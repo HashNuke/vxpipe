@@ -16,6 +16,11 @@
 # Local checkpoint notes created by bin/create-labnotes.
 /labnotes/
 
+# The Starlight documentation site's local and generated files.
+/docs/.astro/
+/docs/dist/
+/docs/node_modules/
+
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump
 

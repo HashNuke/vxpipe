@@ -1,3 +1,9 @@
+---
+title: Project goals
+description: The intended outcomes and enduring architectural boundaries of Vxpipe.
+editUrl: https://github.com/HashNuke/vxpipe/edit/main/docs/src/content/docs/goals.md
+---
+
 # Vxpipe Project Goals
 
 This document defines the intended outcomes and enduring boundaries of Vxpipe.

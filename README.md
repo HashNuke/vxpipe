@@ -39,3 +39,24 @@ MIX_ENV=prod mix release vxpipe
 
 The release listens on `0.0.0.0` and reads its port from `PORT`, defaulting to
 `4000`.
+
+## Documentation
+
+The documentation site is a self-contained Starlight project, with Astro as its
+underlying build system. Install its dependencies, install
+[Forego](https://github.com/ddollar/forego), and start the development processes
+from the umbrella root:
+
+```shell
+npm --prefix docs install
+bin/dev
+```
+
+`bin/dev` runs `Procfile.dev`. It currently starts the live-reloading
+documentation server; more development processes can be added there over time.
+
+Build the static site with:
+
+```shell
+npm --prefix docs run build
+```
