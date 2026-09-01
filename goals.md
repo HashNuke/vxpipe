@@ -104,17 +104,30 @@ provider. It should:
   order;
 - represent humans, AI agents, observers, recorders, and controllers without
   tying their identity to a transport;
-- keep participant, connection, and capability lifecycles explicit; and
+- keep participant, connection, and service lifecycles explicit; and
 - provide deterministic room creation, activation, teardown, and public
   snapshots.
 
 The domain model keeps these concepts separate:
 
 ```text
-Participant = who or what is in the room
-Connection  = how a participant sends or receives media
-Capability  = processing used by a participant, such as STT, LLM, or TTS
+Participant         = who or what is in the room
+Connection          = how a participant sends or receives media
+Participant service = processing owned by one participant
+Room service        = cross-cutting processing or observation for the room
+Media track         = one normalized, timed stream in the Membrane graph
 ```
+
+Participant services include STT, TTS, an LLM backing, and input or output
+guardrails. A human backing is normally expressed through one or more
+connections and routing policy rather than pretending the human is an LLM
+service. Internally, participant services may be implemented as capabilities,
+workers, Membrane elements, or bins according to their responsibility.
+
+Room services include recording, transcript assembly, policy monitoring,
+telemetry, evaluation, and artifact export. They attach once to the room and
+observe explicit event or media outputs instead of being copied into every
+participant.
 
 This separation should support, among other cases:
 
@@ -123,18 +136,20 @@ This separation should support, among other cases:
 - an AI-to-human or human-to-AI handoff;
 - a transfer to another human or AI participant;
 - provider-native bridging when routing media through Vxpipe is unnecessary;
-  and
-- passive live listeners, recorders, debuggers, and analytics consumers.
+- passive live listeners and debuggers;
+- participant-specific input and output policy chains; and
+- room-wide recorders, transcript writers, monitors, and artifact exporters.
 
 Each live room is a supervised process island. The room controller owns the
-authoritative control-plane state while participant, connection, capability,
+authoritative control-plane state while participant, connection, service,
 and media processes own their narrower responsibilities. Failure in one room
 must not damage unrelated calls or leave provider sessions orphaned.
 
 ### 2. Use plans as the portable call contract
 
 A complete room plan should describe the desired participants, connections,
-capabilities, routing policy, adapter choices, and safe adapter configuration.
+participant and room services, routing policy, adapter choices, and safe
+adapter configuration.
 It must be validated before any process or provider call is started.
 
 Plans should be usable by both the Elixir API and the standalone network API.
@@ -176,6 +191,7 @@ Vxpipe should define small public behaviours and normalized domain values for:
 - speech-to-text;
 - text-to-speech;
 - language models and agent runtimes;
+- input and output guardrails;
 - recording and storage;
 - webhook and provider-event translation; and
 - future media processors or observers.
@@ -196,8 +212,9 @@ An application using Vxpipe as a dependency should be able to:
 - construct and validate a room plan without starting network services;
 - start and supervise the Vxpipe runtime inside its own supervision tree;
 - create, inspect, modify, and end rooms through documented APIs;
-- attach its own participants, connections, capabilities, media outputs, and
+- attach its own participants, connections, services, media outputs, and
   adapters;
+- attach participant services and room-wide monitoring or storage services;
 - subscribe to normalized lifecycle and domain events; and
 - mount the reusable web layer only when it needs it.
 
@@ -326,6 +343,516 @@ Tests should focus on Vxpipe behavior: plans, public contracts, supervision,
 failure recovery, media topology, protocol handling, and adapter boundaries.
 Normal tests should be deterministic and must not depend on live providers.
 
+## Working contract sketch
+
+The following is the current starting design, not a frozen public API. It makes
+the intended boundaries concrete enough to implement and test while leaving
+provider callback details, media containers, and final endpoint names open.
+
+### Participant services and room services
+
+Every service has an id, a kind, an adapter selected through a controlled
+registry, configuration owned by that adapter, declared inputs and outputs, and
+a failure policy. Services differ by scope:
+
+- A participant service belongs to one participant. STT, TTS, LLM, participant
+  input policy, and participant output policy are the initial kinds.
+- A room service belongs to the room. Recording, transcript assembly, artifact
+  export, monitoring, evaluation, and telemetry are the initial kinds.
+
+Each participant also declares its backing: a human reached through one or more
+connections, an LLM participant service, or an application-controlled
+connection. This makes human-backed and model-backed participants equally
+explicit without making a telephony transport pretend to be an LLM service.
+
+The normal AI participant signal chain is conceptually:
+
+```text
+participant audio
+  -> STT
+  -> input guardrail chain
+  -> LLM or other agent backing
+  -> output guardrail chain
+  -> TTS
+  -> participant audio output
+```
+
+A guardrail should have an explicit signal contract. An input guardrail may
+allow, reject, redact, or transform a final transcript or structured input. An
+output guardrail may allow, reject, redact, transform, retry, or request a
+handoff before text reaches TTS. Audio-specific moderation, if later required,
+is a different service kind and must not be hidden inside a text guardrail.
+
+Guardrails are ordered policy chains, not ambient callbacks. Their decisions
+should produce normalized events with bounded metadata, without logging the
+sensitive input by default. Each service declares whether its failure fails the
+participant, bypasses the service, retries within a bound, or ends the room.
+
+Room services should receive only the data they request. A transcript writer
+does not need raw audio; an individual-track recorder does not need prompts or
+tool results; a telemetry exporter should receive measurements rather than call
+content. A room service that consumes media attaches to a bounded Membrane
+output branch. It must not receive every audio frame through the room
+GenServer's ordinary mailbox.
+
+### Initial room plan shape
+
+One validated plan should drive both the embeddable and standalone forms. The
+Elixir representation may contain approved modules when called by trusted OTP
+code. The JSON representation accepts only registered adapter names and
+credential references. Untrusted strings are never converted into new atoms or
+arbitrary modules.
+
+The plan should contain these top-level concepts:
+
+```elixir
+%{
+  id: "room_01...",
+  purpose: :customer_call,
+  metadata: %{},
+  participants: [],
+  room_services: [],
+  routing: %{},
+  lifecycle: %{},
+  event_outputs: []
+}
+```
+
+A more complete illustrative plan is:
+
+```elixir
+%{
+  id: "room_01...",
+  purpose: :customer_call,
+  metadata: %{external_call_id: "call_123"},
+  participants: [
+    %{
+      id: "caller",
+      kind: :human,
+      role: :caller,
+      backing: %{kind: :human, connection_ids: ["caller-leg"]},
+      connections: [
+        %{
+          id: "caller-leg",
+          kind: :telephony,
+          adapter: :telnyx,
+          direction: :inbound,
+          credential_ref: "telnyx-primary",
+          config: %{}
+        }
+      ],
+      services: [
+        %{
+          id: "caller-stt",
+          kind: :stt,
+          adapter: :deepgram,
+          config: %{language: "en"},
+          failure_policy: :fail_participant
+        },
+        %{
+          id: "caller-input-policy",
+          kind: :input_guardrail,
+          adapter: :application_policy,
+          config: %{},
+          failure_policy: :end_room
+        }
+      ]
+    },
+    %{
+      id: "assistant",
+      kind: :agent,
+      role: :assistant,
+      backing: %{kind: :llm, service_id: "assistant-llm"},
+      connections: [],
+      services: [
+        %{
+          id: "assistant-llm",
+          kind: :llm,
+          adapter: :openai,
+          config: %{model: "configured-model", system_prompt_ref: "prompt-v3"},
+          failure_policy: :fail_participant
+        },
+        %{
+          id: "assistant-output-policy",
+          kind: :output_guardrail,
+          adapter: :application_policy,
+          config: %{},
+          failure_policy: :end_room
+        },
+        %{
+          id: "assistant-tts",
+          kind: :tts,
+          adapter: :rime,
+          config: %{voice: "configured-voice"},
+          failure_policy: :fail_participant
+        }
+      ]
+    }
+  ],
+  room_services: [
+    %{
+      id: "archive",
+      kind: :artifact_export,
+      adapter: :s3,
+      credential_ref: "call-archive",
+      config: %{
+        prefix: "rooms/room_01...",
+        audio: %{tracks: :individual_and_mixed},
+        transcript: %{enabled: true},
+        call_details: %{enabled: true}
+      },
+      failure_policy: :report_and_continue
+    }
+  ],
+  routing: %{
+    caller: %{sends_audio_to: ["assistant"], receives_audio_from: ["assistant"]}
+  },
+  lifecycle: %{idle_timeout_ms: 30_000}
+}
+```
+
+This example illustrates ownership; it does not decide the final field names.
+In particular, secrets and raw authorization headers do not belong in a plan,
+public snapshot, event, or artifact. `credential_ref` is resolved by the
+embedding application or standalone runtime at the adapter boundary.
+
+Plan validation should happen in phases:
+
+1. Validate ids, shapes, enums, limits, and referential integrity without
+   starting any process.
+2. Resolve adapter names through an explicit registry and verify that the
+   adapter supports the requested service or connection contract.
+3. Validate adapter-owned configuration without resolving or exposing secrets.
+4. Produce an immutable normalized plan suitable for an idempotent creation
+   comparison.
+5. Only then start the room island and external provider operations, rolling
+   back all partial work if startup fails.
+
+### Room command API
+
+The public Elixir API should expose semantic room commands rather than internal
+GenServer messages. The first contract should cover operations equivalent to:
+
+```text
+validate plan
+create room from normalized plan
+activate room
+get public room snapshot
+end room idempotently
+
+add, update, and remove a participant
+attach and detach a participant connection
+connect, answer, dial, and disconnect through that connection
+attach, start, stop, and detach a participant service
+attach, start, stop, and detach a room service
+update routing or bridge policy
+
+subscribe and unsubscribe from authorized room events
+attach and detach authorized individual or mixed media outputs
+deliver a normalized provider event or media ingress notification
+```
+
+Exact function names remain to be designed with the structs and tests. The API
+should return tagged results at recoverable boundaries, accept a runtime or
+supervisor reference where practical, and never require callers to address a
+room process directly.
+
+Commands that can be retried must accept a command or idempotency identifier.
+Repeating the same command with the same normalized input returns the existing
+result. Reusing the identifier with different input returns a conflict. Adding
+or removing participants, attaching connections, bridging, and ending a room
+all need explicit retry semantics because provider webhooks and HTTP clients
+will repeat work.
+
+The standalone HTTP API is a translation and authorization layer over the same
+commands. It converts JSON adapter names through the registry, authenticates
+the calling application, enforces room-level authorization, and maps tagged
+results to a versioned wire protocol. It must not implement a second room
+lifecycle in controllers or Plugs.
+
+The network API will likely need both a general room resource and a convenient
+call-creation operation. The latter can validate a telephony plan, create a
+room, attach an outbound connection, and dial as one idempotent orchestration
+without weakening the underlying room contract.
+
+### Room inputs and published events
+
+The room consumes four categories of input:
+
+- public room commands from trusted Elixir callers or the authorized HTTP API;
+- normalized provider lifecycle and control events from connection adapters;
+- control-plane outputs from participant and room services, such as final
+  transcripts, guarded text, tool results, and artifact completion; and
+- bounded notifications from the Membrane pipeline, such as track start, end,
+  format, discontinuity, lag, and failure.
+
+Raw provider payloads stop at adapters. Continuous audio remains in the
+Membrane media plane and crosses into control-plane events only when a bounded,
+low-rate notification is useful.
+
+Every public event should use a versioned envelope containing at least:
+
+```text
+event id
+schema version
+room id and per-room sequence
+event type and occurrence time
+participant, connection, service, track, and command ids when applicable
+normalized payload
+bounded metadata
+causation or correlation id when applicable
+```
+
+The initial event families should include:
+
+- room created, active, ending, ended, and failed;
+- participant added, joined, state changed, removed, and failed;
+- connection attached, connecting, connected, disconnected, and failed;
+- service attached, started, stopped, bypassed, and failed;
+- media track started, format changed, lagged, dropped, ended, and failed;
+- transcript partial, transcript final, and speaker turn finalized;
+- input or output guardrail allowed, blocked, transformed, and failed;
+- bridge requested, connected, failed, and ended;
+- artifact started, completed, partial, and failed; and
+- normalized provider and application control events that have a documented
+  public purpose.
+
+Partial transcripts and high-rate diagnostic events are optional and normally
+ephemeral. Final transcripts, lifecycle transitions, bridge results, and
+artifact completion are candidates for durable delivery. The event delivery
+contract must say which events are ordered, retryable, and acknowledged. A
+spawned task per event, as used by Callx for some subscribers, is not a durable
+delivery strategy.
+
+Hooks that can block or transform a decision are distinct from observers.
+Blocking hooks run at explicit low-rate decision points with a deadline and a
+declared failure policy. Observers use bounded queues and cannot stall the room
+or media pipeline.
+
+### Telephony and bridging
+
+Inbound and outbound telephony are connection operations. A telephony adapter
+owns dialing, answering, hanging up, provider commands, webhook verification,
+provider event normalization, media ingress and egress, and its provider ids.
+The core owns the participant, connection lifecycle, authorization, routing,
+and normalized events.
+
+A generic human participant never defaults to Telnyx, Twilio, or another
+provider. The plan or trusted application must select an adapter explicitly.
+Adding a second telephony adapter must not require changes to the room domain
+model.
+
+Bridging two calls means attaching the two telephony legs as connections for
+participants in one room and selecting one of two explicit modes:
+
+- `provider_native`: one compatible telephony adapter bridges its own legs.
+  Vxpipe retains authoritative participants, connection state, and normalized
+  lifecycle events while the provider carries the live media.
+- `media_plane`: both legs stream through the room's Membrane graph. This works
+  across different providers and enables per-track recording, mixing,
+  intervention, and arbitrary media outputs.
+
+Provider-native bridging is an optional adapter capability, not part of the
+minimum telephony behaviour. Cross-provider bridging necessarily uses the
+media-plane mode unless an explicit external bridge adapter owns both sides.
+Bridge failure and teardown must leave neither a local process nor a billable
+provider leg orphaned.
+
+### Media outputs
+
+The media graph should expose explicit output attachments for:
+
+- one participant's input or output track;
+- one telephony connection leg or channel where available;
+- a selected group of tracks; and
+- a mixed room track.
+
+An output attachment declares its desired stream format and its lag policy.
+Each output branch has bounded buffering. Depending on the consumer, lag may
+drop frames, mark the artifact partial, disconnect the output, or fail a room
+service; it must never grow without limit or backpressure an unrelated call.
+
+Live WebSocket listeners, recorders, and remote artifact writers consume these
+outputs through different adapters but share the same track-selection model.
+Mixing is requested explicitly and never destroys the original individual
+tracks.
+
+### Artifact storage model
+
+Vxpipe should define an artifact-store behaviour rather than embed S3 calls in
+the room, pipeline, or recorder. Initial implementations should include a
+deterministic local filesystem store for tests and development, followed by an
+S3-compatible store. Other object stores or application-owned remote endpoints
+can implement the same contract.
+
+The store contract needs operations for small JSON objects and streaming or
+multipart artifacts. It must support completion, abort, idempotent retry,
+checksums, content type, byte count, and bounded finalization. Storage workers
+run outside the room controller. They use bounded queues or a bounded local
+spool and report artifact state back through normalized events.
+
+The default object layout should be versioned and predictable:
+
+```text
+rooms/{room_id}/manifest.json
+rooms/{room_id}/call.json
+rooms/{room_id}/transcript.json
+rooms/{room_id}/events/000001.jsonl.gz
+rooms/{room_id}/audio/participants/{participant_id}/{track_id}.{ext}
+rooms/{room_id}/audio/mixed/{track_id}.{ext}
+```
+
+Object names use validated opaque ids, not phone numbers, participant display
+names, or other personal data. The extension and content type reflect the
+actual negotiated container and codec; the storage model does not require WAV
+or any one provider format.
+
+`manifest.json` is the entry point for consumers and should resemble:
+
+```json
+{
+  "schema_version": "vxpipe.artifacts.v1",
+  "room_id": "room_01...",
+  "generation": 3,
+  "state": "complete",
+  "created_at": "2026-09-01T00:00:00Z",
+  "finalized_at": "2026-09-01T00:05:00Z",
+  "artifacts": [
+    {
+      "id": "artifact_01...",
+      "kind": "participant_audio",
+      "participant_id": "caller",
+      "track_id": "track_01...",
+      "object_key": "rooms/room_01.../audio/participants/caller/track_01xyz.ogg",
+      "content_type": "audio/ogg",
+      "codec": "opus",
+      "started_at_ms": 0,
+      "ended_at_ms": 298000,
+      "bytes": 1234567,
+      "sha256": "...",
+      "state": "complete"
+    }
+  ]
+}
+```
+
+The manifest may be replaced as artifacts progress, using its `generation` to
+make updates explicit. It is finalized after writers have either completed or
+reported a terminal partial or failed state. A room can end successfully even
+if an optional exporter fails; the manifest and artifact events must make that
+failure visible.
+
+`call.json` stores provider-neutral call details:
+
+```json
+{
+  "schema_version": "vxpipe.call.v1",
+  "room_id": "room_01...",
+  "external_call_id": "call_123",
+  "direction": "inbound",
+  "status": "ended",
+  "started_at": "2026-09-01T00:00:00Z",
+  "ended_at": "2026-09-01T00:05:00Z",
+  "duration_ms": 300000,
+  "end_reason": {"code": "completed"},
+  "participants": [],
+  "connections": [],
+  "services": [],
+  "metadata": {}
+}
+```
+
+Participants, connections, and services contain stable public ids, kinds,
+roles, direction, timing, and normalized terminal state. Provider references
+are included only when the configured storage policy permits them. Credentials,
+raw provider payloads, PIDs, internal registry names, and adapter state are
+never included.
+
+`transcript.json` stores canonical finalized turns rather than raw STT chunks:
+
+```json
+{
+  "schema_version": "vxpipe.transcript.v1",
+  "room_id": "room_01...",
+  "language": "en",
+  "turns": [
+    {
+      "id": "turn_01...",
+      "sequence": 1,
+      "participant_id": "caller",
+      "role": "caller",
+      "started_at_ms": 1200,
+      "ended_at_ms": 3600,
+      "text": "I need an appointment.",
+      "source_service_id": "caller-stt",
+      "confidence": 0.94,
+      "metadata": {}
+    }
+  ]
+}
+```
+
+Partial transcripts and replay diagnostics belong in optional event chunks, not
+the canonical transcript. Transcript turns have stable ids, room sequence,
+speaker ownership, timing, and source service so they can be aligned with
+individual or mixed recordings.
+
+Storage policy is explicit per artifact class. It controls whether an artifact
+is disabled, retained, encrypted, redacted, or sent to one or more stores.
+Vxpipe does not persist audio or transcripts merely because a storage adapter is
+configured. The application must request the artifact and is responsible for
+the applicable consent and retention policy.
+
+### First implementation sequence
+
+The implementation should proceed in contract-sized checkpoints:
+
+1. Define and test pure plan structs, service scopes, adapter registries,
+   validation, normalized plans, and public snapshots. Use only controlled fake
+   adapters. This is the starting point.
+2. Implement the supervised room lifecycle, participant and service attachment,
+   idempotent commands, routing policy, and the versioned event envelope without
+   real provider calls.
+3. Implement the per-room Membrane pipeline with deterministic source and sink
+   elements, individual tracks, explicit output branches, bounded buffering,
+   and requested mixing.
+4. Prove participant service chains with fake STT, guardrail, LLM, and TTS
+   adapters, plus a room-wide observer that cannot stall media.
+5. Define artifact structs and the local artifact-store adapter. Prove
+   individual and mixed audio, canonical transcript, call details, manifest
+   finalization, partial writes, and shutdown flushing.
+6. Expose the same room commands through the versioned Plug/WebSock layer with
+   authentication, authorization, idempotency, and bounded protocol limits.
+7. Add one telephony adapter end to end for inbound and outbound calls, including
+   exact raw-body webhook verification and bidirectional media.
+8. Implement media-plane bridging, provider-native bridging where supported,
+   and teardown tests for both success and failure.
+9. Add a second telephony adapter to prove the core is provider-neutral, and add
+   replaceable production STT and TTS adapters.
+10. Add the S3-compatible artifact-store adapter and build the supported Docker
+    image with runtime configuration, health, readiness, and graceful shutdown.
+
+Each checkpoint includes its public contract, deterministic tests, relevant
+notes, and failure semantics. Live-provider interoperability remains a separate
+tagged test lane.
+
+### Decisions deliberately left open
+
+The first contract work should gather evidence before fixing:
+
+- the final module and HTTP resource names;
+- whether public plans expose generic signal ports, a constrained routing DSL,
+  or both;
+- the exact guardrail decision and retry vocabulary;
+- which event classes receive durable at-least-once delivery in the standalone
+  service;
+- the initial recording container and codec combinations;
+- multipart upload versus bounded local spool behavior for each artifact store;
+- manifest update and conditional-write requirements across object stores;
+- whether the standalone service offers an optional durable event outbox
+  without introducing a mandatory product database; and
+- the first production telephony, STT, TTS, and object-storage adapters.
+
 ## Lessons retained from Callx
 
 The Callx design provides useful evidence for the runtime model Vxpipe should
@@ -357,7 +884,7 @@ implementation details:
   product database.
 - The standalone service composes the reusable libraries rather than bypassing
   them.
-- A participant is not a connection, and a connection is not a capability.
+- A participant is not a connection, and a service is neither of those.
 - The control plane and high-rate media plane remain separate.
 - Provider-specific data is normalized at the boundary.
 - Slow consumers cannot create unbounded memory growth or stall an entire room.
