@@ -11,7 +11,7 @@ export default defineConfig({
     starlight({
       title: "Vxpipe",
       description:
-        "Provider-neutral, Membrane-backed voice call rooms for Elixir applications.",
+        "An embeddable, deployable voice runtime backed by Elixir, OTP, and Membrane.",
       editLink: {
         baseUrl: "https://github.com/HashNuke/vxpipe/edit/main/docs/",
       },
@@ -21,12 +21,6 @@ export default defineConfig({
           icon: "github",
           label: "GitHub",
           href: "https://github.com/HashNuke/vxpipe",
-        },
-      ],
-      sidebar: [
-        {
-          label: "Documentation",
-          items: [{ slug: "goals" }],
         },
       ],
     }),
