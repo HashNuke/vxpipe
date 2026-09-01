@@ -10,6 +10,13 @@ that every capability described here already exists. See `AGENTS.md` and
 Vxpipe is a provider-neutral voice runtime that applications can use to
 initiate, receive, and operate live calls.
 
+The first product version is intentionally voice-first, but voice is not the
+permanent boundary of the platform. Plans, participants, connections, media
+tracks, services, and public events should remain extensible to future video,
+image, avatar, and other multimodal inputs and outputs. Those media types are
+not part of the v1 delivery criteria and must not delay a reliable voice
+runtime.
+
 It should be equally useful in two forms:
 
 - as reusable Elixir/OTP libraries that an application can embed, configure,
@@ -25,6 +32,74 @@ product model, UI, or database into Vxpipe.
 Vxpipe extracts and generalizes the useful call-room ideas developed in Callx.
 It does not carry over Callpipe-specific product policy, persistence, tenancy,
 workflows, or assumptions about a particular provider.
+
+## Version 1: the voice foundation
+
+V1 is the smallest release that is genuinely useful both as an embedded
+library and as a standalone voice platform. It proves one complete,
+production-capable human-to-AI voice session over WebSockets and the extension
+contracts needed to grow the platform. It is not a promise to implement every
+goal in this document before shipping.
+
+V1 includes:
+
+- validated provider-neutral room plans, authoritative room lifecycle,
+  supervised room islands, idempotent commands, and versioned events;
+- the embeddable core and reusable web layer, plus the standalone release and
+  Docker image using the same runtime contracts;
+- a versioned WebSocket media-ingress connection through which a human
+  participant sends audio, and a separate authorized, read-only WebSocket
+  output subscription through which a client receives an agent, participant,
+  or requested mixed track;
+- one production adapter each for STT, LLM, and TTS, and a Silero VAD-backed
+  turn detector;
+- a real per-room Membrane audio graph with normalized timed tracks, bounded
+  output branches, individual and requested mixed output, and deterministic
+  media tests;
+- room-scoped conversation context, participant-scoped context projections,
+  room-level and participant-level tools, and cold and warm agent transfers;
+- VAD-backed turn boundaries and coordinated barge-in that cancels generation,
+  flushes undelivered audio, and suppresses late results;
+- the ordered provider-candidate and failover contract, proven with
+  deterministic adapters even though v1 does not require two production
+  providers for every service kind;
+- lifecycle and performance metrics, optional local recording/transcript
+  artifacts, and authorized event subscriptions;
+- a dogfooding and reference web application with a Vite/React TypeScript
+  frontend, a Fastify TypeScript backend, and project-owned UI states developed
+  in Storybook; and
+- explicit startup rollback, bounded queues and timeouts, dependency-aware
+  readiness, content-safe observability, and ordered shutdown.
+
+WebSockets are the deliberate v1 transport because they allow local,
+deterministic, and browser-capable development without a carrier account,
+public webhook, phone number, or billable telephony call. This choice does not
+replace the Membrane media plane or make WebSocket protocol details part of the
+room domain. Later telephony or other real-time transports attach as connection
+adapters to the same participants, tracks, services, and routing contracts.
+
+The v1 `samples` web application is a reference client and development harness,
+not a product UI or a runtime dependency. Its backend owns sample orchestration
+and server-side credentials; the browser sends and receives live media directly
+through Vxpipe's authorized WebSockets. Microphone capture, playback, and
+browser echo-cancellation behavior remain client concerns. Reusable UI states
+are prototyped and reviewed in Storybook before being wired into sample pages.
+
+The following remain goals, but are delivered incrementally after v1:
+
+- telephony adapters for inbound and outbound carrier calls, verified webhooks,
+  DTMF, IVR navigation, voicemail detection, and provider-native call control;
+- second and subsequent production STT, LLM, TTS, VAD, storage, and other
+  service adapters, including production primary/backup combinations;
+- media-plane and provider-native telephony bridging;
+- advanced audio cleanup and optional turn-scoped audio artifacts;
+- S3-compatible artifact export, richer retention and storage policies, and an
+  optional durable event outbox;
+- broader evaluation and operational tooling; and
+- video, image, avatar, and other multimodal tracks and services.
+
+Post-v1 work should extend the public participant, connection, service, track,
+plan, and event contracts rather than introduce a parallel runtime.
 
 ## The two ways to use Vxpipe
 
@@ -45,7 +120,28 @@ independent OTP release and use its versioned network API. The application
 remains the source of truth for customers, workflows, and business data;
 Vxpipe owns live call execution.
 
-A typical outbound call should work like this:
+A typical v1 WebSocket call should work like this:
+
+```text
+Main application
+  -> creates a room from an authenticated, idempotent request
+  -> authorizes a human participant's media-ingress connection
+Web client
+  -> opens the participant WebSocket and sends binary microphone audio
+  -> opens a read-only output subscription for the agent's audio track
+Vxpipe
+  -> runs turn detection, STT, context, tools, LLM, and TTS
+  -> publishes normalized events and binary agent audio
+  -> main application or web client controls or ends the room
+```
+
+The ingress connection and output subscription are separate protocol roles.
+The ingress socket is a participant connection allowed to produce media. The
+output socket is a bounded, read-only attachment to an authorized individual or
+mixed track and may be joined by more than one observer. A simple web-call
+client normally opens one of each.
+
+After v1, a typical outbound telephony call should work like this:
 
 ```text
 Main application
@@ -56,7 +152,7 @@ Main application
   -> main application observes, controls, or ends the call
 ```
 
-A typical inbound call should work like this:
+An inbound telephony call should work like this:
 
 ```text
 Twilio, Telnyx, or another provider
@@ -86,6 +182,10 @@ The umbrella has three complementary responsibilities:
   Phoenix application can mount without starting a listener.
 - `apps/vxpipe_server` composes the library, web layer, and selected adapters
   into the standalone Bandit release.
+
+The `samples` package sits outside the umbrella applications. It is a
+TypeScript dogfooding client and end-user reference implementation; neither the
+core libraries nor the standalone release depend on it.
 
 Telephony providers such as Telnyx and Twilio, speech providers, language-model
 providers, recorders, and storage systems are adapters. They should be
@@ -145,11 +245,19 @@ authoritative control-plane state while participant, connection, service,
 and media processes own their narrower responsibilities. Failure in one room
 must not damage unrelated calls or leave provider sessions orphaned.
 
+Agent-to-agent handoff is a first-class room operation, not an application
+convention built from unrelated participant mutations. The public API must
+define preparation, context handoff, routing cutover, completion, cancellation,
+failure, rollback, and idempotency. The room id remains stable across a
+handoff, and the operation must make it unambiguous which participant owns the
+active agent role at every point.
+
 ### 2. Use plans as the portable call contract
 
 A complete room plan should describe the desired participants, connections,
-participant and room services, routing policy, adapter choices, and safe
-adapter configuration.
+participant and room services, routing policy, ordered provider choices,
+turn-taking and interruption policy, transfer policy, and safe adapter
+configuration.
 It must be validated before any process or provider call is started.
 
 Plans should be usable by both the Elixir API and the standalone network API.
@@ -192,12 +300,17 @@ Vxpipe should define small public behaviours and normalized domain values for:
 - text-to-speech;
 - language models and agent runtimes;
 - input and output guardrails;
+- voice activity and turn detection;
+- conversation context and scoped tool execution;
+- DTMF, IVR navigation, and voicemail detection;
 - recording and storage;
 - webhook and provider-event translation; and
 - future media processors or observers.
 
-Telnyx, Twilio, Deepgram, and Rime are examples, not defaults embedded in the
-domain model. A user should be able to supply a custom adapter without
+Telnyx, Twilio, Deepgram, Rime, and Silero VAD are examples, not defaults
+embedded in the domain model. Silero VAD is the initial voice-activity detector
+to evaluate, behind the same provider-neutral contract as alternative or
+future turn detectors. A user should be able to supply a custom adapter without
 replacing room internals or copying the runtime.
 
 Provider credentials, payloads, codec names, SDK structs, retry rules, and wire
@@ -226,11 +339,11 @@ PIDs, GenServer messages, or private Membrane topology.
 
 The standalone network API should let an authorized application:
 
-- submit a validated plan and initiate an outbound call;
-- create a room for an application-controlled or non-telephony session;
+- submit a validated plan and create an application-controlled room;
 - inspect public room and call state using stable public identifiers;
 - perform supported controls such as ending a call, transferring a
-  participant, or changing an approved routing decision;
+  participant through the defined transfer API, or changing an approved
+  routing decision;
 - receive normalized asynchronous lifecycle and domain events; and
 - attach authorized read-only or media-producing WebSocket connections.
 
@@ -240,15 +353,15 @@ fail clearly. Authentication and authorization happen before call control or
 media access. API responses and events must not expose PIDs, registry names,
 provider credentials, or adapter-private state.
 
-HTTP request completion must not be confused with completion of a call. Call
-creation returns a durable public identifier and initial status; subsequent
+HTTP request completion must not be confused with completion of a room or call.
+Creation returns a durable public identifier and initial status; subsequent
 provider and room changes are observable asynchronously.
 
-### 7. Accept inbound calls through verified provider ingress
+### 7. Add verified provider ingress after the WebSocket foundation
 
-Each telephony adapter should own the public webhook and media ingress required
-by its provider. The reusable web layer may mount or dispatch to those adapter
-handlers, while the standalone server exposes them on its listener.
+Each post-v1 telephony adapter should own the public webhook and media ingress
+required by its provider. The reusable web layer may mount or dispatch to those
+adapter handlers, while the standalone server exposes them on its listener.
 
 Provider ingress must:
 
@@ -273,12 +386,23 @@ though a host Phoenix application may mount the Plug router.
 
 The web surface should:
 
+- provide a versioned participant media-ingress WebSocket that authenticates a
+  media-producing connection before it joins the room;
 - offer explicit participant-track and mixed-track audio subscriptions;
 - use binary WebSocket frames for audio and a documented control protocol;
-- distinguish read-only observers from connections allowed to inject media;
+- make the read-only media output subscription a separate protocol role from a
+  connection allowed to inject media;
 - authorize access to the exact room and track before upgrading;
+- negotiate or require a documented v1 audio format and normalize it at the
+  Membrane boundary while preserving sequence and timing information;
 - apply finite frame, timeout, queue, and process limits; and
 - define backpressure, lag, disconnect, and reconnect behavior.
+
+The v1 web-call client model uses two sockets: a participant media-ingress
+connection for microphone audio and a read-only media output subscription for
+the desired agent or mixed track. The output subscription is independently
+authorized and buffered, so a slow listener cannot stall the participant input,
+agent processing, or another subscriber.
 
 Normalized call events should also be deliverable to embedding subscribers and
 to standalone clients through a documented asynchronous mechanism. Delivery
@@ -314,6 +438,12 @@ The runtime should deliberately handle:
 - partial room startup and rollback;
 - provider retries and duplicate or out-of-order webhooks;
 - failed participants, adapters, pipelines, and WebSocket consumers;
+- ordered primary and backup providers for every provider-backed service,
+  including bounded failover without changing the logical service identity;
+- provider failure during partially emitted text or media, without duplicating
+  output or leaving the failed provider active;
+- user barge-in that cancels in-flight LLM and TTS work, flushes queued output,
+  and records what was generated separately from what was actually delivered;
 - bounded mailboxes, queues, task concurrency, and network timeouts;
 - idempotent start, end, connect, and disconnect operations where retries occur;
   and
@@ -331,6 +461,15 @@ Observability should use stable identifiers, durations, bounded counts, queue
 depths, media rates, and normalized failure reasons. Audio, transcripts, phone
 numbers, prompts, credentials, signed URLs, and raw provider payloads must not
 be logged or retained by default.
+
+The public metric vocabulary should distinguish vendor/service metrics from
+end-to-end runtime performance. It should cover provider request counts,
+failures, retries, failovers, usage units, and cost inputs where available, as
+well as VAD timing, STT finalization latency, LLM time to first response, TTS
+time to first audio, end-to-end turn latency, interruption drain time, queue
+depth, dropped media, and playback timing. Metrics carry stable room,
+participant, service, provider-candidate, and turn identifiers but no call
+content.
 
 ### 12. Remain straightforward to extend and maintain
 
@@ -351,14 +490,19 @@ provider callback details, media containers, and final endpoint names open.
 
 ### Participant services and room services
 
-Every service has an id, a kind, an adapter selected through a controlled
-registry, configuration owned by that adapter, declared inputs and outputs, and
-a failure policy. Services differ by scope:
+Every service has a stable logical id, a kind, declared inputs and outputs, an
+implementation selected through a controlled registry, and a failure policy.
+A provider-backed service additionally declares one or more ordered provider
+candidates and provider-owned configuration. It may have only a primary
+candidate, but the contract supports backups without changing the service's
+public identity. Services differ by scope:
 
 - A participant service belongs to one participant. STT, TTS, LLM, participant
-  input policy, and participant output policy are the initial kinds.
+  input policy, participant output policy, and participant tools are v1 kinds.
+  IVR navigation and voicemail detection are planned post-v1 kinds.
 - A room service belongs to the room. Recording, transcript assembly, artifact
-  export, monitoring, evaluation, and telemetry are the initial kinds.
+  export, conversation context, room tools, monitoring, evaluation, and
+  telemetry are initial kinds.
 
 Each participant also declares its backing: a human reached through one or more
 connections, an LLM participant service, or an application-controlled
@@ -395,6 +539,108 @@ content. A room service that consumes media attaches to a bounded Membrane
 output branch. It must not receive every audio frame through the room
 GenServer's ordinary mailbox.
 
+### Service provider selection and failover
+
+A provider-backed logical service declares an ordered list containing a primary
+candidate and zero or more backups. Each candidate names an allowlisted adapter,
+credential reference, adapter-owned configuration, and the capabilities it is
+expected to provide. Plans fail validation when candidates are incompatible
+with the service contract.
+
+Failover policy declares which startup failures, timeouts, rate limits,
+provider errors, or health states advance to the next candidate; retry and
+cooldown bounds; and what happens after the candidate list is exhausted. A
+provider switch emits a normalized event and vendor/service metrics while the
+logical service id remains unchanged. Authentication or configuration errors
+must not be treated as indefinitely retryable failures.
+
+Streaming services require an explicit safe failover boundary. If an LLM or TTS
+provider fails after emitting partial output, Vxpipe must cancel or isolate the
+failed attempt, identify which text or media was delivered, and avoid replaying
+content blindly through the backup. Live provider settings may be updated only
+through validated service commands with observable success or failure.
+
+### Conversation context and scoped tools
+
+Conversation context is a room service because it must survive participant and
+agent transfers. It owns the canonical ordered conversation state for the room,
+including finalized user and agent turns and bounded tool-call results. It may
+summarize, truncate, or export that state according to an explicit policy; it is
+not automatically a permanent product record.
+
+Participant LLM services consume authorized projections of the room context.
+The projection may omit private participant data, room-only control events, raw
+tool results, or history outside the participant's role. Multiple named context
+services may be used when a room needs deliberately isolated conversations.
+
+Tools have explicit room or participant scope:
+
+- a room-level tool is available to every participant authorized by its policy
+  and operates on room-owned capabilities;
+- a participant-level tool is visible only to its owning participant unless a
+  transfer policy explicitly grants it to the target; and
+- every invocation has a stable id, validated input, authorization decision,
+  deadline, cancellation policy, normalized result or error, and bounded
+  observability metadata.
+
+Tool execution runs outside the room controller and high-rate media path.
+Invocations must be cancellable where the integration permits it, and late
+results from cancelled or superseded turns must not mutate context or trigger
+speech accidentally.
+
+### Turn taking, interruption, and telephony interaction
+
+Turn detection is a participant-level media capability. The first voice
+implementation should evaluate Silero VAD for speech activity while keeping the
+public contract independent of that implementation. VAD detects speech versus
+non-speech; it does not by itself prove that a speaker has semantically
+completed a turn. Turn policy therefore combines VAD events with configurable
+start, silence, end-of-turn, and idle rules.
+
+Accepted user speech produces stable turn-start and turn-end events with media
+timestamps. When policy permits barge-in, a new user turn interrupts the active
+agent response as one coordinated operation: cancel or supersede in-flight LLM
+and TTS work, stop synthesis and playback, flush bounded queued agent audio,
+mark undelivered output, and prevent late results from restarting the response.
+The context and artifact models must distinguish generated text/audio from the
+portion actually delivered to the participant.
+
+DTMF is a normalized connection command and event, regardless of whether a
+telephony provider sends native digit events or a media element detects or
+generates tones. DTMF, IVR navigation, and voicemail detection enter with the
+post-v1 telephony work. IVR navigation may be a participant service or an
+application-controlled state machine that consumes DTMF, speech, and connection
+events. Voicemail detection is a participant service that can combine
+provider-native signals with media analysis and reports a normalized decision,
+confidence when available, evidence category, timing, and failure reason.
+
+### Agent transfers and handoffs
+
+The public transfer API targets an existing participant or a validated new
+participant specification. A transfer command contains a stable command id,
+source and target, handoff mode, context policy, routing policy, timeout, and
+failure policy. At minimum, the contract should support:
+
+- a cold transfer that atomically replaces the active agent;
+- a warm transfer that prepares the target and its services before cutover;
+- an overlap period in which both agents may participate under explicit
+  routing; and
+- cancellation or rollback when preparation or cutover fails.
+
+Transfer phases are observable as requested, preparing, ready, committed,
+cancelled, and failed. Preparing the target may resolve its provider candidates,
+start required services, and provide an authorized full, summarized, or empty
+context projection without routing its output to the caller. Commit changes
+active-agent ownership and routing exactly once. Completion stops or demotes the
+source according to policy and leaves neither provider work nor media output
+orphaned.
+
+Agent handoff is distinct from a provider-native transfer of a telephony leg.
+Both are room commands, but they have different adapter capabilities, media
+effects, and failure semantics. Replaying an idempotent transfer command returns
+the existing operation; reusing its command id for a different target or policy
+returns a conflict.
+
 ### Initial room plan shape
 
 One validated plan should drive both the embeddable and standalone forms. The
@@ -413,6 +659,8 @@ The plan should contain these top-level concepts:
   participants: [],
   room_services: [],
   routing: %{},
+  turn_policy: %{},
+  transfer_policy: %{},
   lifecycle: %{},
   event_outputs: []
 }
@@ -423,30 +671,44 @@ A more complete illustrative plan is:
 ```elixir
 %{
   id: "room_01...",
-  purpose: :customer_call,
-  metadata: %{external_call_id: "call_123"},
+  purpose: :web_voice_session,
+  metadata: %{external_session_id: "session_123"},
   participants: [
     %{
       id: "caller",
       kind: :human,
       role: :caller,
-      backing: %{kind: :human, connection_ids: ["caller-leg"]},
+      backing: %{kind: :human, connection_ids: ["caller-media-in"]},
       connections: [
         %{
-          id: "caller-leg",
-          kind: :telephony,
-          adapter: :telnyx,
-          direction: :inbound,
-          credential_ref: "telnyx-primary",
-          config: %{}
+          id: "caller-media-in",
+          kind: :websocket_media,
+          adapter: :vxpipe_websocket,
+          direction: :ingress,
+          config: %{
+            format: %{encoding: :pcm_s16le, sample_rate: 16_000, channels: 1}
+          }
         }
       ],
       services: [
         %{
           id: "caller-stt",
           kind: :stt,
-          adapter: :deepgram,
-          config: %{language: "en"},
+          provider_candidates: [
+            %{
+              id: "primary",
+              adapter: :deepgram,
+              credential_ref: "stt-primary",
+              config: %{language: "en"}
+            },
+            %{
+              id: "backup",
+              adapter: :configured_stt_backup,
+              credential_ref: "stt-backup",
+              config: %{language: "en"}
+            }
+          ],
+          failover: %{max_attempts_per_candidate: 1},
           failure_policy: :fail_participant
         },
         %{
@@ -468,8 +730,21 @@ A more complete illustrative plan is:
         %{
           id: "assistant-llm",
           kind: :llm,
-          adapter: :openai,
-          config: %{model: "configured-model", system_prompt_ref: "prompt-v3"},
+          provider_candidates: [
+            %{
+              id: "primary",
+              adapter: :openai,
+              credential_ref: "llm-primary",
+              config: %{model: "configured-model", system_prompt_ref: "prompt-v3"}
+            },
+            %{
+              id: "backup",
+              adapter: :configured_llm_backup,
+              credential_ref: "llm-backup",
+              config: %{model: "configured-backup-model", system_prompt_ref: "prompt-v3"}
+            }
+          ],
+          failover: %{max_attempts_per_candidate: 1},
           failure_policy: :fail_participant
         },
         %{
@@ -482,8 +757,21 @@ A more complete illustrative plan is:
         %{
           id: "assistant-tts",
           kind: :tts,
-          adapter: :rime,
-          config: %{voice: "configured-voice"},
+          provider_candidates: [
+            %{
+              id: "primary",
+              adapter: :rime,
+              credential_ref: "tts-primary",
+              config: %{voice: "configured-voice"}
+            },
+            %{
+              id: "backup",
+              adapter: :configured_tts_backup,
+              credential_ref: "tts-backup",
+              config: %{voice: "configured-backup-voice"}
+            }
+          ],
+          failover: %{max_attempts_per_candidate: 1},
           failure_policy: :fail_participant
         }
       ]
@@ -491,10 +779,23 @@ A more complete illustrative plan is:
   ],
   room_services: [
     %{
+      id: "conversation",
+      kind: :conversation_context,
+      adapter: :local_context,
+      config: %{summarization: :configured},
+      failure_policy: :end_room
+    },
+    %{
       id: "archive",
       kind: :artifact_export,
-      adapter: :s3,
-      credential_ref: "call-archive",
+      provider_candidates: [
+        %{
+          id: "primary",
+          adapter: :s3,
+          credential_ref: "call-archive",
+          config: %{}
+        }
+      ],
       config: %{
         prefix: "rooms/room_01...",
         audio: %{tracks: :individual_and_mixed},
@@ -507,11 +808,17 @@ A more complete illustrative plan is:
   routing: %{
     caller: %{sends_audio_to: ["assistant"], receives_audio_from: ["assistant"]}
   },
+  turn_policy: %{
+    detector: %{adapter: :silero_vad, config: %{}},
+    barge_in: :interrupt_agent_output
+  },
+  transfer_policy: %{default_mode: :warm, context: :summary},
   lifecycle: %{idle_timeout_ms: 30_000}
 }
 ```
 
-This example illustrates ownership; it does not decide the final field names.
+This example illustrates ownership; it does not decide the final field names or
+the required v1 audio format.
 In particular, secrets and raw authorization headers do not belong in a plan,
 public snapshot, event, or artifact. `credential_ref` is resolved by the
 embedding application or standalone runtime at the adapter boundary.
@@ -531,7 +838,8 @@ Plan validation should happen in phases:
 ### Room command API
 
 The public Elixir API should expose semantic room commands rather than internal
-GenServer messages. The first contract should cover operations equivalent to:
+GenServer messages. The complete contract should cover operations equivalent
+to:
 
 ```text
 validate plan
@@ -545,7 +853,12 @@ attach and detach a participant connection
 connect, answer, dial, and disconnect through that connection
 attach, start, stop, and detach a participant service
 attach, start, stop, and detach a room service
+update a service's validated settings or provider candidates
 update routing or bridge policy
+request, inspect, commit, and cancel an agent transfer
+interrupt or supersede an active agent response
+send DTMF through an authorized connection
+invoke or cancel an authorized room-level or participant-level tool
 
 subscribe and unsubscribe from authorized room events
 attach and detach authorized individual or mixed media outputs
@@ -560,9 +873,9 @@ room process directly.
 Commands that can be retried must accept a command or idempotency identifier.
 Repeating the same command with the same normalized input returns the existing
 result. Reusing the identifier with different input returns a conflict. Adding
-or removing participants, attaching connections, bridging, and ending a room
-all need explicit retry semantics because provider webhooks and HTTP clients
-will repeat work.
+or removing participants, attaching connections, transferring agents, invoking
+tools, sending DTMF, bridging, and ending a room all need explicit retry
+semantics because provider webhooks and HTTP clients will repeat work.
 
 The standalone HTTP API is a translation and authorization layer over the same
 commands. It converts JSON adapter names through the registry, authenticates
@@ -597,7 +910,8 @@ event id
 schema version
 room id and per-room sequence
 event type and occurrence time
-participant, connection, service, track, and command ids when applicable
+participant, connection, service, provider-candidate, track, turn, tool-call,
+transfer, and command ids when applicable
 normalized payload
 bounded metadata
 causation or correlation id when applicable
@@ -608,21 +922,28 @@ The initial event families should include:
 - room created, active, ending, ended, and failed;
 - participant added, joined, state changed, removed, and failed;
 - connection attached, connecting, connected, disconnected, and failed;
-- service attached, started, stopped, bypassed, and failed;
+- service attached, started, stopped, bypassed, failed, provider selected,
+  provider switched, and providers exhausted;
 - media track started, format changed, lagged, dropped, ended, and failed;
-- transcript partial, transcript final, and speaker turn finalized;
+- speech activity started and stopped, turn started and finalized, transcript
+  partial and final, response interrupted, and output flushed;
 - input or output guardrail allowed, blocked, transformed, and failed;
+- tool requested, authorized, started, completed, cancelled, timed out, and
+  failed;
+- agent transfer requested, preparing, ready, committed, cancelled, and failed;
+- DTMF sent and received, IVR state changed, and voicemail detected or
+  undetermined;
 - bridge requested, connected, failed, and ended;
 - artifact started, completed, partial, and failed; and
 - normalized provider and application control events that have a documented
   public purpose.
 
 Partial transcripts and high-rate diagnostic events are optional and normally
-ephemeral. Final transcripts, lifecycle transitions, bridge results, and
-artifact completion are candidates for durable delivery. The event delivery
-contract must say which events are ordered, retryable, and acknowledged. A
-spawned task per event, as used by Callx for some subscribers, is not a durable
-delivery strategy.
+ephemeral. Final transcripts, lifecycle and transfer transitions, tool results,
+bridge results, and artifact completion are candidates for durable delivery.
+The event delivery contract must say which events are ordered, retryable, and
+acknowledged. A spawned task per event, as used by Callx for some subscribers,
+is not a durable delivery strategy.
 
 Hooks that can block or transform a decision are distinct from observers.
 Blocking hooks run at explicit low-rate decision points with a deadline and a
@@ -742,14 +1063,15 @@ reported a terminal partial or failed state. A room can end successfully even
 if an optional exporter fails; the manifest and artifact events must make that
 failure visible.
 
-`call.json` stores provider-neutral call details:
+`call.json` stores provider-neutral room and call details:
 
 ```json
 {
   "schema_version": "vxpipe.call.v1",
   "room_id": "room_01...",
-  "external_call_id": "call_123",
-  "direction": "inbound",
+  "external_session_id": "session_123",
+  "direction": "application_created",
+  "transport": "websocket",
   "status": "ended",
   "started_at": "2026-09-01T00:00:00Z",
   "ended_at": "2026-09-01T00:05:00Z",
@@ -803,46 +1125,83 @@ Vxpipe does not persist audio or transcripts merely because a storage adapter is
 configured. The application must request the artifact and is responsible for
 the applicable consent and retention policy.
 
-### First implementation sequence
+### V1 delivery sequence
 
 The implementation should proceed in contract-sized checkpoints:
 
-1. Define and test pure plan structs, service scopes, adapter registries,
-   validation, normalized plans, and public snapshots. Use only controlled fake
-   adapters. This is the starting point.
+1. Define and test pure plan structs, service and tool scopes, ordered provider
+   candidates, adapter registries, turn and transfer policies, validation,
+   normalized plans, and public snapshots. Use only controlled fake adapters.
+   This is the starting point.
 2. Implement the supervised room lifecycle, participant and service attachment,
-   idempotent commands, routing policy, and the versioned event envelope without
-   real provider calls.
+   idempotent commands, routing policy, agent transfer state machine, and the
+   versioned event envelope without real provider calls.
 3. Implement the per-room Membrane pipeline with deterministic source and sink
    elements, individual tracks, explicit output branches, bounded buffering,
    and requested mixing.
 4. Prove participant service chains with fake STT, guardrail, LLM, and TTS
-   adapters, plus a room-wide observer that cannot stall media.
-5. Define artifact structs and the local artifact-store adapter. Prove
+   adapters, primary-to-backup failover, a room conversation-context service,
+   scoped tools, and a room-wide observer that cannot stall media.
+5. Implement deterministic VAD-backed turn detection and barge-in. Prove turn
+   timestamps, cancellation of in-flight LLM and TTS work, bounded audio flush,
+   suppression of late results, and generated-versus-delivered output state.
+6. Define artifact structs and the local artifact-store adapter. Prove
    individual and mixed audio, canonical transcript, call details, manifest
    finalization, partial writes, and shutdown flushing.
-6. Expose the same room commands through the versioned Plug/WebSock layer with
+7. Expose the same room commands through the versioned Plug/WebSock layer with
    authentication, authorization, idempotency, and bounded protocol limits.
-7. Add one telephony adapter end to end for inbound and outbound calls, including
-   exact raw-body webhook verification and bidirectional media.
-8. Implement media-plane bridging, provider-native bridging where supported,
-   and teardown tests for both success and failure.
-9. Add a second telephony adapter to prove the core is provider-neutral, and add
-   replaceable production STT and TTS adapters.
-10. Add the S3-compatible artifact-store adapter and build the supported Docker
-    image with runtime configuration, health, readiness, and graceful shutdown.
+8. Implement the v1 WebSocket participant media-ingress connection and
+   read-only media output subscription. Prove format validation, timestamps,
+   authorization, independent buffering, lag policy, reconnect behavior, and
+   teardown with deterministic clients and the `samples` web application.
+9. Add one replaceable production adapter each for STT, LLM, and TTS and verify
+   the complete browser-to-Vxpipe-to-agent-to-browser voice path through the
+   sample application in the tagged interoperability lane.
+10. Build the supported Docker image and prove the embedded and standalone
+    acceptance paths with runtime configuration, health, readiness, metrics,
+    startup rollback, concurrent rooms, and graceful shutdown.
 
 Each checkpoint includes its public contract, deterministic tests, relevant
-notes, and failure semantics. Live-provider interoperability remains a separate
-tagged test lane.
+notes, failure semantics, and applicable vendor/service and end-to-end
+performance metrics. Live-provider interoperability remains a separate tagged
+test lane.
+
+### Post-v1 delivery increments
+
+After the v1 acceptance criteria are green, capabilities should be added as
+small end-to-end increments rather than as a second broad foundation phase. The
+expected early increments are:
+
+1. Add the first telephony adapter end to end for inbound and outbound calls,
+   including exact raw-body webhook verification, bidirectional media, and
+   normalized DTMF.
+2. Add a second telephony adapter and production backup STT, LLM, and TTS
+   candidates to exercise provider-neutral behaviour and failover with live
+   integrations.
+3. Add media-plane call bridging and provider-native bridging where supported,
+   including failure and teardown tests for both modes.
+4. Add packaged IVR navigation and voicemail detection on top of normalized
+   DTMF, connection events, and participant services.
+5. Add the S3-compatible artifact-store adapter and the selected production
+   recording formats, upload strategy, and retention controls.
+6. Add richer evaluation, audio preprocessing, diagnostics, and optional
+   turn-scoped artifacts without making sensitive retention the default.
+7. Introduce additional media track kinds and adapters when multimodal work is
+   scheduled, beginning with contracts that preserve the v1 voice behavior.
 
 ### Decisions deliberately left open
 
 The first contract work should gather evidence before fixing:
 
 - the final module and HTTP resource names;
+- the exact v1 WebSocket audio format, binary frame envelope, timestamp and
+  sequencing rules, and whether reconnect can resume an existing attachment;
 - whether public plans expose generic signal ports, a constrained routing DSL,
   or both;
+- the exact Silero VAD package and runtime boundary, VAD thresholds, and the
+  initial strategy used to distinguish silence from semantic turn completion;
+- the precise safe failover boundaries for partially emitted model and speech
+  output;
 - the exact guardrail decision and retry vocabulary;
 - which event classes receive durable at-least-once delivery in the standalone
   service;
@@ -851,7 +1210,8 @@ The first contract work should gather evidence before fixing:
 - manifest update and conditional-write requirements across object stores;
 - whether the standalone service offers an optional durable event outbox
   without introducing a mandatory product database; and
-- the first production telephony, STT, TTS, and object-storage adapters.
+- the first production STT, LLM, TTS, and VAD implementations, and the first
+  post-v1 telephony and object-storage adapters.
 
 ## Lessons retained from Callx
 
@@ -893,30 +1253,58 @@ implementation details:
 - The reusable web layer does not own a listener.
 - Sensitive call content is not logged or persisted by default.
 
-## Definition of initial success
+## V1 acceptance criteria
 
-Vxpipe reaches its initial product goal when all of the following are true:
+V1 is complete only when all of the following are true:
 
 1. An Elixir application can add the core as a dependency, supervise it, create
-   a room from a validated plan, and use a custom adapter without starting HTTP.
-2. The supported Docker image can start from runtime configuration and expose
+   a room from a validated plan, run a voice call with custom adapters, and end
+   it without starting HTTP.
+2. The supported Docker image starts from runtime configuration and exposes
    health, readiness, and an authenticated, versioned control API.
-3. A non-Elixir application can make one idempotent API request to initiate an
-   outbound call, observe normalized state changes, control it, and end it.
-4. A reference Telnyx or Twilio adapter can verify an inbound provider request,
-   resolve an application-owned plan, create the room, and operate the incoming
-   call through the same runtime used for outbound calls.
-5. A deterministic end-to-end test proves audio can enter through an adapter,
-   traverse a Membrane graph, and reach an authorized individual or mixed
-   output without relying on a live provider.
-6. A host application can mount `vxpipe_web`, receive a verified webhook, and
-   authorize a WebSocket audio subscriber without Phoenix Channels.
-7. Multiple room islands can run concurrently and failures, startup rollback,
-   slow consumers, and ordered shutdown are bounded, observable, and covered by
-   regression tests.
-8. The public plans, behaviours, events, HTTP API, and WebSocket protocol are
-   documented well enough for another project to use and extend without
-   copying private code.
+3. A non-Elixir application can make one idempotent request to create a
+   human-to-AI voice room, authorize the needed media attachments, observe
+   normalized state changes, use the supported controls, and end it.
+4. A client can open an authenticated participant media-ingress WebSocket, send
+   binary microphone audio, open a separately authorized read-only output
+   subscription, and receive the selected agent or mixed audio track.
+5. One production STT, LLM, and TTS adapter can form a complete agent service
+   chain, while deterministic adapters prove primary-to-backup failover and
+   failure exhaustion without changing the logical service identity.
+6. A Silero VAD-backed turn detector and deterministic media tests prove turn
+   boundaries, user barge-in, cancellation of in-flight LLM and TTS work,
+   bounded output flushing, and suppression of late output.
+7. A room conversation-context service survives agent handoff, exposes only
+   authorized participant projections, and records accepted tool results
+   without retaining sensitive content by default.
+8. Room-level and participant-level tools enforce scope, input validation,
+   authorization, deadlines, cancellation, idempotency, and late-result
+   handling.
+9. The versioned transfer API performs and observes cold and warm
+   agent-to-agent handoffs while preserving room identity, applying the chosen
+   context policy, and rolling back a failed cutover.
+10. Deterministic end-to-end tests prove timed WebSocket audio can enter through
+    a participant connection, traverse a Membrane graph and agent service
+    chain, and reach authorized individual and requested mixed outputs without
+    live providers.
+11. Media ingress and every output subscription have independent authorization,
+    bounded buffering, format validation, lag and disconnect policies, and
+    teardown; a slow subscriber cannot stall a room or another subscriber.
+12. Optional local artifacts can produce aligned individual and mixed audio, a
+    canonical transcript, call details, and an explicit complete, partial, or
+    failed manifest without enabling retention by default.
+13. A host application can mount `vxpipe_web` and use the same room-control,
+    media-ingress, and output-subscription protocols without starting the
+    standalone listener or using Phoenix Channels.
+14. Multiple room islands run concurrently and startup rollback, provider and
+    pipeline failure, slow consumers, bounded queues, metrics, and ordered
+    shutdown are observable and covered by regression tests.
+15. The public plans, behaviours, events, transfer API, HTTP API, and WebSocket
+    protocol are documented well enough for another project to use and extend
+    without copying private code.
+16. The TypeScript sample backend can orchestrate a room without exposing
+    server credentials, and the Storybook-developed web client can complete the
+    v1 media-ingress and output-subscription flow against that room.
 
 ## Non-goals
 
