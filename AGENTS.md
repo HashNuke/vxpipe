@@ -202,6 +202,16 @@ Work in small, coherent checkpoints that leave the umbrella usable. Keep the
 implementation, focused tests, and relevant documentation for a checkpoint
 together.
 
+### First-time worktree setup
+
+- Run `bin/setup` once after creating or checking out a new worktree and before
+  running tests or `bin/dev` there.
+- Keep `bin/setup` idempotent and update it whenever development gains another
+  required setup step.
+- `bin/setup` must prepare dependencies and tools but must not start long-running
+  development processes; those belong in `Procfile.dev` and run through
+  `bin/dev`.
+
 Use red-green-refactor for behavior changes:
 
 1. Write the smallest focused test that describes the desired externally

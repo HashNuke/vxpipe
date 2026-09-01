@@ -1,0 +1,127 @@
+#!/bin/sh
+
+set -eu
+
+project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+for required_command in mix npm; do
+  if ! command -v "$required_command" >/dev/null 2>&1; then
+    printf 'bin/setup requires %s, but it was not found in PATH.\n' "$required_command"
+    exit 127
+  fi
+done
+
+install_goreman() {
+  if command -v goreman >/dev/null 2>&1; then
+    printf '%s\n' "==> Goreman already installed at $(command -v goreman)"
+    return
+  fi
+
+  goreman_version=0.3.19
+  goreman_system=$(uname -s)
+  goreman_machine=$(uname -m)
+
+  case "$goreman_system:$goreman_machine" in
+    Linux:x86_64)
+      goreman_platform=linux_amd64
+      goreman_archive_kind=tar
+      goreman_checksum=3a295da503fc2113620c723f2be26f1322818f53575cf85c31a605d76e97f585
+      ;;
+    Linux:aarch64 | Linux:arm64)
+      goreman_platform=linux_arm64
+      goreman_archive_kind=tar
+      goreman_checksum=c09b580cd8c1f8a3e90928e02608f3ead02c87656368261f7f0514f724507b93
+      ;;
+    Darwin:x86_64)
+      goreman_platform=darwin_amd64
+      goreman_archive_kind=zip
+      goreman_checksum=3e2e35c4b2472b95627bb52a431fcdd30d946fa94d17eb6a0c5e418a7ab39b72
+      ;;
+    Darwin:arm64)
+      goreman_platform=darwin_arm64
+      goreman_archive_kind=zip
+      goreman_checksum=cb80f6956f9679f5d859db79c48ccd02ffbe8d6d26015e7d2cc7db50695c7d18
+      ;;
+    *)
+      printf 'bin/setup cannot install Goreman on %s %s.\n' \
+        "$goreman_system" "$goreman_machine"
+      exit 1
+      ;;
+  esac
+
+  if ! command -v curl >/dev/null 2>&1; then
+    printf '%s\n' "bin/setup requires curl to install Goreman."
+    exit 127
+  fi
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    goreman_sha256_command=sha256sum
+  elif command -v shasum >/dev/null 2>&1; then
+    goreman_sha256_command=shasum
+  else
+    printf '%s\n' "bin/setup requires sha256sum or shasum to verify Goreman."
+    exit 127
+  fi
+
+  setup_temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/vxpipe-goreman.XXXXXX")
+  trap 'find "$setup_temp_dir" -depth -delete' EXIT
+
+  if [ "$goreman_archive_kind" = tar ]; then
+    goreman_archive_name="goreman_v${goreman_version}_${goreman_platform}.tar.gz"
+  else
+    goreman_archive_name="goreman_v${goreman_version}_${goreman_platform}.zip"
+  fi
+
+  goreman_archive_path="$setup_temp_dir/$goreman_archive_name"
+  goreman_release_url="https://github.com/mattn/goreman/releases/download/v${goreman_version}/$goreman_archive_name"
+
+  printf '%s\n' "==> Installing Goreman v${goreman_version}"
+  curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+    --output "$goreman_archive_path" "$goreman_release_url"
+
+  if [ "$goreman_sha256_command" = sha256sum ]; then
+    goreman_actual_checksum=$(sha256sum "$goreman_archive_path" | awk '{print $1}')
+  else
+    goreman_actual_checksum=$(shasum -a 256 "$goreman_archive_path" | awk '{print $1}')
+  fi
+
+  if [ "$goreman_actual_checksum" != "$goreman_checksum" ]; then
+    printf '%s\n' "Goreman archive checksum verification failed."
+    exit 1
+  fi
+
+  if [ "$goreman_archive_kind" = tar ]; then
+    tar -xzf "$goreman_archive_path" -C "$setup_temp_dir"
+  else
+    unzip -q "$goreman_archive_path" -d "$setup_temp_dir"
+  fi
+
+  goreman_install_dir="${HOME:?bin/setup requires HOME}/bin"
+  goreman_binary="$setup_temp_dir/goreman_v${goreman_version}_${goreman_platform}/goreman"
+  mkdir -p "$goreman_install_dir"
+  install -m 0755 "$goreman_binary" "$goreman_install_dir/goreman"
+
+  if ! "$goreman_install_dir/goreman" version | grep -qx "$goreman_version"; then
+    printf '%s\n' "Installed Goreman failed its version check."
+    exit 1
+  fi
+
+  if ! command -v goreman >/dev/null 2>&1; then
+    printf '%s\n' \
+      "Goreman was installed at $goreman_install_dir/goreman," \
+      "but $goreman_install_dir is not in PATH."
+    exit 127
+  fi
+}
+
+cd "$project_root"
+
+install_goreman
+
+printf '%s\n' "==> Fetching Elixir dependencies"
+mix deps.get
+
+printf '%s\n' "==> Installing locked documentation dependencies"
+npm --prefix docs ci
+
+printf '%s\n' "==> Setup complete. Run bin/dev to start development processes."
