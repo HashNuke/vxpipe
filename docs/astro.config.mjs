@@ -1,7 +1,8 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
-const site = process.env.DOCS_SITE_URL ?? "http://localhost:4321";
+const docsPort = process.env.DEV_PORT_DOCS ?? "4321";
+const site = process.env.DOCS_SITE_URL ?? `http://localhost:${docsPort}`;
 const base = process.env.DOCS_BASE_PATH;
 
 export default defineConfig({

@@ -1,1 +1,4 @@
-docs: __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=$(hostname) npm --prefix docs run dev -- --host 0.0.0.0
+docs: __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=$(hostname) npm --prefix docs run dev -- --host 0.0.0.0 --port $DEV_PORT_DOCS
+samples_backend: SAMPLES_HOST=0.0.0.0 SAMPLES_PORT=$DEV_PORT_SAMPLES_BACKEND npm --prefix samples run dev:backend
+samples_frontend: SAMPLES_BACKEND_PORT=$DEV_PORT_SAMPLES_BACKEND __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=$(hostname) npm --prefix samples run dev:frontend -- --port $DEV_PORT_SAMPLES_FRONTEND --strictPort
+storybook: __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=$(hostname) npm --prefix samples run storybook -- --port $DEV_PORT_STORYBOOK --exact-port

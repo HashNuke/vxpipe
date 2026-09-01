@@ -4,7 +4,7 @@ set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-for required_command in mix npm; do
+for required_command in git mix node npm; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     printf 'bin/setup requires %s, but it was not found in PATH.\n' "$required_command"
     exit 127
@@ -118,10 +118,16 @@ cd "$project_root"
 
 install_goreman
 
+printf '%s\n' "==> Configuring development ports"
+node "$project_root/bin/dev-ports.mjs" assign "$project_root"
+
 printf '%s\n' "==> Fetching Elixir dependencies"
 mix deps.get
 
 printf '%s\n' "==> Installing locked documentation dependencies"
 npm --prefix docs ci
+
+printf '%s\n' "==> Installing locked samples dependencies"
+npm --prefix samples ci
 
 printf '%s\n' "==> Setup complete. Run bin/dev to start development processes."

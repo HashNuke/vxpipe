@@ -13,6 +13,9 @@
 # Temporary files, for example, from tests.
 /tmp/
 
+# Worktree-local environment loaded only by Goreman and its child processes.
+/.env.dev
+
 # Local checkpoint notes created by bin/create-labnotes.
 /labnotes/
 
@@ -20,6 +23,11 @@
 /docs/.astro/
 /docs/dist/
 /docs/node_modules/
+
+# The Vite/Storybook samples package's local and generated files.
+/samples/dist/
+/samples/node_modules/
+/samples/storybook-static/
 
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump

@@ -11,5 +11,13 @@ if ! command -v goreman >/dev/null 2>&1; then
   exit 127
 fi
 
+if ! command -v node >/dev/null 2>&1; then
+  printf '%s\n' "bin/dev requires Node.js, but it was not found in PATH."
+  exit 127
+fi
+
 cd "$project_root"
-exec goreman -f Procfile.dev -rpc-server=false -set-ports=false start "$@"
+dev_environment=$(node "$project_root/bin/dev-ports.mjs" check "$project_root")
+
+exec goreman -f Procfile.dev -env "$dev_environment" \
+  -rpc-server=false -set-ports=false start "$@"

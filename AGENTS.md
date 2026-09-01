@@ -206,6 +206,9 @@ together.
 
 - Run `bin/setup` once after creating or checking out a new worktree and before
   running tests or `bin/dev` there.
+- `bin/setup` writes the ignored `.env.dev` loaded by Goreman. The primary
+  checkout receives the stable defaults; each linked worktree receives its own
+  available contiguous port block. Do not copy this file between worktrees.
 - Keep `bin/setup` idempotent and update it whenever development gains another
   required setup step.
 - `bin/setup` must prepare dependencies and tools but must not start long-running

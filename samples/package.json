@@ -1,0 +1,53 @@
+{
+  "name": "@vxpipe/samples",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n frontend,backend -c blue,green \"npm:dev:frontend\" \"npm:dev:backend\"",
+    "dev:frontend": "vite --host 0.0.0.0",
+    "dev:backend": "tsx watch src/backend/main.ts",
+    "build": "npm run typecheck && npm run build:frontend && npm run build:backend",
+    "build:frontend": "vite build",
+    "build:backend": "tsc -p tsconfig.backend.json",
+    "start:backend": "node dist/server/main.js",
+    "typecheck": "tsc -p tsconfig.frontend.json && tsc -p tsconfig.backend.json --noEmit && tsc -p tsconfig.tests.json && tsc -p tsconfig.tools.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "storybook": "storybook dev --host 0.0.0.0 --no-open",
+    "storybook:build": "storybook build"
+  },
+  "dependencies": {
+    "fastify": "5.12.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@storybook/addon-a11y": "10.5.10",
+    "@storybook/addon-docs": "10.5.10",
+    "@storybook/react-vite": "10.5.10",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "26.4.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.1",
+    "concurrently": "10.0.5",
+    "eslint": "10.9.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.5",
+    "globals": "17.12.0",
+    "jsdom": "30.0.1",
+    "storybook": "10.5.10",
+    "tsx": "4.23.13",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}
