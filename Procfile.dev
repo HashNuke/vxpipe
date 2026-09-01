@@ -1,1 +1,1 @@
-docs: npm --prefix docs run dev
+docs: __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=$(hostname) npm --prefix docs run dev -- --host 0.0.0.0
