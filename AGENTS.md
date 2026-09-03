@@ -144,3 +144,12 @@ mix deps.unlock --check-unused
 
 For documentation-only changes, verify the changed documentation and use
 proportionate checks when it changes generated configuration.
+
+## Documentation references
+
+### Pipecat
+
+- [React SDK overview](https://docs.pipecat.ai/api-reference/client/react/overview.md)
+- [React SDK components](https://docs.pipecat.ai/api-reference/client/react/components.md)
+- [React SDK hooks](https://docs.pipecat.ai/api-reference/client/react/hooks.md)
+- [Voice UI Kit](https://voiceuikit.pipecat.ai/)

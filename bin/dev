@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if ! command -v goreman >/dev/null 2>&1; then
+  echo "Error: bin/dev requires goreman on PATH." >&2
+  exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "Error: bin/dev requires Node.js and npm on PATH." >&2
+  exit 1
+fi
+
+exec goreman \
+  -basedir "$repo_root" \
+  -f "$repo_root/Procfile" \
+  -set-ports=false \
+  -exit-on-error \
+  start "$@"

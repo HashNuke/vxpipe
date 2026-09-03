@@ -19,3 +19,9 @@ erl_crash.dump
 # Also ignore archive artifacts (built via "mix archive.build").
 *.ez
 
+# Frontend dependencies and build output.
+/samples/node_modules/
+/samples/dist/
+/samples/*.tsbuildinfo
+/samples/.env*
+!/samples/.env.example
