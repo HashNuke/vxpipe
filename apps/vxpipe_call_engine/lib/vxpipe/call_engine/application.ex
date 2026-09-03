@@ -5,7 +5,12 @@ defmodule Vxpipe.CallEngine.Application do
 
   @impl true
   def start(_type, _args) do
-    Supervisor.start_link([],
+    children = [
+      {Registry, keys: :unique, name: Vxpipe.CallEngine.RoomRegistry},
+      Vxpipe.CallEngine.RoomSupervisor
+    ]
+
+    Supervisor.start_link(children,
       strategy: :one_for_one,
       name: Vxpipe.CallEngine.Supervisor
     )

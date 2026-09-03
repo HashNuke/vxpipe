@@ -13,8 +13,7 @@
 
 html,
 body,
-#root,
-.sample-shell {
+#root {
   min-height: 100%;
   height: 100%;
   margin: 0;
@@ -23,4 +22,145 @@ body,
 body {
   min-width: 320px;
   overflow: hidden;
+}
+
+.console-page {
+  height: 100%;
+  margin: 0;
+}
+
+.create-room-page {
+  --page-background: #0b0f0d;
+  --page-foreground: #f1f5ed;
+  --page-muted: #aeb9ac;
+  --page-accent: #b9f778;
+  --page-accent-hover: #cbff96;
+  --page-error: #ffb4a8;
+
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: clamp(1.5rem, 5vw, 5rem);
+  overflow: auto;
+  color: var(--page-foreground);
+  background: var(--page-background);
+}
+
+.create-room-page ::selection {
+  color: var(--page-background);
+  background: var(--page-accent);
+}
+
+.create-room-content {
+  width: min(100%, 56rem);
+  animation: room-entry 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.create-room-content h1 {
+  max-width: 11ch;
+  margin: 0 0 1.5rem;
+  font-size: clamp(3rem, 9vw, 6rem);
+  font-weight: 650;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+
+.create-room-content > p {
+  max-width: 56ch;
+  margin: 0 0 2.5rem;
+  color: var(--page-muted);
+  font-size: clamp(1rem, 1.8vw, 1.2rem);
+  line-height: 1.6;
+}
+
+.create-room-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(100%, 22rem);
+  min-height: 4rem;
+  gap: 2rem;
+  padding: 0.9rem 1.1rem 0.9rem 1.35rem;
+  border: 1px solid var(--page-accent);
+  border-radius: 14px;
+  color: var(--page-background);
+  background: var(--page-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out;
+}
+
+.create-room-action svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.create-room-action:hover:not(:disabled) {
+  border-color: var(--page-accent-hover);
+  background: var(--page-accent-hover);
+}
+
+.create-room-action:hover:not(:disabled) svg {
+  transform: translateX(0.25rem);
+}
+
+.create-room-action:focus-visible {
+  outline: 3px solid var(--page-foreground);
+  outline-offset: 4px;
+}
+
+.create-room-action:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.create-room-content .create-room-error {
+  max-width: 54ch;
+  margin: 1.25rem 0 0;
+  color: var(--page-error);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+@keyframes room-entry {
+  from {
+    opacity: 0.72;
+    transform: translateY(0.75rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-room-content {
+    animation: none;
+  }
+
+  .create-room-action,
+  .create-room-action svg {
+    transition: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .create-room-page {
+    place-items: end start;
+    padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  }
+
+  .create-room-content h1 {
+    margin-bottom: 1rem;
+  }
+
+  .create-room-content > p {
+    margin-bottom: 2rem;
+  }
 }

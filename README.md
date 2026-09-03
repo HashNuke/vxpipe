@@ -59,6 +59,15 @@ application environment. In development, `APP_HOST` becomes the exact allowed
 HTTPS origin on port 5173. Environment variables are read from
 `config/runtime.exs`, while `config/dev.exs` only enables the listener.
 
+The playground's **Create room** action exercises the first complete
+application slice. It posts to `/api/rooms`; the gateway supplies its configured
+development tenant and actor, validates the browser-generated room ID,
+constructs a protocol-neutral command, and asks the call engine to start a
+supervised room incarnation. The returned incarnation ID comes from the live
+engine process. This development principal is not an authentication mechanism,
+and the endpoint is disabled by default outside the repository's development
+configuration.
+
 The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It
 targets `/api/rtvi/offer`; that signaling route and the WebRTC/RTVI session are
 still pending. The implemented `/healthz` route verifies the gateway listener.

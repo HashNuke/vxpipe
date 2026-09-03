@@ -22,8 +22,9 @@ and the current [RTVI standard](https://docs.pipecat.ai/client/rtvi-standard.md)
 [RTVI server reference](https://docs.pipecat.ai/api-reference/server/rtvi/introduction.md),
 and [RTVIProcessor reference](https://docs.pipecat.ai/api-reference/server/rtvi/rtvi-processor.md).
 
-The document describes the intended Vxpipe contract. It does not claim that the
-current generated umbrella skeleton implements these components.
+The document primarily describes the intended Vxpipe contract. The implemented
+create-room vertical slice described below is the current exception; later
+sections and checkpoints remain proposed unless stated otherwise.
 
 ## Why support RTVI
 
@@ -600,6 +601,33 @@ These adapters are used for:
 
 Each behavior checkpoint begins with the smallest failing externally observable
 test and leaves the umbrella usable.
+
+### Implemented create-room slice
+
+The first deliberately narrow vertical slice crosses the browser, gateway, and
+call-engine boundaries without claiming completion of checkpoints 1 through 3:
+
+1. The samples browser sends `POST /api/rooms` to its same-origin gateway.
+2. The gateway injects a configured development principal with a tenant, actor,
+   and `rooms:create` scope. The browser cannot assert those identities.
+3. The browser supplies a non-secret, randomly generated room ID. The gateway
+   validates it and constructs the protocol-neutral `CreateRoom` command with a
+   generated command ID and absolute deadline.
+4. The call engine starts a temporary room-incarnation supervisor through its
+   named dynamic room supervisor.
+5. A significant, temporary room-authority child owns the initial `open` state.
+   If that authority terminates, the whole incarnation terminates and is not
+   automatically recreated under stale identity.
+6. The engine returns a public snapshot, which the gateway serializes. That
+   confirmation replaces the creation screen with the responsive Pipecat
+   console; the console receives the whole viewport without Vxpipe overlays.
+
+The development route is disabled in base configuration and enabled only by the
+repository development overlay. The configured principal is not authentication;
+it is a replaceable seam where a future authenticated gateway session supplies
+the same protocol-neutral identity. The slice does not yet implement generic
+command/event contracts, participants, media, RTVI signaling, persistence, or
+room recovery.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

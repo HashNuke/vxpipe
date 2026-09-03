@@ -3,6 +3,12 @@
 The `vxpipe_call_engine` OTP application owns Vxpipe's protocol-neutral call
 lifecycle and processing runtime.
 
+Its first vertical slice accepts a `Vxpipe.CallEngine.Command.CreateRoom`, starts
+a room incarnation through the named `Vxpipe.CallEngine.RoomSupervisor`, and
+returns a `Vxpipe.CallEngine.Room.Snapshot`. The room authority is a significant,
+temporary child: its termination ends that incarnation instead of independently
+restarting authoritative state.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

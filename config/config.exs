@@ -14,6 +14,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     enabled: false,
     ip: :loopback,
     port: 4000,
+    room_creation: [enabled: false],
     cors: [
       allowed_origins: [],
       allowed_methods: ["GET", "POST", "PATCH", "OPTIONS"],

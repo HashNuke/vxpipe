@@ -9,6 +9,12 @@ The initial screen uses `ConsoleTemplate` from
 client, and uses the Small WebRTC transport. The default offer URL is
 `/api/rtvi/offer`.
 
+The **Create room** control is the first working vertical slice. It calls
+`POST /api/rooms` through the same-origin proxy with a browser-generated room ID,
+then replaces the creation screen with the responsive Pipecat console. The
+development tenant and actor are injected by gateway configuration; they are not
+supplied or authenticated by the browser.
+
 From the repository root:
 
 ```shell

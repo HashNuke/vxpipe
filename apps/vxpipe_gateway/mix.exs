@@ -28,7 +28,8 @@ defmodule Vxpipe.Gateway.MixProject do
     [
       {:bandit, "~> 1.12"},
       {:cors_plug, "~> 3.0"},
-      {:plug, "~> 1.20"}
+      {:plug, "~> 1.20"},
+      {:vxpipe_call_engine, in_umbrella: true}
     ]
   end
 end

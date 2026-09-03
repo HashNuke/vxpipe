@@ -11,7 +11,7 @@ defmodule Vxpipe.Gateway.HTTP.Supervisor do
 
   @impl true
   def init(options) do
-    endpoint_options = [cors: Keyword.get(options, :cors, [])]
+    endpoint_options = Keyword.take(options, [:cors, :room_creation])
 
     children = [
       {Bandit,
