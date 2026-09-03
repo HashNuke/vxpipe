@@ -61,4 +61,4 @@
   interaction path. Blocked browser verification must be disclosed.
 - Committed only the `AGENTS.md` browser-inspection rule as commit `4589a93`
   (`Require browser inspection for UI changes`). The Impeccable initialization
-  artifacts remain uncommitted and separate from that checkpoint.
+  artifacts were kept separate and committed in the following checkpoint.
