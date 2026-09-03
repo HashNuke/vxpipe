@@ -130,6 +130,18 @@ or routine mechanical edits.
 - Keep tests in the umbrella application that owns the behavior. Run focused
   tests from that child application's directory when iterating.
 
+## UI and browser verification
+
+- Inspect every UI or web application change in a rendered browser. Source
+  review and automated tests do not replace checking the interface itself.
+- Use `agent-browser` for browser inspection. Choose headless Chrome when visual
+  fidelity, layout, CSS, responsive behavior, accessibility, interactions, or
+  browser APIs matter. Choose Lightpanda for faster DOM, content, navigation, or
+  basic interaction checks that do not require Chromium rendering fidelity.
+- Cover the relevant viewport sizes and important states in a bounded inspection
+  pass. If the application cannot run or browser inspection is blocked, record
+  that limitation explicitly instead of implying the UI was verified.
+
 ## Completion checks
 
 For code or dependency changes, run these from the umbrella root and fix
