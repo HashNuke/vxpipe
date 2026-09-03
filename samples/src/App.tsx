@@ -1,27 +1,34 @@
 import { useState } from "react";
 import { ConsoleTemplate } from "@pipecat-ai/voice-ui-kit";
 
-import CreateRoomPage, { type RoomSnapshot } from "./CreateRoomPage";
+import CreateRoomPage, { type RoomConnection } from "./CreateRoomPage";
 
 const DEFAULT_OFFER_URL = "/api/rtvi/offer";
 
-function offerUrl(): string {
-  return import.meta.env.VITE_VXPIPE_RTVI_OFFER_URL?.trim() || DEFAULT_OFFER_URL;
+function offerUrl(sessionEndpoint: string): string {
+  return (
+    import.meta.env.VITE_VXPIPE_RTVI_OFFER_URL?.trim() || sessionEndpoint || DEFAULT_OFFER_URL
+  );
 }
 
 export default function App() {
-  const [room, setRoom] = useState<RoomSnapshot>();
+  const [connection, setConnection] = useState<RoomConnection>();
 
-  if (!room) {
-    return <CreateRoomPage onCreated={setRoom} />;
+  if (!connection) {
+    return <CreateRoomPage onCreated={setConnection} />;
   }
 
   return (
     <main className="console-page">
       <ConsoleTemplate
-        key={room.incarnation_id}
+        key={connection.room.incarnation_id}
         transportType="smallwebrtc"
-        connectParams={{ webrtcUrl: offerUrl() }}
+        connectParams={{
+          webrtcRequestParams: {
+            endpoint: offerUrl(connection.session.transport.endpoint),
+            requestData: connection.session.transport.request_data,
+          },
+        }}
         titleText="Vxpipe RTVI Playground"
         noBotVideo
       />

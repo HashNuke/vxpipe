@@ -4,15 +4,21 @@ defmodule Vxpipe.Gateway.Application do
   use Application
 
   alias Vxpipe.Gateway.HTTP
+  alias Vxpipe.Gateway.SessionSupervisor
+  alias Vxpipe.Gateway.WebRTC.ConnectionSupervisor
 
   @impl true
   def start(_type, _args) do
     settings = Application.fetch_env!(:vxpipe_gateway, __MODULE__)
 
-    children =
-      settings
-      |> Keyword.fetch!(:http)
-      |> http_children()
+    children = [
+      {Registry, keys: :unique, name: Vxpipe.Gateway.SessionRegistry},
+      SessionSupervisor,
+      {Registry, keys: :unique, name: Vxpipe.Gateway.WebRTC.Registry},
+      ConnectionSupervisor
+    ]
+
+    children = children ++ http_children(Keyword.fetch!(settings, :http))
 
     Supervisor.start_link(children,
       strategy: :one_for_one,

@@ -14,6 +14,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     enabled: false,
     ip: :loopback,
     port: 4000,
+    webrtc: [ice_servers: [], candidate_gathering_timeout_ms: 1_000],
     room_creation: [enabled: false],
     cors: [
       allowed_origins: [],

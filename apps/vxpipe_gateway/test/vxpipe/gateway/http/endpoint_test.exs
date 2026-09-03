@@ -22,7 +22,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
                              principal: [
                                tenant_id: "tenant-development",
                                actor_id: "actor-samples",
-                               scopes: ["rooms:create"]
+                               scopes: ["rooms:create", "rooms:join"]
                              ]
                            ]
                          )
@@ -125,5 +125,47 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
 
     assert conn.status == 403
     assert %{"error" => %{"code" => "not_authorized"}} = JSON.decode!(conn.resp_body)
+  end
+
+  test "admits a participant and issues a bound Small WebRTC session" do
+    room_id = "room-session-#{System.unique_integer([:positive, :monotonic])}"
+
+    create_conn =
+      :post
+      |> conn("/api/rooms", JSON.encode!(%{"room_id" => room_id}))
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@room_endpoint_options)
+
+    assert create_conn.status == 201
+
+    session_conn =
+      :post
+      |> conn("/api/rooms/#{room_id}/sessions")
+      |> Endpoint.call(@room_endpoint_options)
+
+    assert session_conn.status == 201
+
+    assert %{
+             "participant" => %{
+               "participant_id" => "part_" <> _,
+               "role" => "human",
+               "room_id" => ^room_id,
+               "state" => "joined"
+             },
+             "session" => %{
+               "expires_at" => expires_at,
+               "session_id" => session_id,
+               "transport" => %{
+                 "endpoint" => "/api/rtvi/offer",
+                 "request_data" => %{"session_id" => request_session_id},
+                 "type" => "smallwebrtc"
+               }
+             }
+           } = JSON.decode!(session_conn.resp_body)
+
+    assert "sess_" <> _ = session_id
+    assert request_session_id == session_id
+    assert {:ok, expires_at, 0} = DateTime.from_iso8601(expires_at)
+    assert DateTime.diff(expires_at, DateTime.utc_now(), :second) >= 240
   end
 end

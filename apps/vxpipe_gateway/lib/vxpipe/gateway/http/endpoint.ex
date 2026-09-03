@@ -14,9 +14,13 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
           parsers: [:json],
           pass: [],
           json_decoder: JSON,
-          length: 4_096
+          length: 131_072
         ),
-      router: Router.init(room_creation: Keyword.get(options, :room_creation, []))
+      router:
+        Router.init(
+          room_creation: Keyword.get(options, :room_creation, []),
+          webrtc: Keyword.get(options, :webrtc, [])
+        )
     }
   end
 

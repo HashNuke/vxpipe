@@ -1,6 +1,7 @@
 # Vxpipe protocol and runtime architecture
 
-Status: Proposed architecture
+Status: Living architecture; room creation and one-participant RTVI connection
+slices are implemented
 
 ## Decision
 
@@ -23,8 +24,8 @@ and the current [RTVI standard](https://docs.pipecat.ai/client/rtvi-standard.md)
 and [RTVIProcessor reference](https://docs.pipecat.ai/api-reference/server/rtvi/rtvi-processor.md).
 
 The document primarily describes the intended Vxpipe contract. The implemented
-create-room vertical slice described below is the current exception; later
-sections and checkpoints remain proposed unless stated otherwise.
+vertical slices are called out below; later sections and checkpoints remain
+proposed unless stated otherwise.
 
 ## Why support RTVI
 
@@ -625,9 +626,48 @@ call-engine boundaries without claiming completion of checkpoints 1 through 3:
 The development route is disabled in base configuration and enabled only by the
 repository development overlay. The configured principal is not authentication;
 it is a replaceable seam where a future authenticated gateway session supplies
-the same protocol-neutral identity. The slice does not yet implement generic
-command/event contracts, participants, media, RTVI signaling, persistence, or
-room recovery.
+the same protocol-neutral identity. At this checkpoint the slice did not yet
+implement generic command/event contracts, participants, media, RTVI signaling,
+persistence, or room recovery.
+
+### Implemented participant connection slice
+
+The next slice admits one human participant and proves a real unmodified Pipecat
+client can cross the browser, HTTP, WebRTC, RTVI, and OTP boundaries:
+
+1. `POST /api/rooms/:room_id/sessions` requires the configured `rooms:join`
+   scope and asks the call engine to admit a protocol-neutral human participant.
+2. The room authority starts that participant only through the dynamic
+   participant supervisor owned by the room incarnation. It monitors the
+   participant and releases its identity if the participant terminates.
+3. The gateway issues an opaque, single-use session bound to the tenant, actor,
+   room incarnation, and participant. The default development lifetime is five
+   minutes; expiry is enforced with monotonic time.
+4. The samples app passes that session in the current Pipecat client's
+   `webrtcRequestParams.requestData` and uses the same-origin
+   `/api/rtvi/offer` endpoint.
+5. The gateway implements Pipecat Small WebRTC's `POST` offer/answer and `PATCH`
+   trickle-ICE requests with ExWebRTC. It accepts the ordered `chat` data channel
+   and ignores transport signalling and keepalive messages that are not RTVI
+   application messages.
+6. A current RTVI 2.x `client-ready` receives a correlated `bot-ready` for
+   server protocol 2.1.0. Unsupported or malformed version strings receive a
+   correlated protocol error without crashing the transport process.
+7. Closing the data channel tears down the complete temporary connection
+   incarnation, including the peer connection, while the participant and room
+   incarnation remain alive.
+
+The gateway owns the session, WebRTC, and RTVI processes and their dependencies.
+The call engine sees only participant admission and contains no ExWebRTC,
+Pipecat, JSON, or RTVI types. The detailed decision, supervision topology,
+failure behavior, and verification evidence are recorded in
+[`rtvi-participant-connection.md`](rtvi-participant-connection.md).
+
+This is transport and protocol readiness, not a voice conversation pipeline.
+Incoming RTP currently terminates at a diagnostic sink. There is no agent
+participant, transcription, model inference, speech synthesis, outbound audio,
+reconnection, production authentication, TURN policy, persistence, or room
+recovery yet.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

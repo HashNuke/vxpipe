@@ -9,7 +9,9 @@ defmodule Vxpipe.CallEngine.Error do
   @type code ::
           :deadline_exceeded
           | :invalid_command
+          | :participant_already_exists
           | :room_already_exists
+          | :room_not_found
           | :room_start_failed
 
   @type t :: %__MODULE__{

@@ -1,14 +1,12 @@
-defmodule Vxpipe.CallEngine.Id do
+defmodule Vxpipe.Gateway.Id do
   @moduledoc false
 
   @prefixes %{
-    command: "cmd",
-    participant: "part",
-    room: "room",
-    room_incarnation: "rinc"
+    connection: "conn",
+    session: "sess"
   }
 
-  @type kind :: :command | :participant | :room | :room_incarnation
+  @type kind :: :connection | :session
 
   @spec generate(kind()) :: String.t()
   def generate(kind) when is_map_key(@prefixes, kind) do

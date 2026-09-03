@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   use DynamicSupervisor
 
-  alias Vxpipe.CallEngine.Command.CreateRoom
+  alias Vxpipe.CallEngine.Command.{CreateRoom, JoinParticipant}
   alias Vxpipe.CallEngine.{Error, Id, RoomAuthority, RoomIncarnationSupervisor}
 
   def start_link(_options) do
@@ -17,6 +17,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {command.tenant_id, command.room_id}) do
       [] -> start_room(command)
       [_room] -> {:error, room_already_exists(command.room_id)}
+    end
+  end
+
+  def join_participant(%JoinParticipant{} = command) do
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {command.tenant_id, command.room_id}) do
+      [{room_authority, _value}] -> RoomAuthority.join_participant(room_authority, command)
+      [] -> {:error, room_not_found(command.room_id)}
     end
   end
 
@@ -45,6 +52,14 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     Error.new(
       :room_already_exists,
       "The room already exists.",
+      details: %{"room_id" => room_id}
+    )
+  end
+
+  defp room_not_found(room_id) do
+    Error.new(
+      :room_not_found,
+      "The room does not exist.",
       details: %{"room_id" => room_id}
     )
   end

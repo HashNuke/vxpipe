@@ -165,6 +165,12 @@ proportionate checks when it changes generated configuration.
 - [React SDK components](https://docs.pipecat.ai/api-reference/client/react/components.md)
 - [React SDK hooks](https://docs.pipecat.ai/api-reference/client/react/hooks.md)
 - [Voice UI Kit](https://voiceuikit.pipecat.ai/)
+- [Small WebRTC transport](https://docs.pipecat.ai/api-reference/client/js/transports/small-webrtc)
+- [RTVI standard](https://docs.pipecat.ai/client/rtvi-standard)
+
+### Elixir WebRTC
+
+- [ExWebRTC](https://hexdocs.pm/ex_webrtc/ExWebRTC.PeerConnection.html)
 
 ### Caddy and Tailscale
 

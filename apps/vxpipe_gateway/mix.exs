@@ -18,7 +18,7 @@ defmodule Vxpipe.Gateway.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:crypto, :logger],
       mod: {Vxpipe.Gateway.Application, []}
     ]
   end
@@ -28,6 +28,8 @@ defmodule Vxpipe.Gateway.MixProject do
     [
       {:bandit, "~> 1.12"},
       {:cors_plug, "~> 3.0"},
+      {:ex_sctp, "~> 0.1.3"},
+      {:ex_webrtc, "~> 0.17.0"},
       {:plug, "~> 1.20"},
       {:vxpipe_call_engine, in_umbrella: true}
     ]

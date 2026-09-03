@@ -9,6 +9,12 @@ returns a `Vxpipe.CallEngine.Room.Snapshot`. The room authority is a significant
 temporary child: its termination ends that incarnation instead of independently
 restarting authoritative state.
 
+The next slice accepts `Vxpipe.CallEngine.Command.JoinParticipant` for a live
+room. The room authority serializes admission and starts each temporary
+participant authority through the room incarnation's named dynamic participant
+supervisor. The resulting public snapshot contains domain identity and state,
+not gateway sessions, WebRTC, JSON, or RTVI data.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

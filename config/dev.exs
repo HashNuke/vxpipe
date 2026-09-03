@@ -8,7 +8,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
       principal: [
         tenant_id: "tenant-development",
         actor_id: "actor-samples",
-        scopes: ["rooms:create"]
+        scopes: ["rooms:create", "rooms:join"]
       ]
     ]
   ]

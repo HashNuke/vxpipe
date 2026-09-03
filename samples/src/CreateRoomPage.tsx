@@ -12,8 +12,36 @@ type RoomResponse = {
   room: RoomSnapshot;
 };
 
+type ParticipantSnapshot = {
+  participant_id: string;
+  role: string;
+  room_id: string;
+  state: string;
+};
+
+type GatewaySession = {
+  session_id: string;
+  expires_at: string;
+  transport: {
+    type: "smallwebrtc";
+    endpoint: string;
+    request_data: { session_id: string };
+  };
+};
+
+type SessionResponse = {
+  participant: ParticipantSnapshot;
+  session: GatewaySession;
+};
+
+export type RoomConnection = {
+  room: RoomSnapshot;
+  participant: ParticipantSnapshot;
+  session: GatewaySession;
+};
+
 type CreateRoomPageProps = {
-  onCreated: (room: RoomSnapshot) => void;
+  onCreated: (connection: RoomConnection) => void;
 };
 
 function isRoomResponse(value: unknown): value is RoomResponse {
@@ -33,8 +61,45 @@ function isRoomResponse(value: unknown): value is RoomResponse {
   );
 }
 
+function isSessionResponse(value: unknown): value is SessionResponse {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("participant" in value) ||
+    !("session" in value)
+  ) {
+    return false;
+  }
+
+  const { participant, session } = value;
+
+  return (
+    !!participant &&
+    typeof participant === "object" &&
+    "participant_id" in participant &&
+    typeof participant.participant_id === "string" &&
+    !!session &&
+    typeof session === "object" &&
+    "session_id" in session &&
+    typeof session.session_id === "string" &&
+    "transport" in session &&
+    !!session.transport &&
+    typeof session.transport === "object" &&
+    "type" in session.transport &&
+    session.transport.type === "smallwebrtc" &&
+    "endpoint" in session.transport &&
+    typeof session.transport.endpoint === "string" &&
+    "request_data" in session.transport &&
+    !!session.transport.request_data &&
+    typeof session.transport.request_data === "object" &&
+    "session_id" in session.transport.request_data &&
+    session.transport.request_data.session_id === session.session_id
+  );
+}
+
 export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
   const [roomId] = useState(() => `room_${crypto.randomUUID()}`);
+  const [room, setRoom] = useState<RoomSnapshot>();
   const [error, setError] = useState<string>();
   const [creating, setCreating] = useState(false);
 
@@ -43,23 +108,45 @@ export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
     setError(undefined);
 
     try {
-      const response = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ room_id: roomId }),
-      });
+      let createdRoom = room;
 
-      if (!response.ok) {
-        throw new Error("The gateway could not create a room.");
+      if (!createdRoom) {
+        const response = await fetch("/api/rooms", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ room_id: roomId }),
+        });
+
+        if (!response.ok) {
+          throw new Error("The gateway could not create a room.");
+        }
+
+        const payload: unknown = await response.json();
+
+        if (!isRoomResponse(payload)) {
+          throw new Error("The gateway returned an invalid room response.");
+        }
+
+        createdRoom = payload.room;
+        setRoom(createdRoom);
       }
 
-      const payload: unknown = await response.json();
+      const sessionResponse = await fetch(
+        `/api/rooms/${encodeURIComponent(createdRoom.room_id)}/sessions`,
+        { method: "POST" },
+      );
 
-      if (!isRoomResponse(payload)) {
-        throw new Error("The gateway returned an invalid room response.");
+      if (!sessionResponse.ok) {
+        throw new Error("The gateway could not prepare a voice session.");
       }
 
-      onCreated(payload.room);
+      const sessionPayload: unknown = await sessionResponse.json();
+
+      if (!isSessionResponse(sessionPayload)) {
+        throw new Error("The gateway returned an invalid voice-session response.");
+      }
+
+      onCreated({ room: createdRoom, ...sessionPayload });
     } catch (reason) {
       const detail = reason instanceof Error ? reason.message : "Room creation failed.";
       setError(`${detail} Check that bin/dev is running, then try again.`);

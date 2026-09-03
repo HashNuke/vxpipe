@@ -9,11 +9,18 @@ The initial screen uses `ConsoleTemplate` from
 client, and uses the Small WebRTC transport. The default offer URL is
 `/api/rtvi/offer`.
 
-The **Create room** control is the first working vertical slice. It calls
-`POST /api/rooms` through the same-origin proxy with a browser-generated room ID,
-then replaces the creation screen with the responsive Pipecat console. The
-development tenant and actor are injected by gateway configuration; they are not
-supplied or authenticated by the browser.
+The **Create room** control calls `POST /api/rooms` through the same-origin proxy
+with a browser-generated room ID, then calls the returned room's session
+endpoint. The gateway admits one participant and returns a five-minute,
+single-use Small WebRTC session. Only then does the creation screen give the
+whole viewport to the responsive Pipecat console. The development tenant and
+actor are injected by gateway configuration; they are not supplied or
+authenticated by the browser.
+
+The Pipecat **Connect** control sends its offer to the returned endpoint along
+with the request data from the session response. The current gateway completes
+WebRTC and RTVI readiness. It does not yet route microphone audio to an agent or
+return synthesized audio.
 
 From the repository root:
 
