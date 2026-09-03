@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-processes=(vxpipe samples)
+processes=(vxpipe samples reloader)
 dev_mode="https"
 export VXPIPE_SAMPLES_PORT="5173"
 export VXPIPE_DEV_TLS="http"
@@ -20,6 +20,16 @@ fi
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "Error: bin/dev requires Node.js and npm on PATH." >&2
+  exit 1
+fi
+
+if ! command -v watchman >/dev/null 2>&1; then
+  echo "Error: bin/dev requires watchman on PATH." >&2
+  exit 1
+fi
+
+if ! command -v watchman-make >/dev/null 2>&1; then
+  echo "Error: bin/dev requires watchman-make on PATH." >&2
   exit 1
 fi
 

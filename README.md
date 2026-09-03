@@ -6,8 +6,9 @@
 
 The development stack requires Elixir, Node.js and npm,
 [Goreman](https://github.com/mattn/goreman),
-[Caddy](https://caddyserver.com/), Tailscale, and `jq`. Vite 8 requires Node.js
-20.19.x or Node.js 22.12 or newer.
+[Watchman](https://facebook.github.io/watchman/) with its `watchman-make`
+Python client, [Caddy](https://caddyserver.com/), Tailscale, and `jq`. Vite 8
+requires Node.js 20.19.x or Node.js 22.12 or newer.
 
 Install the sample frontend dependencies once:
 
@@ -27,6 +28,12 @@ as the tailnet-only HTTPS ingress at `https://<machine-fqdn>:5173/`. The machine
 FQDN and Tailscale IPv4 address are discovered automatically. Caddy sends
 `/api/*` and `/healthz` to the gateway on loopback port 4000 and all other
 requests to Vite.
+
+Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
+Mix manifests, or runtime configuration ask Goreman to restart only the
+`vxpipe` process. A reload therefore starts a fresh BEAM instance and discards
+development rooms, sessions, and WebRTC connections. Test changes do not
+restart the development server.
 
 Caddy automatically obtains a certificate for the `.ts.net` hostname from the
 local Tailscale daemon. MagicDNS and HTTPS certificates must be enabled for the

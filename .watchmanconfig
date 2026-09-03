@@ -1,0 +1,11 @@
+{
+  "ignore_dirs": [
+    "_build",
+    "deps",
+    "samples/node_modules",
+    "samples/dist",
+    "tmp",
+    "cover",
+    "doc"
+  ]
+}
