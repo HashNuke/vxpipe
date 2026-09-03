@@ -2,6 +2,14 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+processes=(vxpipe samples)
+dev_mode="https"
+goreman_args=(
+  -basedir "$repo_root"
+  -f "$repo_root/Procfile"
+  -set-ports=false
+  -exit-on-error
+)
 
 if ! command -v goreman >/dev/null 2>&1; then
   echo "Error: bin/dev requires goreman on PATH." >&2
@@ -13,9 +21,47 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-exec goreman \
-  -basedir "$repo_root" \
-  -f "$repo_root/Procfile" \
-  -set-ports=false \
-  -exit-on-error \
-  start "$@"
+case "${1:-}" in
+  --http)
+    dev_mode="http"
+    shift
+    ;;
+  --https)
+    shift
+    ;;
+esac
+
+if [[ "$dev_mode" == "https" ]]; then
+  if ! command -v tailscale >/dev/null 2>&1; then
+    echo "Error: bin/dev requires tailscale on PATH. Use --http to run without TLS." >&2
+    exit 1
+  fi
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: bin/dev requires jq on PATH. Use --http to run without TLS." >&2
+    exit 1
+  fi
+
+  if ! tailscale_host="$(
+    tailscale status --json |
+      jq -er '.Self.DNSName | strings | sub("\\.$"; "") | select(length > 0)'
+  )"; then
+    echo "Error: unable to determine this machine's Tailscale FQDN." >&2
+    exit 1
+  fi
+
+  export APP_HOST="$tailscale_host"
+  export VXPIPE_DEV_TLS="tailscale"
+  processes+=(https)
+fi
+
+if [[ $# -gt 0 ]]; then
+  echo "Usage: bin/dev [--http | --https]" >&2
+  exit 1
+fi
+
+if [[ -f "$repo_root/.env" ]]; then
+  goreman_args+=(-env "$repo_root/.env")
+fi
+
+exec goreman "${goreman_args[@]}" start "${processes[@]}"
