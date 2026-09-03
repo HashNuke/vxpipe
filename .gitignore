@@ -25,3 +25,5 @@ erl_crash.dump
 /samples/*.tsbuildinfo
 /samples/.env*
 !/samples/.env.example
+
+.env
