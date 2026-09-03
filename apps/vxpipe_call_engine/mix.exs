@@ -1,9 +1,9 @@
-defmodule CallEngine.MixProject do
+defmodule Vxpipe.CallEngine.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :call_engine,
+      app: :vxpipe_call_engine,
       version: "0.1.0",
       build_path: "../../_build",
       config_path: "../../config/config.exs",
@@ -19,7 +19,7 @@ defmodule CallEngine.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {CallEngine.Application, []}
+      mod: {Vxpipe.CallEngine.Application, []}
     ]
   end
 
