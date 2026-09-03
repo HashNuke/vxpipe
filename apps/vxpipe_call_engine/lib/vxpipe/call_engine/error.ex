@@ -7,10 +7,15 @@ defmodule Vxpipe.CallEngine.Error do
   defstruct [:code, :message, retryable: false, details: %{}]
 
   @type code ::
-          :deadline_exceeded
+          :agent_not_ready
+          | :connection_already_attached
+          | :connection_not_attached
+          | :deadline_exceeded
           | :invalid_command
           | :participant_already_exists
+          | :participant_not_found
           | :room_already_exists
+          | :room_incarnation_changed
           | :room_not_found
           | :room_start_failed
 

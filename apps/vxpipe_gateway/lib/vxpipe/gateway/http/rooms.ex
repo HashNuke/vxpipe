@@ -25,6 +25,7 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
         enabled: true,
         tenant_id: Keyword.fetch!(principal, :tenant_id),
         actor_id: Keyword.fetch!(principal, :actor_id),
+        agent: Keyword.get(options, :agent),
         scopes: Keyword.get(principal, :scopes, []),
         session_ttl_ms: Keyword.get(options, :session_ttl_ms, @default_session_ttl_ms)
       }
@@ -75,6 +76,7 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
              tenant_id: principal.tenant_id,
              actor_id: principal.actor_id,
              room_id: Map.get(conn.body_params, "room_id"),
+             agent: principal.agent,
              deadline: deadline
            ),
          {:ok, snapshot} <- CallEngine.create_room(command) do

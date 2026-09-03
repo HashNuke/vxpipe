@@ -13,6 +13,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
                       cors: [],
                       room_creation: [
                         enabled: true,
+                        agent: :deterministic_text,
                         principal: [
                           tenant_id: "tenant-development",
                           actor_id: "actor-samples",
@@ -115,6 +116,33 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
              "type" => "bot-ready",
              "data" => %{"version" => "2.1.0"}
            } = JSON.decode!(reply)
+
+    :ok =
+      PeerConnection.send_data(
+        client,
+        client_channel,
+        JSON.encode!(%{
+          "id" => "client-text-1",
+          "label" => "rtvi-ai",
+          "type" => "send-text",
+          "data" => %{
+            "content" => "hello",
+            "options" => %{"run_immediately" => true, "audio_response" => true}
+          }
+        })
+      )
+
+    assert_receive {:ex_webrtc, ^client, {:data, ^client_channel, output}}, 5_000
+
+    assert %{
+             "label" => "rtvi-ai",
+             "type" => "bot-output",
+             "data" => %{
+               "text" => "Echo: hello",
+               "aggregated_by" => "sentence",
+               "will_be_spoken" => false
+             }
+           } = JSON.decode!(output)
 
     assert [{connection, _value}] =
              Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, connection_id})

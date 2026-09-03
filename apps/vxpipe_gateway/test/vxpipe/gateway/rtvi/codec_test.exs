@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Gateway.RTVI.Codec
+  alias Vxpipe.CallEngine.Event.TextOutput
 
   test "answers a current RTVI 2.x client-ready message with bot-ready" do
     client_ready =
@@ -67,6 +68,99 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
              "id" => "ready-malformed",
              "type" => "error-response"
            } = JSON.decode!(reply)
+  end
+
+  test "decodes a send-text command and projects protocol-neutral output" do
+    payload =
+      JSON.encode!(%{
+        "id" => "client-text-1",
+        "label" => "rtvi-ai",
+        "type" => "send-text",
+        "data" => %{
+          "content" => "hello",
+          "options" => %{"run_immediately" => true, "audio_response" => true}
+        }
+      })
+
+    assert {:command,
+            {:send_text,
+             %{
+               id: "client-text-1",
+               content: "hello",
+               run_immediately: true,
+               audio_response: true
+             }}} = Codec.handle(payload)
+
+    event = %TextOutput{
+      id: "evt_output",
+      sequence: 1,
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-agent",
+      source_participant_id: "part-human",
+      connection_id: "conn-demo",
+      command_id: "cmd-text",
+      correlation_id: "client-text-1",
+      text: "Echo: hello",
+      aggregated_by: :sentence,
+      will_be_spoken: false,
+      occurred_at: ~U[2026-09-03 18:30:00.000Z]
+    }
+
+    assert {:ok, encoded} = Codec.encode_event(event)
+
+    assert %{
+             "id" => "evt_output",
+             "label" => "rtvi-ai",
+             "type" => "bot-output",
+             "data" => %{
+               "text" => "Echo: hello",
+               "aggregated_by" => "sentence",
+               "segment_id" => 1,
+               "will_be_spoken" => false
+             }
+           } = JSON.decode!(encoded)
+  end
+
+  test "correlates invalid send-text options without emitting an engine command" do
+    payload =
+      JSON.encode!(%{
+        "id" => "client-text-invalid",
+        "label" => "rtvi-ai",
+        "type" => "send-text",
+        "data" => %{
+          "content" => "hello",
+          "options" => %{"audio_response" => "yes"}
+        }
+      })
+
+    assert {:reply, reply} = Codec.handle(payload)
+
+    assert %{
+             "id" => "client-text-invalid",
+             "type" => "error-response",
+             "data" => %{"error" => "The send-text options are invalid."}
+           } = JSON.decode!(reply)
+  end
+
+  test "applies RTVI defaults when send-text options are omitted" do
+    payload =
+      JSON.encode!(%{
+        "id" => "client-text-defaults",
+        "label" => "rtvi-ai",
+        "type" => "send-text",
+        "data" => %{"content" => "hello"}
+      })
+
+    assert {:command,
+            {:send_text,
+             %{
+               id: "client-text-defaults",
+               content: "hello",
+               run_immediately: true,
+               audio_response: true
+             }}} = Codec.handle(payload)
   end
 
   test "ignores Small WebRTC signalling and keepalive messages" do

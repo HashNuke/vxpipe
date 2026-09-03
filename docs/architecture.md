@@ -1,7 +1,7 @@
 # Vxpipe protocol and runtime architecture
 
-Status: Living architecture; room creation and one-participant RTVI connection
-slices are implemented
+Status: Living architecture; room creation, one-participant RTVI connection,
+and deterministic text-turn slices are implemented
 
 ## Decision
 
@@ -663,11 +663,42 @@ Pipecat, JSON, or RTVI types. The detailed decision, supervision topology,
 failure behavior, and verification evidence are recorded in
 [`rtvi-participant-connection.md`](rtvi-participant-connection.md).
 
-This is transport and protocol readiness, not a voice conversation pipeline.
-Incoming RTP currently terminates at a diagnostic sink. There is no agent
-participant, transcription, model inference, speech synthesis, outbound audio,
-reconnection, production authentication, TURN policy, persistence, or room
-recovery yet.
+At that checkpoint this was transport and protocol readiness, not a voice
+conversation pipeline. Incoming RTP terminated at a diagnostic sink, and there
+was not yet an agent participant or text-turn path.
+
+### Implemented deterministic text-turn slice
+
+The third slice adds a provider-free conversational round trip without changing
+the browser UI or introducing RTVI types into the call engine:
+
+1. Development room creation resolves a deterministic text agent. The room
+   authority admits its agent participant and starts the responder through the
+   room incarnation's dynamic capability supervisor.
+2. A WebRTC connection must attach to its exact room incarnation and admitted
+   human participant before it can complete negotiation and report
+   `bot-ready`. A room without a ready agent path rejects attachment.
+3. The engine and gateway monitor each other across that attachment. Browser
+   disconnect removes the room subscription; loss of the room, human
+   participant, or agent capability tears down the transport connection.
+4. The gateway decodes RTVI `send-text` into a validated, protocol-neutral
+   `SendText` command using identity from the bound session rather than the
+   client message.
+5. The room authority verifies that the caller owns the attached connection,
+   then dispatches work outside its mailbox to the deterministic capability.
+6. The capability produces `Echo: <input>`. The room authority assigns an event
+   ID and room-incarnation sequence to a protocol-neutral `TextOutput` event and
+   sends it only to the originating connection.
+7. The gateway projects that event as an unspoken RTVI `bot-output`. The
+   unmodified Pipecat conversation view displays both the locally injected user
+   message and the engine-produced assistant response.
+
+This establishes the first bidirectional command/event path and the first
+runtime capability instance. It does not add transcription, model inference,
+speech synthesis, outbound audio, provider credentials, reconnection,
+production authentication, TURN policy, persistence, or room recovery. The
+detailed decision and verification evidence are in
+[`deterministic-text-turn.md`](deterministic-text-turn.md).
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

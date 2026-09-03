@@ -15,6 +15,13 @@ participant authority through the room incarnation's named dynamic participant
 supervisor. The resulting public snapshot contains domain identity and state,
 not gateway sessions, WebRTC, JSON, or RTVI data.
 
+Development rooms can also resolve a deterministic text agent. Its agent
+participant uses the normal participant supervisor, while its responder runs as
+a separate capability under the room's dynamic capability supervisor. Attached
+connections can submit protocol-neutral `SendText` commands and receive targeted,
+room-sequenced `TextOutput` events. The engine still has no dependency on the
+gateway or RTVI.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

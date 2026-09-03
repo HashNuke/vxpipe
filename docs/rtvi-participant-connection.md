@@ -87,8 +87,10 @@ so media, data-channel, ICE, and lifecycle events reach the process that owns
 the protocol state. A closed chat data channel, failed/closed peer connection,
 or peer-process exit stops the connection authority. Because it is significant,
 the entire connection incarnation shuts down instead of leaving transport
-workers behind. That subtree is not linked to the room lifecycle, so a browser
-disconnect does not terminate the room or participant.
+workers behind. The later deterministic text-turn slice also attaches this
+process to the room authority with mutual monitoring. A browser disconnect does
+not terminate the room or participant, while room or participant loss now
+terminates the stale transport.
 
 ## Compatibility contract
 
@@ -128,12 +130,11 @@ development headers when dependencies are compiled.
 
 ## Implications and next boundary
 
-This slice proves connection compatibility, not conversational usefulness.
-Incoming audio is accepted but not routed to a capability, and the server emits
-no speech, transcription, model, or audio output. The next slice should attach
-an agent participant with a deterministic input/output capability path and
-prove one observable round trip while preserving this admission and transport
-boundary.
+This slice proved connection compatibility rather than conversational
+usefulness. The next planned text slice has since been implemented in
+[`deterministic-text-turn.md`](deterministic-text-turn.md). Incoming audio is
+still accepted without being routed to a capability, and the server emits no
+speech, transcription, model, or audio output.
 
 Reconnection is also deliberately absent. A claimed or expired session cannot
 be reused; a later reconnection policy must issue a new connection credential

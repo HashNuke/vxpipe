@@ -19,8 +19,10 @@ authenticated by the browser.
 
 The Pipecat **Connect** control sends its offer to the returned endpoint along
 with the request data from the session response. The current gateway completes
-WebRTC and RTVI readiness. It does not yet route microphone audio to an agent or
-return synthesized audio.
+WebRTC and RTVI readiness. Once connected, typing `hello` in the conversation
+input runs through the engine's deterministic capability and displays
+`Echo: hello` as an unspoken assistant response. The gateway does not yet route
+microphone audio to the agent or return synthesized audio.
 
 From the repository root:
 

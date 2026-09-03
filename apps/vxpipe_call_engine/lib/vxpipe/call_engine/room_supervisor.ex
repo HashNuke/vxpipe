@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   use DynamicSupervisor
 
-  alias Vxpipe.CallEngine.Command.{CreateRoom, JoinParticipant}
+  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
   alias Vxpipe.CallEngine.{Error, Id, RoomAuthority, RoomIncarnationSupervisor}
 
   def start_link(_options) do
@@ -27,6 +27,26 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
+  def attach_connection(%AttachConnection{} = command) do
+    case lookup_room(command.tenant_id, command.room_id) do
+      {:ok, room_authority} ->
+        case RoomAuthority.attach_connection(room_authority, command, self()) do
+          :ok -> {:ok, room_authority}
+          {:error, %Error{} = error} -> {:error, error}
+        end
+
+      {:error, %Error{} = error} ->
+        {:error, error}
+    end
+  end
+
+  def send_text(%SendText{} = command) do
+    case lookup_room(command.tenant_id, command.room_id) do
+      {:ok, room_authority} -> RoomAuthority.send_text(room_authority, command)
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
   defp start_room(command) do
     incarnation_id = Id.generate(:room_incarnation)
     options = [command: command, incarnation_id: incarnation_id]
@@ -45,6 +65,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
            "The room incarnation could not be started.",
            retryable: true
          )}
+    end
+  end
+
+  defp lookup_room(tenant_id, room_id) do
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {tenant_id, room_id}) do
+      [{room_authority, _value}] -> {:ok, room_authority}
+      [] -> {:error, room_not_found(room_id)}
     end
   end
 

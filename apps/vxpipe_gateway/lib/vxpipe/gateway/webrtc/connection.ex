@@ -4,10 +4,15 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   use GenServer
 
   alias ExWebRTC.{DataChannel, PeerConnection, SessionDescription}
+  alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
+  alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.Event.TextOutput
   alias Vxpipe.Gateway.RTVI.Codec
   alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
 
   @call_timeout 10_000
+  @command_timeout_seconds 5
 
   def start_link(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
@@ -33,23 +38,29 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   @impl true
   def init(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
+    session = Keyword.fetch!(options, :session)
 
-    {:ok, peer_connection} =
-      ConnectionPeerSupervisor.start_peer(
-        connection_id,
-        self(),
-        Keyword.fetch!(options, :ice_servers)
-      )
-
-    {:ok,
-     %{
-       candidate_gathering_timeout_ms: Keyword.fetch!(options, :candidate_gathering_timeout_ms),
-       channel_ref: nil,
-       connection_id: connection_id,
-       peer_connection: peer_connection,
-       peer_monitor: Process.monitor(peer_connection),
-       session: Keyword.fetch!(options, :session)
-     }}
+    with {:ok, attach_command} <- attach_command(connection_id, session),
+         {:ok, room_monitor} <- CallEngine.attach_connection(attach_command),
+         {:ok, peer_connection} <-
+           ConnectionPeerSupervisor.start_peer(
+             connection_id,
+             self(),
+             Keyword.fetch!(options, :ice_servers)
+           ) do
+      {:ok,
+       %{
+         candidate_gathering_timeout_ms: Keyword.fetch!(options, :candidate_gathering_timeout_ms),
+         channel_ref: nil,
+         connection_id: connection_id,
+         peer_connection: peer_connection,
+         peer_monitor: Process.monitor(peer_connection),
+         room_monitor: room_monitor,
+         session: session
+       }}
+    else
+      _error -> {:stop, :connection_attachment_failed}
+    end
   end
 
   @impl true
@@ -83,6 +94,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
       ) do
     case Codec.handle(payload) do
       {:reply, reply} -> :ok = PeerConnection.send_data(peer_connection, channel_ref, reply)
+      {:command, {:send_text, input}} -> submit_text(input, state)
       :ignore -> :ok
     end
 
@@ -111,6 +123,29 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     {:stop, :shutdown, state}
   end
 
+  def handle_info(
+        {:DOWN, room_monitor, :process, _pid, _reason},
+        %{room_monitor: room_monitor} = state
+      ) do
+    {:stop, :shutdown, state}
+  end
+
+  def handle_info(
+        {:vxpipe_event, %TextOutput{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
+         {:ok, message} <- Codec.encode_event(event) do
+      :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_connection_unavailable, _reason}, state) do
+    {:stop, :shutdown, state}
+  end
+
   def handle_info({:ex_webrtc, _peer_connection, _event}, state), do: {:noreply, state}
 
   defp call(connection_id, message) do
@@ -118,6 +153,52 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
       [{connection, _value}] -> GenServer.call(connection, message, @call_timeout)
       [] -> {:error, :connection_not_found}
     end
+  end
+
+  defp attach_command(connection_id, session) do
+    AttachConnection.new(
+      tenant_id: session.tenant_id,
+      actor_id: session.actor_id,
+      room_id: session.room_id,
+      incarnation_id: session.incarnation_id,
+      participant_id: session.participant_id,
+      connection_id: connection_id,
+      deadline: command_deadline()
+    )
+  end
+
+  defp submit_text(input, state) do
+    result =
+      with {:ok, command} <-
+             SendText.new(
+               tenant_id: state.session.tenant_id,
+               actor_id: state.session.actor_id,
+               room_id: state.session.room_id,
+               incarnation_id: state.session.incarnation_id,
+               participant_id: state.session.participant_id,
+               connection_id: state.connection_id,
+               correlation_id: input.id,
+               content: input.content,
+               run_immediately: input.run_immediately,
+               audio_response: input.audio_response,
+               deadline: command_deadline()
+             ),
+           :ok <- CallEngine.send_text(command) do
+        :ok
+      end
+
+    case result do
+      :ok ->
+        :ok
+
+      {:error, %Error{}} ->
+        reply = Codec.encode_error_response(input.id, "The text input could not be accepted.")
+        :ok = PeerConnection.send_data(state.peer_connection, state.channel_ref, reply)
+    end
+  end
+
+  defp command_deadline do
+    DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)
   end
 
   defp negotiate_peer(peer_connection, offer, gathering_timeout_ms) do

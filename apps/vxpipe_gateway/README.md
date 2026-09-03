@@ -9,9 +9,10 @@ development room/session admission, and Pipecat Small WebRTC signalling:
 - `POST /api/rtvi/offer`
 - `PATCH /api/rtvi/offer`
 
-The offer transport completes the minimum RTVI 2.x readiness exchange over the
-`chat` data channel. Incoming RTP is accepted but not yet routed to a speech or
-agent pipeline.
+The offer transport completes RTVI 2.x readiness over the `chat` data channel.
+In development it attaches the connection to a deterministic engine agent and
+maps `send-text` commands to unspoken `bot-output` events. Incoming RTP is
+accepted but not yet routed to a speech pipeline.
 
 Configure the application from the host project's application environment:
 
@@ -36,10 +37,11 @@ The application reads this setting once during startup and passes the HTTP
 options into its supervision tree. Embedded callers can instead supervise
 `Vxpipe.Gateway.HTTP.Supervisor` directly with the same HTTP options.
 
-The repository's development configuration enables room creation and
-participant admission with a fixed development principal so the browser can
-exercise the complete path without claiming to implement authentication. It
-issues an opaque, five-minute, single-use session for the offer request.
+The repository's development configuration enables a deterministic text agent,
+room creation, and participant admission with a fixed development principal so
+the browser can exercise the complete path without claiming to implement
+authentication. It issues an opaque, five-minute, single-use session for the
+offer request.
 Production and embedding configurations must leave this disabled until a real
 authenticated principal is attached at the gateway boundary.
 
