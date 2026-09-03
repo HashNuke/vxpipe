@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-03T17:25:45Z",
+  "title": "Design System: Vxpipe Operator's Bench",
+  "extensions": {
+    "colorMeta": {
+      "engine-ink": {
+        "role": "neutral",
+        "displayName": "Engine Ink",
+        "canonical": "oklch(0.141 0.005 285.823)",
+        "tonalRamp": ["oklch(0.15 0.005 285.823)", "oklch(0.25 0.005 285.823)", "oklch(0.35 0.005 285.823)", "oklch(0.45 0.005 285.823)", "oklch(0.55 0.005 285.823)", "oklch(0.65 0.005 285.823)", "oklch(0.8 0.005 285.823)", "oklch(0.95 0.005 285.823)"]
+      },
+      "bench-charcoal": {
+        "role": "neutral",
+        "displayName": "Bench Charcoal",
+        "canonical": "oklch(0.21 0.006 285.885)",
+        "tonalRamp": ["oklch(0.15 0.006 285.885)", "oklch(0.25 0.006 285.885)", "oklch(0.35 0.006 285.885)", "oklch(0.45 0.006 285.885)", "oklch(0.55 0.006 285.885)", "oklch(0.65 0.006 285.885)", "oklch(0.8 0.006 285.885)", "oklch(0.95 0.006 285.885)"]
+      },
+      "worktop-gray": {
+        "role": "neutral",
+        "displayName": "Worktop Gray",
+        "canonical": "oklch(0.274 0.006 286.033)",
+        "tonalRamp": ["oklch(0.15 0.006 286.033)", "oklch(0.25 0.006 286.033)", "oklch(0.35 0.006 286.033)", "oklch(0.45 0.006 286.033)", "oklch(0.55 0.006 286.033)", "oklch(0.65 0.006 286.033)", "oklch(0.8 0.006 286.033)", "oklch(0.95 0.006 286.033)"]
+      },
+      "muted-readout": {
+        "role": "neutral",
+        "displayName": "Muted Readout",
+        "canonical": "oklch(0.552 0.016 285.938)",
+        "tonalRamp": ["oklch(0.15 0.016 285.938)", "oklch(0.25 0.016 285.938)", "oklch(0.35 0.016 285.938)", "oklch(0.45 0.016 285.938)", "oklch(0.55 0.016 285.938)", "oklch(0.65 0.016 285.938)", "oklch(0.8 0.016 285.938)", "oklch(0.95 0.016 285.938)"]
+      },
+      "subtle-divider": {
+        "role": "neutral",
+        "displayName": "Subtle Divider",
+        "canonical": "oklch(0.705 0.015 286.067)",
+        "tonalRamp": ["oklch(0.15 0.015 286.067)", "oklch(0.25 0.015 286.067)", "oklch(0.35 0.015 286.067)", "oklch(0.45 0.015 286.067)", "oklch(0.55 0.015 286.067)", "oklch(0.65 0.015 286.067)", "oklch(0.8 0.015 286.067)", "oklch(0.95 0.015 286.067)"]
+      },
+      "divider-gray": {
+        "role": "neutral",
+        "displayName": "Divider Gray",
+        "canonical": "oklch(0.92 0.004 286.32)",
+        "tonalRamp": ["oklch(0.15 0.004 286.32)", "oklch(0.25 0.004 286.32)", "oklch(0.35 0.004 286.32)", "oklch(0.45 0.004 286.32)", "oklch(0.55 0.004 286.32)", "oklch(0.65 0.004 286.32)", "oklch(0.8 0.004 286.32)", "oklch(0.95 0.004 286.32)"]
+      },
+      "panel-gray": {
+        "role": "neutral",
+        "displayName": "Panel Gray",
+        "canonical": "oklch(0.967 0.001 286.375)",
+        "tonalRamp": ["oklch(0.15 0.001 286.375)", "oklch(0.25 0.001 286.375)", "oklch(0.35 0.001 286.375)", "oklch(0.45 0.001 286.375)", "oklch(0.55 0.001 286.375)", "oklch(0.65 0.001 286.375)", "oklch(0.8 0.001 286.375)", "oklch(0.95 0.001 286.375)"]
+      },
+      "console-paper": {
+        "role": "neutral",
+        "displayName": "Console Paper",
+        "canonical": "oklch(0.985 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.55 0 0)", "oklch(0.65 0 0)", "oklch(0.8 0 0)", "oklch(0.95 0 0)"]
+      },
+      "clean-canvas": {
+        "role": "neutral",
+        "displayName": "Clean Canvas",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": ["oklch(0.15 0 0)", "oklch(0.25 0 0)", "oklch(0.35 0 0)", "oklch(0.45 0 0)", "oklch(0.55 0 0)", "oklch(0.65 0 0)", "oklch(0.8 0 0)", "oklch(0.95 0 0)"]
+      },
+      "signal-green": {
+        "role": "primary",
+        "displayName": "Signal Green",
+        "canonical": "oklch(0.696 0.17 162.48)",
+        "tonalRamp": ["oklch(0.15 0.17 162.48)", "oklch(0.25 0.17 162.48)", "oklch(0.35 0.17 162.48)", "oklch(0.45 0.17 162.48)", "oklch(0.55 0.17 162.48)", "oklch(0.65 0.17 162.48)", "oklch(0.8 0.17 162.48)", "oklch(0.95 0.17 162.48)"]
+      },
+      "fault-coral": {
+        "role": "secondary",
+        "displayName": "Fault Coral",
+        "canonical": "oklch(0.7022 0.1892 22.23)",
+        "tonalRamp": ["oklch(0.15 0.1892 22.23)", "oklch(0.25 0.1892 22.23)", "oklch(0.35 0.1892 22.23)", "oklch(0.45 0.1892 22.23)", "oklch(0.55 0.1892 22.23)", "oklch(0.65 0.1892 22.23)", "oklch(0.8 0.1892 22.23)", "oklch(0.95 0.1892 22.23)"]
+      },
+      "agent-violet": {
+        "role": "tertiary",
+        "displayName": "Agent Violet",
+        "canonical": "oklch(0.585 0.233 277.117)",
+        "tonalRamp": ["oklch(0.15 0.233 277.117)", "oklch(0.25 0.233 277.117)", "oklch(0.35 0.233 277.117)", "oklch(0.45 0.233 277.117)", "oklch(0.55 0.233 277.117)", "oklch(0.65 0.233 277.117)", "oklch(0.8 0.233 277.117)", "oklch(0.95 0.233 277.117)"]
+      },
+      "client-blue": {
+        "role": "tertiary",
+        "displayName": "Client Blue",
+        "canonical": "oklch(0.623 0.214 259.815)",
+        "tonalRamp": ["oklch(0.15 0.214 259.815)", "oklch(0.25 0.214 259.815)", "oklch(0.35 0.214 259.815)", "oklch(0.45 0.214 259.815)", "oklch(0.55 0.214 259.815)", "oklch(0.65 0.214 259.815)", "oklch(0.8 0.214 259.815)", "oklch(0.95 0.214 259.815)"]
+      }
+    },
+    "typographyMeta": {
+      "title": {"displayName": "Title", "purpose": "Compact workspace and product titles."},
+      "body": {"displayName": "Body", "purpose": "Instructions, empty states, and general interface copy."},
+      "control": {"displayName": "Control", "purpose": "Buttons, selectors, and compact actions."},
+      "bench-label": {"displayName": "Bench Label", "purpose": "Uppercase panel headings, tabs, and operational categories."},
+      "telemetry": {"displayName": "Telemetry", "purpose": "Timestamps, identifiers, transport values, and event data."}
+    },
+    "shadows": [
+      {
+        "name": "overlay-xshort-light",
+        "value": "0px 7px 3px rgb(0 0 0 / 0.01), 0px 4px 2px rgb(0 0 0 / 0.03), 0px 2px 2px rgb(0 0 0 / 0.04), 0px 0px 1px rgb(0 0 0 / 0.05)",
+        "purpose": "Minimal ambient separation for temporary light-theme overlays."
+      },
+      {
+        "name": "overlay-xshort-dark",
+        "value": "0px 7px 3px rgb(0 0 0 / 0.8), 0px 4px 2px rgb(0 0 0 / 0.85), 0px 2px 2px rgb(0 0 0 / 0.9), 0px 0px 1px rgb(0 0 0 / 0.92)",
+        "purpose": "Dense ambient separation for temporary dark-theme overlays."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-standard",
+        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default hover, focus, and state transition."
+      }
+    ],
+    "breakpoints": [
+      {"name": "workspace", "value": "640px"}
+    ]
+  },
+  "components": [
+    {
+      "name": "Active Connect Button",
+      "kind": "button",
+      "refersTo": "button-active",
+      "description": "The primary readiness and connection action.",
+      "html": "<button class=\"ds-button-active\">Connect</button>",
+      "css": ".ds-button-active { height: 36px; padding: 8px 18px; border: 1px solid transparent; border-radius: 6px; background: var(--color-active, oklch(0.696 0.17 162.48)); color: var(--color-active-foreground, oklch(0.9793 0.0207 166.11)); font: 500 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-active:hover { background: color-mix(in oklch, var(--color-active, oklch(0.696 0.17 162.48)) 90%, transparent); } .ds-button-active:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-active-ring, oklch(0.696 0.17 162.48 / 20%)); }"
+    },
+    {
+      "name": "Primary Icon Button",
+      "kind": "button",
+      "refersTo": "button-primary-light",
+      "description": "A compact icon action such as send or commit.",
+      "html": "<button class=\"ds-button-icon\" aria-label=\"Send\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M22 2 11 13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"m22 2-7 20-4-9-9-4Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/></svg></button>",
+      "css": ".ds-button-icon { display: inline-grid; width: 36px; height: 36px; place-items: center; border: 1px solid transparent; border-radius: 6px; background: var(--color-primary, oklch(0.21 0.006 285.885)); color: var(--color-primary-foreground, oklch(0.985 0 0)); transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-icon:hover { background: color-mix(in oklch, var(--color-primary, oklch(0.21 0.006 285.885)) 90%, transparent); } .ds-button-icon:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); }"
+    },
+    {
+      "name": "Ghost Utility Button",
+      "kind": "button",
+      "refersTo": "button-primary-light",
+      "description": "A low-emphasis toolbar action that becomes tonal on hover.",
+      "html": "<button class=\"ds-button-ghost\">Open keypad</button>",
+      "css": ".ds-button-ghost { height: 36px; padding: 0 13px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 500 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-ghost:hover { background: var(--color-accent, oklch(0.967 0.001 286.375)); } .ds-button-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); }"
+    },
+    {
+      "name": "Workbench Panel",
+      "kind": "card",
+      "refersTo": "panel-light",
+      "description": "The flat bordered container for one operational responsibility.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-panel-header\">BOT AUDIO</header><div class=\"ds-panel-body\">No audio</div></section>",
+      "css": ".ds-panel { overflow: hidden; min-height: 180px; border: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); border-radius: 4px; background: var(--color-card, oklch(1 0 0)); color: var(--color-card-foreground, oklch(0.552 0.016 285.938)); box-shadow: none; } .ds-panel-header { padding: 12px; border-bottom: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SF Mono\", Consolas, monospace; letter-spacing: 0.05em; } .ds-panel-body { display: grid; min-height: 136px; place-items: center; padding: 16px; font: 500 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Segmented Workspace Tabs",
+      "kind": "nav",
+      "refersTo": "segmented-tab",
+      "description": "A compact switch between sibling operational views.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"Workspace view\"><button class=\"ds-tab is-active\" role=\"tab\" aria-selected=\"true\">CONVERSATION</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">METRICS</button></div>",
+      "css": ".ds-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: var(--color-muted, oklch(0.967 0.001 286.375)); } .ds-tab { height: 33px; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SF Mono\", Consolas, monospace; letter-spacing: 0.05em; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-tab:hover { background: color-mix(in oklch, var(--color-muted-foreground, oklch(0.552 0.016 285.938)) 10%, transparent); } .ds-tab.is-active { background: var(--color-background, oklch(1 0 0)); } .ds-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); }"
+    },
+    {
+      "name": "Filter Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A compact filter field for dense event and data regions.",
+      "html": "<label class=\"ds-filter\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" aria-hidden=\"true\"><path d=\"M4 5h16l-6 7v5l-4 2v-7Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linejoin=\"round\"/></svg><span class=\"ds-sr-only\">Filter events</span><input type=\"search\" placeholder=\"Filter\" /></label>",
+      "css": ".ds-filter { display: inline-flex; height: 36px; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--color-input, oklch(0.92 0.004 286.32)); border-radius: 6px; background: var(--color-secondary, oklch(0.967 0.001 286.375)); color: var(--color-muted-foreground, oklch(0.552 0.016 285.938)); transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-filter:focus-within { border-color: var(--color-ring, oklch(0.705 0.015 286.067)); box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); } .ds-filter input { width: 150px; border: 0; outline: 0; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 400 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-filter input::placeholder { color: var(--color-muted-foreground, oklch(0.552 0.016 285.938)); } .ds-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }"
+    },
+    {
+      "name": "Status Readout",
+      "kind": "custom",
+      "refersTo": "panel-light",
+      "description": "A compact label-and-value block for live system state.",
+      "html": "<section class=\"ds-status\"><h3>STATUS</h3><dl><div><dt>Client</dt><dd>INITIALIZED</dd></div><div><dt>Agent</dt><dd>---</dd></div></dl></section>",
+      "css": ".ds-status { border: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); border-radius: 4px; background: var(--color-card, oklch(1 0 0)); color: var(--color-card-foreground, oklch(0.552 0.016 285.938)); } .ds-status h3 { margin: 0; padding: 10px 12px 4px; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SF Mono\", Consolas, monospace; letter-spacing: 0.05em; } .ds-status dl { margin: 0; padding: 4px 12px 10px; } .ds-status dl div { display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: 16px; } .ds-status dt { font: 400 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-status dd { margin: 0; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 400 12px/18px \"Geist Mono\", \"SF Mono\", Consolas, monospace; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Operator's Bench",
+    "overview": "The Operator's Bench treats each screen as a working instrument: technical, calm, and dependable. The interface is compact and information-dense without feeling hurried; hierarchy comes from alignment, mono labels, borders, and restrained semantic color rather than decorative emphasis.\n\nSurfaces stay quiet so state is unmistakable. Neutral panels form a stable frame; Signal Green marks readiness and action, Fault Coral marks unavailable or error states, and identity hues remain tied to agent and client roles. Controls feel instrument-like and state-explicit.",
+    "keyCharacteristics": [
+      "Compact operational density",
+      "Dual light and dark neutral work surfaces",
+      "Sans-serif actions paired with uppercase mono labels and readouts",
+      "Saturated color reserved for state and identity",
+      "Flat, bordered panels with shallow corners"
+    ],
+    "rules": [
+      {"name": "The State Owns Color Rule", "body": "Saturated hues are reserved for operational state and participant identity; neutral structure carries everything else.", "section": "colors"},
+      {"name": "The Theme Is a Remap Rule", "body": "Light and dark modes preserve hierarchy and semantic assignments rather than merely inverting pixels.", "section": "colors"},
+      {"name": "The Quiet Canvas Rule", "body": "Do not add decorative gradients or brand color washes to operational surfaces.", "section": "colors"},
+      {"name": "The Readout Split Rule", "body": "Use sans-serif type for prose and actions; use mono for terse labels, identifiers, status values, and timestamps.", "section": "typography"},
+      {"name": "The One Working Surface Rule", "body": "Group related tools inside one bordered panel; do not create decorative cards inside cards.", "section": "layout"},
+      {"name": "The Flat at Rest Rule", "body": "Core work surfaces never float; one-pixel dividers and tonal contrast define hierarchy. Shadows belong only to temporary overlays.", "section": "elevation"},
+      {"name": "The Tool, Not Toy Rule", "body": "Keep corners shallow and functional; do not turn ordinary content, labels, or panels into pills.", "section": "shapes"},
+      {"name": "The One State, One Signal Rule", "body": "A control's color, label, icon, and disabled treatment must agree about its operational state.", "section": "components"}
+    ],
+    "dos": [
+      "Do build hierarchy from panels, alignment, tonal layers, and dividers.",
+      "Do keep status colors tied to readiness, failure, agent, and client roles.",
+      "Do use uppercase mono labels for terse categories and sans-serif type for readable instructions and actions.",
+      "Do preserve the 640px transition from resizable workspace to single-panel mobile navigation.",
+      "Do bring new custom surfaces onto these tokens before treating them as design authority."
+    ],
+    "donts": [
+      "Don't use unstyled browser-default controls or the former Room lifecycle slice bar as design-system evidence.",
+      "Don't soften the console into consumer chat styling with plush message bubbles, oversized pills, or friendly gradient cards.",
+      "Don't import decorative marketing treatments such as hero-scale type, ornamental glows, or gradient backdrops into operational screens.",
+      "Don't nest decorative cards inside working panels.",
+      "Don't use saturated color as ornament; every bright hue must communicate a defined state or identity."
+    ]
+  }
+}
