@@ -24,17 +24,19 @@ npm run dev --prefix samples
 
 Copy `.env.example` to `.env.local` when an endpoint differs from the defaults.
 `VITE_VXPIPE_RTVI_OFFER_URL` is exposed to the browser. `VXPIPE_GATEWAY_URL` is
-used only by the Vite development proxy. Never store credentials in either
-variable; browser clients should obtain scoped, short-lived connection details
-from the gateway.
+used only by the Vite development proxy in HTTP mode. Never store credentials
+in either variable; browser clients should obtain scoped, short-lived connection
+details from the gateway.
 
 In HTTP mode, set `APP_HOST` to a hostname or interface address to change the
-Vite bind host. When `VXPIPE_GATEWAY_URL` is absent, the proxy also connects to
-port 4000 on `APP_HOST`. Without `APP_HOST`, Vite binds to `0.0.0.0` and the
-proxy uses `http://127.0.0.1:4000`.
+Vite bind host. Without `APP_HOST`, Vite binds to `0.0.0.0`. The proxy uses
+`http://127.0.0.1:4000` by default.
 
 By default, `bin/dev` uses trusted HTTPS within the tailnet. Vite listens only on
-loopback and Goreman also runs Tailscale Serve on HTTPS port 5173. The machine
-FQDN is discovered automatically. This keeps the development server private to
-the tailnet while providing the secure browser context required for microphone
-access. Run `bin/dev --http` to disable TLS for local troubleshooting.
+loopback port 5174 and Goreman runs Caddy on HTTPS port 5173. Caddy routes
+`/api/*` directly to the gateway and sends other paths, including Vite's hot
+module replacement connection, to the frontend. The machine FQDN and Tailscale
+address are discovered automatically. Run `bin/dev --http` to omit Caddy for
+local troubleshooting. The HTTPS path may ask for sudo once so only Caddy can
+run as root and obtain the Tailscale certificate; the application processes stay
+unprivileged.

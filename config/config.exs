@@ -9,6 +9,19 @@
 # move said applications out of the umbrella.
 import Config
 
+config :vxpipe_gateway, Vxpipe.Gateway.Application,
+  http: [
+    enabled: false,
+    ip: :loopback,
+    port: 4000,
+    cors: [
+      allowed_origins: [],
+      allowed_methods: ["GET", "POST", "PATCH", "OPTIONS"],
+      allowed_headers: ["content-type", "authorization"],
+      allow_credentials: false
+    ]
+  ]
+
 # Sample configuration:
 #
 #     config :logger, :default_handler,
@@ -18,3 +31,5 @@ import Config
 #       format: "$date $time [$level] $metadata$message\n",
 #       metadata: [:user_id]
 #
+
+import_config "#{config_env()}.exs"

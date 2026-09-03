@@ -1,0 +1,19 @@
+{
+	auto_https disable_redirects
+	admin off
+	persist_config off
+}
+
+https://{$APP_HOST}:5173 {
+	bind {$VXPIPE_TAILSCALE_IP}
+
+	@gateway path /api/* /healthz
+
+	handle @gateway {
+		reverse_proxy 127.0.0.1:4000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:5174
+	}
+}

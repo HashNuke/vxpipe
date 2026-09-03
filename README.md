@@ -5,8 +5,9 @@
 ## Development
 
 The development stack requires Elixir, Node.js and npm,
-[Goreman](https://github.com/mattn/goreman), Tailscale, and `jq`. Vite 8 requires
-Node.js 20.19.x or Node.js 22.12 or newer.
+[Goreman](https://github.com/mattn/goreman),
+[Caddy](https://caddyserver.com/), Tailscale, and `jq`. Vite 8 requires Node.js
+20.19.x or Node.js 22.12 or newer.
 
 Install the sample frontend dependencies once:
 
@@ -20,37 +21,46 @@ Then start the Vxpipe umbrella and sample frontend together:
 bin/dev
 ```
 
-Goreman runs the `call_engine` and `gateway` applications in one BEAM instance,
-serves the Vite playground on loopback, and exposes it privately through
-Tailscale Serve at `https://<machine-fqdn>:5173/`. The machine FQDN is discovered
-automatically. The playground sends `/api` requests to port 4000 on that host by
-default. Set `VXPIPE_GATEWAY_URL` to change the proxy target.
+Goreman runs the `vxpipe_call_engine` and `vxpipe_gateway` applications in one
+BEAM instance, serves the Vite playground on loopback port 5174, and runs Caddy
+as the tailnet-only HTTPS ingress at `https://<machine-fqdn>:5173/`. The machine
+FQDN and Tailscale IPv4 address are discovered automatically. Caddy sends
+`/api/*` and `/healthz` to the gateway on loopback port 4000 and all other
+requests to Vite.
 
-Tailscale Serve is tailnet-only; do not substitute Tailscale Funnel, which is
-public. MagicDNS and HTTPS certificates must be enabled for the tailnet. The
-trusted HTTPS origin provides the secure browser context required for microphone
-access.
+Caddy automatically obtains a certificate for the `.ts.net` hostname from the
+local Tailscale daemon. MagicDNS and HTTPS certificates must be enabled for the
+tailnet. `bin/dev` renders a complete JSON configuration, obtains sudo once, and
+Goreman runs only the Caddy process as root. Mix and Vite continue to run as the
+calling user. No `TS_PERMIT_CERT_UID` or manually exported Caddy variables are
+required. Caddy binds only to the discovered Tailscale address; it does not use
+Tailscale Funnel or make the development stack public.
 
-Use `--http` to disable TLS for local troubleshooting. In HTTP mode, set
-`APP_HOST` to bind the playground to a specific hostname or interface. The same
-host becomes the default gateway proxy target unless `VXPIPE_GATEWAY_URL`
-overrides it:
+Use `--http` to omit Caddy and run Vite directly on port 5173 for local
+troubleshooting. In HTTP mode, set `APP_HOST` to bind the playground to a
+specific hostname or interface:
 
 ```shell
 APP_HOST=vxpipe.example.ts.net bin/dev --http
 ```
 
-Alternatively, put a static `APP_HOST` value in the repository-root `.env`.
-`bin/dev` asks Goreman to load that file into its child processes. It does not
-export the value into the parent shell, so `env | grep APP_HOST` remains empty
-unless the value was separately exported there.
+The repository-root `.env.example` documents optional Goreman process
+overrides. A static `APP_HOST` can be placed in `.env` for HTTP mode; HTTPS mode
+derives it from Tailscale automatically. Goreman loads `.env` into its child
+processes without exporting values into the parent shell.
 
-Without `APP_HOST`, HTTP mode binds to `0.0.0.0` and proxies to the gateway over
-loopback. The current gateway skeleton has no network listener yet; `APP_HOST`
-is passed through to its process but has no gateway socket to configure until
-that listener is implemented.
+Without `APP_HOST`, HTTP mode binds Vite to `0.0.0.0`. Vite proxies `/api`
+requests to the gateway over loopback in HTTP mode; Caddy owns that routing in
+the default HTTPS mode. `VXPIPE_GATEWAY_URL` remains available to override the
+Vite proxy target.
+
+The gateway reads its listener and CORS options from the `vxpipe_gateway`
+application environment. In development, `APP_HOST` becomes the exact allowed
+HTTPS origin on port 5173. Environment variables are read from
+`config/runtime.exs`, while `config/dev.exs` only enables the listener.
 
 The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It
-targets `/api/rtvi/offer`; the gateway must implement that endpoint before a
-voice connection can succeed. Set `VITE_VXPIPE_RTVI_OFFER_URL` in
-`samples/.env.local` to test a different offer endpoint.
+targets `/api/rtvi/offer`; that signaling route and the WebRTC/RTVI session are
+still pending. The implemented `/healthz` route verifies the gateway listener.
+Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
+offer endpoint.

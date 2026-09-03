@@ -153,3 +153,9 @@ proportionate checks when it changes generated configuration.
 - [React SDK components](https://docs.pipecat.ai/api-reference/client/react/components.md)
 - [React SDK hooks](https://docs.pipecat.ai/api-reference/client/react/hooks.md)
 - [Voice UI Kit](https://voiceuikit.pipecat.ai/)
+
+### Caddy and Tailscale
+
+- [Caddyfile concepts](https://caddyserver.com/docs/caddyfile/concepts)
+- [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
+- [Caddy certificates on Tailscale](https://tailscale.com/docs/integrations/web-servers/caddy/caddy-certificates)

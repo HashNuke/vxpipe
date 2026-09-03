@@ -15,9 +15,9 @@ another client standard must be able to drive the same engine commands and
 consume the same domain events without changing the engine.
 
 This document refines the initial ideas in
-[`labnotes/20260903-0323-vxpipe-thoughts.md`](labnotes/20260903-0323-vxpipe-thoughts.md)
+[`labnotes/20260903-0323-vxpipe-thoughts.md`](../labnotes/20260903-0323-vxpipe-thoughts.md)
 using the Callx findings in
-[`labnotes/20260902-1743-investigate-callx-architecture.md`](labnotes/20260902-1743-investigate-callx-architecture.md)
+[`labnotes/20260902-1743-investigate-callx-architecture.md`](../labnotes/20260902-1743-investigate-callx-architecture.md)
 and the current [RTVI standard](https://docs.pipecat.ai/client/rtvi-standard.md),
 [RTVI server reference](https://docs.pipecat.ai/api-reference/server/rtvi/introduction.md),
 and [RTVIProcessor reference](https://docs.pipecat.ai/api-reference/server/rtvi/rtvi-processor.md).
@@ -141,12 +141,12 @@ Four contracts remain separate:
 4. **Management and delivery:** authenticated REST/control operations, durable
    event subscriptions, webhooks, artifacts, and configuration.
 
-The `gateway` application owns external protocol and transport adapters. The
-`call_engine` application owns room state, participant and capability lifecycle,
-routing, turn semantics, tools, transfers, and protocol-neutral events. The
-dependency direction is from gateway to the public call-engine contract. The
-call engine must not depend on RTVI message names, JSON shapes, client SDKs, or
-transport credentials.
+The `vxpipe_gateway` application owns external protocol and transport adapters.
+The `vxpipe_call_engine` application owns room state, participant and capability
+lifecycle, routing, turn semantics, tools, transfers, and protocol-neutral
+events. The dependency direction is from gateway to the public call-engine
+contract. The call engine must not depend on RTVI message names, JSON shapes,
+client SDKs, or transport credentials.
 
 ## Gateway protocol adapter contract
 
@@ -413,7 +413,7 @@ RTVI `bot-output` remains the compatible best-effort projection. The
 ## OTP runtime topology
 
 ```text
-CallEngine.Application
+Vxpipe.CallEngine.Application
 ├── Registry / cluster room directory
 ├── DynamicSupervisor RoomSupervisor
 │   └── RoomIncarnationSupervisor
@@ -517,9 +517,27 @@ projection and are not the canonical telemetry schema.
 
 ## Configuration and container boundary
 
+OTP application settings are the canonical configuration entry point for
+runnable Vxpipe applications. Each application reads its namespaced setting once
+at its application boundary, validates and normalizes it, and passes explicit
+options down its supervision tree. Reusable supervisors also accept those
+options directly so an embedding host is not forced to mutate global
+application state.
+
+Vxpipe's own `config/<env>.exs` files configure only the Vxpipe root project.
+Mix does not evaluate a dependency's configuration files in a consuming
+project; the consuming release owns its application settings. Runtime modules
+must not branch on `Mix.env()`. Deployment environment variables are read only
+from `config/runtime.exs` and translated into application settings before the
+applications start.
+
 The Docker runner accepts one versioned JSON configuration through an explicit
 `--config` path. The same schema permits pinned resource references or complete
 inline definitions for a standalone process.
+
+The JSON loader is an adapter into the same validated application options. It
+must not create an independent configuration path or allow raw string-keyed JSON
+to flow through runtime processes.
 
 External strings resolve through closed registries. JSON never selects an
 arbitrary BEAM module and never uses `String.to_atom/1`. Provider credentials are
@@ -540,6 +558,26 @@ The container exposes readiness only after required engine and gateway services
 can accept work. Termination drains admitted sessions according to policy,
 rejects new admission, and exits with deterministic status. Logs are structured,
 secret-safe, and exportable without a local interactive login.
+
+### Development ingress
+
+The repository development stack uses Caddy as its single tailnet HTTPS ingress.
+Caddy binds to the discovered Tailscale address, routes `/api/*` to the gateway
+over loopback, exposes the gateway health check at `/healthz`, and routes
+remaining paths to the Vite samples application over loopback. This supplies one
+stable secure browser origin and leaves room for additional development
+applications without making Caddy part of the product protocol model.
+
+`bin/dev` resolves the tailnet hostname and address, renders a complete Caddy
+JSON configuration as the invoking user, and then asks Goreman to run only the
+Caddy process through sudo. The root process does not inherit application
+secrets or depend on manually preserved environment variables. This lets Caddy
+retrieve `.ts.net` certificates from tailscaled without configuring
+`TS_PERMIT_CERT_UID`; Mix and Vite remain unprivileged.
+
+Caddy terminates only HTTP and WebSocket traffic. WebRTC media and RTVI data
+channels still establish their own ICE-selected path and are not proxied through
+Caddy. Production ingress remains deployment-specific.
 
 ## Deterministic testing facilities
 
@@ -585,7 +623,7 @@ test and leaves the umbrella usable.
 9. **JSON release and image:** compile mounted JSON into a redacted resolved
    plan, start the release, and verify readiness, drain, and deterministic exit.
 10. **Second-adapter proof:** implement a minimal test-only second protocol
-    adapter to ensure RTVI concepts have not leaked into `call_engine`.
+    adapter to ensure RTVI concepts have not leaked into `vxpipe_call_engine`.
 
 ## Acceptance criteria
 
@@ -594,7 +632,7 @@ test and leaves the umbrella usable.
 - Unsupported versions and malformed messages fail without activating or
   crashing a room.
 - A second protocol adapter drives the same commands and domain events without
-  modifying `call_engine`.
+  modifying `vxpipe_call_engine`.
 - Partial, provider-final, turn-committed, interrupted, and cancelled input are
   observably distinct.
 - Generated, synthesized, scheduled, played, truncated, and interrupted agent
