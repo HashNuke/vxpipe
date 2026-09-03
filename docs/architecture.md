@@ -84,6 +84,39 @@ in-process event surface with explicit protocol-neutral contracts.
 | Durability and replay | Not defined | Unbounded in-memory history | Bounded journal and snapshots |
 | Authentication | Outside RTVI | Host-specific | Gateway session and operation scopes |
 
+## Domain terminology
+
+Vxpipe uses **capability** for behavior available to a participant. Capability
+kinds include speech-to-text, model inference, text-to-speech, input and output
+guardrails, recording, and other composable voice-runtime functions.
+
+The related terms have distinct meanings:
+
+- A **participant** has zero or more configured capability instances.
+- A **capability kind** defines the provider-neutral contract and the events it
+  consumes and publishes.
+- A **capability instance** is one participant's resolved runtime attachment,
+  including its provider selection, options, lifecycle, and routing policy.
+- A **provider** supplies an underlying external function, such as hosted
+  speech recognition, model inference, or speech synthesis.
+- An **adapter** implements a capability contract for a provider and translates
+  between provider-native data and Vxpipe commands, frames, and events.
+- A **service** is an external system or an independently deployed application,
+  not the generic name for a participant's runtime behavior.
+
+For example, a human participant may have a `speech_to_text` capability instance
+implemented by a provider adapter. An AI participant may have model-inference,
+text-to-speech, and guardrail capability instances. Whether an adapter uses a
+remote API or in-process code does not change the participant-facing capability
+contract.
+
+Vxpipe will not initially define a standalone voice-activity-detection
+capability or run local speech/model inference such as Whisper. Selected hosted
+STT providers are responsible for their supported speech-activity, endpointing,
+and transcription behavior. When a provider emits speech-activity or endpointing
+evidence, its adapter normalizes that evidence into Vxpipe turn events; the call
+engine does not run a separate detector.
+
 ## Architectural boundaries
 
 ```text
@@ -345,7 +378,7 @@ connection ID even when it rejoins the same interaction, room, and participant.
 The initial thought that a human publishes transcription only after a completed
 turn is too coarse. Vxpipe distinguishes:
 
-1. raw VAD speech start or stop;
+1. provider speech-activity start or stop, when available;
 2. semantic user-speaking start or stop;
 3. partial transcript;
 4. provider-final transcript segment;
