@@ -38,8 +38,7 @@ or routine mechanical edits.
   not replace durable architecture or user-facing documentation under `docs/`.
 - Do not create labnotes for simple status checks, read-only inspection, or a
   request that only runs an existing command or script.
-- Labnotes are local working records and remain ignored. Never force-add or commit
-  them.
+- Commit labnotes with the implementation or research work they document.
 
 ### Git and commit hygiene
 
