@@ -1,7 +1,12 @@
 defmodule Vxpipe.Gateway.RTVI.Codec do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Event.TextOutput
+  alias Vxpipe.CallEngine.Event.{
+    AgentTurnCompleted,
+    ParticipantTurnCompleted,
+    ParticipantTurnStarted,
+    TextOutput
+  }
 
   @label "rtvi-ai"
   @protocol_version "2.1.0"
@@ -38,6 +43,21 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
          "will_be_spoken" => event.will_be_spoken
        }
      })}
+  end
+
+  @spec encode_event(AgentTurnCompleted.t()) :: {:ok, binary()}
+  def encode_event(%AgentTurnCompleted{} = event) do
+    {:ok, encode_empty_event(event.id, "bot-stopped-speaking")}
+  end
+
+  @spec encode_event(ParticipantTurnStarted.t()) :: {:ok, binary()}
+  def encode_event(%ParticipantTurnStarted{} = event) do
+    {:ok, encode_empty_event(event.id, "user-started-speaking")}
+  end
+
+  @spec encode_event(ParticipantTurnCompleted.t()) :: {:ok, binary()}
+  def encode_event(%ParticipantTurnCompleted{} = event) do
+    {:ok, encode_empty_event(event.id, "user-stopped-speaking")}
   end
 
   @spec encode_error_response(String.t(), String.t()) :: binary()
@@ -135,6 +155,15 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
       value when is_boolean(value) -> {:ok, value}
       _invalid -> :error
     end
+  end
+
+  defp encode_empty_event(id, type) do
+    JSON.encode!(%{
+      "id" => id,
+      "label" => @label,
+      "type" => type,
+      "data" => nil
+    })
   end
 
   defp aggregation(:sentence), do: "sentence"

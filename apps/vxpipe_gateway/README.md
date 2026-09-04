@@ -11,8 +11,10 @@ development room/session admission, and Pipecat Small WebRTC signalling:
 
 The offer transport completes RTVI 2.x readiness over the `chat` data channel.
 In development it attaches the connection to a deterministic engine agent and
-maps `send-text` commands to unspoken `bot-output` events. Incoming RTP is
-accepted but not yet routed to a speech pipeline.
+maps `send-text` commands to unspoken `bot-output` events followed by an RTVI
+assistant-turn boundary. Typed participant boundaries also project to RTVI user
+start/stop messages so rapidly submitted turns remain separate in unmodified
+clients. Incoming RTP is accepted but not yet routed to a speech pipeline.
 
 Configure the application from the host project's application environment:
 

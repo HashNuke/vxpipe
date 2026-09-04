@@ -5,7 +5,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   alias Vxpipe.CallEngine.Capability.DeterministicText
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
-  alias Vxpipe.CallEngine.Event.TextOutput
+
+  alias Vxpipe.CallEngine.Event.{
+    AgentTurnCompleted,
+    ParticipantTurnCompleted,
+    ParticipantTurnStarted,
+    TextOutput
+  }
+
   alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, RoomParticipantSupervisor}
   alias Vxpipe.CallEngine.Room.Snapshot
 
@@ -84,6 +91,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_call({:send_text, command}, {caller, _tag}, state) do
     case authorize_text(command, caller, state) do
       {:ok, capability} ->
+        state = emit_participant_text_turn(command, state)
         DeterministicText.respond(capability, command)
         {:reply, :ok, state}
 
@@ -94,7 +102,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   @impl true
   def handle_info({:vxpipe_capability_text, capability, command, text}, state) do
-    state = emit_text_output(capability, command, text, state)
+    state = emit_text_turn(capability, command, text, state)
     {:noreply, state}
   end
 
@@ -213,13 +221,48 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     MapSet.member?(state.participant_ids, state.text_capability.participant_id)
   end
 
-  defp emit_text_output(capability, command, text, state) do
+  defp emit_participant_text_turn(command, state) do
+    connection = Map.fetch!(state.connections, command.connection_id)
+    occurred_at = DateTime.utc_now(:millisecond)
+
+    event_fields = %{
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id,
+      modality: :text,
+      occurred_at: occurred_at
+    }
+
+    started =
+      struct!(
+        ParticipantTurnStarted,
+        Map.merge(event_fields, %{id: Id.generate(:event), sequence: state.next_sequence})
+      )
+
+    completed =
+      struct!(
+        ParticipantTurnCompleted,
+        Map.merge(event_fields, %{id: Id.generate(:event), sequence: state.next_sequence + 1})
+      )
+
+    send(connection.pid, {:vxpipe_event, started})
+    send(connection.pid, {:vxpipe_event, completed})
+    %{state | next_sequence: state.next_sequence + 2}
+  end
+
+  defp emit_text_turn(capability, command, text, state) do
     connection = Map.get(state.connections, command.connection_id)
 
     if state.text_capability != nil and state.text_capability.pid == capability and
          connection != nil and
          connection.participant_id == command.participant_id do
-      event = %TextOutput{
+      occurred_at = DateTime.utc_now(:millisecond)
+
+      output = %TextOutput{
         id: Id.generate(:event),
         sequence: state.next_sequence,
         tenant_id: state.snapshot.tenant_id,
@@ -233,11 +276,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         text: text,
         aggregated_by: :sentence,
         will_be_spoken: false,
-        occurred_at: DateTime.utc_now(:millisecond)
+        occurred_at: occurred_at
       }
 
-      send(connection.pid, {:vxpipe_event, event})
-      %{state | next_sequence: state.next_sequence + 1}
+      completed = %AgentTurnCompleted{
+        id: Id.generate(:event),
+        sequence: state.next_sequence + 1,
+        tenant_id: state.snapshot.tenant_id,
+        room_id: state.snapshot.room_id,
+        incarnation_id: state.snapshot.incarnation_id,
+        participant_id: state.text_capability.participant_id,
+        source_participant_id: command.participant_id,
+        connection_id: command.connection_id,
+        command_id: command.id,
+        correlation_id: command.correlation_id,
+        occurred_at: occurred_at
+      }
+
+      send(connection.pid, {:vxpipe_event, output})
+      send(connection.pid, {:vxpipe_event, completed})
+      %{state | next_sequence: state.next_sequence + 2}
     else
       state
     end

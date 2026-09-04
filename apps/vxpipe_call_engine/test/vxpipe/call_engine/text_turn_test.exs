@@ -4,7 +4,13 @@ defmodule Vxpipe.CallEngine.TextTurnTest do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
   alias Vxpipe.CallEngine.Error
-  alias Vxpipe.CallEngine.Event.TextOutput
+
+  alias Vxpipe.CallEngine.Event.{
+    AgentTurnCompleted,
+    ParticipantTurnCompleted,
+    ParticipantTurnStarted,
+    TextOutput
+  }
 
   test "routes attached participant text through the room's deterministic agent" do
     room_id = unique_id("room")
@@ -66,16 +72,44 @@ defmodule Vxpipe.CallEngine.TextTurnTest do
     assert :ok = CallEngine.send_text(send_command)
 
     assert_receive {:vxpipe_event,
-                    %TextOutput{
+                    %ParticipantTurnStarted{
                       id: "evt_" <> _,
                       sequence: 1,
                       tenant_id: "tenant-demo",
                       room_id: ^room_id,
                       incarnation_id: incarnation_id,
-                      participant_id: agent_participant_id,
-                      source_participant_id: source_participant_id,
+                      participant_id: source_participant_id,
                       connection_id: "conn-test",
                       command_id: command_id,
+                      correlation_id: "client-message-1",
+                      modality: :text
+                    }}
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnCompleted{
+                      id: "evt_" <> _,
+                      sequence: 2,
+                      tenant_id: "tenant-demo",
+                      room_id: ^room_id,
+                      incarnation_id: ^incarnation_id,
+                      participant_id: ^source_participant_id,
+                      connection_id: "conn-test",
+                      command_id: ^command_id,
+                      correlation_id: "client-message-1",
+                      modality: :text
+                    }}
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      id: "evt_" <> _,
+                      sequence: 3,
+                      tenant_id: "tenant-demo",
+                      room_id: ^room_id,
+                      incarnation_id: ^incarnation_id,
+                      participant_id: agent_participant_id,
+                      source_participant_id: ^source_participant_id,
+                      connection_id: "conn-test",
+                      command_id: ^command_id,
                       correlation_id: "client-message-1",
                       text: "Echo: hello",
                       aggregated_by: :sentence,
@@ -86,6 +120,20 @@ defmodule Vxpipe.CallEngine.TextTurnTest do
     assert agent_participant_id == create_command.agent_participant_id
     assert source_participant_id == participant.participant_id
     assert command_id == send_command.id
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnCompleted{
+                      id: "evt_" <> _,
+                      sequence: 4,
+                      tenant_id: "tenant-demo",
+                      room_id: ^room_id,
+                      incarnation_id: ^incarnation_id,
+                      participant_id: ^agent_participant_id,
+                      source_participant_id: ^source_participant_id,
+                      connection_id: "conn-test",
+                      command_id: ^command_id,
+                      correlation_id: "client-message-1"
+                    }}
 
     assert [{participant_authority, _value}] =
              Registry.lookup(

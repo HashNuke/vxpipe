@@ -684,14 +684,22 @@ the browser UI or introducing RTVI types into the call engine:
 4. The gateway decodes RTVI `send-text` into a validated, protocol-neutral
    `SendText` command using identity from the bound session rather than the
    client message.
-5. The room authority verifies that the caller owns the attached connection,
-   then dispatches work outside its mailbox to the deterministic capability.
-6. The capability produces `Echo: <input>`. The room authority assigns an event
-   ID and room-incarnation sequence to a protocol-neutral `TextOutput` event and
-   sends it only to the originating connection.
-7. The gateway projects that event as an unspoken RTVI `bot-output`. The
-   unmodified Pipecat conversation view displays both the locally injected user
-   message and the engine-produced assistant response.
+5. The room authority verifies that the caller owns the attached connection and
+   emits consecutive `ParticipantTurnStarted` and `ParticipantTurnCompleted`
+   events for the complete typed input before dispatching work outside its
+   mailbox to the deterministic capability.
+6. The capability produces `Echo: <input>`. The room authority assigns IDs and
+   consecutive room-incarnation sequences to protocol-neutral `TextOutput` and
+   `AgentTurnCompleted` events and sends them only to the originating
+   connection. Completion is separate because one turn may eventually contain
+   multiple output segments.
+7. The gateway projects participant boundaries as RTVI user start/stop messages
+   and agent output as an unspoken `bot-output` followed by
+   `bot-stopped-speaking`. Pipecat's protocol 2.x client uses these lifecycle
+   events to keep successive typed turns in separate messages, including turns
+   submitted inside its speech-pause grace period. The unmodified Pipecat
+   conversation view displays both the locally injected user message and the
+   engine-produced assistant response.
 
 This establishes the first bidirectional command/event path and the first
 runtime capability instance. It does not add transcription, model inference,

@@ -132,6 +132,24 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
         })
       )
 
+    assert_receive {:ex_webrtc, ^client, {:data, ^client_channel, user_started}}, 5_000
+
+    assert %{
+             "id" => "evt_" <> _,
+             "label" => "rtvi-ai",
+             "type" => "user-started-speaking",
+             "data" => nil
+           } = JSON.decode!(user_started)
+
+    assert_receive {:ex_webrtc, ^client, {:data, ^client_channel, user_stopped}}, 5_000
+
+    assert %{
+             "id" => "evt_" <> _,
+             "label" => "rtvi-ai",
+             "type" => "user-stopped-speaking",
+             "data" => nil
+           } = JSON.decode!(user_stopped)
+
     assert_receive {:ex_webrtc, ^client, {:data, ^client_channel, output}}, 5_000
 
     assert %{
@@ -143,6 +161,15 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
                "will_be_spoken" => false
              }
            } = JSON.decode!(output)
+
+    assert_receive {:ex_webrtc, ^client, {:data, ^client_channel, turn_boundary}}, 5_000
+
+    assert %{
+             "id" => "evt_" <> _,
+             "label" => "rtvi-ai",
+             "type" => "bot-stopped-speaking",
+             "data" => nil
+           } = JSON.decode!(turn_boundary)
 
     assert [{connection, _value}] =
              Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, connection_id})

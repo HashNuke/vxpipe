@@ -7,7 +7,14 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Error
-  alias Vxpipe.CallEngine.Event.TextOutput
+
+  alias Vxpipe.CallEngine.Event.{
+    AgentTurnCompleted,
+    ParticipantTurnCompleted,
+    ParticipantTurnStarted,
+    TextOutput
+  }
+
   alias Vxpipe.Gateway.RTVI.Codec
   alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
 
@@ -134,11 +141,31 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         {:vxpipe_event, %TextOutput{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
-    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
-         {:ok, message} <- Codec.encode_event(event) do
-      :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
-    end
+    send_event(event, state)
+    {:noreply, state}
+  end
 
+  def handle_info(
+        {:vxpipe_event, %AgentTurnCompleted{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    send_event(event, state)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_event, %ParticipantTurnStarted{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    send_event(event, state)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_event, %ParticipantTurnCompleted{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    send_event(event, state)
     {:noreply, state}
   end
 
@@ -147,6 +174,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def handle_info({:ex_webrtc, _peer_connection, _event}, state), do: {:noreply, state}
+
+  defp send_event(event, state) do
+    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
+         {:ok, message} <- Codec.encode_event(event) do
+      :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
+    end
+  end
 
   defp call(connection_id, message) do
     case Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, connection_id}) do

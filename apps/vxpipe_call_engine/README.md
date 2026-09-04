@@ -19,8 +19,8 @@ Development rooms can also resolve a deterministic text agent. Its agent
 participant uses the normal participant supervisor, while its responder runs as
 a separate capability under the room's dynamic capability supervisor. Attached
 connections can submit protocol-neutral `SendText` commands and receive targeted,
-room-sequenced `TextOutput` events. The engine still has no dependency on the
-gateway or RTVI.
+room-sequenced participant-turn, `TextOutput`, and `AgentTurnCompleted` events.
+The engine still has no dependency on the gateway or RTVI.
 
 ## Installation
 
