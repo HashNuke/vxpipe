@@ -782,17 +782,25 @@ provider or WebRTC details in the room authority:
 6. Provider `SpeechMetadata` means no more synthesis audio. It causes egress to
    zero-pad at most one final incomplete PCM frame. The room does not emit agent
    completion until that last paced packet's duration has elapsed.
-7. Sending the first RTP packet produces a protocol-neutral
-   `AgentSpeechStarted`; draining the final packet produces
-   `AgentTurnCompleted`. The gateway projects these as RTVI
-   `bot-started-speaking` and `bot-stopped-speaking`, so the client lifecycle
-   describes the gateway's paced output delivery rather than the provider's
-   generation boundary. It does not claim a browser output-device
-   acknowledgement.
-8. Fatal provider, transport, codec, sink, or sustained queue failures never
-   fabricate successful completion. Interruption, local playback cancellation,
-   and Flux playback-offset reconciliation are deferred to the next output
-   lifecycle slice.
+7. A spoken `TextOutput` is projected as an RTVI 2.x `bot-output` segment with
+   `spoken_status: new`. Sending the first RTP packet produces a
+   protocol-neutral `AgentSpeechStarted`; draining the final packet produces
+   `AgentTurnCompleted`. The gateway projects those boundaries as
+   `bot-started-speaking` plus an `in-progress` output cursor, then a `completed`
+   output cursor followed by `bot-stopped-speaking`. This gives an unmodified
+   RTVI 2.x client one persistent assistant message while making its spoken
+   state follow paced gateway output rather than provider generation. It does
+   not claim a browser output-device acknowledgement.
+8. This first audible slice is explicitly half-duplex. From the announcement of
+   a spoken output until its paced output completes, the connection discards
+   inbound microphone RTP before it reaches STT and emits the standard RTVI
+   `user-mute-started` and `user-mute-stopped` messages. Queued spoken outputs
+   hold the gate closed until all of them finish. This prevents speaker output
+   from being transcribed as a new participant turn; interruption and barge-in
+   require a later duplex-policy slice.
+9. Fatal provider, transport, codec, sink, or sustained queue failures never
+   fabricate successful completion. Local playback cancellation and Flux
+   playback-offset reconciliation remain deferred.
 
 Base configuration leaves text-to-speech disabled. The repository development
 overlay enables `flux-haley-en`, requests 48 kHz linear16, and resolves the same

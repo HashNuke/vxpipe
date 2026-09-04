@@ -123,6 +123,76 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
            } = JSON.decode!(encoded)
   end
 
+  test "projects the RTVI 2.x lifecycle for spoken bot output" do
+    output = text_output(will_be_spoken: true)
+
+    assert {:ok, announced} = Codec.encode_event(output)
+
+    assert %{
+             "id" => "evt_output",
+             "type" => "bot-output",
+             "data" => %{
+               "text" => "Echo: hello",
+               "segment_id" => 1,
+               "will_be_spoken" => true,
+               "spoken_status" => "new"
+             }
+           } = JSON.decode!(announced)
+
+    assert {:ok, started} =
+             Codec.encode_spoken_progress(output, "evt_speech", :in_progress)
+
+    assert %{
+             "id" => "evt_speech-progress",
+             "type" => "bot-output",
+             "data" => %{
+               "text" => "Echo: hello",
+               "segment_id" => 1,
+               "will_be_spoken" => true,
+               "spoken_status" => "in-progress",
+               "spoken_progress" => %{
+                 "accumulated_text" => "",
+                 "remaining_text" => "Echo: hello"
+               }
+             }
+           } = JSON.decode!(started)
+
+    assert {:ok, completed} =
+             Codec.encode_spoken_progress(output, "evt_completed", :completed)
+
+    assert %{
+             "id" => "evt_completed-progress",
+             "type" => "bot-output",
+             "data" => %{
+               "text" => "Echo: hello",
+               "segment_id" => 1,
+               "will_be_spoken" => true,
+               "spoken_status" => "completed",
+               "spoken_progress" => %{
+                 "accumulated_text" => "Echo: hello",
+                 "remaining_text" => ""
+               }
+             }
+           } = JSON.decode!(completed)
+  end
+
+  test "projects server-side input mute boundaries" do
+    assert {:ok, started} = Codec.encode_user_mute("evt_output", :started)
+    assert {:ok, stopped} = Codec.encode_user_mute("evt_completed", :stopped)
+
+    assert %{
+             "id" => "evt_output-user-mute-started",
+             "type" => "user-mute-started",
+             "data" => nil
+           } = JSON.decode!(started)
+
+    assert %{
+             "id" => "evt_completed-user-mute-stopped",
+             "type" => "user-mute-stopped",
+             "data" => nil
+           } = JSON.decode!(stopped)
+  end
+
   test "correlates invalid send-text options without emitting an engine command" do
     payload =
       JSON.encode!(%{
@@ -233,5 +303,24 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
              )
 
     assert :ignore = Codec.handle("ping: 1788470000000")
+  end
+
+  defp text_output(options) do
+    %TextOutput{
+      id: "evt_output",
+      sequence: 1,
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-agent",
+      source_participant_id: "part-human",
+      connection_id: "conn-demo",
+      command_id: "cmd-text",
+      correlation_id: "client-text-1",
+      text: "Echo: hello",
+      aggregated_by: :sentence,
+      will_be_spoken: Keyword.fetch!(options, :will_be_spoken),
+      occurred_at: ~U[2026-09-03 18:30:00.000Z]
+    }
   end
 end

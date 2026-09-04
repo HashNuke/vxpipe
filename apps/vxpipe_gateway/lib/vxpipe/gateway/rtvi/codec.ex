@@ -33,17 +33,26 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
 
   @spec encode_event(TextOutput.t()) :: {:ok, binary()}
   def encode_event(%TextOutput{} = event) do
+    data = %{
+      "text" => event.text,
+      "aggregated_by" => aggregation(event.aggregated_by),
+      "segment_id" => event.sequence,
+      "will_be_spoken" => event.will_be_spoken
+    }
+
+    data =
+      if event.will_be_spoken do
+        Map.put(data, "spoken_status", "new")
+      else
+        data
+      end
+
     {:ok,
      JSON.encode!(%{
        "id" => event.id,
        "label" => @label,
        "type" => "bot-output",
-       "data" => %{
-         "text" => event.text,
-         "aggregated_by" => aggregation(event.aggregated_by),
-         "segment_id" => event.sequence,
-         "will_be_spoken" => event.will_be_spoken
-       }
+       "data" => data
      })}
   end
 
@@ -81,6 +90,42 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   @spec encode_event(ParticipantTurnCompleted.t()) :: {:ok, binary()}
   def encode_event(%ParticipantTurnCompleted{} = event) do
     {:ok, encode_empty_event(event.id, "user-stopped-speaking")}
+  end
+
+  @spec encode_spoken_progress(TextOutput.t(), String.t(), :in_progress | :completed) ::
+          {:ok, binary()}
+  def encode_spoken_progress(%TextOutput{} = output, event_id, status)
+      when is_binary(event_id) and status in [:in_progress, :completed] do
+    {accumulated_text, remaining_text} =
+      case status do
+        :in_progress -> {"", output.text}
+        :completed -> {output.text, ""}
+      end
+
+    {:ok,
+     JSON.encode!(%{
+       "id" => event_id <> "-progress",
+       "label" => @label,
+       "type" => "bot-output",
+       "data" => %{
+         "text" => output.text,
+         "aggregated_by" => aggregation(output.aggregated_by),
+         "segment_id" => output.sequence,
+         "will_be_spoken" => true,
+         "spoken_status" => progress_status(status),
+         "spoken_progress" => %{
+           "accumulated_text" => accumulated_text,
+           "remaining_text" => remaining_text
+         }
+       }
+     })}
+  end
+
+  @spec encode_user_mute(String.t(), :started | :stopped) :: {:ok, binary()}
+  def encode_user_mute(event_id, status)
+      when is_binary(event_id) and status in [:started, :stopped] do
+    type = "user-mute-#{status}"
+    {:ok, encode_empty_event(event_id <> "-" <> type, type)}
   end
 
   @spec encode_error_response(String.t(), String.t()) :: binary()
@@ -190,6 +235,9 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   end
 
   defp aggregation(:sentence), do: "sentence"
+
+  defp progress_status(:in_progress), do: "in-progress"
+  defp progress_status(:completed), do: "completed"
 
   defp parse_version(version) do
     with [major, minor, patch] <- String.split(version, "."),

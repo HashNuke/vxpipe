@@ -184,7 +184,10 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
       "user-transcription",
       "user-stopped-speaking",
       "bot-output",
+      "user-mute-started",
       "bot-started-speaking",
+      "bot-output",
+      "bot-output",
       "bot-stopped-speaking"
     ])
 
@@ -203,8 +206,13 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
 
     assert echoed_text == String.trim(final_text)
 
-    assert %{"data" => %{"will_be_spoken" => true}} =
+    assert %{"data" => %{"will_be_spoken" => true, "spoken_status" => "new"}} =
              Enum.find(messages, &match?(%{"type" => "bot-output"}, &1))
+
+    assert Enum.any?(
+             messages,
+             &match?(%{"type" => "bot-output", "data" => %{"spoken_status" => "completed"}}, &1)
+           )
 
     assert %Packet{payload: payload} = await_output_rtp(client, output_track.id, 5_000)
     assert byte_size(payload) > 0

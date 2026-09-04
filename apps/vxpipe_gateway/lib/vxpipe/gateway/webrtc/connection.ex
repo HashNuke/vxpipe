@@ -20,6 +20,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   }
 
   alias Vxpipe.Gateway.RTVI.Codec
+  alias Vxpipe.Gateway.RTVI.TurnState
   alias Vxpipe.Gateway.WebRTC.AudioFrame
   alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
 
@@ -80,6 +81,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          peer_connection: peer_connection,
          peer_monitor: Process.monitor(peer_connection),
          room_monitor: attachment.room_monitor,
+         rtvi_turn_state: TurnState.new(),
          session: session
        }}
     else
@@ -118,13 +120,17 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         {:ex_webrtc, peer_connection, {:rtp, track_id, _rid, %Packet{} = packet}},
         %{peer_connection: peer_connection} = state
       ) do
-    state = ensure_track_codecs(track_id, state)
-    codec = state.audio_tracks |> Map.get(track_id, %{}) |> Map.get(packet.payload_type)
+    if TurnState.input_enabled?(state.rtvi_turn_state) do
+      state = ensure_track_codecs(track_id, state)
+      codec = state.audio_tracks |> Map.get(track_id, %{}) |> Map.get(packet.payload_type)
 
-    case forward_audio(codec, track_id, packet, state) do
-      :ok -> {:noreply, state}
-      :drop -> {:noreply, state}
-      :unavailable -> {:stop, :shutdown, state}
+      case forward_audio(codec, track_id, packet, state) do
+        :ok -> {:noreply, state}
+        :drop -> {:noreply, state}
+        :unavailable -> {:stop, :shutdown, state}
+      end
+    else
+      {:noreply, state}
     end
   end
 
@@ -180,24 +186,21 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         {:vxpipe_event, %TextOutput{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
-    send_event(event, state)
-    {:noreply, state}
+    {:noreply, project_turn_event(event, state)}
   end
 
   def handle_info(
         {:vxpipe_event, %AgentSpeechStarted{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
-    send_event(event, state)
-    {:noreply, state}
+    {:noreply, project_turn_event(event, state)}
   end
 
   def handle_info(
         {:vxpipe_event, %AgentTurnCompleted{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
-    send_event(event, state)
-    {:noreply, state}
+    {:noreply, project_turn_event(event, state)}
   end
 
   def handle_info(
@@ -233,6 +236,30 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   defp send_event(event, state) do
     with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
          {:ok, message} <- Codec.encode_event(event) do
+      :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
+    end
+  end
+
+  defp project_turn_event(event, state) do
+    {rtvi_turn_state, actions} = TurnState.project(state.rtvi_turn_state, event)
+    state = %{state | rtvi_turn_state: rtvi_turn_state}
+    Enum.each(actions, &send_turn_action(&1, state))
+    state
+  end
+
+  defp send_turn_action({:event, event}, state), do: send_event(event, state)
+
+  defp send_turn_action({:spoken_progress, output, event_id, status}, state) do
+    send_encoded(Codec.encode_spoken_progress(output, event_id, status), state)
+  end
+
+  defp send_turn_action({:user_mute, status, event_id}, state) do
+    send_encoded(Codec.encode_user_mute(event_id, status), state)
+  end
+
+  defp send_encoded(encoded, state) do
+    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
+         {:ok, message} <- encoded do
       :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
     end
   end

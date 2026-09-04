@@ -101,8 +101,10 @@ signals become RTVI speaking and replacement-transcription messages; a committed
 turn receives the deterministic `Echo: <transcript>` response. That text is
 streamed through Flux TTS as 48 kHz linear16, encoded to 20 ms Opus packets, and
 paced onto the negotiated browser audio track. RTVI bot speaking boundaries
-follow the gateway's paced output queue rather than provider generation
-completion. The
+and 2.x bot-output progress follow the gateway's paced output queue rather than
+provider generation completion. The current slice is half-duplex: while spoken
+bot output is pending, the gateway reports server-side user mute and keeps
+microphone RTP out of STT so bot audio cannot recursively create user turns. The
 implemented `/healthz` route verifies the gateway listener.
 Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
 offer endpoint.
