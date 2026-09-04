@@ -61,7 +61,7 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
     :ok
   end
 
-  test "delivers a spoken RTVI text turn as paced Opus RTP" do
+  test "plays a long turn completely and queues text submitted during playback" do
     room_id = "room-live-tts-#{System.unique_integer([:positive, :monotonic])}"
     session_id = create_room_session(room_id)
 
@@ -124,22 +124,44 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
 
     assert %{"type" => "bot-ready"} = await_rtvi(client, client_channel, 5_000)
 
+    first_input = "Hello how are you again! Is this something we should talk about?"
+    second_input = "This arrived while the first response was playing."
+    first_response = "Echo: " <> first_input
+    second_response = "Echo: " <> second_input
+
     :ok =
       PeerConnection.send_data(
         client,
         client_channel,
         JSON.encode!(%{
-          "id" => "client-text-live-tts",
+          "id" => "client-text-long-live-tts",
           "label" => "rtvi-ai",
           "type" => "send-text",
           "data" => %{
-            "content" => "hello",
+            "content" => first_input,
             "options" => %{"audio_response" => true, "run_immediately" => true}
           }
         })
       )
 
-    messages = await_stopped(client, client_channel, 15_000, [])
+    messages = await_type(client, client_channel, "bot-started-speaking", 15_000, [])
+
+    :ok =
+      PeerConnection.send_data(
+        client,
+        client_channel,
+        JSON.encode!(%{
+          "id" => "client-text-during-playback-live-tts",
+          "label" => "rtvi-ai",
+          "type" => "send-text",
+          "data" => %{
+            "content" => second_input,
+            "options" => %{"audio_response" => true, "run_immediately" => true}
+          }
+        })
+      )
+
+    messages = await_type(client, client_channel, "user-mute-stopped", 30_000, messages)
     types = Enum.map(messages, &Map.fetch!(&1, "type"))
 
     assert_subsequence(types, [
@@ -150,26 +172,40 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
       "bot-started-speaking",
       "bot-output",
       "bot-output",
-      "bot-stopped-speaking"
+      "bot-stopped-speaking",
+      "bot-output",
+      "bot-started-speaking",
+      "bot-output",
+      "bot-output",
+      "bot-stopped-speaking",
+      "user-mute-stopped"
     ])
 
-    assert %{
-             "data" => %{
-               "text" => "Echo: hello",
-               "will_be_spoken" => true,
-               "spoken_status" => "new"
-             }
-           } = Enum.find(messages, &match?(%{"type" => "bot-output"}, &1))
+    new_outputs =
+      for %{
+            "type" => "bot-output",
+            "data" => %{
+              "text" => text,
+              "will_be_spoken" => true,
+              "spoken_status" => "new"
+            }
+          } <- messages,
+          do: text
 
-    assert Enum.any?(
+    assert new_outputs == [first_response, second_response]
+
+    assert Enum.count(
              messages,
              &match?(%{"type" => "bot-output", "data" => %{"spoken_status" => "completed"}}, &1)
-           )
+           ) == 2
+
+    assert Enum.count(messages, &match?(%{"type" => "bot-stopped-speaking"}, &1)) == 2
 
     assert Enum.any?(messages, fn
              %{
                "type" => "bot-output",
                "data" => %{
+                 "text" => ^first_response,
                  "spoken_status" => "in-progress",
                  "spoken_progress" => %{"accumulated_text" => text}
                }
@@ -181,24 +217,43 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
                false
            end)
 
-    assert %Packet{payload: payload} = await_output_rtp(client, output_track.id, 5_000)
-    assert byte_size(payload) > 0
+    packets = drain_output_rtp(client, output_track.id, [])
+    assert Enum.all?(packets, &(byte_size(&1.payload) > 0))
+
+    turn_start_indices =
+      packets
+      |> Enum.with_index()
+      |> Enum.filter(fn {packet, _index} -> packet.marker end)
+      |> Enum.map(fn {_packet, index} -> index end)
+
+    assert [0, second_turn_start] = turn_start_indices
+    assert second_turn_start > 100
+    assert length(packets) > second_turn_start
   end
 
-  defp await_stopped(client, channel, timeout_ms, messages) do
+  defp await_type(client, channel, type, timeout_ms, messages) do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
-    do_await_stopped(client, channel, deadline, messages)
+    do_await_type(client, channel, type, deadline, messages)
   end
 
-  defp do_await_stopped(client, channel, deadline, messages) do
+  defp do_await_type(client, channel, type, deadline, messages) do
     remaining = max(deadline - System.monotonic_time(:millisecond), 0)
     message = await_rtvi(client, channel, remaining)
     messages = messages ++ [message]
 
-    if message["type"] == "bot-stopped-speaking" do
+    if message["type"] == type do
       messages
     else
-      do_await_stopped(client, channel, deadline, messages)
+      do_await_type(client, channel, type, deadline, messages)
+    end
+  end
+
+  defp drain_output_rtp(client, track_id, packets) do
+    receive do
+      {:ex_webrtc, ^client, {:rtp, ^track_id, _rid, %Packet{} = packet}} ->
+        drain_output_rtp(client, track_id, [packet | packets])
+    after
+      0 -> Enum.reverse(packets)
     end
   end
 
@@ -207,14 +262,6 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
       {:ex_webrtc, ^client, {:data, ^channel, payload}} -> JSON.decode!(payload)
     after
       timeout_ms -> flunk("timed out waiting for an RTVI message")
-    end
-  end
-
-  defp await_output_rtp(client, track_id, timeout_ms) do
-    receive do
-      {:ex_webrtc, ^client, {:rtp, ^track_id, _rid, %Packet{} = packet}} -> packet
-    after
-      timeout_ms -> flunk("timed out waiting for agent Opus RTP")
     end
   end
 

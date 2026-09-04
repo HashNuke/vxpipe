@@ -90,6 +90,18 @@ References:
 ## Verification
 
 - Focused call-engine capability/room and gateway egress/RTVI tests pass.
+- The Deepgram-backed WebRTC integration test now reproduces the reported
+  sequence: it submits the original long text, waits for
+  `bot-started-speaking`, and submits a second text turn while playout is
+  active. Both assistant outputs reach `completed` and
+  `bot-stopped-speaking` in order without losing the connection.
+- The first live response alone produced more than 100 paced RTP packets,
+  crossing the former two-second failure boundary, and emitted a non-empty
+  `spoken_progress.accumulated_text` update before completion.
+- The first version of that live assertion stopped collecting at the second
+  `bot-stopped-speaking` and consequently missed the immediately following
+  `user-mute-stopped`. Collection now ends on `user-mute-stopped`, the actual
+  boundary at which this half-duplex slice reopens input.
 - `mix format --check-formatted` passed.
 - `mix compile --warnings-as-errors` passed.
 - `mix test` passed: 32 call-engine tests and 31 gateway tests, with the tagged
