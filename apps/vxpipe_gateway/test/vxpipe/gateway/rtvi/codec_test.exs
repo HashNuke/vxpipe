@@ -2,7 +2,13 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Gateway.RTVI.Codec
-  alias Vxpipe.CallEngine.Event.{AgentSpeechStarted, ParticipantTranscription, TextOutput}
+
+  alias Vxpipe.CallEngine.Event.{
+    AgentSpeechStarted,
+    AgentTurnFailed,
+    ParticipantTranscription,
+    TextOutput
+  }
 
   test "answers a current RTVI 2.x client-ready message with bot-ready" do
     client_ready =
@@ -206,6 +212,33 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
              "type" => "user-mute-stopped",
              "data" => nil
            } = JSON.decode!(stopped)
+  end
+
+  test "projects a failed model turn as a correlated retryable response" do
+    event = %AgentTurnFailed{
+      id: "evt_failed",
+      sequence: 9,
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-agent",
+      source_participant_id: "part-human",
+      connection_id: "conn-demo",
+      command_id: "cmd-text",
+      correlation_id: "client-text-failed",
+      reason: :provider_timeout,
+      retryable: true,
+      occurred_at: ~U[2026-09-04 21:00:00.000Z]
+    }
+
+    assert {:ok, encoded} = Codec.encode_event(event)
+
+    assert %{
+             "id" => "client-text-failed",
+             "label" => "rtvi-ai",
+             "type" => "error-response",
+             "data" => %{"error" => "The agent could not generate a response. Please try again."}
+           } = JSON.decode!(encoded)
   end
 
   test "correlates invalid send-text options without emitting an engine command" do

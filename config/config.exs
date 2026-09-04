@@ -10,6 +10,7 @@
 import Config
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+  model_inference: [enabled: false],
   speech_to_text: [enabled: false],
   text_to_speech: [enabled: false]
 

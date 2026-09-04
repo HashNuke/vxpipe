@@ -4,6 +4,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechStarted,
     AgentTurnCompleted,
+    AgentTurnFailed,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
@@ -77,6 +78,15 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   @spec encode_event(AgentTurnCompleted.t()) :: {:ok, binary()}
   def encode_event(%AgentTurnCompleted{} = event) do
     {:ok, encode_empty_event(event.id, "bot-stopped-speaking")}
+  end
+
+  @spec encode_event(AgentTurnFailed.t()) :: {:ok, binary()}
+  def encode_event(%AgentTurnFailed{} = event) do
+    {:ok,
+     error_response(
+       event.correlation_id,
+       "The agent could not generate a response. Please try again."
+     )}
   end
 
   @spec encode_event(AgentSpeechStarted.t()) :: {:ok, binary()}

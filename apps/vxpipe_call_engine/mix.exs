@@ -30,6 +30,7 @@ defmodule Vxpipe.CallEngine.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:req_llm, "~> 1.22"},
       {:websockex, "~> 0.5.1"}
     ]
   end

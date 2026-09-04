@@ -3,7 +3,13 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   use DynamicSupervisor
 
-  alias Vxpipe.CallEngine.Capability.{DeterministicText, SpeechToText, TextToSpeech}
+  alias Vxpipe.CallEngine.Capability.{
+    DeterministicText,
+    ModelInference,
+    SpeechToText,
+    TextToSpeech
+  }
+
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Media.Ingress
 
@@ -23,9 +29,34 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   @impl true
   def init(:ok), do: DynamicSupervisor.init(strategy: :one_for_one)
 
-  def start_capability(incarnation_id, room_authority, participant_id) do
+  def start_deterministic_text(incarnation_id, room_authority, participant_id) do
     options = [room_authority: room_authority, participant_id: participant_id]
     DynamicSupervisor.start_child(via(incarnation_id), {DeterministicText, options})
+  end
+
+  def start_model_inference(
+        incarnation_id,
+        room_authority,
+        participant_id,
+        provider,
+        options
+      ) do
+    capability_options = [
+      owner: room_authority,
+      participant_id: participant_id,
+      provider: provider,
+      system_prompt: Keyword.fetch!(options, :system_prompt),
+      maximum_context_turns: Keyword.fetch!(options, :maximum_context_turns),
+      maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
+      maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
+      request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
+      task_supervisor: Vxpipe.CallEngine.ModelInferenceTaskSupervisor
+    ]
+
+    DynamicSupervisor.start_child(
+      via(incarnation_id),
+      {ModelInference, capability_options}
+    )
   end
 
   def start_text_to_speech(

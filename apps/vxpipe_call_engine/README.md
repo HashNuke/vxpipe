@@ -37,6 +37,14 @@ opaque output sink. Raw audio still bypasses the room authority. Provider
 completion and sink playout completion are distinct; room-sequenced agent
 speaking/completion events follow sink acknowledgements.
 
+The model-inference slice adds a provider-neutral, room-scoped conversational
+capability. Development uses ReqLLM with Gemini, while the reusable base
+configuration remains disabled. A trusted application-configured system prompt
+is prepended to every request, successful user/assistant turns are retained with
+a whole-turn bound, and provider work is serialized outside the room authority.
+Generation errors fail only their correlated turn and leave the room available.
+Generated text reuses the existing optional TTS and completion path.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.Error do
 
   @type code ::
           :agent_not_ready
+          | :agent_busy
           | :connection_already_attached
           | :connection_not_attached
           | :deadline_exceeded

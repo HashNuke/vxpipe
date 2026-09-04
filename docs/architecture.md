@@ -1,7 +1,7 @@
 # Vxpipe protocol and runtime architecture
 
 Status: Living architecture; room creation, one-participant RTVI connection,
-deterministic text-turn, Deepgram Flux audio-input, and Deepgram Flux
+text-turn, Gemini model-inference, Deepgram Flux audio-input, and Deepgram Flux
 text-to-speech slices are implemented
 
 ## Decision
@@ -823,6 +823,47 @@ sequencing. Separately tagged live tests prove both provider PCM output and a
 complete RTVI text-to-Flux-to-Opus-to-WebRTC path. Research, Callx comparison,
 the rejected PCMU path, and detailed evidence are in
 [`20260904-1602-tts-capability.md`](../labnotes/20260904-1602-tts-capability.md).
+
+### Implemented Gemini model-inference slice
+
+The sixth slice replaces the repository development agent's deterministic echo
+with room-scoped conversational generation while preserving the established
+input and output boundaries:
+
+1. `CreateRoom` accepts the provider-neutral `:model_inference` agent preset.
+   The reusable base configuration leaves it disabled; the development overlay
+   selects the ReqLLM adapter and `google:gemini-3.5-flash-lite`.
+2. The room authority admits the normal agent participant and starts one
+   temporary model-inference capability under the room incarnation's dynamic
+   capability supervisor. Provider selection is application configuration, not
+   part of the client protocol or room HTTP payload.
+3. Typed RTVI input and committed Deepgram transcripts still converge on
+   `SendText`. The capability accepts each turn quickly, while an explicitly
+   named application `Task.Supervisor` owns blocking provider requests outside
+   the room-authority mailbox.
+4. Each capability runs one request at a time, bounds its pending FIFO, and
+   retains a configured number of complete successful user/assistant pairs.
+   The configured system prompt is placed first on every request and is not
+   replaceable by client input.
+5. The ReqLLM adapter translates neutral message roles, passes the runtime
+   Gemini credential explicitly, and returns only normalized text or error. One
+   complete response follows the existing `TextOutput`, optional TTS, paced
+   playout, and `AgentTurnCompleted` path.
+6. A provider failure, invalid response, task exit, or timeout fails that turn,
+   omits it from history, and advances queued work without ending the room. A
+   protocol-neutral `AgentTurnFailed` becomes a correlated generic RTVI error
+   response. A full pending queue rejects new work as retryable `agent_busy`
+   before participant input events are committed.
+7. Development reads `GEMINI_API_KEY` only from runtime configuration when the
+   capability is enabled. The credential never enters commands, events, public
+   snapshots, JSON payloads, browser configuration, or logs.
+
+The slice deliberately produces one complete output rather than streaming
+tokens. Context is volatile and bounded by completed turn count, not tokens.
+Streaming, tools, token-aware compaction, durable history, prompt-profile
+resolution, provider fallback, and cancellation remain later checkpoints. The
+detailed decision and verification evidence are in
+[`model-inference-turn.md`](model-inference-turn.md).
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

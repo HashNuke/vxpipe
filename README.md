@@ -29,18 +29,18 @@ Then start the Vxpipe umbrella and sample frontend together:
 bin/dev
 ```
 
-Development enables the Deepgram Flux speech-to-text and text-to-speech
-capabilities. Put a
-development credential in the ignored repository-root `.env` file before
-starting the stack:
+Development enables Gemini model inference plus the Deepgram Flux
+speech-to-text and text-to-speech capabilities. Put development credentials in
+the ignored repository-root `.env` file before starting the stack:
 
 ```shell
 DEEPGRAM_API_KEY=replace-with-a-development-key
+GEMINI_API_KEY=replace-with-a-development-key
 ```
 
-Goreman loads the credential into its child processes, including Watchman
+Goreman loads the credentials into its child processes, including Watchman
 restarts. Reusable call-engine code receives provider options through the OTP
-application environment and does not read this environment variable directly.
+application environment and does not read these environment variables directly.
 
 Goreman runs the `vxpipe_call_engine` and `vxpipe_gateway` applications in one
 BEAM instance, serves the Vite playground on loopback port 5174, and runs Caddy
@@ -98,9 +98,10 @@ targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and perform
 the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming Opus audio is routed
 through a bounded, protocol-neutral media ingress to Deepgram Flux. Flux turn
 signals become RTVI speaking and replacement-transcription messages; a committed
-turn receives the deterministic `Echo: <transcript>` response. That text is
-streamed through Flux TTS as 48 kHz linear16, encoded to 20 ms Opus packets, and
-paced onto the negotiated browser audio track. RTVI bot speaking boundaries
+turn is sent through the room's bounded Gemini model-inference capability. Its
+complete text response is streamed through Flux TTS as 48 kHz linear16, encoded
+to 20 ms Opus packets, and paced onto the negotiated browser audio track. RTVI
+bot speaking boundaries
 and 2.x bot-output progress follow the gateway's paced output queue rather than
 provider generation completion. The current slice is half-duplex: while spoken
 bot output is pending, the gateway reports server-side user mute and keeps

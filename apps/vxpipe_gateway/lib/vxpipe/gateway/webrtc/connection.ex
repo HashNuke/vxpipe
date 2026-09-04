@@ -14,6 +14,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     AgentSpeechProgressed,
     AgentSpeechStarted,
     AgentTurnCompleted,
+    AgentTurnFailed,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
@@ -209,6 +210,14 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         %{connection_id: connection_id} = state
       ) do
     {:noreply, project_turn_event(event, state)}
+  end
+
+  def handle_info(
+        {:vxpipe_event, %AgentTurnFailed{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    send_event(event, state)
+    {:noreply, state}
   end
 
   def handle_info(

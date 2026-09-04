@@ -3,13 +3,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.Capability.{DeterministicText, TextToSpeech}
+  alias Vxpipe.CallEngine.Capability.{DeterministicText, ModelInference, TextToSpeech}
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
     AgentSpeechStarted,
     AgentTurnCompleted,
+    AgentTurnFailed,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
@@ -149,9 +150,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_call({:send_text, command}, {caller, _tag}, state) do
     case authorize_text(command, caller, state) do
       {:ok, capability} ->
-        state = emit_participant_text_turn(command, state)
-        DeterministicText.respond(capability, command)
-        {:reply, :ok, state}
+        case respond(capability, command) do
+          :ok -> {:reply, :ok, emit_participant_text_turn(command, state)}
+          {:error, reason} -> {:reply, {:error, agent_busy(reason)}, state}
+        end
 
       {:error, error} ->
         {:reply, {:error, error}, state}
@@ -161,6 +163,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   @impl true
   def handle_info({:vxpipe_capability_text, capability, command, text}, state) do
     state = emit_text_turn(capability, command, text, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_capability_failed, capability, command, reason}, state) do
+    state = emit_agent_turn_failed(capability, command, reason, state)
     {:noreply, state}
   end
 
@@ -236,7 +243,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp start_configured_agent(%CreateRoom{agent: nil}, state), do: {:ok, state}
 
-  defp start_configured_agent(%CreateRoom{agent: :deterministic_text} = command, state) do
+  defp start_configured_agent(%CreateRoom{} = command, state) do
     with {:ok, join_command} <-
            JoinParticipant.new(
              tenant_id: command.tenant_id,
@@ -247,13 +254,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
              deadline: command.deadline
            ),
          {:ok, participant, state} <- start_participant(join_command, state),
-         {:ok, capability} <-
-           RoomCapabilitySupervisor.start_capability(
-             state.snapshot.incarnation_id,
-             self(),
-             participant.participant_id
-           ) do
+         {:ok, module, capability} <-
+           start_text_capability(command.agent, participant.participant_id, state) do
       text_capability = %{
+        module: module,
         monitor: Process.monitor(capability),
         participant_id: participant.participant_id,
         pid: capability
@@ -263,6 +267,41 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       start_configured_text_to_speech(participant.participant_id, state)
     else
       _error -> {:error, :agent_start_failed}
+    end
+  end
+
+  defp start_text_capability(:deterministic_text, participant_id, state) do
+    case RoomCapabilitySupervisor.start_deterministic_text(
+           state.snapshot.incarnation_id,
+           self(),
+           participant_id
+         ) do
+      {:ok, capability} -> {:ok, DeterministicText, capability}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp start_text_capability(:model_inference, participant_id, state) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    options = Keyword.fetch!(settings, :model_inference)
+
+    if Keyword.fetch!(options, :enabled) do
+      provider_module = Keyword.fetch!(options, :provider)
+
+      with {:ok, provider_config} <-
+             provider_module.new(Keyword.fetch!(options, :provider_options)),
+           {:ok, capability} <-
+             RoomCapabilitySupervisor.start_model_inference(
+               state.snapshot.incarnation_id,
+               self(),
+               participant_id,
+               {provider_module, provider_config},
+               options
+             ) do
+        {:ok, ModelInference, capability}
+      end
+    else
+      {:error, :model_inference_disabled}
     end
   end
 
@@ -428,7 +467,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {:error, agent_not_ready()}
 
       true ->
-        {:ok, state.text_capability.pid}
+        {:ok, state.text_capability}
     end
   end
 
@@ -623,7 +662,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
     case result do
       {:ok, command} when state.text_capability != nil ->
-        DeterministicText.respond(state.text_capability.pid, command)
+        case respond(state.text_capability, command) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            send(
+              self(),
+              {:vxpipe_capability_failed, state.text_capability.pid, command,
+               failure_reason(reason)}
+            )
+        end
 
       _empty_or_invalid ->
         :ok
@@ -752,6 +801,34 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       else
         emit_agent_turn_completed(command, connection, occurred_at, state)
       end
+    else
+      state
+    end
+  end
+
+  defp emit_agent_turn_failed(capability, command, reason, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    if state.text_capability != nil and state.text_capability.pid == capability and
+         connection != nil and connection.participant_id == command.participant_id do
+      event = %AgentTurnFailed{
+        id: Id.generate(:event),
+        sequence: state.next_sequence,
+        tenant_id: state.snapshot.tenant_id,
+        room_id: state.snapshot.room_id,
+        incarnation_id: state.snapshot.incarnation_id,
+        participant_id: state.text_capability.participant_id,
+        source_participant_id: command.participant_id,
+        connection_id: command.connection_id,
+        command_id: command.id,
+        correlation_id: command.correlation_id,
+        reason: failure_reason(reason),
+        retryable: true,
+        occurred_at: DateTime.utc_now(:millisecond)
+      }
+
+      send(connection.pid, {:vxpipe_event, event})
+      %{state | next_sequence: state.next_sequence + 1}
     else
       state
     end
@@ -1078,6 +1155,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp agent_not_ready do
     Error.new(:agent_not_ready, "The room agent is not ready.", retryable: true)
   end
+
+  defp agent_busy(reason) do
+    Error.new(
+      :agent_busy,
+      "The room agent cannot accept this turn right now.",
+      retryable: true,
+      details: %{"reason" => Atom.to_string(reason)}
+    )
+  end
+
+  defp respond(%{module: module, pid: capability}, command) do
+    module.respond(capability, command)
+  end
+
+  defp failure_reason(reason)
+       when reason in [:invalid_response, :provider_timeout, :provider_unavailable],
+       do: reason
+
+  defp failure_reason(_reason), do: :provider_unavailable
 
   defp build_snapshot(%CreateRoom{} = command, incarnation_id) do
     %Snapshot{
