@@ -11,6 +11,12 @@ The development stack requires Elixir, Node.js and npm, a Rust toolchain,
 Python client, [Caddy](https://caddyserver.com/), Tailscale, and `jq`. Vite 8
 requires Node.js 20.19.x or Node.js 22.12 or newer.
 
+Install the Watchman Python client as an isolated user-level tool:
+
+```shell
+uv tool install pywatchman
+```
+
 Install the sample frontend dependencies once:
 
 ```shell
