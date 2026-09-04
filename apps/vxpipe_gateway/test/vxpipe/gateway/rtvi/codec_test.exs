@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Gateway.RTVI.Codec
-  alias Vxpipe.CallEngine.Event.TextOutput
+  alias Vxpipe.CallEngine.Event.{ParticipantTranscription, TextOutput}
 
   test "answers a current RTVI 2.x client-ready message with bot-ready" do
     client_ready =
@@ -142,6 +142,41 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
              "type" => "error-response",
              "data" => %{"error" => "The send-text options are invalid."}
            } = JSON.decode!(reply)
+  end
+
+  test "projects replacement user transcription with the RTVI final boundary" do
+    event = %ParticipantTranscription{
+      id: "evt_transcription",
+      sequence: 7,
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-human",
+      connection_id: "conn-demo",
+      command_id: "cmd-audio",
+      correlation_id: "turn-audio",
+      text: "hello there",
+      final: false,
+      provider_turn_index: 2,
+      occurred_at: ~U[2026-09-04 12:00:00.000Z]
+    }
+
+    assert {:ok, partial} = Codec.encode_event(event)
+
+    assert %{
+             "id" => "evt_transcription",
+             "label" => "rtvi-ai",
+             "type" => "user-transcription",
+             "data" => %{
+               "text" => "hello there",
+               "final" => false,
+               "timestamp" => "2026-09-04T12:00:00.000Z",
+               "user_id" => "part-human"
+             }
+           } = JSON.decode!(partial)
+
+    assert {:ok, final} = Codec.encode_event(%{event | id: "evt_final", final: true})
+    assert %{"data" => %{"final" => true}} = JSON.decode!(final)
   end
 
   test "applies RTVI defaults when send-text options are omitted" do

@@ -14,7 +14,10 @@ In development it attaches the connection to a deterministic engine agent and
 maps `send-text` commands to unspoken `bot-output` events followed by an RTVI
 assistant-turn boundary. Typed participant boundaries also project to RTVI user
 start/stop messages so rapidly submitted turns remain separate in unmodified
-clients. Incoming RTP is accepted but not yet routed to a speech pipeline.
+clients. Incoming Opus RTP is mapped to the call engine's protocol-neutral audio
+frame, sent through its bounded media ingress, and projected back as RTVI
+speaking and replacement-transcription messages. The committed transcript drives
+the same deterministic agent; bot audio is not yet synthesized.
 
 Configure the application from the host project's application environment:
 

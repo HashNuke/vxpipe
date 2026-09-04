@@ -2,7 +2,7 @@
 
 Date: 2026-09-04
 
-Status: researched and planned; implementation has not started.
+Status: implemented and verified with deterministic and live integration tests.
 
 Repository baseline: Vxpipe commit `356216d` and Callpipe commit `2ea5ee0c`.
 Pipecat behavior was checked against upstream commit
@@ -47,8 +47,7 @@ The slice includes:
   `user-stopped-speaking` projection;
 - dispatch of a committed audio turn to the existing deterministic text
   capability;
-- bounded buffering, explicit teardown, redacted provider failures, and focused
-  telemetry; and
+- bounded buffering, explicit teardown, and redacted provider failures; and
 - fake-transport tests plus a separately tagged live Deepgram integration lane.
 
 The slice does not include:
@@ -93,6 +92,13 @@ The first development configuration will select:
 Startup should fail with a safe configuration error when Flux is enabled without
 the credential. Tests inject provider options and a fake transport directly and
 do not depend on the developer's environment.
+
+Implementation result: base configuration leaves STT disabled. The repository's
+development overlay enables Flux, and `config/runtime.exs` resolves the required
+credential before placing it in explicit provider options. A missing or blank
+credential stops development startup with a message that names only the required
+variable. The running Goreman process supplies the same environment to
+watcher-driven Vxpipe restarts.
 
 ## Deepgram protocol findings
 
@@ -159,6 +165,14 @@ using actual payloads received from the existing browser/WebRTC path:
 
 This gate prevents codec work from being smuggled into the provider adapter and
 keeps a live external-service assumption out of the default test suite.
+
+Implementation result: the live compatibility lane sent individual 20 ms,
+48 kHz Opus packets extracted from an Ogg fixture, paced at their original packet
+duration. Flux accepted the raw packets and produced both `StartOfTurn` and
+`EndOfTurn` with non-empty transcripts. No repacketization or PCM conversion is
+needed for this first browser path. The test remains tagged `:integration`, is
+excluded by default, and requires both a credential and an explicitly supplied
+audio-fixture path.
 
 ## How Pipecat integrates Deepgram Nova
 
@@ -446,6 +460,61 @@ mix deps.unlock --check-unused
 The default suite must use fake provider transport and remain independent of the
 network and local secrets. The tagged Deepgram lane supplies interoperability
 evidence but is not a substitute for deterministic boundary and lifecycle tests.
+
+## Implementation record
+
+The slice was implemented with `websockex` 0.5.1 in the call-engine application.
+The dependency is contained there because that application owns provider I/O;
+the transport is still hidden behind the project-owned speech-to-text transport
+behaviour used by deterministic tests.
+
+Completed checkpoints:
+
+- `Vxpipe.CallEngine.Provider.Deepgram.Flux` validates configuration, builds the
+  connection request, bounds provider messages, and maps only fixed known event
+  names. Its inspection representation omits the credential.
+- `FluxSocket` owns the WebSocket lifecycle, synchronous binary sends, and
+  best-effort `CloseStream` teardown without reconnecting an uncertain turn.
+- `SpeechToText` validates audio identity and format, rejects duplicate or stale
+  provider sequence numbers, and forwards normalized signals only.
+- `Media.Ingress` binds the stream to its first accepted audio track, bounds
+  frame count, total bytes, and age, and allows at most one provider send in
+  flight. Frames that age while queued are dropped before delivery; sustained
+  overflow fails the capability.
+- Connection attachment starts and binds the capability and ingress through the
+  room's owning dynamic supervisor. Partial startup or binding failure cleans up
+  the new children and detaches the connection.
+- The room authority assigns turn correlation and event sequence numbers, keeps
+  provider-final transcription distinct from turn completion, and dispatches
+  only one non-empty `EndOfTurn` transcript to the deterministic agent.
+- The gateway maps negotiated Opus RTP to `AudioFrame` and projects normalized
+  events to RTVI speaking and transcription messages. Partial text remains a
+  replacement snapshot instead of being appended.
+
+Focused tests were written red first at their owning boundaries. The default
+call-engine and gateway suites cover provider decoding, socket delegation,
+media bounds and failure, room turn semantics, RTP mapping, and RTVI encoding.
+Two opt-in live tests then proved:
+
+1. Flux accepts the unchanged Opus packet framing and emits a committed turn.
+2. An ExWebRTC client can create a room and session, complete Small WebRTC and
+   RTVI readiness, stream RTP through the gateway and engine to Flux, receive an
+   ordered final RTVI transcription, and receive exactly the matching
+   deterministic echo.
+
+The browser remains the final interactive smoke-test surface. The automated
+full-path test exercises the same HTTP, WebRTC, engine, provider, and RTVI
+boundaries without depending on UI rendering.
+
+Final verification on 2026-09-04:
+
+- `mix format --check-formatted`: passed;
+- `mix compile --warnings-as-errors`: passed;
+- `mix test`: 23 call-engine tests and 19 gateway tests passed, with the two
+  tagged integration tests excluded;
+- `mix deps.unlock --check-unused`: passed; and
+- the two explicitly included live integration tests passed together in 25.8
+  seconds.
 
 ## Decisions captured
 

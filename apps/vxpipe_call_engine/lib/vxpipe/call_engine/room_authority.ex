@@ -8,11 +8,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   alias Vxpipe.CallEngine.Event.{
     AgentTurnCompleted,
+    ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
     TextOutput
   }
 
+  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, RoomParticipantSupervisor}
   alias Vxpipe.CallEngine.Room.Snapshot
 
@@ -49,6 +51,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     GenServer.call(room_authority, {:send_text, command}, @call_timeout)
   end
 
+  def bind_speech_to_text(
+        room_authority,
+        %AttachConnection{} = command,
+        subscriber,
+        capability,
+        ingress
+      )
+      when is_pid(subscriber) and is_pid(capability) and is_pid(ingress) do
+    GenServer.call(
+      room_authority,
+      {:bind_speech_to_text, command, subscriber, capability, ingress},
+      @call_timeout
+    )
+  end
+
+  def detach_connection(room_authority, %AttachConnection{} = command, subscriber)
+      when is_pid(subscriber) do
+    GenServer.call(room_authority, {:detach_connection, command, subscriber}, @call_timeout)
+  end
+
   @impl true
   def init(options) do
     command = Keyword.fetch!(options, :command)
@@ -60,7 +82,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       next_sequence: 1,
       participant_monitors: %{},
       participant_ids: MapSet.new(),
+      participant_roles: %{},
       snapshot: build_snapshot(command, incarnation_id),
+      speech_to_text_monitors: %{},
       text_capability: nil
     }
 
@@ -88,6 +112,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  def handle_call(
+        {:bind_speech_to_text, command, subscriber, capability, ingress},
+        {caller, _tag},
+        state
+      ) do
+    case authorize_speech_to_text_binding(command, caller, subscriber, state) do
+      :ok -> bind_connection_speech_to_text(command, capability, ingress, state)
+      {:error, error} -> {:reply, {:error, error}, state}
+    end
+  end
+
+  def handle_call({:detach_connection, command, subscriber}, {caller, _tag}, state) do
+    case authorize_detachment(command, caller, subscriber, state) do
+      :ok -> {:reply, :ok, remove_connection_by_id(command.connection_id, state)}
+      {:error, error} -> {:reply, {:error, error}, state}
+    end
+  end
+
   def handle_call({:send_text, command}, {caller, _tag}, state) do
     case authorize_text(command, caller, state) do
       {:ok, capability} ->
@@ -106,6 +148,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, state}
   end
 
+  def handle_info({:vxpipe_stt_signal, capability, identity, %Signal{} = signal}, state) do
+    state = handle_speech_to_text_signal(capability, identity, signal, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_stt_unavailable, capability, identity, _reason}, state) do
+    state = handle_speech_to_text_unavailable(capability, identity, state)
+    {:noreply, state}
+  end
+
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state) do
     state =
       cond do
@@ -114,6 +166,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
         Map.has_key?(state.connection_monitors, monitor) ->
           remove_connection(monitor, state)
+
+        Map.has_key?(state.speech_to_text_monitors, monitor) ->
+          remove_unavailable_speech_to_text(monitor, state)
 
         state.text_capability != nil and state.text_capability.monitor == monitor ->
           notify_connections(state.connections, :agent_unavailable)
@@ -181,16 +236,90 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp put_connection(command, subscriber, state) do
     monitor = Process.monitor(subscriber)
+    role = Map.fetch!(state.participant_roles, command.participant_id)
 
     connection = %{
+      actor_id: command.actor_id,
       participant_id: command.participant_id,
-      pid: subscriber
+      pid: subscriber,
+      role: role,
+      speech_to_text: nil
     }
 
     state = %{
       state
       | connection_monitors: Map.put(state.connection_monitors, monitor, command.connection_id),
         connections: Map.put(state.connections, command.connection_id, connection)
+    }
+
+    {:reply, {:ok, role}, state}
+  end
+
+  defp authorize_speech_to_text_binding(command, caller, subscriber, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    cond do
+      caller != subscriber ->
+        {:error, connection_not_attached(command.connection_id)}
+
+      command.incarnation_id != state.snapshot.incarnation_id ->
+        {:error, room_incarnation_changed(state.snapshot.incarnation_id)}
+
+      connection == nil or connection.pid != subscriber or
+          connection.participant_id != command.participant_id ->
+        {:error, connection_not_attached(command.connection_id)}
+
+      connection.role != :human or connection.speech_to_text != nil ->
+        {:error, speech_to_text_not_bindable(command.connection_id)}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp authorize_detachment(command, caller, subscriber, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    cond do
+      caller != subscriber ->
+        {:error, connection_not_attached(command.connection_id)}
+
+      command.incarnation_id != state.snapshot.incarnation_id ->
+        {:error, room_incarnation_changed(state.snapshot.incarnation_id)}
+
+      connection == nil or connection.pid != subscriber or
+          connection.participant_id != command.participant_id ->
+        {:error, connection_not_attached(command.connection_id)}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp bind_connection_speech_to_text(command, capability, ingress, state) do
+    capability_monitor = Process.monitor(capability)
+    ingress_monitor = Process.monitor(ingress)
+    connection = Map.fetch!(state.connections, command.connection_id)
+
+    speech_to_text = %{
+      capability: capability,
+      capability_monitor: capability_monitor,
+      ingress: ingress,
+      ingress_monitor: ingress_monitor,
+      turn: nil
+    }
+
+    connection = %{connection | speech_to_text: speech_to_text}
+
+    speech_to_text_monitors =
+      state.speech_to_text_monitors
+      |> Map.put(capability_monitor, command.connection_id)
+      |> Map.put(ingress_monitor, command.connection_id)
+
+    state = %{
+      state
+      | connections: Map.put(state.connections, command.connection_id, connection),
+        speech_to_text_monitors: speech_to_text_monitors
     }
 
     {:reply, :ok, state}
@@ -219,6 +348,229 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp agent_ready?(state) do
     MapSet.member?(state.participant_ids, state.text_capability.participant_id)
+  end
+
+  defp handle_speech_to_text_signal(capability, identity, signal, state) do
+    case authorized_speech_to_text(capability, identity, state) do
+      {:ok, connection_id, connection} ->
+        apply_speech_to_text_signal(signal, connection_id, connection, state)
+
+      :error ->
+        state
+    end
+  end
+
+  defp apply_speech_to_text_signal(
+         %Signal{kind: :turn_started} = signal,
+         connection_id,
+         connection,
+         state
+       ) do
+    begin_audio_turn(signal, connection_id, connection, state)
+  end
+
+  defp apply_speech_to_text_signal(
+         %Signal{kind: :transcript_updated} = signal,
+         connection_id,
+         _connection,
+         state
+       ) do
+    update_audio_transcription(signal, connection_id, state)
+  end
+
+  defp apply_speech_to_text_signal(
+         %Signal{kind: :turn_ended} = signal,
+         connection_id,
+         connection,
+         state
+       ) do
+    complete_audio_turn(signal, connection_id, connection, state)
+  end
+
+  defp apply_speech_to_text_signal(_signal, _connection_id, _connection, state), do: state
+
+  defp begin_audio_turn(signal, connection_id, connection, state) do
+    if connection.speech_to_text.turn == nil and is_binary(signal.text) do
+      occurred_at = DateTime.utc_now(:millisecond)
+
+      turn = %{
+        command_id: Id.generate(:command),
+        id: Id.generate(:turn),
+        last_text: signal.text,
+        provider_turn_index: signal.provider_turn_index
+      }
+
+      started = %ParticipantTurnStarted{
+        id: Id.generate(:event),
+        sequence: state.next_sequence,
+        tenant_id: state.snapshot.tenant_id,
+        room_id: state.snapshot.room_id,
+        incarnation_id: state.snapshot.incarnation_id,
+        participant_id: connection.participant_id,
+        connection_id: connection_id,
+        command_id: turn.command_id,
+        correlation_id: turn.id,
+        modality: :audio,
+        occurred_at: occurred_at
+      }
+
+      send(connection.pid, {:vxpipe_event, started})
+
+      state =
+        state
+        |> put_connection_turn(connection_id, turn)
+        |> Map.update!(:next_sequence, &(&1 + 1))
+
+      if signal.text == "" do
+        state
+      else
+        emit_participant_transcription(connection_id, turn, signal.text, false, state)
+      end
+    else
+      state
+    end
+  end
+
+  defp update_audio_transcription(signal, connection_id, state) do
+    connection = Map.fetch!(state.connections, connection_id)
+    turn = connection.speech_to_text.turn
+
+    if matching_active_turn?(turn, signal) and is_binary(signal.text) and
+         signal.text != turn.last_text do
+      turn = %{turn | last_text: signal.text}
+
+      state
+      |> put_connection_turn(connection_id, turn)
+      |> then(&emit_participant_transcription(connection_id, turn, signal.text, false, &1))
+    else
+      state
+    end
+  end
+
+  defp complete_audio_turn(signal, connection_id, connection, state) do
+    turn = connection.speech_to_text.turn
+
+    if matching_active_turn?(turn, signal) and is_binary(signal.text) do
+      turn = %{turn | last_text: signal.text}
+
+      state =
+        state
+        |> put_connection_turn(connection_id, turn)
+        |> then(&emit_participant_transcription(connection_id, turn, signal.text, true, &1))
+        |> emit_participant_audio_turn_completed(connection_id, turn)
+        |> put_connection_turn(connection_id, nil)
+
+      dispatch_committed_audio_turn(connection_id, connection, turn, signal.text, state)
+    else
+      state
+    end
+  end
+
+  defp emit_participant_transcription(connection_id, turn, text, final, state) do
+    connection = Map.fetch!(state.connections, connection_id)
+
+    event = %ParticipantTranscription{
+      id: Id.generate(:event),
+      sequence: state.next_sequence,
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      participant_id: connection.participant_id,
+      connection_id: connection_id,
+      command_id: turn.command_id,
+      correlation_id: turn.id,
+      text: text,
+      final: final,
+      provider_turn_index: turn.provider_turn_index,
+      occurred_at: DateTime.utc_now(:millisecond)
+    }
+
+    send(connection.pid, {:vxpipe_event, event})
+    %{state | next_sequence: state.next_sequence + 1}
+  end
+
+  defp emit_participant_audio_turn_completed(state, connection_id, turn) do
+    connection = Map.fetch!(state.connections, connection_id)
+
+    event = %ParticipantTurnCompleted{
+      id: Id.generate(:event),
+      sequence: state.next_sequence,
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      participant_id: connection.participant_id,
+      connection_id: connection_id,
+      command_id: turn.command_id,
+      correlation_id: turn.id,
+      modality: :audio,
+      occurred_at: DateTime.utc_now(:millisecond)
+    }
+
+    send(connection.pid, {:vxpipe_event, event})
+    %{state | next_sequence: state.next_sequence + 1}
+  end
+
+  defp dispatch_committed_audio_turn(connection_id, connection, turn, text, state) do
+    content = String.trim(text)
+
+    result =
+      if content == "" do
+        :empty
+      else
+        SendText.new(
+          id: turn.command_id,
+          tenant_id: state.snapshot.tenant_id,
+          actor_id: connection.actor_id,
+          room_id: state.snapshot.room_id,
+          incarnation_id: state.snapshot.incarnation_id,
+          participant_id: connection.participant_id,
+          connection_id: connection_id,
+          correlation_id: turn.id,
+          content: content,
+          run_immediately: true,
+          audio_response: true,
+          deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+        )
+      end
+
+    case result do
+      {:ok, command} when state.text_capability != nil ->
+        DeterministicText.respond(state.text_capability.pid, command)
+
+      _empty_or_invalid ->
+        :ok
+    end
+
+    state
+  end
+
+  defp matching_active_turn?(nil, _signal), do: false
+
+  defp matching_active_turn?(turn, signal) do
+    turn.provider_turn_index == signal.provider_turn_index
+  end
+
+  defp put_connection_turn(state, connection_id, turn) do
+    connection = Map.fetch!(state.connections, connection_id)
+    speech_to_text = %{connection.speech_to_text | turn: turn}
+    connection = %{connection | speech_to_text: speech_to_text}
+    %{state | connections: Map.put(state.connections, connection_id, connection)}
+  end
+
+  defp authorized_speech_to_text(capability, identity, state) do
+    connection_id = Map.get(identity, :connection_id)
+    connection = Map.get(state.connections, connection_id)
+
+    if connection != nil and connection.speech_to_text != nil and
+         connection.speech_to_text.capability == capability and
+         connection.participant_id == Map.get(identity, :participant_id) and
+         state.snapshot.tenant_id == Map.get(identity, :tenant_id) and
+         state.snapshot.room_id == Map.get(identity, :room_id) and
+         state.snapshot.incarnation_id == Map.get(identity, :incarnation_id) do
+      {:ok, connection_id, connection}
+    else
+      :error
+    end
   end
 
   defp emit_participant_text_turn(command, state) do
@@ -329,7 +681,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           state
           | participant_monitors:
               Map.put(state.participant_monitors, monitor, command.participant_id),
-            participant_ids: MapSet.put(state.participant_ids, command.participant_id)
+            participant_ids: MapSet.put(state.participant_ids, command.participant_id),
+            participant_roles:
+              Map.put(state.participant_roles, command.participant_id, participant.role)
         }
 
         {:ok, participant, state}
@@ -363,18 +717,96 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     %{
       state
       | participant_monitors: participant_monitors,
-        participant_ids: MapSet.delete(state.participant_ids, participant_id)
+        participant_ids: MapSet.delete(state.participant_ids, participant_id),
+        participant_roles: Map.delete(state.participant_roles, participant_id)
     }
   end
 
   defp remove_connection(monitor, state) do
     {connection_id, connection_monitors} = Map.pop(state.connection_monitors, monitor)
 
+    state = %{state | connection_monitors: connection_monitors}
+    remove_connection_by_id(connection_id, state)
+  end
+
+  defp remove_connection_by_id(nil, state), do: state
+
+  defp remove_connection_by_id(connection_id, state) do
+    state = clear_connection_speech_to_text(connection_id, false, state)
+    {monitor, connection_monitors} = pop_connection_monitor(connection_id, state)
+
+    if monitor != nil do
+      Process.demonitor(monitor, [:flush])
+    end
+
     %{
       state
       | connection_monitors: connection_monitors,
         connections: Map.delete(state.connections, connection_id)
     }
+  end
+
+  defp handle_speech_to_text_unavailable(capability, identity, state) do
+    case authorized_speech_to_text(capability, identity, state) do
+      {:ok, connection_id, _connection} ->
+        clear_connection_speech_to_text(connection_id, true, state)
+
+      :error ->
+        state
+    end
+  end
+
+  defp remove_unavailable_speech_to_text(monitor, state) do
+    case Map.fetch(state.speech_to_text_monitors, monitor) do
+      {:ok, connection_id} -> clear_connection_speech_to_text(connection_id, true, state)
+      :error -> state
+    end
+  end
+
+  defp clear_connection_speech_to_text(connection_id, notify?, state) do
+    connection = Map.get(state.connections, connection_id)
+
+    if connection != nil and connection.speech_to_text != nil do
+      speech_to_text = connection.speech_to_text
+      Process.demonitor(speech_to_text.capability_monitor, [:flush])
+      Process.demonitor(speech_to_text.ingress_monitor, [:flush])
+
+      :ok =
+        RoomCapabilitySupervisor.stop_speech_to_text(
+          state.snapshot.incarnation_id,
+          speech_to_text.capability,
+          speech_to_text.ingress
+        )
+
+      connection = %{connection | speech_to_text: nil}
+
+      speech_to_text_monitors =
+        state.speech_to_text_monitors
+        |> Map.delete(speech_to_text.capability_monitor)
+        |> Map.delete(speech_to_text.ingress_monitor)
+
+      if notify? do
+        send(connection.pid, {:vxpipe_connection_unavailable, :speech_to_text_unavailable})
+      end
+
+      %{
+        state
+        | connections: Map.put(state.connections, connection_id, connection),
+          speech_to_text_monitors: speech_to_text_monitors
+      }
+    else
+      state
+    end
+  end
+
+  defp pop_connection_monitor(connection_id, state) do
+    case Enum.find(state.connection_monitors, fn {_monitor, id} -> id == connection_id end) do
+      {monitor, _connection_id} ->
+        {monitor, Map.delete(state.connection_monitors, monitor)}
+
+      nil ->
+        {nil, state.connection_monitors}
+    end
   end
 
   defp notify_connections(connections, reason) do
@@ -411,6 +843,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     Error.new(
       :connection_not_attached,
       "The connection is not attached to this participant.",
+      details: %{"connection_id" => connection_id}
+    )
+  end
+
+  defp speech_to_text_not_bindable(connection_id) do
+    Error.new(
+      :speech_to_text_not_bindable,
+      "Speech-to-text cannot be bound to this connection.",
       details: %{"connection_id" => connection_id}
     )
   end

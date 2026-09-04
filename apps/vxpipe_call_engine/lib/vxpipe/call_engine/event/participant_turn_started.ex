@@ -30,7 +30,7 @@ defmodule Vxpipe.CallEngine.Event.ParticipantTurnStarted do
           connection_id: String.t(),
           command_id: String.t(),
           correlation_id: String.t(),
-          modality: :text,
+          modality: :audio | :text,
           occurred_at: DateTime.t()
         }
 end

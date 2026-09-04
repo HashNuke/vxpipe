@@ -4,7 +4,9 @@ defmodule Vxpipe.CallEngine do
   """
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.RoomSupervisor
 
   @spec create_room(CreateRoom.t()) ::
@@ -36,12 +38,24 @@ defmodule Vxpipe.CallEngine do
   end
 
   @spec attach_connection(AttachConnection.t()) ::
-          {:ok, reference()} | {:error, Error.t()}
+          {:ok, ConnectionAttachment.t()} | {:error, Error.t()}
   def attach_connection(%AttachConnection{} = command) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
-      case RoomSupervisor.attach_connection(command) do
-        {:ok, room_authority} -> {:ok, Process.monitor(room_authority)}
-        {:error, %Error{} = error} -> {:error, error}
+      settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+      case RoomSupervisor.attach_connection(
+             command,
+             Keyword.fetch!(settings, :speech_to_text)
+           ) do
+        {:ok, room_authority, media_ingress} ->
+          {:ok,
+           %ConnectionAttachment{
+             room_monitor: Process.monitor(room_authority),
+             media_ingress: media_ingress
+           }}
+
+        {:error, %Error{} = error} ->
+          {:error, error}
       end
     else
       {:error,
@@ -50,6 +64,24 @@ defmodule Vxpipe.CallEngine do
          "The attach-connection command deadline has elapsed."
        )}
     end
+  end
+
+  @spec push_audio(ConnectionAttachment.t(), AudioFrame.t()) ::
+          :ok
+          | {:error,
+             :media_overloaded
+             | :queue_full
+             | :speech_to_text_unavailable
+             | :stale_frame
+             | :unavailable
+             | :wrong_connection
+             | :wrong_track}
+  def push_audio(%ConnectionAttachment{media_ingress: nil}, %AudioFrame{}) do
+    {:error, :speech_to_text_unavailable}
+  end
+
+  def push_audio(%ConnectionAttachment{media_ingress: media_ingress}, %AudioFrame{} = frame) do
+    Ingress.push(media_ingress, frame)
   end
 
   @spec send_text(SendText.t()) :: :ok | {:error, Error.t()}

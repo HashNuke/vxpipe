@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.TextTurnTest do
 
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Error
 
   alias Vxpipe.CallEngine.Event.{
@@ -48,7 +49,9 @@ defmodule Vxpipe.CallEngine.TextTurnTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, room_monitor} = CallEngine.attach_connection(attach_command)
+    assert {:ok, %ConnectionAttachment{room_monitor: room_monitor, media_ingress: nil}} =
+             CallEngine.attach_connection(attach_command)
+
     assert is_reference(room_monitor)
 
     assert {:ok, send_command} =

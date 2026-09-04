@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
 
   alias Vxpipe.CallEngine.Event.{
     AgentTurnCompleted,
+    ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
     TextOutput
@@ -41,6 +42,22 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
          "aggregated_by" => aggregation(event.aggregated_by),
          "segment_id" => event.sequence,
          "will_be_spoken" => event.will_be_spoken
+       }
+     })}
+  end
+
+  @spec encode_event(ParticipantTranscription.t()) :: {:ok, binary()}
+  def encode_event(%ParticipantTranscription{} = event) do
+    {:ok,
+     JSON.encode!(%{
+       "id" => event.id,
+       "label" => @label,
+       "type" => "user-transcription",
+       "data" => %{
+         "text" => event.text,
+         "user_id" => event.participant_id,
+         "timestamp" => DateTime.to_iso8601(event.occurred_at),
+         "final" => event.final
        }
      })}
   end

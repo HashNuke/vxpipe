@@ -1,6 +1,6 @@
-defmodule Vxpipe.CallEngine.Event.ParticipantTurnCompleted do
+defmodule Vxpipe.CallEngine.Event.ParticipantTranscription do
   @moduledoc """
-  Marks the end of one participant input turn for a connection.
+  A protocol-neutral replacement transcript for one active participant turn.
   """
 
   @schema_version 1
@@ -14,7 +14,9 @@ defmodule Vxpipe.CallEngine.Event.ParticipantTurnCompleted do
     :connection_id,
     :command_id,
     :correlation_id,
-    :modality,
+    :text,
+    :final,
+    :provider_turn_index,
     :occurred_at
   ]
   defstruct @enforce_keys ++ [schema_version: @schema_version]
@@ -30,7 +32,9 @@ defmodule Vxpipe.CallEngine.Event.ParticipantTurnCompleted do
           connection_id: String.t(),
           command_id: String.t(),
           correlation_id: String.t(),
-          modality: :audio | :text,
+          text: String.t(),
+          final: boolean(),
+          provider_turn_index: non_neg_integer(),
           occurred_at: DateTime.t()
         }
 end

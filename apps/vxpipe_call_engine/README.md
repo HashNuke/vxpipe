@@ -22,6 +22,14 @@ connections can submit protocol-neutral `SendText` commands and receive targeted
 room-sequenced participant-turn, `TextOutput`, and `AgentTurnCompleted` events.
 The engine still has no dependency on the gateway or RTVI.
 
+The first audio slice adds one speech-to-text capability and bounded media
+ingress per attached human connection. It accepts protocol-neutral Opus frames,
+streams them through the Deepgram Flux adapter, and admits normalized turn and
+replacement-transcription signals into the room authority. Only Flux
+`EndOfTurn` commits the audio turn and dispatches its final text to the
+deterministic agent. Provider I/O and raw audio remain outside the room-authority
+mailbox, and the engine still contains no WebRTC or RTVI types.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

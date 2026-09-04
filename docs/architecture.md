@@ -1,7 +1,7 @@
 # Vxpipe protocol and runtime architecture
 
 Status: Living architecture; room creation, one-participant RTVI connection,
-and deterministic text-turn slices are implemented
+deterministic text-turn, and Deepgram Flux audio-turn slices are implemented
 
 ## Decision
 
@@ -707,6 +707,51 @@ speech synthesis, outbound audio, provider credentials, reconnection,
 production authentication, TURN policy, persistence, or room recovery. The
 detailed decision and verification evidence are in
 [`deterministic-text-turn.md`](deterministic-text-turn.md).
+
+### Implemented Deepgram Flux audio-turn slice
+
+The fourth slice routes the browser's existing microphone track through a
+provider-neutral engine boundary while preserving RTVI as a gateway projection:
+
+1. The gateway resolves the negotiated codec for each remote audio track and
+   maps an ExRTP Opus packet to a protocol-neutral `AudioFrame`. No ExWebRTC or
+   ExRTP type crosses into `vxpipe_call_engine`.
+2. Attaching a human connection starts one temporary speech-to-text capability
+   and one bounded media ingress through the room incarnation's dynamic
+   capability supervisor. The returned `ConnectionAttachment` is an internal
+   runtime handle and is never a public snapshot or wire value.
+3. Media ingress validates room-incarnation and connection identity, binds the
+   stream to its first accepted track, and enforces maximum frame age, queue
+   length, and total queued bytes. It allows only one provider send in flight,
+   preserves accepted order, tolerates isolated overflow as RTP loss, and
+   terminates the stream after sustained overflow.
+4. The Deepgram adapter owns Flux `/v2/listen` query construction, authorization,
+   bounded JSON decoding, and fixed provider-event mapping. The supervised socket
+   owns WebSocket lifecycle and sends raw 48 kHz Opus payloads without exposing
+   its credential or provider payloads to the room.
+5. The room authority receives only normalized low-rate signals. `StartOfTurn`
+   creates an audio turn, `Update` replaces the current partial transcript, and
+   `EndOfTurn` emits a provider-final transcription followed by a distinct
+   participant-turn completion. Eager end predictions never invoke the agent.
+6. Only the complete, non-empty `EndOfTurn` transcript is dispatched once to the
+   deterministic agent. All resulting events retain one engine turn correlation
+   while receiving consecutive room-incarnation sequence numbers.
+7. The gateway projects those events as RTVI `user-started-speaking`,
+   `user-transcription` with the correct `final` flag, and
+   `user-stopped-speaking`, followed by the existing deterministic bot output.
+8. Closing or losing the provider before `EndOfTurn` does not fabricate a final
+   transcript or committed turn. Provider and media failure tears down the
+   affected WebRTC connection; automatic mid-turn reconnect is deferred.
+
+The repository development overlay enables this capability with
+`flux-general-en` and requires `DEEPGRAM_API_KEY` at runtime. Base configuration
+leaves speech-to-text disabled, so an embedding application's environment is not
+implicitly coupled to the repository's development provider. Default tests use
+a fake transport; separately tagged live tests prove both individual 20 ms Opus
+packet compatibility and the complete WebRTC-to-Flux-to-RTVI-to-agent path.
+Detailed planning, provider research, implementation choices, and verification
+evidence are recorded in
+[`20260904-1212-stt-capability.md`](../labnotes/20260904-1212-stt-capability.md).
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

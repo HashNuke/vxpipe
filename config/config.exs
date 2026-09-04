@@ -9,6 +9,8 @@
 # move said applications out of the umbrella.
 import Config
 
+config :vxpipe_call_engine, Vxpipe.CallEngine.Application, speech_to_text: [enabled: false]
+
 config :vxpipe_gateway, Vxpipe.Gateway.Application,
   http: [
     enabled: false,

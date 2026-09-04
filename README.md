@@ -29,6 +29,18 @@ Then start the Vxpipe umbrella and sample frontend together:
 bin/dev
 ```
 
+Development enables the Deepgram Flux speech-to-text capability. Put a
+development credential in the ignored repository-root `.env` file before
+starting the stack:
+
+```shell
+DEEPGRAM_API_KEY=replace-with-a-development-key
+```
+
+Goreman loads the credential into its child processes, including Watchman
+restarts. Reusable call-engine code receives provider options through the OTP
+application environment and does not read this environment variable directly.
+
 Goreman runs the `vxpipe_call_engine` and `vxpipe_gateway` applications in one
 BEAM instance, serves the Vite playground on loopback port 5174, and runs Caddy
 as the tailnet-only HTTPS ingress at `https://<machine-fqdn>:5173/`. The machine
@@ -58,10 +70,10 @@ specific hostname or interface:
 APP_HOST=vxpipe.example.ts.net bin/dev --http
 ```
 
-The repository-root `.env.example` documents optional Goreman process
-overrides. A static `APP_HOST` can be placed in `.env` for HTTP mode; HTTPS mode
-derives it from Tailscale automatically. Goreman loads `.env` into its child
-processes without exporting values into the parent shell.
+The repository-root `.env.example` documents the development credential and
+optional Goreman process overrides. A static `APP_HOST` can be placed in `.env`
+for HTTP mode; HTTPS mode derives it from Tailscale automatically. Goreman loads
+`.env` into its child processes without exporting values into the parent shell.
 
 Without `APP_HOST`, HTTP mode binds Vite to `0.0.0.0`. Vite proxies `/api`
 requests to the gateway over loopback in HTTP mode; Caddy owns that routing in
@@ -82,9 +94,11 @@ repository's development configuration.
 
 The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It
 targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and performs
-the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming audio is not yet
-routed through an agent or speech pipeline, so this checkpoint proves admission,
-transport, and protocol readiness rather than a voice conversation. The
-implemented `/healthz` route verifies the gateway listener.
+the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming Opus audio is routed
+through a bounded, protocol-neutral media ingress to Deepgram Flux. Flux turn
+signals become RTVI speaking and replacement-transcription messages; a committed
+turn receives the existing deterministic `Echo: <transcript>` response. This
+checkpoint does not yet synthesize or play bot audio. The implemented `/healthz`
+route verifies the gateway listener.
 Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
 offer endpoint.

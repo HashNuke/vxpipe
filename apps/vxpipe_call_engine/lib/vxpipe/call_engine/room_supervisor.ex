@@ -4,7 +4,14 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   use DynamicSupervisor
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
-  alias Vxpipe.CallEngine.{Error, Id, RoomAuthority, RoomIncarnationSupervisor}
+
+  alias Vxpipe.CallEngine.{
+    Error,
+    Id,
+    RoomAuthority,
+    RoomCapabilitySupervisor,
+    RoomIncarnationSupervisor
+  }
 
   def start_link(_options) do
     DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -27,17 +34,92 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
-  def attach_connection(%AttachConnection{} = command) do
+  def attach_connection(%AttachConnection{} = command, speech_to_text_options) do
     case lookup_room(command.tenant_id, command.room_id) do
       {:ok, room_authority} ->
         case RoomAuthority.attach_connection(room_authority, command, self()) do
-          :ok -> {:ok, room_authority}
-          {:error, %Error{} = error} -> {:error, error}
+          {:ok, role} ->
+            start_connection_speech_to_text(
+              room_authority,
+              command,
+              role,
+              speech_to_text_options
+            )
+
+          {:error, %Error{} = error} ->
+            {:error, error}
         end
 
       {:error, %Error{} = error} ->
         {:error, error}
     end
+  end
+
+  defp start_connection_speech_to_text(room_authority, command, :human, options) do
+    if Keyword.fetch!(options, :enabled) do
+      provider_module = Keyword.fetch!(options, :provider)
+
+      with {:ok, provider_config} <-
+             provider_module.new(Keyword.fetch!(options, :provider_options)),
+           {:ok, capability, ingress} <-
+             RoomCapabilitySupervisor.start_speech_to_text(
+               command.incarnation_id,
+               room_authority,
+               command,
+               {provider_module, provider_config},
+               Keyword.fetch!(options, :transport),
+               Keyword.fetch!(options, :media_ingress)
+             ) do
+        bind_connection_speech_to_text(
+          room_authority,
+          command,
+          capability,
+          ingress
+        )
+      else
+        _error -> attachment_speech_to_text_failed(room_authority, command)
+      end
+    else
+      {:ok, room_authority, nil}
+    end
+  end
+
+  defp start_connection_speech_to_text(room_authority, _command, _role, _options) do
+    {:ok, room_authority, nil}
+  end
+
+  defp bind_connection_speech_to_text(room_authority, command, capability, ingress) do
+    case RoomAuthority.bind_speech_to_text(
+           room_authority,
+           command,
+           self(),
+           capability,
+           ingress
+         ) do
+      :ok ->
+        {:ok, room_authority, ingress}
+
+      {:error, _reason} ->
+        :ok =
+          RoomCapabilitySupervisor.stop_speech_to_text(
+            command.incarnation_id,
+            capability,
+            ingress
+          )
+
+        attachment_speech_to_text_failed(room_authority, command)
+    end
+  end
+
+  defp attachment_speech_to_text_failed(room_authority, command) do
+    :ok = RoomAuthority.detach_connection(room_authority, command, self())
+
+    {:error,
+     Error.new(
+       :speech_to_text_unavailable,
+       "The speech-to-text capability could not be started.",
+       retryable: true
+     )}
   end
 
   def send_text(%SendText{} = command) do

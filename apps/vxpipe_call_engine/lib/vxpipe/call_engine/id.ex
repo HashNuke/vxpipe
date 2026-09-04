@@ -6,10 +6,11 @@ defmodule Vxpipe.CallEngine.Id do
     event: "evt",
     participant: "part",
     room: "room",
-    room_incarnation: "rinc"
+    room_incarnation: "rinc",
+    turn: "turn"
   }
 
-  @type kind :: :command | :event | :participant | :room | :room_incarnation
+  @type kind :: :command | :event | :participant | :room | :room_incarnation | :turn
 
   @spec generate(kind()) :: String.t()
   def generate(kind) when is_map_key(@prefixes, kind) do
