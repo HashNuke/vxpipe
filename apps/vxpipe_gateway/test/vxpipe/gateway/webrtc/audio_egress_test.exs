@@ -27,6 +27,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
          track_id: "track-output",
          encoder: {TestOpusEncoder, [observer: self()]},
          maximum_packets: 4,
+         progress_interval_packets: 1,
          send_rtp: sender,
          schedule: schedule}
       )
@@ -53,6 +54,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
              )
 
     send(egress, pace_message)
+    assert_receive {:vxpipe_audio_playback, ^egress, "turn-test", {:progress, 20, 40}}
     assert_receive {:test_pcm_encoded, final_pcm}
     assert byte_size(final_pcm) == 1_920
     assert binary_part(final_pcm, 0, 4) == <<1, 0, 2, 0>>
@@ -64,7 +66,125 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     assert_receive {:vxpipe_audio_playback, ^egress, "turn-test", :completed}
   end
 
-  test "rejects the wrong connection and an overflowing packet queue" do
+  test "backpressures a provider burst while the bounded packet queue drains" do
+    test_process = self()
+
+    sender = fn _peer, _track, packet ->
+      send(test_process, {:test_rtp, packet})
+      :ok
+    end
+
+    schedule = fn target, message, milliseconds ->
+      send(test_process, {:test_scheduled, target, message, milliseconds})
+      make_ref()
+    end
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         maximum_packets: 1,
+         send_rtp: sender,
+         schedule: schedule}
+      )
+
+    burst = :binary.copy(<<0>>, 3 * 1_920)
+    burst_frame = frame(burst)
+    task_supervisor = start_supervised!(Task.Supervisor)
+
+    push =
+      Task.Supervisor.async_nolink(task_supervisor, fn ->
+        GenServer.call(egress, {:vxpipe_audio_output, burst_frame})
+      end)
+
+    assert_receive {:test_rtp, %Packet{sequence_number: 0}}
+    assert_receive {:test_scheduled, ^egress, first_pace, 20}
+    assert Task.yield(push, 0) == nil
+
+    send(egress, first_pace)
+    assert_receive {:test_rtp, %Packet{sequence_number: 1}}
+    assert_receive {:test_scheduled, ^egress, second_pace, 20}
+    assert Task.yield(push, 0) == nil
+
+    send(egress, second_pace)
+    assert_receive {:test_rtp, %Packet{sequence_number: 2}}
+    assert_receive {:test_scheduled, ^egress, final_pace, 20}
+    assert Task.await(push) == :ok
+
+    assert :ok =
+             GenServer.call(egress, {:vxpipe_audio_output_finish, "turn-test", self()})
+
+    send(egress, final_pace)
+    assert_receive {:vxpipe_audio_playback, ^egress, "turn-test", :completed}
+  end
+
+  test "backpressures final PCM padding until the packet queue has room" do
+    test_process = self()
+
+    sender = fn _peer, _track, packet ->
+      send(test_process, {:test_rtp, packet})
+      :ok
+    end
+
+    schedule = fn target, message, milliseconds ->
+      send(test_process, {:test_scheduled, target, message, milliseconds})
+      make_ref()
+    end
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         maximum_packets: 1,
+         send_rtp: sender,
+         schedule: schedule}
+      )
+
+    assert :ok =
+             GenServer.call(egress, {
+               :vxpipe_audio_output,
+               frame(:binary.copy(<<0>>, 1_920))
+             })
+
+    assert_receive {:test_rtp, %Packet{sequence_number: 0}}
+    assert_receive {:test_scheduled, ^egress, first_pace, 20}
+
+    assert :ok =
+             GenServer.call(egress, {
+               :vxpipe_audio_output,
+               frame(:binary.copy(<<0>>, 1_924))
+             })
+
+    task_supervisor = start_supervised!(Task.Supervisor)
+
+    finish =
+      Task.Supervisor.async_nolink(task_supervisor, fn ->
+        GenServer.call(egress, {:vxpipe_audio_output_finish, "turn-test", test_process})
+      end)
+
+    assert Task.yield(finish, 100) == nil
+
+    send(egress, first_pace)
+    assert_receive {:test_rtp, %Packet{sequence_number: 1}}
+    assert_receive {:test_scheduled, ^egress, second_pace, 20}
+    assert Task.yield(finish, 0) == nil
+
+    send(egress, second_pace)
+    assert_receive {:test_rtp, %Packet{sequence_number: 2}}
+    assert_receive {:test_scheduled, ^egress, final_pace, 20}
+    assert Task.await(finish) == :ok
+
+    send(egress, final_pace)
+    assert_receive {:vxpipe_audio_playback, ^egress, "turn-test", :completed}
+  end
+
+  test "rejects audio for the wrong connection" do
     test_process = self()
 
     sender = fn _peer, _track, packet ->
@@ -91,14 +211,6 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
 
     wrong = %{frame(<<0, 0>>) | connection_id: "other"}
     assert {:error, :wrong_connection} = GenServer.call(egress, {:vxpipe_audio_output, wrong})
-
-    assert :ok = GenServer.call(egress, {:vxpipe_audio_output, frame(:binary.copy(<<0>>, 1_920))})
-    assert_receive {:test_rtp, _packet}
-
-    assert :ok = GenServer.call(egress, {:vxpipe_audio_output, frame(:binary.copy(<<0>>, 1_920))})
-
-    assert {:error, :queue_full} =
-             GenServer.call(egress, {:vxpipe_audio_output, frame(:binary.copy(<<0>>, 1_920))})
   end
 
   defp frame(payload) do

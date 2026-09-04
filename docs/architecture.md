@@ -769,35 +769,48 @@ provider or WebRTC details in the room authority:
    a bounded pending FIFO. It sends separate Flux `Speak` and `Flush` controls,
    validates provider lifecycle messages, and synchronously hands bounded raw
    audio frames to the connection sink. The socket cannot accumulate unbounded
-   audio in the capability mailbox.
+   audio in the capability mailbox. If the paced sink fills, the current binary
+   frame and, when necessary, final-frame padding wait behind bounded calls while
+   pace ticks drain capacity; provider bursts therefore apply TCP/WebSocket
+   backpressure rather than terminating the room.
 4. Flux streaming emits raw signed little-endian linear16 rather than Opus. The
    gateway's per-connection egress preserves provider-frame remainders, makes
    exact 20 ms 48 kHz mono frames, and encodes them through libopus. It queues a
    bounded number of packets and paces RTP at 20 ms with sequence numbers and
-   timestamps advanced independently of provider chunk boundaries.
+   timestamps advanced independently of provider chunk boundaries. The default
+   500-packet queue covers ten seconds of ordinary output; longer turns remain
+   supported through backpressure instead of requiring an unbounded buffer.
 5. The gateway creates the outbound WebRTC audio track before answering the SDP
    offer. The output sink is an opaque process handle passed only through the
    internal attachment path; no PID enters a public command, snapshot, event,
    JSON value, or RTVI message.
 6. Provider `SpeechMetadata` means no more synthesis audio. It causes egress to
-   zero-pad at most one final incomplete PCM frame. The room does not emit agent
-   completion until that last paced packet's duration has elapsed.
+   zero-pad at most one final incomplete PCM frame. Once the total packet count
+   is known, egress reports elapsed scheduled playout every 100 ms. The room does
+   not emit agent completion until the last paced packet's duration has elapsed.
 7. A spoken `TextOutput` is projected as an RTVI 2.x `bot-output` segment with
    `spoken_status: new`. Sending the first RTP packet produces a
    protocol-neutral `AgentSpeechStarted`; draining the final packet produces
    `AgentTurnCompleted`. The gateway projects those boundaries as
-   `bot-started-speaking` plus an `in-progress` output cursor, then a `completed`
-   output cursor followed by `bot-stopped-speaking`. This gives an unmodified
-   RTVI 2.x client one persistent assistant message while making its spoken
-   state follow paced gateway output rather than provider generation. It does
-   not claim a browser output-device acknowledgement.
+   `bot-started-speaking` plus `in-progress` output cursors, then a `completed`
+   output cursor followed by `bot-stopped-speaking`. Flux supplies total audio
+   duration but no per-word timing stream, so the RTVI adapter maps the scheduled
+   audio ratio onto whole-word text boundaries. This is best-effort highlighting,
+   not provider alignment. It gives an unmodified RTVI 2.x client one persistent
+   assistant message while making its spoken state follow paced gateway output
+   rather than provider generation. It does not claim a browser output-device
+   acknowledgement.
 8. This first audible slice is explicitly half-duplex. From the announcement of
    a spoken output until its paced output completes, the connection discards
    inbound microphone RTP before it reaches STT and emits the standard RTVI
    `user-mute-started` and `user-mute-stopped` messages. Queued spoken outputs
-   hold the gate closed until all of them finish. This prevents speaker output
-   from being transcribed as a new participant turn; interruption and barge-in
-   require a later duplex-policy slice.
+   hold the gate closed until all of them finish. Their RTVI `bot-output`
+   announcements are also serialized: the next segment is not exposed until the
+   active paced turn completes, even though the engine may already have produced
+   its text. This prevents speaker output from being transcribed as a new
+   participant turn and prevents overlapping assistant segments in unmodified
+   clients. Typed input during playback is queued output, not interruption;
+   interruption and barge-in require a later duplex-policy slice.
 9. Fatal provider, transport, codec, sink, or sustained queue failures never
    fabricate successful completion. Local playback cancellation and Flux
    playback-offset reconciliation remain deferred.

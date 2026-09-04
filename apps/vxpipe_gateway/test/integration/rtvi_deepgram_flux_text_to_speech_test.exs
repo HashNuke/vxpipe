@@ -166,6 +166,21 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
              &match?(%{"type" => "bot-output", "data" => %{"spoken_status" => "completed"}}, &1)
            )
 
+    assert Enum.any?(messages, fn
+             %{
+               "type" => "bot-output",
+               "data" => %{
+                 "spoken_status" => "in-progress",
+                 "spoken_progress" => %{"accumulated_text" => text}
+               }
+             }
+             when text != "" ->
+               true
+
+             _other ->
+               false
+           end)
+
     assert %Packet{payload: payload} = await_output_rtp(client, output_track.id, 5_000)
     assert byte_size(payload) > 0
   end

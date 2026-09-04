@@ -48,6 +48,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
     :ok = TestAudioOutputSink.playback_started(sink)
     assert_receive {:vxpipe_tts_playback, ^capability, ^request, :started}
 
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^request, {:progress, 20, 100}}
+
     :ok = TestAudioOutputSink.playback_completed(sink)
     assert_receive {:vxpipe_tts_playback, ^capability, ^request, :completed}
   end

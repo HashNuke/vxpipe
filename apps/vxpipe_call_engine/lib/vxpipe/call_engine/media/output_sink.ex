@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Media.OutputSink do
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
 
-  @call_timeout 5_000
+  @call_timeout 15_000
 
   @spec push(pid(), AudioOutputFrame.t()) :: :ok | {:error, term()}
   def push(sink, %AudioOutputFrame{} = frame) when is_pid(sink) do

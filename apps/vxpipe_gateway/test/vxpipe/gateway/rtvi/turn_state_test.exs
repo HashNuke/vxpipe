@@ -1,7 +1,13 @@
 defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Event.{AgentSpeechStarted, AgentTurnCompleted, TextOutput}
+  alias Vxpipe.CallEngine.Event.{
+    AgentSpeechProgressed,
+    AgentSpeechStarted,
+    AgentTurnCompleted,
+    TextOutput
+  }
+
   alias Vxpipe.Gateway.RTVI.TurnState
 
   test "suppresses input and projects a complete RTVI 2.x spoken-output lifecycle" do
@@ -23,6 +29,13 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
               {:spoken_progress, ^output, "evt_speech", :in_progress}
             ]} = TurnState.project(state, speech_started)
 
+    progress = agent_speech_progressed("turn-1", 600, 1_000)
+
+    assert {state,
+            [
+              {:spoken_progress, ^output, "evt_progress", {:in_progress, 600, 1_000}}
+            ]} = TurnState.project(state, progress)
+
     assert {state,
             [
               {:spoken_progress, ^output, "evt_completed", :completed},
@@ -40,10 +53,14 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
     assert {state, [{:event, ^first}, {:user_mute, :started, "evt_output"}]} =
              TurnState.project(TurnState.new(), first)
 
-    assert {state, [{:event, ^second}]} = TurnState.project(state, second)
+    assert {state, []} = TurnState.project(state, second)
 
-    assert {state, [{:spoken_progress, ^first, "evt_completed", :completed}, {:event, _}]} =
-             TurnState.project(state, agent_turn_completed("turn-1"))
+    assert {state,
+            [
+              {:spoken_progress, ^first, "evt_completed", :completed},
+              {:event, _},
+              {:event, ^second}
+            ]} = TurnState.project(state, agent_turn_completed("turn-1"))
 
     refute TurnState.input_enabled?(state)
 
@@ -89,6 +106,15 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
 
   defp agent_turn_completed(correlation_id) do
     struct!(AgentTurnCompleted, event_fields("evt_completed", correlation_id))
+  end
+
+  defp agent_speech_progressed(correlation_id, played_ms, total_ms) do
+    fields =
+      "evt_progress"
+      |> event_fields(correlation_id)
+      |> Map.merge(%{played_ms: played_ms, total_ms: total_ms})
+
+    struct!(AgentSpeechProgressed, fields)
   end
 
   defp event_fields(id, correlation_id) do

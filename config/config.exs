@@ -21,7 +21,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     webrtc: [
       ice_servers: [],
       candidate_gathering_timeout_ms: 1_000,
-      maximum_audio_packets: 100
+      maximum_audio_packets: 500
     ],
     room_creation: [enabled: false],
     cors: [

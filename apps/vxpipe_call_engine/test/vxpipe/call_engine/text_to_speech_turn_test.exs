@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechProgressed,
     AgentSpeechStarted,
     AgentTurnCompleted,
     ParticipantTurnCompleted,
@@ -138,8 +139,13 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     :ok = TestAudioOutputSink.playback_started(sink)
     assert_receive {:vxpipe_event, %AgentSpeechStarted{sequence: 4}}
 
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
+
+    assert_receive {:vxpipe_event,
+                    %AgentSpeechProgressed{sequence: 5, played_ms: 20, total_ms: 100}}
+
     :ok = TestAudioOutputSink.playback_completed(sink)
-    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 5}}
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 6}}
   end
 
   defp unique_id(prefix) do

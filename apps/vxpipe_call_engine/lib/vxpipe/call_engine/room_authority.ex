@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechProgressed,
     AgentSpeechStarted,
     AgentTurnCompleted,
     ParticipantTranscription,
@@ -169,6 +170,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       )
       when status in [:started, :completed] do
     state = handle_text_to_speech_playback(capability, request, status, state)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_tts_playback, capability, %TextToSpeechRequest{} = request,
+         {:progress, played_ms, total_ms}},
+        state
+      )
+      when is_integer(played_ms) and played_ms > 0 and is_integer(total_ms) and
+             total_ms > played_ms do
+    state =
+      handle_text_to_speech_playback(
+        capability,
+        request,
+        {:progress, played_ms, total_ms},
+        state
+      )
+
     {:noreply, state}
   end
 
@@ -743,8 +762,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
     if authorized_text_to_speech?(capability, request, connection, state) do
       case status do
-        :started -> emit_agent_speech_started(request, connection, state)
-        :completed -> emit_agent_turn_completed(request, connection, state)
+        :started ->
+          emit_agent_speech_started(request, connection, state)
+
+        {:progress, played_ms, total_ms} ->
+          emit_agent_speech_progressed(request, connection, played_ms, total_ms, state)
+
+        :completed ->
+          emit_agent_turn_completed(request, connection, state)
       end
     else
       state
@@ -762,6 +787,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp emit_agent_speech_started(request, connection, state) do
     event = struct!(AgentSpeechStarted, agent_event_fields(request, state))
+
+    send(connection.pid, {:vxpipe_event, event})
+    %{state | next_sequence: state.next_sequence + 1}
+  end
+
+  defp emit_agent_speech_progressed(request, connection, played_ms, total_ms, state) do
+    event =
+      struct!(
+        AgentSpeechProgressed,
+        Map.merge(agent_event_fields(request, state), %{played_ms: played_ms, total_ms: total_ms})
+      )
 
     send(connection.pid, {:vxpipe_event, event})
     %{state | next_sequence: state.next_sequence + 1}

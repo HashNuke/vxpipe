@@ -141,6 +141,17 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     end
   end
 
+  def handle_info(
+        {:vxpipe_audio_playback, sink, turn, {:progress, played_ms, total_ms} = progress},
+        %{current: %{request: request}} = state
+      )
+      when sink == request.output_sink and turn == request.correlation_id and
+             is_integer(played_ms) and played_ms > 0 and is_integer(total_ms) and
+             total_ms > played_ms do
+    send(state.owner, {:vxpipe_tts_playback, self(), request, progress})
+    {:noreply, state}
+  end
+
   def handle_info({:EXIT, transport, _reason}, %{transport: transport} = state) do
     stop_unavailable(:transport_closed, state)
   end

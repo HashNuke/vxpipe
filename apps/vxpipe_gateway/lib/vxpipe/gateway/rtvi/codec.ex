@@ -10,6 +10,8 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
     TextOutput
   }
 
+  alias Vxpipe.Gateway.RTVI.SpokenProgress
+
   @label "rtvi-ai"
   @protocol_version "2.1.0"
   @protocol_major 2
@@ -92,14 +94,24 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
     {:ok, encode_empty_event(event.id, "user-stopped-speaking")}
   end
 
-  @spec encode_spoken_progress(TextOutput.t(), String.t(), :in_progress | :completed) ::
+  @spec encode_spoken_progress(
+          TextOutput.t(),
+          String.t(),
+          :in_progress | :completed | {:in_progress, pos_integer(), pos_integer()}
+        ) ::
           {:ok, binary()}
   def encode_spoken_progress(%TextOutput{} = output, event_id, status)
-      when is_binary(event_id) and status in [:in_progress, :completed] do
+      when is_binary(event_id) do
     {accumulated_text, remaining_text} =
       case status do
-        :in_progress -> {"", output.text}
-        :completed -> {output.text, ""}
+        :in_progress ->
+          {"", output.text}
+
+        {:in_progress, played_ms, total_ms} ->
+          SpokenProgress.split(output.text, played_ms, total_ms)
+
+        :completed ->
+          {output.text, ""}
       end
 
     {:ok,
@@ -237,6 +249,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   defp aggregation(:sentence), do: "sentence"
 
   defp progress_status(:in_progress), do: "in-progress"
+  defp progress_status({:in_progress, _played_ms, _total_ms}), do: "in-progress"
   defp progress_status(:completed), do: "completed"
 
   defp parse_version(version) do

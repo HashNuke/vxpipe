@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket do
   @default_connect_timeout 10_000
   @default_keepalive_interval 30_000
   @default_receive_timeout 60_000
-  @output_timeout 5_000
+  @output_timeout 15_000
   @send_timeout 5_000
 
   @impl true

@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.CallEngine.Error
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechProgressed,
     AgentSpeechStarted,
     AgentTurnCompleted,
     ParticipantTranscription,
@@ -191,6 +192,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   def handle_info(
         {:vxpipe_event, %AgentSpeechStarted{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    {:noreply, project_turn_event(event, state)}
+  end
+
+  def handle_info(
+        {:vxpipe_event, %AgentSpeechProgressed{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
     {:noreply, project_turn_event(event, state)}

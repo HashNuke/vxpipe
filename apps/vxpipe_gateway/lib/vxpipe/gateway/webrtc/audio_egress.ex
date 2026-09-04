@@ -33,9 +33,12 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
            current: nil,
            encoder: encoder,
            encoder_module: encoder_module,
-           maximum_packets: Keyword.get(options, :maximum_packets, 100),
+           maximum_packets: Keyword.get(options, :maximum_packets, 500),
            pace_ref: nil,
+           pending_finish: nil,
+           pending_push: nil,
            peer_connection: Keyword.fetch!(options, :peer_connection),
+           progress_interval_packets: Keyword.get(options, :progress_interval_packets, 5),
            queue: :queue.new(),
            remainder: <<>>,
            rtp_sequence: 0,
@@ -52,36 +55,80 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   end
 
   @impl true
-  def handle_call({:vxpipe_audio_output, %AudioOutputFrame{} = frame}, _from, state) do
+  def handle_call(
+        {:vxpipe_audio_output, %AudioOutputFrame{} = frame},
+        from,
+        %{pending_push: nil} = state
+      ) do
     with :ok <- validate_frame(frame, state),
-         {:ok, state} <- establish_turn(frame, state),
-         {:ok, pcm_frames, remainder} <- split_pcm(state.remainder <> frame.payload, state),
-         {:ok, packets} <- encode_frames(pcm_frames, state),
-         state <- enqueue_packets(packets, remainder, state),
-         {:ok, state} <- maybe_send(state) do
-      {:reply, :ok, state}
+         {:ok, state} <- establish_turn(frame, state) do
+      pcm = state.remainder <> frame.payload
+      state = %{state | remainder: <<>>}
+
+      case buffer_available_pcm(pcm, state) do
+        {:accepted, state} ->
+          reply_after_maybe_send(state)
+
+        {:backpressure, pending_pcm, state} ->
+          case maybe_send(state) do
+            {:ok, state} ->
+              {:noreply, %{state | pending_push: %{from: from, pcm: pending_pcm}}}
+
+            {:error, reason} ->
+              {:reply, {:error, reason}, state}
+          end
+
+        {:error, reason, state} ->
+          {:reply, {:error, reason}, state}
+      end
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
-  def handle_call({:vxpipe_audio_output_finish, turn, callback}, _from, state) do
-    with :ok <- validate_finish(turn, callback, state),
-         {:ok, state} <- enqueue_final_remainder(state),
-         state <- put_in(state.current.finished, true),
-         {:ok, state} <- maybe_send_or_complete(state) do
-      {:reply, :ok, state}
+  def handle_call({:vxpipe_audio_output, %AudioOutputFrame{}}, _from, state) do
+    {:reply, {:error, :busy}, state}
+  end
+
+  def handle_call(
+        {:vxpipe_audio_output_finish, turn, callback},
+        from,
+        %{pending_finish: nil} = state
+      ) do
+    with :ok <- validate_finish(turn, callback, state) do
+      case prepare_finish(state) do
+        {:ok, state} ->
+          case maybe_send_or_complete(state) do
+            {:ok, state} -> {:reply, :ok, state}
+            {:error, reason} -> {:reply, {:error, reason}, state}
+          end
+
+        {:backpressure, state} ->
+          {:noreply, %{state | pending_finish: %{from: from}}}
+
+        {:error, reason, state} ->
+          {:reply, {:error, reason}, state}
+      end
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
+  end
+
+  def handle_call({:vxpipe_audio_output_finish, _turn, _callback}, _from, state) do
+    {:reply, {:error, :busy}, state}
   end
 
   @impl true
   def handle_info({:vxpipe_audio_pace, pace_ref}, %{pace_ref: pace_ref} = state) do
-    state = %{state | pace_ref: nil}
+    state = state |> Map.put(:pace_ref, nil) |> advance_playout()
 
-    case maybe_send_or_complete(state) do
-      {:ok, state} -> {:noreply, state}
+    with {:ok, state} <- drain_pending_push(state),
+         {:ok, state} <- drain_pending_finish(state),
+         state <- maybe_notify_progress(state, false),
+         {:ok, state} <- maybe_send_or_complete(state) do
+      {:noreply, state}
+    else
+      {:error, reason, state} -> {:stop, reason, state}
       {:error, reason} -> {:stop, reason, state}
     end
   end
@@ -107,6 +154,9 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
       command_id: frame.command_id,
       correlation_id: frame.correlation_id,
       finished: false,
+      last_progress_packets: 0,
+      packet_count: 0,
+      played_packets: 0,
       started: false
     }
 
@@ -124,15 +174,25 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     end
   end
 
-  defp split_pcm(pcm, state) do
+  defp buffer_available_pcm(pcm, state) do
     frame_count = div(byte_size(pcm), @frame_bytes)
+    available = max(state.maximum_packets - :queue.len(state.queue), 0)
+    accepted_count = min(frame_count, available)
+    accepted_bytes = accepted_count * @frame_bytes
+    <<accepted::binary-size(accepted_bytes), pending::binary>> = pcm
 
-    if frame_count + :queue.len(state.queue) > state.maximum_packets do
-      {:error, :queue_full}
-    else
-      full_bytes = frame_count * @frame_bytes
-      <<full::binary-size(full_bytes), remainder::binary>> = pcm
-      {:ok, split_full_frames(full, []), remainder}
+    case accepted |> split_full_frames([]) |> encode_frames(state) do
+      {:ok, packets} ->
+        state = enqueue_packets(packets, state)
+
+        if div(byte_size(pending), @frame_bytes) == 0 do
+          {:accepted, %{state | remainder: pending}}
+        else
+          {:backpressure, pending, state}
+        end
+
+      {:error, reason} ->
+        {:error, reason, state}
     end
   end
 
@@ -155,9 +215,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     end
   end
 
-  defp enqueue_packets(packets, remainder, state) do
+  defp enqueue_packets(packets, state) do
     queue = Enum.reduce(packets, state.queue, &:queue.in/2)
-    %{state | queue: queue, remainder: remainder}
+    current = %{state.current | packet_count: state.current.packet_count + length(packets)}
+    %{state | current: current, queue: queue}
   end
 
   defp validate_finish(turn, callback, %{current: current}) when current != nil do
@@ -181,7 +242,15 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
       case state.encoder_module.encode(state.encoder, pcm) do
         {:ok, packet} ->
-          {:ok, %{state | queue: :queue.in(packet, state.queue), remainder: <<>>}}
+          current = %{state.current | packet_count: state.current.packet_count + 1}
+
+          {:ok,
+           %{
+             state
+             | current: current,
+               queue: :queue.in(packet, state.queue),
+               remainder: <<>>
+           }}
 
         {:error, _reason} ->
           {:error, :encode_failed}
@@ -194,6 +263,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
   defp maybe_send_or_complete(state) do
     cond do
+      state.pace_ref != nil -> {:ok, state}
       not :queue.is_empty(state.queue) -> send_next(state)
       state.current != nil and state.current.finished -> {:ok, complete_turn(state)}
       true -> {:ok, state}
@@ -246,6 +316,98 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   end
 
   defp maybe_notify_started(state), do: state
+
+  defp advance_playout(%{current: %{started: true} = current} = state) do
+    %{state | current: %{current | played_packets: current.played_packets + 1}}
+  end
+
+  defp advance_playout(state), do: state
+
+  defp maybe_notify_progress(
+         %{current: %{finished: true, started: true} = current} = state,
+         force?
+       ) do
+    progress_due? =
+      current.played_packets > current.last_progress_packets and
+        current.played_packets < current.packet_count and
+        (force? or
+           current.played_packets - current.last_progress_packets >=
+             state.progress_interval_packets)
+
+    if progress_due? do
+      send(
+        current.callback,
+        {:vxpipe_audio_playback, self(), current.correlation_id,
+         {:progress, current.played_packets * @frame_duration_ms,
+          current.packet_count * @frame_duration_ms}}
+      )
+
+      %{state | current: %{current | last_progress_packets: current.played_packets}}
+    else
+      state
+    end
+  end
+
+  defp maybe_notify_progress(state, _force?), do: state
+
+  defp drain_pending_push(%{pending_push: nil} = state), do: {:ok, state}
+
+  defp drain_pending_push(%{pending_push: pending} = state) do
+    state = %{state | pending_push: nil}
+
+    case buffer_available_pcm(pending.pcm, state) do
+      {:accepted, state} ->
+        GenServer.reply(pending.from, :ok)
+        {:ok, state}
+
+      {:backpressure, pending_pcm, state} ->
+        {:ok, %{state | pending_push: %{pending | pcm: pending_pcm}}}
+
+      {:error, reason, state} ->
+        GenServer.reply(pending.from, {:error, reason})
+        {:error, reason, state}
+    end
+  end
+
+  defp reply_after_maybe_send(state) do
+    case maybe_send(state) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  defp prepare_finish(state) do
+    case enqueue_final_remainder(state) do
+      {:ok, state} ->
+        state = state |> put_in([:current, :finished], true) |> maybe_notify_progress(true)
+        {:ok, state}
+
+      {:error, :queue_full} ->
+        {:backpressure, state}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  defp drain_pending_finish(%{pending_finish: nil} = state), do: {:ok, state}
+
+  defp drain_pending_finish(%{pending_finish: pending} = state) do
+    state = %{state | pending_finish: nil}
+
+    case prepare_finish(state) do
+      {:ok, state} ->
+        GenServer.reply(pending.from, :ok)
+        {:ok, state}
+
+      {:backpressure, state} ->
+        {:ok, %{state | pending_finish: pending}}
+
+      {:error, reason, state} ->
+        GenServer.reply(pending.from, {:error, reason})
+        {:error, reason, state}
+    end
+  end
 
   defp complete_turn(state) do
     current = state.current

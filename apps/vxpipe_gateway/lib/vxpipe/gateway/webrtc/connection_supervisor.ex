@@ -35,7 +35,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionSupervisor do
       ice_servers: Keyword.get(options, :ice_servers, []),
       candidate_gathering_timeout_ms:
         Keyword.get(options, :candidate_gathering_timeout_ms, 1_000),
-      maximum_audio_packets: Keyword.get(options, :maximum_audio_packets, 100)
+      maximum_audio_packets: Keyword.get(options, :maximum_audio_packets, 500)
     ]
 
     case DynamicSupervisor.start_child(

@@ -104,7 +104,11 @@ paced onto the negotiated browser audio track. RTVI bot speaking boundaries
 and 2.x bot-output progress follow the gateway's paced output queue rather than
 provider generation completion. The current slice is half-duplex: while spoken
 bot output is pending, the gateway reports server-side user mute and keeps
-microphone RTP out of STT so bot audio cannot recursively create user turns. The
-implemented `/healthz` route verifies the gateway listener.
+microphone RTP out of STT so bot audio cannot recursively create user turns.
+Provider bursts are absorbed by a bounded ten-second packet queue and then
+backpressured while RTP drains; later spoken outputs are announced and played in
+order. During playout, best-effort whole-word progress lets RTVI 2.x clients
+distinguish spoken from remaining text even though Flux does not return word
+timestamps. The implemented `/healthz` route verifies the gateway listener.
 Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
 offer endpoint.
