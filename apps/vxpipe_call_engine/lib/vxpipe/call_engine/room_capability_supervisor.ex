@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   use DynamicSupervisor
 
-  alias Vxpipe.CallEngine.Capability.{DeterministicText, SpeechToText}
+  alias Vxpipe.CallEngine.Capability.{DeterministicText, SpeechToText, TextToSpeech}
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Media.Ingress
 
@@ -26,6 +26,25 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
   def start_capability(incarnation_id, room_authority, participant_id) do
     options = [room_authority: room_authority, participant_id: participant_id]
     DynamicSupervisor.start_child(via(incarnation_id), {DeterministicText, options})
+  end
+
+  def start_text_to_speech(
+        incarnation_id,
+        room_authority,
+        participant_id,
+        provider,
+        transport,
+        maximum_requests
+      ) do
+    options = [
+      owner: room_authority,
+      participant_id: participant_id,
+      provider: provider,
+      transport: transport,
+      maximum_requests: maximum_requests
+    ]
+
+    DynamicSupervisor.start_child(via(incarnation_id), {TextToSpeech, options})
   end
 
   def start_speech_to_text(

@@ -1,7 +1,8 @@
 # Vxpipe protocol and runtime architecture
 
 Status: Living architecture; room creation, one-participant RTVI connection,
-deterministic text-turn, and Deepgram Flux audio-turn slices are implemented
+deterministic text-turn, Deepgram Flux audio-input, and Deepgram Flux
+text-to-speech slices are implemented
 
 ## Decision
 
@@ -752,6 +753,55 @@ packet compatibility and the complete WebRTC-to-Flux-to-RTVI-to-agent path.
 Detailed planning, provider research, implementation choices, and verification
 evidence are recorded in
 [`20260904-1212-stt-capability.md`](../labnotes/20260904-1212-stt-capability.md).
+
+### Implemented Deepgram Flux text-to-speech slice
+
+The fifth slice completes audible deterministic-agent output without placing
+provider or WebRTC details in the room authority:
+
+1. A configured agent owns one temporary text-to-speech capability under the
+   room incarnation's dynamic capability supervisor. The capability keeps one
+   persistent `/v2/speak` session so Flux prosody can persist across turns.
+2. `TextOutput.will_be_spoken` is true only when the command requested audio,
+   the room has a live TTS capability, and its originating connection supplied
+   an output sink. Text-only and TTS-disabled paths still complete immediately.
+3. The provider-neutral capability serializes one active synthesis request and
+   a bounded pending FIFO. It sends separate Flux `Speak` and `Flush` controls,
+   validates provider lifecycle messages, and synchronously hands bounded raw
+   audio frames to the connection sink. The socket cannot accumulate unbounded
+   audio in the capability mailbox.
+4. Flux streaming emits raw signed little-endian linear16 rather than Opus. The
+   gateway's per-connection egress preserves provider-frame remainders, makes
+   exact 20 ms 48 kHz mono frames, and encodes them through libopus. It queues a
+   bounded number of packets and paces RTP at 20 ms with sequence numbers and
+   timestamps advanced independently of provider chunk boundaries.
+5. The gateway creates the outbound WebRTC audio track before answering the SDP
+   offer. The output sink is an opaque process handle passed only through the
+   internal attachment path; no PID enters a public command, snapshot, event,
+   JSON value, or RTVI message.
+6. Provider `SpeechMetadata` means no more synthesis audio. It causes egress to
+   zero-pad at most one final incomplete PCM frame. The room does not emit agent
+   completion until that last paced packet's duration has elapsed.
+7. Sending the first RTP packet produces a protocol-neutral
+   `AgentSpeechStarted`; draining the final packet produces
+   `AgentTurnCompleted`. The gateway projects these as RTVI
+   `bot-started-speaking` and `bot-stopped-speaking`, so the client lifecycle
+   describes the gateway's paced output delivery rather than the provider's
+   generation boundary. It does not claim a browser output-device
+   acknowledgement.
+8. Fatal provider, transport, codec, sink, or sustained queue failures never
+   fabricate successful completion. Interruption, local playback cancellation,
+   and Flux playback-offset reconciliation are deferred to the next output
+   lifecycle slice.
+
+Base configuration leaves text-to-speech disabled. The repository development
+overlay enables `flux-haley-en`, requests 48 kHz linear16, and resolves the same
+runtime `DEEPGRAM_API_KEY` used by Flux STT. Focused tests cover provider parsing,
+bounded capability behavior, PCM framing, Opus encoding, RTP pacing, and room
+sequencing. Separately tagged live tests prove both provider PCM output and a
+complete RTVI text-to-Flux-to-Opus-to-WebRTC path. Research, Callx comparison,
+the rejected PCMU path, and detailed evidence are in
+[`20260904-1602-tts-capability.md`](../labnotes/20260904-1602-tts-capability.md).
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

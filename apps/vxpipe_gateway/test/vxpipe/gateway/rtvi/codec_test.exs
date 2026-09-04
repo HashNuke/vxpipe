@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Gateway.RTVI.Codec
-  alias Vxpipe.CallEngine.Event.{ParticipantTranscription, TextOutput}
+  alias Vxpipe.CallEngine.Event.{AgentSpeechStarted, ParticipantTranscription, TextOutput}
 
   test "answers a current RTVI 2.x client-ready message with bot-ready" do
     client_ready =
@@ -177,6 +177,31 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
 
     assert {:ok, final} = Codec.encode_event(%{event | id: "evt_final", final: true})
     assert %{"data" => %{"final" => true}} = JSON.decode!(final)
+  end
+
+  test "projects actual output playout as bot-started-speaking" do
+    event = %AgentSpeechStarted{
+      id: "evt_speech",
+      sequence: 8,
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-agent",
+      source_participant_id: "part-human",
+      connection_id: "conn-demo",
+      command_id: "cmd-audio",
+      correlation_id: "turn-audio",
+      occurred_at: ~U[2026-09-04 12:00:00.000Z]
+    }
+
+    assert {:ok, encoded} = Codec.encode_event(event)
+
+    assert %{
+             "id" => "evt_speech",
+             "label" => "rtvi-ai",
+             "type" => "bot-started-speaking",
+             "data" => nil
+           } = JSON.decode!(encoded)
   end
 
   test "applies RTVI defaults when send-text options are omitted" do

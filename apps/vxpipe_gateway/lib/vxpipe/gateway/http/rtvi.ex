@@ -10,7 +10,8 @@ defmodule Vxpipe.Gateway.HTTP.RTVI do
     %{
       candidate_gathering_timeout_ms:
         Keyword.get(options, :candidate_gathering_timeout_ms, 1_000),
-      ice_servers: Keyword.get(options, :ice_servers, [])
+      ice_servers: Keyword.get(options, :ice_servers, []),
+      maximum_audio_packets: Keyword.get(options, :maximum_audio_packets, 100)
     }
   end
 

@@ -39,13 +39,14 @@ defmodule Vxpipe.CallEngine do
 
   @spec attach_connection(AttachConnection.t()) ::
           {:ok, ConnectionAttachment.t()} | {:error, Error.t()}
-  def attach_connection(%AttachConnection{} = command) do
+  def attach_connection(%AttachConnection{} = command, output_sink \\ nil) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
       settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
       case RoomSupervisor.attach_connection(
              command,
-             Keyword.fetch!(settings, :speech_to_text)
+             Keyword.fetch!(settings, :speech_to_text),
+             output_sink
            ) do
         {:ok, room_authority, media_ingress} ->
           {:ok,

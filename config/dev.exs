@@ -16,6 +16,17 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
       maximum_age_ms: 2_000,
       maximum_consecutive_overflows: 5
     ]
+  ],
+  text_to_speech: [
+    enabled: true,
+    provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
+    provider_options: [
+      model: "flux-haley-en",
+      encoding: :linear16,
+      sample_rate: 48_000
+    ],
+    transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket, []},
+    maximum_requests: 4
   ]
 
 config :vxpipe_gateway, Vxpipe.Gateway.Application,

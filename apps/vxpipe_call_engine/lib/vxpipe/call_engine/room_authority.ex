@@ -3,10 +3,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.Capability.DeterministicText
+  alias Vxpipe.CallEngine.Capability.{DeterministicText, TextToSpeech}
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechStarted,
     AgentTurnCompleted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
@@ -15,7 +16,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   }
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
-  alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, RoomParticipantSupervisor}
+
+  alias Vxpipe.CallEngine.{
+    Error,
+    Id,
+    RoomCapabilitySupervisor,
+    RoomParticipantSupervisor,
+    TextToSpeechRequest
+  }
+
   alias Vxpipe.CallEngine.Room.Snapshot
 
   @call_timeout 5_000
@@ -37,12 +46,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def attach_connection(
         room_authority,
         %AttachConnection{} = command,
-        subscriber
+        subscriber,
+        output_sink
       )
       when is_pid(subscriber) do
     GenServer.call(
       room_authority,
-      {:attach_connection, command, subscriber},
+      {:attach_connection, command, subscriber, output_sink},
       @call_timeout
     )
   end
@@ -85,7 +95,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       participant_roles: %{},
       snapshot: build_snapshot(command, incarnation_id),
       speech_to_text_monitors: %{},
-      text_capability: nil
+      text_capability: nil,
+      text_to_speech_capability: nil
     }
 
     case start_configured_agent(command, state) do
@@ -105,9 +116,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
-  def handle_call({:attach_connection, command, subscriber}, {caller, _tag}, state) do
+  def handle_call(
+        {:attach_connection, command, subscriber, output_sink},
+        {caller, _tag},
+        state
+      ) do
     case authorize_attachment(command, caller, subscriber, state) do
-      :ok -> put_connection(command, subscriber, state)
+      :ok -> put_connection(command, subscriber, output_sink, state)
       {:error, error} -> {:reply, {:error, error}, state}
     end
   end
@@ -148,6 +163,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, state}
   end
 
+  def handle_info(
+        {:vxpipe_tts_playback, capability, %TextToSpeechRequest{} = request, status},
+        state
+      )
+      when status in [:started, :completed] do
+    state = handle_text_to_speech_playback(capability, request, status, state)
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_tts_unavailable, capability, _reason}, state) do
+    state = handle_text_to_speech_unavailable(capability, state)
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_stt_signal, capability, identity, %Signal{} = signal}, state) do
     state = handle_speech_to_text_signal(capability, identity, signal, state)
     {:noreply, state}
@@ -173,6 +202,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         state.text_capability != nil and state.text_capability.monitor == monitor ->
           notify_connections(state.connections, :agent_unavailable)
           %{state | text_capability: nil}
+
+        state.text_to_speech_capability != nil and
+            state.text_to_speech_capability.monitor == monitor ->
+          notify_connections(state.connections, :agent_unavailable)
+          %{state | text_to_speech_capability: nil}
 
         true ->
           state
@@ -206,9 +240,43 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         pid: capability
       }
 
-      {:ok, %{state | text_capability: text_capability}}
+      state = %{state | text_capability: text_capability}
+      start_configured_text_to_speech(participant.participant_id, state)
     else
       _error -> {:error, :agent_start_failed}
+    end
+  end
+
+  defp start_configured_text_to_speech(participant_id, state) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    options = Keyword.fetch!(settings, :text_to_speech)
+
+    if Keyword.fetch!(options, :enabled) do
+      provider_module = Keyword.fetch!(options, :provider)
+
+      with {:ok, provider_config} <-
+             provider_module.new(Keyword.fetch!(options, :provider_options)),
+           {:ok, capability} <-
+             RoomCapabilitySupervisor.start_text_to_speech(
+               state.snapshot.incarnation_id,
+               self(),
+               participant_id,
+               {provider_module, provider_config},
+               Keyword.fetch!(options, :transport),
+               Keyword.fetch!(options, :maximum_requests)
+             ) do
+        text_to_speech_capability = %{
+          monitor: Process.monitor(capability),
+          participant_id: participant_id,
+          pid: capability
+        }
+
+        {:ok, %{state | text_to_speech_capability: text_to_speech_capability}}
+      else
+        _error -> {:error, :text_to_speech_start_failed}
+      end
+    else
+      {:ok, state}
     end
   end
 
@@ -234,7 +302,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
-  defp put_connection(command, subscriber, state) do
+  defp put_connection(command, subscriber, output_sink, state) do
     monitor = Process.monitor(subscriber)
     role = Map.fetch!(state.participant_roles, command.participant_id)
 
@@ -242,6 +310,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       actor_id: command.actor_id,
       participant_id: command.participant_id,
       pid: subscriber,
+      output_sink: output_sink,
       role: role,
       speech_to_text: nil
     }
@@ -614,6 +683,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
          connection.participant_id == command.participant_id do
       occurred_at = DateTime.utc_now(:millisecond)
 
+      will_be_spoken =
+        command.audio_response and state.text_to_speech_capability != nil and
+          is_pid(connection.output_sink)
+
       output = %TextOutput{
         id: Id.generate(:event),
         sequence: state.next_sequence,
@@ -627,27 +700,121 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         correlation_id: command.correlation_id,
         text: text,
         aggregated_by: :sentence,
-        will_be_spoken: false,
-        occurred_at: occurred_at
-      }
-
-      completed = %AgentTurnCompleted{
-        id: Id.generate(:event),
-        sequence: state.next_sequence + 1,
-        tenant_id: state.snapshot.tenant_id,
-        room_id: state.snapshot.room_id,
-        incarnation_id: state.snapshot.incarnation_id,
-        participant_id: state.text_capability.participant_id,
-        source_participant_id: command.participant_id,
-        connection_id: command.connection_id,
-        command_id: command.id,
-        correlation_id: command.correlation_id,
+        will_be_spoken: will_be_spoken,
         occurred_at: occurred_at
       }
 
       send(connection.pid, {:vxpipe_event, output})
-      send(connection.pid, {:vxpipe_event, completed})
-      %{state | next_sequence: state.next_sequence + 2}
+
+      state = %{state | next_sequence: state.next_sequence + 1}
+
+      if will_be_spoken do
+        request = %TextToSpeechRequest{
+          tenant_id: state.snapshot.tenant_id,
+          room_id: state.snapshot.room_id,
+          incarnation_id: state.snapshot.incarnation_id,
+          participant_id: state.text_to_speech_capability.participant_id,
+          source_participant_id: command.participant_id,
+          connection_id: command.connection_id,
+          command_id: command.id,
+          correlation_id: command.correlation_id,
+          text: text,
+          output_sink: connection.output_sink
+        }
+
+        case TextToSpeech.synthesize(state.text_to_speech_capability.pid, request) do
+          :ok ->
+            state
+
+          {:error, _reason} ->
+            send(connection.pid, {:vxpipe_connection_unavailable, :text_to_speech_unavailable})
+            state
+        end
+      else
+        emit_agent_turn_completed(command, connection, occurred_at, state)
+      end
+    else
+      state
+    end
+  end
+
+  defp handle_text_to_speech_playback(capability, request, status, state) do
+    connection = Map.get(state.connections, request.connection_id)
+
+    if authorized_text_to_speech?(capability, request, connection, state) do
+      case status do
+        :started -> emit_agent_speech_started(request, connection, state)
+        :completed -> emit_agent_turn_completed(request, connection, state)
+      end
+    else
+      state
+    end
+  end
+
+  defp authorized_text_to_speech?(capability, request, connection, state) do
+    state.text_to_speech_capability != nil and
+      state.text_to_speech_capability.pid == capability and connection != nil and
+      connection.output_sink == request.output_sink and
+      connection.participant_id == request.source_participant_id and
+      state.snapshot.tenant_id == request.tenant_id and state.snapshot.room_id == request.room_id and
+      state.snapshot.incarnation_id == request.incarnation_id
+  end
+
+  defp emit_agent_speech_started(request, connection, state) do
+    event = struct!(AgentSpeechStarted, agent_event_fields(request, state))
+
+    send(connection.pid, {:vxpipe_event, event})
+    %{state | next_sequence: state.next_sequence + 1}
+  end
+
+  defp emit_agent_turn_completed(%TextToSpeechRequest{} = request, connection, state) do
+    event = struct!(AgentTurnCompleted, agent_event_fields(request, state))
+
+    send(connection.pid, {:vxpipe_event, event})
+    %{state | next_sequence: state.next_sequence + 1}
+  end
+
+  defp emit_agent_turn_completed(command, connection, occurred_at, state) do
+    event = %AgentTurnCompleted{
+      id: Id.generate(:event),
+      sequence: state.next_sequence,
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      participant_id: state.text_capability.participant_id,
+      source_participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id,
+      occurred_at: occurred_at
+    }
+
+    send(connection.pid, {:vxpipe_event, event})
+    %{state | next_sequence: state.next_sequence + 1}
+  end
+
+  defp agent_event_fields(request, state) do
+    %{
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      participant_id: request.participant_id,
+      source_participant_id: request.source_participant_id,
+      connection_id: request.connection_id,
+      command_id: request.command_id,
+      correlation_id: request.correlation_id,
+      id: Id.generate(:event),
+      sequence: state.next_sequence,
+      occurred_at: DateTime.utc_now(:millisecond)
+    }
+  end
+
+  defp handle_text_to_speech_unavailable(capability, state) do
+    if state.text_to_speech_capability != nil and
+         state.text_to_speech_capability.pid == capability do
+      Process.demonitor(state.text_to_speech_capability.monitor, [:flush])
+      notify_connections(state.connections, :agent_unavailable)
+      %{state | text_to_speech_capability: nil}
     else
       state
     end
@@ -711,6 +878,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         RoomCapabilitySupervisor.stop_capability(
           state.snapshot.incarnation_id,
           state.text_capability.pid
+        )
+    end
+
+    if state.text_to_speech_capability != nil and
+         state.text_to_speech_capability.participant_id == participant_id do
+      _ =
+        RoomCapabilitySupervisor.stop_capability(
+          state.snapshot.incarnation_id,
+          state.text_to_speech_capability.pid
         )
     end
 

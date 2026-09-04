@@ -9,14 +9,20 @@
 # move said applications out of the umbrella.
 import Config
 
-config :vxpipe_call_engine, Vxpipe.CallEngine.Application, speech_to_text: [enabled: false]
+config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+  speech_to_text: [enabled: false],
+  text_to_speech: [enabled: false]
 
 config :vxpipe_gateway, Vxpipe.Gateway.Application,
   http: [
     enabled: false,
     ip: :loopback,
     port: 4000,
-    webrtc: [ice_servers: [], candidate_gathering_timeout_ms: 1_000],
+    webrtc: [
+      ice_servers: [],
+      candidate_gathering_timeout_ms: 1_000,
+      maximum_audio_packets: 100
+    ],
     room_creation: [enabled: false],
     cors: [
       allowed_origins: [],

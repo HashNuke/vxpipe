@@ -4,6 +4,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
   use DynamicSupervisor
 
   alias ExWebRTC.PeerConnection
+  alias Vxpipe.Gateway.WebRTC.AudioEgress
 
   def start_link(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
@@ -34,6 +35,17 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
     }
 
     DynamicSupervisor.start_child(via(connection_id), child_spec)
+  end
+
+  def start_audio_egress(connection_id, peer_connection, track_id, maximum_packets) do
+    options = [
+      connection_id: connection_id,
+      peer_connection: peer_connection,
+      track_id: track_id,
+      maximum_packets: maximum_packets
+    ]
+
+    DynamicSupervisor.start_child(via(connection_id), {AudioEgress, options})
   end
 
   defp via(connection_id) do

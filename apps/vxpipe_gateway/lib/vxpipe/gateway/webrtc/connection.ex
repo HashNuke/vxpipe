@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   alias Vxpipe.CallEngine.Error
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechStarted,
     AgentTurnCompleted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
@@ -52,18 +53,27 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     session = Keyword.fetch!(options, :session)
 
     with {:ok, attach_command} <- attach_command(connection_id, session),
-         {:ok, %ConnectionAttachment{} = attachment} <-
-           CallEngine.attach_connection(attach_command),
          {:ok, peer_connection} <-
            ConnectionPeerSupervisor.start_peer(
              connection_id,
              self(),
              Keyword.fetch!(options, :ice_servers)
-           ) do
+           ),
+         {:ok, output_track} <- add_output_track(peer_connection),
+         {:ok, audio_egress} <-
+           ConnectionPeerSupervisor.start_audio_egress(
+             connection_id,
+             peer_connection,
+             output_track.id,
+             Keyword.fetch!(options, :maximum_audio_packets)
+           ),
+         {:ok, %ConnectionAttachment{} = attachment} <-
+           CallEngine.attach_connection(attach_command, audio_egress) do
       {:ok,
        %{
          candidate_gathering_timeout_ms: Keyword.fetch!(options, :candidate_gathering_timeout_ms),
          attachment: attachment,
+         audio_egress: audio_egress,
          audio_tracks: %{},
          channel_ref: nil,
          connection_id: connection_id,
@@ -168,6 +178,14 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   def handle_info(
         {:vxpipe_event, %TextOutput{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    send_event(event, state)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_event, %AgentSpeechStarted{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
     send_event(event, state)
@@ -327,6 +345,15 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          %SessionDescription{} = local_description <-
            PeerConnection.get_local_description(peer_connection) do
       {:ok, local_description}
+    end
+  end
+
+  defp add_output_track(peer_connection) do
+    track = MediaStreamTrack.new(:audio)
+
+    case PeerConnection.add_track(peer_connection, track) do
+      {:ok, _sender} -> {:ok, track}
+      {:error, _reason} = error -> error
     end
   end
 

@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Event.{
+    AgentSpeechStarted,
     AgentTurnCompleted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
@@ -65,6 +66,11 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   @spec encode_event(AgentTurnCompleted.t()) :: {:ok, binary()}
   def encode_event(%AgentTurnCompleted{} = event) do
     {:ok, encode_empty_event(event.id, "bot-stopped-speaking")}
+  end
+
+  @spec encode_event(AgentSpeechStarted.t()) :: {:ok, binary()}
+  def encode_event(%AgentSpeechStarted{} = event) do
+    {:ok, encode_empty_event(event.id, "bot-started-speaking")}
   end
 
   @spec encode_event(ParticipantTurnStarted.t()) :: {:ok, binary()}

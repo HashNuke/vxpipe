@@ -11,13 +11,16 @@ development room/session admission, and Pipecat Small WebRTC signalling:
 
 The offer transport completes RTVI 2.x readiness over the `chat` data channel.
 In development it attaches the connection to a deterministic engine agent and
-maps `send-text` commands to unspoken `bot-output` events followed by an RTVI
-assistant-turn boundary. Typed participant boundaries also project to RTVI user
+maps `send-text` commands to `bot-output` events followed by RTVI agent-speaking
+boundaries. Typed participant boundaries also project to RTVI user
 start/stop messages so rapidly submitted turns remain separate in unmodified
 clients. Incoming Opus RTP is mapped to the call engine's protocol-neutral audio
 frame, sent through its bounded media ingress, and projected back as RTVI
 speaking and replacement-transcription messages. The committed transcript drives
-the same deterministic agent; bot audio is not yet synthesized.
+the same deterministic agent. Deepgram Flux TTS returns raw 48 kHz mono
+linear16; a per-connection bounded egress reframes and encodes it to Opus, then
+paces 20 ms RTP packets onto an outbound audio track negotiated before the SDP
+answer. RTVI bot start/stop messages follow the first and final paced packets.
 
 Configure the application from the host project's application environment:
 
@@ -27,7 +30,11 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     enabled: true,
     ip: :loopback,
     port: 4000,
-    webrtc: [ice_servers: [], candidate_gathering_timeout_ms: 1_000],
+    webrtc: [
+      ice_servers: [],
+      candidate_gathering_timeout_ms: 1_000,
+      maximum_audio_packets: 100
+    ],
     room_creation: [enabled: false],
     cors: [
       allowed_origins: ["https://client.example.test"],

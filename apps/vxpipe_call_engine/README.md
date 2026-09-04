@@ -30,6 +30,13 @@ replacement-transcription signals into the room authority. Only Flux
 deterministic agent. Provider I/O and raw audio remain outside the room-authority
 mailbox, and the engine still contains no WebRTC or RTVI types.
 
+The output slice adds one persistent, bounded text-to-speech capability for the
+agent participant. Agent text is sent to Deepgram Flux TTS and normalized as
+48 kHz mono linear16 frames delivered directly to the authorized connection's
+opaque output sink. Raw audio still bypasses the room authority. Provider
+completion and sink playout completion are distinct; room-sequenced agent
+speaking/completion events follow sink acknowledgements.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

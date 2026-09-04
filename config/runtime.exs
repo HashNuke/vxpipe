@@ -5,30 +5,44 @@ if config_env() == :dev do
     Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
   speech_to_text = Keyword.fetch!(call_engine_settings, :speech_to_text)
+  text_to_speech = Keyword.fetch!(call_engine_settings, :text_to_speech)
 
-  speech_to_text =
-    if Keyword.fetch!(speech_to_text, :enabled) do
-      api_key =
-        case System.fetch_env("DEEPGRAM_API_KEY") do
-          {:ok, value} ->
-            if String.trim(value) == "" do
-              raise "DEEPGRAM_API_KEY is required when Deepgram Flux is enabled"
-            else
-              value
-            end
+  deepgram_enabled =
+    Keyword.fetch!(speech_to_text, :enabled) or Keyword.fetch!(text_to_speech, :enabled)
 
-          :error ->
+  api_key =
+    if deepgram_enabled do
+      case System.fetch_env("DEEPGRAM_API_KEY") do
+        {:ok, value} ->
+          if String.trim(value) == "" do
             raise "DEEPGRAM_API_KEY is required when Deepgram Flux is enabled"
-        end
+          else
+            value
+          end
 
-      Keyword.update!(speech_to_text, :provider_options, fn provider_options ->
+        :error ->
+          raise "DEEPGRAM_API_KEY is required when Deepgram Flux is enabled"
+      end
+    else
+      nil
+    end
+
+  inject_api_key = fn capability ->
+    if Keyword.fetch!(capability, :enabled) do
+      Keyword.update!(capability, :provider_options, fn provider_options ->
         Keyword.put(provider_options, :api_key, api_key)
       end)
     else
-      speech_to_text
+      capability
     end
+  end
 
-  config :vxpipe_call_engine, Vxpipe.CallEngine.Application, speech_to_text: speech_to_text
+  speech_to_text = inject_api_key.(speech_to_text)
+  text_to_speech = inject_api_key.(text_to_speech)
+
+  config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+    speech_to_text: speech_to_text,
+    text_to_speech: text_to_speech
 
   app_host =
     case System.get_env("APP_HOST") do

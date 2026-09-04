@@ -10,10 +10,14 @@ defmodule Vxpipe.Gateway.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_env), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -30,6 +34,7 @@ defmodule Vxpipe.Gateway.MixProject do
       {:cors_plug, "~> 3.0"},
       {:ex_sctp, "~> 0.1.3"},
       {:ex_webrtc, "~> 0.17.0"},
+      {:membrane_opus_plugin, "~> 0.21.0"},
       {:plug, "~> 1.20"},
       {:vxpipe_call_engine, in_umbrella: true}
     ]

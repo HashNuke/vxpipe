@@ -29,7 +29,8 @@ Then start the Vxpipe umbrella and sample frontend together:
 bin/dev
 ```
 
-Development enables the Deepgram Flux speech-to-text capability. Put a
+Development enables the Deepgram Flux speech-to-text and text-to-speech
+capabilities. Put a
 development credential in the ignored repository-root `.env` file before
 starting the stack:
 
@@ -97,8 +98,11 @@ targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and perform
 the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming Opus audio is routed
 through a bounded, protocol-neutral media ingress to Deepgram Flux. Flux turn
 signals become RTVI speaking and replacement-transcription messages; a committed
-turn receives the existing deterministic `Echo: <transcript>` response. This
-checkpoint does not yet synthesize or play bot audio. The implemented `/healthz`
-route verifies the gateway listener.
+turn receives the deterministic `Echo: <transcript>` response. That text is
+streamed through Flux TTS as 48 kHz linear16, encoded to 20 ms Opus packets, and
+paced onto the negotiated browser audio track. RTVI bot speaking boundaries
+follow the gateway's paced output queue rather than provider generation
+completion. The
+implemented `/healthz` route verifies the gateway listener.
 Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
 offer endpoint.

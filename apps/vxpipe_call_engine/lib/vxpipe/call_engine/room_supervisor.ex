@@ -34,10 +34,10 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
-  def attach_connection(%AttachConnection{} = command, speech_to_text_options) do
+  def attach_connection(%AttachConnection{} = command, speech_to_text_options, output_sink) do
     case lookup_room(command.tenant_id, command.room_id) do
       {:ok, room_authority} ->
-        case RoomAuthority.attach_connection(room_authority, command, self()) do
+        case RoomAuthority.attach_connection(room_authority, command, self(), output_sink) do
           {:ok, role} ->
             start_connection_speech_to_text(
               room_authority,
