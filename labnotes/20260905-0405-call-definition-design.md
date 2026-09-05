@@ -4,11 +4,12 @@ Research date: 2026-09-05 UTC
 
 ## Goal
 
-Define the smallest useful graph-based call-definition contract for Vxpipe: one
-reusable, versionable description that can start a single-agent call today and
-grow into multi-agent calls, scoped context, agent handoffs, human transfers,
-tools, and telephony without prematurely implementing a general-purpose
-workflow language.
+Define the smallest useful call-definition contract for Vxpipe: one reusable,
+versionable, agent-first description that can start a single-agent call today
+and grow into multi-agent calls, scoped context, agent handoffs, human
+transfers, tools, and telephony without forcing ordinary calls into a
+general-purpose workflow language. A private resolved plan may use a graph
+internally, and an explicit workflow authoring surface can be added later.
 
 This is a research checkpoint. It does not commit a public schema or change
 runtime behavior.
@@ -28,8 +29,8 @@ runtime behavior.
   public snapshots, events, errors, and logs.
 - Keep remote MCP integrations application-wide or tenant-scoped so endpoints,
   credentials, discovery, health, and limits are reusable across calls. Keep
-  enabled integration references and tool bindings on individual agent nodes so
-  a configured integration does not automatically affect every call or expose
+  enabled integration references and tool bindings on individual agents so a
+  configured integration does not automatically affect every call or expose
   every operation to every agent.
 - Keep model decisions separate from authoritative room mutations.
 - Defer an embedded scripting language until declarative primitives prove
@@ -105,124 +106,72 @@ Across the reviewed systems, the stable concepts are:
 10. immutable published versions or pinned runtime snapshots; and
 11. a runtime invocation carrying per-call variables and endpoint identities.
 
-These identify the behaviors a useful call graph must be able to compose. They
-do not require arbitrary code, arbitrary expressions, parallel branches, or a
-large node taxonomy.
+These identify the behaviors a useful call definition must compose. They do not
+require arbitrary code, arbitrary expressions, parallel branches, or a large
+node taxonomy in the initial authoring contract.
 
-### A graph can be the public composition model without being the domain kernel
+### Use an agent-first public authoring model
 
-Evidence cuts both ways on explicit graphs:
+The common path across the reviewed systems is not a graph. It is one reusable
+agent, or a named set of focused agents with one entry agent and explicit,
+allowlisted handoffs. Graphs appear as a separate structured-flow product or a
+code-level orchestration mechanism when deterministic sequencing is actually
+needed.
 
-- A graph gives inspectable paths, deterministic action nodes, fallback edges,
-  and focused debugging. It works well for regulated or highly structured calls.
-- A graph becomes cumbersome when every conversational phase is a node. Model
-  behavior must simultaneously follow the current node, evaluate possible
-  transitions, and handle digressions. One reviewed control plane is retiring
-  this shape in favor of focused agents with tool-selected handoffs.
-- Another system compiles a graph into a single prompt for flexible execution,
-  but this increases prompt size and weakens deterministic condition handling.
-- Code-first systems consistently distinguish persistent agents from temporary
-  typed tasks rather than treating every implementation object as the same kind
-  of graph node.
+The public `CallDefinition` should therefore be agent-first:
 
-Vxpipe can still make a graph the first-class public call definition. The graph
-should describe control topology while the existing room model remains the
-authority for participants, connections, media, turns, tools, and call legs.
-The graph selects which activity owns conversational control and what follows
-its typed outcome; it must not become a second copy of room state.
+- one `entry_agent`;
+- shared capability-profile defaults;
+- a map of named agents;
+- each agent's instructions, first-message behavior, capability overrides,
+  selected tools, and handoffs;
+- typed invocation inputs and typed session state; and
+- bounded call policies and references to artifact/event policies.
 
-The graph executor should be intentionally small:
+The agent name in the definition is a stable logical role, not a PID, runtime
+participant ID, or activation ID. Entering an agent creates a fresh activation
+that owns conversational control. Re-entering the same agent may reuse its
+private history according to policy, but stale work from an earlier activation
+must still be rejected.
+
+An agent's `handoffs` are a named allowlist. Each handoff declares a destination,
+a model-facing description of when it is appropriate, the context-transfer
+policy, and optional presentation behavior. This is easier to author and review
+than separate node and edge collections while preserving an exact directed
+topology.
+
+### Keep graphs as a private plan and a later advanced surface
+
+A graph still has value for runtime compilation and future deterministic
+workflows. The compiler can lower each agent to an internal agent node and each
+handoff to an internal edge. The initial runtime needs only one active cursor:
 
 ```text
-enter one node
-  -> node starts, completes, or waits
-  -> node emits one typed outcome and optional typed context patch
-  -> graph follows the matching edge
+activate entry agent
+  -> agent converses or requests an allowlisted handoff
+  -> room authority commits the transition
   -> previous activation becomes stale
-  -> enter the next node or finish
+  -> activate destination agent or end the call
 ```
 
-The graph does not evaluate natural-language edge conditions or execute opaque
-code. The source node owns how an outcome is chosen. For example, an agent node
-can expose its outgoing model-selectable routes as tools; a branch node can
-evaluate a closed deterministic condition; an action node can emit success or
-failure after a tool or engine command completes.
+That private plan must not become a second copy of room state. The room remains
+authoritative for participants, connections, media, turns, tools, typed context,
+and call legs. Provider requests and tool execution remain concurrent supervised
+work, while the conversational-control cursor is singular.
 
-Start with one active control node. Media processing, provider requests, tools,
-and participant processes remain concurrent under supervision, but parallel
-graph branches, joins, races, and compensation are deferred until a concrete
-call requires them.
+If a concrete use case later requires guaranteed sequencing, deterministic
+branching, waiting, joins, or compensation, add a separate explicit workflow
+authoring surface which compiles into the same private plan. Do not make every
+ordinary call author understand `agent`, `action`, `wait`, `branch`, and `end`
+node kinds merely so two agents can hand off to one another.
 
-The graph's mutable execution state should remain small: resolved-plan ID,
-current node and activation IDs, node lifecycle and entry time, transition and
-visit counters, and the last outcome/edge correlation. Typed call context stays
-in room-owned state. Asynchronous node work runs outside the room authority and
-returns typed results; the room alone commits context patches and transitions.
+This separation also avoids conflating three different concepts:
 
-### Distinguish graph execution primitives from authoring primitives
-
-There are two meanings of primitive:
-
-- **Execution primitives** are the closed node kinds and outcomes understood by
-  the runtime. They sit beneath the graph.
-- **Authoring primitives** are friendly builders such as single agent, agent
-  handoff, collect fields, or warm transfer. They sit on top of the graph and
-  compile into ordinary nodes and edges.
-
-Vxpipe can offer both a raw graph API and higher-level builders without creating
-two execution semantics. The graph is the common interchange and inspection
-form; the builders only produce validated graph data.
-
-The minimal useful execution-node inventory is:
-
-1. `agent`: hold multi-turn conversational control until the model, host, or
-   policy selects a declared route;
-2. `action`: execute one typed tool or engine command, possibly asynchronously,
-   and produce a terminal outcome;
-3. `wait`: await a typed room/participant/leg/host event or a deadline without
-   starting a side effect;
-4. `branch`: choose an outcome through a small deterministic condition algebra
-   over declared context fields; and
-5. `end`: finish graph execution with a typed result and room/call disposition.
-
-Each kind has one lifecycle-shaped responsibility:
-
-| Node kind | Owns | Waits for | Emits |
-| --- | --- | --- | --- |
-| `agent` | Conversational control | A declared route or interruption | A route outcome |
-| `action` | One requested side effect | Its terminal command result | A typed terminal outcome |
-| `wait` | No side effect | One allowlisted event or deadline | The event or timeout outcome |
-| `branch` | Deterministic selection | Nothing | One condition arm |
-| `end` | Final disposition | Nothing | No further outcome |
-
-An `agent` node represents a logical conversational participant, not a process.
-Entering it creates a fresh activation and grants conversational control;
-exiting it revokes that control. Re-entering the same node may reuse that
-agent's private history according to policy, but still creates a new activation.
-Definition node IDs, runtime participant IDs, and activation IDs are therefore
-different identities.
-
-Every activation receives a fresh ID, and every outcome carries that ID. The
-room rejects outcomes and visible output from stale activations after a
-transition. This gives the graph a precise concurrency boundary without adding
-parallel graph execution.
-
-Only `agent` and `end` are required for the first two-agent proof. `action` is
-the next required kind for tools and human transfer. `wait` and `branch` should
-be added only with a focused use case. A task or subflow is composition over
-these nodes with typed input/output, not an initial sixth runtime primitive.
-
-This small inventory covers the anticipated features:
-
-- an agent handoff is an `agent -> agent` transition;
-- a model tool can run inside an agent, while a guaranteed workflow action is
-  an `action` node;
-- DTMF collection and a warm transfer are asynchronous actions with explicit
-  results;
-- waiting for a participant to join or for an external approval is a `wait`;
-- deterministic routing on previously collected facts is a `branch`;
-- hangup or detach-agent-while-humans-continue is an `end` disposition; and
-- a reusable collection or transfer workflow can later compile to a subgraph.
+- a **tool** is a model-selectable typed operation available to an active agent;
+- a **task** is a bounded conversational subroutine that returns typed data and
+  then yields control; and
+- a **workflow** is deterministic orchestration across conversational and
+  non-conversational steps.
 
 ### Context is not one value
 
@@ -320,15 +269,18 @@ Use validated Elixir structs as the canonical in-process representation:
 
 ```text
 CallDefinition
-CallDefinition.Graph
-CallDefinition.Node
-CallDefinition.Edge
+CallDefinition.Agent
+CallDefinition.Handoff
+CallDefinition.CapabilitySelection
 CallDefinition.Context
 CallDefinition.Policy
 CallDefinition.AgentIntegration
 CallDefinition.AgentToolBinding
 CallInvocation
 ResolvedCallPlan
+ResolvedCallPlan.Graph
+ResolvedCallPlan.Node
+ResolvedCallPlan.Edge
 ResolvedCallPlan.Agent
 ResolvedCallPlan.IntegrationBinding
 ResolvedCallPlan.ToolBinding
@@ -350,52 +302,48 @@ semantics.
 The first version should contain only:
 
 - `schema_version`;
-- optional external `id` and `revision` metadata;
-- `entry_node`;
-- named `nodes` using only `agent` and `end` kinds initially;
-- typed `edges` keyed by source-node outcome;
-- a typed `context` field schema and initial defaults that are safe to persist;
-- shared call policies for turns, interruption, limits, failure, and ending;
-  and
+- optional display metadata, while durable ID and revision stay in the resource
+  envelope;
+- `entry_agent`;
+- shared capability-profile defaults;
+- named inline `agents`;
+- typed invocation-input and session-state schemas;
+- shared call policies for turns, interruption, limits, failure, and ending; and
 - artifact/event policy references.
 
-Each `agent` node should contain:
+Each agent should contain:
 
-- stable node and agent identity;
+- a stable definition-local name;
 - instructions or a versioned prompt-profile reference;
-- model-inference capability profile;
-- optional speech-to-text and text-to-speech profile overrides;
+- optional capability-profile overrides;
+- first-message behavior;
 - MCP integrations enabled for this agent and stable agent-local bindings for
   the selected remote tools;
 - engine-owned tool grants;
 - input, output, and action-guardrail policy references;
-- entry behavior (`wait`, fixed speech, or generated speech); and
+- named handoffs to other agents; and
 - optional limits stricter than the call defaults.
 
-Each edge should contain:
+Each handoff should contain:
 
-- stable name;
-- source node, declared source outcome, and destination node;
-- optional model-facing route description consumed only by an `agent` node;
+- a stable name within the source agent;
+- the destination agent;
+- a model-facing description of when the route is appropriate;
 - optional context/history transfer policy for an agent-to-agent transition;
   and
 - optional user-visible transition speech policy.
 
-Every node kind defines how its allowed outcomes and result schemas are
-declared. The compiler rejects outcomes outside that contract, duplicate
-`(source, outcome)` routes, and missing targets. The executor only matches a
-typed outcome to an edge; it does not know how the outcome was chosen.
+The compiler can turn model-selectable handoffs into engine-owned route tools
+granted only during the source agent's activation. The room checks that the
+source activation is still current, the target exists and is ready, and
+handoff budgets are not exhausted. A host command can request the same declared
+handoff without giving the model authority over the room mutation.
 
-For an agent node, its outgoing edges declare the available route outcomes and
-their descriptions for model or host selection. Action and wait outcomes are
-closed by their operation/event contracts; branch outcomes are its declared
-arms; and `end` has no outgoing outcome. Edges remain ordinary typed routing
-data in every case.
-
-For an agent node, the runtime can compile model-selectable outgoing edges into
-engine-owned route tools granted only during that node activation. The room
-checks that the source activation is still current, the target exists and is
-ready, and transition budgets are not exhausted.
+Version one should keep agents inline so one call definition is portable in the
+standalone JSON configuration and resolves without a dependency graph. A later
+control plane may offer reusable agent resources and allow a definition to pin
+one by ID and revision, but it must compile that reference into the same
+self-contained immutable plan before the room starts.
 
 ### Application/tenant MCP integrations and agent enablement
 
@@ -408,7 +356,7 @@ Remote MCP integrations are reusable infrastructure, not call-definition data:
   one tenant. Tenant integrations are isolated by the authenticated tenant ID
   and are the normal home for tenant-owned Google Docs, Zapier, or similar
   access.
-- Each **agent node** in the call definition independently enables configured
+- Each **agent** in the call definition independently enables configured
   integrations and binds a bounded selection of their tools to agent-local
   names.
 - The **call invocation** carries neither MCP configuration nor credentials.
@@ -416,7 +364,7 @@ Remote MCP integrations are reusable infrastructure, not call-definition data:
 Use these terms consistently:
 
 - **configured**: an integration record exists at application or tenant scope;
-- **enabled**: an agent node selects that configured integration and its allowed
+- **enabled**: an agent selects that configured integration and its allowed
   remote tools;
 - **resolved**: compiling the call pins each agent's bindings plus the selected
   scope, integration/catalog revision, and private credential lease;
@@ -429,7 +377,7 @@ This creates four narrowing layers before invocation:
 
 ```text
 configured application or authenticated-tenant integration
-  -> agent-node enabled integration
+  -> agent-enabled integration
   -> agent-local tool bindings
   -> currently active agent activation
 ```
@@ -489,13 +437,12 @@ can be reused by calls sharing the same application integration or tenant
 integration rather than repeated for every call. Catalog and connection state
 must never cross tenant/integration/credential boundaries.
 
-Each agent node binds stable agent-local tool names to catalog entries:
+Each agent binds stable agent-local tool names to catalog entries:
 
 ```json
 {
-  "nodes": {
+  "agents": {
     "timekeeper": {
-      "type": "agent",
       "integrations": {
         "utilities": {
           "type": "remote_mcp",
@@ -602,74 +549,50 @@ This is a discussion aid, not a committed schema:
 ```json
 {
   "schema_version": 1,
-  "entry_node": "triage",
-  "context": {
-    "fields": {
-      "customer_id": {"type": "string", "source": "invocation"},
-      "issue_kind": {"type": "string", "visibility": ["triage", "billing"]}
+  "name": "customer-support",
+  "entry_agent": "reception",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "customer_id": {"type": "string"}
+    },
+    "required": ["customer_id"],
+    "additionalProperties": false
+  },
+  "defaults": {
+    "capabilities": {
+      "speech_to_text": "default-stt",
+      "model_inference": "fast-general",
+      "text_to_speech": "default-voice"
     }
   },
-  "nodes": {
-    "triage": {
-      "type": "agent",
-      "instructions": "Understand why the caller is contacting us.",
-      "model": "fast-general",
-      "voice": "default-voice",
-      "integrations": {
-        "records": {
-          "type": "remote_mcp",
-          "ref": "records",
-          "tools": {
-            "lookup_customer": {"remote_name": "lookup_customer"}
+  "agents": {
+    "reception": {
+      "instructions": "Understand why the caller is contacting us and route the conversation.",
+      "first_message": {"mode": "generated"},
+      "handoffs": {
+        "to_billing": {
+          "to": "billing",
+          "description": "Use when the caller needs help with a billing issue.",
+          "context": {
+            "history": {"mode": "last_n_spoken", "turns": 6},
+            "inputs": ["customer_id"]
           }
         }
       }
     },
     "billing": {
-      "type": "agent",
       "instructions": "Resolve billing questions.",
-      "model": "careful-general",
-      "voice": "default-voice",
-      "integrations": {
-        "records": {
-          "type": "remote_mcp",
-          "ref": "records",
-          "tools": {
-            "lookup_invoice": {"remote_name": "lookup_invoice"}
-          }
-        }
-      }
-    },
-    "complete": {
-      "type": "end",
-      "result": "completed",
-      "disposition": "end_call"
+      "capabilities": {
+        "model_inference": "careful-general"
+      },
+      "first_message": {"mode": "generated"},
+      "handoffs": {}
     }
   },
-  "edges": [
-    {
-      "name": "triage-to-billing",
-      "from": "triage",
-      "outcome": "billing",
-      "to": "billing",
-      "description": "Use after the caller's issue is confirmed to be billing-related.",
-      "context": {
-        "history": {"type": "last_n_spoken", "turns": 6},
-        "fields": ["customer_id", "issue_kind"]
-      }
-    },
-    {
-      "name": "billing-complete",
-      "from": "billing",
-      "outcome": "resolved",
-      "to": "complete",
-      "description": "Use after the billing issue is resolved."
-    }
-  ],
-  "policies": {
+  "limits": {
     "max_duration_ms": 1800000,
-    "max_handoffs": 6,
-    "on_agent_failure": "end_with_error"
+    "max_handoffs": 6
   }
 }
 ```
@@ -679,31 +602,47 @@ inputs:
 
 ```json
 {
-  "definition": "support-call@7",
-  "room_id": "room-123",
-  "inputs": {
+  "call_definition": {
+    "id": "customer-support",
+    "revision": 7
+  },
+  "input": {
     "customer_id": "customer-456"
+  },
+  "transport": {
+    "type": "web"
   }
 }
 ```
 
-Provider/profile strings are closed registry names resolved by the host. They do
-not name Elixir modules. Instructions may later be replaced by immutable prompt
-references without changing the runtime semantics.
+The authenticated principal supplies tenant and actor identity; neither is a
+caller-controlled field. The gateway creates runtime room, incarnation,
+participant, connection, and call IDs. The transport attachment belongs to the
+invocation or an inbound routing resource, not to reusable conversational
+behavior.
+
+Provider/profile strings are closed registry names resolved by the host. They
+do not name Elixir modules. Instructions may later be replaced by immutable
+prompt references without changing the runtime semantics. Agent-scoped tools,
+knowledge, guardrails, MCP enablement, and artifact-policy references fit into
+this shape without changing its basic entry-agent and handoff model, but they
+should be specified in separate focused checkpoints.
 
 ## Alternatives considered
 
 ### Start with a fully expressive JSON graph
 
-Rejected, but a minimal graph is accepted. A fully expressive graph front-loads
-node taxonomy, expression semantics, parallelism, joins, compensation, graph
-migration, and visual-editor concerns before Vxpipe can switch between two
-agents. It also risks making the graph rather than the room the source of truth.
+Rejected as the initial public authoring contract. A fully expressive graph
+front-loads node taxonomy, expression semantics, parallelism, joins,
+compensation, graph migration, and visual-editor concerns before Vxpipe can
+switch between two agents. Even a minimal public `agent`/`end` graph makes the
+common case less direct than an entry agent with named handoffs and risks making
+the graph rather than the room the source of truth.
 
-The initial graph has one cursor, typed outcomes, ordinary directed edges, and
-only `agent` and `end` nodes. New node kinds require externally observable use
-cases and focused tests. Higher-level flows compile into this representation and
-do not need a separate executor in the room hot path.
+An internal graph remains a useful compiled representation. A separate advanced
+workflow surface may later expose deterministic nodes and edges when a concrete
+use case justifies them; it must compile into the same plan and room authority
+rather than introduce a second executor.
 
 ### Make executable Elixir modules the only definition
 
@@ -731,12 +670,12 @@ commands available to declarative policies.
 
 ### Add a general expression language now
 
-Deferred with Lua. The first graph transition can be model-selected through a
-temporary route tool or requested explicitly by the host. When deterministic
-branching is needed, add the `branch` node with a small typed condition algebra
-over declared context fields (`eq`, `in`, `exists`, `all`, `any`, `not`) rather
-than conditions attached to generic edges or strings evaluated at runtime. This
-remains serializable, validatable, and testable.
+Deferred with Lua. An agent handoff can be model-selected through an engine-owned
+route tool or requested explicitly by the host. When deterministic branching is
+needed, add it to the explicit workflow surface with a small typed condition
+algebra over declared context fields (`eq`, `in`, `exists`, `all`, `any`,
+`not`) rather than putting natural-language expressions into ordinary handoffs.
+This remains serializable, validatable, and testable.
 
 ### Put MCP endpoints or credentials directly in each call definition
 
@@ -758,7 +697,7 @@ narrow tool use for a particular call shape without rebuilding the integration.
 ### Treat a configured MCP integration as enabled for every agent
 
 Rejected. Application or tenant configuration may make an integration and tool
-catalog available, but only an agent node enables it and binds its tools. This
+catalog available, but only an agent enables it and binds its tools. This
 keeps one agent from inheriting tools merely because another agent, call, or
 tenant happens to use the same MCP server.
 
@@ -767,10 +706,10 @@ tenant happens to use the same MCP server.
 Compilation should reject, with path-specific errors:
 
 - unsupported schema versions;
-- an absent or unknown entry node;
+- an absent or unknown entry agent;
 - duplicate or invalid names;
-- missing edge endpoints or an edge referencing an undeclared outcome;
-- more than one edge for the same source-node outcome;
+- a handoff with an unknown destination;
+- duplicate handoff names within one source agent;
 - tool or integration references not present in closed registries;
 - duplicate agent-local tool aliases within one agent;
 - an agent's enabled integration reference unavailable to the authenticated
@@ -785,22 +724,20 @@ Compilation should reject, with path-specific errors:
 - context fields with unsupported types or invalid visibility grants;
 - invocation defaults for undeclared fields;
 - policies outside bounded ranges;
-- a model-selectable route whose source node cannot request it;
+- a model-selectable handoff whose source agent cannot request it;
 - incompatible required capabilities; and
 - any private runtime term or literal secret at the public boundary.
 
-Cycles are not inherently invalid: callers may legitimately return to triage.
-They require bounded node visits/transitions and session duration rather than an
-acyclic graph rule. Unreachable nodes should initially be a compiler warning or
-a lint error, not necessarily a runtime-invalid definition.
+Cycles are not inherently invalid: callers may legitimately return to the entry
+agent. They require bounded handoffs and session duration rather than an
+acyclicity rule. Unreachable agents should initially be a compiler warning or a
+lint error, not necessarily a runtime-invalid definition.
 
 ## Observable runtime contracts needed
 
 The first multi-agent slice needs protocol-neutral events for:
 
 - call plan resolved;
-- graph started;
-- node entered, outcome committed, edge traversed, and node exited;
 - agent admitted and ready;
 - agent activated and deactivated;
 - handoff requested, accepted, completed, rejected, failed, and cancelled;
@@ -821,64 +758,64 @@ turn, and activation identity.
 ## Suggested red-green checkpoints
 
 1. **Definition and invocation data:** red tests for a minimal one-agent
-   definition, agent-scoped enabled-integration references, stable agent-local
-   tool bindings, and a credential-free invocation. Implement immutable structs
-   and pure path-specific validation only.
-2. **Integration resolution:** use fake application and tenant integration
-   catalogs to prove tenant lookup is derived from the authenticated principal,
-   a tenant integration atomically replaces the application-wide integration,
-   integrations referenced by no agent create no plan bindings, unavailable or
-   disallowed agent tools reject the call, and no state crosses tenant boundaries.
-   Produce a secret-free `ResolvedCallPlan` plus private credential leases.
-3. **Graph data contract:** test the entry node, `agent`/`end` nodes, declared
-   outcomes, edge resolution, missing targets, duplicate routes, cycles, and
-   path-specific errors.
-4. **Graph reducer:** test enter, stay, outcome, transition, terminal, stale
-   activation, and transition-budget behavior using a deterministic fake node;
+   definition, entry-agent selection, shared capability defaults, agent
+   overrides, input validation, and a credential-free invocation. Implement
+   immutable structs and pure path-specific validation only.
+2. **Basic plan resolution:** use fake closed capability-profile registries to
+   prove defaults and overrides resolve into a self-contained, secret-free
+   `ResolvedCallPlan`; unused profiles leave no runtime binding.
+3. **Agent and handoff data:** test handoff
+   resolution, missing targets, duplicate names, cycles, unreachable-agent
+   linting, and path-specific errors.
+4. **Active-agent reducer:** test activation, handoff, terminal state, stale
+   activation, and handoff-budget behavior using deterministic fake agents;
    implement a pure reducer with one active cursor and activation ID.
-5. **Behavior-preserving agent node:** prove a one-agent resolved plan produces
-   the same text/audio turn behavior as the current preset path and that only
-   tools enabled on that agent reach model inference.
+5. **Behavior-preserving agent:** prove a one-agent resolved plan produces
+   the same text/audio turn behavior as the current preset path.
 6. **JSON and gateway boundary:** round-trip definition/invocation data, reject
-   unknown keys, dynamic atom creation, endpoints, credentials, and tenant
-   overrides, and prove private integration data is absent from responses,
-   errors, snapshots, and inspection output.
-7. **Remote MCP execution:** behind the engine-owned tool backend, configure one
-   HTTPS MCP integration, enable one tool on one agent node, call it, preserve
+   unknown keys, dynamic atom creation, arbitrary runtime overrides, credentials,
+   and tenant overrides.
+7. **Integration resolution:** use fake application and tenant integration
+   catalogs to prove tenant lookup comes from the authenticated principal, a
+   tenant integration atomically replaces the application-wide integration,
+   only agent-enabled tools reach model inference, unavailable tools reject the
+   call, and no state crosses tenant boundaries. Produce private credential
+   leases outside the public plan.
+8. **Remote MCP execution:** behind the engine-owned tool backend, configure one
+   HTTPS MCP integration, enable one tool on one agent, call it, preserve
    the existing room/RTVI lifecycle, and prove interruption or agent handoff
    cancels the remote request. Do not add stdio or an MCP server endpoint.
-8. **Agent-to-agent edge:** use two deterministic agent nodes to prove only the
-   active node receives turns, model-selectable routes are allowlisted, and stale
+9. **Agent handoff:** use two deterministic agents to prove only the active
+   agent receives turns, model-selectable routes are allowlisted, and stale
    output is rejected.
-9. **Scoped transition context:** prove allowed spoken history and typed fields
+10. **Scoped transition context:** prove allowed spoken history and typed fields
    reach the destination while hidden fields, private tool data, credentials,
    and unplayed text do not.
-10. **Later execution primitives:** add `action`, human transfer, `wait`, and
-    `branch` only alongside their first concrete uses. Defer subgraphs,
-    parallelism, joins, races, and scripting.
+11. **Later workflow surface:** add deterministic `action`, human transfer,
+    `wait`, and `branch` steps only alongside their first concrete uses. Defer
+    subgraphs, parallelism, joins, races, and scripting.
 
 ## Decision for the next checkpoint
 
 Proceed first with typed `CallDefinition`, `CallInvocation`, and
-`ResolvedCallPlan` contracts. Remote MCP integrations live in application or
-tenant catalogs, where they are **configured**. Individual agent nodes explicitly
-**enable** integrations and bind selected tools to agent-local names. MCP
-endpoints and credentials are neither definition nor invocation data. A tenant
-integration atomically takes precedence over an application-wide integration
-with the same stable ID; neither catalog enables it for any agent automatically.
+`ResolvedCallPlan` contracts without MCP fields in the first proof. The smallest
+proof is an inline one-agent definition with an entry agent, shared capability
+profile defaults, declared invocation inputs, and bounded limits becoming a
+self-contained immutable plan. Route the existing single-agent behavior through
+that plan before adding multi-agent handoffs or integration resolution.
 
-The smallest proof is pure resolution using fake application/tenant catalogs: a
-single-agent definition becomes a secret-free immutable plan whose tool surface
-is exact, whose agent-enabled integration comes from the authenticated tenant or
-application fallback, and whose credential lease has the correct scope.
-Integrations referenced by no agent must leave no trace in that plan. Do not
-begin an MCP transport implementation until this boundary exists. Then route a
-behavior-preserving single-agent call through the plan before connecting one
-remote HTTPS MCP tool.
+Remote MCP integrations still live in application or tenant catalogs, where
+they are **configured**. Individual agents explicitly **enable** integrations
+and bind selected tools to agent-local names. MCP endpoints and credentials are
+neither definition nor invocation data. A tenant integration atomically takes
+precedence over an application-wide integration with the same stable ID; neither
+catalog enables it for any agent automatically. Do not begin an MCP transport
+implementation until the general call-definition boundary exists.
 
-Retain the graph direction with one cursor, typed node outcomes, and directed
-edges. Start with `agent` and `end`; do not start with Lua, arbitrary executable
-hooks, natural-language edge evaluation, parallel graph execution, or a broad
+Use the agent-first public input with one entry agent and named handoffs. Compile
+it into a private one-cursor plan; do not expose generic nodes and edges in the
+initial JSON. Do not start with Lua, arbitrary executable hooks,
+natural-language condition evaluation, parallel graph execution, or a broad
 workflow interpreter.
 
 ## Verification evidence
@@ -899,7 +836,7 @@ workflow interpreter.
 - Refined integration scope after review: remote MCP endpoint, authentication,
   discovery, health, and limit configuration is application-wide or
   tenant-scoped, never invocation-scoped. A configured integration becomes
-  available infrastructure; only an agent node enables it and binds its selected
+  available infrastructure; only an agent enables it and binds its selected
   tools. Other agents in the same call do not inherit that surface.
 - Reviewed the official MCP `2026-07-28` tool specification, Streamable HTTP
   transport, and generated schema:
