@@ -118,6 +118,30 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     {:reply, {:error, :busy}, state}
   end
 
+  def handle_call({:vxpipe_audio_output_interrupt, turn, callback}, _from, state) do
+    case validate_interrupt(turn, callback, state) do
+      :ok ->
+        played_ms = state.current.played_packets * @frame_duration_ms
+
+        state =
+          state
+          |> reply_to_pending_calls()
+          |> Map.merge(%{
+            current: nil,
+            pace_ref: nil,
+            pending_finish: nil,
+            pending_push: nil,
+            queue: :queue.new(),
+            remainder: <<>>
+          })
+
+        {:reply, {:ok, played_ms}, state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
   @impl true
   def handle_info({:vxpipe_audio_pace, pace_ref}, %{pace_ref: pace_ref} = state) do
     state = state |> Map.put(:pace_ref, nil) |> advance_playout()
@@ -230,6 +254,28 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   end
 
   defp validate_finish(_turn, _callback, _state), do: {:error, :wrong_turn}
+
+  defp validate_interrupt(turn, callback, %{current: current}) when current != nil do
+    if current.correlation_id == turn and current.callback == callback do
+      :ok
+    else
+      {:error, :wrong_turn}
+    end
+  end
+
+  defp validate_interrupt(_turn, _callback, _state), do: {:error, :wrong_turn}
+
+  defp reply_to_pending_calls(state) do
+    if state.pending_push != nil do
+      GenServer.reply(state.pending_push.from, {:error, :interrupted})
+    end
+
+    if state.pending_finish != nil do
+      GenServer.reply(state.pending_finish.from, {:error, :interrupted})
+    end
+
+    state
+  end
 
   defp enqueue_final_remainder(%{remainder: <<>>} = state), do: {:ok, state}
 
@@ -414,7 +460,8 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
     send(
       current.callback,
-      {:vxpipe_audio_playback, self(), current.correlation_id, :completed}
+      {:vxpipe_audio_playback, self(), current.correlation_id,
+       {:completed, current.played_packets * @frame_duration_ms}}
     )
 
     %{state | current: nil, remainder: <<>>}

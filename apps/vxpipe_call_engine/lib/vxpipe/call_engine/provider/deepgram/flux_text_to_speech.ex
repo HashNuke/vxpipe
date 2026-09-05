@@ -82,6 +82,15 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
   def encode_flush, do: JSON.encode!(%{"type" => "Flush"})
 
   @impl true
+  def encode_interrupt(playback_offset_ms)
+      when is_integer(playback_offset_ms) and playback_offset_ms >= 0 do
+    JSON.encode!(%{
+      "type" => "Interrupt",
+      "playback_offset" => %{"type" => "time_ms", "value" => playback_offset_ms}
+    })
+  end
+
+  @impl true
   def decode(payload) when is_binary(payload) do
     if byte_size(payload) > @maximum_message_bytes do
       {:error, :message_too_large}
@@ -124,12 +133,27 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
 
   defp decode_message(%{"type" => "SpeechInterrupted", "metadata" => metadata} = message)
        when is_map(metadata) do
-    signal(
-      :speech_interrupted,
-      Map.get(message, "request_id"),
-      Map.get(metadata, "speech_id"),
-      nil
-    )
+    with {:ok, signal} <-
+           signal(
+             :speech_interrupted,
+             Map.get(message, "request_id"),
+             Map.get(metadata, "speech_id"),
+             nil
+           ),
+         audio_played_ms when is_integer(audio_played_ms) and audio_played_ms >= 0 <-
+           Map.get(message, "audio_played_ms"),
+         text_spoken when is_binary(text_spoken) <- Map.get(message, "text_spoken"),
+         text_remaining when is_binary(text_remaining) <- Map.get(message, "text_remaining") do
+      {:ok,
+       %{
+         signal
+         | audio_played_ms: audio_played_ms,
+           text_spoken: text_spoken,
+           text_remaining: text_remaining
+       }}
+    else
+      _invalid -> {:error, :invalid_message}
+    end
   end
 
   defp decode_message(%{"type" => "Warning", "code" => code} = message) do

@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
   alias Vxpipe.CallEngine.Event.{
     AgentTurnCompleted,
     AgentTurnFailed,
+    AgentTurnInterrupted,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
     TextOutput
@@ -111,6 +112,38 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 7}}
   end
 
+  test "keeps non-immediate typed input queued behind the active model turn" do
+    room_id = unique_id("room")
+    {room, participant} = start_attached_room(room_id)
+    current = send_command(room, participant, "turn-current", "first")
+
+    assert :ok = CallEngine.send_text(current)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
+    assert_receive {:test_model_inference_request, current_request, _messages}
+
+    queued =
+      send_command(room, participant, "turn-queued", "second", run_immediately: false)
+
+    assert :ok = CallEngine.send_text(queued)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 3}}
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 4}}
+    refute_receive {:vxpipe_event, %AgentTurnInterrupted{}}
+    refute_receive {:test_model_inference_request, _request, _messages}
+
+    send(current_request, {:test_model_inference_reply, {:ok, "first answer"}})
+    assert_receive {:vxpipe_event, %TextOutput{sequence: 5, correlation_id: "turn-current"}}
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 6}}
+
+    assert_receive {:test_model_inference_request, _queued_request,
+                    [
+                      %Message{role: :system},
+                      %Message{role: :user, content: "first"},
+                      %Message{role: :assistant, content: "first answer"},
+                      %Message{role: :user, content: "second"}
+                    ]}
+  end
+
   defp start_attached_room(room_id) do
     assert {:ok, create} =
              CreateRoom.new(
@@ -149,7 +182,7 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     {room, participant}
   end
 
-  defp send_command(room, participant, correlation_id, content) do
+  defp send_command(room, participant, correlation_id, content, options \\ []) do
     assert {:ok, command} =
              SendText.new(
                tenant_id: "tenant-demo",
@@ -160,6 +193,7 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
                connection_id: "conn-model",
                correlation_id: correlation_id,
                content: content,
+               run_immediately: Keyword.get(options, :run_immediately, true),
                audio_response: false,
                deadline: future_deadline()
              )

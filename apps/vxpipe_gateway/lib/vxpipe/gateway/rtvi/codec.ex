@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
     AgentSpeechStarted,
     AgentTurnCompleted,
     AgentTurnFailed,
+    AgentTurnInterrupted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
@@ -87,6 +88,11 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
      )}
   end
 
+  @spec encode_event(AgentTurnInterrupted.t()) :: {:ok, binary()}
+  def encode_event(%AgentTurnInterrupted{} = event) do
+    {:ok, encode_empty_event(event.id, "bot-interrupted")}
+  end
+
   @spec encode_event(AgentSpeechStarted.t()) :: {:ok, binary()}
   def encode_event(%AgentSpeechStarted{} = event) do
     {:ok, encode_empty_event(event.id, "bot-started-speaking")}
@@ -100,6 +106,37 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   @spec encode_event(ParticipantTurnCompleted.t()) :: {:ok, binary()}
   def encode_event(%ParticipantTurnCompleted{} = event) do
     {:ok, encode_empty_event(event.id, "user-stopped-speaking")}
+  end
+
+  @spec encode_interruption_context(AgentTurnInterrupted.t()) :: {:ok, binary()}
+  def encode_interruption_context(%AgentTurnInterrupted{} = event) do
+    {:ok,
+     JSON.encode!(%{
+       "id" => event.id <> "-context",
+       "label" => @label,
+       "type" => "server-message",
+       "data" => %{
+         "t" => "vxpipe.turn",
+         "v" => 1,
+         "d" => %{
+           "kind" => "interrupted",
+           "turn" => %{
+             "agent_participant_id" => event.participant_id,
+             "source_participant_id" => event.source_participant_id,
+             "connection_id" => event.connection_id,
+             "command_id" => event.command_id,
+             "correlation_id" => event.correlation_id,
+             "played_ms" => event.played_ms
+           },
+           "interrupted_by" => %{
+             "participant_id" => event.interrupted_by_participant_id,
+             "connection_id" => event.interrupted_by_connection_id,
+             "command_id" => event.interruption_command_id,
+             "correlation_id" => event.interruption_correlation_id
+           }
+         }
+       }
+     })}
   end
 
   @spec encode_spoken_progress(

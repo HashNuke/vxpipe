@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
     AgentSpeechProgressed,
     AgentSpeechStarted,
     AgentTurnCompleted,
+    AgentTurnInterrupted,
     TextOutput
   }
 
@@ -78,6 +79,28 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
     assert TurnState.input_enabled?(state)
   end
 
+  test "interrupts active output without claiming its remaining text was spoken" do
+    output = text_output("turn-1")
+    interruption = agent_turn_interrupted("turn-1")
+
+    assert {state, [{:event, ^output}, {:user_mute, :started, "evt_output"}]} =
+             TurnState.project(TurnState.new(), output)
+
+    assert {state,
+            [
+              {:event, ^interruption},
+              {:interruption_context, ^interruption},
+              {:user_mute, :stopped, "evt_interrupted"}
+            ]} = TurnState.project(state, interruption)
+
+    assert TurnState.input_enabled?(state)
+
+    refute Enum.any?(
+             elem(TurnState.project(state, interruption), 1),
+             &match?({:spoken_progress, _, _, :completed}, &1)
+           )
+  end
+
   defp text_output(correlation_id) do
     %TextOutput{
       id: "evt_output",
@@ -103,6 +126,21 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
 
   defp agent_turn_completed(correlation_id) do
     struct!(AgentTurnCompleted, event_fields("evt_completed", correlation_id))
+  end
+
+  defp agent_turn_interrupted(correlation_id) do
+    fields =
+      "evt_interrupted"
+      |> event_fields(correlation_id)
+      |> Map.merge(%{
+        interrupted_by_participant_id: "part-interrupter",
+        interrupted_by_connection_id: "conn-interrupter",
+        interruption_command_id: "cmd-interrupter",
+        interruption_correlation_id: "turn-interrupter",
+        played_ms: 20
+      })
+
+    struct!(AgentTurnInterrupted, fields)
   end
 
   defp agent_speech_progressed(correlation_id, played_ms, total_ms) do

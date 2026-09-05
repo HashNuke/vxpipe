@@ -46,11 +46,16 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechTest do
            )
   end
 
-  test "encodes text and flush controls exactly" do
+  test "encodes text, flush, and interruption controls exactly" do
     assert JSON.decode!(FluxTextToSpeech.encode_speak("Hello ")) ==
              %{"type" => "Speak", "text" => "Hello "}
 
     assert JSON.decode!(FluxTextToSpeech.encode_flush()) == %{"type" => "Flush"}
+
+    assert JSON.decode!(FluxTextToSpeech.encode_interrupt(2_340)) == %{
+             "type" => "Interrupt",
+             "playback_offset" => %{"type" => "time_ms", "value" => 2_340}
+           }
   end
 
   test "decodes speech boundaries, warnings, errors, and binary audio" do
@@ -66,6 +71,18 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechTest do
     assert {:ok, %Signal{kind: :speech_completed, provider_speech_id: "dg_sp_123abc"}} =
              FluxTextToSpeech.decode(
                ~s({"type":"SpeechMetadata","speech_id":"dg_sp_123abc","audio_duration_ms":42})
+             )
+
+    assert {:ok,
+            %Signal{
+              kind: :speech_interrupted,
+              provider_speech_id: "dg_sp_123abc",
+              audio_played_ms: 2_340,
+              text_spoken: "Hello there",
+              text_remaining: " friend"
+            }} =
+             FluxTextToSpeech.decode(
+               ~s({"type":"SpeechInterrupted","request_id":"req_1","audio_played_ms":2340,"text_spoken":"Hello there","text_remaining":" friend","metadata":{"speech_id":"dg_sp_123abc"}})
              )
 
     assert {:ok, %Signal{kind: :warning, provider_code: "NO_ACTIVE_SPEECH"}} =

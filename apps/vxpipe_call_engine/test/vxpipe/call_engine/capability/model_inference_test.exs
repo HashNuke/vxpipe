@@ -121,6 +121,59 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
     assert_receive {:vxpipe_capability_text, ^capability, ^next, "continued"}
   end
 
+  test "interrupts in-flight and queued requests before accepting replacement work" do
+    capability = start_capability()
+    current = command("current", "keep talking")
+    queued = command("queued", "wait your turn")
+    replacement = command("replacement", "new topic")
+
+    assert :ok = ModelInference.respond(capability, current)
+    assert_receive {:test_model_inference_request, request, _messages}
+    request_monitor = Process.monitor(request)
+    assert :ok = ModelInference.respond(capability, queued)
+
+    assert {:ok, [^current, ^queued]} = ModelInference.interrupt(capability, [])
+    assert_receive {:DOWN, ^request_monitor, :process, ^request, _reason}
+
+    assert :ok = ModelInference.respond(capability, replacement)
+
+    assert_receive {:test_model_inference_request, replacement_request,
+                    [
+                      %Message{role: :system, content: "Be concise."},
+                      %Message{role: :user, content: "new topic"}
+                    ]}
+
+    send(replacement_request, {:test_model_inference_reply, {:ok, "new answer"}})
+    assert_receive {:vxpipe_capability_text, ^capability, ^replacement, "new answer"}
+    refute_receive {:vxpipe_capability_text, ^capability, ^current, _text}
+    refute_receive {:vxpipe_capability_text, ^capability, ^queued, _text}
+  end
+
+  test "removes interrupted completed turns from subsequent model context" do
+    capability = start_capability()
+    completed = command("completed", "old topic")
+
+    assert :ok = ModelInference.respond(capability, completed)
+    assert_receive {:test_model_inference_request, request, _messages}
+    send(request, {:test_model_inference_reply, {:ok, "old answer"}})
+    assert_receive {:vxpipe_capability_text, ^capability, ^completed, "old answer"}
+
+    assert {:ok, []} =
+             ModelInference.interrupt(
+               capability,
+               [{"connection-test", "completed", completed.id}]
+             )
+
+    replacement = command("replacement", "new topic")
+    assert :ok = ModelInference.respond(capability, replacement)
+
+    assert_receive {:test_model_inference_request, _request,
+                    [
+                      %Message{role: :system, content: "Be concise."},
+                      %Message{role: :user, content: "new topic"}
+                    ]}
+  end
+
   defp start_capability(overrides \\ []) do
     task_supervisor = start_supervised!({Task.Supervisor, []})
 

@@ -219,7 +219,7 @@ connected transport is not sufficient evidence that the bot can process input.
 | --- | --- |
 | `client-ready` | Negotiate protocol and attach the participant connection |
 | `disconnect-bot` | Detach or end according to session policy |
-| `send-text` | Append text context and optionally run the active agent |
+| `send-text` | Submit text; interrupt older room-agent work when `run_immediately` is true, otherwise retain FIFO order |
 | `dtmf` | Publish ordered DTMF input to the selected connection/input collector |
 | `llm-function-call-result` | Complete the matching client-owned tool invocation |
 | `client-message` | Dispatch a validated optional Vxpipe request or notification |
@@ -255,6 +255,12 @@ mutations use the SDK's `sendClientRequest` facility. Server notifications use
   }
 }
 ```
+
+Typed interruption uses `t: "vxpipe.turn"`, `v: 1`, and
+`d.kind: "interrupted"`. Its data names the interrupted agent participant,
+originating participant and turn, confirmed played milliseconds, and the
+authenticated participant, connection, command, and correlation that caused the
+interruption. The parallel standard `bot-interrupted` event remains unmodified.
 
 All mutations carry a stable `command_id`. Domain-level responses have a typed
 result envelope:
@@ -812,11 +818,13 @@ provider or WebRTC details in the room authority:
    active paced turn completes, even though the engine may already have produced
    its text. This prevents speaker output from being transcribed as a new
    participant turn and prevents overlapping assistant segments in unmodified
-   clients. Typed input during playback is queued output, not interruption;
-   interruption and barge-in require a later duplex-policy slice.
+   clients. At this checkpoint typed input during playback was queued output;
+   the typed-interruption checkpoint below supersedes that behavior when
+   `run_immediately` is true.
 9. Fatal provider, transport, codec, sink, or sustained queue failures never
-   fabricate successful completion. Local playback cancellation and Flux
-   playback-offset reconciliation remain deferred.
+   fabricate successful completion. At this checkpoint local playback
+   cancellation and Flux playback-offset reconciliation remained deferred; the
+   typed-interruption checkpoint below implements them for immediate text.
 
 Base configuration leaves text-to-speech disabled. The repository development
 overlay enables `flux-haley-en`, requests 48 kHz linear16, and resolves the same
@@ -864,9 +872,48 @@ input and output boundaries:
 The slice deliberately produces one complete output rather than streaming
 tokens. Context is volatile and bounded by completed turn count, not tokens.
 Streaming, tools, token-aware compaction, durable history, prompt-profile
-resolution, provider fallback, and cancellation remain later checkpoints. The
-detailed decision and verification evidence are in
+resolution, provider fallback, and acoustic barge-in remain later checkpoints.
+The detailed decision and verification evidence are in
 [`model-inference-turn.md`](model-inference-turn.md).
+
+### Implemented typed turn-interruption slice
+
+The next slice makes RTVI `send-text` urgency observable across the complete
+model, synthesis, playout, and protocol path:
+
+1. The room authority derives interrupter identity from the already attached
+   connection. A client cannot override its participant ID in the message.
+2. `run_immediately: true` cancels all older active and queued work in the room's
+   current single logical agent-output lane before dispatching replacement work.
+   `run_immediately: false` retains FIFO behavior.
+3. `AgentTurnInterrupted` explicitly names the interrupted agent, originating
+   participant and turn, target connection, interrupting participant and
+   connection, both commands and correlations, and confirmed played time. This
+   remains unambiguous with several human participants and does not assume agent
+   identity from a process ID.
+4. Audio egress immediately clears unsent RTP and PCM. The persistent Flux TTS
+   capability keeps its one in-flight sink write in a supervised task so RTP
+   backpressure cannot block cancellation. The persistent Flux TTS session
+   receives an `Interrupt` with cumulative confirmed playback when audio has
+   played, discards late provider audio, and starts replacement synthesis only
+   after the old provider turn closes.
+5. In-flight and queued model requests are canceled. A completed interrupted
+   user/assistant pair is removed from volatile history when exact heard text is
+   unavailable, preventing later prompts from treating the complete response as
+   heard.
+6. The gateway emits standard `bot-interrupted` without private fields. It also
+   emits a versioned `vxpipe.turn` `server-message` carrying full attribution for
+   Vxpipe-aware clients, releases the input mute boundary, and never marks the
+   interrupted output as completely spoken.
+7. RTVI exposes one logical bot through each connection. The engine event names
+   its agent participant so future agent composition remains protocol-neutral;
+   independently addressable multi-agent clients require an optional Vxpipe
+   message or another adapter.
+
+This is typed interruption, not acoustic barge-in. Microphone RTP remains gated
+during bot playout. The decision, rejected alternatives, implications, and test
+evidence are recorded in
+[`typed-turn-interruption.md`](typed-turn-interruption.md).
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

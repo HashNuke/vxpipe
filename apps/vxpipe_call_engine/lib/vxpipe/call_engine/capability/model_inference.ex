@@ -26,6 +26,15 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec interrupt(pid(), [{String.t(), String.t(), String.t()}]) ::
+          {:ok, [SendText.t()]} | {:error, :unavailable}
+  def interrupt(capability, completed_turn_ids)
+      when is_pid(capability) and is_list(completed_turn_ids) do
+    GenServer.call(capability, {:interrupt, completed_turn_ids}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     state = %{
@@ -64,6 +73,22 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
     else
       {:reply, {:error, :queue_full}, state}
     end
+  end
+
+  def handle_call({:interrupt, completed_turn_ids}, _from, state) do
+    interrupted = interrupted_commands(state)
+    state = cancel_current(state)
+    discarded = MapSet.new(completed_turn_ids)
+
+    history =
+      Enum.reject(state.history, fn turn ->
+        MapSet.member?(
+          discarded,
+          {turn.connection_id, turn.correlation_id, turn.command_id}
+        )
+      end)
+
+    {:reply, {:ok, interrupted}, %{state | history: history, pending: :queue.new()}}
   end
 
   @impl true
@@ -134,7 +159,14 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
           {:vxpipe_capability_text, self(), state.current.command, text}
         )
 
-        turn = %{user: state.current.command.content, assistant: text}
+        turn = %{
+          connection_id: state.current.command.connection_id,
+          correlation_id: state.current.command.correlation_id,
+          command_id: state.current.command.id,
+          user: state.current.command.content,
+          assistant: text
+        }
+
         history = Enum.take(state.history ++ [turn], -state.maximum_context_turns)
         %{state | current: nil, history: history}
 
@@ -219,6 +251,20 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
   defp cancel_timer(timer) do
     _ = Process.cancel_timer(timer)
     :ok
+  end
+
+  defp interrupted_commands(state) do
+    current = if state.current == nil, do: [], else: [state.current.command]
+    current ++ :queue.to_list(state.pending)
+  end
+
+  defp cancel_current(%{current: nil} = state), do: state
+
+  defp cancel_current(state) do
+    cancel_timer(state.current.timer)
+    Process.demonitor(state.current.task.ref, [:flush])
+    _ = Task.shutdown(state.current.task, :brutal_kill)
+    %{state | current: nil}
   end
 
   defp valid_configuration?(state) do

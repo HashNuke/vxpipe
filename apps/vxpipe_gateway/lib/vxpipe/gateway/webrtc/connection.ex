@@ -15,6 +15,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     AgentSpeechStarted,
     AgentTurnCompleted,
     AgentTurnFailed,
+    AgentTurnInterrupted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
@@ -213,6 +214,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def handle_info(
+        {:vxpipe_event, %AgentTurnInterrupted{connection_id: connection_id} = event},
+        %{connection_id: connection_id} = state
+      ) do
+    {:noreply, project_turn_event(event, state)}
+  end
+
+  def handle_info(
         {:vxpipe_event, %AgentTurnFailed{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
@@ -268,6 +276,10 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   defp send_turn_action({:spoken_progress, output, event_id, status}, state) do
     send_encoded(Codec.encode_spoken_progress(output, event_id, status), state)
+  end
+
+  defp send_turn_action({:interruption_context, event}, state) do
+    send_encoded(Codec.encode_interruption_context(event), state)
   end
 
   defp send_turn_action({:user_mute, status, event_id}, state) do

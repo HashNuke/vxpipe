@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechStarted,
     AgentTurnFailed,
+    AgentTurnInterrupted,
     ParticipantTranscription,
     TextOutput
   }
@@ -305,6 +306,65 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
              "type" => "bot-started-speaking",
              "data" => nil
            } = JSON.decode!(encoded)
+  end
+
+  test "projects a standard bot interruption and separately preserves room attribution" do
+    event = %AgentTurnInterrupted{
+      id: "evt_interrupted",
+      sequence: 9,
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-agent",
+      source_participant_id: "part-originator",
+      connection_id: "conn-originator",
+      command_id: "cmd-original",
+      correlation_id: "turn-original",
+      interrupted_by_participant_id: "part-interrupter",
+      interrupted_by_connection_id: "conn-interrupter",
+      interruption_command_id: "cmd-interrupter",
+      interruption_correlation_id: "turn-interrupter",
+      played_ms: 320,
+      occurred_at: ~U[2026-09-05 02:30:00.000Z]
+    }
+
+    assert {:ok, standard} = Codec.encode_event(event)
+
+    assert %{
+             "id" => "evt_interrupted",
+             "label" => "rtvi-ai",
+             "type" => "bot-interrupted",
+             "data" => nil
+           } = JSON.decode!(standard)
+
+    assert {:ok, attributed} = Codec.encode_interruption_context(event)
+
+    assert %{
+             "id" => "evt_interrupted-context",
+             "label" => "rtvi-ai",
+             "type" => "server-message",
+             "data" => %{
+               "t" => "vxpipe.turn",
+               "v" => 1,
+               "d" => %{
+                 "kind" => "interrupted",
+                 "turn" => %{
+                   "agent_participant_id" => "part-agent",
+                   "source_participant_id" => "part-originator",
+                   "connection_id" => "conn-originator",
+                   "command_id" => "cmd-original",
+                   "correlation_id" => "turn-original",
+                   "played_ms" => 320
+                 },
+                 "interrupted_by" => %{
+                   "participant_id" => "part-interrupter",
+                   "connection_id" => "conn-interrupter",
+                   "command_id" => "cmd-interrupter",
+                   "correlation_id" => "turn-interrupter"
+                 }
+               }
+             }
+           } = JSON.decode!(attributed)
   end
 
   test "applies RTVI defaults when send-text options are omitted" do

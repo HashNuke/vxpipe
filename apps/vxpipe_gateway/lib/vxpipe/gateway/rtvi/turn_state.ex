@@ -5,13 +5,19 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
     AgentSpeechProgressed,
     AgentSpeechStarted,
     AgentTurnCompleted,
+    AgentTurnInterrupted,
     TextOutput
   }
 
   defstruct active_spoken_output: nil, pending_spoken_outputs: :queue.new()
 
   @type action ::
-          {:event, TextOutput.t() | AgentSpeechStarted.t() | AgentTurnCompleted.t()}
+          {:event,
+           TextOutput.t()
+           | AgentSpeechStarted.t()
+           | AgentTurnCompleted.t()
+           | AgentTurnInterrupted.t()}
+          | {:interruption_context, AgentTurnInterrupted.t()}
           | {:spoken_progress, TextOutput.t(), String.t(), progress()}
           | {:user_mute, :started | :stopped, String.t()}
 
@@ -34,6 +40,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
           | AgentSpeechStarted.t()
           | AgentSpeechProgressed.t()
           | AgentTurnCompleted.t()
+          | AgentTurnInterrupted.t()
         ) ::
           {t(), [action()]}
   def project(%__MODULE__{} = state, %TextOutput{will_be_spoken: false} = event) do
@@ -80,6 +87,26 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
     end
   end
 
+  def project(%__MODULE__{} = state, %AgentTurnInterrupted{} = event) do
+    cond do
+      active_turn?(state, event.correlation_id) ->
+        state = %{state | active_spoken_output: nil, pending_spoken_outputs: :queue.new()}
+
+        {state,
+         [
+           {:event, event},
+           {:interruption_context, event},
+           {:user_mute, :stopped, event.id}
+         ]}
+
+      pending_turn?(state, event.correlation_id) ->
+        {remove_pending_turn(state, event.correlation_id), []}
+
+      true ->
+        {state, [{:event, event}, {:interruption_context, event}]}
+    end
+  end
+
   defp complete_active_output(state, output, event) do
     actions = [
       {:spoken_progress, output, event.id, :completed},
@@ -100,5 +127,25 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
         state = %{state | active_spoken_output: nil, pending_spoken_outputs: pending}
         {state, actions ++ [{:user_mute, :stopped, event.id}]}
     end
+  end
+
+  defp active_turn?(state, correlation_id) do
+    match?(%TextOutput{correlation_id: ^correlation_id}, state.active_spoken_output)
+  end
+
+  defp pending_turn?(state, correlation_id) do
+    Enum.any?(:queue.to_list(state.pending_spoken_outputs), fn output ->
+      output.correlation_id == correlation_id
+    end)
+  end
+
+  defp remove_pending_turn(state, correlation_id) do
+    pending =
+      state.pending_spoken_outputs
+      |> :queue.to_list()
+      |> Enum.reject(&(&1.correlation_id == correlation_id))
+      |> :queue.from_list()
+
+    %{state | pending_spoken_outputs: pending}
   end
 end

@@ -101,15 +101,18 @@ signals become RTVI speaking and replacement-transcription messages; a committed
 turn is sent through the room's bounded Gemini model-inference capability. Its
 complete text response is streamed through Flux TTS as 48 kHz linear16, encoded
 to 20 ms Opus packets, and paced onto the negotiated browser audio track. RTVI
-bot speaking boundaries
-and 2.x bot-output progress follow the gateway's paced output queue rather than
-provider generation completion. The current slice is half-duplex: while spoken
-bot output is pending, the gateway reports server-side user mute and keeps
-microphone RTP out of STT so bot audio cannot recursively create user turns.
+bot speaking boundaries and 2.x bot-output progress follow the gateway's paced
+output queue rather than
+provider generation completion. Microphone input remains half-duplex: while
+spoken bot output is pending, the gateway reports server-side user mute and
+keeps microphone RTP out of STT so bot audio cannot recursively create user
+turns. Typed RTVI input with `run_immediately: true` cancels current and queued
+agent work, stops unsent RTP, and begins the replacement turn;
+`run_immediately: false` remains queued.
 Provider bursts are absorbed by a bounded ten-second packet queue and then
 backpressured while RTP drains; later spoken outputs are announced and played in
-order. During playout, best-effort whole-word progress lets RTVI 2.x clients
-distinguish spoken from remaining text even though Flux does not return word
-timestamps. The implemented `/healthz` route verifies the gateway listener.
+order. Without provider word timestamps, spoken text stays pending until paced
+playout completes rather than using a character estimate. The implemented
+`/healthz` route verifies the gateway listener.
 Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
 offer endpoint.

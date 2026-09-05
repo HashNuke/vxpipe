@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Application do
   def start(_type, _args) do
     children = [
       {Registry, keys: :unique, name: Vxpipe.CallEngine.RoomRegistry},
+      {Task.Supervisor, name: Vxpipe.CallEngine.AudioOutputTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ModelInferenceTaskSupervisor},
       Vxpipe.CallEngine.RoomSupervisor
     ]

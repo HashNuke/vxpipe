@@ -20,11 +20,13 @@ speaking and replacement-transcription messages. The committed transcript drives
 the same deterministic agent. Deepgram Flux TTS returns raw 48 kHz mono
 linear16; a per-connection bounded egress reframes and encodes it to Opus, then
 paces 20 ms RTP packets onto an outbound audio track negotiated before the SDP
-answer. RTVI bot start/stop and best-effort whole-word progress messages follow
-the paced packets. The default 500-packet queue covers ten seconds of audio and
+answer. RTVI bot start/stop and whole-segment completion messages follow the
+paced packets. The default 500-packet queue covers ten seconds of audio and
 applies bounded backpressure to longer provider bursts. Spoken outputs generated
-while another is playing remain ordered at the RTVI boundary. Typed input does
-not interrupt active output in this half-duplex slice.
+while another is playing remain ordered at the RTVI boundary. Typed input with
+`run_immediately: true` interrupts active and queued output, while false retains
+FIFO behavior. Microphone input remains gated during output; acoustic barge-in is
+not part of this slice.
 
 Configure the application from the host project's application environment:
 

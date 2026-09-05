@@ -15,6 +15,12 @@ defmodule Vxpipe.CallEngine.Media.OutputSink do
     safe_call(sink, {:vxpipe_audio_output_finish, turn, callback})
   end
 
+  @spec interrupt(pid(), String.t(), pid()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def interrupt(sink, turn, callback)
+      when is_pid(sink) and is_binary(turn) and is_pid(callback) do
+    safe_call(sink, {:vxpipe_audio_output_interrupt, turn, callback})
+  end
+
   defp safe_call(sink, message) do
     try do
       GenServer.call(sink, message, @call_timeout)

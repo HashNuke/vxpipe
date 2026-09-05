@@ -81,6 +81,93 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
     assert JSON.decode!(second_speak)["text"] == "two"
   end
 
+  test "interrupts current playout and queued speech before starting replacement speech" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability(maximum_requests: 2)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+
+    first = request("turn-1", "one", sink)
+    queued = request("turn-2", "two", sink)
+    replacement = request("turn-3", "three", sink)
+
+    assert :ok = TextToSpeech.synthesize(capability, first)
+    assert :ok = TextToSpeech.synthesize(capability, queued)
+    assert_receive {:test_tts_control, ^transport, _speak}
+    assert_receive {:test_tts_control, ^transport, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_one"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(transport, <<1, 0, 2, 0>>)
+    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: "turn-1"}}
+
+    :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^first, :started}
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^first, {:progress, 20, 100}}
+
+    assert {:ok, [{^first, 20}, {^queued, 0}]} = TextToSpeech.interrupt(capability)
+    assert_receive {:test_audio_output_interrupt, ^sink, "turn-1", 20}
+
+    assert_receive {:test_tts_control, ^transport, interrupt}
+
+    assert JSON.decode!(interrupt) == %{
+             "type" => "Interrupt",
+             "playback_offset" => %{"type" => "time_ms", "value" => 20}
+           }
+
+    TestTextToSpeechTransport.deliver_audio(transport, <<3, 0, 4, 0>>)
+    refute_receive {:test_audio_output, ^sink, %AudioOutputFrame{payload: <<3, 0, 4, 0>>}}
+
+    assert :ok = TextToSpeech.synthesize(capability, replacement)
+    refute_receive {:test_tts_control, ^transport, _payload}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechInterrupted","request_id":"req","audio_played_ms":20,"text_spoken":"o","text_remaining":"ne","metadata":{"speech_id":"dg_sp_one"}})
+    )
+
+    assert_receive {:test_tts_control, ^transport, replacement_speak}
+    assert JSON.decode!(replacement_speak) == %{"type" => "Speak", "text" => "three"}
+    assert_receive {:test_tts_control, ^transport, replacement_flush}
+    assert JSON.decode!(replacement_flush) == %{"type" => "Flush"}
+  end
+
+  test "interrupts promptly while one bounded audio write is backpressured" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self(), block_output: true})
+    capability = start_capability(maximum_requests: 1)
+    task_supervisor = start_supervised!(Task.Supervisor)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+
+    current = request("turn-1", "one", sink)
+    assert :ok = TextToSpeech.synthesize(capability, current)
+    assert_receive {:test_tts_control, ^transport, _speak}
+    assert_receive {:test_tts_control, ^transport, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_one"})
+    )
+
+    audio_reference =
+      TestTextToSpeechTransport.deliver_audio_with_result(transport, <<1, 0, 2, 0>>)
+
+    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: "turn-1"}}
+    :ok = TestAudioOutputSink.playback_started(sink)
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
+
+    interruption =
+      Task.Supervisor.async_nolink(task_supervisor, fn ->
+        TextToSpeech.interrupt(capability)
+      end)
+
+    assert Task.await(interruption, 500) == {:ok, [{current, 20}]}
+    assert_receive {:test_audio_output_interrupt, ^sink, "turn-1", 20}
+    assert_receive {:test_tts_audio_result, ^audio_reference, :ok}
+  end
+
   test "tolerates warnings but stops on provider errors" do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     capability = start_capability(maximum_requests: 1)
@@ -122,7 +209,8 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
          owner: self(),
          participant_id: "agent-test",
          provider: {FluxTextToSpeech, provider},
-         transport: {TestTextToSpeechTransport, [observer: self()]}
+         transport: {TestTextToSpeechTransport, [observer: self()]},
+         task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor
        ] ++ options}
     )
   end

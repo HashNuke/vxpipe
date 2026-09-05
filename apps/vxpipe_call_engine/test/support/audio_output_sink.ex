@@ -14,12 +14,27 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
   def playback_completed(sink), do: GenServer.call(sink, :playback_completed)
 
   @impl true
-  def init(options), do: {:ok, %{callback: nil, observer: Keyword.fetch!(options, :observer)}}
+  def init(options) do
+    {:ok,
+     %{
+       block_output: Keyword.get(options, :block_output, false),
+       callback: nil,
+       observer: Keyword.fetch!(options, :observer),
+       pending_output: nil,
+       played_ms: 0
+     }}
+  end
 
   @impl true
-  def handle_call({:vxpipe_audio_output, frame}, _from, state) do
+  def handle_call({:vxpipe_audio_output, frame}, from, state) do
     send(state.observer, {:test_audio_output, self(), frame})
-    {:reply, :ok, state}
+    state = %{state | callback: {frame.reply_to, frame.correlation_id}}
+
+    if state.block_output do
+      {:noreply, %{state | pending_output: from}}
+    else
+      {:reply, :ok, state}
+    end
   end
 
   def handle_call({:vxpipe_audio_output_finish, turn, callback}, _from, state) do
@@ -33,8 +48,8 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
   end
 
   def handle_call(:playback_completed, _from, %{callback: {callback, turn}} = state) do
-    send(callback, {:vxpipe_audio_playback, self(), turn, :completed})
-    {:reply, :ok, %{state | callback: nil}}
+    send(callback, {:vxpipe_audio_playback, self(), turn, {:completed, state.played_ms}})
+    {:reply, :ok, %{state | callback: nil, played_ms: 0}}
   end
 
   def handle_call(
@@ -47,6 +62,24 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
       {:vxpipe_audio_playback, self(), turn, {:progress, played_ms, total_ms}}
     )
 
-    {:reply, :ok, state}
+    {:reply, :ok, %{state | played_ms: played_ms}}
+  end
+
+  def handle_call(
+        {:vxpipe_audio_output_interrupt, turn, callback},
+        _from,
+        %{callback: {callback, turn}} = state
+      ) do
+    send(state.observer, {:test_audio_output_interrupt, self(), turn, state.played_ms})
+
+    if state.pending_output != nil do
+      GenServer.reply(state.pending_output, {:error, :interrupted})
+    end
+
+    {:reply, {:ok, state.played_ms}, %{state | callback: nil, pending_output: nil, played_ms: 0}}
+  end
+
+  def handle_call({:vxpipe_audio_output_interrupt, _turn, _callback}, _from, state) do
+    {:reply, {:error, :wrong_turn}, state}
   end
 end

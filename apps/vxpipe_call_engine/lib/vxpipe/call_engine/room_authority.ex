@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     AgentSpeechStarted,
     AgentTurnCompleted,
     AgentTurnFailed,
+    AgentTurnInterrupted,
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
@@ -91,6 +92,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     state = %{
       connection_monitors: %{},
       connections: %{},
+      agent_turns: %{},
       next_sequence: 1,
       participant_monitors: %{},
       participant_ids: MapSet.new(),
@@ -150,9 +152,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_call({:send_text, command}, {caller, _tag}, state) do
     case authorize_text(command, caller, state) do
       {:ok, capability} ->
-        case respond(capability, command) do
-          :ok -> {:reply, :ok, emit_participant_text_turn(command, state)}
-          {:error, reason} -> {:reply, {:error, agent_busy(reason)}, state}
+        case interrupt_active_turns(command, state) do
+          {:ok, state} ->
+            case respond(capability, command) do
+              :ok ->
+                state = state |> put_agent_turn(command) |> emit_participant_text_turn(command)
+                {:reply, :ok, state}
+
+              {:error, reason} ->
+                {:reply, {:error, agent_busy(reason)}, state}
+            end
+
+          {:error, reason} ->
+            {:reply, {:error, agent_busy(reason)}, state}
         end
 
       {:error, error} ->
@@ -662,23 +674,39 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
     case result do
       {:ok, command} when state.text_capability != nil ->
-        case respond(state.text_capability, command) do
-          :ok ->
-            :ok
+        case interrupt_active_turns(command, state) do
+          {:ok, state} ->
+            case respond(state.text_capability, command) do
+              :ok ->
+                put_agent_turn(state, command)
+
+              {:error, reason} ->
+                state = put_agent_turn(state, command)
+
+                send(
+                  self(),
+                  {:vxpipe_capability_failed, state.text_capability.pid, command,
+                   failure_reason(reason)}
+                )
+
+                state
+            end
 
           {:error, reason} ->
+            state = put_agent_turn(state, command)
+
             send(
               self(),
               {:vxpipe_capability_failed, state.text_capability.pid, command,
                failure_reason(reason)}
             )
+
+            state
         end
 
       _empty_or_invalid ->
-        :ok
+        state
     end
-
-    state
   end
 
   defp matching_active_turn?(nil, _signal), do: false
@@ -710,7 +738,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
-  defp emit_participant_text_turn(command, state) do
+  defp emit_participant_text_turn(state, command) do
     connection = Map.fetch!(state.connections, command.connection_id)
     occurred_at = DateTime.utc_now(:millisecond)
 
@@ -746,7 +774,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp emit_text_turn(capability, command, text, state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    if state.text_capability != nil and state.text_capability.pid == capability and
+    if active_agent_turn?(command, state) and state.text_capability != nil and
+         state.text_capability.pid == capability and
          connection != nil and
          connection.participant_id == command.participant_id do
       occurred_at = DateTime.utc_now(:millisecond)
@@ -809,7 +838,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp emit_agent_turn_failed(capability, command, reason, state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    if state.text_capability != nil and state.text_capability.pid == capability and
+    if active_agent_turn?(command, state) and state.text_capability != nil and
+         state.text_capability.pid == capability and
          connection != nil and connection.participant_id == command.participant_id do
       event = %AgentTurnFailed{
         id: Id.generate(:event),
@@ -828,7 +858,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       }
 
       send(connection.pid, {:vxpipe_event, event})
-      %{state | next_sequence: state.next_sequence + 1}
+
+      state
+      |> Map.update!(:next_sequence, &(&1 + 1))
+      |> delete_agent_turn(command)
     else
       state
     end
@@ -854,7 +887,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   defp authorized_text_to_speech?(capability, request, connection, state) do
-    state.text_to_speech_capability != nil and
+    active_agent_turn?(request, state) and state.text_to_speech_capability != nil and
       state.text_to_speech_capability.pid == capability and connection != nil and
       connection.output_sink == request.output_sink and
       connection.participant_id == request.source_participant_id and
@@ -884,7 +917,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     event = struct!(AgentTurnCompleted, agent_event_fields(request, state))
 
     send(connection.pid, {:vxpipe_event, event})
-    %{state | next_sequence: state.next_sequence + 1}
+
+    state
+    |> Map.update!(:next_sequence, &(&1 + 1))
+    |> delete_agent_turn(request)
   end
 
   defp emit_agent_turn_completed(command, connection, occurred_at, state) do
@@ -903,8 +939,109 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     }
 
     send(connection.pid, {:vxpipe_event, event})
-    %{state | next_sequence: state.next_sequence + 1}
+
+    state
+    |> Map.update!(:next_sequence, &(&1 + 1))
+    |> delete_agent_turn(command)
   end
+
+  defp interrupt_active_turns(%SendText{run_immediately: false}, state), do: {:ok, state}
+
+  defp interrupt_active_turns(%SendText{}, %{agent_turns: agent_turns} = state)
+       when map_size(agent_turns) == 0,
+       do: {:ok, state}
+
+  defp interrupt_active_turns(%SendText{} = interrupter, state) do
+    turns = state.agent_turns |> Map.values() |> Enum.sort_by(& &1.order, :desc)
+    turn_ids = Enum.map(turns, &turn_key(&1.command))
+
+    with {:ok, speech_requests} <- interrupt_text_to_speech(state),
+         {:ok, _commands} <- interrupt_text_generation(state, turn_ids) do
+      played_by_turn =
+        Map.new(speech_requests, fn {request, played_ms} ->
+          {turn_key(request), played_ms}
+        end)
+
+      state = %{state | agent_turns: %{}}
+
+      state =
+        Enum.reduce(turns, state, fn turn, state ->
+          emit_agent_turn_interrupted(
+            turn.command,
+            interrupter,
+            Map.get(played_by_turn, turn_key(turn.command), 0),
+            state
+          )
+        end)
+
+      {:ok, state}
+    end
+  end
+
+  defp interrupt_text_to_speech(%{text_to_speech_capability: nil}), do: {:ok, []}
+
+  defp interrupt_text_to_speech(state) do
+    TextToSpeech.interrupt(state.text_to_speech_capability.pid)
+  end
+
+  defp interrupt_text_generation(%{text_capability: %{module: ModelInference}} = state, ids) do
+    ModelInference.interrupt(state.text_capability.pid, ids)
+  end
+
+  defp interrupt_text_generation(_state, _ids), do: {:ok, []}
+
+  defp emit_agent_turn_interrupted(command, interrupter, played_ms, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    if connection != nil and connection.participant_id == command.participant_id do
+      event = %AgentTurnInterrupted{
+        id: Id.generate(:event),
+        sequence: state.next_sequence,
+        tenant_id: state.snapshot.tenant_id,
+        room_id: state.snapshot.room_id,
+        incarnation_id: state.snapshot.incarnation_id,
+        participant_id: state.text_capability.participant_id,
+        source_participant_id: command.participant_id,
+        connection_id: command.connection_id,
+        command_id: command.id,
+        correlation_id: command.correlation_id,
+        interrupted_by_participant_id: interrupter.participant_id,
+        interrupted_by_connection_id: interrupter.connection_id,
+        interruption_command_id: interrupter.id,
+        interruption_correlation_id: interrupter.correlation_id,
+        played_ms: played_ms,
+        occurred_at: DateTime.utc_now(:millisecond)
+      }
+
+      send(connection.pid, {:vxpipe_event, event})
+      %{state | next_sequence: state.next_sequence + 1}
+    else
+      state
+    end
+  end
+
+  defp put_agent_turn(state, command) do
+    turn = %{command: command, order: state.next_sequence}
+    %{state | agent_turns: Map.put(state.agent_turns, turn_key(command), turn)}
+  end
+
+  defp delete_agent_turn(state, command) do
+    %{state | agent_turns: Map.delete(state.agent_turns, turn_key(command))}
+  end
+
+  defp active_agent_turn?(command, state) do
+    case Map.get(state.agent_turns, turn_key(command)) do
+      %{command: active} -> active.id == command_id(command)
+      nil -> false
+    end
+  end
+
+  defp turn_key(command) do
+    {command.connection_id, command.correlation_id, command_id(command)}
+  end
+
+  defp command_id(%SendText{} = command), do: command.id
+  defp command_id(%TextToSpeechRequest{} = request), do: request.command_id
 
   defp agent_event_fields(request, state) do
     %{
