@@ -45,6 +45,13 @@ a whole-turn bound, and provider work is serialized outside the room authority.
 Generation errors fail only their correlated turn and leave the room available.
 Generated text reuses the existing optional TTS and completion path.
 
+The spoken-barge-in slice keeps provider turn detection separate from raw media
+transport. An authenticated STT capability's normalized `StartOfTurn` signal
+uses a protocol-neutral interrupter identity to cancel older model, synthesis,
+and playout work before the participant audio turn begins. `EndOfTurn` commits
+that same turn without repeating interruption. The engine runs no local VAD and
+still contains no WebRTC or RTVI types.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

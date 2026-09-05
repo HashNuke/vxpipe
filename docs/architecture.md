@@ -2,7 +2,8 @@
 
 Status: Living architecture; room creation, one-participant RTVI connection,
 text-turn, Gemini model-inference, Deepgram Flux audio-input, and Deepgram Flux
-text-to-speech slices are implemented
+text-to-speech, typed interruption, and provider-driven spoken barge-in slices
+are implemented
 
 ## Decision
 
@@ -256,11 +257,13 @@ mutations use the SDK's `sendClientRequest` facility. Server notifications use
 }
 ```
 
-Typed interruption uses `t: "vxpipe.turn"`, `v: 1`, and
+Agent interruption uses `t: "vxpipe.turn"`, `v: 1`, and
 `d.kind: "interrupted"`. Its data names the interrupted agent participant,
 originating participant and turn, confirmed played milliseconds, and the
 authenticated participant, connection, command, and correlation that caused the
-interruption. The parallel standard `bot-interrupted` event remains unmodified.
+interruption. The trigger may be immediate typed input or an authenticated
+provider speech-start signal. The parallel standard `bot-interrupted` event
+remains unmodified.
 
 All mutations carry a stable `command_id`. Domain-level responses have a typed
 result envelope:
@@ -403,6 +406,13 @@ be assumed to mean conversational end of turn.
 RTVI `user-transcription.final` projects partial versus provider-final state for
 compatibility. The optional `vxpipe.turn` messages carry the richer turn ID,
 phase, evidence, timestamps, endpointing reason, and commit state.
+
+Microphone media remains active while agent output plays. A normalized provider
+`StartOfTurn` is an immediate interruption signal from the participant and
+connection to which that STT capability is bound. It stops older work before the
+new participant-turn event is committed. The provider's later `EndOfTurn`
+commits input but does not repeat cancellation. This uses hosted provider turn
+detection; the call engine does not run a local VAD.
 
 ### Agent output and actual playout
 
@@ -809,18 +819,14 @@ provider or WebRTC details in the room authority:
    assistant message without presenting estimated word positions as observed
    speech. The completion boundary does not claim a browser output-device
    acknowledgement.
-8. This first audible slice is explicitly half-duplex. From the announcement of
-   a spoken output until its paced output completes, the connection discards
-   inbound microphone RTP before it reaches STT and emits the standard RTVI
-   `user-mute-started` and `user-mute-stopped` messages. Queued spoken outputs
-   hold the gate closed until all of them finish. Their RTVI `bot-output`
-   announcements are also serialized: the next segment is not exposed until the
-   active paced turn completes, even though the engine may already have produced
-   its text. This prevents speaker output from being transcribed as a new
-   participant turn and prevents overlapping assistant segments in unmodified
-   clients. At this checkpoint typed input during playback was queued output;
-   the typed-interruption checkpoint below supersedes that behavior when
-   `run_immediately` is true.
+8. This first audible slice initially gated microphone RTP and projected server
+   mute boundaries during spoken output. The later spoken-barge-in checkpoint
+   supersedes that input behavior: microphone RTP now continues to STT and no
+   synthetic mute events are emitted. Output announcements remain serialized:
+   the next segment is not exposed until the active paced turn completes, even
+   though the engine may already have produced its text. At this checkpoint
+   typed input during playback was queued output; the typed-interruption
+   checkpoint below supersedes that behavior when `run_immediately` is true.
 9. Fatal provider, transport, codec, sink, or sustained queue failures never
    fabricate successful completion. At this checkpoint local playback
    cancellation and Flux playback-offset reconciliation remained deferred; the
@@ -872,8 +878,9 @@ input and output boundaries:
 The slice deliberately produces one complete output rather than streaming
 tokens. Context is volatile and bounded by completed turn count, not tokens.
 Streaming, tools, token-aware compaction, durable history, prompt-profile
-resolution, provider fallback, and acoustic barge-in remain later checkpoints.
-The detailed decision and verification evidence are in
+resolution, and provider fallback remain later checkpoints. Provider-driven
+spoken barge-in is implemented by the later checkpoint below. The detailed
+decision and verification evidence are in
 [`model-inference-turn.md`](model-inference-turn.md).
 
 ### Implemented typed turn-interruption slice
@@ -903,17 +910,52 @@ model, synthesis, playout, and protocol path:
    heard.
 6. The gateway emits standard `bot-interrupted` without private fields. It also
    emits a versioned `vxpipe.turn` `server-message` carrying full attribution for
-   Vxpipe-aware clients, releases the input mute boundary, and never marks the
-   interrupted output as completely spoken.
+   Vxpipe-aware clients and never marks the interrupted output as completely
+   spoken.
 7. RTVI exposes one logical bot through each connection. The engine event names
    its agent participant so future agent composition remains protocol-neutral;
    independently addressable multi-agent clients require an optional Vxpipe
    message or another adapter.
 
-This is typed interruption, not acoustic barge-in. Microphone RTP remains gated
-during bot playout. The decision, rejected alternatives, implications, and test
-evidence are recorded in
+This checkpoint covered typed interruption and initially left microphone RTP
+gated during bot playout. The subsequent spoken-barge-in checkpoint supersedes
+that transport behavior. The decision, rejected alternatives, implications,
+and test evidence are recorded in
 [`typed-turn-interruption.md`](typed-turn-interruption.md).
+
+### Implemented provider-driven spoken-barge-in slice
+
+The next slice uses the hosted STT provider's turn-start evidence to activate
+the existing room-wide interruption path:
+
+1. The WebRTC connection forwards valid inbound RTP through its bounded media
+   ingress regardless of whether agent output is queued or playing. It no longer
+   projects synthetic `user-mute-started` or `user-mute-stopped` messages around
+   output.
+2. A normalized provider `StartOfTurn` is accepted only from the STT capability
+   bound to that tenant, room incarnation, participant, and connection. Neither
+   the provider payload nor the client supplies the participant identity.
+3. Before emitting the participant start, the room allocates the audio turn's
+   command and correlation IDs and uses them in a protocol-neutral interruption
+   context. The existing cancellation path stops model work, synthesis, and
+   local playout. If no agent work exists, no interruption event is fabricated.
+4. `AgentTurnInterrupted` precedes `ParticipantTurnStarted` in room sequence and
+   attributes the cancellation to the authenticated STT connection. Repeated
+   provider updates do not cancel twice.
+5. The same audio turn continues through partial transcription. `EndOfTurn`
+   commits a non-immediate internal text command because the interruption was
+   already evaluated at speech start, then drives normal model inference and
+   spoken output.
+6. Standard clients receive `bot-interrupted`, user speaking/transcription
+   events, and the replacement bot output. The optional `vxpipe.turn` projection
+   carries the complete agent, source-turn, and interrupter identities.
+7. The slice does not add local VAD or server-side acoustic echo cancellation.
+   Capture endpoints should use their available echo control. Provider false
+   starts can cancel agent work, and continuous microphone streaming continues
+   to consume STT capacity during output.
+
+The implementation and verification evidence are detailed in
+[`spoken-barge-in.md`](spoken-barge-in.md).
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

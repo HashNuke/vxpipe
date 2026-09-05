@@ -83,8 +83,12 @@ Cancellation proceeds from the listener outward:
 5. The room emits attributed interruption events, accepts the replacement turn,
    and preserves monotonic room-incarnation event sequence numbers.
 
-Microphone RTP remains suppressed while spoken output is active. This checkpoint
-adds typed interruption; acoustic/VAD-driven barge-in is still deferred.
+This cancellation path is also used by provider-driven spoken barge-in. The
+gateway now keeps microphone RTP flowing during spoken output, and a normalized
+provider speech start supplies the same authenticated participant/connection
+attribution through a protocol-neutral internal interrupter value. See
+[`spoken-barge-in.md`](spoken-barge-in.md) for the input and turn-detection
+boundary.
 
 ## Rejected alternatives
 
@@ -129,6 +133,6 @@ adds typed interruption; acoustic/VAD-driven barge-in is still deferred.
 - A room vertical test proves participant B can interrupt participant A's spoken
   turn and that every identity in `AgentTurnInterrupted` is authoritative.
 - Gateway codec and turn-state tests prove standard `bot-interrupted`, attributed
-  `server-message`, mute release, and the absence of false completed-spoken
-  progress.
+  `server-message`, interruption state release, and the absence of false
+  completed-spoken progress.
 - A model-room test proves `run_immediately: false` retains FIFO behavior.

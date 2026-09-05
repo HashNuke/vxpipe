@@ -154,8 +154,9 @@ longer ready and existing connection failure policy applies.
 This slice is non-streaming: one complete provider response becomes one
 sentence-aggregated `TextOutput`. Token streaming, token-aware context budgets,
 summarization, tool calls, structured output, provider fallback, retry policy,
-durable context, prompt-version identity, cancellation, and barge-in remain
-separate checkpoints.
+durable context, and prompt-version identity remain separate checkpoints.
+Cancellation and provider-driven spoken barge-in are implemented by subsequent
+checkpoints without changing this capability's provider-neutral request model.
 
 The development prompt requests short plain-text responses because output is
 spoken. It is a configurable policy, not a hard engine rule. Output size remains

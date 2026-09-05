@@ -121,3 +121,17 @@ remains the semantic source for speech start and end.
   attributed custom context, user speech/transcription boundaries, and the
   replacement spoken `bot-output` on the data channel. This keeps the default
   suite deterministic while covering the adapter-to-engine-to-adapter slice.
+- 2026-09-05: Added `docs/spoken-barge-in.md` and updated the living architecture,
+  root development guide, application READMEs, and prior interruption/model
+  decision records. The current contract explicitly keeps STT ingress active,
+  uses provider turn detection rather than local VAD, derives identity from the
+  connection binding, and leaves acoustic echo cancellation at the capture or
+  transport boundary.
+- 2026-09-05: Split the work into small checkpoints: `ea3ca0e` records the plan,
+  `20373b2` adds room-authoritative speech-start cancellation, and `24867e9`
+  enables full-duplex gateway ingress and projection. Durable documentation and
+  final evidence form the closing checkpoint.
+- 2026-09-05: All umbrella completion checks passed:
+  `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix test`
+  (49 call-engine tests and 35 gateway tests passing; externally tagged tests
+  excluded by the default lane), and `mix deps.unlock --check-unused`.

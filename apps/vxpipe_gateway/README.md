@@ -25,8 +25,12 @@ paced packets. The default 500-packet queue covers ten seconds of audio and
 applies bounded backpressure to longer provider bursts. Spoken outputs generated
 while another is playing remain ordered at the RTVI boundary. Typed input with
 `run_immediately: true` interrupts active and queued output, while false retains
-FIFO behavior. Microphone input remains gated during output; acoustic barge-in is
-not part of this slice.
+FIFO behavior. Microphone RTP continues through bounded STT ingress during
+output. A hosted provider speech-start signal invokes the same cancellation path
+with identity from the authenticated connection, then its committed transcript
+drives the replacement response. The gateway does not run local VAD or
+server-side acoustic echo cancellation and does not project synthetic mute
+events merely because agent output is active.
 
 Configure the application from the host project's application environment:
 
