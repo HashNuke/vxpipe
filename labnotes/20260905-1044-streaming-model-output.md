@@ -43,3 +43,15 @@ terminal segment.
   output and one speech request per assistant turn, so segmentation must carry an
   output identity through playback rather than treating every sentence as a new
   turn.
+- Added the optional provider streaming contract and a bounded sentence
+  accumulator. The model capability now applies backpressure to provider chunks,
+  emits complete sentences early, flushes the final fragment, and sends a distinct
+  terminal signal. Buffered providers emit one segment through that same terminal
+  lifecycle.
+- ReqLLM streaming selection defaults to model metadata and can be explicitly
+  enabled or disabled. Development explicitly enables it for the configured model
+  because its current catalog record omits the text-streaming flag even though the
+  endpoint supports it.
+- Focused evidence: 15 model capability, accumulator, and ReqLLM provider tests
+  pass. The red run first failed on the missing accumulator, streaming request,
+  completion signal, and configuration behavior as intended.

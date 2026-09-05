@@ -26,6 +26,7 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLMTest do
     assert Keyword.fetch!(options, :api_key) == "runtime-secret"
     assert Keyword.fetch!(options, :temperature) == 0.2
     assert Keyword.fetch!(options, :max_tokens) == 256
+    refute ReqLLMProvider.streaming?(config)
     refute inspect(config) =~ "runtime-secret"
 
     assert context
@@ -37,6 +38,28 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLMTest do
                {:assistant, "Hello."},
                {:user, "What did I say?"}
              ]
+  end
+
+  test "allows streaming to be disabled for a buffered model" do
+    assert {:ok, config} =
+             ReqLLMProvider.new(
+               api_key: "runtime-secret",
+               model: "google:gemini-3.5-flash-lite",
+               streaming: false
+             )
+
+    refute ReqLLMProvider.streaming?(config)
+  end
+
+  test "allows streaming to be enabled when deployment knowledge is newer than metadata" do
+    assert {:ok, config} =
+             ReqLLMProvider.new(
+               api_key: "runtime-secret",
+               model: "google:gemini-3.5-flash-lite",
+               streaming: true
+             )
+
+    assert ReqLLMProvider.streaming?(config)
   end
 
   test "rejects missing credentials and credential overrides" do

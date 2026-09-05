@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
   use GenServer
 
   alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.Capability.SentenceAccumulator
   alias Vxpipe.CallEngine.Provider.ModelInference.Message
 
   @call_timeout 5_000
@@ -91,6 +92,26 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
     {:reply, {:ok, interrupted}, %{state | history: history, pending: :queue.new()}}
   end
 
+  def handle_call(
+        {:stream_chunk, request_id, chunk},
+        _from,
+        %{current: %{request_id: request_id}} = state
+      ) do
+    case SentenceAccumulator.push(state.current.accumulator, chunk) do
+      {:ok, accumulator, segments} ->
+        Enum.each(segments, &emit_segment(state, &1))
+        current = %{state.current | accumulator: accumulator}
+        {:reply, :ok, %{state | current: current}}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:stream_chunk, _request_id, _chunk}, _from, state) do
+    {:reply, {:error, :cancelled}, state}
+  end
+
   @impl true
   def handle_info({reference, result}, %{current: %{task: %{ref: reference}}} = state)
       when is_reference(reference) do
@@ -129,11 +150,19 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
   defp start_request(command, state) do
     messages = request_messages(command, state)
     {provider_module, provider_config} = state.provider
+    capability = self()
+    request_id = make_ref()
 
     try do
       task =
         Task.Supervisor.async_nolink(state.task_supervisor, fn ->
-          safe_generate(provider_module, provider_config, messages)
+          safe_request(
+            provider_module,
+            provider_config,
+            messages,
+            capability,
+            request_id
+          )
         end)
 
       timer =
@@ -143,36 +172,68 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
           state.request_timeout_ms
         )
 
-      {:ok, %{state | current: %{command: command, task: task, timer: timer}}}
+      current = %{
+        accumulator: SentenceAccumulator.new(state.maximum_output_bytes),
+        command: command,
+        request_id: request_id,
+        task: task,
+        timer: timer
+      }
+
+      {:ok, %{state | current: current}}
     catch
       :exit, _reason -> {:error, state}
     end
   end
 
-  defp finish_request(result, state) do
+  defp finish_request({:buffered, result}, state) do
     cancel_timer(state.current.timer)
 
     case normalize_result(result, state.maximum_output_bytes) do
       {:ok, text} ->
-        send(
-          state.owner,
-          {:vxpipe_capability_text, self(), state.current.command, text}
-        )
-
-        turn = %{
-          connection_id: state.current.command.connection_id,
-          correlation_id: state.current.command.correlation_id,
-          command_id: state.current.command.id,
-          user: state.current.command.content,
-          assistant: text
-        }
-
-        history = Enum.take(state.history ++ [turn], -state.maximum_context_turns)
-        %{state | current: nil, history: history}
+        emit_segment(state, text)
+        complete_current(text, state)
 
       {:error, reason} ->
         fail_current(reason, state)
     end
+  end
+
+  defp finish_request({:streamed, :ok}, state) do
+    cancel_timer(state.current.timer)
+
+    case SentenceAccumulator.finish(state.current.accumulator) do
+      {:ok, pending, text} ->
+        Enum.each(pending, &emit_segment(state, &1))
+        complete_current(text, state)
+
+      {:error, reason} ->
+        fail_current(reason, state)
+    end
+  end
+
+  defp finish_request({:streamed, {:error, reason}}, state),
+    do: fail_current(normalize_stream_error(reason), state)
+
+  defp finish_request(_result, state), do: fail_current(:provider_unavailable, state)
+
+  defp complete_current(text, state) do
+    send(state.owner, {:vxpipe_capability_text_complete, self(), state.current.command})
+
+    turn = %{
+      connection_id: state.current.command.connection_id,
+      correlation_id: state.current.command.correlation_id,
+      command_id: state.current.command.id,
+      user: state.current.command.content,
+      assistant: text
+    }
+
+    history = Enum.take(state.history ++ [turn], -state.maximum_context_turns)
+    %{state | current: nil, history: history}
+  end
+
+  defp emit_segment(state, text) do
+    send(state.owner, {:vxpipe_capability_text, self(), state.current.command, text})
   end
 
   defp fail_current(reason, state) do
@@ -219,15 +280,32 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
     [system | history] ++ [%Message{role: :user, content: command.content}]
   end
 
-  defp safe_generate(provider_module, provider_config, messages) do
+  defp safe_request(provider_module, provider_config, messages, capability, request_id) do
     try do
-      provider_module.generate(provider_config, messages)
+      if provider_streaming?(provider_module, provider_config) do
+        emit = fn chunk ->
+          GenServer.call(capability, {:stream_chunk, request_id, chunk}, @call_timeout)
+        end
+
+        {:streamed, provider_module.stream(provider_config, messages, emit)}
+      else
+        {:buffered, provider_module.generate(provider_config, messages)}
+      end
     rescue
-      _exception -> {:error, :provider_unavailable}
+      _exception -> {:buffered, {:error, :provider_unavailable}}
     catch
-      _kind, _reason -> {:error, :provider_unavailable}
+      _kind, _reason -> {:buffered, {:error, :provider_unavailable}}
     end
   end
+
+  defp provider_streaming?(provider_module, provider_config) do
+    function_exported?(provider_module, :stream, 3) and
+      (not function_exported?(provider_module, :streaming?, 1) or
+         provider_module.streaming?(provider_config))
+  end
+
+  defp normalize_stream_error(reason) when reason in [:invalid_response, :cancelled], do: reason
+  defp normalize_stream_error(_reason), do: :provider_unavailable
 
   defp normalize_result({:ok, text}, maximum_output_bytes) when is_binary(text) do
     if String.valid?(text) do

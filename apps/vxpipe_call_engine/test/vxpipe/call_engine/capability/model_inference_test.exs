@@ -6,6 +6,36 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
   alias Vxpipe.CallEngine.Provider.ModelInference.Message
   alias Vxpipe.CallEngine.TestModelInferenceProvider
 
+  test "emits complete sentences before a streaming response completes" do
+    capability = start_capability(provider_config: %{observer: self(), streaming: true})
+    command = command("streamed", "tell me something")
+
+    assert :ok = ModelInference.respond(capability, command)
+    assert_receive {:test_stream_model_inference_request, request, _messages}
+
+    emit_chunk(request, "First sentence. Sec")
+    assert_receive {:vxpipe_capability_text, ^capability, ^command, "First sentence."}
+    refute_receive {:vxpipe_capability_text_complete, ^capability, ^command}
+
+    emit_chunk(request, "ond sentence!")
+    send(request, {:test_model_inference_reply, :ok})
+
+    assert_receive {:vxpipe_capability_text, ^capability, ^command, "Second sentence!"}
+    assert_receive {:vxpipe_capability_text_complete, ^capability, ^command}
+  end
+
+  test "routes a non-streaming provider through one segment and terminal completion" do
+    capability = start_capability()
+    command = command("buffered", "hello")
+
+    assert :ok = ModelInference.respond(capability, command)
+    assert_receive {:test_model_inference_request, request, _messages}
+    send(request, {:test_model_inference_reply, {:ok, "Buffered answer."}})
+
+    assert_receive {:vxpipe_capability_text, ^capability, ^command, "Buffered answer."}
+    assert_receive {:vxpipe_capability_text_complete, ^capability, ^command}
+  end
+
   test "serializes requests and includes the prompt and completed history" do
     capability = start_capability(maximum_pending_requests: 1, maximum_context_turns: 2)
     first = command("first", "hello")
@@ -177,12 +207,15 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
   defp start_capability(overrides \\ []) do
     task_supervisor = start_supervised!({Task.Supervisor, []})
 
+    provider_config = Keyword.get(overrides, :provider_config, %{observer: self()})
+    overrides = Keyword.delete(overrides, :provider_config)
+
     options =
       Keyword.merge(
         [
           owner: self(),
           participant_id: "agent-test",
-          provider: {TestModelInferenceProvider, %{observer: self()}},
+          provider: {TestModelInferenceProvider, provider_config},
           system_prompt: "Be concise.",
           maximum_context_turns: 4,
           maximum_pending_requests: 2,
@@ -194,6 +227,11 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
       )
 
     start_supervised!({ModelInference, options})
+  end
+
+  defp emit_chunk(request, chunk) do
+    send(request, {:test_model_inference_chunk, chunk, self()})
+    assert_receive {:test_model_inference_chunk_result, :ok}
   end
 
   defp command(correlation_id, content) do

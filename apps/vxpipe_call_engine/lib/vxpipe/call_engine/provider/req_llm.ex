@@ -5,13 +5,19 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLM do
 
   alias Elixir.ReqLLM.Context
   alias Elixir.ReqLLM.Response
+  alias Elixir.ReqLLM.StreamResponse
   alias Vxpipe.CallEngine.Provider.ModelInference.Message
   alias Vxpipe.CallEngine.Provider.ReqLLM.Config
 
   @impl true
   def new(options) do
     with {:ok, options} <-
-           Keyword.validate(options, api_key: nil, model: nil, generation_options: []),
+           Keyword.validate(options,
+             api_key: nil,
+             model: nil,
+             generation_options: [],
+             streaming: :auto
+           ),
          api_key when is_binary(api_key) <- Keyword.fetch!(options, :api_key),
          true <- String.trim(api_key) != "",
          model_spec when is_binary(model_spec) <- Keyword.fetch!(options, :model),
@@ -19,16 +25,47 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLM do
          generation_options when is_list(generation_options) <-
            Keyword.fetch!(options, :generation_options),
          true <- Keyword.keyword?(generation_options),
+         streaming when streaming in [:auto, true, false] <- Keyword.fetch!(options, :streaming),
          false <- Keyword.has_key?(generation_options, :api_key),
          {:ok, model} <- Elixir.ReqLLM.model(model_spec) do
       {:ok,
        %Config{
          api_key: api_key,
          model: model,
-         generation_options: generation_options
+         generation_options: generation_options,
+         streaming: resolve_streaming(streaming, model)
        }}
     else
       _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  @impl true
+  def streaming?(%Config{} = config), do: config.streaming
+
+  @impl true
+  def stream(%Config{} = config, messages, emit) when is_list(messages) do
+    {model, context, options} = prepare_request(config, messages)
+
+    case Elixir.ReqLLM.stream_text(model, context, options) do
+      {:ok, %StreamResponse{} = response} ->
+        try do
+          response
+          |> StreamResponse.tokens()
+          |> Enum.reduce_while(:ok, fn chunk, :ok ->
+            case emit.(chunk) do
+              :ok -> {:cont, :ok}
+              {:error, reason} -> {:halt, {:error, reason}}
+            end
+          end)
+        rescue
+          _exception -> {:error, :provider_unavailable}
+        after
+          StreamResponse.close(response)
+        end
+
+      {:error, _reason} ->
+        {:error, :provider_unavailable}
     end
   end
 
@@ -67,4 +104,7 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLM do
 
   defp to_req_llm_message(%Message{role: :assistant, content: content}),
     do: Context.assistant(content)
+
+  defp resolve_streaming(:auto, model), do: Elixir.ReqLLM.ModelHelpers.streaming_text?(model)
+  defp resolve_streaming(streaming, _model), do: streaming
 end

@@ -6,6 +6,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     provider: Vxpipe.CallEngine.Provider.ReqLLM,
     provider_options: [
       model: "google:gemini-3.5-flash-lite",
+      streaming: true,
       generation_options: [
         temperature: 0.2,
         max_tokens: 256,
