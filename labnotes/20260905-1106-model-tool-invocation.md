@@ -73,7 +73,34 @@ to observe the tool call and provide a simple manual test.
   cancellation policy, and future authorization.
 - Parallel tools: useful later, but unnecessary for the first complete loop.
 
+## Manual samples acceptance test
+
+These steps are the user-visible completion criterion and must be rerun after the
+implementation is green:
+
+1. Put valid `GEMINI_API_KEY` and `DEEPGRAM_API_KEY` values in the repository
+   root `.env` and run `bin/dev`.
+2. Open `https://<this-machine's-tailscale-fqdn>:5173/`, choose **Create room**,
+   and then choose **Connect** in the voice console.
+3. Type or say: “Use the get_current_time tool and tell me the current UTC time.”
+4. In the console event log, verify one
+   `llm-function-call-in-progress` event names `get_current_time`, followed by one
+   `llm-function-call-stopped` event with `cancelled: false`.
+5. Verify the assistant then displays and speaks a UTC time. The answer must come
+   after the stopped event and remain one assistant turn.
+6. Start the request again and immediately type another message with normal
+   immediate-send behavior. Verify the tool/agent turn is interrupted, no stale
+   answer arrives, and the replacement turn responds normally.
+
+The exact event payloads and interruption behavior remain provisional until the
+corresponding tests and live run are complete.
+
 ## Progress
 
 - Created the running labnote and verified the existing provider, room, gateway,
   RTVI, and samples boundaries.
+- Added the initial manual samples acceptance checklist before implementation.
+- Added the engine-owned tool behavior, definition/call/context values, validated
+  registry/executor, and the argument-free UTC clock tool. Executor output must be
+  JSON-compatible and size-bounded. Focused tests cover successful execution,
+  unknown names, invalid arguments, and duplicate configuration.
