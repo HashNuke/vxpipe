@@ -109,7 +109,9 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLM do
   defp to_req_llm_message(%Message{role: :assistant, content: content, tool_calls: calls}) do
     tool_calls =
       Enum.map(calls, fn call ->
-        Elixir.ReqLLM.ToolCall.new(call.id, call.name, JSON.encode!(call.arguments))
+        call.id
+        |> Elixir.ReqLLM.ToolCall.new(call.name, JSON.encode!(call.arguments))
+        |> Elixir.ReqLLM.ToolCall.put_metadata(call.provider_metadata)
       end)
 
     Context.assistant(content, tool_calls: tool_calls)
@@ -184,9 +186,15 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLM do
     normalize_tool_call(Elixir.ReqLLM.ToolCall.to_map(call))
   end
 
-  defp normalize_tool_call(%{id: id, name: name, arguments: arguments})
+  defp normalize_tool_call(%{id: id, name: name, arguments: arguments} = call)
        when is_binary(id) and id != "" and is_binary(name) and name != "" and is_map(arguments) do
-    {:ok, %Call{id: id, name: name, arguments: arguments}}
+    {:ok,
+     %Call{
+       id: id,
+       name: name,
+       arguments: arguments,
+       provider_metadata: Elixir.ReqLLM.ToolCall.metadata(call)
+     }}
   end
 
   defp normalize_tool_call(_call), do: :error

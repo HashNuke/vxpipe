@@ -118,3 +118,8 @@ corresponding tests and live run are complete.
   `llm-function-call-in-progress` and `llm-function-call-stopped` events.
 - Focused and application suites pass: 64 call-engine tests and 37 gateway tests,
   with existing network integration lanes excluded.
+- ReqLLM classification normalizes calls before returning them. Those maps can
+  contain provider continuation metadata such as a Gemini thought signature.
+  The neutral call value now retains that metadata as an opaque adapter field;
+  ReqLLM restores it on the assistant continuation message, while room events
+  expose only the validated call ID, name, and arguments.

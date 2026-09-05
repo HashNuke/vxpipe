@@ -82,7 +82,12 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLMTest do
                model: "google:gemini-3.5-flash-lite"
              )
 
-    call = %Call{id: "tool-1", name: "get_current_time", arguments: %{}}
+    call = %Call{
+      id: "tool-1",
+      name: "get_current_time",
+      arguments: %{},
+      provider_metadata: %{thought_signature: "opaque-signature"}
+    }
 
     messages = [
       %Message{role: :user, content: "What time is it?"},
@@ -103,6 +108,11 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLMTest do
     assert Enum.at(req_messages, -2).role == :assistant
     assert [tool_call] = Enum.at(req_messages, -2).tool_calls
     assert tool_call.id == "tool-1"
+
+    assert Elixir.ReqLLM.ToolCall.metadata(tool_call) == %{
+             thought_signature: "opaque-signature"
+           }
+
     assert Enum.at(req_messages, -1).role == :tool
     assert Enum.at(req_messages, -1).tool_call_id == "tool-1"
   end
