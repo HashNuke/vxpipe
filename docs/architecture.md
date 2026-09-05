@@ -863,9 +863,11 @@ input and output boundaries:
    The configured system prompt is placed first on every request and is not
    replaceable by client input.
 5. The ReqLLM adapter translates neutral message roles, passes the runtime
-   Gemini credential explicitly, and returns only normalized text or error. One
-   complete response follows the existing `TextOutput`, optional TTS, paced
-   playout, and `AgentTurnCompleted` path.
+   Gemini credential explicitly, and returns only normalized text chunks or an
+   error. Streaming models feed a bounded sentence accumulator so each complete
+   sentence can enter the existing `TextOutput`, optional TTS, and paced playout
+   path before generation finishes. Models without streaming support return one
+   buffered terminal segment through the same engine lifecycle.
 6. A provider failure, invalid response, task exit, or timeout fails that turn,
    omits it from history, and advances queued work without ending the room. A
    protocol-neutral `AgentTurnFailed` becomes a correlated generic RTVI error
@@ -875,12 +877,13 @@ input and output boundaries:
    capability is enabled. The credential never enters commands, events, public
    snapshots, JSON payloads, browser configuration, or logs.
 
-The slice deliberately produces one complete output rather than streaming
-tokens. Context is volatile and bounded by completed turn count, not tokens.
-Streaming, tools, token-aware compaction, durable history, prompt-profile
-resolution, and provider fallback remain later checkpoints. Provider-driven
-spoken barge-in is implemented by the later checkpoint below. The detailed
-decision and verification evidence are in
+The engine does not expose provider token boundaries. It emits sentence-sized
+segments and closes the logical assistant turn only after model generation and
+all scheduled speech playout complete. Context is volatile and bounded by
+completed turn count, not tokens. Tools, token-aware compaction, durable history,
+prompt-profile resolution, and provider fallback remain later checkpoints.
+Provider-driven spoken barge-in is implemented by the later checkpoint below.
+The detailed decision and verification evidence are in
 [`model-inference-turn.md`](model-inference-turn.md).
 
 ### Implemented typed turn-interruption slice

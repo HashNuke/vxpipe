@@ -21,7 +21,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
     assert {state, [{:event, ^output}]} =
              TurnState.project(state, output)
 
-    assert {^state,
+    assert {state,
             [
               {:event, ^speech_started},
               {:spoken_progress, ^output, "evt_speech", :in_progress}
@@ -59,6 +59,32 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
               {:spoken_progress, ^second, "evt_completed", :completed},
               {:event, _}
             ]} = TurnState.project(state, agent_turn_completed("turn-2"))
+  end
+
+  test "advances streamed sentences while keeping one speaking turn open" do
+    first = text_output("turn-1")
+    second = %{text_output("turn-1") | id: "evt_output_2", sequence: 2, text: "Again."}
+    first_started = agent_speech_started("turn-1")
+    second_started = %{agent_speech_started("turn-1") | id: "evt_speech_2", sequence: 4}
+
+    assert {state, [{:event, ^first}]} = TurnState.project(TurnState.new(), first)
+    assert {state, []} = TurnState.project(state, second)
+
+    assert {state, [{:event, ^first_started}, {:spoken_progress, ^first, _, :in_progress}]} =
+             TurnState.project(state, first_started)
+
+    assert {state,
+            [
+              {:spoken_progress, ^first, "evt_speech_2", :completed},
+              {:event, ^second},
+              {:spoken_progress, ^second, "evt_speech_2", :in_progress}
+            ]} = TurnState.project(state, second_started)
+
+    assert {_state,
+            [
+              {:spoken_progress, ^second, "evt_completed", :completed},
+              {:event, _}
+            ]} = TurnState.project(state, agent_turn_completed("turn-1"))
   end
 
   test "projects text-only output directly" do

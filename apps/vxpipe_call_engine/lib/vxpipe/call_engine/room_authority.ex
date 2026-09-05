@@ -179,6 +179,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, state}
   end
 
+  def handle_info({:vxpipe_capability_text_complete, capability, command}, state) do
+    state = complete_text_generation(capability, command, state)
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_capability_failed, capability, command, reason}, state) do
     state = emit_agent_turn_failed(capability, command, reason, state)
     {:noreply, state}
@@ -837,14 +842,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
         case TextToSpeech.synthesize(state.text_to_speech_capability.pid, request) do
           :ok ->
-            state
+            update_agent_turn(state, command, fn turn ->
+              %{turn | pending_speech: turn.pending_speech + 1}
+            end)
 
           {:error, _reason} ->
             send(connection.pid, {:vxpipe_connection_unavailable, :text_to_speech_unavailable})
             state
         end
       else
-        emit_agent_turn_completed(command, connection, occurred_at, state)
+        state
       end
     else
       state
@@ -895,7 +902,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           emit_agent_speech_progressed(request, connection, played_ms, total_ms, state)
 
         :completed ->
-          emit_agent_turn_completed(request, connection, state)
+          complete_spoken_segment(request, connection, state)
       end
     else
       state
@@ -959,6 +966,36 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     state
     |> Map.update!(:next_sequence, &(&1 + 1))
     |> delete_agent_turn(command)
+  end
+
+  defp complete_text_generation(capability, command, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    if active_agent_turn?(command, state) and state.text_capability != nil and
+         state.text_capability.pid == capability and connection != nil and
+         connection.participant_id == command.participant_id do
+      turn = Map.fetch!(state.agent_turns, turn_key(command))
+
+      if turn.pending_speech == 0 do
+        emit_agent_turn_completed(command, connection, DateTime.utc_now(:millisecond), state)
+      else
+        update_agent_turn(state, command, &%{&1 | generation_complete?: true})
+      end
+    else
+      state
+    end
+  end
+
+  defp complete_spoken_segment(request, connection, state) do
+    turn = Map.fetch!(state.agent_turns, turn_key(request))
+    turn = %{turn | pending_speech: max(turn.pending_speech - 1, 0)}
+    state = put_agent_turn_state(state, request, turn)
+
+    if turn.generation_complete? and turn.pending_speech == 0 do
+      emit_agent_turn_completed(request, connection, state)
+    else
+      state
+    end
   end
 
   defp interrupt_active_turns(%SendText{run_immediately: false}, state), do: {:ok, state}
@@ -1048,7 +1085,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   defp put_agent_turn(state, command) do
-    turn = %{command: command, order: state.next_sequence}
+    turn = %{
+      command: command,
+      generation_complete?: false,
+      order: state.next_sequence,
+      pending_speech: 0
+    }
+
+    %{state | agent_turns: Map.put(state.agent_turns, turn_key(command), turn)}
+  end
+
+  defp update_agent_turn(state, command, update) do
+    case Map.fetch(state.agent_turns, turn_key(command)) do
+      {:ok, turn} -> put_agent_turn_state(state, command, update.(turn))
+      :error -> state
+    end
+  end
+
+  defp put_agent_turn_state(state, command, turn) do
     %{state | agent_turns: Map.put(state.agent_turns, turn_key(command), turn)}
   end
 

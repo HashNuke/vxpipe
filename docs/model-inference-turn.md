@@ -52,6 +52,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     provider: Vxpipe.CallEngine.Provider.ReqLLM,
     provider_options: [
       model: "google:gemini-3.5-flash-lite",
+      streaming: true,
       generation_options: [
         temperature: 0.2,
         max_tokens: 256,
@@ -105,13 +106,17 @@ context-routing policy.
 ## Provider boundary
 
 `Vxpipe.CallEngine.Provider.ModelInference` accepts only ordered neutral
-messages with `:system`, `:user`, and `:assistant` roles and returns either text
-or a normalized error. The ReqLLM adapter owns these concrete concerns:
+messages with `:system`, `:user`, and `:assistant` roles. Buffered generation is
+the required provider contract. Streaming is optional and reports text deltas
+through a backpressured callback. The capability converts those deltas into
+sentence-sized segments and emits one explicit terminal signal. The ReqLLM
+adapter owns these concrete concerns:
 
 - resolving the configured provider/model identifier through ReqLLM;
 - translating neutral messages to `ReqLLM.Context` messages;
 - passing the runtime credential and generation options to ReqLLM;
-- extracting text from the canonical ReqLLM response; and
+- selecting streaming from model metadata or an explicit trusted override;
+- consuming and closing a streaming response, or extracting buffered text; and
 - hiding provider-specific errors from engine events and clients.
 
 The call engine depends on ReqLLM only in this adapter. Replacing Gemini or
@@ -151,12 +156,25 @@ longer ready and existing connection failure policy applies.
 
 ## Implications and deferred work
 
-This slice is non-streaming: one complete provider response becomes one
-sentence-aggregated `TextOutput`. Token streaming, token-aware context budgets,
-summarization, tool calls, structured output, provider fallback, retry policy,
-durable context, and prompt-version identity remain separate checkpoints.
-Cancellation and provider-driven spoken barge-in are implemented by subsequent
-checkpoints without changing this capability's provider-neutral request model.
+Provider token chunks never become public output directly. A bounded accumulator
+emits complete sentences early and flushes the final fragment only on successful
+provider completion. Every sentence is a separate sentence-aggregated
+`TextOutput`, but the room keeps one logical assistant turn open across all of
+them. Speech synthesis remains ordered, the gateway advances spoken progress as
+each sentence starts, and only the terminal generation plus final speech playout
+emits `AgentTurnCompleted`.
+
+A provider with no streaming callback, or a ReqLLM model configured with
+`streaming: false`, produces one buffered terminal segment through the identical
+room and gateway path. Automatic ReqLLM selection consults model metadata;
+trusted deployment configuration may override stale metadata in either
+direction. Falling back after a stream has already emitted output is deliberately
+rejected because it could duplicate text and bill a second request.
+
+Token-aware context budgets, summarization, tool calls, structured output,
+provider fallback, retry policy, durable context, and prompt-version identity
+remain separate checkpoints. Cancellation and provider-driven spoken barge-in
+operate on the same logical turn.
 
 The development prompt requests short plain-text responses because output is
 spoken. It is a configurable policy, not a hard engine rule. Output size remains
@@ -173,8 +191,12 @@ bounded defensively even when the provider ignores its token limit.
 - A second vertical test proves a failed generation emits a retryable
   `AgentTurnFailed` event and a subsequent turn succeeds in the same room.
 - Adapter tests resolve `google:gemini-3.5-flash-lite`, verify neutral-to-ReqLLM
-  message translation and generation options, and reject missing credentials or
-  credential overrides.
+  message translation, streaming selection, and generation options, and reject
+  missing credentials or credential overrides.
+- Streaming capability tests prove early sentence output, final-fragment flush,
+  terminal completion, bounded aggregate output, and the one-segment buffered
+  fallback. Room and gateway tests prove multiple segments retain one logical
+  completion and one speaking interval.
 - Gateway codec tests prove `AgentTurnFailed` becomes a correlated RTVI
   `error-response` without leaking the provider reason.
 - Default tests use no network and no provider credential. Live provider quality,

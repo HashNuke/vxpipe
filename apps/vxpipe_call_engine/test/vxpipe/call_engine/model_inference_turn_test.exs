@@ -82,6 +82,28 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 8}}
   end
 
+  test "keeps one text turn open across streamed sentence segments" do
+    enable_streaming_provider()
+    room_id = unique_id("room")
+    {room, participant} = start_attached_room(room_id)
+    command = send_command(room, participant, "turn-streamed", "Tell me two things.")
+
+    assert :ok = CallEngine.send_text(command)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
+    assert_receive {:test_stream_model_inference_request, request, _messages}
+
+    emit_chunk(request, "First thing. Sec")
+    assert_receive {:vxpipe_event, %TextOutput{sequence: 3, text: "First thing."}}
+    refute_receive {:vxpipe_event, %AgentTurnCompleted{}}
+
+    emit_chunk(request, "ond thing!")
+    send(request, {:test_model_inference_reply, :ok})
+
+    assert_receive {:vxpipe_event, %TextOutput{sequence: 4, text: "Second thing!"}}
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 5}}
+  end
+
   test "reports a generation failure without ending the room or its model capability" do
     room_id = unique_id("room")
     {room, participant} = start_attached_room(room_id)
@@ -199,6 +221,26 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
              )
 
     command
+  end
+
+  defp enable_streaming_provider do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    model_inference =
+      settings
+      |> Keyword.fetch!(:model_inference)
+      |> Keyword.update!(:provider_options, &Keyword.put(&1, :streaming, true))
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(settings, :model_inference, model_inference)
+    )
+  end
+
+  defp emit_chunk(request, chunk) do
+    send(request, {:test_model_inference_chunk, chunk, self()})
+    assert_receive {:test_model_inference_chunk_result, :ok}
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)

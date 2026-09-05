@@ -17,6 +17,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
   alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
   alias Vxpipe.CallEngine.TestAudioOutputSink
+  alias Vxpipe.CallEngine.TestModelInferenceProvider
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
 
   setup do
@@ -35,10 +36,23 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
       maximum_requests: 2
     ]
 
+    model_inference = [
+      enabled: true,
+      provider: TestModelInferenceProvider,
+      provider_options: [observer: self(), streaming: true],
+      system_prompt: "Be concise.",
+      maximum_context_turns: 4,
+      maximum_pending_requests: 2,
+      maximum_output_bytes: 65_536,
+      request_timeout_ms: 1_000
+    ]
+
     Application.put_env(
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
-      Keyword.put(original, :text_to_speech, text_to_speech)
+      original
+      |> Keyword.put(:text_to_speech, text_to_speech)
+      |> Keyword.put(:model_inference, model_inference)
     )
 
     on_exit(fn ->
@@ -46,6 +60,52 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     end)
 
     :ok
+  end
+
+  test "plays streamed model sentences in order and completes after the final playout" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    room_id = unique_id("room")
+
+    assert {:ok, create} =
+             CreateRoom.new(
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo",
+               room_id: room_id,
+               agent: :model_inference,
+               deadline: future_deadline()
+             )
+
+    assert {:ok, room} = CallEngine.create_room(create)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+    {participant, connection_id} = join_and_attach(room, "conn-stream", sink)
+    command = send_command(room, participant, connection_id, "turn-stream", "two sentences")
+
+    assert :ok = CallEngine.send_text(command)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
+    assert_receive {:test_stream_model_inference_request, request, _messages}
+
+    emit_model_chunk(request, "First sentence. Sec")
+    assert_receive {:vxpipe_event, %TextOutput{sequence: 3, text: "First sentence."}}
+    assert_receive {:test_tts_control, ^transport, first_speak}
+    assert JSON.decode!(first_speak)["text"] == "First sentence."
+    assert_receive {:test_tts_control, ^transport, _first_flush}
+
+    emit_model_chunk(request, "ond sentence!")
+    send(request, {:test_model_inference_reply, :ok})
+    assert_receive {:vxpipe_event, %TextOutput{sequence: 4, text: "Second sentence!"}}
+    refute_receive {:vxpipe_event, %AgentTurnCompleted{}}
+
+    finish_synthesis(transport, sink, "first", <<1, 0>>)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{sequence: 5}}
+    assert_receive {:test_tts_control, ^transport, second_speak}
+    assert JSON.decode!(second_speak)["text"] == "Second sentence!"
+    assert_receive {:test_tts_control, ^transport, _second_flush}
+    refute_receive {:vxpipe_event, %AgentTurnCompleted{}}
+
+    finish_synthesis(transport, sink, "second", <<2, 0>>)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{sequence: 6}}
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 7}}
   end
 
   test "routes agent text to PCM and sequences speaking events around sink playout" do
@@ -317,6 +377,30 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
              )
 
     command
+  end
+
+  defp emit_model_chunk(request, chunk) do
+    send(request, {:test_model_inference_chunk, chunk, self()})
+    assert_receive {:test_model_inference_chunk_result, :ok}
+  end
+
+  defp finish_synthesis(transport, sink, speech_id, audio) do
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      JSON.encode!(%{type: "SpeechStarted", request_id: "req", speech_id: speech_id})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(transport, audio)
+    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{payload: ^audio}}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      JSON.encode!(%{type: "SpeechMetadata", request_id: "req", speech_id: speech_id})
+    )
+
+    assert_receive {:test_audio_output_finish, ^sink, "turn-stream"}
+    :ok = TestAudioOutputSink.playback_started(sink)
+    :ok = TestAudioOutputSink.playback_completed(sink)
   end
 
   defp unique_id(prefix) do

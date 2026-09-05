@@ -9,7 +9,9 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
     TextOutput
   }
 
-  defstruct active_spoken_output: nil, pending_spoken_outputs: :queue.new()
+  defstruct active_spoken_output: nil,
+            active_spoken_started?: false,
+            pending_spoken_outputs: :queue.new()
 
   @type action ::
           {:event,
@@ -24,6 +26,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
 
   @type t :: %__MODULE__{
           active_spoken_output: TextOutput.t() | nil,
+          active_spoken_started?: boolean(),
           pending_spoken_outputs: :queue.queue(TextOutput.t())
         }
 
@@ -46,7 +49,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
   def project(%__MODULE__{} = state, %TextOutput{will_be_spoken: true} = event) do
     case state.active_spoken_output do
       nil ->
-        state = %{state | active_spoken_output: event}
+        state = %{state | active_spoken_output: event, active_spoken_started?: false}
         {state, [{:event, event}]}
 
       %TextOutput{} ->
@@ -59,11 +62,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
     case state.active_spoken_output do
       %TextOutput{correlation_id: correlation_id} = output
       when correlation_id == event.correlation_id ->
-        {state,
-         [
-           {:event, event},
-           {:spoken_progress, output, event.id, :in_progress}
-         ]}
+        project_speech_started(state, output, event)
 
       _other ->
         {state, [{:event, event}]}
@@ -86,7 +85,12 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
   def project(%__MODULE__{} = state, %AgentTurnInterrupted{} = event) do
     cond do
       active_turn?(state, event.correlation_id) ->
-        state = %{state | active_spoken_output: nil, pending_spoken_outputs: :queue.new()}
+        state = %{
+          state
+          | active_spoken_output: nil,
+            active_spoken_started?: false,
+            pending_spoken_outputs: :queue.new()
+        }
 
         {state,
          [
@@ -113,14 +117,53 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
         state = %{
           state
           | active_spoken_output: next_output,
+            active_spoken_started?: false,
             pending_spoken_outputs: pending
         }
 
         {state, actions ++ [{:event, next_output}]}
 
       {:empty, pending} ->
-        state = %{state | active_spoken_output: nil, pending_spoken_outputs: pending}
+        state = %{
+          state
+          | active_spoken_output: nil,
+            active_spoken_started?: false,
+            pending_spoken_outputs: pending
+        }
+
         {state, actions}
+    end
+  end
+
+  defp project_speech_started(%{active_spoken_started?: false} = state, output, event) do
+    state = %{state | active_spoken_started?: true}
+
+    {state,
+     [
+       {:event, event},
+       {:spoken_progress, output, event.id, :in_progress}
+     ]}
+  end
+
+  defp project_speech_started(state, output, event) do
+    case :queue.out(state.pending_spoken_outputs) do
+      {{:value, next_output}, pending} ->
+        state = %{
+          state
+          | active_spoken_output: next_output,
+            active_spoken_started?: true,
+            pending_spoken_outputs: pending
+        }
+
+        {state,
+         [
+           {:spoken_progress, output, event.id, :completed},
+           {:event, next_output},
+           {:spoken_progress, next_output, event.id, :in_progress}
+         ]}
+
+      {:empty, _pending} ->
+        {state, [{:event, event}]}
     end
   end
 

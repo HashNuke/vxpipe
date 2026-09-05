@@ -5,8 +5,11 @@ defmodule Vxpipe.CallEngine.TestModelInferenceProvider do
 
   def new(options) do
     case Keyword.fetch(options, :observer) do
-      {:ok, observer} when is_pid(observer) -> {:ok, %{observer: observer}}
-      _missing_or_invalid -> {:error, :invalid_configuration}
+      {:ok, observer} when is_pid(observer) ->
+        {:ok, %{observer: observer, streaming: Keyword.get(options, :streaming, false)}}
+
+      _missing_or_invalid ->
+        {:error, :invalid_configuration}
     end
   end
 

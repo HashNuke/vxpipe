@@ -55,3 +55,19 @@ terminal segment.
 - Focused evidence: 15 model capability, accumulator, and ReqLLM provider tests
   pass. The red run first failed on the missing accumulator, streaming request,
   completion signal, and configuration behavior as intended.
+- Updated room authority to retain generation-complete and pending-speech state
+  per logical turn. Text-only turns now close on the terminal model signal;
+  spoken turns close only after that signal and the last queued sentence playout.
+- Updated gateway turn projection so successive sentence speech-start events
+  complete the preceding segment's spoken progress and activate the next segment
+  without emitting another bot-speaking start. Buffered one-segment behavior is
+  unchanged.
+- Focused room, TTS, and gateway tests pass. The full umbrella suite passes with
+  57 call-engine tests and 36 gateway tests; network integration lanes remain
+  excluded by their existing tags.
+- The first full-suite run exposed an optional-callback load-order race:
+  `function_exported?/3` returned false before the test provider module had been
+  loaded, selecting buffered generation. Explicitly ensuring the provider module
+  is loaded before capability detection makes selection deterministic.
+- Final completion gate passed: formatting check, warnings-as-errors compilation,
+  the full default test suite, and unused dependency-lock check.

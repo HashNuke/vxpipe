@@ -31,6 +31,8 @@ defmodule Vxpipe.CallEngine.Capability.DeterministicText do
       {:vxpipe_capability_text, self(), command, "Echo: #{command.content}"}
     )
 
+    send(state.room_authority, {:vxpipe_capability_text_complete, self(), command})
+
     {:noreply, state}
   end
 end

@@ -299,7 +299,7 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
   end
 
   defp provider_streaming?(provider_module, provider_config) do
-    function_exported?(provider_module, :stream, 3) and
+    Code.ensure_loaded?(provider_module) and function_exported?(provider_module, :stream, 3) and
       (not function_exported?(provider_module, :streaming?, 1) or
          provider_module.streaming?(provider_config))
   end
