@@ -6,10 +6,11 @@ Research date: 2026-09-05 UTC
 
 Define the smallest useful call-definition contract for Vxpipe: one reusable,
 versionable, agent-first description that can start a single-agent call today
-and grow into multi-agent calls, scoped context, agent handoffs, human
+and grow into multi-agent calls, scoped context, agent transfers, human
 transfers, tools, and telephony without forcing ordinary calls into a
-general-purpose workflow language. A private resolved plan may use a graph
-internally, and an explicit workflow authoring surface can be added later.
+general-purpose workflow language. Agent and participant transfers are
+engine-owned tools; neither the public definition nor the private resolved plan
+needs a node-and-edge model.
 
 This is a research checkpoint. It does not commit a public schema or change
 runtime behavior.
@@ -124,7 +125,7 @@ The public `CallDefinition` should therefore be agent-first:
 - shared capability-profile defaults;
 - a map of named agents;
 - each agent's instructions, first-message behavior, capability overrides,
-  selected tools, and handoffs;
+  and selected tools;
 - typed invocation inputs and typed session state; and
 - bounded call policies and references to artifact/event policies.
 
@@ -134,36 +135,40 @@ that owns conversational control. Re-entering the same agent may reuse its
 private history according to policy, but stale work from an earlier activation
 must still be rejected.
 
-An agent's `handoffs` are a named allowlist. Each handoff declares a destination,
-a model-facing description of when it is appropriate, the context-transfer
-policy, and optional presentation behavior. This is easier to author and review
-than separate node and edge collections while preserving an exact directed
-topology.
+Agent transfer and participant transfer are engine-owned tool kinds. Each agent
+receives only the transfer tools it is allowed to request. An agent-transfer
+tool pins a definition-local target agent; a participant-transfer tool pins an
+allowlisted logical participant destination resolved by the host. Its
+model-facing arguments must not accept arbitrary runtime participant IDs,
+telephone numbers, or transport destinations.
 
-### Keep graphs as a private plan and a later advanced surface
+Each configured transfer tool can carry a model-facing description, context
+policy, and presentation policy. This gives the model a typed request surface
+while the room authority validates and commits the actual control mutation.
 
-A graph still has value for runtime compilation and future deterministic
-workflows. The compiler can lower each agent to an internal agent node and each
-handoff to an internal edge. The initial runtime needs only one active cursor:
+### Track active control directly; do not introduce a graph
+
+The room already has the state needed for agent and participant transfers. The
+resolved plan needs named agent specs and resolved tool bindings, while the room
+tracks the active agent and a fresh activation ID:
 
 ```text
 activate entry agent
-  -> agent converses or requests an allowlisted handoff
-  -> room authority commits the transition
+  -> agent converses or requests an allowlisted transfer tool
+  -> tool executor validates the target and asks the room to commit the transfer
   -> previous activation becomes stale
-  -> activate destination agent or end the call
+  -> activate the destination agent or update participant/call-leg routing
 ```
 
-That private plan must not become a second copy of room state. The room remains
-authoritative for participants, connections, media, turns, tools, typed context,
-and call legs. Provider requests and tool execution remain concurrent supervised
-work, while the conversational-control cursor is singular.
+The private plan must not become a second copy of room state. The room remains
+authoritative for active control, participants, connections, media, turns,
+tools, typed context, and call legs. Provider requests and tool execution remain
+concurrent supervised work.
 
 If a concrete use case later requires guaranteed sequencing, deterministic
-branching, waiting, joins, or compensation, add a separate explicit workflow
-authoring surface which compiles into the same private plan. Do not make every
-ordinary call author understand `agent`, `action`, `wait`, `branch`, and `end`
-node kinds merely so two agents can hand off to one another.
+branching, waiting, joins, or compensation, design that use case independently.
+Do not pre-install a node-and-edge execution model into `CallDefinition` or
+`ResolvedCallPlan` merely because another product calls such behavior a flow.
 
 This separation also avoids conflating three different concepts:
 
@@ -177,10 +182,10 @@ This separation also avoids conflating three different concepts:
 
 The reviewed systems distinguish at least three forms of state:
 
-- model history: ordered user, assistant, tool, configuration, and handoff
+- model history: ordered user, assistant, tool, configuration, and transfer
   items;
 - typed session data: facts collected or loaded during the call; and
-- handoff context: a selected copy, summary, recent window, or fresh context for
+- transfer context: a selected copy, summary, recent window, or fresh context for
   the destination agent.
 
 Some systems share all model history by default. Others start every agent with a
@@ -193,15 +198,15 @@ The initial context model should distinguish:
 - `call`: typed facts visible according to field grants;
 - `agent`: private model history and scratch state;
 - `participant`: data private to or owned by one participant; and
-- `handoff`: an immutable packet created for one transition.
+- `agent_transfer`: an immutable packet created for one agent transition.
 
-A handoff packet should name its source and destination agents, reason,
+A transfer packet should name its source and destination agents, reason,
 authoritative typed fields, selected transcript/history, causation, and
 visibility. It is an event/result, not a mutable global bag.
 
 ### Tools and authoritative control must remain separate
 
-Model-facing tools are the common request mechanism for agent handoff, hangup,
+Model-facing tools are the common request mechanism for agent transfer, hangup,
 data collection, and external actions. The model can request an operation; it
 must not directly change active-agent, participant, connection, leg, or room
 state.
@@ -217,7 +222,7 @@ An engine-owned tool invocation should therefore have:
 - result visibility to the model, room, clients, and artifacts; and
 - an authoritative command emitted only after validation succeeds.
 
-Agent handoff, participant transfer, telephony-leg transfer, and ending a call
+Agent transfer, participant transfer, telephony-leg transfer, and ending a call
 remain different commands even if all are exposed to a model as tools.
 
 ### Definition version, deployment selection, and invocation are different
@@ -226,6 +231,19 @@ The reviewed control planes support stored and inline definitions, drafts,
 published revisions, explicit version selection, and environment aliases. These
 are useful control-plane features but should not complicate the first engine
 contract.
+
+The public schema identifier is a fixed-width string in `YYYYMMDD.NN` form. The
+date is the UTC publication date of that schema and `NN` is the two-digit schema
+release sequence for that date, beginning at `01`. The initial proposed value is
+`"20260905.01"`. Every published schema shape receives a new identifier;
+compatible and incompatible evolution is determined by a schema registry and
+explicit decoder/migration rules, not by interpreting the identifier as semantic
+versioning. Unknown identifiers are rejected.
+
+Schema identity is independent from the revision of a stored call definition.
+For example, revision `7` of one definition may still use schema
+`"20260905.01"`. RTVI protocol versions, provider API versions, integration
+catalog revisions, and resolved-plan digests also remain separate identities.
 
 Vxpipe should distinguish:
 
@@ -248,9 +266,9 @@ Application integration catalog
 - A call definition owns portable conversational composition and policy,
   including the integration/tool bindings enabled independently for each agent.
   It does not own MCP endpoints or credentials.
-- A call invocation owns caller/destination identity, entrypoint, definition
-  selection, permitted runtime variables, and idempotency. It carries no MCP
-  authentication.
+- A call invocation owns caller/destination identity, definition selection,
+  permitted runtime variables, transport attachment, and idempotency. It does
+  not override the definition's entry agent and carries no MCP authentication.
 - A resolved call plan pins all references, defaults, adapter capabilities,
   selected integration/catalog revisions, discovered tool schemas, policy
   versions, and credential-lease references without retaining secret values.
@@ -270,17 +288,14 @@ Use validated Elixir structs as the canonical in-process representation:
 ```text
 CallDefinition
 CallDefinition.Agent
-CallDefinition.Handoff
 CallDefinition.CapabilitySelection
 CallDefinition.Context
 CallDefinition.Policy
 CallDefinition.AgentIntegration
 CallDefinition.AgentToolBinding
+CallDefinition.TransferTool
 CallInvocation
 ResolvedCallPlan
-ResolvedCallPlan.Graph
-ResolvedCallPlan.Node
-ResolvedCallPlan.Edge
 ResolvedCallPlan.Agent
 ResolvedCallPlan.IntegrationBinding
 ResolvedCallPlan.ToolBinding
@@ -297,11 +312,11 @@ while preserving the future container contract. A YAML adapter would be
 mechanical once the JSON-safe schema exists and does not need separate runtime
 semantics.
 
-### Minimal `CallDefinition` v1
+### Minimal initial `CallDefinition`
 
 The first version should contain only:
 
-- `schema_version`;
+- `schema_version` as a `YYYYMMDD.NN` string;
 - optional display metadata, while durable ID and revision stay in the resource
   envelope;
 - `entry_agent`;
@@ -321,28 +336,27 @@ Each agent should contain:
   the selected remote tools;
 - engine-owned tool grants;
 - input, output, and action-guardrail policy references;
-- named handoffs to other agents; and
 - optional limits stricter than the call defaults.
 
-Each handoff should contain:
+An engine-owned transfer-tool binding should contain:
 
 - a stable name within the source agent;
-- the destination agent;
-- a model-facing description of when the route is appropriate;
-- optional context/history transfer policy for an agent-to-agent transition;
-  and
+- kind `transfer_agent` or `transfer_participant`;
+- a fixed definition-local agent target or allowlisted logical participant
+  destination;
+- a model-facing description of when the transfer is appropriate;
+- optional context/history transfer policy for an agent transfer; and
 - optional user-visible transition speech policy.
 
-The compiler can turn model-selectable handoffs into engine-owned route tools
-granted only during the source agent's activation. The room checks that the
-source activation is still current, the target exists and is ready, and
-handoff budgets are not exhausted. A host command can request the same declared
-handoff without giving the model authority over the room mutation.
+The room checks that the source activation is still current, the target is
+allowlisted and ready, and transfer budgets are not exhausted. A host command
+can request the same declared transfer without giving the model authority over
+the room mutation.
 
-Version one should keep agents inline so one call definition is portable in the
-standalone JSON configuration and resolves without a dependency graph. A later
-control plane may offer reusable agent resources and allow a definition to pin
-one by ID and revision, but it must compile that reference into the same
+The initial schema should keep agents inline so one call definition is portable
+in the standalone JSON configuration and resolves without a dependency graph. A
+later control plane may offer reusable agent resources and allow a definition
+to pin one by ID and revision, but it must compile that reference into the same
 self-contained immutable plan before the room starts.
 
 ### Application/tenant MCP integrations and agent enablement
@@ -487,7 +501,7 @@ through a turn. Credential revocation may invalidate its lease and make later
 tool calls fail, but must not silently switch the call to another tenant or
 application credential.
 
-An agent handoff changes the effective tool surface. Before deactivating the
+An agent transfer changes the effective tool surface. Before deactivating the
 source activation, its in-flight tool calls must be settled or cancelled. After
 the transition, source-agent bindings cannot accept new calls, and only the
 destination activation's bindings enter model requests. Tool results and events
@@ -499,7 +513,7 @@ reference) plus an invocation. The current `CreateRoom` command remains a lower
 level engine command and should eventually receive only a resolved-plan identity
 or typed plan, never decoded call JSON or credentials.
 
-### Initial handoff context policies
+### Initial agent-transfer context policies
 
 Start with a closed set:
 
@@ -536,7 +550,7 @@ transfer targets, but it should not contain MCP endpoints, live socket
 identifiers, carrier call IDs, literal credentials, or provider webhook state.
 
 For the first version, one call maps to one room with multiple participants and
-connections. Agent handoff changes conversational control inside that room.
+connections. Agent transfer changes conversational control inside that room.
 Human or telephony transfer is an engine-owned tool/command that creates or
 changes participant connections and call legs. A later warm-transfer workflow
 may create a temporary consultation room, but that should not force multi-room
@@ -548,7 +562,7 @@ This is a discussion aid, not a committed schema:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": "20260905.01",
   "name": "customer-support",
   "entry_agent": "reception",
   "input_schema": {
@@ -570,14 +584,20 @@ This is a discussion aid, not a committed schema:
     "reception": {
       "instructions": "Understand why the caller is contacting us and route the conversation.",
       "first_message": {"mode": "generated"},
-      "handoffs": {
-        "to_billing": {
-          "to": "billing",
+      "tools": {
+        "transfer_to_billing": {
+          "type": "transfer_agent",
+          "target": "billing",
           "description": "Use when the caller needs help with a billing issue.",
           "context": {
             "history": {"mode": "last_n_spoken", "turns": 6},
             "inputs": ["customer_id"]
           }
+        },
+        "transfer_to_person": {
+          "type": "transfer_participant",
+          "target": "support_queue",
+          "description": "Use when the caller asks to speak with a person."
         }
       }
     },
@@ -587,12 +607,12 @@ This is a discussion aid, not a committed schema:
         "model_inference": "careful-general"
       },
       "first_message": {"mode": "generated"},
-      "handoffs": {}
+      "tools": {}
     }
   },
   "limits": {
     "max_duration_ms": 1800000,
-    "max_handoffs": 6
+    "max_transfers": 6
   }
 }
 ```
@@ -619,30 +639,28 @@ The authenticated principal supplies tenant and actor identity; neither is a
 caller-controlled field. The gateway creates runtime room, incarnation,
 participant, connection, and call IDs. The transport attachment belongs to the
 invocation or an inbound routing resource, not to reusable conversational
-behavior.
+behavior. `support_queue` is a logical destination resolved through trusted
+application or tenant configuration; it is not a runtime participant ID or a
+model-supplied address.
 
 Provider/profile strings are closed registry names resolved by the host. They
 do not name Elixir modules. Instructions may later be replaced by immutable
 prompt references without changing the runtime semantics. Agent-scoped tools,
 knowledge, guardrails, MCP enablement, and artifact-policy references fit into
-this shape without changing its basic entry-agent and handoff model, but they
-should be specified in separate focused checkpoints.
+this shape without changing its basic entry-agent and transfer-tool model, but
+they should be specified in separate focused checkpoints.
 
 ## Alternatives considered
 
 ### Start with a fully expressive JSON graph
 
-Rejected as the initial public authoring contract. A fully expressive graph
+Rejected for both the public definition and the initial private plan. A graph
 front-loads node taxonomy, expression semantics, parallelism, joins,
 compensation, graph migration, and visual-editor concerns before Vxpipe can
-switch between two agents. Even a minimal public `agent`/`end` graph makes the
-common case less direct than an entry agent with named handoffs and risks making
-the graph rather than the room the source of truth.
-
-An internal graph remains a useful compiled representation. A separate advanced
-workflow surface may later expose deterministic nodes and edges when a concrete
-use case justifies them; it must compile into the same plan and room authority
-rather than introduce a second executor.
+switch between two agents. Even a minimal `agent`/`end` graph makes the common
+case less direct than an entry agent with transfer tools and risks making the
+graph rather than the room the source of truth. Named agent specs, resolved tool
+bindings, and the room's active-agent state are sufficient.
 
 ### Make executable Elixir modules the only definition
 
@@ -670,12 +688,12 @@ commands available to declarative policies.
 
 ### Add a general expression language now
 
-Deferred with Lua. An agent handoff can be model-selected through an engine-owned
-route tool or requested explicitly by the host. When deterministic branching is
-needed, add it to the explicit workflow surface with a small typed condition
-algebra over declared context fields (`eq`, `in`, `exists`, `all`, `any`,
-`not`) rather than putting natural-language expressions into ordinary handoffs.
-This remains serializable, validatable, and testable.
+Deferred with Lua. An agent transfer can be model-selected through an
+engine-owned tool or requested explicitly by the host. When deterministic
+branching is needed, design it around its first concrete use with a small typed
+condition algebra over declared context fields (`eq`, `in`, `exists`, `all`,
+`any`, `not`) rather than putting natural-language expressions into transfer
+tools. This remains serializable, validatable, and testable.
 
 ### Put MCP endpoints or credentials directly in each call definition
 
@@ -708,8 +726,8 @@ Compilation should reject, with path-specific errors:
 - unsupported schema versions;
 - an absent or unknown entry agent;
 - duplicate or invalid names;
-- a handoff with an unknown destination;
-- duplicate handoff names within one source agent;
+- a transfer tool with an unknown or disallowed destination;
+- duplicate tool names within one source agent;
 - tool or integration references not present in closed registries;
 - duplicate agent-local tool aliases within one agent;
 - an agent's enabled integration reference unavailable to the authenticated
@@ -724,14 +742,14 @@ Compilation should reject, with path-specific errors:
 - context fields with unsupported types or invalid visibility grants;
 - invocation defaults for undeclared fields;
 - policies outside bounded ranges;
-- a model-selectable handoff whose source agent cannot request it;
+- a model-selectable transfer whose source agent lacks that tool grant;
 - incompatible required capabilities; and
 - any private runtime term or literal secret at the public boundary.
 
-Cycles are not inherently invalid: callers may legitimately return to the entry
-agent. They require bounded handoffs and session duration rather than an
-acyclicity rule. Unreachable agents should initially be a compiler warning or a
-lint error, not necessarily a runtime-invalid definition.
+Transfer cycles are not inherently invalid: callers may legitimately return to
+the entry agent. They require bounded transfers and session duration.
+Unreachable agents should initially be a compiler warning or a lint error, not
+necessarily a runtime-invalid definition.
 
 ## Observable runtime contracts needed
 
@@ -740,7 +758,10 @@ The first multi-agent slice needs protocol-neutral events for:
 - call plan resolved;
 - agent admitted and ready;
 - agent activated and deactivated;
-- handoff requested, accepted, completed, rejected, failed, and cancelled;
+- agent transfer requested, accepted, completed, rejected, failed, and
+  cancelled;
+- participant transfer requested, accepted, completed, rejected, failed, and
+  cancelled;
 - context packet created and delivered, with values redacted by visibility;
 - tool invocation lifecycle;
 - routing changed; and
@@ -764,12 +785,12 @@ turn, and activation identity.
 2. **Basic plan resolution:** use fake closed capability-profile registries to
    prove defaults and overrides resolve into a self-contained, secret-free
    `ResolvedCallPlan`; unused profiles leave no runtime binding.
-3. **Agent and handoff data:** test handoff
-   resolution, missing targets, duplicate names, cycles, unreachable-agent
-   linting, and path-specific errors.
-4. **Active-agent reducer:** test activation, handoff, terminal state, stale
-   activation, and handoff-budget behavior using deterministic fake agents;
-   implement a pure reducer with one active cursor and activation ID.
+3. **Agent and transfer-tool data:** test agent and participant target
+   resolution, missing targets, duplicate names, transfer cycles,
+   unreachable-agent linting, and path-specific errors.
+4. **Active-agent reducer:** test activation, agent transfer, terminal state,
+   stale activation, and transfer-budget behavior using deterministic fake
+   agents; implement a pure reducer with one active agent and activation ID.
 5. **Behavior-preserving agent:** prove a one-agent resolved plan produces
    the same text/audio turn behavior as the current preset path.
 6. **JSON and gateway boundary:** round-trip definition/invocation data, reject
@@ -783,17 +804,17 @@ turn, and activation identity.
    leases outside the public plan.
 8. **Remote MCP execution:** behind the engine-owned tool backend, configure one
    HTTPS MCP integration, enable one tool on one agent, call it, preserve
-   the existing room/RTVI lifecycle, and prove interruption or agent handoff
+   the existing room/RTVI lifecycle, and prove interruption or agent transfer
    cancels the remote request. Do not add stdio or an MCP server endpoint.
-9. **Agent handoff:** use two deterministic agents to prove only the active
-   agent receives turns, model-selectable routes are allowlisted, and stale
-   output is rejected.
+9. **Agent transfer:** use two deterministic agents and one engine-owned
+   transfer tool to prove only the active agent receives turns, targets are
+   allowlisted, and stale output is rejected.
 10. **Scoped transition context:** prove allowed spoken history and typed fields
    reach the destination while hidden fields, private tool data, credentials,
    and unplayed text do not.
 11. **Later workflow surface:** add deterministic `action`, human transfer,
-    `wait`, and `branch` steps only alongside their first concrete uses. Defer
-    subgraphs, parallelism, joins, races, and scripting.
+    `wait`, and `branch` behavior only alongside its first concrete use. Do not
+    assume a graph, subgraph, parallel-branch, join, or race model.
 
 ## Decision for the next checkpoint
 
@@ -802,7 +823,7 @@ Proceed first with typed `CallDefinition`, `CallInvocation`, and
 proof is an inline one-agent definition with an entry agent, shared capability
 profile defaults, declared invocation inputs, and bounded limits becoming a
 self-contained immutable plan. Route the existing single-agent behavior through
-that plan before adding multi-agent handoffs or integration resolution.
+that plan before adding multi-agent transfer tools or integration resolution.
 
 Remote MCP integrations still live in application or tenant catalogs, where
 they are **configured**. Individual agents explicitly **enable** integrations
@@ -812,11 +833,11 @@ precedence over an application-wide integration with the same stable ID; neither
 catalog enables it for any agent automatically. Do not begin an MCP transport
 implementation until the general call-definition boundary exists.
 
-Use the agent-first public input with one entry agent and named handoffs. Compile
-it into a private one-cursor plan; do not expose generic nodes and edges in the
-initial JSON. Do not start with Lua, arbitrary executable hooks,
-natural-language condition evaluation, parallel graph execution, or a broad
-workflow interpreter.
+Use the agent-first public input with one entry agent and agent-scoped tools.
+The private plan contains resolved agent specs and tool bindings; it does not
+contain generic nodes or edges. The room directly owns active-agent and
+participant-routing state. Do not start with Lua, arbitrary executable hooks,
+natural-language condition evaluation, or a broad workflow interpreter.
 
 ## Verification evidence
 
@@ -838,6 +859,10 @@ workflow interpreter.
   tenant-scoped, never invocation-scoped. A configured integration becomes
   available infrastructure; only an agent enables it and binds its selected
   tools. Other agents in the same call do not inherit that surface.
+- Refined the authoring contract after review: schema identifiers use the
+  date-based `YYYYMMDD.NN` format, agent and participant transfers are
+  engine-owned tools, and neither the public definition nor resolved plan uses
+  generic nodes or edges.
 - Reviewed the official MCP `2026-07-28` tool specification, Streamable HTTP
   transport, and generated schema:
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx>
