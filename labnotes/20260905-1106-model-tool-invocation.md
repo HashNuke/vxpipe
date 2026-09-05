@@ -1,0 +1,79 @@
+# Model tool invocation
+
+## Goal
+
+Implement one complete, provider-neutral model tool loop:
+
+```text
+participant input -> model tool request -> supervised tool execution
+                  -> model continuation -> streamed text and speech
+```
+
+The development samples path must expose enough standard RTVI lifecycle events
+to observe the tool call and provide a simple manual test.
+
+## Initial findings
+
+- Model inference already owns one bounded supervised task per logical turn,
+  streaming sentence output and cancellation inside that task. The smallest safe
+  tool executor can run inside this task: room authority remains unblocked and
+  existing interruption/timeout kills both provider continuation and tool work.
+- ReqLLM classifies both buffered and streamed responses as either final text or
+  tool calls. Its stream processor provides incremental text callbacks and a
+  terminal response containing reconstructed tool calls.
+- RTVI 2.1 defines `llm-function-call-in-progress` and
+  `llm-function-call-stopped`. The samples console already logs standard RTVI
+  events, so the gateway can project engine events without adding custom UI.
+- Current conversation history stores successful user/final-assistant pairs.
+  Tool-call and tool-result messages are needed during one request loop, but the
+  first slice can retain the existing final-answer history contract.
+
+## Plan
+
+1. Define engine-owned tool definitions, calls, results, and an execution
+   behavior. Add one argument-free `get_current_time` development tool.
+2. Extend the provider-neutral model boundary to return tool calls and accept
+   assistant/tool continuation messages. Keep streamed and buffered provider
+   paths at parity.
+3. Teach model inference to execute a bounded number of tool rounds inside its
+   already supervised request task, emit lifecycle notifications, pass results
+   back to the provider, and produce the normal final answer. Unknown, invalid,
+   failing, timed-out, and interrupted calls must settle without crashing the
+   room.
+4. Add protocol-neutral room events and project them as the standard RTVI 2.1
+   function-call lifecycle. Track active calls per agent turn so interruption
+   emits cancellation before the turn interruption.
+5. Configure the development agent with `get_current_time`, document the design
+   in `docs/`, and add exact browser steps to `samples/README.md`.
+6. Run focused tests at each boundary followed by all repository completion
+   checks.
+
+## Decisions
+
+- Tool modules and definitions belong to the call engine, not RTVI or ReqLLM.
+  Provider adapters translate schemas and conversation messages.
+- Tools are trusted application configuration. Browsers cannot provide callback
+  modules, schemas, or executable names when creating a room.
+- The entire model/tool/model loop shares the original turn timeout and
+  cancellation task. Per-tool worker processes and parallel calls can be added
+  when a real tool needs independent lifecycle or concurrency.
+- Tool rounds are explicitly bounded to prevent an uncooperative model from
+  looping forever.
+- We expose tool arguments/results in the development RTVI projection because
+  the sample tool contains no secrets. A future authorization policy must support
+  redacted reporting levels before sensitive tools are enabled.
+
+## Rejected for this slice
+
+- Client-executed tools: they weaken server authorization and do not exercise
+  OTP-owned execution.
+- An HTTP webhook tool: it adds external reliability and credential questions
+  before the lifecycle itself is proven.
+- Provider-owned automatic tool execution: it would bypass engine events,
+  cancellation policy, and future authorization.
+- Parallel tools: useful later, but unnecessary for the first complete loop.
+
+## Progress
+
+- Created the running labnote and verified the existing provider, room, gateway,
+  RTVI, and samples boundaries.
