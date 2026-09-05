@@ -4,7 +4,11 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
   import Plug.Conn
   import Plug.Test
 
-  alias ExWebRTC.{DataChannel, ICECandidate, PeerConnection, SessionDescription}
+  alias ExRTP.Packet
+  alias ExWebRTC.{DataChannel, ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
+  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.TestSpeechToTextTransport
+  alias Vxpipe.CallEngine.TestTextToSpeechTransport
   alias Vxpipe.Gateway.HTTP.Endpoint
 
   @moduletag capture_log: true
@@ -183,6 +187,160 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {"tenant-development", room_id})
   end
 
+  test "forwards microphone RTP to speech recognition while agent output is active" do
+    configure_audio_capabilities(self())
+
+    room_id = "room-full-duplex-#{System.unique_integer([:positive, :monotonic])}"
+    session_id = create_room_session(room_id)
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+
+    client = start_supervised!({PeerConnection, []})
+    :ok = PeerConnection.controlling_process(client, self())
+
+    {:ok, %DataChannel{ref: client_channel}} =
+      PeerConnection.create_data_channel(client, "chat", ordered: true)
+
+    audio_track = MediaStreamTrack.new(:audio)
+
+    {:ok, _transceiver} =
+      PeerConnection.add_transceiver(client, audio_track, direction: :sendrecv)
+
+    {:ok, offer} = PeerConnection.create_offer(client)
+    :ok = PeerConnection.set_local_description(client, offer)
+
+    offer_conn =
+      :post
+      |> conn(
+        "/api/rtvi/offer",
+        JSON.encode!(%{
+          "sdp" => offer.sdp,
+          "type" => "offer",
+          "pc_id" => nil,
+          "restart_pc" => false,
+          "requestData" => %{"session_id" => session_id}
+        })
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@endpoint_options)
+
+    assert offer_conn.status == 200
+
+    assert %{"pc_id" => connection_id, "sdp" => answer_sdp, "type" => "answer"} =
+             JSON.decode!(offer_conn.resp_body)
+
+    assert_receive {:test_stt_transport_started, stt_transport, _connection}
+
+    :ok =
+      PeerConnection.set_remote_description(
+        client,
+        %SessionDescription{type: :answer, sdp: answer_sdp}
+      )
+
+    assert_receive {:ex_webrtc, ^client, {:ice_candidate, candidate}}, 5_000
+    patch_candidate(connection_id, candidate)
+    assert_receive {:ex_webrtc, ^client, {:connection_state_change, :connected}}, 5_000
+
+    assert_receive {:ex_webrtc, ^client, {:data_channel_state_change, ^client_channel, :open}},
+                   5_000
+
+    :ok =
+      PeerConnection.send_data(
+        client,
+        client_channel,
+        JSON.encode!(%{
+          "id" => "client-ready-full-duplex",
+          "label" => "rtvi-ai",
+          "type" => "client-ready",
+          "data" => %{"version" => "2.1.0"}
+        })
+      )
+
+    assert %{"type" => "bot-ready"} = await_type(client, client_channel, "bot-ready", 5_000)
+
+    :ok =
+      PeerConnection.send_data(
+        client,
+        client_channel,
+        JSON.encode!(%{
+          "id" => "client-text-full-duplex",
+          "label" => "rtvi-ai",
+          "type" => "send-text",
+          "data" => %{
+            "content" => "keep speaking",
+            "options" => %{"run_immediately" => true, "audio_response" => true}
+          }
+        })
+      )
+
+    assert %{"type" => "bot-output", "data" => %{"will_be_spoken" => true}} =
+             await_type(client, client_channel, "bot-output", 5_000)
+
+    assert_receive {:test_tts_control, ^tts_transport, _speak}
+    assert_receive {:test_tts_control, ^tts_transport, _flush}
+
+    packet =
+      Packet.new(<<1, 2, 3, 4>>,
+        payload_type: 111,
+        sequence_number: 1,
+        timestamp: 960,
+        ssrc: 123
+      )
+
+    assert :ok = PeerConnection.send_rtp(client, audio_track.id, packet)
+    assert_receive {:test_stt_audio, ^stt_transport, <<1, 2, 3, 4>>}, 5_000
+
+    refute_receive {:ex_webrtc, ^client, {:data, ^client_channel, _message}}
+
+    TestSpeechToTextTransport.deliver(
+      stt_transport,
+      turn_message("StartOfTurn", 1, "actually make it shorter")
+    )
+
+    assert %{"type" => "bot-interrupted", "data" => nil} =
+             receive_rtvi(client, client_channel, 5_000)
+
+    assert %{
+             "type" => "server-message",
+             "data" => %{
+               "t" => "vxpipe.turn",
+               "d" => %{
+                 "kind" => "interrupted",
+                 "interrupted_by" => %{
+                   "participant_id" => "part_" <> _,
+                   "connection_id" => ^connection_id
+                 }
+               }
+             }
+           } = receive_rtvi(client, client_channel, 5_000)
+
+    assert %{"type" => "user-started-speaking"} =
+             receive_rtvi(client, client_channel, 5_000)
+
+    assert %{
+             "type" => "user-transcription",
+             "data" => %{"text" => "actually make it shorter", "final" => false}
+           } = receive_rtvi(client, client_channel, 5_000)
+
+    TestSpeechToTextTransport.deliver(
+      stt_transport,
+      turn_message("EndOfTurn", 2, "actually make it shorter", "model")
+    )
+
+    assert %{"type" => "user-transcription", "data" => %{"final" => true}} =
+             receive_rtvi(client, client_channel, 5_000)
+
+    assert %{"type" => "user-stopped-speaking"} =
+             receive_rtvi(client, client_channel, 5_000)
+
+    assert %{
+             "type" => "bot-output",
+             "data" => %{
+               "text" => "Echo: actually make it shorter",
+               "will_be_spoken" => true
+             }
+           } = receive_rtvi(client, client_channel, 5_000)
+  end
+
   defp create_room_session(room_id) do
     create_conn =
       :post
@@ -222,5 +380,99 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
 
     assert patch_conn.status == 200
     assert %{"status" => "success"} = JSON.decode!(patch_conn.resp_body)
+  end
+
+  defp configure_audio_capabilities(observer) do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    speech_to_text = [
+      enabled: true,
+      provider: Flux,
+      provider_options: [
+        api_key: "runtime-secret",
+        model: "flux-general-en",
+        encoding: :opus,
+        sample_rate: 48_000
+      ],
+      transport: {TestSpeechToTextTransport, [observer: observer]},
+      media_ingress: [
+        maximum_frames: 50,
+        maximum_bytes: 262_144,
+        maximum_age_ms: 2_000,
+        maximum_consecutive_overflows: 5
+      ]
+    ]
+
+    text_to_speech = [
+      enabled: true,
+      provider: FluxTextToSpeech,
+      provider_options: [
+        api_key: "runtime-secret",
+        model: "flux-haley-en",
+        encoding: :linear16,
+        sample_rate: 48_000
+      ],
+      transport: {TestTextToSpeechTransport, [observer: observer]},
+      maximum_requests: 2
+    ]
+
+    settings =
+      original
+      |> Keyword.put(:speech_to_text, speech_to_text)
+      |> Keyword.put(:text_to_speech, text_to_speech)
+
+    Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, settings)
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+  end
+
+  defp await_type(client, channel, type, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_type(client, channel, type, deadline)
+  end
+
+  defp do_await_type(client, channel, type, deadline) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {:ex_webrtc, ^client, {:data, ^channel, payload}} ->
+        message = JSON.decode!(payload)
+
+        if message["type"] == type do
+          message
+        else
+          do_await_type(client, channel, type, deadline)
+        end
+    after
+      remaining -> flunk("timed out waiting for #{type}")
+    end
+  end
+
+  defp receive_rtvi(client, channel, timeout_ms) do
+    receive do
+      {:ex_webrtc, ^client, {:data, ^channel, payload}} -> JSON.decode!(payload)
+    after
+      timeout_ms -> flunk("timed out waiting for an RTVI message")
+    end
+  end
+
+  defp turn_message(event, sequence, transcript, trigger \\ nil) do
+    message = %{
+      "type" => "TurnInfo",
+      "request_id" => "request-1",
+      "sequence_id" => sequence,
+      "event" => event,
+      "turn_index" => 0,
+      "audio_window_start" => 0.0,
+      "audio_window_end" => 1.0,
+      "transcript" => transcript,
+      "words" => [],
+      "end_of_turn_confidence" => 0.8
+    }
+
+    message = if trigger == nil, do: message, else: Map.put(message, "trigger", trigger)
+    JSON.encode!(message)
   end
 end

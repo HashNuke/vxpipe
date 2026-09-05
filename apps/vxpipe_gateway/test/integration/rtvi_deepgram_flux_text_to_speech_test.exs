@@ -156,19 +156,20 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
           "type" => "send-text",
           "data" => %{
             "content" => second_input,
-            "options" => %{"audio_response" => true, "run_immediately" => true}
+            "options" => %{"audio_response" => true, "run_immediately" => false}
           }
         })
       )
 
-    messages = await_type(client, client_channel, "user-mute-stopped", 30_000, messages)
+    messages =
+      await_type_count(client, client_channel, "bot-stopped-speaking", 2, 30_000, messages)
+
     types = Enum.map(messages, &Map.fetch!(&1, "type"))
 
     assert_subsequence(types, [
       "user-started-speaking",
       "user-stopped-speaking",
       "bot-output",
-      "user-mute-started",
       "bot-started-speaking",
       "bot-output",
       "bot-output",
@@ -177,9 +178,10 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
       "bot-started-speaking",
       "bot-output",
       "bot-output",
-      "bot-stopped-speaking",
-      "user-mute-stopped"
+      "bot-stopped-speaking"
     ])
+
+    refute Enum.any?(types, &String.starts_with?(&1, "user-mute-"))
 
     new_outputs =
       for %{
@@ -249,6 +251,23 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
       messages
     else
       do_await_type(client, channel, type, deadline, messages)
+    end
+  end
+
+  defp await_type_count(client, channel, type, count, timeout_ms, messages) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_type_count(client, channel, type, count, deadline, messages)
+  end
+
+  defp do_await_type_count(client, channel, type, count, deadline, messages) do
+    occurrences = Enum.count(messages, &(&1["type"] == type))
+
+    if occurrences >= count do
+      messages
+    else
+      remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+      message = await_rtvi(client, channel, remaining)
+      do_await_type_count(client, channel, type, count, deadline, messages ++ [message])
     end
   end
 

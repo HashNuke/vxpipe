@@ -123,17 +123,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         {:ex_webrtc, peer_connection, {:rtp, track_id, _rid, %Packet{} = packet}},
         %{peer_connection: peer_connection} = state
       ) do
-    if TurnState.input_enabled?(state.rtvi_turn_state) do
-      state = ensure_track_codecs(track_id, state)
-      codec = state.audio_tracks |> Map.get(track_id, %{}) |> Map.get(packet.payload_type)
+    state = ensure_track_codecs(track_id, state)
+    codec = state.audio_tracks |> Map.get(track_id, %{}) |> Map.get(packet.payload_type)
 
-      case forward_audio(codec, track_id, packet, state) do
-        :ok -> {:noreply, state}
-        :drop -> {:noreply, state}
-        :unavailable -> {:stop, :shutdown, state}
-      end
-    else
-      {:noreply, state}
+    case forward_audio(codec, track_id, packet, state) do
+      :ok -> {:noreply, state}
+      :drop -> {:noreply, state}
+      :unavailable -> {:stop, :shutdown, state}
     end
   end
 
@@ -280,10 +276,6 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   defp send_turn_action({:interruption_context, event}, state) do
     send_encoded(Codec.encode_interruption_context(event), state)
-  end
-
-  defp send_turn_action({:user_mute, status, event_id}, state) do
-    send_encoded(Codec.encode_user_mute(event_id, status), state)
   end
 
   defp send_encoded(encoded, state) do

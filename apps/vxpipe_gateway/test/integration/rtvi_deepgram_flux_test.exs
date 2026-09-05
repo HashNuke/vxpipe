@@ -184,12 +184,13 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
       "user-transcription",
       "user-stopped-speaking",
       "bot-output",
-      "user-mute-started",
       "bot-started-speaking",
       "bot-output",
       "bot-output",
       "bot-stopped-speaking"
     ])
+
+    refute Enum.any?(message_types, &String.starts_with?(&1, "user-mute-"))
 
     final_transcription =
       messages

@@ -11,20 +11,17 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
 
   alias Vxpipe.Gateway.RTVI.TurnState
 
-  test "keeps unaligned spoken output pending until playback completes" do
+  test "keeps unaligned spoken output pending without muting participant input" do
     output = text_output("turn-1")
     speech_started = agent_speech_started("turn-1")
     turn_completed = agent_turn_completed("turn-1")
 
     state = TurnState.new()
-    assert TurnState.input_enabled?(state)
 
-    assert {state, [{:event, ^output}, {:user_mute, :started, "evt_output"}]} =
+    assert {state, [{:event, ^output}]} =
              TurnState.project(state, output)
 
-    refute TurnState.input_enabled?(state)
-
-    assert {state,
+    assert {^state,
             [
               {:event, ^speech_started},
               {:spoken_progress, ^output, "evt_speech", :in_progress}
@@ -32,23 +29,20 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
 
     progress = agent_speech_progressed("turn-1", 600, 1_000)
 
-    assert {state, []} = TurnState.project(state, progress)
+    assert {^state, []} = TurnState.project(state, progress)
 
-    assert {state,
+    assert {_state,
             [
               {:spoken_progress, ^output, "evt_completed", :completed},
-              {:event, ^turn_completed},
-              {:user_mute, :stopped, "evt_completed"}
+              {:event, ^turn_completed}
             ]} = TurnState.project(state, turn_completed)
-
-    assert TurnState.input_enabled?(state)
   end
 
-  test "keeps input suppressed until every queued spoken turn completes" do
+  test "sequences every queued spoken turn without server mute actions" do
     first = text_output("turn-1")
     second = %{text_output("turn-2") | id: "evt_output_2", sequence: 2}
 
-    assert {state, [{:event, ^first}, {:user_mute, :started, "evt_output"}]} =
+    assert {state, [{:event, ^first}]} =
              TurnState.project(TurnState.new(), first)
 
     assert {state, []} = TurnState.project(state, second)
@@ -60,40 +54,31 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
               {:event, ^second}
             ]} = TurnState.project(state, agent_turn_completed("turn-1"))
 
-    refute TurnState.input_enabled?(state)
-
-    assert {state,
+    assert {_state,
             [
               {:spoken_progress, ^second, "evt_completed", :completed},
-              {:event, _},
-              {:user_mute, :stopped, "evt_completed"}
+              {:event, _}
             ]} = TurnState.project(state, agent_turn_completed("turn-2"))
-
-    assert TurnState.input_enabled?(state)
   end
 
-  test "does not suppress input for text-only output" do
+  test "projects text-only output directly" do
     output = %{text_output("turn-1") | will_be_spoken: false}
 
-    assert {state, [{:event, ^output}]} = TurnState.project(TurnState.new(), output)
-    assert TurnState.input_enabled?(state)
+    assert {_state, [{:event, ^output}]} = TurnState.project(TurnState.new(), output)
   end
 
   test "interrupts active output without claiming its remaining text was spoken" do
     output = text_output("turn-1")
     interruption = agent_turn_interrupted("turn-1")
 
-    assert {state, [{:event, ^output}, {:user_mute, :started, "evt_output"}]} =
+    assert {state, [{:event, ^output}]} =
              TurnState.project(TurnState.new(), output)
 
     assert {state,
             [
               {:event, ^interruption},
-              {:interruption_context, ^interruption},
-              {:user_mute, :stopped, "evt_interrupted"}
+              {:interruption_context, ^interruption}
             ]} = TurnState.project(state, interruption)
-
-    assert TurnState.input_enabled?(state)
 
     refute Enum.any?(
              elem(TurnState.project(state, interruption), 1),

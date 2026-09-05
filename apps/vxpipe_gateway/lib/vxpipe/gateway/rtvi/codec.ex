@@ -175,13 +175,6 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
      })}
   end
 
-  @spec encode_user_mute(String.t(), :started | :stopped) :: {:ok, binary()}
-  def encode_user_mute(event_id, status)
-      when is_binary(event_id) and status in [:started, :stopped] do
-    type = "user-mute-#{status}"
-    {:ok, encode_empty_event(event_id <> "-" <> type, type)}
-  end
-
   @spec encode_error_response(String.t(), String.t()) :: binary()
   def encode_error_response(id, message) when is_binary(id) and is_binary(message) do
     error_response(id, message)

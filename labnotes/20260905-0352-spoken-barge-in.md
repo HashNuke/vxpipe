@@ -98,3 +98,26 @@ remains the semantic source for speech start and end.
   idle speech start emits no false interruption. The focused file passes two
   tests; the call-engine suite passes 49 tests with one tagged integration test
   excluded.
+- 2026-09-05: Changed the gateway turn-state expectations before implementation.
+  Three tests failed because spoken output still produced `user-mute-started`
+  and completion or interruption still produced `user-mute-stopped`. Added a
+  real local WebRTC test with fake provider transports; it timed out waiting for
+  STT audio and captured the mute message, confirming RTP was discarded while
+  the output turn was active.
+- 2026-09-05: Removed the output-dependent RTP gate and synthetic server mute
+  actions. `TurnState` continues to serialize spoken output projection, while
+  the WebRTC connection now forwards every valid inbound audio packet through
+  its bounded media ingress regardless of output state. Removed the unused mute
+  encoder rather than retaining a misleading control path.
+- 2026-09-05: Updated the externally tagged audio tests to reject server mute
+  messages. The queued-TTS test now correctly uses non-immediate text and waits
+  for both output completions instead of using the removed mute-stop message as
+  a completion sentinel. The focused turn-state and WebRTC tests pass six tests;
+  the gateway default suite passes 35 tests with three externally tagged tests
+  excluded.
+- 2026-09-05: Extended the local WebRTC test through the complete control path.
+  After proving RTP reaches the fake STT transport during active output, the test
+  injects provider start and end signals and observes standard interruption,
+  attributed custom context, user speech/transcription boundaries, and the
+  replacement spoken `bot-output` on the data channel. This keeps the default
+  suite deterministic while covering the adapter-to-engine-to-adapter slice.

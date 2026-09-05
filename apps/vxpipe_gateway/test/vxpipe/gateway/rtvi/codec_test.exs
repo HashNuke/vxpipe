@@ -183,23 +183,6 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
            } = JSON.decode!(completed)
   end
 
-  test "projects server-side input mute boundaries" do
-    assert {:ok, started} = Codec.encode_user_mute("evt_output", :started)
-    assert {:ok, stopped} = Codec.encode_user_mute("evt_completed", :stopped)
-
-    assert %{
-             "id" => "evt_output-user-mute-started",
-             "type" => "user-mute-started",
-             "data" => nil
-           } = JSON.decode!(started)
-
-    assert %{
-             "id" => "evt_completed-user-mute-stopped",
-             "type" => "user-mute-stopped",
-             "data" => nil
-           } = JSON.decode!(stopped)
-  end
-
   test "projects a failed model turn as a correlated retryable response" do
     event = %AgentTurnFailed{
       id: "evt_failed",

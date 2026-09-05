@@ -19,7 +19,6 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
            | AgentTurnInterrupted.t()}
           | {:interruption_context, AgentTurnInterrupted.t()}
           | {:spoken_progress, TextOutput.t(), String.t(), progress()}
-          | {:user_mute, :started | :stopped, String.t()}
 
   @type progress :: :in_progress | :completed
 
@@ -30,9 +29,6 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
 
   @spec new() :: t()
   def new, do: %__MODULE__{}
-
-  @spec input_enabled?(t()) :: boolean()
-  def input_enabled?(%__MODULE__{active_spoken_output: output}), do: output == nil
 
   @spec project(
           t(),
@@ -51,7 +47,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
     case state.active_spoken_output do
       nil ->
         state = %{state | active_spoken_output: event}
-        {state, [{:event, event}, {:user_mute, :started, event.id}]}
+        {state, [{:event, event}]}
 
       %TextOutput{} ->
         pending = :queue.in(event, state.pending_spoken_outputs)
@@ -95,8 +91,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
         {state,
          [
            {:event, event},
-           {:interruption_context, event},
-           {:user_mute, :stopped, event.id}
+           {:interruption_context, event}
          ]}
 
       pending_turn?(state, event.correlation_id) ->
@@ -125,7 +120,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
 
       {:empty, pending} ->
         state = %{state | active_spoken_output: nil, pending_spoken_outputs: pending}
-        {state, actions ++ [{:user_mute, :stopped, event.id}]}
+        {state, actions}
     end
   end
 
