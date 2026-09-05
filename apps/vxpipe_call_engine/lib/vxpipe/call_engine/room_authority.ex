@@ -25,7 +25,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     Id,
     RoomCapabilitySupervisor,
     RoomParticipantSupervisor,
-    TextToSpeechRequest
+    TextToSpeechRequest,
+    TurnInterrupter
   }
 
   alias Vxpipe.CallEngine.Room.Snapshot
@@ -530,8 +531,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp begin_audio_turn(signal, connection_id, connection, state) do
     if connection.speech_to_text.turn == nil and is_binary(signal.text) do
-      occurred_at = DateTime.utc_now(:millisecond)
-
       turn = %{
         command_id: Id.generate(:command),
         id: Id.generate(:turn),
@@ -539,35 +538,52 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         provider_turn_index: signal.provider_turn_index
       }
 
-      started = %ParticipantTurnStarted{
-        id: Id.generate(:event),
-        sequence: state.next_sequence,
-        tenant_id: state.snapshot.tenant_id,
-        room_id: state.snapshot.room_id,
-        incarnation_id: state.snapshot.incarnation_id,
-        participant_id: connection.participant_id,
-        connection_id: connection_id,
-        command_id: turn.command_id,
-        correlation_id: turn.id,
-        modality: :audio,
-        occurred_at: occurred_at
-      }
+      case interrupt_active_turns(audio_turn_interrupter(turn, connection_id, connection), state) do
+        {:ok, state} ->
+          occurred_at = DateTime.utc_now(:millisecond)
 
-      send(connection.pid, {:vxpipe_event, started})
+          started = %ParticipantTurnStarted{
+            id: Id.generate(:event),
+            sequence: state.next_sequence,
+            tenant_id: state.snapshot.tenant_id,
+            room_id: state.snapshot.room_id,
+            incarnation_id: state.snapshot.incarnation_id,
+            participant_id: connection.participant_id,
+            connection_id: connection_id,
+            command_id: turn.command_id,
+            correlation_id: turn.id,
+            modality: :audio,
+            occurred_at: occurred_at
+          }
 
-      state =
-        state
-        |> put_connection_turn(connection_id, turn)
-        |> Map.update!(:next_sequence, &(&1 + 1))
+          send(connection.pid, {:vxpipe_event, started})
 
-      if signal.text == "" do
-        state
-      else
-        emit_participant_transcription(connection_id, turn, signal.text, false, state)
+          state =
+            state
+            |> put_connection_turn(connection_id, turn)
+            |> Map.update!(:next_sequence, &(&1 + 1))
+
+          if signal.text == "" do
+            state
+          else
+            emit_participant_transcription(connection_id, turn, signal.text, false, state)
+          end
+
+        {:error, _reason} ->
+          state
       end
     else
       state
     end
+  end
+
+  defp audio_turn_interrupter(turn, connection_id, connection) do
+    %TurnInterrupter{
+      participant_id: connection.participant_id,
+      connection_id: connection_id,
+      command_id: turn.command_id,
+      correlation_id: turn.id
+    }
   end
 
   defp update_audio_transcription(signal, connection_id, state) do
@@ -666,7 +682,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           connection_id: connection_id,
           correlation_id: turn.id,
           content: content,
-          run_immediately: true,
+          run_immediately: false,
           audio_response: true,
           deadline: DateTime.add(DateTime.utc_now(), 5, :second)
         )
@@ -947,11 +963,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp interrupt_active_turns(%SendText{run_immediately: false}, state), do: {:ok, state}
 
-  defp interrupt_active_turns(%SendText{}, %{agent_turns: agent_turns} = state)
+  defp interrupt_active_turns(%SendText{} = command, state) do
+    interrupter = %TurnInterrupter{
+      participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id
+    }
+
+    interrupt_active_turns(interrupter, state)
+  end
+
+  defp interrupt_active_turns(%TurnInterrupter{}, %{agent_turns: agent_turns} = state)
        when map_size(agent_turns) == 0,
        do: {:ok, state}
 
-  defp interrupt_active_turns(%SendText{} = interrupter, state) do
+  defp interrupt_active_turns(%TurnInterrupter{} = interrupter, state) do
     turns = state.agent_turns |> Map.values() |> Enum.sort_by(& &1.order, :desc)
     turn_ids = Enum.map(turns, &turn_key(&1.command))
 
@@ -1007,7 +1034,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         correlation_id: command.correlation_id,
         interrupted_by_participant_id: interrupter.participant_id,
         interrupted_by_connection_id: interrupter.connection_id,
-        interruption_command_id: interrupter.id,
+        interruption_command_id: interrupter.command_id,
         interruption_correlation_id: interrupter.correlation_id,
         played_ms: played_ms,
         occurred_at: DateTime.utc_now(:millisecond)

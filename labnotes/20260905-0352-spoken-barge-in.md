@@ -83,3 +83,18 @@ remains the semantic source for speech start and end.
   cancellation path. Confirmed the slice can reuse existing media, STT, model,
   TTS, and egress components; its new engine boundary is early interruption on
   authenticated provider turn start.
+- 2026-09-05: Added a room-level spoken barge-in test before implementation. It
+  failed at the expected boundary: `StartOfTurn` emitted participant start and
+  transcription events but produced no audio-egress or synthesis interruption.
+- 2026-09-05: Added an internal `TurnInterrupter` value so typed commands and
+  provider speech starts share cancellation without treating an incomplete
+  spoken turn as text input. The room now allocates the audio turn identity,
+  cancels older work, emits the attributed interruption, and only then emits the
+  participant turn start. The generated command submitted at `EndOfTurn` is
+  non-immediate because interruption was already evaluated at speech start.
+- 2026-09-05: The new tests prove active speech is canceled before turn commit,
+  the interruption and later transcript share the generated command and
+  correlation IDs, replacement speech waits for the old provider boundary, and
+  idle speech start emits no false interruption. The focused file passes two
+  tests; the call-engine suite passes 49 tests with one tagged integration test
+  excluded.

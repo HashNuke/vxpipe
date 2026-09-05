@@ -1,6 +1,6 @@
 defmodule Vxpipe.CallEngine.Event.AgentTurnInterrupted do
   @moduledoc """
-  Records one agent turn canceled by an authenticated participant command.
+  Records one agent turn canceled by authenticated participant input.
   """
 
   @schema_version 1
