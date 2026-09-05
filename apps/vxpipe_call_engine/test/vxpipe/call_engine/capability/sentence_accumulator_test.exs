@@ -17,4 +17,15 @@ defmodule Vxpipe.CallEngine.Capability.SentenceAccumulatorTest do
     assert {:error, :invalid_response} = SentenceAccumulator.push(accumulator, <<255>>)
     assert {:error, :invalid_response} = SentenceAccumulator.push(accumulator, "12345")
   end
+
+  test "flushes a provider-round tail while retaining complete response text" do
+    assert {:ok, accumulator, []} =
+             SentenceAccumulator.new(100) |> SentenceAccumulator.push("Let me check.")
+
+    assert {:ok, accumulator, ["Let me check."]} = SentenceAccumulator.flush(accumulator)
+    assert {:ok, accumulator, []} = SentenceAccumulator.push(accumulator, "It is noon.")
+
+    assert {:ok, ["It is noon."], "Let me check. It is noon."} =
+             SentenceAccumulator.finish(accumulator)
+  end
 end

@@ -886,6 +886,38 @@ Provider-driven spoken barge-in is implemented by the later checkpoint below.
 The detailed decision and verification evidence are in
 [`model-inference-turn.md`](model-inference-turn.md).
 
+### Implemented model tool-invocation slice
+
+The next slice closes the first model/action/model loop without moving tool
+execution into RTVI or a provider adapter:
+
+1. Trusted call-engine configuration supplies modules implementing the neutral
+   tool behavior. Each exposes a name, description, JSON parameter schema, and
+   callback. The browser cannot submit executable modules or tool schemas.
+2. The model capability gives neutral definitions to its provider adapter. A
+   response may contain final text or normalized tool calls; both streaming and
+   buffered providers use the same classification.
+3. Calls execute sequentially inside the original supervised model request task.
+   Results must be JSON-compatible and byte-bounded, and the complete loop has a
+   configured maximum number of rounds plus the original turn timeout.
+4. Tool results return to the provider as neutral assistant-call and tool-result
+   messages. Provider-specific continuation metadata remains opaque adapter state
+   and never enters public events.
+5. Room authority publishes sequenced tool start, completion, failure, and
+   cancellation events attributed to the agent, originating participant,
+   connection, command, and correlation. Immediate typed or spoken interruption
+   kills tool work and settles active calls before the turn interruption.
+6. The RTVI gateway maps this lifecycle to
+   `llm-function-call-in-progress` and `llm-function-call-stopped`. Other client
+   protocols may project the same engine events differently.
+7. Development enables an argument-free `get_current_time` tool returning UTC,
+   allowing the unmodified samples console to demonstrate the entire loop.
+
+The first tool runs within the model request task. Separate per-tool supervision,
+parallel calls, approval gates, durable results, idempotency, and external action
+providers remain later checkpoints. Detailed decisions and verification evidence
+are in [`model-tool-invocation.md`](model-tool-invocation.md).
+
 ### Implemented typed turn-interruption slice
 
 The next slice makes RTVI `send-text` urgency observable across the complete

@@ -124,6 +124,21 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
     {:reply, {:error, :cancelled}, state}
   end
 
+  def handle_call(
+        {:stream_round_complete, request_id},
+        _from,
+        %{current: %{request_id: request_id}} = state
+      ) do
+    {:ok, accumulator, segments} = SentenceAccumulator.flush(state.current.accumulator)
+    Enum.each(segments, &emit_segment(state, &1))
+    current = %{state.current | accumulator: accumulator}
+    {:reply, :ok, %{state | current: current}}
+  end
+
+  def handle_call({:stream_round_complete, _request_id}, _from, state) do
+    {:reply, {:error, :cancelled}, state}
+  end
+
   @impl true
   def handle_info({reference, result}, %{current: %{task: %{ref: reference}}} = state)
       when is_reference(reference) do
@@ -358,7 +373,8 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
 
     case result do
       {mode, {:tool_calls, calls}} when round < maximum_tool_rounds ->
-        with {:ok, continuation} <-
+        with :ok <- complete_provider_round(mode, capability, request_id),
+             {:ok, continuation} <-
                execute_tool_calls(owner, capability, command, calls, tool_executor, tool_context) do
           assistant = %Message{role: :assistant, content: "", tool_calls: calls}
 
@@ -385,6 +401,12 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
       final ->
         final
     end
+  end
+
+  defp complete_provider_round(:buffered, _capability, _request_id), do: :ok
+
+  defp complete_provider_round(:streamed, capability, request_id) do
+    GenServer.call(capability, {:stream_round_complete, request_id}, @call_timeout)
   end
 
   defp provider_request(

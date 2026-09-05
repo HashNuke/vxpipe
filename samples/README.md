@@ -19,10 +19,27 @@ authenticated by the browser.
 
 The Pipecat **Connect** control sends its offer to the returned endpoint along
 with the request data from the session response. The current gateway completes
-WebRTC and RTVI readiness. Once connected, typing `hello` in the conversation
-input runs through the engine's deterministic capability and displays
-`Echo: hello` as an unspoken assistant response. The gateway does not yet route
-microphone audio to the agent or return synthesized audio.
+WebRTC and RTVI readiness. Typed input and committed microphone speech run
+through the room's Gemini model capability; final model text is displayed and
+spoken through the configured Deepgram path.
+
+## Manual tool-call test
+
+1. Put valid `GEMINI_API_KEY` and `DEEPGRAM_API_KEY` values in the repository-root
+   `.env` file.
+2. From the repository root, run `bin/dev`.
+3. Open `https://<this-machine's-tailscale-fqdn>:5173/`, choose **Create room**,
+   and then choose **Connect** in the Pipecat console.
+4. Type or say: `Use the get_current_time tool and tell me the current UTC time.`
+5. In the console event log, verify an `llm-function-call-in-progress` event for
+   `get_current_time`, followed by an `llm-function-call-stopped` event whose
+   `cancelled` value is `false`.
+6. Verify that the assistant then displays and speaks a UTC time as one normal
+   assistant turn.
+
+The development system prompt requires the model to call this tool for current
+date or time questions, so a guessed answer without the two function-call events
+is a failed test.
 
 From the repository root:
 

@@ -37,6 +37,35 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
     assert_receive {:vxpipe_capability_text_complete, ^capability, ^command}
   end
 
+  test "continues a streaming provider after executing its tool call" do
+    capability =
+      start_capability(
+        provider_config: %{observer: self(), streaming: true},
+        tools: [CurrentTime]
+      )
+
+    command = command("streaming-tool-turn", "what time is it?")
+    call = %Call{id: "tool-call-stream", name: "get_current_time", arguments: %{}}
+
+    assert :ok = ModelInference.respond(capability, command)
+    assert_receive {:test_stream_model_inference_request, request, _messages, [_definition]}
+    emit_chunk(request, "Let me check.")
+    send(request, {:test_model_inference_reply, {:tool_calls, [call]}})
+    assert_receive {:vxpipe_capability_text, ^capability, ^command, "Let me check."}
+    assert_receive {:vxpipe_capability_tool_started, ^capability, ^command, ^call}
+    assert_receive {:vxpipe_capability_tool_completed, ^capability, ^command, ^call, _result}
+
+    assert_receive {:test_stream_model_inference_request, continuation, messages, [_definition]}
+    assert Enum.at(messages, -1).role == :tool
+    emit_chunk(continuation, "The current time is noon UTC.")
+    send(continuation, {:test_model_inference_reply, :ok})
+
+    assert_receive {:vxpipe_capability_text, ^capability, ^command,
+                    "The current time is noon UTC."}
+
+    assert_receive {:vxpipe_capability_text_complete, ^capability, ^command}
+  end
+
   test "emits complete sentences before a streaming response completes" do
     capability = start_capability(provider_config: %{observer: self(), streaming: true})
     command = command("streamed", "tell me something")

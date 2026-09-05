@@ -116,5 +116,11 @@ spoken outputs are announced and played in order. Without provider word
 timestamps, spoken text stays pending until paced playout completes rather than
 using a character estimate. The implemented
 `/healthz` route verifies the gateway listener.
+
+The development agent also exposes the engine-owned `get_current_time` tool.
+Asking for the current UTC time exercises a model/tool/model loop inside the
+original supervised turn and produces standard RTVI function-call lifecycle
+events before the streamed spoken answer. Exact browser verification steps are
+in [`samples/README.md`](samples/README.md#manual-tool-call-test).
 Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
 offer endpoint.

@@ -34,6 +34,17 @@ defmodule Vxpipe.CallEngine.Capability.SentenceAccumulator do
 
   def push(%__MODULE__{}, _chunk), do: {:error, :invalid_response}
 
+  @spec flush(t()) :: {:ok, t(), [String.t()]}
+  def flush(%__MODULE__{} = accumulator) do
+    case String.trim(accumulator.buffer) do
+      "" ->
+        {:ok, %{accumulator | buffer: ""}, []}
+
+      tail ->
+        {:ok, %{accumulator | buffer: "", segments: accumulator.segments ++ [tail]}, [tail]}
+    end
+  end
+
   @spec finish(t()) :: {:ok, [String.t()], String.t()} | {:error, :invalid_response}
   def finish(%__MODULE__{} = accumulator) do
     tail = String.trim(accumulator.buffer)

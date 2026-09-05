@@ -88,12 +88,12 @@ implementation is green:
    `llm-function-call-stopped` event with `cancelled: false`.
 5. Verify the assistant then displays and speaks a UTC time. The answer must come
    after the stopped event and remain one assistant turn.
-6. Start the request again and immediately type another message with normal
-   immediate-send behavior. Verify the tool/agent turn is interrupted, no stale
-   answer arrives, and the replacement turn responds normally.
 
-The exact event payloads and interruption behavior remain provisional until the
-corresponding tests and live run are complete.
+Automated integration coverage uses a blocking test tool to verify interruption:
+the execution task terminates, the tool is reported cancelled before the owning
+turn, no stale completion is accepted, and a replacement turn succeeds. The UTC
+tool is intentionally fast, so reproducing that timing race manually is not part
+of the simple browser test.
 
 ## Progress
 
@@ -123,3 +123,13 @@ corresponding tests and live run are complete.
   The neutral call value now retains that metadata as an opaque adapter field;
   ReqLLM restores it on the assistant continuation message, while room events
   expose only the validated call ID, name, and arguments.
+- A streaming model may emit a short preamble before ending a provider round
+  with a tool call. The sentence accumulator now flushes that round's remaining
+  text before tool execution, preventing it from being concatenated with the
+  post-tool answer. Focused regression tests cover the round boundary and the
+  streamed tool continuation.
+- Final verification passed: formatting, compilation with warnings as errors,
+  unused dependency checking, 66 call-engine tests, 37 gateway tests, 2 samples
+  tests, and the samples production build. Network integration tests remain in
+  their explicitly excluded lanes. Vite reported its existing advisory for a
+  generated chunk larger than 500 kB; it did not fail the build.
