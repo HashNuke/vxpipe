@@ -49,6 +49,9 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
       maximum_context_turns: Keyword.fetch!(options, :maximum_context_turns),
       maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
       maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
+      tools: Keyword.get(options, :tools, []),
+      maximum_tool_result_bytes: Keyword.get(options, :maximum_tool_result_bytes, 16_384),
+      maximum_tool_rounds: Keyword.get(options, :maximum_tool_rounds, 2),
       request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
       task_supervisor: Vxpipe.CallEngine.ModelInferenceTaskSupervisor
     ]

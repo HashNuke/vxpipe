@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLMTest do
   alias ReqLLM.Context
   alias Vxpipe.CallEngine.Provider.ModelInference.Message
   alias Vxpipe.CallEngine.Provider.ReqLLM, as: ReqLLMProvider
+  alias Vxpipe.CallEngine.Tool.{Call, CurrentTime}
 
   test "resolves the configured model and translates the neutral request" do
     assert {:ok, config} =
@@ -72,6 +73,38 @@ defmodule Vxpipe.CallEngine.Provider.ReqLLMTest do
                model: "google:gemini-3.5-flash-lite",
                generation_options: [api_key: "override"]
              )
+  end
+
+  test "translates engine tool definitions and continuation messages" do
+    assert {:ok, config} =
+             ReqLLMProvider.new(
+               api_key: "runtime-secret",
+               model: "google:gemini-3.5-flash-lite"
+             )
+
+    call = %Call{id: "tool-1", name: "get_current_time", arguments: %{}}
+
+    messages = [
+      %Message{role: :user, content: "What time is it?"},
+      %Message{role: :assistant, content: "", tool_calls: [call]},
+      %Message{
+        role: :tool,
+        content: ~s({"timezone":"UTC"}),
+        name: "get_current_time",
+        tool_call_id: "tool-1"
+      }
+    ]
+
+    definition = CurrentTime.definition()
+    {_model, context, options} = ReqLLMProvider.prepare_request(config, messages, [definition])
+
+    assert [%ReqLLM.Tool{name: "get_current_time"}] = Keyword.fetch!(options, :tools)
+    req_messages = Context.to_list(context)
+    assert Enum.at(req_messages, -2).role == :assistant
+    assert [tool_call] = Enum.at(req_messages, -2).tool_calls
+    assert tool_call.id == "tool-1"
+    assert Enum.at(req_messages, -1).role == :tool
+    assert Enum.at(req_messages, -1).tool_call_id == "tool-1"
   end
 
   defp message_text(message) do

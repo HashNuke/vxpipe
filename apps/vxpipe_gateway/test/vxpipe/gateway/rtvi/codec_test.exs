@@ -8,7 +8,10 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
     AgentTurnFailed,
     AgentTurnInterrupted,
     ParticipantTranscription,
-    TextOutput
+    TextOutput,
+    ToolCallCancelled,
+    ToolCallCompleted,
+    ToolCallStarted
   }
 
   test "answers a current RTVI 2.x client-ready message with bot-ready" do
@@ -367,6 +370,66 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
                run_immediately: true,
                audio_response: true
              }}} = Codec.handle(payload)
+  end
+
+  test "projects tool execution through the RTVI function-call lifecycle" do
+    fields = %{
+      id: "evt-tool-started",
+      sequence: 3,
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-agent",
+      source_participant_id: "part-human",
+      connection_id: "conn-demo",
+      command_id: "cmd-text",
+      correlation_id: "turn-tool",
+      tool_call_id: "tool-1",
+      name: "get_current_time",
+      occurred_at: ~U[2026-09-05 11:00:00.000Z]
+    }
+
+    started = struct!(ToolCallStarted, Map.put(fields, :arguments, %{}))
+    assert {:ok, encoded} = Codec.encode_event(started)
+
+    assert %{
+             "type" => "llm-function-call-in-progress",
+             "data" => %{
+               "tool_call_id" => "tool-1",
+               "function_name" => "get_current_time",
+               "arguments" => %{}
+             }
+           } = JSON.decode!(encoded)
+
+    completed =
+      fields
+      |> Map.put(:id, "evt-tool-completed")
+      |> Map.put(:result, %{"timezone" => "UTC"})
+      |> then(&struct!(ToolCallCompleted, &1))
+
+    assert {:ok, encoded} = Codec.encode_event(completed)
+
+    assert %{
+             "type" => "llm-function-call-stopped",
+             "data" => %{
+               "tool_call_id" => "tool-1",
+               "function_name" => "get_current_time",
+               "cancelled" => false,
+               "result" => %{"timezone" => "UTC"}
+             }
+           } = JSON.decode!(encoded)
+
+    cancelled =
+      fields
+      |> Map.put(:id, "evt-tool-cancelled")
+      |> then(&struct!(ToolCallCancelled, &1))
+
+    assert {:ok, encoded} = Codec.encode_event(cancelled)
+
+    assert %{
+             "type" => "llm-function-call-stopped",
+             "data" => %{"tool_call_id" => "tool-1", "cancelled" => true}
+           } = JSON.decode!(encoded)
   end
 
   test "ignores Small WebRTC signalling and keepalive messages" do

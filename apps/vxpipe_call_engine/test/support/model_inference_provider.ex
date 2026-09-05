@@ -13,8 +13,8 @@ defmodule Vxpipe.CallEngine.TestModelInferenceProvider do
     end
   end
 
-  def generate(%{observer: observer}, messages) do
-    send(observer, {:test_model_inference_request, self(), messages})
+  def generate(%{observer: observer}, messages, definitions) do
+    notify_request(observer, :test_model_inference_request, messages, definitions)
 
     receive do
       {:test_model_inference_reply, result} -> result
@@ -23,9 +23,17 @@ defmodule Vxpipe.CallEngine.TestModelInferenceProvider do
 
   def streaming?(config), do: Map.get(config, :streaming, false)
 
-  def stream(%{observer: observer}, messages, emit) do
-    send(observer, {:test_stream_model_inference_request, self(), messages})
+  def stream(%{observer: observer}, messages, definitions, emit) do
+    notify_request(observer, :test_stream_model_inference_request, messages, definitions)
     stream_loop(emit)
+  end
+
+  defp notify_request(observer, tag, messages, []) do
+    send(observer, {tag, self(), messages})
+  end
+
+  defp notify_request(observer, tag, messages, definitions) do
+    send(observer, {tag, self(), messages, definitions})
   end
 
   defp stream_loop(emit) do

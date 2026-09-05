@@ -19,7 +19,11 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
-    TextOutput
+    TextOutput,
+    ToolCallCancelled,
+    ToolCallCompleted,
+    ToolCallFailed,
+    ToolCallStarted
   }
 
   alias Vxpipe.Gateway.RTVI.Codec
@@ -220,6 +224,20 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         {:vxpipe_event, %AgentTurnFailed{connection_id: connection_id} = event},
         %{connection_id: connection_id} = state
       ) do
+    send_event(event, state)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_event, event},
+        %{connection_id: connection_id} = state
+      )
+      when event.__struct__ in [
+             ToolCallStarted,
+             ToolCallCompleted,
+             ToolCallFailed,
+             ToolCallCancelled
+           ] and event.connection_id == connection_id do
     send_event(event, state)
     {:noreply, state}
   end

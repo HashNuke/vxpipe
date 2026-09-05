@@ -17,11 +17,15 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     system_prompt: """
     You are a concise, helpful voice assistant. Respond naturally in plain text.
     Keep replies brief unless the user asks for detail. Do not use Markdown because
-    your response will be spoken aloud.
+    your response will be spoken aloud. Always use get_current_time when asked for
+    the current date or time; never guess it.
     """,
     maximum_context_turns: 8,
     maximum_pending_requests: 4,
     maximum_output_bytes: 65_536,
+    tools: [Vxpipe.CallEngine.Tool.CurrentTime],
+    maximum_tool_result_bytes: 16_384,
+    maximum_tool_rounds: 2,
     request_timeout_ms: 30_000
   ],
   speech_to_text: [

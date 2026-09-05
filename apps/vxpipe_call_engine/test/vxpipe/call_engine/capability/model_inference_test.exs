@@ -5,6 +5,37 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Provider.ModelInference.Message
   alias Vxpipe.CallEngine.TestModelInferenceProvider
+  alias Vxpipe.CallEngine.Tool.Call
+  alias Vxpipe.CallEngine.Tool.CurrentTime
+
+  test "executes a provider tool call and continues the same model turn" do
+    capability = start_capability(tools: [CurrentTime])
+    command = command("tool-turn", "what time is it?")
+    call = %Call{id: "tool-call-1", name: "get_current_time", arguments: %{}}
+
+    assert :ok = ModelInference.respond(capability, command)
+    assert_receive {:test_model_inference_request, first_request, _messages, definitions}
+    assert Enum.map(definitions, & &1.name) == ["get_current_time"]
+    send(first_request, {:test_model_inference_reply, {:tool_calls, [call]}})
+
+    assert_receive {:vxpipe_capability_tool_started, ^capability, ^command, ^call}
+
+    assert_receive {:vxpipe_capability_tool_completed, ^capability, ^command, ^call, result}
+    assert result["timezone"] == "UTC"
+
+    assert_receive {:test_model_inference_request, second_request, messages, _definitions}
+    assert %Message{role: :assistant, tool_calls: [^call]} = Enum.at(messages, -2)
+
+    assert %Message{
+             role: :tool,
+             tool_call_id: "tool-call-1",
+             name: "get_current_time"
+           } = Enum.at(messages, -1)
+
+    send(second_request, {:test_model_inference_reply, {:ok, "It is noon UTC."}})
+    assert_receive {:vxpipe_capability_text, ^capability, ^command, "It is noon UTC."}
+    assert_receive {:vxpipe_capability_text_complete, ^capability, ^command}
+  end
 
   test "emits complete sentences before a streaming response completes" do
     capability = start_capability(provider_config: %{observer: self(), streaming: true})
@@ -221,6 +252,9 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
           maximum_pending_requests: 2,
           maximum_output_bytes: 65_536,
           request_timeout_ms: 1_000,
+          tools: [],
+          maximum_tool_result_bytes: 4_096,
+          maximum_tool_rounds: 2,
           task_supervisor: task_supervisor
         ],
         overrides

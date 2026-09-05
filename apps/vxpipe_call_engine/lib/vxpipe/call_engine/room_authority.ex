@@ -15,7 +15,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
-    TextOutput
+    TextOutput,
+    ToolCallCancelled,
+    ToolCallCompleted,
+    ToolCallFailed,
+    ToolCallStarted
   }
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -182,6 +186,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({:vxpipe_capability_text_complete, capability, command}, state) do
     state = complete_text_generation(capability, command, state)
     {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_capability_tool_started, capability, command, call}, state) do
+    {:noreply, emit_tool_call_started(capability, command, call, state)}
+  end
+
+  def handle_info(
+        {:vxpipe_capability_tool_completed, capability, command, call, result},
+        state
+      ) do
+    {:noreply, emit_tool_call_completed(capability, command, call, result, state)}
+  end
+
+  def handle_info({:vxpipe_capability_tool_failed, capability, command, call, reason}, state) do
+    {:noreply, emit_tool_call_failed(capability, command, call, reason, state)}
   end
 
   def handle_info({:vxpipe_capability_failed, capability, command, reason}, state) do
@@ -890,6 +909,84 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  defp emit_tool_call_started(capability, command, call, state) do
+    if authorized_tool_event?(capability, command, state) do
+      connection = Map.fetch!(state.connections, command.connection_id)
+
+      event =
+        struct!(
+          ToolCallStarted,
+          Map.merge(tool_event_fields(command, call, state), %{arguments: call.arguments})
+        )
+
+      send(connection.pid, {:vxpipe_event, event})
+
+      state
+      |> Map.update!(:next_sequence, &(&1 + 1))
+      |> update_agent_turn(command, fn turn ->
+        %{turn | active_tool_calls: Map.put(turn.active_tool_calls, call.id, call)}
+      end)
+    else
+      state
+    end
+  end
+
+  defp emit_tool_call_completed(capability, command, call, result, state) do
+    emit_tool_call_stopped(capability, command, call, state, fn fields ->
+      struct!(ToolCallCompleted, Map.put(fields, :result, result))
+    end)
+  end
+
+  defp emit_tool_call_failed(capability, command, call, reason, state) do
+    emit_tool_call_stopped(capability, command, call, state, fn fields ->
+      struct!(ToolCallFailed, Map.put(fields, :reason, reason))
+    end)
+  end
+
+  defp emit_tool_call_stopped(capability, command, call, state, build_event) do
+    turn = Map.get(state.agent_turns, turn_key(command))
+
+    if authorized_tool_event?(capability, command, state) and turn != nil and
+         Map.has_key?(turn.active_tool_calls, call.id) do
+      connection = Map.fetch!(state.connections, command.connection_id)
+      send(connection.pid, {:vxpipe_event, build_event.(tool_event_fields(command, call, state))})
+
+      state
+      |> Map.update!(:next_sequence, &(&1 + 1))
+      |> update_agent_turn(command, fn turn ->
+        %{turn | active_tool_calls: Map.delete(turn.active_tool_calls, call.id)}
+      end)
+    else
+      state
+    end
+  end
+
+  defp authorized_tool_event?(capability, command, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    active_agent_turn?(command, state) and state.text_capability != nil and
+      state.text_capability.pid == capability and connection != nil and
+      connection.participant_id == command.participant_id
+  end
+
+  defp tool_event_fields(command, call, state) do
+    %{
+      id: Id.generate(:event),
+      sequence: state.next_sequence,
+      tenant_id: state.snapshot.tenant_id,
+      room_id: state.snapshot.room_id,
+      incarnation_id: state.snapshot.incarnation_id,
+      participant_id: state.text_capability.participant_id,
+      source_participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id,
+      tool_call_id: call.id,
+      name: call.name,
+      occurred_at: DateTime.utc_now(:millisecond)
+    }
+  end
+
   defp handle_text_to_speech_playback(capability, request, status, state) do
     connection = Map.get(state.connections, request.connection_id)
 
@@ -1030,6 +1127,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
       state =
         Enum.reduce(turns, state, fn turn, state ->
+          state = emit_tool_call_cancellations(turn, state)
+
           emit_agent_turn_interrupted(
             turn.command,
             interrupter,
@@ -1084,8 +1183,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  defp emit_tool_call_cancellations(turn, state) do
+    connection = Map.get(state.connections, turn.command.connection_id)
+
+    if connection != nil and connection.participant_id == turn.command.participant_id do
+      turn.active_tool_calls
+      |> Map.values()
+      |> Enum.sort_by(& &1.id)
+      |> Enum.reduce(state, fn call, state ->
+        event = struct!(ToolCallCancelled, tool_event_fields(turn.command, call, state))
+        send(connection.pid, {:vxpipe_event, event})
+        %{state | next_sequence: state.next_sequence + 1}
+      end)
+    else
+      state
+    end
+  end
+
   defp put_agent_turn(state, command) do
     turn = %{
+      active_tool_calls: %{},
       command: command,
       generation_complete?: false,
       order: state.next_sequence,

@@ -9,7 +9,11 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
     ParticipantTranscription,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
-    TextOutput
+    TextOutput,
+    ToolCallCancelled,
+    ToolCallCompleted,
+    ToolCallFailed,
+    ToolCallStarted
   }
 
   @label "rtvi-ai"
@@ -106,6 +110,36 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
   @spec encode_event(ParticipantTurnCompleted.t()) :: {:ok, binary()}
   def encode_event(%ParticipantTurnCompleted{} = event) do
     {:ok, encode_empty_event(event.id, "user-stopped-speaking")}
+  end
+
+  @spec encode_event(ToolCallStarted.t()) :: {:ok, binary()}
+  def encode_event(%ToolCallStarted{} = event) do
+    {:ok,
+     JSON.encode!(%{
+       "id" => event.id,
+       "label" => @label,
+       "type" => "llm-function-call-in-progress",
+       "data" => %{
+         "tool_call_id" => event.tool_call_id,
+         "function_name" => event.name,
+         "arguments" => event.arguments
+       }
+     })}
+  end
+
+  @spec encode_event(ToolCallCompleted.t()) :: {:ok, binary()}
+  def encode_event(%ToolCallCompleted{} = event) do
+    {:ok, encode_tool_call_stopped(event, false, event.result)}
+  end
+
+  @spec encode_event(ToolCallFailed.t()) :: {:ok, binary()}
+  def encode_event(%ToolCallFailed{} = event) do
+    {:ok, encode_tool_call_stopped(event, false, %{"error" => Atom.to_string(event.reason)})}
+  end
+
+  @spec encode_event(ToolCallCancelled.t()) :: {:ok, binary()}
+  def encode_event(%ToolCallCancelled{} = event) do
+    {:ok, encode_tool_call_stopped(event, true, nil)}
   end
 
   @spec encode_interruption_context(AgentTurnInterrupted.t()) :: {:ok, binary()}
@@ -278,6 +312,23 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
       "label" => @label,
       "type" => type,
       "data" => nil
+    })
+  end
+
+  defp encode_tool_call_stopped(event, cancelled, result) do
+    data = %{
+      "tool_call_id" => event.tool_call_id,
+      "function_name" => event.name,
+      "cancelled" => cancelled
+    }
+
+    data = if result == nil, do: data, else: Map.put(data, "result", result)
+
+    JSON.encode!(%{
+      "id" => event.id,
+      "label" => @label,
+      "type" => "llm-function-call-stopped",
+      "data" => data
     })
   end
 

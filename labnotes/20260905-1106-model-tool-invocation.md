@@ -104,3 +104,17 @@ corresponding tests and live run are complete.
   registry/executor, and the argument-free UTC clock tool. Executor output must be
   JSON-compatible and size-bounded. Focused tests cover successful execution,
   unknown names, invalid arguments, and duplicate configuration.
+- Extended the neutral model provider contract with tool definitions, calls, and
+  assistant/tool continuation messages. Model inference now performs at most the
+  configured number of tool rounds inside the original supervised request task,
+  returns failures to the model as tool results, and retains the existing final
+  answer history contract.
+- ReqLLM now translates tool schemas and continuation messages and classifies both
+  streamed and buffered responses into final answers or engine tool calls.
+- Added sequenced room events for tool start, success, failure, and cancellation.
+  Active call IDs live with their agent turn; interruption cancels the supervised
+  task and publishes tool cancellation before the turn-interrupted event.
+- The gateway projects the lifecycle as RTVI 2.1
+  `llm-function-call-in-progress` and `llm-function-call-stopped` events.
+- Focused and application suites pass: 64 call-engine tests and 37 gateway tests,
+  with existing network integration lanes excluded.
