@@ -22,13 +22,15 @@ runtime behavior.
 - Start with typed data and a small set of runtime primitives.
 - Do not allow a public definition to select arbitrary modules, functions, PIDs,
   or atoms.
-- Keep reusable definitions secret-free. Permit a call invocation to carry
-  one-call credential material, but resolve it immediately into a private
-  credential lease and keep its value absent from resolved-plan equality,
+- Keep definitions and invocations secret-free. Resolve credentials from a
+  tenant-scoped store with an application-wide fallback into a private
+  credential lease, and keep the value absent from resolved-plan equality,
   public snapshots, events, errors, and logs.
-- Make remote MCP sources, tool bindings, and per-agent tool grants part of the
-  call definition. Application configuration may provide integration profiles
-  and authentication defaults, but it must not silently add tools to a call.
+- Keep remote MCP integrations application-wide or tenant-scoped so endpoints,
+  credentials, discovery, health, and limits are reusable across calls. Keep
+  call-local tool references and per-agent grants in the call definition so a
+  shared integration does not automatically expose every operation to every
+  agent.
 - Keep model decisions separate from authoritative room mutations.
 - Defer an embedded scripting language until declarative primitives prove
   insufficient.
@@ -279,26 +281,30 @@ contract.
 Vxpipe should distinguish:
 
 ```text
-Application integration configuration
+Application integration catalog
+  + Tenant integration catalog
   + Call definition revision
-  + Call invocation and one-call credentials
+  + Call invocation
         -> definition resolver/compiler
         -> immutable resolved call plan + private credential leases
         -> running interaction / room incarnation
         -> events, artifacts, and result
 ```
 
-- Application configuration owns registered provider/integration profiles,
-  default authentication, server behavior, and deployment defaults.
+- Application configuration owns shared provider/integration instances,
+  credentials, server behavior, and deployment defaults.
+- Tenant configuration owns tenant-specific integration instances and
+  credentials. The authenticated call principal supplies the tenant ID; a
+  definition or invocation cannot select another tenant.
 - A call definition owns portable conversational composition and policy,
-  including the remote MCP sources available to the call, stable tool bindings,
-  and the tools granted to each agent.
+  including stable references to tools from available integrations and the tools
+  granted to each agent. It does not own MCP endpoints or credentials.
 - A call invocation owns caller/destination identity, entrypoint, definition
-  selection, permitted runtime variables, idempotency, and optional one-call
-  authentication overrides for sources declared by that definition.
+  selection, permitted runtime variables, and idempotency. It carries no MCP
+  authentication.
 - A resolved call plan pins all references, defaults, adapter capabilities,
-  discovered tool schemas, policy versions, and credential-lease references
-  without retaining secret values.
+  selected integration/catalog revisions, discovered tool schemas, policy
+  versions, and credential-lease references without retaining secret values.
 - A running room owns mutable state. Editing a definition cannot mutate an
   existing room.
 
@@ -319,12 +325,11 @@ CallDefinition.Node
 CallDefinition.Edge
 CallDefinition.Context
 CallDefinition.Policy
-CallDefinition.ToolSource
-CallDefinition.ToolBinding
+CallDefinition.ToolReference
 CallInvocation
-CallInvocation.Authentication
 ResolvedCallPlan
 ResolvedCallPlan.ToolBinding
+ResolvedCallPlan.CredentialBinding
 ```
 
 The constructors accept ordinary Elixir data and return path-specific typed
@@ -347,7 +352,7 @@ The first version should contain only:
 - named `nodes` using only `agent` and `end` kinds initially;
 - typed `edges` keyed by source-node outcome;
 - a typed `context` field schema and initial defaults that are safe to persist;
-- named remote MCP tool sources and stable tool bindings available to this call;
+- stable tool references into the application/tenant integration catalog;
 - shared call policies for turns, interruption, limits, failure, and ending;
   and
 - artifact/event policy references.
@@ -388,119 +393,69 @@ engine-owned route tools granted only during that node activation. The room
 checks that the source activation is still current, the target exists and is
 ready, and transition budgets are not exhausted.
 
-### Per-call remote MCP sources and tools
+### Application/tenant MCP integrations and call tool grants
 
-Remote MCP support sharpens the distinction between definition, invocation, and
-application configuration:
+Remote MCP integrations are reusable infrastructure, not call-definition data:
 
-- The **call definition** declares which remote MCP sources exist for this call,
-  which remote tools are bound to stable call-local names, and which agents may
-  expose those names to their models.
-- The **call invocation** may provide authentication for a declared source. That
-  credential exists only for this running call and overrides the corresponding
-  application default as one atomic authentication value.
-- **Application configuration** may register deployment-owned MCP profiles with
-  endpoints and default authentication. It never grants a tool merely because a
-  server or credential is configured.
+- **Application configuration** may register an application-wide MCP integration
+  containing its stable ID, HTTPS endpoint, authentication, tool policy,
+  discovery/cache policy, timeouts, and concurrency limits.
+- **Tenant configuration** may register an integration with the same shape for
+  one tenant. Tenant integrations are isolated by the authenticated tenant ID and
+  are the normal home for tenant-owned Google Docs, Zapier, or similar access.
+- The **call definition** only references tools from integrations visible to its
+  tenant and narrows which agent may expose each tool to its model.
+- The **call invocation** carries neither MCP configuration nor credentials.
 
-Use three explicit layers rather than treating an MCP server's discovered tool
-list as an agent grant:
+This creates three distinct authorization layers:
 
 ```text
-tool source:  where tools come from
-tool binding: stable call-local name -> source + remote tool name
-agent grant:  which call-local tool names one agent may expose to its model
+application or authenticated-tenant integration catalog
+  -> call-definition tool references
+  -> per-agent tool grants
 ```
 
-A source has a stable definition-local ID and uses exactly one of these forms:
+The effective model tool surface is their intersection. Configuring a remote MCP
+integration does not automatically put all of its tools into every model prompt.
+For example, one agent may receive a document-search tool while another call
+using the same tenant integration receives no document tools or only a read-only
+subset.
 
-1. a registered application profile, where the host owns the endpoint and may
-   provide default authentication; or
-2. an inline HTTPS Streamable HTTP endpoint, where the invocation supplies any
-   required authentication.
-
-For example, the inline form is distinct from a registered profile:
-
-```json
-{
-  "type": "remote_mcp",
-  "endpoint": {
-    "transport": "streamable_http",
-    "url": "https://tools.example.test/mcp"
-  },
-  "authentication": "required"
-}
-```
-
-An application credential must never be selected solely by a caller-controlled
-source ID. Otherwise a definition could reuse a trusted ID, substitute an
-attacker-controlled URL, and receive the default credential. A registered
-profile binds its default authentication to its application-owned endpoint. An
-inline endpoint cannot inherit profile authentication unless it resolves through
-that profile and passes the profile's endpoint constraints.
-
-The initial tool-binding form should be explicit:
-
-```json
-{
-  "tool_sources": {
-    "utilities": {
-      "type": "remote_mcp",
-      "profile": "utilities-production"
-    }
-  },
-  "tools": {
-    "current_time": {
-      "source": "utilities",
-      "remote_name": "get_current_time"
-    }
-  }
-}
-```
-
-The model sees `current_time`, not an endpoint, credential, profile name, or
-unfiltered remote catalog. Different sources can therefore expose the same
-remote name without collision, and a remote server may add unrelated tools
-without changing the call's granted surface.
-
-The resolver performs bounded `tools/list` discovery before starting the room,
-verifies every declared remote binding, validates its input/output schemas, and
-pins the normalized definitions in the resolved plan. The first version should
-fail call creation when a required source or declared tool cannot be resolved;
-degraded optional sources can be designed later. Remote definitions and
-annotations are untrusted data even when the endpoint is configured.
-
-Application configuration and invocation authentication have narrow precedence:
+Tenant integration lookup takes precedence as one whole integration record:
 
 ```text
-invocation authentication for the declared source
-  > registered profile's default authentication
-  > explicit unauthenticated access
-  > resolution error when authentication is required
+tenant integration for (authenticated tenant_id, integration_id)
+  > application-wide integration for integration_id
+  > resolution error
 ```
 
-Omission means inherit. An explicit `none` means do not use the configured
-default. Authentication objects replace one another whole; their headers,
-tokens, and options are never deep-merged. Per-call overrides do not change the
-endpoint, transport, tool bindings, grants, timeouts, or application environment.
-Those require their own typed definition or invocation fields if a concrete use
-case later needs them.
+Endpoint, authentication, policies, and limits are not deep-merged across those
+scopes. Atomic replacement prevents a tenant credential from being combined
+accidentally with an unrelated application endpoint or policy. The tenant ID
+comes from the authenticated principal; neither the definition nor invocation
+may override it.
 
-Conceptually, the OTP application default is a closed profile registry:
+Conceptually, application configuration can provide a shared integration:
 
 ```elixir
-config :vxpipe_call_engine, :remote_mcp_profiles, %{
-  "utilities-production" => [
+config :vxpipe_call_engine, :remote_mcp_integrations, %{
+  "utilities" => [
     url: "https://tools.example.test/mcp",
-    authentication: [type: :bearer, token: {:system, "UTILITIES_MCP_TOKEN"}]
+    authentication: [type: :bearer, token: {:system, "UTILITIES_MCP_TOKEN"}],
+    allowed_tools: ["get_current_time"]
   ]
 }
 ```
 
-An embedding application may supply the token directly in its application
-settings; a release may resolve the system reference in `runtime.exs`; and the
-container JSON adapter may decode the same closed authentication shape. All
-three paths normalize before call resolution and have the same precedence.
+An embedded host can provide tenant integrations through an engine-owned
+resolver backed by its database or vault. A standalone/container deployment can
+use a bounded tenant-integration map from application configuration. In both
+cases the lookup is equivalent to:
+
+```text
+resolve_integration(authenticated_tenant_id, integration_id)
+  -> tenant integration, application integration, or not configured
+```
 
 Start with closed authentication variants `none`, `bearer`, and validated custom
 headers. A supplied OAuth access token is a bearer credential; performing an
@@ -508,26 +463,49 @@ interactive OAuth flow is a separate control-plane feature. Custom headers must
 not override protocol routing, content-length, host, or other transport-owned
 headers.
 
-At resolution, literal invocation credentials move into a call-scoped private
-credential lease. The resolved plan and room state retain only an opaque lease
-reference and non-secret provenance such as `invocation_override` or
-`application_default`. The lease must redact process status/crash formatting and
-expire with the room incarnation. Tool execution retrieves the value only at the
-remote MCP adapter boundary.
+The integration owner also owns bounded `tools/list` discovery, schema
+validation, catalog TTL/refresh, health, concurrency, and circuit state. These
+can be reused by calls sharing the same application integration or tenant
+integration rather than repeated for every call. Catalog and connection state
+must never cross tenant/integration/credential boundaries.
 
-The effective call configuration is resolved once. A running call does not read
-changing application environment or mutate `Application` configuration. New
-defaults affect only later calls.
+The call definition binds a stable call-local tool name to a catalog entry:
 
-Here, **per-call** means every invocation receives its own resolved catalog,
-bindings, grants, and credential leases. It does not require callers to duplicate
-an inline definition: several calls may select the same immutable definition
-revision while resolving it independently with different invocation credentials.
+```json
+{
+  "tools": {
+    "current_time": {
+      "integration": "utilities",
+      "remote_name": "get_current_time"
+    }
+  }
+}
+```
+
+The model sees `current_time`, not an endpoint, credential, or unfiltered remote
+catalog. At call resolution, the compiler verifies each reference against the
+current integration catalog and pins the normalized definition plus catalog
+revision in the resolved plan. The first version fails call creation when a
+required integration or tool cannot be resolved; optional/degraded tools can be
+designed later.
+
+The selected credential moves into a call-scoped private credential lease. The
+resolved plan and room state retain only an opaque lease reference and non-secret
+scope such as `tenant_integration` or `application_integration`. The lease must
+redact process status/crash formatting and expire with the room incarnation.
+Remote definitions, annotations, and results remain untrusted even when the
+integration is configured.
+
+The effective call plan is resolved once. A running call pins the selected
+integration and catalog revision rather than changing tool definitions midway
+through a turn. Credential revocation may invalidate its lease and make later
+tool calls fail, but must not silently switch the call to another tenant or
+application credential.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
 level engine command and should eventually receive only a resolved-plan identity
-or typed plan, never decoded call JSON or literal credentials.
+or typed plan, never decoded call JSON or credentials.
 
 ### Initial handoff context policies
 
@@ -549,11 +527,11 @@ Avoid arbitrary deep-merge overrides. `CallInvocation` may provide only fields
 declared as invocation inputs by the definition. Provider selection, tool grants,
 guardrails, and routing must not be silently replaced by caller-supplied maps.
 
-Authentication is a distinct typed invocation input rather than a behavioral
-deep merge. An invocation may replace the default authentication for a remote
-MCP source already declared by the definition, but it cannot use credentials to
-introduce another source or grant another tool. The entire authentication object
-is replaced so credentials from different scopes cannot be combined accidentally.
+MCP integration selection and authentication are not invocation overrides. They
+resolve from the authenticated tenant's integration catalog with an
+application-wide fallback. Differences that need reuse across calls belong in a
+tenant integration or a separate call-definition revision, not an arbitrary
+per-call patch.
 
 If future applications need controlled variation, add explicit typed override
 slots with their own validation and public visibility rather than generic JSON
@@ -561,11 +539,9 @@ patches.
 
 ### Transport and telephony boundary
 
-The definition may declare requirements, remote MCP sources, and transfer
-targets, but it should not contain live socket identifiers, carrier call IDs,
-literal credentials, or provider webhook state. A single API payload may contain
-both a definition and an invocation; the credential values still belong to the
-invocation envelope rather than the reusable definition within it.
+The definition may declare integration tool references, requirements, and
+transfer targets, but it should not contain MCP endpoints, live socket
+identifiers, carrier call IDs, literal credentials, or provider webhook state.
 
 For the first version, one call maps to one room with multiple participants and
 connections. Agent handoff changes conversational control inside that room.
@@ -588,19 +564,13 @@ This is a discussion aid, not a committed schema:
       "issue_kind": {"type": "string", "visibility": ["triage", "billing"]}
     }
   },
-  "tool_sources": {
-    "records": {
-      "type": "remote_mcp",
-      "profile": "records-production"
-    }
-  },
   "tools": {
     "lookup_customer": {
-      "source": "records",
+      "integration": "records",
       "remote_name": "lookup_customer"
     },
     "lookup_invoice": {
-      "source": "records",
+      "integration": "records",
       "remote_name": "lookup_invoice"
     }
   },
@@ -653,8 +623,8 @@ This is a discussion aid, not a committed schema:
 }
 ```
 
-The corresponding invocation may override the application profile's
-authentication without changing the call definition:
+The corresponding invocation contains only call-specific identity and declared
+inputs:
 
 ```json
 {
@@ -662,20 +632,9 @@ authentication without changing the call definition:
   "room_id": "room-123",
   "inputs": {
     "customer_id": "customer-456"
-  },
-  "authentication": {
-    "records": {
-      "type": "bearer",
-      "token": "one-call-access-token"
-    }
   }
 }
 ```
-
-The gateway must redact the authentication object as soon as it crosses the
-trusted request boundary. It is shown here only to make the input shape and
-override scope explicit; the value must never appear in returned JSON or
-diagnostics.
 
 Provider/profile strings are closed registry names resolved by the host. They do
 not name Elixir modules. Instructions may later be replaced by immutable prompt
@@ -728,23 +687,29 @@ over declared context fields (`eq`, `in`, `exists`, `all`, `any`, `not`) rather
 than conditions attached to generic edges or strings evaluated at runtime. This
 remains serializable, validatable, and testable.
 
-### Put provider credentials directly in each call definition
+### Put MCP endpoints or credentials directly in each call definition
 
-Rejected. Remote MCP sources and tool bindings are call behavior and therefore
-belong in the definition, either through an inline endpoint or an application
-profile reference. Literal credentials do not: embedding them makes reusable
-definitions, revisions, inspection, and logging unsafe. Authentication belongs
-in the invocation or the referenced application profile, with invocation
-authentication taking precedence atomically. The compiler pins an opaque
-credential lease rather than its value.
+Rejected. Remote MCP integration configuration is reusable infrastructure, not
+call behavior. The definition contains only stable integration/tool references.
+Literal endpoints and credentials do not belong there: embedding them makes
+reusable definitions, revisions, inspection, and logging unsafe. Authentication
+belongs to an application-wide or tenant-scoped integration. The compiler pins
+an opaque credential lease rather than its value.
+
+### Configure remote MCP integrations per invocation
+
+Rejected for the initial contract. Endpoints, credentials, discovery caches,
+health, limits, and policies are reusable at application or tenant scope.
+Per-invocation integration maps would repeat work, increase secret traffic, and
+make authorization harder to audit. A separate call-definition revision can
+narrow tool use for a particular call shape without rebuilding the integration.
 
 ### Let application MCP configuration automatically expose tools
 
-Rejected. Application configuration may make an integration and default
-credential available, but the call definition remains the authority for the
-source, tool binding, and per-agent grant. This keeps one call from inheriting
-tools merely because another call or deployment happens to use the same MCP
-server.
+Rejected. Application or tenant configuration may make an integration and tool
+catalog available, but the call definition remains the authority for call-local
+tool references and per-agent grants. This keeps one call from inheriting tools
+merely because another call or tenant happens to use the same MCP server.
 
 ## Validation requirements
 
@@ -755,13 +720,15 @@ Compilation should reject, with path-specific errors:
 - duplicate or invalid names;
 - missing edge endpoints or an edge referencing an undeclared outcome;
 - more than one edge for the same source-node outcome;
-- tool or profile references not present in closed registries;
+- tool or integration references not present in closed registries;
 - an agent grant referencing an undeclared call-local tool;
-- a tool binding referencing an unknown source or unresolved remote tool;
-- an inline MCP source attempting to inherit authentication from an unrelated
-  application profile;
-- invocation authentication for a source not declared by the selected
-  definition;
+- a tool reference naming an integration unavailable to the authenticated
+  tenant and absent from the application catalog;
+- a remote tool absent from the selected integration catalog or excluded by its
+  integration-level policy;
+- any attempt by a definition or invocation to select another tenant or supply
+  an endpoint or credential;
+- tenant integration state escaping its tenant boundary;
 - forbidden or malformed custom authentication headers;
 - context fields with unsupported types or invalid visibility grants;
 - invocation defaults for undeclared fields;
@@ -798,14 +765,15 @@ turn, and activation identity.
 ## Suggested red-green checkpoints
 
 1. **Definition and invocation data:** red tests for a minimal one-agent
-   definition, remote MCP profile/inline sources, explicit tool bindings,
-   per-agent grants, and invocation authentication limited to declared sources.
-   Implement immutable structs and pure path-specific validation only.
-2. **Resolution and authentication precedence:** use fake application profiles
-   and a fake remote catalog to prove invocation authentication atomically
-   replaces an application default, explicit `none` disables it, inline URLs
-   cannot steal profile credentials, and missing requirements reject the call.
-   Produce a secret-free `ResolvedCallPlan` plus private credential leases.
+   definition, stable integration/tool references, per-agent grants, and a
+   credential-free invocation. Implement immutable structs and pure
+   path-specific validation only.
+2. **Integration resolution:** use fake application and tenant integration
+   catalogs to prove tenant lookup is derived from the authenticated principal,
+   a tenant integration atomically replaces the application-wide integration,
+   unavailable or disallowed tools reject the call, and no state crosses tenant
+   boundaries. Produce a secret-free `ResolvedCallPlan` plus private credential
+   leases.
 3. **Graph data contract:** test the entry node, `agent`/`end` nodes, declared
    outcomes, edge resolution, missing targets, duplicate routes, cycles, and
    path-specific errors.
@@ -816,10 +784,11 @@ turn, and activation identity.
    the same text/audio turn behavior as the current preset path and that only
    its explicitly granted tool bindings reach model inference.
 6. **JSON and gateway boundary:** round-trip definition/invocation data, reject
-   unknown keys and dynamic atom creation, and prove credentials are absent from
-   responses, errors, snapshots, and inspection output.
+   unknown keys, dynamic atom creation, endpoints, credentials, and tenant
+   overrides, and prove private integration data is absent from responses,
+   errors, snapshots, and inspection output.
 7. **Remote MCP execution:** behind the engine-owned tool backend, resolve one
-   HTTPS MCP source, call one declared tool, preserve the existing room/RTVI
+   HTTPS MCP integration, call one declared tool, preserve the existing room/RTVI
    lifecycle, and prove interruption cancels the remote request. Do not add
    stdio or an MCP server endpoint.
 8. **Agent-to-agent edge:** use two deterministic agent nodes to prove only the
@@ -835,16 +804,18 @@ turn, and activation identity.
 ## Decision for the next checkpoint
 
 Proceed first with typed `CallDefinition`, `CallInvocation`, and
-`ResolvedCallPlan` contracts. Remote MCP sources, explicit tool bindings, and
-per-agent grants are definition data. Literal one-call authentication is
-invocation data and atomically overrides a registered application's default for
-the same resolved source. Application configuration makes profiles available;
-it does not add tools to a call.
+`ResolvedCallPlan` contracts. Remote MCP integrations live in application or
+tenant catalogs. Stable references to integration tools and per-agent grants are
+definition data. MCP endpoints and credentials are neither definition nor
+invocation data. A tenant integration atomically takes precedence over an
+application-wide integration with the same stable ID; neither catalog adds tools
+to a call automatically.
 
-The smallest proof is pure resolution using fake profiles and discovery: a
+The smallest proof is pure resolution using fake application/tenant catalogs: a
 single-agent definition becomes a secret-free immutable plan whose tool surface
-is exact and whose credential lease has the correct provenance. Do not begin an
-MCP transport implementation until this boundary exists. Then route a
+is exact, whose integration comes from the authenticated tenant or application
+fallback, and whose credential lease has the correct scope. Do not begin an MCP
+transport implementation until this boundary exists. Then route a
 behavior-preserving single-agent call through the plan before connecting one
 remote HTTPS MCP tool.
 
@@ -868,6 +839,10 @@ workflow interpreter.
 - Confirmed that the current tool executor accepts only a static list of trusted
   Elixir modules. Remote MCP bindings therefore require a backend-neutral tool
   binding, but do not require changing the model/room/RTVI tool lifecycle.
+- Refined integration scope after review: remote MCP endpoint, authentication,
+  discovery, health, and limit configuration is application-wide or
+  tenant-scoped, never invocation-scoped. Call definitions retain only stable
+  tool references and per-agent grants.
 - Reviewed the official MCP `2026-07-28` tool specification, Streamable HTTP
   transport, and generated schema:
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx>
