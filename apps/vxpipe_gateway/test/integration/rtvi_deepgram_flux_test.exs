@@ -218,12 +218,15 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTest do
              %{
                "type" => "bot-output",
                "data" => %{
+                 "text" => text,
                  "spoken_status" => "in-progress",
-                 "spoken_progress" => %{"accumulated_text" => text}
+                 "spoken_progress" => %{
+                   "accumulated_text" => "",
+                   "remaining_text" => remaining_text
+                 }
                }
-             }
-             when text != "" ->
-               true
+             } ->
+               remaining_text == text
 
              _other ->
                false

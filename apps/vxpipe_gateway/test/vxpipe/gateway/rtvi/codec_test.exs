@@ -163,21 +163,6 @@ defmodule Vxpipe.Gateway.RTVI.CodecTest do
              }
            } = JSON.decode!(started)
 
-    assert {:ok, advanced} =
-             Codec.encode_spoken_progress(output, "evt_progress", {:in_progress, 600, 1_000})
-
-    assert %{
-             "id" => "evt_progress-progress",
-             "type" => "bot-output",
-             "data" => %{
-               "spoken_status" => "in-progress",
-               "spoken_progress" => %{
-                 "accumulated_text" => "Echo: ",
-                 "remaining_text" => "hello"
-               }
-             }
-           } = JSON.decode!(advanced)
-
     assert {:ok, completed} =
              Codec.encode_spoken_progress(output, "evt_completed", :completed)
 

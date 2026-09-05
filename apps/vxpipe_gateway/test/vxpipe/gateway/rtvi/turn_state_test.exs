@@ -10,7 +10,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
 
   alias Vxpipe.Gateway.RTVI.TurnState
 
-  test "suppresses input and projects a complete RTVI 2.x spoken-output lifecycle" do
+  test "keeps unaligned spoken output pending until playback completes" do
     output = text_output("turn-1")
     speech_started = agent_speech_started("turn-1")
     turn_completed = agent_turn_completed("turn-1")
@@ -31,10 +31,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnStateTest do
 
     progress = agent_speech_progressed("turn-1", 600, 1_000)
 
-    assert {state,
-            [
-              {:spoken_progress, ^output, "evt_progress", {:in_progress, 600, 1_000}}
-            ]} = TurnState.project(state, progress)
+    assert {state, []} = TurnState.project(state, progress)
 
     assert {state,
             [

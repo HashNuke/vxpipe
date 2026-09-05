@@ -55,8 +55,8 @@ frame at a time.
 The value provides enough elasticity for ordinary TTS responses that arrive in
 a faster-than-real-time burst while keeping memory bounded per connection. It
 also allows the provider to finish many ordinary responses early enough for the
-gateway to know their total packet count and emit useful spoken-progress updates
-during the remaining playout.
+gateway to know their total packet count while the remaining packets continue
+through paced playout.
 
 The exact number is an operational default, not a protocol requirement. A
 smaller value would use less memory and engage backpressure more frequently. A
@@ -74,5 +74,5 @@ for deployments that need a different memory/latency tradeoff.
 The provider-backed WebRTC regression test submits a response whose first turn
 produces more than 100 paced RTP packets, then submits a second text turn after
 the first begins playing. It verifies that both turns complete in order, the
-connection remains usable, and spoken-progress updates advance before the first
-turn completes.
+connection remains usable, and the first response remains pending until its
+paced playback completes.

@@ -201,20 +201,24 @@ defmodule Vxpipe.Gateway.Integration.RTVIDeepgramFluxTextToSpeechTest do
 
     assert Enum.count(messages, &match?(%{"type" => "bot-stopped-speaking"}, &1)) == 2
 
-    assert Enum.any?(messages, fn
-             %{
-               "type" => "bot-output",
-               "data" => %{
-                 "text" => ^first_response,
-                 "spoken_status" => "in-progress",
-                 "spoken_progress" => %{"accumulated_text" => text}
-               }
-             }
-             when text != "" ->
-               true
+    in_progress_outputs =
+      Enum.filter(
+        messages,
+        &match?(%{"type" => "bot-output", "data" => %{"spoken_status" => "in-progress"}}, &1)
+      )
 
-             _other ->
-               false
+    assert length(in_progress_outputs) == 2
+
+    assert Enum.all?(in_progress_outputs, fn %{
+                                               "data" => %{
+                                                 "text" => text,
+                                                 "spoken_progress" => %{
+                                                   "accumulated_text" => "",
+                                                   "remaining_text" => remaining_text
+                                                 }
+                                               }
+                                             } ->
+             remaining_text == text
            end)
 
     packets = drain_output_rtp(client, output_track.id, [])

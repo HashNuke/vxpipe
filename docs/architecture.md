@@ -786,19 +786,22 @@ provider or WebRTC details in the room authority:
    JSON value, or RTVI message.
 6. Provider `SpeechMetadata` means no more synthesis audio. It causes egress to
    zero-pad at most one final incomplete PCM frame. Once the total packet count
-   is known, egress reports elapsed scheduled playout every 100 ms. The room does
-   not emit agent completion until the last paced packet's duration has elapsed.
+   is known, egress reports elapsed scheduled playout every 100 ms for internal
+   transport progress. The room does not emit agent completion until the last
+   paced packet's duration has elapsed.
 7. A spoken `TextOutput` is projected as an RTVI 2.x `bot-output` segment with
    `spoken_status: new`. Sending the first RTP packet produces a
    protocol-neutral `AgentSpeechStarted`; draining the final packet produces
    `AgentTurnCompleted`. The gateway projects those boundaries as
-   `bot-started-speaking` plus `in-progress` output cursors, then a `completed`
-   output cursor followed by `bot-stopped-speaking`. Flux supplies total audio
-   duration but no per-word timing stream, so the RTVI adapter maps the scheduled
-   audio ratio onto whole-word text boundaries. This is best-effort highlighting,
-   not provider alignment. It gives an unmodified RTVI 2.x client one persistent
-   assistant message while making its spoken state follow paced gateway output
-   rather than provider generation. It does not claim a browser output-device
+   `bot-started-speaking` plus an `in-progress` output whose entire text remains
+   pending, then a `completed` output followed by `bot-stopped-speaking`. Flux
+   supplies total audio duration but no per-word timing stream, so the RTVI
+   adapter does not fabricate intermediate word progress from scheduled audio.
+   Progressive highlighting is reserved for a future provider-alignment event;
+   without one, the whole output changes from pending to completed at the paced
+   gateway boundary. This gives an unmodified RTVI 2.x client one persistent
+   assistant message without presenting estimated word positions as observed
+   speech. The completion boundary does not claim a browser output-device
    acknowledgement.
 8. This first audible slice is explicitly half-duplex. From the announcement of
    a spoken output until its paced output completes, the connection discards

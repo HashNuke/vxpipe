@@ -15,8 +15,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
           | {:spoken_progress, TextOutput.t(), String.t(), progress()}
           | {:user_mute, :started | :stopped, String.t()}
 
-  @type progress ::
-          :in_progress | :completed | {:in_progress, pos_integer(), pos_integer()}
+  @type progress :: :in_progress | :completed
 
   @type t :: %__MODULE__{
           active_spoken_output: TextOutput.t() | nil,
@@ -68,19 +67,7 @@ defmodule Vxpipe.Gateway.RTVI.TurnState do
     end
   end
 
-  def project(%__MODULE__{} = state, %AgentSpeechProgressed{} = event) do
-    case state.active_spoken_output do
-      %TextOutput{correlation_id: correlation_id} = output
-      when correlation_id == event.correlation_id ->
-        {state,
-         [
-           {:spoken_progress, output, event.id, {:in_progress, event.played_ms, event.total_ms}}
-         ]}
-
-      _other ->
-        {state, []}
-    end
-  end
+  def project(%__MODULE__{} = state, %AgentSpeechProgressed{}), do: {state, []}
 
   def project(%__MODULE__{} = state, %AgentTurnCompleted{} = event) do
     case state.active_spoken_output do
