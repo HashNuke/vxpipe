@@ -1569,8 +1569,9 @@ artifacts, and derived publication:
 | Pinned definition and resolved plan for a running call | `RoomAuthority` | call row plus non-secret resolved-plan snapshot/digest |
 | Mutable room context | `RoomAuthority` | private section snapshots and/or ordered context updates |
 | Ordered call, turn, tool, transfer, and provider-usage facts | engine events | append-only PostgreSQL ledger plus query projections |
-| Participant audio | supervised recording workers | object storage plus relational artifact metadata |
-| Combined audio and final call-details JSON | post-call jobs | derived versioned objects plus publication status |
+| Live participant and monitor audio | room media mixer | bounded realtime mix and mix-minus streams |
+| Participant tracks and the live full mix | room recording capability | object storage plus relational artifact metadata |
+| Optional repaired/remixed audio and final call-details JSON | post-call jobs | derived versioned objects plus publication status |
 
 The database is the durable system of record for management and the call ledger;
 it is not the live synchronization mechanism for a room. Object storage holds
@@ -1752,36 +1753,86 @@ contracts need equivalent typed usage/finalization signals based on the unit the
 provider actually bills; measured audio duration or characters may be marked as
 estimates when no provider usage is available.
 
-### Record separate participant tracks and derive a mix
+### Mix live; record participant tracks and the live mix
 
-When audio retention is enabled, recording each participant/connection track
-separately is the useful canonical artifact. A combined call recording is a
-derived presentation artifact. Keeping only a live mix loses speaker isolation,
-makes overlapping speech hard to inspect, and prevents a later mix from applying
-better channel or gain policy.
+The room must mix audio in realtime. Participants need audio from the other
+active sources, and an authorized silent monitor needs one full-room stream while
+the call is happening. Waiting until call end cannot satisfy either requirement.
 
-Separate tracks are useful only with a shared timeline. Every segment manifest
-must include call, room/incarnation, participant, connection, track, codec/sample
+Treat live mixing as an engine-owned media pipeline under the room incarnation,
+not as a database, gateway, or post-call concern. A `RoomMixer` receives
+normalized, timestamped audio frames for every admitted audio-producing
+participant. It produces:
+
+- a mix-minus stream for each speaking participant, excluding that participant's
+  own source to avoid feeding their audio back to them;
+- a full-room mix for an authorized monitor that contributes no audio; and
+- optional individual-track subscriptions for an authorized debugger.
+
+The gateway owns only the monitor's external transport and authorization. After
+admission, its output sink subscribes to the appropriate engine mix exactly like
+another participant connection. Monitoring does not read audio back from S3 and
+does not make the gateway the mixer.
+
+The live mixer is a media-pipeline component rather than an external provider
+capability. Recording is a separately enabled room capability. Its coordinator
+lives alongside the call engine's other room capabilities and attaches bounded
+media taps to the mixer inputs and outputs. That capability decides, from the
+resolved call and participant policy, whether to retain individual tracks, the
+full live mix, both, or neither.
+
+The intended room topology is:
+
+```text
+RoomIncarnationSupervisor
+├── RoomAuthority
+├── RoomParticipantSupervisor
+├── RoomCapabilitySupervisor
+│   └── RoomRecording (when enabled)
+└── RoomPipelineSupervisor
+    └── RoomMixer (when the topology requires mixing or monitoring)
+```
+
+`RoomAuthority` authorizes participants, subscriptions, and recording policy,
+but does not process frames. `RoomMixer` owns realtime frame alignment and
+fan-out. `RoomRecording` owns the room-scoped recording lifecycle and media taps.
+Call-scoped `ArtifactWriter` workers are started through the artifact
+application's owning dynamic supervisor; they monitor the recording session and
+finalize or mark uploads incomplete if the room disappears.
+
+The recorder must not perform object-store I/O in `RoomAuthority` or the live
+mixer. It forwards bounded chunks to supervised artifact-writer processes. Those
+workers upload rolling segments or bounded multipart parts to S3-compatible
+object storage and persist artifact progress through the artifact metadata port.
+This is the split between engine ownership and external storage:
+
+```text
+participant/agent audio
+  -> RoomMixer
+       ├── mix-minus -> participant output sinks
+       ├── full mix  -> silent monitor output sink
+       └── media taps -> RoomRecording capability
+                           -> ArtifactWriter -> object storage
+                           -> artifact metadata -> PostgreSQL
+```
+
+Recording the live full mix provides the single call-audio object requested for
+ordinary playback. Recording individual participant/connection tracks at the
+same time preserves speaker isolation and permits later repair, analysis, or a
+different mix. These artifacts share one room clock. Every segment manifest
+includes call, room/incarnation, participant, connection, track, codec/sample
 format, monotonic start offset, sample count or duration, gaps, and terminal
-status. Agent output should be correlated with the utterance and the portion
-accepted by the egress path; generated-but-discarded TTS audio is not silently
-treated as delivered call audio.
+status. Agent output is correlated with the utterance and the portion accepted
+by the egress path; generated-but-discarded TTS audio is not recorded as delivered
+call audio.
 
-Recording workers run outside `RoomAuthority` under a dedicated supervisor. A
-media tap sends them bounded frames after the engine has accepted ingress or
-egress media for the room topology. Workers upload rolling segments or bounded
-multipart parts to S3-compatible object storage and persist artifact progress in
-PostgreSQL. They must not accumulate an entire call in a BEAM heap or block the
-room/media path on object-store latency. Queue overflow and uploader failure have
-explicit policy: normally emit an incomplete-recording event and continue the
-call; a deployment that requires recording may instead fail admission or end the
-call according to its policy.
-
-The post-call mixer consumes finalized track manifests, aligns them on the shared
-timeline, preserves overlap and silence, and writes a versioned combined object.
-It does not guess alignment from object creation timestamps. The first recording
-slice can retain separate tracks only; adding a mix is an independent job once
-the timing manifest is proven.
+Object-store latency never blocks live mixing. Queue overflow and uploader
+failure have explicit policy: normally mark recording incomplete and continue
+the call; a deployment that requires recording may fail admission or end the
+call. A post-call mixer is optional and consumes the timestamped separate tracks
+only to repair or produce another presentation format. It is not the source of
+the participant or monitor audio and is not required to obtain the normal
+combined recording.
 
 Recording remains a separate capability and retention choice. Disabling speech
 recognition or synthesis does not disable recording, and enabling either does not
@@ -1808,8 +1859,8 @@ The versioned call-details JSON can contain:
 - tool and transfer summaries;
 - permitted final context sections or context revision metadata according to
   retention policy; and
-- separate-track, combined-audio, and other artifact references with checksums
-  and completeness state.
+- separate-track, recorded live-mix, optional remixed-audio, and other artifact
+  references with checksums and completeness state.
 
 Publishing is an idempotent outbox-driven job keyed by call ID and archive schema
 version. It runs outside the room process and retries safely. Required artifacts
@@ -1832,6 +1883,8 @@ The target umbrella split is:
 vxpipe_gateway
   -> verifies and normalizes HTTP/provider input
   -> asks the call-admission API to admit or attach a call
+  -> after admission, sends realtime client/transport commands to call_engine
+     and projects subscribed engine events
 
 vxpipe_calls
   -> owns database-neutral call admission and archive application workflows
@@ -1850,9 +1903,87 @@ vxpipe_persistence
   -> implements repository/journal ports defined by vxpipe_calls
 
 vxpipe_artifacts (when the recording slice begins)
-  -> owns object-store adapters, track writers, mix jobs, and archive objects
+  -> owns object-store adapters, track writers, optional offline remix/export
+     jobs, and archive objects
   -> implements artifact/publisher ports without entering the room hot path
 ```
+
+The short responsibility test is:
+
+- `vxpipe_calls` answers **which immutable definition starts this durable call,
+  and what is its admission/publication lifecycle?**
+- `vxpipe_call_engine` answers **what is happening in the live room right now?**
+- `vxpipe_persistence` answers **how are the durable records read and written in
+  PostgreSQL?**
+- `vxpipe_artifacts` answers **how are retained media and exported documents
+  written to object storage?**
+
+`vxpipe_persistence` has one concrete purpose: it is the PostgreSQL adapter for
+durable platform data. It owns the Ecto Repo, migrations, Ecto schemas,
+constraints, transactions, query implementations, idempotent event inserts,
+projections, and outbox rows. It does not own a live call, decide which agent is
+active, mix or record audio, call a provider, authorize an RTVI command, or
+construct the final archive document. Its Ecto schemas are database records, not
+the domain structs passed through the call engine.
+
+`vxpipe_calls` owns the application workflow that needs persistence. It uses
+small repository ports synchronously from an admission task before a room starts:
+
+```text
+Gateway webhook/API handler
+  -> Vxpipe.Calls.admit(request)
+       -> InboundRouteRepository.resolve(route_key)
+       -> CallDefinitionRepository.fetch_revision(revision_id)
+       -> CallEngine compile/resolve functions
+       -> CallRepository.begin_admission(call, idempotency_key)
+       -> CallEngine.create_room(resolved_plan)
+       -> CallRepository.mark_running(call_id, room/incarnation)
+  <- admitted call/session result
+```
+
+In a managed deployment, `vxpipe_persistence` implements those repository ports
+with Ecto. In a standalone JSON-configured deployment, static/in-memory modules
+implement the same ports. The gateway calls `vxpipe_calls`; it does not know
+which implementation resolved the definition. Repository calls are ordinary
+bounded function calls made by the admission workflow, but the workflow never
+keeps a database transaction open while calling the engine or a provider.
+
+`vxpipe_call_engine` does not use the Repo for normal runtime persistence. Once a
+room exists, it owns hot mutable state and emits ordered protocol-neutral events
+to a supervised event dispatcher:
+
+```text
+RoomAuthority commits a state transition
+  -> RoomEventDispatcher accepts the ordered event
+       ├── gateway projection subscribers
+       ├── call-ledger consumer -> CallLedger port -> vxpipe_persistence/Ecto
+       ├── telemetry consumers
+       └── authorized application subscribers
+```
+
+The dispatcher acceptance is a short in-memory operation with explicit queue
+bounds. The call-ledger consumer performs database work in its own process,
+batches when useful, retries idempotently by event ID, and reports lag/failure.
+This keeps Ecto latency out of `RoomAuthority` while still making every committed
+turn, context change, usage observation, transfer, and terminal event available
+for storage.
+
+There are therefore two different meanings of “inline”:
+
+- A room-context tool makes an inline bounded `GenServer.call` to
+  `RoomAuthority`, because the authority must authorize and atomically mutate
+  live state before the tool succeeds.
+- An archival database insert is not made inline by `RoomAuthority`; it follows
+  the ordered event path because delaying every room command on PostgreSQL would
+  couple realtime availability to database latency.
+
+Call admission itself is durably inserted before room creation because it is
+outside the room hot path and needs idempotency for webhook retries. Call events,
+transcript projections, usage, and artifact metadata are normally persisted
+asynchronously. If a future recovery guarantee requires a particular context or
+lifecycle mutation to be journaled before acknowledgement, that command uses an
+explicit durable-journal protocol and pending state rather than adding an Ecto
+query to the authority callback.
 
 `vxpipe_calls` is preferable to a generic `core` application: it has the cohesive
 responsibility of a call's durable-neutral application lifecycle outside the
@@ -1929,9 +2060,12 @@ transaction across room/provider work.
 7. **STT/TTS/telephony usage:** add provider-specific finalization observations
    according to their actual billing units, retaining estimates and reconciled
    values as separate facts.
-8. **Separate-track recording:** add a bounded recorder for one participant
-   track, rolling object upload, timing manifest, artifact row, and explicit
-   incomplete status. Then extend to multiple tracks and a derived mix.
+8. **Live mixing and recording:** add a bounded room mixer with two fake
+   participant inputs, mix-minus outputs, and a full silent-monitor output. Then
+   attach the recording capability to one participant track and the live full
+   mix, proving object-store slowdown cannot block mixer progress. Extend to
+   rolling upload, timing manifests, multiple tracks, artifact rows, and explicit
+   incomplete status.
 9. **Call-details publication:** on a terminal call, enqueue one idempotent job,
    assemble versioned JSON from the persisted projections, include artifact
    checksums/status, upload it, and record publication success. Prove retries do
@@ -2189,9 +2323,16 @@ boundaries described above.
   normalized response usage and best-effort cost for buffered and streaming
   requests, but the adapter currently discards it. STT and TTS provider
   contracts likewise have no normalized usage result.
+- Corrected the audio boundary after review: the current engine has direct
+  participant ingress and agent TTS egress but no multi-source room mixer or
+  monitor subscription. The target adds a live engine-owned mixer with
+  mix-minus participant outputs and a full silent-monitor output. The recording
+  capability taps participant tracks and the live full mix and streams them to
+  external artifact writers; offline remixing is optional only.
 - Split the persistence proposal into definition/routing, call/event/context
-  ledger, provider usage, separate participant audio artifacts, derived mix, and
-  final call-details publication. Selected database-free `vxpipe_calls`
+  ledger, provider usage, live room mixing, recorded live-mix and separate-track
+  artifacts, optional offline remix, and final call-details publication.
+  Selected database-free `vxpipe_calls`
   application workflows, an Ecto-owning `vxpipe_persistence` adapter, and a
   later object-store-owning `vxpipe_artifacts` boundary; the call engine and
   gateway keep direct Repo access out of their responsibilities.
