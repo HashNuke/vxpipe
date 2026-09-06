@@ -288,6 +288,22 @@ capability state such as `ready` or `stopped`, for the participant itself or an
 explicitly authorized wider participant selector. No participant policy can
 weaken another policy. Conflicting requirements reject admission or transfer.
 
+The policy owner and the affected participants are separate dimensions:
+
+- `applies_while: admitted` means the owner contributes the policy while it is
+  authoritatively present in the media topology;
+- `applies_while: active_agent` means an agent participant contributes it only
+  while it owns conversational control; this trigger is invalid for a human
+  participant; and
+- the requirement's `participants` selector chooses the affected runtime
+  participants, initially `self`, `room`, a participant `kind`, or every agent
+  participant instantiated from a named `agent_definition`.
+
+Reusable configuration does not select an arbitrary runtime participant ID. An
+authoritative runtime policy may do so through a separate command if that use
+case is later required. `active` must not mean “currently speaking”; Vxpipe
+does not infer policy activation from voice activity.
+
 This makes a rule such as “while this human service participant is present, no
 participant in the room may use speech recognition or synthesis” a property of
 that participant's trusted destination policy. Every transfer to that
@@ -693,6 +709,7 @@ configuration outside the call definition. For example:
   "id": "support_queue",
   "participant_kind": "human",
   "presence_requirements": {
+    "applies_while": "admitted",
     "capabilities": [
       {
         "participants": {"scope": "room"},
@@ -709,6 +726,13 @@ configuration outside the call definition. For example:
 Resolving this destination copies the validated requirements into the runtime
 participant. The client that eventually attaches to that participant cannot
 add, remove, or weaken them.
+
+Changing the selector to `{"agent_definition": "xyz"}` means the same policy
+owner constrains only agent participants instantiated from agent definition
+`xyz`. If that policy requires speech recognition or synthesis to be stopped
+while `xyz` requires it to be ready for activation, `xyz` cannot become the
+active agent until the constraint is removed. An inactive `xyz` participant can
+remain admitted with those capabilities stopped.
 
 ## Representative JSON shape
 
@@ -942,8 +966,10 @@ Compilation should reject, with path-specific errors:
   application or tenant scope;
 - participant-destination metadata with an unsupported allowed participant kind;
 - a transition with an unknown mode or source disposition;
-- a participant presence requirement with an unknown or unauthorized selector,
-  capability kind, or required state;
+- a participant presence requirement with an unknown activation condition,
+  selector, capability kind, or required state;
+- `active_agent` policy activation owned by a human participant, or an
+  unauthorized room-wide or cross-participant selector;
 - incompatible capability requirements in a proposed participant topology;
 - duplicate tool names within one source agent;
 - tool or integration references not present in closed registries;
@@ -1020,8 +1046,8 @@ room incarnation, participant, turn, and activation identity.
    section revisions, and absence of ungranted sections.
 4. **Agent and transfer-tool data:** test `agent_definition` and
    `participant_destination` selector resolution, missing targets, participant
-   kinds and presence requirements, duplicate names, transfer cycles,
-   unreachable-agent linting, and path-specific errors.
+   kinds, presence-policy activation conditions and subject selectors, duplicate
+   names, transfer cycles, unreachable-agent linting, and path-specific errors.
 5. **Active-agent-participant reducer:** test activation, agent-to-agent and
    agent-to-human participant transfer, `active_agent_participant_id: nil`,
    terminal state, stale activation, and transfer-budget behavior using
@@ -1133,6 +1159,11 @@ workflow interpreter.
   capability intent against the proposed participant set before transfer
   commit, and reconciles back toward that baseline when a restrictive
   participant leaves.
+- Separated a presence policy's owner activation from its affected participant
+  selector. A policy can apply while its owner is admitted or, for an agent,
+  while it is the active agent; it can constrain the room, itself, a participant
+  kind, or instances of a named agent definition. `active` never means voice
+  activity.
 - Added room-owned typed context sections with per-agent `read`/`write` grants.
   Top-level section grants are the initial contract; nested dot-path and wildcard
   permissions are deferred.
