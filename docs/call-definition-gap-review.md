@@ -1,7 +1,7 @@
 # Call-definition gap review
 
 Reviewed: 2026-09-06 UTC
-Status: G1's tool-layout clarification approved; G2–G13 pending user review.
+Status: G1 and G2's web routing approved; remaining G2 questions and G3–G13 pending review.
 Documentation only; no runtime implementation.
 
 ## Conclusion and scope
@@ -90,31 +90,53 @@ supported-field/keyword matrix. Partial illustrations are not complete executabl
 definitions, and the broad representative JSON is not a commitment to implement
 every field in the first slice. No new dated schema release is published here.
 
-### G2 — P1: Admission identity, inputs, and personalization need separate rules
+### G2 — Partly resolved: web routing approved; input and lifecycle questions pending
 
-The invocation example has `transport.type: web` but no explicit mapping to the
-human participant definition. With two human `receive` definitions, guessing
-from `entrypoint` is wrong: entrypoint owns initial conversational control, not
-necessarily the incoming connection. An inbound phone call also cannot supply
-the example's required trusted `customer_id` by itself.
+At baseline, `transport.type: web` did not map an incoming connection to a
+participant definition. `entrypoint` identifies the initial handler, not
+necessarily that connection's human participant.
 
-Proposal: resolve a trusted admission-participant ref through the deployment
-route or an authorized invocation slot. Reject ambiguity. Define initial
-materialization: admit the initiating human, prepare the entrypoint, and activate
-the initial agent only when required media/capabilities are ready. Dialing an
+Approved routing: create tenant-scoped participant connection keys as routing
+metadata, with separate HTTPS operations to start and join:
+
+```http
+POST /api/tenants/{tenant_key}/participants/{participant_key}/calls
+POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/sessions
+```
+
+Use a 16-character cryptographically random URL-safe tenant key, UUID participant
+connection keys, and UUID call IDs, separate from database primary keys. A start
+route selects a deployment/definition and initiating participant. A join route
+must identify the particular tenant and call and resolve the participant using
+that call's pinned definition. It cannot choose a call from a reusable support
+key alone. Authorization precedes issuing the call-specific transport session.
+WebRTC is the first browser transport; routing can also serve a future WebSocket
+adapter. These are generic gateway handlers backed by route records, not code
+or room processes created for every saved definition. See the
+[approved web admission contract][web-admission]. No runtime implementation was
+authorized by this documentation decision.
+
+The following G2 proposals remain open and must be reviewed separately:
+
+**Initial materialization and cardinality:** admit the initiating human, prepare
+the entrypoint, and activate the initial agent only when required
+media/capabilities are ready. Dialing an
 outbound recipient does not mean they have answered. Define a human entrypoint
 explicitly as no initial AI control, rather than assuming every entrypoint has
 model inference. Default each participant definition to one materialized
 instance per call until multi-instance selection is specified.
 
-Keep four namespaces distinct: definition constants, validated invocation
-inputs, trusted ingress metadata, and mutable room context. Provider-asserted
+**Input sources and bindings:** an inbound phone call cannot supply the example's
+required trusted `customer_id` by itself. Keep four namespaces distinct:
+definition constants, validated invocation inputs, trusted ingress metadata,
+and mutable room context. Provider-asserted
 caller number is a routing/contact claim, not verified customer identity. An
 admission resolver can perform a bounded lookup before room creation; otherwise
 leave identity unverified for a tool to establish later.
 
-Provide allowlisted bindings for prompt/first-message personalization, locale,
-IANA timezone, and dynamic dial numbers. Specify when each value is evaluated:
+**Personalization and evaluation time:** provide allowlisted bindings for prompt
+and first-message personalization, locale, IANA timezone, and dynamic dial
+numbers. Specify when each value is evaluated:
 call-start time is pinned; “current time” is a typed clock/tool observation, not
 a permanently frozen prompt variable. Missing required bindings fail early;
 optional values need explicit defaults. No arbitrary templates, code evaluation,
@@ -484,6 +506,7 @@ browser checks are not applicable to this documentation-only checkpoint.
 [json-design]: ../labnotes/20260905-0405-call-definition-design.md#representative-json-shape
 [context-design]: ../labnotes/20260905-0405-call-definition-design.md#working-room-context-schema-candidate
 [context-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
+[web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
 [presence]: ../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology
 [persistence]: ../labnotes/20260905-0405-call-definition-design.md#persistence-call-records-usage-and-artifacts
 [terms]: architecture.md#domain-terminology

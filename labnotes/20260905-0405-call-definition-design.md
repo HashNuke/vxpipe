@@ -17,9 +17,10 @@ This is a research checkpoint. It does not commit a public schema or change
 runtime behavior.
 
 The [design gap review](#design-gap-review--pending-approval) records questions
-and possible solutions. G1's unified agent `tools` map is approved and reflected
-in the candidate below. The remaining suggestions are pending user review;
-approval of the documentation does not authorize runtime implementation.
+and possible solutions. G1's unified agent `tools` map and G2's tenant-scoped web
+admission routing are approved and documented below. G2's input/binding questions
+and the other suggestions remain pending user review. Approval of documentation
+does not authorize runtime implementation.
 
 ## Constraints
 
@@ -656,8 +657,9 @@ receive the provider connection:
 `mode: dial` tells the room to originate a provider leg when it materializes
 the participant. `mode: receive` tells ingress to adopt an incoming provider
 leg as that participant. `admission: start_call` means a matching incoming leg
-may create the call and room; joining a pre-existing room will require a future
-explicit admission mode and an unambiguous room-correlation mechanism. A fixed
+may create the call and room; joining a pre-existing telephony room still needs
+an explicit admission mode and an unambiguous provider-leg correlation mechanism.
+The approved web start/join routes are specified separately below. A fixed
 number can live in the definition. A number that genuinely varies per call may
 instead bind to a declared, validated invocation input.
 
@@ -1087,6 +1089,63 @@ definition `xyz`. If `xyz` requires either capability for activation, it cannot
 become the active agent until the denial is removed. An inactive `xyz`
 participant can remain admitted without those capabilities.
 
+### Web participant admission routes — approved G2 routing
+
+The gateway identifies a web participant through a tenant-scoped connection
+route, not by guessing from `transport.type` or the definition's `entrypoint`.
+Saving a definition can create an opaque connection key and routing record for
+each eligible web participant definition. Publishing/enabling makes the route
+callable; saving a draft must not silently expose it. These are records behind
+generic HTTP handlers, not generated router code or room processes. The route
+keys belong to deployment metadata, not portable call-definition JSON.
+
+The approved HTTPS route shapes are:
+
+```http
+POST /api/tenants/{tenant_key}/participants/{participant_key}/calls
+POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/sessions
+```
+
+- The first route starts a new call as the selected initiating participant. It
+  resolves the tenant and participant connection key to a deployment/definition
+  and participant ref, authorizes admission, and starts the room with a pinned
+  revision. The definition's `entrypoint` remains the initial handler.
+- The second route joins an existing call as the selected participant. It
+  resolves the tenant and call first, then uses that call's pinned definition
+  and participant mapping rather than the latest deployment. A support
+  participant cannot be joined using only a reusable participant key: the URL
+  must also identify the tenant and the particular call.
+- Both return a call-specific session and transport connection parameters.
+  WebRTC is the first browser transport: HTTPS handles admission/signaling,
+  media tracks carry audio, and a data channel carries RTVI messages. A future
+  WebSocket adapter can use the same admission routing and return its own
+  connection parameters. Routing keys are not tied to the media transport.
+
+Public identifiers are separate from database primary keys:
+
+| Identifier | Approved public shape | Meaning |
+| --- | --- | --- |
+| `tenant_key` | 16 URL-safe random characters | Stable external tenant identifier |
+| `participant_key` | UUID | Connection route for a participant definition |
+| `call_id` | UUID | One live or historical call |
+
+Generate a tenant key from 12 cryptographically random bytes encoded as unpadded
+base64url, rather than truncating a UUID; this yields 16 characters and 96 bits of
+randomness. Enforce identifier uniqueness in storage. Do not expose internal
+database row IDs in these URLs. The participant connection key is not the
+runtime participant ID, and the call ID is not a room incarnation ID.
+
+The tenant in the URL selects a routing scope; it is not proof of authorization.
+The gateway validates access to that tenant, call, and participant role before
+issuing a narrowly scoped session. An opaque key does not confer staff privileges
+or permission to join another call. The planned database-neutral Calls admission
+boundary owns route/definition resolution; the gateway does not acquire direct
+Repo responsibility. The room holds the resulting pinned plan for runtime work.
+
+This resolves G2's participant-routing question only. Input sources, permitted
+bindings, personalization, and the other pending G2 semantics are not approved
+by this routing decision. No endpoint or ID generator was implemented here.
+
 ## Representative JSON shape
 
 This is the working input for the first implementation checkpoint. It remains a
@@ -1209,8 +1268,10 @@ candidate until the constructor and compiler tests make every field precise:
 }
 ```
 
-The corresponding invocation contains only call-specific identity and declared
-inputs:
+The corresponding embedded-host invocation selects a definition directly and
+carries declared inputs. It is not the HTTP request body for the keyed web
+routes above: those resolve the definition and participant from the route before
+constructing an invocation. Input binding and trust rules remain under review.
 
 ```json
 {
@@ -2253,8 +2314,9 @@ The existing participant-first structure still fits the intended scenarios.
 Keep `entrypoint`, direct participant-ref transfer lists, agent-scoped tool
 enablement, immutable resolved plans, room-owned context, and live mixing. This
 checkpoint identifies missing contracts and inconsistencies; it does not add
-runtime functionality. G1 now records the approved tool-layout clarification;
-the other proposed changes remain unapproved. Detailed reasoning and evidence live
+runtime functionality. G1 records the approved tool layout and G2 records the
+approved web admission routes. G2's remaining questions and G3–G13 are still
+unapproved. Detailed reasoning and evidence live
 in the [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Baseline and scope
@@ -2262,8 +2324,8 @@ in the [call-definition gap review](../docs/call-definition-gap-review.md).
 - The pre-review labnote was already committed in `e7a769e` and the worktree was
   clean before editing. Review documentation will be a separate checkpoint.
 - The original review preserved schema examples and decisions for comparison.
-  The approved G1 follow-up now aligns the tool examples and related wording;
-  the other proposed corrections still require review.
+  Approved follow-ups align G1's tool examples and document G2's tenant-scoped
+  start/join routes. The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
 
@@ -2281,14 +2343,17 @@ The numbering below matches G1–G13 in the focused review document.
    `participants` and read-only `billing` access to `intake`; transfer and context
    tools remain compiler-derived. This resolves G1's documentation ambiguity,
    not the future compiler implementation or its verification.
-2. **Admission and variable binding:** transport type does not identify which
-   human definition is attaching when several are possible. Required customer
-   identity cannot be assumed from an inbound phone number. Possible resolution:
-   trusted admission-participant selection, explicit initial materialization,
-   separate definition/input/ingress/context namespaces, and bounded typed
-   personalization, timezone, and dial-destination bindings. Caller number is
-   not verified customer identity. Specify human entrypoint behavior without
-   assuming an initial agent.
+2. **Admission — routing approved; remaining semantics pending:** tenant-scoped
+   HTTPS routes select the participant connection key when starting a call and
+   additionally the public call ID when joining one. Tenant keys are 16 URL-safe
+   random characters; participant keys and call IDs are UUIDs, separate from
+   database primary keys. Joining uses the call's pinned definition and requires
+   authorization before a transport session is issued. G2 still needs review of
+   input sources/trust, context bindings, personalization, timezone and dynamic
+   destinations, plus detailed initial materialization/participant cardinality.
+   A caller number or client-supplied customer ID is not verified identity.
+   The schema's existing initialization example remains a candidate, not an
+   approval of new source-binding fields or an admission resolver.
 3. **Context initialization and stale work:** requiring a fully valid default
    before applying input bindings prevents required fields from being supplied
    solely at invocation. Activation checks alone do not invalidate interrupted
@@ -2397,12 +2462,19 @@ playground today. Use deterministic fakes first and synthetic data throughout.
 10. Send typed input, interrupt generated output, end the call, and deliver late
     usage/artifact updates. Verify honest transcript provenance, no double-counted
     costs, explicit missing data, and a new revision for a corrected archive.
+11. Exercise the approved web route shapes with synthetic tenant keys, participant
+    keys, and call IDs. Starting creates a call in the selected tenant; joining
+    requires that tenant's call and an authorized participant from its pinned
+    definition. Wrong-tenant calls, invalid role assignments, and missing call
+    correlation must fail. Publish a newer definition and confirm joining an
+    existing call still uses its earlier participant mapping. Verify that no
+    database primary key appears in the public URL or session identifiers.
 
 ### Review checkpoint verification
 
-Passed `git diff --check`, syntax parsing of all 10 JSON fences in this labnote,
-and existence/anchor checks for 13 local documentation links across the two
-changed documents. The labnote terminology check also passed. JSON parsing is
+The original review passed `git diff --check`, syntax parsing of all 10 JSON
+fences in this labnote, and existence/anchor checks for 13 local documentation
+links across the two changed documents. The labnote terminology check also passed. JSON parsing is
 syntax verification only, not validation against an implemented call-definition
 schema. Only this labnote and its focused review document belong to the review
 commit. No runtime suite was run for this documentation-only checkpoint. The
@@ -2413,6 +2485,13 @@ For the approved G1 follow-up, reran these documentation checks and verified tha
 the JSON examples contain no `agents` root or separate participant `integrations`
 block. The mixed built-in/MCP tool example and both read-only `billing` examples
 match the approved layout. No runtime tests were run or features implemented.
+
+For the approved G2 routing follow-up, all 10 JSON fences still parse, all 14
+local links/anchors resolve, and both documents contain the same approved
+tenant-scoped start/join routes. Unified tool examples and labnote terminology
+checks still pass, as does `git diff --check`. Added future routing acceptance
+steps; no runtime tests or endpoint/ID implementation were added. Remaining G2
+input, personalization, and lifecycle proposals stay open for user review.
 
 ## Verification evidence
 
