@@ -391,6 +391,98 @@ recognition and synthesis does not claim to stop those other data paths, so a
 private or regulated segment must name every capability its policy requires the
 room to stop.
 
+### Keep telephony provider-neutral and pin the resolved definition in the room
+
+The Telnyx integration review refined the participant model. This section
+supersedes the earlier split in this labnote between inline agent definitions
+and externally configured participant destinations. A call definition should
+contain every potential participant in one definition-local participant map,
+whether that participant is an agent or a human. The map is a catalog of what
+the room may materialize during this call; it is not a claim that every entry is
+connected when the room starts.
+
+A human participant may carry participant-specific, non-secret connection
+intent in the definition. For example, a human support participant may name the
+telephony service, a telephone number, and whether Vxpipe must originate or
+receive the provider connection:
+
+```json
+{
+  "participants": {
+    "caller": {
+      "type": "human",
+      "connection": {
+        "service": "telnyx",
+        "mode": "receive",
+        "number": "+15550001000",
+        "admission": "start_call"
+      }
+    },
+    "reception": {
+      "type": "agent",
+      "transfers": ["xyz", "abc", "human-support-agent"]
+    },
+    "human-support-agent": {
+      "type": "human",
+      "connection": {
+        "service": "telnyx",
+        "mode": "dial",
+        "number": "+1234123412"
+      }
+    }
+  }
+}
+```
+
+`mode: dial` tells the room to originate a provider leg when it materializes
+the participant. `mode: receive` tells ingress to adopt an incoming provider
+leg as that participant. `admission: start_call` means a matching incoming leg
+may create the call and room; joining a pre-existing room will require a future
+explicit admission mode and an unambiguous room-correlation mechanism. A fixed
+number can live in the definition. A number that genuinely varies per call may
+instead bind to a declared, validated invocation input.
+
+`service` selects a configured telephony adapter; it is not a credential. API
+keys, webhook verification material, provider account/application identifiers,
+public ingress addresses, and deployment policy remain application- or
+tenant-configured. Participant-specific topology such as service selection,
+connection mode, and a non-secret destination may live in the call definition.
+
+Telnyx is only the first concrete adapter. The same common room sequence must
+also support Twilio and later telephony services:
+
+```text
+resolve participant connection intent
+  -> ask the configured telephony adapter to dial or adopt a leg
+  -> correlate provider lifecycle events with the room connection
+  -> attach the provider media transport
+  -> report common connected, failed, and disconnected outcomes
+  -> let the room execute provider-neutral transfer and cleanup policy
+```
+
+Provider adapters translate this sequence into their own webhook events, REST
+commands, call/leg identifiers, media WebSocket framing, and bridge or
+conference operations. Provider-specific identifiers and webhook payloads stay
+in adapter/runtime state. The call definition describes participant and
+connection intent rather than Telnyx or Twilio command payloads.
+
+The active room authority should receive one fully validated and resolved call
+plan when the room is created and retain that immutable plan for the room
+incarnation. It should include the exact call-definition revision, all
+participant definitions, transfer allowlists, policies, resolved non-secret
+service configuration, and pinned integration/profile revisions required to
+orchestrate the call. Transfers and other ordinary room decisions must resolve
+against this in-memory plan rather than repeatedly looking up mutable database
+rows.
+
+The database remains the control plane for drafts, publication, version
+selection, and recovery. At call admission, Vxpipe selects a published revision
+and compiles a snapshot. Subsequent edits or publication of a newer revision do
+not affect the running room. Events and artifacts carry the pinned revision and
+plan digest so the interaction can be explained or replayed against the exact
+configuration it used. Recovery may reload that same immutable snapshot; it
+must not silently substitute the latest database revision.
+
 ### Definition version, deployment selection, and invocation are different
 
 The reviewed control planes support stored and inline definitions, drafts,
@@ -1152,15 +1244,16 @@ precedence over an application-wide integration with the same stable ID; neither
 catalog enables it for any agent automatically. Do not begin an MCP transport
 implementation until the general call-definition boundary exists.
 
-Use the agent-first public input with one typed entrypoint and agent-scoped tools.
-The private plan contains resolved agent specs and tool bindings; it does not
-contain generic nodes or edges. The room directly owns participant routing and
-the optional active agent participant, and a running room may have no agent
-participant. Platform tools include at least `hangup`, `transfer`, and the
-permission-constrained room context update operation. A participant transfer
-does not enumerate capability changes; the room reconciles the proposed
-topology by filtering its normal capability intent through each participant's
-presence-policy denials before commit. Do not start with Lua,
+Use the participant-definition public input with one entrypoint and
+agent-scoped tools. The private plan contains resolved participant specs,
+connection intents, transfer allowlists, and tool bindings; it does not contain
+generic nodes or edges. The room directly owns the pinned plan, participant
+routing, and the optional active agent participant, and a running room may have
+no agent participant. Platform tools include at least `hangup`, `transfer`, and
+the permission-constrained room context update operation. A participant
+transfer does not enumerate capability changes; the room reconciles the
+proposed topology by filtering its normal capability intent through each
+participant's presence-policy denials before commit. Do not start with Lua,
 arbitrary executable hooks, natural-language condition evaluation, or a broad
 workflow interpreter.
 
@@ -1220,6 +1313,20 @@ workflow interpreter.
 - Added room-owned typed context sections with per-agent `read`/`write` grants.
   Top-level section grants are the initial contract; nested dot-path and wildcard
   permissions are deferred.
+- Reviewed Callpipe's Telnyx webhook, Call Control, media WebSocket, call-router,
+  participant-connection, and handoff paths. Refined telephony as a common
+  adapter contract that can support Telnyx, Twilio, and later providers while
+  keeping provider commands, identifiers, and webhook payloads out of the public
+  definition. Participant-specific non-secret connection intent may select a
+  configured service, connection mode, and number in the definition; provider
+  credentials and deployment ingress configuration remain application- or
+  tenant-scoped.
+- Recorded that the room authority owns the immutable resolved call plan for the
+  entire room incarnation. The plan pins the exact definition revision,
+  participant catalog, transfers, policies, and resolved service/profile
+  revisions in memory. Normal orchestration does not repeatedly consult mutable
+  database definitions, and recovery must reload the same snapshot rather than
+  adopting a newer revision.
 - Reviewed the official MCP `2026-07-28` tool specification, Streamable HTTP
   transport, and generated schema:
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx>
