@@ -6,9 +6,9 @@ Research date: 2026-09-05 UTC
 
 Define the smallest useful call-definition contract for Vxpipe: one reusable,
 versionable, agent-first description that can start a single-agent call today
-and grow into multi-agent calls, scoped context, agent transfers, human
-transfers, tools, and telephony without forcing ordinary calls into a
-general-purpose workflow language. Agent and participant transfers are
+and grow into multi-agent calls, scoped context, transfers between agent and
+human participants, tools, and telephony without forcing ordinary calls into a
+general-purpose workflow language. Participant-control transfers are
 engine-owned tools; neither the public definition nor the private resolved plan
 needs a node-and-edge model.
 
@@ -115,15 +115,15 @@ node taxonomy in the initial authoring contract.
 
 The common path across the reviewed systems is not a graph. It is one reusable
 agent, or a named set of focused agents with one initial entrypoint and explicit,
-allowlisted handoffs. Graphs appear as a separate structured-flow product or a
-code-level orchestration mechanism when deterministic sequencing is actually
-needed.
+allowlisted participant handoffs. Graphs appear as a separate structured-flow
+product or a code-level orchestration mechanism when deterministic sequencing
+is actually needed.
 
 The public `CallDefinition` should therefore be agent-first without assuming an
 agent must own the room for its entire lifetime:
 
-- one typed `entrypoint`, initially an agent reference or a trusted participant
-  destination reference;
+- one typed `entrypoint`, resolved from either an agent-definition reference or
+  a trusted participant-destination reference;
 - shared capability-profile defaults;
 - a map of named agents;
 - each agent's prompt, first-message behavior, capability overrides,
@@ -137,23 +137,28 @@ that owns conversational control. Re-entering the same agent may reuse its
 private history according to policy, but stale work from an earlier activation
 must still be rejected.
 
-An agent entrypoint resolves within the definition's `agents` map. A participant
-entrypoint resolves through trusted application or tenant destination
-configuration. The latter permits an initially human-only call and an empty
-agent map; an empty agent map is invalid when any entrypoint or transfer names
-an agent.
+An `agent_definition` entrypoint resolves within the definition's `agents` map
+and materializes an agent participant. A `participant_destination` entrypoint
+resolves through trusted application or tenant destination configuration and
+may produce a human or agent participant. The latter permits an initially
+human-only call and an empty agent map; an empty agent map is invalid when any
+entrypoint or transfer names an agent definition.
 
-Vxpipe uses `agent` for an AI conversational definition and `participant` for a
-human, AI, or service identity present in the room. A person working in a
-support role may be called an agent by the surrounding business, but is a human
-participant in the engine's type system.
+`Participant` is the room-level runtime identity. Its `kind` may be `human` or
+`agent`. An agent in the call definition is reusable configuration; when the
+room admits an instance of it, that instance is a participant with
+`kind: agent`. A person working in a support role may be called an agent by the
+surrounding business, but remains a participant with `kind: human` in the
+engine's type system.
 
-Transfer is an engine-owned platform tool with typed targets. Each agent receives
-only the target-specific transfer bindings it is allowed to request. An agent
-target pins a definition-local agent; a participant target pins an allowlisted
-logical destination resolved by the host. Its model-facing arguments must not
-accept arbitrary runtime participant IDs, telephone numbers, or transport
-destinations.
+Transfer is an engine-owned platform tool with typed target selectors. Each
+agent definition receives only the target-specific transfer bindings it is
+allowed to request. An `agent_definition` selector pins definition-local
+configuration that will be admitted as an agent participant. A
+`participant_destination` selector pins an allowlisted logical destination,
+which the host may resolve to a human or agent participant. These are resolution
+paths, not sibling runtime identity types. Model-facing arguments must not accept
+arbitrary runtime participant IDs, telephone numbers, or transport destinations.
 
 Each configured transfer tool can carry a model-facing description, context
 policy, and presentation policy. This gives the model a typed request surface
@@ -161,22 +166,25 @@ while the room authority validates and commits the actual control mutation.
 
 ### Track active control directly; do not introduce a graph
 
-The room already has the state needed for agent and participant transfers. The
+The room already has the state needed for participant transfers. The
 resolved plan needs an entrypoint, named agent specs, and resolved tool bindings,
-while the room tracks an optional active agent and its fresh activation ID:
+while the room tracks an optional active agent participant and its fresh
+activation ID:
 
 ```text
-activate the entrypoint's agent
-  -> agent converses or requests an allowlisted transfer tool
+admit and activate the entrypoint's agent participant
+  -> the participant converses or requests an allowlisted transfer tool
   -> tool executor validates the target and asks the room to commit the transfer
   -> previous activation becomes stale
-  -> activate the destination agent or update participant/call-leg routing
+  -> resolve/admit the destination participant and commit control/routing
 ```
 
-`active_agent: nil` is a valid running-room state. A transfer can leave two or
-more human participants connected after the AI participant has been detached.
+`active_agent_participant_id: nil` is a valid running-room state. A transfer can
+move control from an agent participant, such as an intake agent, to a human
+participant, such as a human service agent. It can leave two or more human
+participants connected after the agent participant has been detached.
 The room lifecycle is therefore determined by room/call disposition and
-participant connections, not by whether an AI agent remains active.
+participant connections, not by whether an agent participant remains active.
 
 The private plan must not become a second copy of room state. The room remains
 authoritative for active control, participants, connections, media, turns,
@@ -202,7 +210,7 @@ The reviewed systems distinguish model history, typed session data, and context
 selected for a transfer. Vxpipe should make the typed shared data an explicit
 room-owned `room_context`, separate from every agent's private model history and
 scratch state. It remains available while humans continue the call after the
-last AI agent leaves.
+last agent participant leaves.
 
 The definition declares named top-level context sections. Each section has a
 schema and optional safe default. Invocation input or authoritative tools may
@@ -231,47 +239,52 @@ payload schema, and current room incarnation before applying an update and
 emitting its event. MCP results do not update room context implicitly; an
 explicit tool-result mapping or authorized context update must request it.
 
-An agent transfer packet is an immutable projection of allowed room-context
-sections plus the selected spoken-history policy. It names source and
-destination agents, reason, causation, and visibility. It is an event/result,
-not a second mutable context bag. Client and human-participant access to room
-context uses separate authenticated permissions rather than inheriting an
-agent's grants.
+A participant-transfer packet is an immutable projection of allowed room-context
+sections plus the selected spoken-history policy. It names the concrete source
+and destination participant identities and kinds, reason, causation, and
+visibility. When an agent participant is the destination, its projection is
+further constrained by that agent definition's context permissions. It is an
+event/result, not a second mutable context bag. Client and human-participant
+access to room context uses separate authenticated permissions rather than
+inheriting an agent definition's grants.
 
 ### Tools and authoritative control must remain separate
 
-Model-facing tools are the common request mechanism for agent transfer, hangup,
-data collection, and external actions. The model can request an operation; it
-must not directly change active-agent, participant, connection, leg, or room
-state.
+Model-facing tools are the common request mechanism for participant transfer,
+hangup, data collection, and external actions. The model can request an
+operation; it must not directly change the active agent participant, connection,
+leg, or room state.
 
 An engine-owned tool invocation should therefore have:
 
 - stable invocation and correlation IDs;
 - an input and output schema;
-- source agent/turn identity;
+- source participant identity and optional agent activation/turn identity;
 - grants and an optional approval policy;
 - deadline, cancellation, retry, and idempotency policy;
 - progress plus one terminal result;
 - result visibility to the model, room, clients, and artifacts; and
 - an authoritative command emitted only after validation succeeds.
 
-Agent transfer, participant transfer, telephony-leg transfer, and ending a call
-remain different commands even if all are exposed to a model as tools.
+A participant-control transfer, a telephony-leg transfer, and ending a call
+remain different commands even if all are exposed to a model as tools. Agent to
+agent and agent to human are variants of participant-control transfer, not
+separate top-level runtime identity models.
 
 ### A transfer may change the room's capability topology
 
 A successful participant transfer may deliberately leave a human-only room. The
 transfer binding must therefore be able to declare trusted post-success effects,
-including detaching the source AI agent and stopping selected capability kinds
-for selected participant scopes. These effects are definition data, not
-model-generated tool arguments.
+including detaching the source agent participant and stopping selected
+capability kinds for selected participant scopes. These effects are definition
+data, not model-generated tool arguments.
 
-The room authority coordinates the transfer, active-agent change, and desired
-capability state as one operation. Generation and activation checks reject late
-transcription, inference, or speech output from capabilities that belonged to
-the earlier state. Stopping speech-to-text or text-to-speech means closing the
-provider work and preventing new input, not merely hiding client events.
+The room authority coordinates the transfer, active-agent-participant change,
+and desired capability state as one operation. Generation and activation checks
+reject late transcription, inference, or speech output from capabilities that
+belonged to the earlier state. Stopping speech-to-text or text-to-speech means
+closing the provider work and preventing new input, not merely hiding client
+events.
 
 When a capability stop is a privacy boundary, it is a transfer barrier rather
 than best-effort cleanup. The room first makes the capability ineligible for new
@@ -281,11 +294,11 @@ failed or timed-out stop follows the transfer's failure policy instead of
 silently entering the protected segment. Graceful draining is inappropriate
 because it could publish buffered transcription or speech after the boundary.
 
-This allows a call to begin with an AI agent, admit a human destination during a
-warm transfer, detach the AI after the bridge succeeds, and continue with two
-human participants. A later explicit, authorized command may restart a stopped
-capability if policy permits it; transfer completion must not restart one
-implicitly.
+This allows a call to begin with an agent participant, admit a human participant
+during a warm transfer, detach the source agent participant after the bridge
+succeeds, and continue with two human participants. A later explicit,
+authorized command may restart a stopped capability if policy permits it;
+transfer completion must not restart one implicitly.
 
 Recording, analytics, and export are separate capabilities. Stopping speech
 recognition and synthesis does not claim to stop those other data paths, so a
@@ -414,17 +427,20 @@ An engine-owned transfer-tool binding should contain:
 
 - a stable name within the source agent;
 - platform tool kind `transfer`;
-- a typed target containing either a fixed definition-local agent reference or
-  an allowlisted logical participant destination reference;
+- a typed target selector containing either a fixed definition-local
+  `agent_definition` reference or an allowlisted logical
+  `participant_destination` reference;
 - a model-facing description of when the transfer is appropriate;
-- optional context/history transfer policy for an agent transfer; and
+- optional context/history transfer policy when the destination is an agent
+  participant; and
 - optional user-visible transition speech policy and trusted post-success
   capability effects.
 
-The room checks that the source activation is still current, the target is
-allowlisted and ready, and transfer budgets are not exhausted. A host command
-can request the same declared transfer without giving the model authority over
-the room mutation.
+The room checks that the source participant is current and, for an agent
+participant, that its activation is current. It also checks that the target is
+allowlisted and ready and that transfer budgets are not exhausted. A host
+command can request the same declared transfer without giving the model
+authority over the room mutation.
 
 The initial schema should keep agents inline so one call definition is portable
 in the standalone JSON configuration and resolves without a dependency graph. A
@@ -574,12 +590,14 @@ through a turn. Credential revocation may invalidate its lease and make later
 tool calls fail, but must not silently switch the call to another tenant or
 application credential.
 
-An agent transfer changes the effective tool surface. Before deactivating the
-source activation, its in-flight tool calls must be settled or cancelled. After
-the transition, source-agent bindings cannot accept new calls, and only the
-destination activation's bindings enter model requests. Tool results and events
-carry agent and activation identity so a late result from the previous agent is
-rejected even when both agents use the same configured integration.
+A transfer away from an agent participant changes the effective tool surface.
+Before deactivating the source activation, its in-flight tool calls must be
+settled or cancelled. After the transition, source-agent bindings cannot accept
+new calls. An agent-participant destination receives only its own activation's
+bindings; a human-participant destination receives no model tool surface. Tool
+results and events carry participant and activation identity so a late result
+from the previous agent participant is rejected even when both agent
+participants use the same configured integration.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
@@ -638,7 +656,7 @@ This is a discussion aid, not a committed schema:
   "schema_version": "20260906.01",
   "name": "customer-support",
   "entrypoint": {
-    "type": "agent",
+    "type": "agent_definition",
     "ref": "reception"
   },
   "input_schema": {
@@ -703,7 +721,7 @@ This is a discussion aid, not a committed schema:
         "transfer_to_billing": {
           "type": "platform",
           "tool": "transfer",
-          "target": {"type": "agent", "ref": "billing"},
+          "target": {"type": "agent_definition", "ref": "billing"},
           "description": "Use when the caller needs help with a billing issue.",
           "context": {
             "history": {"mode": "last_n_spoken", "turns": 6},
@@ -713,13 +731,13 @@ This is a discussion aid, not a committed schema:
         "transfer_to_person": {
           "type": "platform",
           "tool": "transfer",
-          "target": {"type": "participant", "ref": "support_queue"},
+          "target": {"type": "participant_destination", "ref": "support_queue"},
           "description": "Use when the caller asks to speak with a person.",
           "on_success": {
-            "source_agent": "detach",
+            "source_participant": "detach",
             "stop_capabilities": [
               {
-                "participants": {"type": "human"},
+                "participants": {"kind": "human"},
                 "kinds": ["speech_to_text", "text_to_speech"]
               }
             ]
@@ -793,7 +811,7 @@ compensation, graph migration, and visual-editor concerns before Vxpipe can
 switch between two agents. Even a minimal `agent`/`end` graph makes the common
 case less direct than an entrypoint with transfer tools and risks making the
 graph rather than the room the source of truth. Named agent specs, resolved tool
-bindings, and the room's active-agent state are sufficient.
+bindings, and the room's active-agent-participant state are sufficient.
 
 ### Make executable Elixir modules the only definition
 
@@ -821,7 +839,7 @@ commands available to declarative policies.
 
 ### Add a general expression language now
 
-Deferred with Lua. An agent transfer can be model-selected through an
+Deferred with Lua. A participant transfer can be model-selected through an
 engine-owned tool or requested explicitly by the host. When deterministic
 branching is needed, design it around its first concrete use with a small typed
 condition algebra over declared context fields (`eq`, `in`, `exists`, `all`,
@@ -859,9 +877,11 @@ Compilation should reject, with path-specific errors:
 - malformed, unknown, or unsupported dated schema identifiers;
 - an absent, malformed, or unresolved entrypoint;
 - duplicate or invalid names;
+- an `agent_definition` selector naming an unknown definition-local agent;
 - a transfer tool with an unknown or disallowed destination;
 - a participant destination that cannot be resolved within the authenticated
   application or tenant scope;
+- participant-destination metadata with an unsupported allowed participant kind;
 - a post-transfer capability effect with an unknown kind, subject selector, or
   forbidden lifecycle transition;
 - duplicate tool names within one source agent;
@@ -888,21 +908,24 @@ Compilation should reject, with path-specific errors:
 - any private runtime term or literal secret at the public boundary.
 
 Transfer cycles are not inherently invalid: callers may legitimately return to
-the entrypoint's agent. They require bounded transfers and session duration.
-Unreachable agents should initially be a compiler warning or a lint error, not
-necessarily a runtime-invalid definition.
+the entrypoint's agent participant. They require bounded transfers and session
+duration. Unreachable agents should initially be a compiler warning or a lint
+error, not necessarily a runtime-invalid definition.
+
+At runtime, destination resolution must produce a concrete participant ID and a
+supported `human` or `agent` kind before the room commits the transfer. A missing
+identity, a kind mismatch, or a stale source participant/activation rejects the
+operation without changing control or routing.
 
 ## Observable runtime contracts needed
 
 The first multi-agent slice needs protocol-neutral events for:
 
 - call plan resolved;
-- agent admitted and ready;
-- agent activated and deactivated;
-- agent transfer requested, accepted, completed, rejected, failed, and
-  cancelled;
+- agent participant admitted and ready;
+- agent participant activated and deactivated;
 - participant transfer requested, accepted, completed, rejected, failed, and
-  cancelled;
+  cancelled, including source and destination participant IDs and kinds;
 - capability stop requested, made effective, acknowledged, timed out, or failed;
 - context packet created and delivered, with values redacted by visibility;
 - room-context section initialized, updated, or rejected, including section
@@ -911,14 +934,14 @@ The first multi-agent slice needs protocol-neutral events for:
 - routing changed; and
 - call ended with a typed reason.
 
-Only one agent may own conversational output for a connection/lane at a time.
-Inactive agents must not consume participant turns or emit user-visible output.
-They also must not advertise or invoke their MCP tools. A transition cancels or
-settles the source activation's outstanding tool work before enabling the
-destination activation's tool surface.
+Only one agent participant may own generated conversational output for a
+connection/lane at a time. Inactive agent participants must not consume turns or
+emit user-visible output. They also must not advertise or invoke their MCP
+tools. A transition cancels or settles the source activation's outstanding tool
+work before enabling an agent-participant destination's tool surface.
 
-Late results from a previously active agent must be rejected by incarnation,
-turn, and activation identity.
+Late results from a previously active agent participant must be rejected by
+room incarnation, participant, turn, and activation identity.
 
 ## Suggested red-green checkpoints
 
@@ -933,19 +956,21 @@ turn, and activation identity.
 3. **Room-context contract:** test typed top-level sections, per-agent read/write
    grants, model-visible read projection, authorized writes, schema rejection,
    section revisions, and absence of ungranted sections.
-4. **Agent and transfer-tool data:** test agent and participant target
-   resolution, missing targets, duplicate names, transfer cycles,
-   unreachable-agent linting, and path-specific errors.
-5. **Active-agent reducer:** test activation, agent transfer, `active_agent: nil`,
-   terminal state,
-   stale activation, and transfer-budget behavior using deterministic fake
-   agents; implement a pure reducer with one active agent and activation ID.
+4. **Agent and transfer-tool data:** test `agent_definition` and
+   `participant_destination` selector resolution, missing targets, participant
+   kinds, duplicate names, transfer cycles, unreachable-agent linting, and
+   path-specific errors.
+5. **Active-agent-participant reducer:** test activation, agent-to-agent and
+   agent-to-human participant transfer, `active_agent_participant_id: nil`,
+   terminal state, stale activation, and transfer-budget behavior using
+   deterministic fake participants; implement a pure reducer with one optional
+   active agent participant and activation ID.
 6. **Behavior-preserving agent:** prove a one-agent resolved plan produces
    the same text/audio turn behavior as the current preset path.
-7. **Human-only transfer:** prove a participant joins, the source agent detaches,
-   selected capabilities reject new frames and cancel queued work, transfer
-   completion waits for stop acknowledgement, and the room remains alive with
-   human participants and no active agent.
+7. **Human-only transfer:** prove a human participant joins, the source agent
+   participant detaches, selected capabilities reject new frames and cancel
+   queued work, transfer completion waits for stop acknowledgement, and the room
+   remains alive with human participants and no active agent participant.
 8. **JSON and gateway boundary:** round-trip definition/invocation data, reject
    unknown keys, dynamic atom creation, arbitrary runtime overrides, credentials,
    and tenant overrides.
@@ -957,11 +982,13 @@ turn, and activation identity.
    leases outside the public plan.
 10. **Remote MCP execution:** behind the engine-owned tool backend, configure one
    HTTPS MCP integration, enable one tool on one agent, call it, preserve
-   the existing room/RTVI lifecycle, and prove interruption or agent transfer
-   cancels the remote request. Do not add stdio or an MCP server endpoint.
-11. **Agent transfer:** use two deterministic agents and one engine-owned
-   transfer tool to prove only the active agent receives turns, targets are
-   allowlisted, and stale output is rejected.
+   the existing room/RTVI lifecycle, and prove interruption or transfer away
+   from the agent participant cancels the remote request. Do not add stdio or an
+   MCP server endpoint.
+11. **Agent-to-agent participant transfer:** use two deterministic agent
+   participants and one engine-owned transfer tool to prove only the active
+   agent participant receives turns, targets are allowlisted, and stale output
+   is rejected.
 12. **Scoped transition context:** prove allowed spoken history and typed fields
    reach the destination while hidden fields, private tool data, credentials,
    and unplayed text do not.
@@ -973,12 +1000,12 @@ turn, and activation identity.
 
 Proceed first with typed `CallDefinition`, `CallInvocation`, and
 `ResolvedCallPlan` contracts without MCP fields in the first proof. The smallest
-proof is an inline one-agent definition using schema `"20260906.01"`, an agent
-entrypoint, shared capability-profile defaults, declared invocation inputs,
-typed room-context sections, per-agent section permissions, and bounded limits
-becoming a self-contained immutable plan. Route the existing single-agent
-behavior through that plan before adding transfer tools or integration
-resolution.
+proof is an inline one-agent definition using schema `"20260906.01"`, an
+`agent_definition` entrypoint, shared capability-profile defaults, declared
+invocation inputs, typed room-context sections, per-agent section permissions,
+and bounded limits becoming a self-contained immutable plan. Route the existing
+single-agent behavior through that plan before adding transfer tools or
+integration resolution.
 
 Remote MCP integrations still live in application or tenant catalogs, where
 they are **configured**. Individual agents explicitly **enable** integrations
@@ -990,11 +1017,12 @@ implementation until the general call-definition boundary exists.
 
 Use the agent-first public input with one typed entrypoint and agent-scoped tools.
 The private plan contains resolved agent specs and tool bindings; it does not
-contain generic nodes or edges. The room directly owns active-agent and
-participant-routing state, and a running room may have no active agent. Platform
-tools include at least `hangup`, `transfer`, and the permission-constrained room
-context update operation. A participant transfer may declare a bounded
-capability-stop barrier before leaving a human-only room. Do not start with Lua,
+contain generic nodes or edges. The room directly owns participant routing and
+the optional active agent participant, and a running room may have no agent
+participant. Platform tools include at least `hangup`, `transfer`, and the
+permission-constrained room context update operation. A participant transfer
+may declare a bounded capability-stop barrier before leaving a human-only room.
+Do not start with Lua,
 arbitrary executable hooks, natural-language condition evaluation, or a broad
 workflow interpreter.
 
@@ -1020,12 +1048,19 @@ workflow interpreter.
   tools. Other agents in the same call do not inherit that surface.
 - Refined the authoring contract after review: schema identifiers use the
   date-based `YYYYMMDD.NN` format; the current proposal is `"20260906.01"`.
-  `entrypoint` is a typed initial handler, agent and participant transfers are
-  engine-owned tools, a room may continue without an active AI agent, and
-  neither the public definition nor resolved plan uses generic nodes or edges.
-- Added the human-only continuation requirement: a transfer can detach the AI,
-  stop selected capabilities behind a bounded acknowledgement barrier, and
-  leave the room running with human participants.
+  `entrypoint` is a typed initial handler, participant-control transfers are
+  engine-owned tools, a room may continue without an active agent participant,
+  and neither the public definition nor resolved plan uses generic nodes or
+  edges.
+- Clarified the runtime identity model: every room member is a participant whose
+  kind is `human` or `agent`; an agent definition materializes an agent
+  participant. Transfer target selectors describe how to resolve a destination,
+  while the room always commits a transfer between concrete participants. This
+  includes an intake agent participant transferring control to a human service
+  agent participant.
+- Added the human-only continuation requirement: a transfer can detach the
+  source agent participant, stop selected capabilities behind a bounded
+  acknowledgement barrier, and leave the room running with human participants.
 - Added room-owned typed context sections with per-agent `read`/`write` grants.
   Top-level section grants are the initial contract; nested dot-path and wildcard
   permissions are deferred.
