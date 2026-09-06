@@ -271,22 +271,25 @@ remain different commands even if all are exposed to a model as tools. Agent to
 agent and agent to human are variants of participant-control transfer, not
 separate top-level runtime identity models.
 
-### Participant presence determines the capability topology
+### Participant presence constrains the capability topology
 
-Capability requirements belong to participants and room policy, not to each
-transfer path. A participant carries immutable, resolved `presence_requirements`
-that apply while it is admitted to the room's media topology. The requirements
-come from trusted application or tenant destination configuration for a human
-participant and from the resolved agent definition for an agent participant;
-they are never supplied by an attaching client.
+Capability denials belong to participant and room policy, not to each transfer
+path. A participant carries an immutable, resolved `presence_policy` that
+applies while it is admitted to the room's media topology. The policy comes from
+trusted application or tenant destination configuration for a human participant
+and from the resolved agent definition for an agent participant; it is never
+supplied by an attaching client.
 
-The room begins with the resolved call plan's normal capability intent, including
-the active agent participant's required capabilities. It then reconciles that
-baseline against room/application policy and the presence requirements of every
-participant in the proposed topology. A presence requirement can require a
-capability state such as `ready` or `stopped`, for the participant itself or an
-explicitly authorized wider participant selector. No participant policy can
-weaken another policy. Conflicting requirements reject admission or transfer.
+Positive capability intent remains in the resolved call and active-agent plans:
+these say which capabilities should normally run. A presence policy only lists
+capabilities that are not allowed. The room derives lifecycle actions such as
+cancel, stop, or later restart from that declarative denial instead of exposing
+runtime states in the policy schema.
+
+The room computes its effective capability topology by filtering the normal
+intent through room/application policy and every applicable participant denial.
+Denials accumulate and always win. An activation or proposed topology that
+requires a denied capability cannot commit.
 
 The policy owner and the affected participants are separate dimensions:
 
@@ -295,7 +298,7 @@ The policy owner and the affected participants are separate dimensions:
 - `applies_while: active_agent` means an agent participant contributes it only
   while it owns conversational control; this trigger is invalid for a human
   participant; and
-- the requirement's `participants` selector chooses the affected runtime
+- each denial's `participants` selector chooses the affected runtime
   participants, initially `self`, `room`, a participant `kind`, or every agent
   participant instantiated from a named `agent_definition`.
 
@@ -307,41 +310,41 @@ does not infer policy activation from voice activity.
 This makes a rule such as “while this human service participant is present, no
 participant in the room may use speech recognition or synthesis” a property of
 that participant's trusted destination policy. Every transfer to that
-destination inherits the rule without repeating it. Conversely, admitting an
-agent participant obtains its `ready` requirements from its agent definition.
+destination inherits the rule without repeating it. Conversely, an active agent
+participant obtains its positive capability intent from its agent definition.
 
 The room recomputes the effective capability state whenever its authoritative
 participant set or active agent participant changes. A connection loss alone
-must not remove a presence requirement; the room must detach or expire that
+must not remove a presence policy; the room must detach or expire that
 participant through an explicit lifecycle decision first. When the last
-participant imposing a restriction leaves, the room reconciles back toward the
-normal resolved capability intent. This does not start every known capability
+participant imposing a denial leaves, the room reconciles back toward the normal
+resolved capability intent. This does not start every known capability
 indiscriminately: only capabilities enabled by the call and current agent plans
-resume, and any remaining participant or room policy still applies.
+resume, and any remaining participant or room denial still applies.
 
 A transfer declares only its target and transfer behavior, such as warm versus
 cold handoff, source disposition, context projection, and presentation. The
 room authority runs it in prepare and commit phases. During prepare, it resolves
-the destination and its presence requirements outside the active media
-topology, while the source participant and its current capabilities may remain
-active for announcements and data collection. It then computes the proposed
-post-transfer participant set and reconciles its capability state. Only after
-that state satisfies every presence requirement does the room atomically admit
-or activate the destination, change control/routing, apply the source
-disposition, and emit `transfer.completed`.
+the destination and its presence policy outside the active media topology,
+while the source participant and its current capabilities may remain active for
+announcements and data collection. It then computes the proposed post-transfer
+participant set, enforces its denials, and makes the remaining positively
+required capabilities ready. Only then does the room atomically admit or
+activate the destination, change control/routing, apply the source disposition,
+and emit `transfer.completed`.
 
 The initial `CallDefinition` therefore has no generic `on_success` field. Host
 code can observe `transfer.completed`, and a later deterministic workflow can
 model an explicit next action if a real use case requires one. Neither is part
 of the transfer's safety-critical commit transaction.
 
-When a stopped state is a privacy boundary, it is a commit barrier rather than
-best-effort cleanup. The room makes the capability ineligible for new frames,
-immediately cancels queued/in-flight work, and waits for a bounded stop
-acknowledgement before completing or unhiding the human-only bridge. A failed or
-timed-out requirement follows the transfer's failure policy without changing
-control or routing. Graceful draining is inappropriate because it could publish
-buffered transcription or speech after the boundary.
+When a denial is a privacy boundary, enforcing it is a commit barrier rather
+than best-effort cleanup. The room makes the capability ineligible to start or
+receive new frames, immediately cancels queued/in-flight work, and waits for a
+bounded stop acknowledgement before completing or unhiding the human-only
+bridge. Failed or timed-out enforcement follows the transfer's failure policy
+without changing control or routing. Graceful draining is inappropriate because
+it could publish buffered transcription or speech after the boundary.
 
 Generation and activation checks reject late transcription, inference, or
 speech output from capabilities that belonged to the earlier state. Stopping
@@ -708,15 +711,12 @@ configuration outside the call definition. For example:
 {
   "id": "support_queue",
   "participant_kind": "human",
-  "presence_requirements": {
+  "presence_policy": {
     "applies_while": "admitted",
-    "capabilities": [
+    "capability_denials": [
       {
         "participants": {"scope": "room"},
-        "states": {
-          "speech_to_text": "stopped",
-          "text_to_speech": "stopped"
-        }
+        "capabilities": ["speech_to_text", "text_to_speech"]
       }
     ]
   }
@@ -728,11 +728,10 @@ participant. The client that eventually attaches to that participant cannot
 add, remove, or weaken them.
 
 Changing the selector to `{"agent_definition": "xyz"}` means the same policy
-owner constrains only agent participants instantiated from agent definition
-`xyz`. If that policy requires speech recognition or synthesis to be stopped
-while `xyz` requires it to be ready for activation, `xyz` cannot become the
-active agent until the constraint is removed. An inactive `xyz` participant can
-remain admitted with those capabilities stopped.
+owner denies those capabilities only to agent participants instantiated from
+agent definition `xyz`. If `xyz` requires either capability for activation, it
+cannot become the active agent until the denial is removed. An inactive `xyz`
+participant can remain admitted without those capabilities.
 
 ## Representative JSON shape
 
@@ -872,10 +871,10 @@ invocation or an inbound routing resource, not to reusable conversational
 behavior. `support_queue` is a logical destination resolved through trusted
 application or tenant configuration; it is not a runtime participant ID or a
 model-supplied address. The destination supplies the admitted participant's
-presence requirements, while the transfer binding describes only the handoff.
-Both are trusted configuration; the model only supplies arguments allowed by
-the resolved tool schema. An agent with a `write` context grant receives a
-platform context-update tool restricted to those named sections.
+presence policy, while the transfer binding describes only the handoff. Both
+are trusted configuration; the model only supplies arguments allowed by the
+resolved tool schema. An agent with a `write` context grant receives a platform
+context-update tool restricted to those named sections.
 
 Provider/profile strings are closed registry names resolved by the host. They
 do not name Elixir modules. Inline prompts may later be replaced by immutable
@@ -966,11 +965,12 @@ Compilation should reject, with path-specific errors:
   application or tenant scope;
 - participant-destination metadata with an unsupported allowed participant kind;
 - a transition with an unknown mode or source disposition;
-- a participant presence requirement with an unknown activation condition,
-  selector, capability kind, or required state;
+- a participant presence policy with an unknown activation condition, selector,
+  or denied capability kind;
 - `active_agent` policy activation owned by a human participant, or an
   unauthorized room-wide or cross-participant selector;
-- incompatible capability requirements in a proposed participant topology;
+- an activation or proposed participant topology whose positive capability
+  intent includes a capability denied by an applicable policy;
 - duplicate tool names within one source agent;
 - tool or integration references not present in closed registries;
 - duplicate agent-local tool aliases within one agent;
@@ -1013,8 +1013,8 @@ The first multi-agent slice needs protocol-neutral events for:
 - agent participant activated and deactivated;
 - participant transfer requested, accepted, completed, rejected, failed, and
   cancelled, including source and destination participant IDs and kinds;
-- participant presence requirement applied or removed, and capability
-  reconciliation requested, state reached, acknowledged, timed out, or failed;
+- participant capability denial applied or removed, and capability
+  reconciliation requested, enforced, acknowledged, timed out, or failed;
 - context packet created and delivered, with values redacted by visibility;
 - room-context section initialized, updated, or rejected, including section
   revision and authorized agent activation;
@@ -1046,8 +1046,9 @@ room incarnation, participant, turn, and activation identity.
    section revisions, and absence of ungranted sections.
 4. **Agent and transfer-tool data:** test `agent_definition` and
    `participant_destination` selector resolution, missing targets, participant
-   kinds, presence-policy activation conditions and subject selectors, duplicate
-   names, transfer cycles, unreachable-agent linting, and path-specific errors.
+   kinds, presence-policy activation conditions, denial lists, and subject
+   selectors, duplicate names, transfer cycles, unreachable-agent linting, and
+   path-specific errors.
 5. **Active-agent-participant reducer:** test activation, agent-to-agent and
    agent-to-human participant transfer, `active_agent_participant_id: nil`,
    terminal state, stale activation, and transfer-budget behavior using
@@ -1055,14 +1056,14 @@ room incarnation, participant, turn, and activation identity.
    active agent participant and activation ID.
 6. **Behavior-preserving agent:** prove a one-agent resolved plan produces
    the same text/audio turn behavior as the current preset path.
-7. **Human-only transfer:** prove a human destination's presence requirements
-   are inherited without appearing on the transfer binding. The source agent
-   remains usable during prepare; admission then makes selected capabilities
-   reject new frames and cancel queued work, waits for stop acknowledgement, and
-   detaches the source only when the room can safely continue with human
-   participants and no active agent participant. Detaching the restrictive
-   participant reconciles the remaining topology back to its normal enabled
-   capabilities without a transfer-specific restart list.
+7. **Human-only transfer:** prove a human destination's capability denials are
+   inherited without appearing on the transfer binding. The source agent remains
+   usable during prepare; admission then makes denied capabilities reject new
+   frames and cancel queued work, waits for stop acknowledgement, and detaches
+   the source only when the room can safely continue with human participants and
+   no active agent participant. Detaching the restrictive participant reconciles
+   the remaining topology back to its normal enabled capabilities without a
+   transfer-specific restart list.
 8. **JSON and gateway boundary:** round-trip definition/invocation data, reject
    unknown keys, dynamic atom creation, arbitrary runtime overrides, credentials,
    and tenant overrides.
@@ -1115,8 +1116,8 @@ the optional active agent participant, and a running room may have no agent
 participant. Platform tools include at least `hangup`, `transfer`, and the
 permission-constrained room context update operation. A participant transfer
 does not enumerate capability changes; the room reconciles the proposed
-topology from its baseline intent and each participant's presence requirements
-before commit. Do not start with Lua,
+topology by filtering its normal capability intent through each participant's
+presence-policy denials before commit. Do not start with Lua,
 arbitrary executable hooks, natural-language condition evaluation, or a broad
 workflow interpreter.
 
@@ -1154,10 +1155,11 @@ workflow interpreter.
   agent participant.
 - Corrected capability-policy ownership: there is no generic `on_success` action
   bag and transfer bindings do not enumerate capability changes. Each runtime
-  participant inherits immutable presence requirements from its trusted agent
-  definition or application/tenant destination. The room reconciles its normal
-  capability intent against the proposed participant set before transfer
-  commit, and reconciles back toward that baseline when a restrictive
+  participant inherits an immutable presence policy from its trusted agent
+  definition or application/tenant destination. Positive capability intent
+  remains in the call and active-agent plans; presence policies only deny
+  capabilities. The room filters normal intent through applicable denials before
+  transfer commit and reconciles back toward that baseline when a restrictive
   participant leaves.
 - Separated a presence policy's owner activation from its affected participant
   selector. A policy can apply while its owner is admitted or, for an agent,
