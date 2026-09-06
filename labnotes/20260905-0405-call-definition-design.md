@@ -1,6 +1,7 @@
 # Call definition design
 
 Research date: 2026-09-05 UTC
+Last updated: 2026-09-06 UTC
 
 ## Goal
 
@@ -1555,10 +1556,416 @@ two-agent sample should transfer to `billing`, confirm `billing` reads the same
 allowed data, and confirm it cannot update `intake` when its definition has only
 `read`.
 
+## Persistence, call records, usage, and artifacts
+
+These concerns share correlation IDs and retention policy, but they do not share
+one owner or storage shape. Separate the live room, relational records, object
+artifacts, and derived publication:
+
+| Concern | Live authority | Durable representation |
+| --- | --- | --- |
+| Definition drafts and immutable revisions | `vxpipe_calls` | PostgreSQL |
+| Inbound number/service routing | `vxpipe_calls` | indexed PostgreSQL rows |
+| Pinned definition and resolved plan for a running call | `RoomAuthority` | call row plus non-secret resolved-plan snapshot/digest |
+| Mutable room context | `RoomAuthority` | private section snapshots and/or ordered context updates |
+| Ordered call, turn, tool, transfer, and provider-usage facts | engine events | append-only PostgreSQL ledger plus query projections |
+| Participant audio | supervised recording workers | object storage plus relational artifact metadata |
+| Combined audio and final call-details JSON | post-call jobs | derived versioned objects plus publication status |
+
+The database is the durable system of record for management and the call ledger;
+it is not the live synchronization mechanism for a room. Object storage holds
+large media and exported JSON; it is not queried to authorize a turn or transfer.
+The final call-details object is a projection built from already persisted facts,
+not the only surviving record of the call.
+
+### Inbound routing selects an immutable definition revision
+
+An inbound provider webhook cannot scan call-definition JSON looking for a
+matching number. Publishing or deploying a definition must materialize an
+indexed route from the definition's `receive` plus `start_call` participant
+connection intent. The lookup key should include the trusted configured
+telephony integration/account identity and normalized called number, not only
+the number supplied by the webhook. The integration or verified endpoint first
+establishes the application/tenant boundary.
+
+Use separate persisted resources:
+
+```text
+CallDefinition
+└── immutable CallDefinitionRevision(s)
+    └── Deployment (for example, the currently selected production revision)
+        └── materialized InboundRoute(s)
+```
+
+An inbound route records at least tenant/application scope, configured telephony
+service identity, normalized called number, deployment, entry/admission
+participant ref, enabled state, and effective interval. A database uniqueness
+constraint prevents two simultaneously active routes for the same trusted
+integration and number. Changing a deployment affects only calls admitted after
+the change.
+
+The webhook/admission sequence is:
+
+```text
+verify provider request and identify configured integration
+  -> normalize provider call/event ID and called number
+  -> resolve one active indexed route
+  -> load the route's immutable definition revision
+  -> validate invocation input and compile a resolved plan
+  -> idempotently create the durable call admission record
+  -> start the room with call ID, plan, and initialized context
+  -> mark the call running or record a typed admission failure
+  -> issue provider-neutral leg/media commands
+```
+
+Do not hold a database transaction open while starting OTP processes or making a
+provider API call. Use unique admission/idempotency keys, short database
+transactions, and explicit `admitting`, `running`, `failed`, and terminal call
+states. Repeated delivery of the same provider webhook must return or advance
+the same call rather than starting a second room.
+
+An outbound call follows the same admission path except that an authenticated
+API invocation selects an allowed deployment or exact revision and the resolved
+plan tells the room which `dial` participant to materialize. Every call row pins
+the exact definition revision, schema version, and resolved-plan digest. A
+deployment change never mutates that row or its active room.
+
+### Stable call identity is distinct from a room incarnation
+
+Introduce a `call_id` generated at admission and carry it through engine
+commands, domain events, provider operations, context updates, artifacts, and
+publisher jobs. The call ID survives room-incarnation recovery. `room_id`
+identifies the live collaboration/media scope, and `incarnation_id` rejects stale
+work for one execution of that room. The initial implementation may enforce one
+room per call, but the identifiers must not be conflated because a call can have
+multiple telephony legs and a recovered room receives another incarnation.
+
+The relational `calls` row should contain durable identity and summary state,
+not every detail as one mutable JSON document. It records tenant/application,
+definition revision, plan digest, direction, route/invocation identity, current
+room/incarnation, lifecycle state, start/end timestamps, terminal reason, archive
+status, and retention-policy identity. Provider-native call IDs belong in a
+separate call-leg/provider-identity record with appropriate uniqueness and
+redaction.
+
+### Persist facts incrementally and derive the transcript
+
+Do not wait for `CallDetailsPublisher` to receive an in-memory transcript at the
+end of the call. A node, room, provider, or deployment can fail before that
+callback. Persist an ordered, idempotent event envelope during the call and build
+query-friendly projections from it.
+
+The minimum relational shapes are:
+
+- `call_events`: append-only protocol-neutral event envelopes keyed uniquely by
+  call ID, room incarnation, sequence, and event ID;
+- `call_participants`: runtime participant ID, definition-local participant ref,
+  human/agent type, admission/removal state, and timestamps;
+- `agent_activations`: agent participant, activation ID, model/tool profile
+  identity, start/end sequence, and terminal reason;
+- `call_turns`: one row per committed human input or agent output with speaker,
+  modality, correlation/utterance IDs, lifecycle, timestamps, and transcript
+  provenance;
+- `provider_operations`: one row per external STT, model, TTS, MCP, or telephony
+  operation, including actual provider/model and request lifecycle;
+- `usage_records`: normalized billable units and cost observations linked to a
+  provider operation and, when meaningful, a turn;
+- `call_context_sections`: the latest privately retained section value and
+  revision when context retention is enabled;
+- `artifacts`: object key, kind, participant/connection/track correlation,
+  timing, codec/content type, bytes, checksum, retention, and publication state;
+  and
+- an outbox/job table for idempotent post-call publication and retries.
+
+`call_events` preserves ordering and future replay evidence. The other rows are
+projections for efficient product queries and publication; they can be rebuilt
+from retained events where the retention policy permits it. Do not put audio,
+large transcripts, or a continually rewritten all-call JSON blob on the `calls`
+row.
+
+Transcript persistence is a policy independent of whether STT or TTS happens to
+be enabled. Capability enablement permits realtime processing; retention decides
+what may be stored and for how long. A call with text input can have a transcript
+without STT, and a call may use STT/TTS while policy forbids retaining text or
+audio.
+
+When transcript retention is enabled, keep source facts distinct:
+
+- committed human text input stores the submitted text and `text` provenance;
+- human audio stores the provider-final committed transcript and provider/model
+  identity; partial replacements are optional debug/event retention, not new
+  transcript turns;
+- agent output stores generated text separately from confirmed delivered/spoken
+  text, including interrupted or truncated state; and
+- every turn names the runtime participant, definition-local participant ref,
+  and agent activation when applicable.
+
+This follows the existing engine rule that generated assistant text and audio
+confirmed as played are different facts. A final transcript must not claim that
+interrupted generated text was heard. Word timing, confidence, and provenance
+may be retained as a bounded sidecar when a provider supplies them; their
+absence must not be replaced with invented precision.
+
+### Usage and cost belong to provider operations, with optional turn links
+
+A turn can incur multiple independent charges. One agent turn may require
+several model requests because of tool rounds, several TTS requests because text
+is segmented, and a long-lived STT stream that spans multiple human turns.
+Telephony and MCP charges may be call-, leg-, or operation-scoped. Therefore a
+single cost column on `call_turns` is insufficient.
+
+Store one immutable usage record per billable provider operation. Link it to a
+turn when attribution is honest, but allow a nullable turn link and retain call,
+participant, activation, capability, provider-operation, and call-leg
+correlation. Call and turn totals are derived projections over those records.
+
+A normalized usage record should carry:
+
+- provider operation ID and optional provider request ID;
+- capability (`speech_to_text`, `model_inference`, `text_to_speech`, `mcp`, or
+  telephony);
+- configured provider and actual provider/model/voice identifiers used after
+  fallback;
+- measured units as typed values, such as input/output/cached/reasoning tokens,
+  characters, synthesized audio duration, transcribed audio duration, connection
+  duration, or request count;
+- cost amount as an exact decimal representation, currency, component breakdown,
+  and whether it is provider-reported, library-estimated, locally estimated, or
+  later reconciled;
+- pricing catalog/version or provider billing reference used for an estimate;
+- started/completed timestamps and success/failure/cancellation status; and
+- call, room/incarnation, participant, activation, turn, utterance, and tool-call
+  correlations that actually apply.
+
+Never use floating-point arithmetic as the billing record and never manufacture
+zero usage when a provider omits metadata. Preserve raw normalized units, the
+price/version used, and the estimate source so a later billing reconciliation
+can replace or annotate an estimate without rewriting the original observation.
+
+The current model provider boundary returns only text/tool calls/errors, so it
+cannot carry usage. The current ReqLLM adapter classifies the final response and
+discards its normalized usage even though ReqLLM exposes token and best-effort
+cost data for buffered and streaming responses. A usage slice should introduce
+a typed provider result plus a protocol-neutral `ProviderUsageRecorded` event
+for every model request, including intermediate tool rounds. STT and TTS adapter
+contracts need equivalent typed usage/finalization signals based on the unit the
+provider actually bills; measured audio duration or characters may be marked as
+estimates when no provider usage is available.
+
+### Record separate participant tracks and derive a mix
+
+When audio retention is enabled, recording each participant/connection track
+separately is the useful canonical artifact. A combined call recording is a
+derived presentation artifact. Keeping only a live mix loses speaker isolation,
+makes overlapping speech hard to inspect, and prevents a later mix from applying
+better channel or gain policy.
+
+Separate tracks are useful only with a shared timeline. Every segment manifest
+must include call, room/incarnation, participant, connection, track, codec/sample
+format, monotonic start offset, sample count or duration, gaps, and terminal
+status. Agent output should be correlated with the utterance and the portion
+accepted by the egress path; generated-but-discarded TTS audio is not silently
+treated as delivered call audio.
+
+Recording workers run outside `RoomAuthority` under a dedicated supervisor. A
+media tap sends them bounded frames after the engine has accepted ingress or
+egress media for the room topology. Workers upload rolling segments or bounded
+multipart parts to S3-compatible object storage and persist artifact progress in
+PostgreSQL. They must not accumulate an entire call in a BEAM heap or block the
+room/media path on object-store latency. Queue overflow and uploader failure have
+explicit policy: normally emit an incomplete-recording event and continue the
+call; a deployment that requires recording may instead fail admission or end the
+call according to its policy.
+
+The post-call mixer consumes finalized track manifests, aligns them on the shared
+timeline, preserves overlap and silence, and writes a versioned combined object.
+It does not guess alignment from object creation timestamps. The first recording
+slice can retain separate tracks only; adding a mix is an independent job once
+the timing manifest is proven.
+
+Recording remains a separate capability and retention choice. Disabling speech
+recognition or synthesis does not disable recording, and enabling either does not
+authorize recording. Participant/room policy must explicitly allow the media
+tap, artifact type, access scope, and retention period.
+
+### `CallDetailsPublisher` is a final projector, not the live recorder
+
+`CallDetailsPublisher` is a good name for the post-call boundary if its job is
+narrow: after a terminal call state, read persisted call facts and finalized
+artifact manifests, construct a versioned JSON document, store it in object
+storage, and record its checksum/object reference. It should not own the live
+transcript, usage counters, context, or audio buffers.
+
+The versioned call-details JSON can contain:
+
+- call identity, lifecycle, direction, route, definition revision, and plan
+  digest;
+- participants, connections/call legs, and agent activations;
+- ordered transcript turns with speaker, provenance, interruption, and delivery
+  status;
+- provider operations and normalized usage/cost records, plus explicitly
+  identified derived totals;
+- tool and transfer summaries;
+- permitted final context sections or context revision metadata according to
+  retention policy; and
+- separate-track, combined-audio, and other artifact references with checksums
+  and completeness state.
+
+Publishing is an idempotent outbox-driven job keyed by call ID and archive schema
+version. It runs outside the room process and retries safely. Required artifacts
+may keep the publication in `pending` or `incomplete`; failure to build the final
+JSON does not erase the underlying call ledger. Prefer immutable versioned
+objects over overwriting one key when late usage reconciliation or artifact
+repair requires a new publication.
+
+### Umbrella application and Ecto boundaries
+
+Do not add Ecto to `vxpipe_call_engine`. Its reusable contract should continue to
+work with an inline/static call definition, an in-memory event sink, and no
+database. Do not put Ecto schemas or direct `Repo` calls in `vxpipe_gateway`
+either; the gateway owns HTTP/webhook verification and protocol translation, not
+definition revisioning or call-ledger transactions.
+
+The target umbrella split is:
+
+```text
+vxpipe_gateway
+  -> verifies and normalizes HTTP/provider input
+  -> asks the call-admission API to admit or attach a call
+
+vxpipe_calls
+  -> owns database-neutral call admission and archive application workflows
+  -> selects definition/deployment through configured repository ports
+  -> compiles the plan through vxpipe_call_engine contracts
+  -> creates the durable call record through a port
+  -> starts the room and coordinates terminal publication
+
+vxpipe_call_engine
+  -> owns live room/participant/capability state and protocol-neutral events
+  -> has no Ecto, PostgreSQL, S3, or gateway dependency
+
+vxpipe_persistence
+  -> owns Ecto.Repo, Ecto schemas, migrations, transactions, projections, and
+     outbox persistence
+  -> implements repository/journal ports defined by vxpipe_calls
+
+vxpipe_artifacts (when the recording slice begins)
+  -> owns object-store adapters, track writers, mix jobs, and archive objects
+  -> implements artifact/publisher ports without entering the room hot path
+```
+
+`vxpipe_calls` is preferable to a generic `core` application: it has the cohesive
+responsibility of a call's durable-neutral application lifecycle outside the
+realtime room. `vxpipe_persistence` has the separate reason to change of the
+relational storage implementation. Only `vxpipe_persistence` needs `ecto_sql`
+and the PostgreSQL adapter, and only `vxpipe_artifacts` needs the object-store
+client.
+
+Dependency inversion avoids a compile cycle. `vxpipe_calls` defines small ports
+such as definition repository, inbound route repository, call ledger, and
+publication outbox, and receives configured implementation modules in its
+supervision options. `vxpipe_persistence` depends on those contracts to implement
+them; `vxpipe_calls` does not compile against Ecto. The managed release includes
+and starts the persistence adapter before reporting admission readiness. The
+standalone JSON-configured release supplies static/in-memory implementations and
+does not start a Repo.
+
+The gateway therefore requires a call-admission implementation, not a database.
+In managed mode that implementation uses `vxpipe_persistence`; in standalone
+mode it uses the validated JSON catalog. The call engine requires only an already
+resolved plan and configured event/media sinks. It neither looks up a number nor
+writes a database row itself.
+
+The engine event fan-out needs a first-class subscriber/sink boundary. The
+current room authority sends most domain events only to the participant
+connection that caused the turn, which is insufficient for a complete call
+ledger. Add a protocol-neutral room event sink outside the authority hot path.
+It receives the same ordered event once, then independently fans out to gateway
+participants, persistence projection, telemetry, and other authorized consumers.
+Persistence backpressure must not be hidden in a connection process or create
+unbounded room mailboxes.
+
+### Persistence consistency levels
+
+The first ledger can be an asynchronous archive: a supervised sink batches and
+idempotently inserts events, and the room remains available through a temporary
+database slowdown. This may lose the final buffered events during a node failure
+and is not sufficient to promise room recovery.
+
+Recovery-grade context and room state is a separate contract. It requires a
+durable append/checkpoint acknowledgement before an externally acknowledged
+state transition, or an equivalent replicated log. Do not call it durable
+recovery merely because asynchronous event rows usually arrive. If that mode is
+added, model the room command as pending while an external journal worker writes;
+do not execute Ecto queries inside `RoomAuthority` or hold a synchronous database
+transaction across room/provider work.
+
+### Persistence red-green checkpoints
+
+1. **Database-neutral admission ports:** in `vxpipe_calls`, test route resolution,
+   immutable revision selection, plan compilation, call ID creation, and
+   idempotent admission using in-memory fakes. Prove no provider request or room
+   process runs inside a repository transaction.
+2. **Ecto adapter:** create `vxpipe_persistence` with Repo and migrations for
+   definitions, immutable revisions, deployments, materialized inbound routes,
+   calls, and admission idempotency. Use PostgreSQL integration tests for route
+   uniqueness, revision pinning, transactions, and retry behavior; keep them in
+   the tagged integration lane.
+3. **Gateway admission slice:** make one normalized web or fake-telephony inbound
+   request resolve a stored route, create one durable call, and start one room
+   with the pinned plan. Replaying the request must return the same call. The
+   static JSON admission implementation must continue to work without Repo.
+4. **Ordered call ledger:** add the engine event sink and persist call lifecycle,
+   participant, activation, and final turn events idempotently. Build
+   `call_turns` as a projection and prove partial STT updates do not create
+   duplicate turns.
+5. **Context projection:** persist authorized private context section revisions
+   asynchronously and finalize the last retained snapshot at call end. Prove
+   public events and room snapshots still contain no context value.
+6. **Model usage:** change the model provider contract to preserve each response's
+   usage, emit one usage event per provider request/tool round, and persist exact
+   units/provider/model/cost provenance. Derive turn and call totals without
+   storing floats.
+7. **STT/TTS/telephony usage:** add provider-specific finalization observations
+   according to their actual billing units, retaining estimates and reconciled
+   values as separate facts.
+8. **Separate-track recording:** add a bounded recorder for one participant
+   track, rolling object upload, timing manifest, artifact row, and explicit
+   incomplete status. Then extend to multiple tracks and a derived mix.
+9. **Call-details publication:** on a terminal call, enqueue one idempotent job,
+   assemble versioned JSON from the persisted projections, include artifact
+   checksums/status, upload it, and record publication success. Prove retries do
+   not duplicate call, usage, or artifact records.
+
+The smallest useful database vertical slice is checkpoints 1 through 3. It
+answers the inbound number-to-definition question and pins a durable call record
+without mixing transcript, billing, or recording into admission. The next slice
+adds the event/turn ledger. Usage, recording, mixing, and final publication then
+build on stable call and event identities rather than inventing their own.
+
+### Persistence alternatives rejected
+
+- **Ecto in `vxpipe_call_engine`:** couples the realtime/embedded engine to one
+  database and puts storage failure pressure on room state transitions.
+- **Repo calls in gateway handlers:** mixes provider protocol handling with
+  definition/version and ledger transactions and makes non-HTTP admission harder.
+- **One final in-memory publish:** loses the complete record if the call or node
+  ends abnormally before publication.
+- **One mutable call-details JSON row:** creates write contention, poor query
+  boundaries, and no trustworthy idempotent event history.
+- **Cost columns only on turns:** cannot represent multi-round model calls,
+  streaming STT sessions, segmented TTS, call legs, or later reconciliation.
+- **Only a combined live recording:** loses separate speaker tracks and makes
+  overlap, remixes, and artifact repair harder.
+- **Retention implied by STT/TTS:** confuses processing permission with storage
+  permission; transcripts and audio require explicit artifact/retention policy.
+
 ## Observable runtime contracts needed
 
 The first multi-agent slice needs protocol-neutral events for:
 
+- call admission requested, resolved, started, failed, and ended with stable
+  call identity and pinned definition revision;
 - call plan resolved;
 - agent participant admitted and ready;
 - agent participant activated and deactivated;
@@ -1570,6 +1977,11 @@ The first multi-agent slice needs protocol-neutral events for:
 - context packet created and delivered, with values redacted by visibility;
 - room-context section initialized, updated, or rejected, including section
   revision and authorized agent activation;
+- provider operation started/completed/failed/cancelled and normalized usage
+  recorded, including actual provider/model and correlation scope;
+- recording track/segment started, finalized, incomplete, or failed;
+- artifact and call-details publication queued, completed, incomplete, or
+  failed;
 - tool invocation lifecycle;
 - routing changed; and
 - call ended with a typed reason.
@@ -1675,6 +2087,16 @@ participant's presence-policy denials before commit. Do not start with Lua,
 arbitrary executable hooks, natural-language condition evaluation, or a broad
 workflow interpreter.
 
+The typed call-definition constructor/compiler remains the prerequisite for
+database work: storage must not make unvalidated JSON authoritative. After that
+contract is green, the first persistence vertical slice introduces
+database-neutral admission in `vxpipe_calls`, the Ecto/PostgreSQL adapter in
+`vxpipe_persistence`, immutable definition revisions and deployments, an indexed
+inbound route, and one idempotently created call row that pins the resolved plan.
+Do not combine transcript, usage, recording, or final publication into that
+admission slice; add them incrementally through the ordered event and artifact
+boundaries described above.
+
 ## Verification evidence
 
 - Reviewed existing Vxpipe architecture, product intent, current create-room
@@ -1757,6 +2179,22 @@ workflow interpreter.
   revisions, activation-scoped projections, and compiler-generated read/update
   tools. The plan includes focused red-green checkpoints and manual acceptance
   steps; no runtime implementation was performed in this checkpoint.
+- Inspected the umbrella dependencies and persistence-related runtime surfaces.
+  The repository currently has only gateway and call-engine applications and no
+  Ecto/Repo boundary. The gateway directly creates an engine room, while room
+  events are sent primarily to participant connection processes rather than one
+  complete durable event sink.
+- Confirmed that the current model-provider behavior and ReqLLM adapter return
+  only text/tool/error outcomes to model inference. ReqLLM already exposes
+  normalized response usage and best-effort cost for buffered and streaming
+  requests, but the adapter currently discards it. STT and TTS provider
+  contracts likewise have no normalized usage result.
+- Split the persistence proposal into definition/routing, call/event/context
+  ledger, provider usage, separate participant audio artifacts, derived mix, and
+  final call-details publication. Selected database-free `vxpipe_calls`
+  application workflows, an Ecto-owning `vxpipe_persistence` adapter, and a
+  later object-store-owning `vxpipe_artifacts` boundary; the call engine and
+  gateway keep direct Repo access out of their responsibilities.
 - Reviewed the official MCP `2026-07-28` tool specification, Streamable HTTP
   transport, and generated schema:
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx>
