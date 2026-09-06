@@ -271,34 +271,47 @@ remain different commands even if all are exposed to a model as tools. Agent to
 agent and agent to human are variants of participant-control transfer, not
 separate top-level runtime identity models.
 
-### A transfer may change the room's capability topology
+### Participant presence determines the capability topology
 
-A transfer declares its desired resulting participant topology and the
-requirements that must hold at commit. It does not declare imperative
-`on_success` callbacks. A source disposition such as `detach` is part of the
-atomic transfer result, while capability states such as `ready` or `stopped` are
-commit requirements that the coordinator must satisfy before reporting success.
+Capability requirements belong to participants and room policy, not to each
+transfer path. A participant carries immutable, resolved `presence_requirements`
+that apply while it is admitted to the room's media topology. The requirements
+come from trusted application or tenant destination configuration for a human
+participant and from the resolved agent definition for an agent participant;
+they are never supplied by an attaching client.
 
-The resolved transition combines capability requirements from four trusted
-sources:
+The room begins with the resolved call plan's normal capability intent, including
+the active agent participant's required capabilities. It then reconciles that
+baseline against room/application policy and the presence requirements of every
+participant in the proposed topology. A presence requirement can require a
+capability state such as `ready` or `stopped`, for the participant itself or an
+explicitly authorized wider participant selector. No participant policy can
+weaken another policy. Conflicting requirements reject admission or transfer.
 
-- the destination agent definition's required capability profile;
-- the participant destination's application- or tenant-configured policy;
-- stricter requirements declared by the transfer binding; and
-- room/application policy that applies independently of the definition.
+This makes a rule such as “while this human service participant is present, no
+participant in the room may use speech recognition or synthesis” a property of
+that participant's trusted destination policy. Every transfer to that
+destination inherits the rule without repeating it. Conversely, admitting an
+agent participant obtains its `ready` requirements from its agent definition.
 
-No source can weaken another source's constraint. Incompatible requirements
-reject plan resolution or the transfer. Thus an agent-to-agent transfer can
-require the destination's speech, inference, and speech-output capabilities to
-be ready, while a destination policy for a human-only segment can require
-speech recognition and synthesis to be stopped.
+The room recomputes the effective capability state whenever its authoritative
+participant set or active agent participant changes. A connection loss alone
+must not remove a presence requirement; the room must detach or expire that
+participant through an explicit lifecycle decision first. When the last
+participant imposing a restriction leaves, the room reconciles back toward the
+normal resolved capability intent. This does not start every known capability
+indiscriminately: only capabilities enabled by the call and current agent plans
+resume, and any remaining participant or room policy still applies.
 
-The room authority runs a transfer in prepare and commit phases. During prepare,
-it resolves or admits the destination and may keep the source participant and
-its current capabilities active; this permits announcements, data collection,
-and a warm handoff. Once the destination is ready, the coordinator satisfies
-the merged commit requirements against the proposed resulting participant set.
-Only then does it atomically change control/routing, apply the source
+A transfer declares only its target and transfer behavior, such as warm versus
+cold handoff, source disposition, context projection, and presentation. The
+room authority runs it in prepare and commit phases. During prepare, it resolves
+the destination and its presence requirements outside the active media
+topology, while the source participant and its current capabilities may remain
+active for announcements and data collection. It then computes the proposed
+post-transfer participant set and reconciles its capability state. Only after
+that state satisfies every presence requirement does the room atomically admit
+or activate the destination, change control/routing, apply the source
 disposition, and emit `transfer.completed`.
 
 The initial `CallDefinition` therefore has no generic `on_success` field. Host
@@ -321,9 +334,9 @@ new input, not merely hiding client events.
 
 This allows a call to begin with an agent participant, admit a human participant
 during a warm transfer, detach the source agent participant after the bridge
-succeeds, and continue with two human participants. A later explicit,
-authorized command may restart a stopped capability if policy permits it;
-transfer completion must not restart one implicitly.
+succeeds, and continue with two human participants. When the restrictive
+participant later leaves, reconciliation may restart capabilities required by
+the remaining topology without a reverse transfer having to enumerate them.
 
 Recording, analytics, and export are separate capabilities. Stopping speech
 recognition and synthesis does not claim to stop those other data paths, so a
@@ -459,7 +472,7 @@ An engine-owned transfer-tool binding should contain:
 - optional context/history transfer policy when the destination is an agent
   participant; and
 - a typed transition policy containing its handoff mode, source disposition,
-  user-visible speech policy, and capability requirements for commit.
+  and user-visible speech policy.
 
 The room checks that the source participant is current and, for an agent
 participant, that its activation is current. It also checks that the target is
@@ -672,6 +685,31 @@ changes participant connections and call legs. A later warm-transfer workflow
 may create a temporary consultation room, but that should not force multi-room
 orchestration into the initial definition.
 
+The `support_queue` destination used below is trusted application or tenant
+configuration outside the call definition. For example:
+
+```json
+{
+  "id": "support_queue",
+  "participant_kind": "human",
+  "presence_requirements": {
+    "capabilities": [
+      {
+        "participants": {"scope": "room"},
+        "states": {
+          "speech_to_text": "stopped",
+          "text_to_speech": "stopped"
+        }
+      }
+    ]
+  }
+}
+```
+
+Resolving this destination copies the validated requirements into the runtime
+participant. The client that eventually attaches to that participant cannot
+add, remove, or weaken them.
+
 ## Representative JSON shape
 
 This is a discussion aid, not a committed schema:
@@ -760,18 +798,7 @@ This is a discussion aid, not a committed schema:
           "description": "Use when the caller asks to speak with a person.",
           "transition": {
             "mode": "warm",
-            "source_disposition": "detach",
-            "commit_requirements": {
-              "capabilities": [
-                {
-                  "participants": {"kind": "human"},
-                  "states": {
-                    "speech_to_text": "stopped",
-                    "text_to_speech": "stopped"
-                  }
-                }
-              ]
-            }
+            "source_disposition": "detach"
           }
         }
       }
@@ -820,10 +847,11 @@ participant, connection, and call IDs. The transport attachment belongs to the
 invocation or an inbound routing resource, not to reusable conversational
 behavior. `support_queue` is a logical destination resolved through trusted
 application or tenant configuration; it is not a runtime participant ID or a
-model-supplied address. The target and transition requirements are trusted tool
-configuration; the model only supplies arguments allowed by the resolved tool
-schema. An agent with a `write` context grant receives a platform context-update
-tool restricted to those named sections.
+model-supplied address. The destination supplies the admitted participant's
+presence requirements, while the transfer binding describes only the handoff.
+Both are trusted configuration; the model only supplies arguments allowed by
+the resolved tool schema. An agent with a `write` context grant receives a
+platform context-update tool restricted to those named sections.
 
 Provider/profile strings are closed registry names resolved by the host. They
 do not name Elixir modules. Inline prompts may later be replaced by immutable
@@ -913,10 +941,10 @@ Compilation should reject, with path-specific errors:
 - a participant destination that cannot be resolved within the authenticated
   application or tenant scope;
 - participant-destination metadata with an unsupported allowed participant kind;
-- a transition with an unknown mode, source disposition, participant selector,
+- a transition with an unknown mode or source disposition;
+- a participant presence requirement with an unknown or unauthorized selector,
   capability kind, or required state;
-- incompatible capability commit requirements after merging the agent,
-  destination, transfer-binding, and room/application policies;
+- incompatible capability requirements in a proposed participant topology;
 - duplicate tool names within one source agent;
 - tool or integration references not present in closed registries;
 - duplicate agent-local tool aliases within one agent;
@@ -959,8 +987,8 @@ The first multi-agent slice needs protocol-neutral events for:
 - agent participant activated and deactivated;
 - participant transfer requested, accepted, completed, rejected, failed, and
   cancelled, including source and destination participant IDs and kinds;
-- capability commit requirement evaluated, state transition requested, state
-  reached, acknowledged, timed out, or failed;
+- participant presence requirement applied or removed, and capability
+  reconciliation requested, state reached, acknowledged, timed out, or failed;
 - context packet created and delivered, with values redacted by visibility;
 - room-context section initialized, updated, or rejected, including section
   revision and authorized agent activation;
@@ -992,8 +1020,8 @@ room incarnation, participant, turn, and activation identity.
    section revisions, and absence of ungranted sections.
 4. **Agent and transfer-tool data:** test `agent_definition` and
    `participant_destination` selector resolution, missing targets, participant
-   kinds, duplicate names, transfer cycles, unreachable-agent linting, and
-   path-specific errors.
+   kinds and presence requirements, duplicate names, transfer cycles,
+   unreachable-agent linting, and path-specific errors.
 5. **Active-agent-participant reducer:** test activation, agent-to-agent and
    agent-to-human participant transfer, `active_agent_participant_id: nil`,
    terminal state, stale activation, and transfer-budget behavior using
@@ -1001,11 +1029,14 @@ room incarnation, participant, turn, and activation identity.
    active agent participant and activation ID.
 6. **Behavior-preserving agent:** prove a one-agent resolved plan produces
    the same text/audio turn behavior as the current preset path.
-7. **Human-only transfer:** prove a human participant joins during prepare while
-   the source agent remains usable, commit requirements then make selected
-   capabilities reject new frames and cancel queued work, commit waits for stop
-   acknowledgement, and the source detaches only when the room can remain alive
-   safely with human participants and no active agent participant.
+7. **Human-only transfer:** prove a human destination's presence requirements
+   are inherited without appearing on the transfer binding. The source agent
+   remains usable during prepare; admission then makes selected capabilities
+   reject new frames and cancel queued work, waits for stop acknowledgement, and
+   detaches the source only when the room can safely continue with human
+   participants and no active agent participant. Detaching the restrictive
+   participant reconciles the remaining topology back to its normal enabled
+   capabilities without a transfer-specific restart list.
 8. **JSON and gateway boundary:** round-trip definition/invocation data, reject
    unknown keys, dynamic atom creation, arbitrary runtime overrides, credentials,
    and tenant overrides.
@@ -1057,8 +1088,9 @@ contain generic nodes or edges. The room directly owns participant routing and
 the optional active agent participant, and a running room may have no agent
 participant. Platform tools include at least `hangup`, `transfer`, and the
 permission-constrained room context update operation. A participant transfer
-may declare capability-state commit requirements before leaving a human-only
-room. Do not start with Lua,
+does not enumerate capability changes; the room reconciles the proposed
+topology from its baseline intent and each participant's presence requirements
+before commit. Do not start with Lua,
 arbitrary executable hooks, natural-language condition evaluation, or a broad
 workflow interpreter.
 
@@ -1094,12 +1126,13 @@ workflow interpreter.
   while the room always commits a transfer between concrete participants. This
   includes an intake agent participant transferring control to a human service
   agent participant.
-- Corrected transfer timing: there is no generic `on_success` action bag. A
-  transfer prepares its destination, merges required capability states from
-  agent, destination, binding, and room/application policies, satisfies them as
-  bounded commit barriers, and only then changes routing and applies the source
-  disposition. This supports both capabilities required as `ready` for an agent
-  destination and capabilities required as `stopped` for a human-only segment.
+- Corrected capability-policy ownership: there is no generic `on_success` action
+  bag and transfer bindings do not enumerate capability changes. Each runtime
+  participant inherits immutable presence requirements from its trusted agent
+  definition or application/tenant destination. The room reconciles its normal
+  capability intent against the proposed participant set before transfer
+  commit, and reconciles back toward that baseline when a restrictive
+  participant leaves.
 - Added room-owned typed context sections with per-agent `read`/`write` grants.
   Top-level section grants are the initial contract; nested dot-path and wildcard
   permissions are deferred.
