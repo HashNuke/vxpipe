@@ -151,18 +151,27 @@ room admits an instance of it, that instance is a participant with
 surrounding business, but remains a participant with `kind: human` in the
 engine's type system.
 
-Transfer is an engine-owned platform tool with typed target selectors. Each
-agent definition receives only the target-specific transfer bindings it is
-allowed to request. An `agent_definition` selector pins definition-local
-configuration that will be admitted as an agent participant. A
-`participant_destination` selector pins an allowlisted logical destination,
-which the host may resolve to a human or agent participant. These are resolution
-paths, not sibling runtime identity types. Model-facing arguments must not accept
-arbitrary runtime participant IDs, telephone numbers, or transport destinations.
+Transfer is an engine-owned platform tool derived from the active agent
+definition's declared `transfers` map. Each map entry is an agent-local transfer
+possibility with a stable alias and a typed target selector. An
+`agent_definition` selector pins definition-local configuration that will be
+admitted as an agent participant. A `participant_destination` selector pins an
+allowlisted logical destination, which the host may resolve to a human or agent
+participant. These are resolution paths, not sibling runtime identity types.
 
-Each configured transfer tool can carry a model-facing description, context
-policy, and presentation policy. This gives the model a typed request surface
-while the room authority validates and commits the actual control mutation.
+When an agent has no transfer possibilities, the compiler does not expose a
+transfer tool. When it has one or more, the compiler exposes one platform
+`transfer` tool whose destination argument is restricted to those agent-local
+aliases. The model never receives arbitrary runtime participant IDs, telephone
+numbers, transport destinations, or raw target references. Each possibility
+can carry the model-facing description, context policy, and presentation policy
+needed to choose and execute it.
+
+The generated input schema is only the first guard. At invocation, the executor
+checks that the source participant and activation are current and resolves the
+chosen alias through that active agent's immutable transfer table. A stale,
+unknown, or other-agent alias is rejected before the room receives a command.
+The room then validates and commits the actual control mutation.
 
 ### Track active control directly; do not introduce a graph
 
@@ -495,15 +504,15 @@ Each agent should contain:
 - first-message behavior;
 - MCP integrations enabled for this agent and stable agent-local bindings for
   the selected remote tools;
-- engine-owned tool grants;
+- engine-owned non-transfer tool grants;
+- an optional map of declared transfer possibilities;
 - room-context permissions by top-level section;
 - input, output, and action-guardrail policy references;
 - optional limits stricter than the call defaults.
 
-An engine-owned transfer-tool binding should contain:
+Each declared transfer possibility should contain:
 
-- a stable name within the source agent;
-- platform tool kind `transfer`;
+- a stable alias within the source agent's `transfers` map;
 - a typed target selector containing either a fixed definition-local
   `agent_definition` reference or an allowlisted logical
   `participant_destination` reference;
@@ -512,6 +521,11 @@ An engine-owned transfer-tool binding should contain:
   participant; and
 - a typed transition policy containing its handoff mode, source disposition,
   and user-visible speech policy.
+
+The compiler resolves these entries into the agent's immutable transfer table.
+It derives one platform transfer-tool schema whose destination choices are the
+table's aliases; the author does not add a transfer entry to the agent's `tools`
+map. An absent or empty transfer table produces no model-visible transfer tool.
 
 The room checks that the source participant is current and, for an agent
 participant, that its activation is current. It also checks that the target is
@@ -823,10 +837,10 @@ This is a discussion aid, not a committed schema:
           "type": "platform",
           "tool": "hangup",
           "description": "Use after the conversation is complete."
-        },
-        "transfer_to_billing": {
-          "type": "platform",
-          "tool": "transfer",
+        }
+      },
+      "transfers": {
+        "billing": {
           "target": {"type": "agent_definition", "ref": "billing"},
           "description": "Use when the caller needs help with a billing issue.",
           "context": {
@@ -834,9 +848,7 @@ This is a discussion aid, not a committed schema:
             "sections": ["customer", "intake"]
           }
         },
-        "transfer_to_person": {
-          "type": "platform",
-          "tool": "transfer",
+        "person": {
           "target": {"type": "participant_destination", "ref": "support_queue"},
           "description": "Use when the caller asks to speak with a person.",
           "transition": {
@@ -891,10 +903,12 @@ invocation or an inbound routing resource, not to reusable conversational
 behavior. `support_queue` is a logical destination resolved through trusted
 application or tenant configuration; it is not a runtime participant ID or a
 model-supplied address. The destination supplies the admitted participant's
-presence policy, while the transfer binding describes only the handoff. Both
-are trusted configuration; the model only supplies arguments allowed by the
-resolved tool schema. An agent with a `write` context grant receives a platform
-context-update tool restricted to those named sections.
+presence policy, while the transfer possibility describes only the handoff.
+Both are trusted configuration. For `reception`, the compiler exposes one
+transfer tool whose destination choices are `billing` and `person`; the model
+cannot submit the underlying refs or a third destination. An agent with a
+`write` context grant receives a platform context-update tool restricted to
+those named sections.
 
 Provider/profile strings are closed registry names resolved by the host. They
 do not name Elixir modules. Inline prompts may later be replaced by immutable
@@ -980,7 +994,10 @@ Compilation should reject, with path-specific errors:
 - an absent, malformed, or unresolved entrypoint;
 - duplicate or invalid names;
 - an `agent_definition` selector naming an unknown definition-local agent;
-- a transfer tool with an unknown or disallowed destination;
+- a transfer possibility with an unknown or disallowed destination;
+- a duplicate or invalid transfer alias within one agent;
+- a user-authored `transfer` tool or another tool alias that collides with the
+  compiler-generated platform tool;
 - a participant destination that cannot be resolved within the authenticated
   application or tenant scope;
 - participant-destination metadata with an unsupported allowed participant kind;
@@ -1014,7 +1031,6 @@ Compilation should reject, with path-specific errors:
   read;
 - invocation defaults for undeclared fields;
 - policies outside bounded ranges;
-- a model-selectable transfer whose source agent lacks that tool grant;
 - incompatible required capabilities; and
 - any private runtime term or literal secret at the public boundary.
 
@@ -1025,8 +1041,9 @@ error, not necessarily a runtime-invalid definition.
 
 At runtime, destination resolution must produce a concrete participant ID and a
 supported `human` or `agent` kind before the room commits the transfer. A missing
-identity, a kind mismatch, or a stale source participant/activation rejects the
-operation without changing control or routing.
+identity, a kind mismatch, an alias absent from the active agent's transfer
+table, or a stale source participant/activation rejects the operation without
+changing control or routing.
 
 ## Observable runtime contracts needed
 
@@ -1069,11 +1086,12 @@ room incarnation, participant, turn, and activation identity.
 3. **Room-context contract:** test typed top-level sections, per-agent read/write
    grants, model-visible read projection, authorized writes, schema rejection,
    section revisions, and absence of ungranted sections.
-4. **Agent and transfer-tool data:** test `agent_definition` and
-   `participant_destination` selector resolution, missing targets, participant
-   kinds, presence-policy activation conditions, denial lists, and subject
-   selector-list union and normalization for `all` and `agent`, duplicate names,
-   transfer cycles, unreachable-agent linting, and path-specific errors.
+4. **Agent and transfer-possibility data:** test `agent_definition` and
+   `participant_destination` target resolution, missing targets, duplicate
+   aliases, absent/empty transfers producing no tool, non-empty transfers
+   producing one closed destination choice set, participant kinds,
+   presence-policy denial selectors, transfer cycles, unreachable-agent linting,
+   and path-specific errors.
 5. **Active-agent-participant reducer:** test activation, agent-to-agent and
    agent-to-human participant transfer, `active_agent_participant_id: nil`,
    terminal state, stale activation, and transfer-budget behavior using
@@ -1082,13 +1100,13 @@ room incarnation, participant, turn, and activation identity.
 6. **Behavior-preserving agent:** prove a one-agent resolved plan produces
    the same text/audio turn behavior as the current preset path.
 7. **Human-only transfer:** prove a human destination's capability denials are
-   inherited without appearing on the transfer binding. The source agent remains
-   usable during prepare; admission then makes denied capabilities reject new
-   frames and cancel queued work, waits for stop acknowledgement, and detaches
-   the source only when the room can safely continue with human participants and
-   no active agent participant. Detaching the restrictive participant reconciles
-   the remaining topology back to its normal enabled capabilities without a
-   transfer-specific restart list.
+   inherited without appearing on the transfer possibility. The source agent
+   remains usable during prepare; admission then makes denied capabilities
+   reject new frames and cancel queued work, waits for stop acknowledgement, and
+   detaches the source only when the room can safely continue with human
+   participants and no active agent participant. Detaching the restrictive
+   participant reconciles the remaining topology back to its normal enabled
+   capabilities without a transfer-specific restart list.
 8. **JSON and gateway boundary:** round-trip definition/invocation data, reject
    unknown keys, dynamic atom creation, arbitrary runtime overrides, credentials,
    and tenant overrides.
@@ -1104,10 +1122,10 @@ room incarnation, participant, turn, and activation identity.
    from the agent participant cancels the remote request. Do not add stdio or an
    MCP server endpoint.
 11. **Agent-to-agent participant transfer:** use two deterministic agent
-   participants and one engine-owned transfer tool to prove only the active
-   agent participant receives turns, the destination's required capabilities
-   are ready before commit, targets are allowlisted, and stale output is
-   rejected.
+   participants and one compiler-derived transfer tool to prove only the active
+   agent participant receives turns, only its declared destination aliases are
+   accepted, the destination's required capabilities are ready before commit,
+   and stale output is rejected.
 12. **Scoped transition context:** prove allowed spoken history and typed fields
    reach the destination while hidden fields, private tool data, credentials,
    and unplayed text do not.
@@ -1123,7 +1141,7 @@ proof is an inline one-agent definition using schema `"20260906.01"`, an
 `agent_definition` entrypoint, shared capability-profile defaults, declared
 invocation inputs, typed room-context sections, per-agent section permissions,
 and bounded limits becoming a self-contained immutable plan. Route the existing
-single-agent behavior through that plan before adding transfer tools or
+single-agent behavior through that plan before adding transfer possibilities or
 integration resolution.
 
 Remote MCP integrations still live in application or tenant catalogs, where
@@ -1178,14 +1196,18 @@ workflow interpreter.
   while the room always commits a transfer between concrete participants. This
   includes an intake agent participant transferring control to a human service
   agent participant.
+- Made transfer availability derive from each agent definition's `transfers`
+  map. An absent or empty map exposes no transfer tool; a non-empty map produces
+  one compiler-owned tool restricted to that active agent's local destination
+  aliases. Authors do not place transfer tools in the general `tools` map.
 - Corrected capability-policy ownership: there is no generic `on_success` action
-  bag and transfer bindings do not enumerate capability changes. Each runtime
-  participant inherits an immutable presence policy from its trusted agent
-  definition or application/tenant destination. Positive capability intent
-  remains in the call and active-agent plans; presence policies only deny
-  capabilities. The room filters normal intent through applicable denials before
-  transfer commit and reconciles back toward that baseline when a restrictive
-  participant leaves.
+  bag and transfer possibilities do not enumerate capability changes. Each
+  runtime participant inherits an immutable presence policy from its trusted
+  agent definition or application/tenant destination. Positive capability
+  intent remains in the call and active-agent plans; presence policies only deny
+  capabilities. The room filters normal intent through applicable denials
+  before transfer commit and reconciles back toward that baseline when a
+  restrictive participant leaves.
 - Separated a presence policy's owner activation from its affected participant
   selector. A policy can apply while its owner is admitted or, for an agent,
   while it is the active agent. The initial selector surface constrains either
