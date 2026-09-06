@@ -298,32 +298,40 @@ The policy owner and the affected participants are separate dimensions:
 - `applies_while: active_agent` means an agent participant contributes it only
   while it owns conversational control; this trigger is invalid for a human
   participant; and
-- each denial's `participants` field is a non-empty list of typed selectors whose
-  matches are unioned. Initial selector types are `self`, `all`, participant
-  `kind`, definition-local `agent_definition`, and trusted
+- each denial's `participants` field is a non-empty list of structural selectors
+  whose matches are unioned. Each selector has exactly one key: `self`, `all`,
+  `participant_ref`, `kind`, `agent_definition`, or
   `participant_destination`.
 
-For example, these selectors deny a capability to the agent participants
-instantiated from either `xyz` or `abc`, even if the room has four participants:
+`kind` is intentionally broad: `{"kind": "human"}` selects every human
+participant. Two particular humans out of four require their distinct,
+room-local logical references instead:
 
 ```json
 {
   "participants": [
-    {"type": "agent_definition", "ref": "xyz"},
-    {"type": "agent_definition", "ref": "abc"}
+    {"participant_ref": "caller"},
+    {"participant_ref": "supervisor"}
   ]
 }
 ```
 
-Selectors are resolved to concrete participant IDs against the proposed room
+Each `participant_ref` identifies at most one participant in a room incarnation
+and is assigned through trusted room construction or destination resolution; it
+is not a person name or a participant kind. `{"agent_definition": "xyz"}` may
+match multiple instances of that agent definition, while `participant_ref`
+selects one concrete logical slot.
+
+Selectors are resolved to runtime participant IDs against the proposed room
 topology before enforcement. Duplicate matches are harmless and are normalized
-to one ID. An `all` selector must be the list's only entry because combining it
+to one ID. `{"all": true}` must be the list's only entry because combining it
 with narrower selectors is redundant.
 
-Reusable configuration does not select an arbitrary runtime participant ID. An
-authoritative runtime policy may do so through a separate command if that use
-case is later required. `active` must not mean “currently speaking”; Vxpipe
-does not infer policy activation from voice activity.
+Reusable configuration can select stable `participant_ref` values but not
+arbitrary runtime participant IDs. An authoritative runtime policy may select
+IDs through a separate command if that use case is later required. `active` must
+not mean “currently speaking”; Vxpipe does not infer policy activation from
+voice activity.
 
 This makes a rule such as “while this human service participant is present, no
 participant in the room may use speech recognition or synthesis” a property of
@@ -733,7 +741,7 @@ configuration outside the call definition. For example:
     "applies_while": "admitted",
     "capability_denials": [
       {
-        "participants": [{"type": "all"}],
+        "participants": [{"all": true}],
         "capabilities": ["speech_to_text", "text_to_speech"]
       }
     ]
@@ -745,11 +753,13 @@ Resolving this destination copies the validated presence policy into the runtime
 participant. The client that eventually attaches to that participant cannot
 add, remove, or weaken it.
 
-Changing the list to `[{"type": "agent_definition", "ref": "xyz"}]` means the
-same policy owner denies those capabilities only to agent participants
-instantiated from agent definition `xyz`. If `xyz` requires either capability
-for activation, it cannot become the active agent until the denial is removed.
-An inactive `xyz` participant can remain admitted without those capabilities.
+Changing the list to `[{"agent_definition": "xyz"}]` means the same policy owner
+denies those capabilities to every agent participant instantiated from agent
+definition `xyz`. Using `[{"participant_ref": "xyz_instance"}]` instead selects
+one trusted room-local participant reference. If `xyz` requires either
+capability for activation, it cannot become the active agent until the denial is
+removed. An inactive `xyz` participant can remain admitted without those
+capabilities.
 
 ## Representative JSON shape
 
@@ -986,7 +996,9 @@ Compilation should reject, with path-specific errors:
 - a participant presence policy with an unknown activation condition, selector,
   or denied capability kind;
 - a capability denial whose `participants` value is not a non-empty selector
-  list, or which combines `all` with another selector;
+  list, whose selector has zero or multiple selector keys, or which combines
+  `{"all": true}` with another selector;
+- an unresolved or non-unique room-local `participant_ref`;
 - `active_agent` policy activation owned by a human participant, or an
   unauthorized room-wide or cross-participant selector;
 - an activation or proposed participant topology whose positive capability
@@ -1187,10 +1199,11 @@ workflow interpreter.
   while it is the active agent; it can constrain the room, itself, a participant
   kind, or instances of a named agent definition. `active` never means voice
   activity.
-- Made each capability denial's `participants` field a non-empty list of typed
-  selectors with union semantics. This supports targeting two selected
-  participants out of a larger room without changing the policy shape used for
-  `self`, `all`, kind, agent-definition, or destination selectors.
+- Made each capability denial's `participants` field a non-empty list of
+  structural, single-key selectors with union semantics. A stable room-local
+  `participant_ref` distinguishes selected humans or agent instances of the
+  same kind; broader selectors cover `self`, `all`, kind, agent-definition, or
+  destination matches without a generic `type` discriminator.
 - Added room-owned typed context sections with per-agent `read`/`write` grants.
   Top-level section grants are the initial contract; nested dot-path and wildcard
   permissions are deferred.
