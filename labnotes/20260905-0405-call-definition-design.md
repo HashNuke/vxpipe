@@ -298,9 +298,27 @@ The policy owner and the affected participants are separate dimensions:
 - `applies_while: active_agent` means an agent participant contributes it only
   while it owns conversational control; this trigger is invalid for a human
   participant; and
-- each denial's `participants` selector chooses the affected runtime
-  participants, initially `self`, `room`, a participant `kind`, or every agent
-  participant instantiated from a named `agent_definition`.
+- each denial's `participants` field is a non-empty list of typed selectors whose
+  matches are unioned. Initial selector types are `self`, `all`, participant
+  `kind`, definition-local `agent_definition`, and trusted
+  `participant_destination`.
+
+For example, these selectors deny a capability to the agent participants
+instantiated from either `xyz` or `abc`, even if the room has four participants:
+
+```json
+{
+  "participants": [
+    {"type": "agent_definition", "ref": "xyz"},
+    {"type": "agent_definition", "ref": "abc"}
+  ]
+}
+```
+
+Selectors are resolved to concrete participant IDs against the proposed room
+topology before enforcement. Duplicate matches are harmless and are normalized
+to one ID. An `all` selector must be the list's only entry because combining it
+with narrower selectors is redundant.
 
 Reusable configuration does not select an arbitrary runtime participant ID. An
 authoritative runtime policy may do so through a separate command if that use
@@ -715,7 +733,7 @@ configuration outside the call definition. For example:
     "applies_while": "admitted",
     "capability_denials": [
       {
-        "participants": {"scope": "room"},
+        "participants": [{"type": "all"}],
         "capabilities": ["speech_to_text", "text_to_speech"]
       }
     ]
@@ -723,15 +741,15 @@ configuration outside the call definition. For example:
 }
 ```
 
-Resolving this destination copies the validated requirements into the runtime
+Resolving this destination copies the validated presence policy into the runtime
 participant. The client that eventually attaches to that participant cannot
-add, remove, or weaken them.
+add, remove, or weaken it.
 
-Changing the selector to `{"agent_definition": "xyz"}` means the same policy
-owner denies those capabilities only to agent participants instantiated from
-agent definition `xyz`. If `xyz` requires either capability for activation, it
-cannot become the active agent until the denial is removed. An inactive `xyz`
-participant can remain admitted without those capabilities.
+Changing the list to `[{"type": "agent_definition", "ref": "xyz"}]` means the
+same policy owner denies those capabilities only to agent participants
+instantiated from agent definition `xyz`. If `xyz` requires either capability
+for activation, it cannot become the active agent until the denial is removed.
+An inactive `xyz` participant can remain admitted without those capabilities.
 
 ## Representative JSON shape
 
@@ -967,6 +985,8 @@ Compilation should reject, with path-specific errors:
 - a transition with an unknown mode or source disposition;
 - a participant presence policy with an unknown activation condition, selector,
   or denied capability kind;
+- a capability denial whose `participants` value is not a non-empty selector
+  list, or which combines `all` with another selector;
 - `active_agent` policy activation owned by a human participant, or an
   unauthorized room-wide or cross-participant selector;
 - an activation or proposed participant topology whose positive capability
@@ -1013,8 +1033,9 @@ The first multi-agent slice needs protocol-neutral events for:
 - agent participant activated and deactivated;
 - participant transfer requested, accepted, completed, rejected, failed, and
   cancelled, including source and destination participant IDs and kinds;
-- participant capability denial applied or removed, and capability
-  reconciliation requested, enforced, acknowledged, timed out, or failed;
+- participant capability denial applied or removed, including policy-owner and
+  matched participant IDs, and capability reconciliation requested, enforced,
+  acknowledged, timed out, or failed;
 - context packet created and delivered, with values redacted by visibility;
 - room-context section initialized, updated, or rejected, including section
   revision and authorized agent activation;
@@ -1047,8 +1068,8 @@ room incarnation, participant, turn, and activation identity.
 4. **Agent and transfer-tool data:** test `agent_definition` and
    `participant_destination` selector resolution, missing targets, participant
    kinds, presence-policy activation conditions, denial lists, and subject
-   selectors, duplicate names, transfer cycles, unreachable-agent linting, and
-   path-specific errors.
+   selector-list union and normalization, duplicate names, transfer cycles,
+   unreachable-agent linting, and path-specific errors.
 5. **Active-agent-participant reducer:** test activation, agent-to-agent and
    agent-to-human participant transfer, `active_agent_participant_id: nil`,
    terminal state, stale activation, and transfer-budget behavior using
@@ -1166,6 +1187,10 @@ workflow interpreter.
   while it is the active agent; it can constrain the room, itself, a participant
   kind, or instances of a named agent definition. `active` never means voice
   activity.
+- Made each capability denial's `participants` field a non-empty list of typed
+  selectors with union semantics. This supports targeting two selected
+  participants out of a larger room without changing the policy shape used for
+  `self`, `all`, kind, agent-definition, or destination selectors.
 - Added room-owned typed context sections with per-agent `read`/`write` grants.
   Top-level section grants are the initial contract; nested dot-path and wildcard
   permissions are deferred.
