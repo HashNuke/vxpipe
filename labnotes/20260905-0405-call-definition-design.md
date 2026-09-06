@@ -16,6 +16,10 @@ needs a node-and-edge model.
 This is a research checkpoint. It does not commit a public schema or change
 runtime behavior.
 
+The [design gap review](#design-gap-review--pending-approval) records unresolved
+questions and possible solutions. Those suggestions are pending user review;
+they do not amend the candidate schema or authorize implementation.
+
 ## Constraints
 
 - Preserve the protocol-neutral call engine and keep client/provider protocols
@@ -2230,6 +2234,162 @@ inbound route, and one idempotently created call row that pins the resolved plan
 Do not combine transcript, usage, recording, or final publication into that
 admission slice; add them incrementally through the ordered event and artifact
 boundaries described above.
+
+## Design gap review — pending approval
+
+The existing participant-first structure still fits the intended scenarios.
+Keep `entrypoint`, direct participant-ref transfer lists, agent-scoped tool
+enablement, immutable resolved plans, room-owned context, and live mixing. This
+checkpoint identifies missing contracts and inconsistencies; it does not add
+functionality or adopt new schema fields. Detailed reasoning and evidence live
+in the [call-definition gap review](../docs/call-definition-gap-review.md).
+
+### Baseline and scope
+
+- The pre-review labnote was already committed in `e7a769e` and the worktree was
+  clean before editing. Review documentation will be a separate checkpoint.
+- Existing schema examples and decisions are preserved for comparison. Proposed
+  corrections below require review before being folded into the candidate.
+- No engine, gateway, dependencies, application configuration, or tests changed.
+  No new umbrella application, provider call, or database was introduced.
+
+### Gaps and options to review
+
+The numbering below matches G1–G13 in the focused review document.
+
+1. **Conflicting candidate examples:** MCP enablement still has an `agents`
+   root; the representative definition binds an MCP tool without the separately
+   required integration enablement; `billing` has different `intake` permissions
+   in the two examples. Possible resolution: one canonical participant-first
+   fixture, MCP bindings under agent integration enablement, closed tool-name
+   collision checks, and clearly marked partial/later examples.
+2. **Admission and variable binding:** transport type does not identify which
+   human definition is attaching when several are possible. Required customer
+   identity cannot be assumed from an inbound phone number. Possible resolution:
+   trusted admission-participant selection, explicit initial materialization,
+   separate definition/input/ingress/context namespaces, and bounded typed
+   personalization, timezone, and dial-destination bindings. Caller number is
+   not verified customer identity. Specify human entrypoint behavior without
+   assuming an initial agent.
+3. **Context initialization and stale work:** requiring a fully valid default
+   before applying input bindings prevents required fields from being supplied
+   solely at invocation. Activation checks alone do not invalidate interrupted
+   work from the same activation. Possible resolution: validate partial defaults,
+   apply bindings, fully validate initialized values; check live turn/tool
+   identity and deadline at mutation commit; deduplicate mutation retries.
+   Writes committed before interruption remain facts. Reject mixed authorized
+   and unauthorized reads as a whole, and redact write-only validation errors.
+   A schema-valid agent write also does not prove identity verification or a
+   completed external action. Consider separating intake from trusted-result
+   sections; only authorized platform result bindings may update verified status or
+   external receipts. Verification expiry, attempt limits, and comparison belong
+   to a trusted backend, not model reasoning.
+4. **External side effects:** a canceled request may already have booked or
+   sent something remotely. Possible resolution: separate tool invocation from
+   external operation, preserve confirmed/failed/unknown outcomes, and retry
+   ambiguous writes only with provider-supported idempotency or reconciliation.
+   Late receipts must not revive canceled model work or apply stale context
+   patches. Bind action confirmation to exact arguments and expiry. A start
+   event is not proof of successful completion.
+5. **Private tool data and archive projections:** current tool events carry
+   arguments/results through the gateway. Reusing that path for context would
+   leak values despite metadata-only context events. Possible resolution:
+   audience-specific lifecycle projections, private execution payloads, and an
+   independently authorized private context journal. Apply retention before
+   storage, including sensitive user input, not only during final export.
+6. **Remote integration compatibility:** configured and enabled are specified,
+   but supported protocol revisions, result types, tool-schema features, and
+   unsupported server interactions need a tested profile. Possible resolution:
+   explicitly bounded discovery and JSON/SSE handling, fail-closed incompatibility,
+   credential-scoped caching, safe egress, and no permission changes from returned
+   instructions. Existing HTTP actions require a remote MCP facade or trusted
+   host adapter; they are not automatically MCP tools.
+7. **Greeting, silence, voicemail, and ending:** first-message modes, timer
+   phases, reactivation behavior, and speak-then-end ordering are underspecified.
+   Possible resolution: closed runtime policies and typed evidence/deadlines.
+   Reconnect must not accidentally repeat a greeting. An answered leg does not
+   prove a human answered; required beep/classification evidence must actually
+   be supported by the adapter. Preserve the no-local-model/no-local-VAD scope.
+8. **Transfer policy and media routing:** transfer refs give an allowlist, but
+   warm/cold behavior, acceptance, failure, and source disposition still need a
+   configuration home. Consider call/source defaults plus target requirements,
+   without named transfers. Define busy/no-answer/decline/cancel outcomes and
+   compensating cleanup. A failed prepare cannot promise that already-dialed
+   legs or stopped providers never changed. Private consultation needs explicit
+   authorized audio routes and hold behavior, not only global mix-minus.
+9. **Denials on routed capabilities:** denying STT to an agent is ambiguous
+   when STT runs on a human participant and routes transcripts to that agent.
+   Resolve whether a policy denies processing, consumption, or both; compile
+   ownership and consumer routes together. Room-wide denial must stop the
+   applicable provider work. Later reconciliation must not replay or transcribe
+   the denied interval. Monitor and recording grants remain independent.
+10. **Admission crash recovery:** distinguish webhook delivery IDs from stable
+    call/leg admission identity. Transfer legs attach to a pending transfer, not
+    a fresh definition lookup. Consider claimed/fenced admission transitions,
+    request-digest conflicts, and reconciliation between durable creation, room
+    startup, dialing, and running status. Do not retry an uncertain dial blindly.
+11. **Archive completeness and finalization:** specify bounded per-consumer
+    overflow behavior and explicit incomplete state. Current typed-input events
+    lack the submitted text needed to reconstruct a transcript. Call end,
+    operation settlement, artifact completion, and publication are distinct.
+    Consider publication revisions and source watermarks, not only a call/schema
+    job key, so late corrections can produce another immutable export. Retain
+    engine-side live mixing/recording with external upload workers; upload is not
+    a live monitoring feed. Distinguish sent from device-confirmed audio.
+12. **Usage settlement:** one operation may have several billable
+    attempts and usage observations. Consider observation identity and effective
+    component totals rather than summing estimates, cumulative updates, and
+    reconciliation. Keep canceled-operation costs and avoid double-counting
+    provider token subcategories or allocations across turns.
+13. **Provider profiles and long-call budgets:** specify supported profile
+    options, adapter compatibility, token-aware context/history budgets, and
+    fallback behavior without arbitrary executable provider configuration.
+    Fallback cannot weaken permissions or repeat an uncertain external action.
+
+### Planned acceptance steps, after approval and implementation
+
+These are future verification scenarios, not capabilities available in the
+playground today. Use deterministic fakes first and synthetic data throughout.
+
+1. Compile one complete definition whose required context value comes from input
+   with no dummy default. Missing input must fail before a room or provider starts.
+2. Start a room, save intake through the agent tool, then read it on another
+   turn. Transfer to a read-only agent; the value remains available but writes
+   fail. Inspect client events and confirm private tool values are absent.
+3. Queue a context update, then interrupt or transfer before authority commit.
+   It must reject stale work. Reverse the order and confirm the earlier committed
+   write remains. Retry the same mutation and confirm it does not apply twice.
+4. Submit a fake booking, commit it remotely, and delay its response while
+   interrupting. Confirm one external action, an honest receipt/unknown outcome,
+   no stale response, and no blind duplicate on retry. Change confirmed arguments
+   and prove the earlier confirmation cannot authorize the new action.
+5. Ask the agent to mark verification successful without backend proof. The
+   trusted section must remain unchanged. Test wrong, expired, and reused input;
+   inspect permitted logs/events/archive projections for sensitive-data leakage.
+6. Return instructions that request an undeclared tool or destination. The
+   engine must reject the operation regardless of the model's choice.
+7. Simulate busy, no-answer, voicemail, declined, accepted, and late transfer
+   callbacks. Check typed outcomes, cleanup, source recovery/failure policy, and
+   that restrictive capability policies are enforced before the bridge opens.
+8. Feed distinguishable fake audio into caller and consultation routes. Confirm
+   each sink, monitor, and recorder hears only its authorized mix. Slow the upload
+   and verify live audio continues while incomplete recording is reported.
+9. Replay inbound lifecycle events and crash admission between each external
+   boundary. Confirm one call and a fenced current room; reconcile uncertain legs.
+10. Send typed input, interrupt generated output, end the call, and deliver late
+    usage/artifact updates. Verify honest transcript provenance, no double-counted
+    costs, explicit missing data, and a new revision for a corrected archive.
+
+### Review checkpoint verification
+
+Passed `git diff --check`, syntax parsing of all 10 JSON fences in this labnote,
+and existence/anchor checks for 13 local documentation links across the two
+changed documents. The labnote terminology check also passed. JSON parsing is
+syntax verification only, not validation against an implemented call-definition
+schema. Only this labnote and its focused review document belong to the review
+commit. No runtime suite was run for this documentation-only checkpoint. The
+next implementation scope remains subject to user review; this checklist is not
+authorization to add features.
 
 ## Verification evidence
 
