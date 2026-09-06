@@ -1,7 +1,8 @@
 # Call-definition gap review
 
 Reviewed: 2026-09-06 UTC
-Status: Findings and possible solutions pending user review; no schema or runtime changes
+Status: G1's tool-layout clarification approved; G2–G13 pending user review.
+Documentation only; no runtime implementation.
 
 ## Conclusion and scope
 
@@ -57,27 +58,37 @@ Priorities indicate implementation gates, not a demand to build everything now:
 P1 blocks the corresponding first compiler/private-context/external-action slice;
 P2 is required before claiming the relevant telephony or archive feature.
 
-### G1 — P1: The candidate examples do not describe one grammar
+### G1 — Resolved in documentation: one agent tools map
 
-The labnote's MCP enablement example still uses `agents`, while the agreed root
-is `participants`. Its representative definition puts an MCP tool directly in
-`tools` without the separately required integration enablement. `billing` has
-read-only `intake` in the context candidate but read/write in the representative
-definition. These differences would produce incompatible compiler tests.
-See [MCP enablement][mcp-design] and [representative JSON][json-design].
+At the review baseline, the MCP example used an `agents` root and nested
+`integrations.<alias>.tools`, while the representative definition used
+`participants` and direct MCP bindings in `tools`. The two examples also granted
+`billing` different access to `intake`. They did not describe one grammar.
 
-Proposal: normalize the examples to `participants.<ref>.type: agent`; keep MCP
-enablement and bindings in `integrations.<alias>.tools`; reserve the general
-`tools` map for explicitly granted platform/host tools. Use read-only `billing`
-in the permissions example. Reject duplicate model-visible names across all
-three tool sources, including compiler-generated context/transfer names.
+Approved resolution: each agent has a unified `tools` map for built-in, MCP, and
+registered host bindings. The map key is the model-visible name; `type` selects
+the backend. An MCP entry names `integration` and `tool`; a built-in entry names
+`type: platform` and `tool`. Integration configuration, credentials, availability,
+and allowed operations remain at application/tenant scope. The agent selects
+individual tools, without a separate integration-enablement block. This replaces
+the review's original proposal to keep MCP bindings in a separate block.
 
-Publish one supported-field/keyword matrix and positive/negative fixture set
-before implementing the codec. Distinguish complete executable candidates from
-partial illustrations and later extensions. Do not imply that every field in
-the broad representative JSON belongs to the first one-agent compiler slice.
-The date identifier versions the grammar; a definition revision versions its
-content. This review does not publish a new schema release.
+For example, `tools.lookup_customer` can select the `lookup_customer` operation
+from the configured `records` integration beside `tools.end_call`, which selects
+the platform `hangup` operation. Configuring `records` does not expose all its
+operations to every agent. The compiler resolves the selected tools against the
+appropriate catalog and policy. [Updated tool example][mcp-design],
+[representative JSON][json-design].
+
+The examples now use `participants.<ref>.type: agent` and consistently give
+`billing` read-only `intake` access. Transfer/context tools remain derived from
+their existing grants; tool aliases must not collide with generated names.
+
+G1's authoring ambiguity is resolved, but no compiler was implemented. A future
+compiler checkpoint still needs canonical positive/negative fixtures and a
+supported-field/keyword matrix. Partial illustrations are not complete executable
+definitions, and the broad representative JSON is not a commitment to implement
+every field in the first slice. No new dated schema release is published here.
 
 ### G2 — P1: Admission identity, inputs, and personalization need separate rules
 
@@ -408,7 +419,8 @@ reason to add provider-native payloads to each participant definition.
 This sequence is an option for review, not an approved implementation plan. Do
 not add the suggested fields or functionality before the user reviews the gaps.
 
-1. **Compiler and one-agent context:** resolve G1–G3, the private-event part of
+1. **Compiler and one-agent context:** implement the approved G1 layout only
+   when runtime work is authorized; review G2–G3, the private-event part of
    G5, and denial semantics in G9. Use one canonical fixture with two context
    sections and an engine-owned context tool. Prove the existing text/audio path
    works through a typed plan. Do not start with telephony or Ecto.

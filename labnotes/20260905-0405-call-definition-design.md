@@ -16,9 +16,10 @@ needs a node-and-edge model.
 This is a research checkpoint. It does not commit a public schema or change
 runtime behavior.
 
-The [design gap review](#design-gap-review--pending-approval) records unresolved
-questions and possible solutions. Those suggestions are pending user review;
-they do not amend the candidate schema or authorize implementation.
+The [design gap review](#design-gap-review--pending-approval) records questions
+and possible solutions. G1's unified agent `tools` map is approved and reflected
+in the candidate below. The remaining suggestions are pending user review;
+approval of the documentation does not authorize runtime implementation.
 
 ## Constraints
 
@@ -35,9 +36,10 @@ they do not amend the candidate schema or authorize implementation.
   public snapshots, events, errors, and logs.
 - Keep remote MCP integrations application-wide or tenant-scoped so endpoints,
   credentials, discovery, health, and limits are reusable across calls. Keep
-  enabled integration references and tool bindings on individual agents so a
-  configured integration does not automatically affect every call or expose
-  every operation to every agent.
+  selected MCP and built-in tool bindings in each agent's unified `tools` map so
+  a configured integration does not automatically affect every call or expose
+  every operation to every agent. No separate agent integration-enablement map
+  is required.
 - Keep model decisions separate from authoritative room mutations.
 - Defer an embedded scripting language until declarative primitives prove
   insufficient.
@@ -739,7 +741,7 @@ Application integration catalog
   credentials. The authenticated call principal supplies the tenant ID; a
   definition or invocation cannot select another tenant.
 - A call definition owns portable conversational composition and policy,
-  including the integration/tool bindings enabled independently for each agent.
+  including the tool bindings selected independently in each agent's `tools` map.
   It does not own MCP endpoints or credentials.
 - A call invocation owns caller/destination identity, definition selection,
   permitted runtime variables, transport attachment, and idempotency. It does
@@ -772,7 +774,6 @@ CallDefinition.RoomContext
 CallDefinition.ContextSection
 CallDefinition.ContextPermissions
 CallDefinition.Policy
-CallDefinition.AgentIntegration
 CallDefinition.AgentToolBinding
 CallDefinition.CapabilityEffect
 CallInvocation
@@ -813,9 +814,8 @@ Each agent participant should contain:
 - an inline prompt or versioned prompt-profile reference;
 - optional capability-profile overrides;
 - first-message behavior;
-- MCP integrations enabled for this agent and stable agent-local bindings for
-  the selected remote tools;
-- engine-owned non-transfer tool grants;
+- one `tools` map containing stable agent-local bindings for selected remote MCP
+  tools, built-in non-transfer tools, and registered host tools;
 - a direct list of allowed destination participant refs;
 - room-context permissions by top-level section;
 - input, output, and action-guardrail policy references;
@@ -855,16 +855,19 @@ Remote MCP integrations are reusable infrastructure, not call-definition data:
   one tenant. Tenant integrations are isolated by the authenticated tenant ID
   and are the normal home for tenant-owned Google Docs, Zapier, or similar
   access.
-- Each **agent** in the call definition independently enables configured
-  integrations and binds a bounded selection of their tools to agent-local
-  names.
+- Each **agent** in the call definition selects a bounded set of tools through
+  one `tools` map. An MCP binding names an available configured integration and
+  a remote tool; a built-in binding names a platform operation. There is no
+  separate integration-enablement block on the agent.
 - The **call invocation** carries neither MCP configuration nor credentials.
 
 Use these terms consistently:
 
 - **configured**: an integration record exists at application or tenant scope;
-- **enabled**: an agent selects that configured integration and its allowed
-  remote tools;
+  that scope controls its availability and allowed operations;
+- **enabled tool**: an agent selects an allowed operation in its `tools` map;
+  an MCP tool's integration reference is sufficient to resolve its backing
+  integration, without another agent-level grant;
 - **resolved**: compiling the call pins each agent's bindings plus the selected
   scope, integration/catalog revision, and private credential lease;
 - **active**: the agent activation currently owns conversational control, so its
@@ -872,21 +875,20 @@ Use these terms consistently:
 - **invoked**: the active agent's model selected an enabled tool and the executor
   issued `tools/call`.
 
-This creates four narrowing layers before invocation:
+This creates three narrowing layers before invocation:
 
 ```text
-configured application or authenticated-tenant integration
-  -> agent-enabled integration
-  -> agent-local tool bindings
+available application or authenticated-tenant integration and tool policy
+  -> agent-local selection in the unified tools map
   -> currently active agent activation
 ```
 
-The effective model tool surface is their intersection. Configuring a remote MCP
-integration does not enable it for any agent, and enabling it on one agent does
-not enable it on another. For example, a research agent may receive a
-document-search tool while a transaction agent in the same call receives a
-Zapier action tool. An inactive agent's tools are absent from the active model
-context.
+The effective model tool surface is their intersection. Making a remote MCP
+integration available does not expose all of its tools to an agent. Selecting a
+tool on one agent does not select it on another. For example, a research agent
+may receive a document-search tool while a transaction agent in the same call
+receives a Zapier action tool. An inactive agent's tools are absent from the
+active model context.
 
 Tenant integration lookup takes precedence as one whole integration record:
 
@@ -936,21 +938,22 @@ can be reused by calls sharing the same application integration or tenant
 integration rather than repeated for every call. Catalog and connection state
 must never cross tenant/integration/credential boundaries.
 
-Each agent binds stable agent-local tool names to catalog entries:
+Each agent uses the same `tools` map for built-in and remote MCP bindings:
 
 ```json
 {
-  "agents": {
+  "participants": {
     "timekeeper": {
-      "integrations": {
-        "utilities": {
-          "type": "remote_mcp",
-          "ref": "utilities",
-          "tools": {
-            "current_time": {
-              "remote_name": "get_current_time"
-            }
-          }
+      "type": "agent",
+      "tools": {
+        "current_time": {
+          "type": "mcp",
+          "integration": "utilities",
+          "tool": "get_current_time"
+        },
+        "end_call": {
+          "type": "platform",
+          "tool": "hangup"
         }
       }
     }
@@ -958,20 +961,28 @@ Each agent binds stable agent-local tool names to catalog entries:
 }
 ```
 
-The `timekeeper.integrations.utilities` entry is the enablement decision for that
-agent; its `ref` selects the configured ID through tenant-first resolution. The
-nested `tools.current_time` entry is the agent-local binding. The model sees
+The `participants.timekeeper.tools.current_time` entry selects that operation
+for the agent. Its `integration` selects the configured ID through tenant-first
+resolution, while `tool` names the remote operation. The model sees the map key
 `current_time`, not an endpoint, credential, or unfiltered remote catalog.
+`tools.end_call` exposes the built-in `hangup` operation under the local name
+`end_call`. Multiple entries can select different tools from the same MCP
+integration without repeating its configuration or adding another grant.
 
-At call resolution, the compiler verifies each agent's enabled integrations and
-tool bindings against the current integration catalog and pins the normalized
-definitions plus catalog revisions in that agent's resolved plan. Multiple
-agents may resolve the same configured integration; the runtime may deduplicate
-its transport, catalog, and credential lease internally, but the enabled tool
-sets remain independent. Configured integrations referenced by no agent create
-no call binding or credential lease. The first version fails call creation when
-a required enabled integration or tool cannot be resolved; optional/degraded
-integrations can be designed later.
+Transfer remains derived from `transfers`, and context tools remain derived from
+context permissions; neither needs a duplicate entry in `tools`. Tool aliases
+must remain unambiguous across authored and compiler-generated tools.
+
+At call resolution, the compiler verifies the unified tool map against the
+appropriate platform/host registry or configured integration catalog and policy.
+It derives the required integration bindings from the selected MCP tools and pins
+normalized definitions plus catalog revisions in the agent's resolved plan.
+Multiple agents may resolve the same configured integration; the runtime may
+deduplicate its transport, catalog, and credential lease internally, but the
+enabled tool sets remain independent. Configured integrations referenced by no
+agent tool create no call binding or credential lease. The first version fails
+call creation when a selected tool or its backing integration cannot be resolved;
+optional/degraded integrations can be designed later.
 
 The selected credential moves into a call-scoped private credential lease. The
 resolved plan and room state retain only an opaque lease reference and non-secret
@@ -1176,7 +1187,7 @@ candidate until the constructor and compiler tests make every field precise:
       "first_message": {"mode": "generated"},
       "context_permissions": {
         "customer": ["read"],
-        "intake": ["read", "write"]
+        "intake": ["read"]
       },
       "tools": {},
       "transfers": []
@@ -1295,11 +1306,11 @@ Per-invocation integration maps would repeat work, increase secret traffic, and
 make authorization harder to audit. A separate call-definition revision can
 narrow tool use for a particular call shape without rebuilding the integration.
 
-### Treat a configured MCP integration as enabled for every agent
+### Treat a configured MCP integration as enabling all its tools for every agent
 
 Rejected. Application or tenant configuration may make an integration and tool
-catalog available, but only an agent enables it and binds its tools. This
-keeps one agent from inheriting tools merely because another agent, call, or
+catalog available, but an agent selects specific operations in its `tools` map.
+This keeps one agent from inheriting tools merely because another agent, call, or
 tenant happens to use the same MCP server.
 
 ## Validation requirements
@@ -1328,9 +1339,8 @@ Compilation should reject, with path-specific errors:
 - duplicate tool names within one source agent;
 - tool or integration references not present in closed registries;
 - duplicate agent-local tool aliases within one agent;
-- an agent's enabled integration reference unavailable to the authenticated
+- an MCP tool's integration reference unavailable to the authenticated
   tenant and absent from the application catalog;
-- a tool binding outside an integration enabled by that same agent;
 - a remote tool absent from the selected integration catalog or excluded by its
   integration-level policy;
 - any attempt by a definition or invocation to select another tenant or supply
@@ -2205,11 +2215,13 @@ immutable plan. Route the existing single-agent behavior through that plan
 before adding participant transfer or integration resolution.
 
 Remote MCP integrations still live in application or tenant catalogs, where
-they are **configured**. Individual agents explicitly **enable** integrations
-and bind selected tools to agent-local names. MCP endpoints and credentials are
-neither definition nor invocation data. A tenant integration atomically takes
-precedence over an application-wide integration with the same stable ID; neither
-catalog enables it for any agent automatically. Do not begin an MCP transport
+they are **configured** and made available. Each agent selects individual MCP,
+built-in, or registered host operations in one **tools** map. An MCP entry names
+its configured integration and remote tool; it requires no separate agent-level
+integration-enablement block. MCP endpoints and credentials are neither
+definition nor invocation data. A tenant integration atomically takes precedence
+over an application-wide integration with the same stable ID; neither catalog
+exposes its tools to every agent automatically. Do not begin an MCP transport
 implementation until the general call-definition boundary exists.
 
 Use the participant-definition public input with one entrypoint and
@@ -2241,15 +2253,17 @@ The existing participant-first structure still fits the intended scenarios.
 Keep `entrypoint`, direct participant-ref transfer lists, agent-scoped tool
 enablement, immutable resolved plans, room-owned context, and live mixing. This
 checkpoint identifies missing contracts and inconsistencies; it does not add
-functionality or adopt new schema fields. Detailed reasoning and evidence live
+runtime functionality. G1 now records the approved tool-layout clarification;
+the other proposed changes remain unapproved. Detailed reasoning and evidence live
 in the [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Baseline and scope
 
 - The pre-review labnote was already committed in `e7a769e` and the worktree was
   clean before editing. Review documentation will be a separate checkpoint.
-- Existing schema examples and decisions are preserved for comparison. Proposed
-  corrections below require review before being folded into the candidate.
+- The original review preserved schema examples and decisions for comparison.
+  The approved G1 follow-up now aligns the tool examples and related wording;
+  the other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
 
@@ -2257,12 +2271,16 @@ in the [call-definition gap review](../docs/call-definition-gap-review.md).
 
 The numbering below matches G1–G13 in the focused review document.
 
-1. **Conflicting candidate examples:** MCP enablement still has an `agents`
-   root; the representative definition binds an MCP tool without the separately
-   required integration enablement; `billing` has different `intake` permissions
-   in the two examples. Possible resolution: one canonical participant-first
-   fixture, MCP bindings under agent integration enablement, closed tool-name
-   collision checks, and clearly marked partial/later examples.
+1. **Tool layout — approved and documented:** each agent has one `tools` map
+   containing MCP, built-in, and registered host bindings. An MCP entry uses
+   `type: mcp`, `integration`, and `tool`; a built-in entry uses `type: platform`
+   and `tool`. The map key is the model-visible alias. Application/tenant
+   configuration controls integration availability and allowed operations;
+   listing a selected tool needs no separate agent `integrations` block. The
+   earlier separate-block proposal is withdrawn. Examples now consistently use
+   `participants` and read-only `billing` access to `intake`; transfer and context
+   tools remain compiler-derived. This resolves G1's documentation ambiguity,
+   not the future compiler implementation or its verification.
 2. **Admission and variable binding:** transport type does not identify which
    human definition is attaching when several are possible. Required customer
    identity cannot be assumed from an inbound phone number. Possible resolution:
@@ -2391,6 +2409,11 @@ commit. No runtime suite was run for this documentation-only checkpoint. The
 next implementation scope remains subject to user review; this checklist is not
 authorization to add features.
 
+For the approved G1 follow-up, reran these documentation checks and verified that
+the JSON examples contain no `agents` root or separate participant `integrations`
+block. The mixed built-in/MCP tool example and both read-only `billing` examples
+match the approved layout. No runtime tests were run or features implemented.
+
 ## Verification evidence
 
 - Reviewed existing Vxpipe architecture, product intent, current create-room
@@ -2409,8 +2432,8 @@ authorization to add features.
 - Refined integration scope after review: remote MCP endpoint, authentication,
   discovery, health, and limit configuration is application-wide or
   tenant-scoped, never invocation-scoped. A configured integration becomes
-  available infrastructure; only an agent enables it and binds its selected
-  tools. Other agents in the same call do not inherit that surface.
+  available infrastructure; each agent selects specific operations through its
+  unified `tools` map. Other agents in the same call do not inherit that surface.
 - Refined the authoring contract after review: schema identifiers use the
   date-based `YYYYMMDD.NN` format; the current proposal is `"20260906.02"`.
   `entrypoint` is a definition-local participant ref, participant-control
