@@ -623,6 +623,34 @@ The gateway authorizes every room and participant operation. Admission to a
 transport does not imply permission to observe all room events or control other
 participants.
 
+API-key administration starts through trusted OTP/CLI operations, including
+creating the first key without an existing API key. Keys are bound to one tenant
+and use `admin` and `calls` permission scopes. This approves the tenant boundary
+and scope split, not per-definition allowlists, arbitrary per-operation grants,
+an admin HTTP API, or an implicit relationship between the two scopes. Each
+tenant may have multiple independently revocable keys, allowing separate
+integrations and overlap while replacing a key. Show a generated key once and
+persist only its one-way digest and metadata, never a recoverable copy.
+
+Revoking an API key rejects further authentication with that key. It does not
+invalidate previously issued join tokens or end established connections. Join
+tokens are not coupled to their issuing API key for revocation; admission checks
+the token's own expiry, single-use status, tenant/call/participant scope, and
+current lifecycle eligibility. An otherwise eligible unused token remains valid
+after the requesting API key is revoked. Obtaining another token still requires
+valid API-key authentication.
+
+Join tokens expire five minutes after issuance by default. The authenticated
+backend requesting a token may request a longer lifetime, including when
+requesting one for an existing call. No additional maximum is approved here.
+The browser cannot extend an issued token by changing its join request. Token
+expiry prevents later admission with that token; it neither deletes the prepared
+call record nor ends an established call. Gateway authentication and persistence
+ports own credentials and token handling; the engine receives neither secret.
+These are approved contracts, not implemented authentication endpoints or CLI
+commands. Exact request encoding and the admin endpoint/scope matrix are not
+specified by this checkpoint.
+
 Public projections exclude:
 
 - provider credentials and authorization headers;

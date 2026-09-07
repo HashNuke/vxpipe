@@ -6,6 +6,10 @@ Status: G1 and G2's web routes, initial variables, API-key admission with one-wa
 hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call approved;
+R01–R05 now approve OTP/CLI key bootstrap, tenant-bound `admin`/`calls` scopes,
+multiple independently revocable keys, key revocation without invalidating
+issued join tokens or established connections, and five-minute default tokens
+with longer lifetimes accepted from the authenticated token requester.
 G3 initialization approved with no variable defaults, and submitted variables
 updates continue through conversational interruption under existing checks.
 Reads containing a forbidden section fail with a permission error and no values.
@@ -64,8 +68,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **50 individual decisions** in the numbered backlog below.
-All five items from the latest review batch are resolved. G1 and G3 are resolved;
+Current review count: **45 individual decisions** in the numbered backlog below.
+R01–R05 are resolved; the next batch is R06–R10. G1 and G3 are resolved;
 G2/G4/G5/G7/G8 are partly resolved, while G6 and G9–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
@@ -88,20 +92,20 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**50 pending decisions (R01–R50).** This is the current approval backlog, not a
+**45 pending decisions (R06–R50).** This is the current approval backlog, not a
 count of G headings, tests, implementation tasks, or every configuration key.
-Each row is one independently reviewable policy/contract choice. All five items
-in the preceding batch are resolved. The next batch is **R01–R05**; none of these
-new proposals is approved. Mark rows resolved or deferred as decisions are made
-and update this count; do not renumber the remaining IDs.
+Each row is one independently reviewable policy/contract choice. R01–R05 are
+resolved below and excluded from the pending count. The next batch is
+**R06–R10**; none of those proposals is approved. Mark rows resolved or deferred
+as decisions are made and update this count; do not renumber the remaining IDs.
 
-| ID | Background | Decision awaiting approval |
+| ID | Background | Decision / review status |
 | --- | --- | --- |
-| R01 | G2 | How is authority bootstrapped to issue/manage the first API key without an existing key? |
-| R02 | G2 | Which tenant, operation, and optional definition restrictions can an API key carry? |
-| R03 | G2 | Can a tenant have multiple active API keys for independent integrations and overlap during rotation? |
-| R04 | G2 | Does revoking an API key also invalidate outstanding join tokens or end already-connected calls? |
-| R05 | G2 | What is the default join-token lifetime, and where can it be overridden? |
+| R01 | G2 | **Resolved:** trusted OTP/CLI administration creates the first API key without an existing key. |
+| R02 | G2 | **Resolved:** keys are tenant-bound with `admin` and `calls` scopes; no per-definition allowlist or arbitrary per-operation permission scheme is approved. |
+| R03 | G2 | **Resolved:** multiple independently revocable keys are allowed, including overlap during rotation. |
+| R04 | G2 | **Resolved:** revocation blocks further use of that API key, not previously issued join tokens or established connections; tokens are not coupled to API keys for revocation. |
+| R05 | G2 | **Resolved:** tokens default to five minutes from issuance; the authenticated requester may request a longer lifetime, with no additional maximum approved here. |
 | R06 | G2 | When a backend requests another token, do earlier unused tokens remain valid or get superseded? |
 | R07 | G2 | How long may a disconnected participant reconnect, and what evidence makes the old connection eligible for replacement? |
 | R08 | G2 | What is the WebSocket admission contract for routes, token delivery, initialization, and failure responses? |
@@ -375,6 +379,22 @@ each once to the backend. Gateway authentication uses a credential-store port;
 persistence owns storage, Calls owns preparation/activation, and the engine
 receives neither keys nor join tokens.
 
+**Approved key administration and scopes (R01–R03):** use trusted OTP/CLI
+administration to create the first key without an existing API credential.
+Each key is tenant-bound and permissions use `admin` and `calls` scopes. Do not
+introduce per-definition allowlists or arbitrary per-operation grants from the
+earlier proposal. This scope split does not decide that `admin` implies `calls`
+or specify a complete admin HTTP API/endpoint matrix. Multiple independently
+revocable keys may coexist for a tenant. Rotation can issue a replacement,
+deploy it to an integration, then revoke the old key without revoking others.
+
+**Approved API-key revocation (R04):** reject subsequent authentication with the
+revoked key, including attempts to issue more tokens. Previously issued unused
+join tokens remain valid subject to their own expiry, single-use status, scope,
+and current tenant/call/participant admission eligibility. Do not link token
+validity to the requesting API key's revocation status. Revocation does not end
+established connections; explicit call/session termination is separate.
+
 **Approved API-key storage:** persist only a one-way cryptographic digest of each
 high-entropy generated key with its tenant/permission metadata. Hash the supplied
 key to verify it and apply authorization; do not accept the stored digest as a
@@ -396,6 +416,16 @@ limited lifetime consistent with [bearer-token security][bearer-tokens]. See the
 [approved variables and admission contract][api-admission] for ownership,
 alternatives, and future verification steps.
 
+**Approved join-token lifetime (R05):** default to five minutes from issuance.
+An authenticated backend requesting a token can request a longer lifetime,
+both during preparation and through the existing-call `join-tokens` route.
+No additional maximum or application/tenant TTL override hierarchy is approved
+by this decision. The browser cannot extend a token when joining. Its own
+expiry and single-use admission rules remain independent of the requesting
+API key's later revocation. Exact duration field/units are implementation detail;
+requesting a longer lifetime does not extend the live-call duration or impose
+an expiry on the prepared call record.
+
 **Approved single-use admission and existing-call recovery:** an unused,
 unexpired token may retry before acceptance. Once admission is accepted, it
 stays consumed even if startup fails or the browser loses the response. Only
@@ -404,10 +434,11 @@ one racing attempt may claim it; no transaction spans room/provider startup.
 Recovery after acceptance or token expiry goes through the integrating backend,
 which rechecks the user's authorization and uses its API key with `join-tokens`.
 Vxpipe checks the tenant/call/participant and current eligibility, reconciles an
-in-progress admission first, and rejects ended calls, revoked/unauthorized
-access, and active-connection takeover. Recheck eligibility at token claim;
-issuance does not guarantee that a later join is still allowed. A caller's old
-token or public call ID alone never authorizes fresh-token issuance.
+in-progress admission first, and rejects ended calls, unauthorized access, and
+active-connection takeover. A revoked API key cannot request a fresh token;
+previously issued tokens do not inherit that key's revocation. Recheck eligibility
+at token claim; issuance does not guarantee that a later join is still allowed.
+A caller's old token or public call ID alone never authorizes fresh-token issuance.
 
 Issuance preserves the existing call record and pinned definition/variables. For
 an eligible prepared call, subsequent joining activates the room once; an
@@ -439,19 +470,18 @@ separate. See the [approved timing contract][call-start-timing].
 
 The following G2 proposals remain open and must be reviewed separately:
 
-**API-key management lifecycle:** administrator bootstrap, permission
-granularity, multiple-key management, and rotation/revocation still need review.
-One-way hash storage is resolved; exact key encoding/hash profile remains an
-implementation detail to specify. HMAC algorithm, canonicalization, and
-signature variables are no longer questions for this contract.
-
-**Remaining token details and separate storage policy:** specify token TTL
-settings, repeated issuance requests or superseding other unused tokens, and
-detailed crash reconciliation. Retention periods now have an application default
+**Remaining token details and separate storage policy:** specify repeated
+issuance requests or superseding other unused tokens, and detailed crash
+reconciliation. Retention periods now have an application default
 of retain forever with tenant overrides; finite-expiry cleanup and storage limits
 remain separate review questions. Single-use claim, backend-mediated recovery,
 the existing-call token route, and the absence of automatic call-record expiry
 are resolved.
+R01–R05 settle first-key creation, the tenant/scope split, multiple-key rotation,
+revocation effects, and default/requested token lifetime. Exact key encoding,
+hash profile, and duration encoding are implementation details, not additional
+approval items. HMAC algorithm, canonicalization, and signature variables are
+no longer questions for this contract.
 Exact WebSocket routes, token delivery, initialization limits/timeouts, and errors
 remain unapproved wire details. Deferred browser startup does not impose token
 preparation on an inbound telephony call or an already-authorized outbound dial.
@@ -1190,11 +1220,14 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Prepare private order variables using a backend API key, then join from the browser using only a token | Preparation pins/stores variables without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and variables fail |
 | Connect a backend WSS client with an API key and send unsigned variables as its first message | Invalid authentication fails before upgrade; a missing message, malformed/oversized variables, or wrong datatypes cannot start the room; empty variables and partial sections are allowed; browser Origin and HTTP CORS are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
+| Bootstrap a fresh installation and use separate tenant-scoped keys | Trusted OTP/CLI administration creates the first key; tenant boundaries and the `admin`/`calls` scope split are enforced without assuming a scope hierarchy or definition allowlists |
+| Overlap two keys during rotation, then revoke only one | Further authentication with the revoked key fails, including token issuance; other keys and established connections continue; already-issued unused tokens still pass their independent admission checks |
+| Issue default and explicitly longer-lived tokens using a fake clock | Default expiry is five minutes from issuance; an authenticated fifteen-minute request remains valid after five minutes and expires at fifteen; applies to preparation and existing-call tokens; the browser cannot extend an issued deadline |
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
 | Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting variables |
 | Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/variables remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
 | Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
-| Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
+| Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/unauthorized access and takeover fail; a revoked API key cannot request fresh tokens but does not invalidate issued ones; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
 | Compile read-only, read+write, and standalone write grants; leave another section ungranted | First two grants succeed; standalone write fails without silently adding read; read-only grants expose reads, read+write grants also expose updates and their resulting values; ungranted sections expose neither values nor revisions in model projections |
 | Read an unpopulated section, then populate it over multiple updates | Read returns one null in the requested value slot, no nested placeholders or state/revision change; first object or variable write creates supplied data, later writes add variables; partial reads do not fill missing children; unknown/forbidden sections still fail |
@@ -1511,6 +1544,19 @@ definition fixtures, all 31 local links/anchors, unchanged routes/external
 references, and preserved G3/implemented-runtime contracts. Confirmation scope,
 tool-access boundaries, review status, terminology, path hygiene, and whitespace
 checks pass. No runtime or browser tests were run.
+
+The R01–R05 follow-up approves OTP/CLI first-key creation, tenant-bound
+`admin`/`calls` scopes, multiple independently revocable keys, and revocation
+without invalidating issued tokens or established connections. Tokens default
+to five minutes; the authenticated requester may request longer. No token/key
+revocation coupling, extra TTL cap, per-definition key allowlist, scope hierarchy,
+or complete admin API is introduced. Original admission/recovery contracts,
+architecture, backlog statuses, and future acceptance checks are synchronized.
+There are 45 pending individual decisions, R06–R50; R06–R10 is the next batch.
+Verification covers unchanged fenced examples and 15 valid JSON examples,
+unchanged links/URLs, exact resolved/pending IDs and counts, unrelated contracts,
+terminology, local-path hygiene, and whitespace. No runtime or browser tests
+were run for this documentation-only checkpoint.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

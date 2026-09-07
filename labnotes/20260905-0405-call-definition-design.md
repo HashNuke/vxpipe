@@ -24,6 +24,10 @@ call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call are
 approved and documented below. Record creation and actual live-call start also
 have distinct timestamps; preparation is not call duration.
+R01–R05 approve OTP/CLI first-key creation, tenant-bound `admin`/`calls` scopes,
+multiple independently revocable keys, and key revocation that does not affect
+previously issued join tokens or established connections. Join tokens default
+to five minutes from issuance; the authenticated requester may request longer.
 G3's initialization rule is also approved: call variables have no default values and are
 prefilled only from supplied call-setup data. Its interruption rule lets an
 already-submitted variable update finish under the existing authorization and
@@ -101,8 +105,8 @@ Vxpipe-managed data, including the call record itself.
 General voice/LLM-input redaction is deferred; deterministic collection such as
 DTMF need not involve the LLM. First-message modes and first-activation-only
 greetings are approved, as is source-agent responsibility until committed
-handoff and failure return to that agent. All five items from the latest review
-batch are resolved. The focused gap review now lists 50 individual decisions
+handoff and failure return to that agent. R01–R05 from the latest review batch
+are resolved. The focused gap review now lists 45 individual decisions
 still awaiting review, rather than counting its background groups.
 Approval of documentation does not authorize runtime implementation.
 
@@ -1967,8 +1971,9 @@ for that same eligible record. The definition and values are pinned at
 preparation, not reselected from a newer deployment at join. Token claim and
 activation must coordinate idempotently without holding a database transaction
 across room or provider startup. The single-use and backend-mediated recovery
-contract below is approved; exact token TTL settings and crash-reconciliation
-mechanics remain open.
+contract below is approved. Tokens default to five minutes, with longer lifetimes
+accepted from the authenticated requester; crash-reconciliation mechanics remain
+open.
 This waiting-for-browser lifecycle does not impose a browser token on inbound
 telephony or independently requested outbound dialing.
 
@@ -2003,9 +2008,21 @@ WebSockets. See the [browser WebSocket interface](https://websockets.spec.whatwg
 
 - The gateway generates cryptographically random API keys through an authorized
   management operation and returns each key once. Keys stay on the integrating
-  backend. A tenant may have several independently managed keys; tenant and
-  permission metadata remain ordinary stored records. No separate client ID is
-  required in integration requests.
+  backend. Trusted OTP/CLI administration creates the first key without requiring
+  an existing API key. Each key is tenant-bound with `admin` and `calls` permission
+  scopes. This approves the scope split, not per-definition allowlists, arbitrary
+  per-operation grants, an admin HTTP API, or an implicit relationship between
+  the two scopes. Tenant/scope metadata remain ordinary stored records. No
+  separate client ID is required in integration requests.
+- A tenant may have multiple independently revocable keys for separate
+  integrations or overlapping rotation. Issue a replacement, deploy it to the
+  integration, and then revoke the old key; other keys remain usable.
+- Revocation rejects further authentication with that API key, including requests
+  for more join tokens. It does not invalidate previously issued unused tokens
+  or end established connections. Token admission checks the token's own expiry,
+  single-use status, scope, and current tenant/call/participant eligibility,
+  not the requesting API key's revocation status. No issuing-key dependency is
+  needed to validate a token. Explicit session/call termination remains separate.
 - Gateway authentication uses a credential-store port; the persistence adapter
   owns database details. Calls owns preparation/activation workflows and the
   engine receives only the trusted principal, plan, and variables. No API key or
@@ -2037,11 +2054,21 @@ scope; possession is not proof of a person's identity. Treat it as a secret,
 short-lived bearer credential. [Bearer-token security](https://www.rfc-editor.org/rfc/rfc6750.html#section-5).
 Provider webhook authentication remains a separate adapter concern.
 
-**Still pending:** administrator bootstrap, permission granularity,
-rotation/revocation, token lifetime settings, separate record-retention and
-storage-limit policies, precise transport messages/timeouts and WebSocket routes,
-reconnect eligibility/deadlines, and detailed retry/crash reconciliation. Single-use claim
-and existing-call token issuance are approved below. HMAC algorithm selection,
+**Join-token lifetime:** default to five minutes from issuance. An authenticated
+backend requesting the preparation token or an existing-call token may request
+a longer lifetime. No additional maximum or application/tenant TTL override
+hierarchy is approved here. The browser cannot extend an issued token by changing
+its join request. For example, a backend can request fifteen minutes for a
+user who needs time before connecting; that token still expires at its issued
+deadline even if the requesting API key is revoked in the meantime. A default
+token instead expires after five minutes. Neither expiry ends an established
+call nor deletes its prepared record. Exact request field and duration encoding
+are implementation details, not new approval items.
+
+**Still pending:** separate storage cleanup, precise transport messages/timeouts
+and WebSocket routes, reconnect eligibility/deadlines, and detailed retry/crash
+reconciliation. Single-use claim and existing-call token issuance are approved
+below. HMAC algorithm selection,
 payload canonicalization, and signature-envelope fields are no longer
 implementation questions. Variable-default assembly is eliminated: only supplied
 setup values prefill variables. G3's variable ownership is settled below; telephony
@@ -2078,18 +2105,23 @@ The approved rules are:
    remains on the backend; only the fresh scoped token reaches the frontend.
 4. Gateway authentication and the Calls workflow resolve that same call record
    and participant. Issuance requires an eligible state: reconcile pending
-   admission before retrying, reject ended calls and unauthorized/revoked access,
-   and never silently take over an active connection. Recheck eligibility when
-   consuming the new token so intervening joins or call termination cannot
-   bypass the same rules. This preserves the singleton participant binding.
+   admission before retrying, reject ended calls and unauthorized access, and
+   never silently take over an active connection. A revoked API key cannot
+   request another token, but existing tokens do not inherit key revocation.
+   Recheck eligibility when consuming the new token so intervening joins or call
+   termination cannot bypass the same rules. This preserves the singleton
+   participant binding.
 5. An eligible **prepared call** still has no live room: issuing a token does
    not start one, and accepted joining activates it once. An eligible reconnect
    to a **running call** attaches to the existing participant in its existing
    room, retaining its identity, current variables, and pinned plan. It does not
    reinitialize variables from the original values or create a replacement call.
-6. A token's expiry only prevents a future claim. Once admission was accepted,
-   that token expiring does not hang up the established call. Later reconnect
-   still needs a fresh token and whatever reconnect eligibility is approved.
+6. A token expires five minutes after issuance by default; the authenticated
+   token requester may request a longer lifetime. API-key revocation does not
+   invalidate an already-issued token. A token's expiry only prevents a future
+   claim. Once admission was accepted, that token expiring does not hang up the
+   established call. Later reconnect still needs a fresh token and whatever
+   reconnect eligibility is approved.
 7. An unstarted call record does not automatically expire because its token
    expired or because time passed since preparation. Without a valid token the
    browser cannot join, but the record remains eligible for backend-authorized
@@ -2107,9 +2139,9 @@ token is distinct from negotiating either transport.
 This resolves single-use consumption, before/after-acceptance retry behavior,
 and the backend-authorized existing-call token endpoint. Token expiry suffices
 for this admission contract; there is no additional unstarted-call TTL. It does
-not yet settle token TTL defaults/configuration, record retention/cleanup,
-reconnect grace periods, status/error response shapes, repeated token-issuance
-requests or superseding other unused tokens, or the precise pending-admission
+not yet settle record cleanup, reconnect grace periods, status/error response
+shapes, repeated token-issuance requests or superseding other unused tokens,
+or the precise pending-admission
 crash reconciler. No runtime endpoint or authentication code is implemented here.
 
 ## Representative JSON shape
@@ -3816,9 +3848,12 @@ agent-scoped tool enablement, immutable resolved plans, room-owned variables, an
 live mixing. This checkpoint identifies missing contracts and inconsistencies;
 it does not add runtime functionality. G1 records the approved tool layout and
 G2 records the approved web routes, direct initial variables, hash-only API-key
-storage, single-use join tokens with existing-call recovery and no automatic
-call-record expiry, prepared-token and direct-backend connection flows, explicit
-initial participants/startup, and one
+storage, OTP/CLI bootstrap, tenant-bound `admin`/`calls` scopes, independently
+revocable multiple keys, and no revocation coupling to already-issued tokens.
+Token lifetime defaults to five minutes; authenticated requests may ask for
+longer. It also approves single-use tokens with existing-call recovery and no
+automatic call-record expiry, prepared-token and direct-backend connection flows,
+explicit initial participants/startup, and one
 participant per definition key per call. G3's initialization rule now permits
 only supplied setup values, with no variable defaults. Its interruption rule
 allows submitted variable commands to finish under existing authorization and
@@ -3874,8 +3909,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **50 individual decisions awaiting review**, enumerated as R01–R50 in
-the focused gap review. All five items from the latest batch are resolved.
+There are **45 individual decisions awaiting review**, enumerated as R06–R50 in
+the focused gap review. R01–R05 are resolved and retain their IDs in that backlog.
 G1/G3 are closed; G2/G4/G5/G7/G8 are partly resolved. G headings are background
 organization, not the current count. Earlier progress entries retain their
 historical group counts and do not describe the current individual-item total.
@@ -3887,7 +3922,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next batch is R01–R05; none is approved yet.
+for unstarted records. The next batch is R06–R10; none is approved yet.
 
 ### Baseline and scope
 
@@ -3973,6 +4008,13 @@ The numbering below matches G1–G13 in the focused review document.
    API-key storage is resolved: persist only one-way hashes, show keys once,
    and verify submitted keys without recovering secrets. Upstream MCP/provider
    credentials remain separate and recoverable where needed.
+   First-key creation uses trusted OTP/CLI administration. API-key permissions
+   are tenant-bound with `admin` and `calls` scopes; multiple independently
+   revocable keys support separate integrations and overlapping rotation.
+   Revoking a key blocks further authentication with it, not already-issued
+   join tokens or established connections. No token-to-key revocation coupling
+   is required. Tokens default to five minutes; the authenticated requester may
+   request longer, with no additional maximum approved here.
    Join tokens are consumed once at accepted admission. Before acceptance an
    unused/unexpired token can be retried; afterwards recovery reauthorizes via
    the backend and the existing-call `join-tokens` route. Reconcile pending
@@ -3985,10 +4027,9 @@ The numbering below matches G1–G13 in the focused review document.
    excludes preparation wait.
    Record cleanup is separate from admission/token expiry. Retention periods now
    have an application retain-forever default with tenant overrides. G2 still needs
-   API-key management review, token TTL settings, cleanup, telephony
-   variables sourcing, personalization, timezone and dynamic destinations, plus reconnect
-   eligibility/deadlines, issuance retry
-   details, and admission/transfer crash handling.
+   telephony variables sourcing, personalization, timezone and dynamic destinations,
+   plus reconnect eligibility/deadlines, issuance retry details, and admission/transfer
+   crash handling.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business variables.
 3. **Variable initialization, interruption, reads, and object merging resolved:**
@@ -4337,9 +4378,9 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     policies separately; lack of CORS grants must never bypass authentication.
     Preserve the browser WebRTC admission/signaling path. Keys/tokens stay out of
     URLs, ordinary management responses, room state, events, errors, and logs;
-    only the delegated join token reaches the browser. Add
-    exact token TTL, record-retention, issuance-retry, rotation/revocation,
-    and admin-bootstrap cases after those exact contracts are reviewed. These
+    only the delegated join token reaches the browser. Token lifetime, key
+    bootstrap/scopes, and rotation/revocation now have approved checks below;
+    exact issuance-retry and wire cases await their remaining review. These
     are future checks, not a claim of implemented authentication or storage.
 14. Compile both entry refs as strings resolving to different catalog members.
     Reject missing refs, inline objects in entry fields, unknown refs, and a
@@ -4371,6 +4412,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     that ordinary management responses, events, and logs expose neither key nor
     digest. No retrieval operation can recover a lost key; authorized replacement
     issues a new one. Upstream credential retrieval remains outside this test.
+    Start with no API keys and provision the first through trusted OTP/CLI
+    administration. Verify tenant isolation and the `admin`/`calls` scope split
+    without assuming admin implies calls or introducing definition allowlists.
+    Issue separate keys for two integrations, overlap an old and replacement
+    key, and revoke only the old one. Further authentication with that key fails,
+    including fresh-token issuance; the other keys continue to work.
+    A previously issued unused token remains claimable if its own scope, expiry,
+    single-use, and lifecycle checks pass. Established connections continue.
+    Do not require an issuing-key status lookup when validating the token.
     These are future project-owned boundary checks, not tests of a hash library.
 18. With fake transports/providers, race two joins using the same token. Only
     one claims admission and starts the room. A failure before acceptance can
@@ -4379,6 +4429,11 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     clock: expiry rejects an unclaimed token but does not end an accepted call
     or expire/delete an unstarted record. The latter still starts no room or
     provider work as time passes.
+    Without a requested lifetime, a new token expires five minutes after
+    issuance. Request fifteen minutes from the authenticated backend and confirm
+    admission remains possible after five minutes but fails at fifteen. Cover
+    both preparation and existing-call issuance, and reject any browser attempt
+    to extend the already-issued deadline. No unapproved maximum is assumed.
 19. Use a synthetic backend API key with the existing-call `join-tokens` route.
     For an eligible prepared record whose original token expired, issuance
     starts no room; joining with the fresh token starts it once with its pinned
@@ -4388,8 +4443,9 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     variables. Confirm token requests create no extra call record and accept no
     initial-variables or definition replacement. The route grants no browser CORS
     access; the separate browser join still uses the configured browser policy.
-20. Attempt recovery with a wrong tenant/participant/key, ended call, revoked
-    access, or active connection; reject without takeover. Lose the join response
+20. Attempt backend recovery with a wrong tenant/participant/key, ended call,
+    revoked API key, or active connection; reject without takeover. Already-issued
+    tokens do not inherit API-key revocation. Lose the join response
     while admission is still pending and confirm recovery reconciles that same
     attempt before allowing another. If state changes after fresh-token issuance,
     joining rechecks eligibility and cannot admit a second connection. Exact
@@ -5287,6 +5343,30 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   changed. Verification covers unchanged fenced/JSON examples and links, the
   approved boundaries, exact backlog IDs/count, unrelated contracts, terminology,
   local-path hygiene, and whitespace. No runtime or browser tests were run.
+
+### API-key scopes and independent join-token lifetime — approved 2026-09-07
+
+- Resolved R01–R05: trusted OTP/CLI first-key creation; tenant-bound `admin` and
+  `calls` scopes; multiple independently revocable keys; revocation that rejects
+  further key authentication without invalidating issued tokens or established
+  connections; and five-minute default tokens with longer requested lifetimes.
+- Rejected the proposed coupling between API-key revocation and unused join
+  tokens. Admission still checks token scope, its own expiry and consumption,
+  and current call/participant eligibility. Fresh issuance requires a valid key.
+- The authenticated backend can request longer expiry for either preparation or
+  existing-call tokens. No unapproved cap, TTL configuration hierarchy,
+  per-definition key allowlist, arbitrary operation-grant scheme, or complete
+  admin API was added. Whether admin implies calls is not asserted.
+- Updated canonical admission/recovery contracts, summaries, architecture, and
+  planned bootstrap/scope/rotation/revocation/lifetime checks. Stable IDs R01–R05
+  are resolved; 45 individual decisions remain, R06–R50. The next batch,
+  R06–R10, remains proposals. Earlier progress counts describe earlier checkpoints.
+- Documentation only: no credential, endpoint, CLI command, configuration, schema
+  release, or runtime authentication behavior changed. Verification covers the
+  three-file scope, unchanged fenced examples and 15 valid JSON examples,
+  unchanged links/URLs, resolved/pending IDs and counts, retained unrelated
+  contracts, terminology/local-path hygiene, and whitespace. No runtime or
+  browser tests were run.
 
 ## Verification evidence
 
