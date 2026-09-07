@@ -30,10 +30,11 @@ already-submitted context update finish under the existing authorization and
 revision checks; a correction uses another tool call, not cancellation or
 rollback. Reads containing a forbidden section now explicitly fail as a whole
 with a permission error. Object-level and single-field update tools are requested;
-their final names and object-update semantics remain under review. G2's remaining
-admission details, the remaining G3 questions, and the other suggestions remain
-pending user review. Approval of documentation does not authorize runtime
-implementation.
+`update_context` merges supplied fields into the existing section and preserves
+omitted fields. Final names and nested/removal details remain under review.
+G2's remaining admission details, the remaining G3 questions, and the other
+suggestions remain pending user review. Approval of documentation does not
+authorize runtime implementation.
 
 ## Constraints
 
@@ -568,15 +569,42 @@ sketches, not complete wire schemas: they omit revision and engine-private
 execution metadata for brevity. A field-update convenience does not introduce
 field-level permissions; the existing section write grant still governs it.
 
-Still to decide: whether object data merges supplied fields or replaces the
-entire section, how nested data and removal are expressed, and final tool names.
-No option is selected by these sketches. The earlier mutation-list example
-already allowed multiple field changes in one call, so this is a clearer tool
-surface, not a requirement to perform one call per field.
+Approved object-update behavior: `update_context(section_name, data)` merges the
+supplied fields into that section's existing data. Supplied fields add or update
+schema-permitted values; omitted section fields keep their current values.
+The tool does not replace the entire section with the submitted object, and
+omission is not deletion. One call can change several fields atomically.
+
+For example, updating only `topic` preserves the existing `summary`. These labels
+illustrate the merge; they are not a new request/response envelope:
+
+```json
+{
+  "section": "intake",
+  "before": {"summary": "Needs a billing review", "topic": "billing"},
+  "data": {"topic": "delivery"},
+  "after": {"summary": "Needs a billing review", "topic": "delivery"}
+}
+```
+
+The authority checks the expected revision, merges into a copy, and validates
+the complete resulting section, including retained fields, before committing.
+The supplied partial object need not repeat required fields already present in
+the section. Invalid supplied fields, an invalid merged result, a permission
+failure, or a revision conflict leave the whole section and revisions unchanged.
+This merges existing runtime data, not definition defaults into initial context;
+the supplied-only initialization rule is unchanged.
+
+Nested-object merge behavior, explicit removal/null handling, and final tool
+names still need review. This decision establishes preservation of omitted
+section fields without choosing those additional rules. The earlier mutation
+list already allowed multiple field changes in one call; it remains a possible
+internal representation behind the simpler object/field tool surface.
 
 The existing internal command candidate below can represent a bounded atomic
-section update; the exact lowering from the two tools depends on the remaining
-update-semantics decision. It is not a third model-facing update tool:
+section update; the exact lowering from the two tools must preserve the approved
+merge behavior and account for the remaining nested/removal decisions. It is
+not a third model-facing update tool:
 
 ```json
 {
@@ -593,9 +621,10 @@ Paths are RFC 6901 JSON Pointers relative to the selected section. The initial
 mutation language supports only bounded `set` and `remove` operations on object
 fields; arrays are replaced as values rather than edited by index. An empty path
 may replace the complete section object. This is deliberately not full JSON
-Patch. These internal operations do not decide the object tool's merge/replace
-semantics. The authority applies all changes to a copy, validates the complete
-result, then either commits all of them or none of them.
+Patch. An internal whole-section replacement must not turn `update_context`
+into replacement of the section by its partial input: the merged candidate
+must preserve omitted fields. The authority applies all changes to a copy,
+validates the complete result, then commits all of them or none of them.
 
 A successful result always returns the section name, new section revision, and
 new global revision. It includes the resulting value only when the same agent
@@ -1675,6 +1704,14 @@ stays unfilled. There is no context-default construction or merge layer. This
 does not change capability/profile configuration defaults or later authorized
 context updates.
 
+### Replace a complete context section with a partial object update
+
+Rejected for `update_context`. Merge the supplied fields into the existing
+section and preserve omitted fields. Replacing the section with the submitted
+object would lose previously collected data or require the agent to resend it
+on every update. Validate and commit the complete merged result atomically;
+explicit removal and nested-object behavior remain separate review questions.
+
 ### Cancel submitted context updates when a conversational turn is interrupted
 
 Rejected. Conversation interruption does not cancel or undo an already-submitted
@@ -1925,7 +1962,8 @@ trusted fields include tenant, room, incarnation, source participant, agent
 participant, agent activation, originating command, correlation, and tool-call
 IDs. Requested sections, expected revision, and proposed update data are the
 model-supplied inputs. The update bindings normalize object/field requests into
-the engine command; their exact mapping awaits the update-semantics decision.
+the engine command while preserving omitted section fields; exact nested and
+removal mappings remain under review.
 
 `RoomAuthority.update_context/2` performs one bounded `GenServer.call`. In order,
 the authority verifies:
@@ -2026,7 +2064,7 @@ permissions; stale source-agent tool calls fail their activation check.
    incarnation, stale activation, missing grant, revision conflict, invalid
    schema, and oversized input leave state unchanged. Add bounded read/update
    calls to `RoomAuthority` and protocol-neutral events.
-4. **Platform tool surface:** once update semantics are approved, add failing
+4. **Platform tool surface:** once remaining tool details are settled, add failing
    executor/model tests proving the read tool and both update tools appear only
    when the active agent has the matching grant, their section schemas are
    closed, trusted identity is not model-controlled, and a context update can
@@ -2064,7 +2102,9 @@ each red and green step. The focused cases must demonstrate:
   values, even when other requested sections are readable; a corrected request
   for permitted sections succeeds without adding unrequested sections;
 - an agent can update multiple fields through one object-update tool call, or
-  one field through the field-update tool, under the approved update semantics;
+  one field through the field-update tool, without removing omitted section fields;
+- an object update preserves an omitted existing required field, validates the
+  complete merged result, and rejects an invalid multi-field update atomically;
 - a write-only agent receives no old or resulting section value;
 - an unknown section, unauthorized section, stale activation, wrong incarnation,
   bad pointer, revision conflict, invalid resulting schema, or size violation
@@ -2842,10 +2882,20 @@ only supplied setup values, with no context defaults. Its interruption rule
 allows submitted context commands to finish under existing authorization and
 revision checks, with corrections made through later tool calls. Read requests
 containing a forbidden section fail as a whole with a permission error. The two
-requested update forms still need precise semantics and final naming. G2's
-remaining questions, the remaining G3 questions, and G4–G13 are still unapproved.
+update forms are retained, with object updates merging supplied fields and
+preserving omitted section fields. Nested/removal details and final naming,
+G2's remaining questions, the other G3 questions, and G4–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
+
+### Remaining review count — 2026-09-07
+
+There are **12 open review groups** out of the original 13: G2 and G3 are partly
+resolved, and G4–G13 still need approval. G1 is resolved in documentation.
+This counts the numbered groups, not individual edge cases or implementation
+tasks. The merge decision resolves one question inside G3, not the whole group.
+Next discussion: whether object merging also preserves omitted fields inside
+nested objects. No nested-merge behavior is approved by the section-level rule.
 
 ### Baseline and scope
 
@@ -2872,6 +2922,8 @@ Detailed reasoning and evidence live in the
   The read follow-up rejects silent filtering: a forbidden section causes the
   entire request to fail without values. It also records the requested object
   and field update tools without selecting merge/replace semantics or new names.
+  The merge follow-up selects preservation of omitted section fields and
+  atomic validation of the merged result; nested/removal details remain open.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2931,7 +2983,7 @@ The numbering below matches G1–G13 in the focused review document.
    details, and admission/transfer crash handling.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
-3. **Context initialization, interruption, and read authorization resolved:**
+3. **Context initialization, interruption, reads, and object merging resolved:**
    there are no context defaults and no initialization merge. Only authorized
    call-setup input prefills context. Validate that supplied data, reject missing required
    setup values, and leave omitted optional values unfilled. Both context schema
@@ -2943,8 +2995,10 @@ The numbering below matches G1–G13 in the focused review document.
    revision or be blindly retried; committed values are not rolled back.
    Mixed authorized/unauthorized reads fail as a whole with a permission error
    and no values; do not ignore forbidden names. A corrected request can succeed.
-   Object-level and single-field update tools are requested, but merge versus
-   replacement, nested/removal behavior, and final terminology remain open.
+   Object-level updates merge supplied fields into existing section data,
+   preserving omitted fields and validating the complete merged result. The
+   single-field tool remains available; nested/removal behavior and final
+   terminology remain open.
    Other remaining review includes write-only validation-error redaction.
    A schema-valid agent write also does not prove identity verification or a
    completed external action. Consider separating intake from trusted-result
@@ -3032,9 +3086,13 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    fail. Request both a readable and a forbidden section; expect a permission
    error with no values, then retry the readable section alone successfully.
    Confirm success does not add unrequested sections. Inspect client events
-   and confirm private tool values are absent. Once update semantics are
-   approved, verify a multi-field object update needs one tool call and commits
-   atomically; a field update uses the same section grant and revision boundary.
+   and confirm private tool values are absent. Verify a multi-field object update
+   needs one tool call and commits atomically; a field update uses the same
+   section grant and revision boundary. Update only `intake.topic` and confirm
+   the existing `intake.summary` remains. Test a writable section with an existing
+   required field omitted from the update: the merged result still validates.
+   A bad field or invalid merged result must reject the whole update without
+   changing values or revisions. Nested/removal cases await their own decision.
 3. Submit a context update, then interrupt the conversation before authority
    commit while keeping the same room and agent activation. Confirm it can
    finish under normal authorization/revision checks without resuming cancelled
@@ -3392,8 +3450,8 @@ For the approved 2026-09-07 context-read authorization follow-up:
   several fields, and a field-level convenience handles a single change. The
   existing mutation-list example already batches changes and remains an internal
   command candidate. Both forms share atomic section validation and revision
-  checks. Final naming, merge/replacement, and nested/removal behavior are still
-  pending; no runtime implementation or schema-key rename was made.
+  checks. At that checkpoint, final naming, merge/replacement, and nested/removal
+  behavior were pending; no runtime implementation or schema-key rename was made.
 - Updated G3's status and future acceptance steps in both documents. Verification
   scenarios cover a mixed-permission read failing without values, a corrected
   permitted read, no unrequested data, and the two update forms once their exact
@@ -3403,6 +3461,29 @@ For the approved 2026-09-07 context-read authorization follow-up:
   unchanged. All 20 local links/anchors resolve; update-form, route, terminology,
   local-path, superseded-read-wording, and `git diff --check` checks pass. No
   runtime or browser tests were run for this documentation-only checkpoint.
+
+For the approved 2026-09-07 object-update merge decision:
+
+- Resolved object merge versus replacement in the original tool contract and
+  G3 review: supplied fields update the existing section, omitted section fields
+  remain, and one tool call commits a schema-valid merged result atomically.
+  Required values already present need not be resent. Invalid data or a revision
+  conflict leaves values and revisions unchanged; initialization still has no
+  defaults. Nested-object, removal/null, and final naming details remain open.
+- Added a before/data/after illustration and future acceptance checks for
+  preservation of omitted fields, retained required fields, multi-field atomic
+  validation, and unchanged permission/revision boundaries. The existing internal
+  mutation example is not a third model-facing tool or a replacement shortcut.
+- Counted the original 13 numbered review groups: G1 is resolved, G2/G3 are
+  partly resolved, and G4–G13 await approval, leaving 12 open groups. This is not
+  a count of individual edge cases. Nested-object merge behavior is next to
+  discuss, not an additional approved feature.
+- Verified all 11 JSON examples parse: the previous 10 are unchanged, and the
+  new illustration preserves `summary` while updating `topic`. Both complete
+  definition contracts and the seven write-authorization checks are unchanged.
+  All 20 local links/anchors resolve; the group count, route consistency,
+  terminology, local-path hygiene, and `git diff --check` pass. No runtime
+  implementation, runtime tests, or browser checks were part of this checkpoint.
 
 ## Verification evidence
 

@@ -9,10 +9,16 @@ entry participants/startup, and one participant per definition key per call appr
 G3 initialization approved with no context defaults, and submitted context
 updates continue through conversational interruption under existing checks.
 Reads containing a forbidden section fail with a permission error and no values.
-Object/field update tools are requested, with semantics and naming still open;
+Object updates merge supplied fields and preserve omitted section fields;
+nested/removal details and naming remain open for the object/field tools;
 remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
+
+Review count: **12 open numbered groups** — G2 and G3 partly resolved, G4–G13
+awaiting approval; G1 resolved in documentation. Individual sub-decisions are
+not counted separately here. Object merge versus replacement is resolved within
+G3; nested-object merge behavior is the next discussion, not yet an approval.
 
 ## Conclusion and scope
 
@@ -332,7 +338,7 @@ The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
 need, not a reason to adopt their unrestricted authoring surface.
 
-### G3 — P1, partly resolved: Initialization, interruption, and read authorization
+### G3 — P1, partly resolved: Context initialization, authorization, and updates
 
 **Approved initialization:** the [context candidate][context-design] has no
 default values. Its earlier section defaults and proposed merge rules are
@@ -373,14 +379,21 @@ The agent can retry with permitted sections only; successful reads do not add
 unrequested sections. This clarifies existing section grants, not a new
 field-level permission system. Error responses must not expose hidden values.
 
-**Requested update surface, details pending:** offer both
+**Approved object merge, further details pending:** offer both
 `update_context(section_name, data)` for multiple fields in one call and
 `update_context_field(section_name, field_name, value)` for a single-field
 change. These are working interface names, not final wire schemas. Both share
 the existing atomic section boundary, write grant, validation, and revision
 checks. The labnote's existing operation-list example already batched updates;
 it is retained as an internal command candidate, not a third model-facing tool.
-Object merge versus replacement, nested/removal behavior, and final terminology
+`update_context` merges supplied fields into the existing section; omitted
+section fields retain their values. It does not replace the section with a
+partial object. For example, changing `intake.topic` preserves an existing
+`intake.summary`. Check the expected revision and validate the complete merged
+result, including required fields retained from the old data, then commit once
+or reject the whole update without changing values or revisions. This changes
+runtime values without introducing defaults or an initialization merge.
+Nested-object behavior, explicit removal/null handling, and final terminology
 remain for review. No schema keys or runtime modules are renamed yet.
 
 The following G3 proposals remain unapproved. Precise read and first-write
@@ -693,7 +706,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
-| Update several fields with the object tool, then one field with the field tool, after update semantics are approved | One tool call per operation, atomic section validation, and the same write grant/revision boundary; no implicit field-level grants |
+| Merge several fields with the object tool, then change one field with the field tool | One call per operation; omitted fields remain, including existing required fields; the complete merged result validates atomically; invalid updates change nothing; the same write grant/revision boundary applies |
 | Interrupt after submitting a context update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
@@ -730,6 +743,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   corrections use another tool call, not blind retries of an obsolete patch.
 - Do not silently ignore forbidden sections in a context read. Return a
   permission error and no values so the agent can correct its request.
+- Do not replace a complete context section with the partial object passed to
+  `update_context`. Merge supplied fields, preserve omitted fields, and validate
+  the complete result; omission is not a deletion instruction.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
@@ -807,7 +823,12 @@ The read-authorization follow-up approves whole-request permission errors instea
 of filtering and updates the original read contract and future acceptance cases.
 It records the requested object and field update tools, retaining batching and
 the existing section authorization boundary, with naming and update semantics
-still pending. No runtime implementation or schema rename was introduced.
+pending at that checkpoint. No runtime implementation or schema rename was introduced.
+The subsequent object-update decision selects merging into existing section
+data while preserving omitted fields. The labnote adds a before/data/after
+illustration and planned checks for retained required fields and atomic invalid
+update rejection. Nested/removal details and final naming remain open; no
+runtime merge implementation was introduced.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
