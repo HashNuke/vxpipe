@@ -6,8 +6,9 @@ Status: G1 and G2's web routes, initial context, API-key admission with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call approved;
-G3 initialization approved with no context defaults; remaining G2/G3 questions
-and G4–G13 pending review.
+G3 initialization approved with no context defaults, and submitted context
+updates continue through conversational interruption under existing checks;
+remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
@@ -329,7 +330,7 @@ The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
 need, not a reason to adopt their unrestricted authoring surface.
 
-### G3 — P1, partly resolved: Supplied-only initialization; authority still pending
+### G3 — P1, partly resolved: Initialization and interruption; other details pending
 
 **Approved initialization:** the [context candidate][context-design] has no
 default values. Its earlier section defaults and proposed merge rules are
@@ -346,19 +347,25 @@ later authorized context updates remain supported. Both labnote examples omit
 context defaults; the invocation prefills only `customer.id`, leaving `intake`
 unfilled. There is no default-merge or input-remapping contract left to decide.
 
-The following runtime authority proposals remain unapproved. Precise read and
-first-write behavior for an unset section also needs its implementation contract
-without introducing default values.
+**Approved interruption rule:** let an already-submitted local context update
+finish, and use another tool call for a correction. The
+[context interruption contract][context-interruption] adds no live-turn or
+tool-cancellation check to the [authorization transaction][context-authorization].
+Room/incarnation, participant/activation, permission, deadline, schema, limits,
+and expected section revision still apply. Transfer/deactivation and room end
+remain different from conversational interruption and can invalidate a command.
 
-The [authorization transaction][context-authorization] checks activation, but
-interruption can leave the same agent activation active. Require a still-live
-originating turn and tool invocation as well as incarnation, participant,
-activation, deadline, permission, and revision. A GenServer call timeout is not
-cancellation of an already queued mutation. Check validity at the authority's
-commit point; deduplicate retries with a mutation ID and payload digest. A write
-committed before interruption remains a fact; the acknowledgement being lost
-does not undo it. Whole-node exactly-once behavior needs the separate durable
-journal mode already deferred in the labnote.
+If the original update commits first, the correction uses the resulting revision,
+refreshing its permitted view if necessary. If the correction wins a race against
+the same revision, the delayed original conflicts; do not blindly replay it with
+a newer revision. Committed values stay committed, even if the turn is cancelled
+or its acknowledgement is lost. Completion cannot revive cancelled model speech.
+The earlier live-turn check and mutation-ID deduplication/journal proposal are
+withdrawn for this decision. External tool outcomes remain a separate G4 review.
+
+The following G3 proposals remain unapproved. Precise read and first-write
+behavior for an unset section also needs its implementation contract without
+introducing default values.
 
 Resolve the read wording to all-or-nothing authorization: if any requested
 section is unreadable, return no section values. Write-only errors must not echo
@@ -384,10 +391,12 @@ that alone does not prove deduplication by the external API.
 Proposal: distinguish a conversational tool invocation from an external
 operation. A supervised operation worker owns a stable operation ID, bounded
 deadline, attempts, and one of confirmed success, confirmed failure, or unknown
-outcome. An interrupted turn immediately loses output/context-write authority;
-safe read work can be canceled, while an already submitted write needs a
-receipt/status reconciliation path. Late external facts can enter the private
-operation ledger without resuming an old model turn or applying its stale patch.
+outcome. An interrupted turn loses output authority; safe external read work can
+be canceled, while an already submitted external write needs a receipt/status
+reconciliation path. Late external facts can enter the private operation ledger
+without resuming an old model turn. Whether and how those results can initiate
+new context updates remains under review; this proposal does not cancel G3's
+already-submitted local context commands or bypass their revision checks.
 
 Default mutating operations to no automatic retry after an ambiguous submission.
 Permit retry only with a documented provider idempotency contract or a safe
@@ -667,7 +676,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
-| Interrupt while a context update is queued | Ordering determines one commit-before-interrupt or a stale-work rejection; replayed mutation ID cannot write twice |
+| Interrupt after submitting a context update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
 | Request verification, then have the model write `verified: true` | Write is denied; only backend verification updates trusted status; codes/results stay out of public events |
@@ -698,6 +707,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
 - Do not populate context from definition defaults, merge in fallback values,
   or turn omitted optional values into empty objects or nulls. Only supplied
   setup data prefills context; later writes still need their existing grants.
+- Do not add turn/tool-cancellation tracking or rollback for submitted local
+  context updates. Let them finish under normal authorization/revision checks;
+  corrections use another tool call, not blind retries of an obsolete patch.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
@@ -764,8 +776,13 @@ no runtime timestamp or database schema was changed.
 The subsequent context correction removes defaults from both labnote schema
 examples and approves supplied-only initialization. It replaces the merge-rule
 proposal, retains capability/profile defaults, and updates planned acceptance
-checks. G3's remaining runtime authority questions are still open; no context
-compiler or runtime implementation was changed.
+checks. At that checkpoint, G3's remaining runtime authority questions were still
+open; no context compiler or runtime implementation was changed.
+The subsequent interruption decision lets submitted local context commands
+finish while retaining authorization, lifecycle, and revision checks. It removes
+the proposed live-turn cancellation guard and mutation-ID journal requirement,
+updates the race/correction acceptance case, and leaves external-tool policy
+and the other G3 questions pending. No runtime cancellation behavior was changed.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
@@ -773,6 +790,7 @@ compiler or runtime implementation was changed.
 [json-design]: ../labnotes/20260905-0405-call-definition-design.md#representative-json-shape
 [context-design]: ../labnotes/20260905-0405-call-definition-design.md#working-room-context-schema-candidate
 [context-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
+[context-interruption]: ../labnotes/20260905-0405-call-definition-design.md#context-updates-and-conversational-interruption--approved-g3-decision
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
 [api-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-api-key-admission--approved-g2-decisions
 [join-token-recovery]: ../labnotes/20260905-0405-call-definition-design.md#single-use-join-tokens-and-existing-call-recovery--approved-g2-decisions

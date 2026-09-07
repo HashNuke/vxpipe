@@ -25,9 +25,12 @@ entry participants/startup, and one participant per definition key per call are
 approved and documented below. Record creation and actual live-call start also
 have distinct timestamps; preparation is not call duration.
 G3's initialization rule is also approved: context has no default values and is
-prefilled only from supplied call-setup data. G2's remaining admission details,
-the remaining G3 authority questions, and the other suggestions remain pending
-user review. Approval of documentation does not authorize runtime implementation.
+prefilled only from supplied call-setup data. Its interruption rule lets an
+already-submitted context update finish under the existing authorization and
+revision checks; a correction uses another tool call, not cancellation or
+rollback. G2's remaining admission details, the remaining G3 questions, and the
+other suggestions remain pending user review. Approval of documentation does
+not authorize runtime implementation.
 
 ## Constraints
 
@@ -1638,6 +1641,15 @@ stays unfilled. There is no context-default construction or merge layer. This
 does not change capability/profile configuration defaults or later authorized
 context updates.
 
+### Cancel submitted context updates when a conversational turn is interrupted
+
+Rejected. Conversation interruption does not cancel or undo an already-submitted
+local context update. Let the command finish under the normal room, activation,
+permission, deadline, schema, and revision checks. Corrections use another
+context-update tool call; conflicting old updates are not blindly retried.
+There is no additional live-turn/tool-cancellation check or mutation journal
+for this rule. External tool operations remain a separate review concern.
+
 ### Keep separate client-ID/HMAC authentication for browser-forwarded payloads
 
 Superseded. The backend sends initial context directly under API-key
@@ -1897,6 +1909,35 @@ acceptance acknowledgement, but the provider request and all tool rounds execute
 after that acknowledgement in the capability-owned task. Add a focused
 regression test for this call direction.
 
+### Context updates and conversational interruption — approved G3 decision
+
+A context update is a bounded local room command. Once the tool submits it to
+`RoomAuthority`, a conversational interruption or cancellation of the model turn
+does not cancel that command or roll back a committed value. A later correction
+is another context-update tool call. This avoids adding turn/tool cancellation
+tracking to the context authorization transaction: the originating turn need
+not still be live. Tool-call/correlation IDs remain useful for attribution,
+not an additional cancellation check.
+
+Letting the command finish does not guarantee success or bypass the checks
+above. The room/incarnation, admitted participant, current agent activation,
+permissions, bounded deadline, schema, limits, and expected section revision
+must still be valid. Transfer/deactivation or room end can therefore prevent a
+pending update even though conversation interruption alone cannot.
+
+Keep `expected_revision` to prevent lost updates. If the original update commits
+first, the correcting call uses the resulting revision, refreshing its permitted
+view if needed. If the correction commits first against the same revision, the
+delayed original update conflicts instead of overwriting it. Do not blindly
+retry that stale update with a newer revision; any subsequent call must reflect
+the current intended correction and existing permissions.
+
+Completion does not revive a cancelled model response or resume stale audio.
+A missing acknowledgement does not undo a committed write. No separate mutation
+ID deduplication/journal subsystem is approved by this decision, and the policy
+for external MCP/host side effects or late external results remains under G4
+review. No extra call-definition fields are needed.
+
 ### Agent model and tool integration
 
 Compile an activation-specific effective tool surface from three sources:
@@ -1981,7 +2022,11 @@ each red and green step. The focused cases must demonstrate:
   bad pointer, revision conflict, invalid resulting schema, or size violation
   performs no mutation and emits no success event;
 - two valid changes in one request commit atomically with one section revision;
-- interruption or transfer invalidates late tool work; and
+- conversational interruption does not cancel an already-submitted context
+  update; a later correction uses a new call with the appropriate revision;
+- racing the original and correcting updates cannot silently overwrite a newer
+  revision, and a stale update is not blindly replayed;
+- transfer/deactivation or room end still fences pending context updates; and
 - room snapshots and public events do not expose context values.
 
 After each coherent code checkpoint, run the umbrella completion checks:
@@ -2745,8 +2790,10 @@ storage, single-use join tokens with existing-call recovery and no automatic
 call-record expiry, prepared-token and direct-backend connection flows, explicit
 initial participants/startup, and one
 participant per definition key per call. G3's initialization rule now permits
-only supplied setup values, with no context defaults. G2's remaining questions,
-the remaining G3 authority questions, and G4–G13 are still unapproved. Detailed
+only supplied setup values, with no context defaults. Its interruption rule
+allows submitted context commands to finish under existing authorization and
+revision checks, with corrections made through later tool calls. G2's remaining
+questions, the remaining G3 questions, and G4–G13 are still unapproved. Detailed
 reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -2770,6 +2817,8 @@ reasoning and evidence live in the
   the token expires, while record retention remains a separate concern.
   The context correction removes default values from both schema examples and
   the initialization contract. Capability/profile defaults remain unchanged.
+  The interruption follow-up rejects an additional turn-cancellation check for
+  submitted context updates while preserving revision and lifecycle checks.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2829,16 +2878,18 @@ The numbering below matches G1–G13 in the focused review document.
    details, and admission/transfer crash handling.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
-3. **Context initialization resolved; authority details pending:** there are no
-   context defaults and no initialization merge. Only authorized call-setup
-   input prefills context. Validate that supplied data, reject missing required
+3. **Context initialization and interruption resolved; other details pending:**
+   there are no context defaults and no initialization merge. Only authorized
+   call-setup input prefills context. Validate that supplied data, reject missing required
    setup values, and leave omitted optional values unfilled. Both context schema
    examples now omit defaults; capability/profile configuration is unchanged.
-   Remaining review: activation checks alone do not invalidate interrupted work
-   from the same activation. Also consider checking live turn/tool
-   identity and deadline at mutation commit; deduplicate mutation retries.
-   Writes committed before interruption remain facts. Reject mixed authorized
-   and unauthorized reads as a whole, and redact write-only validation errors.
+   Submitted local context updates continue despite conversational interruption;
+   corrections use another tool call. Keep room/activation, permission, deadline,
+   schema, and revision checks, but add no live-turn/tool-cancellation guard or
+   mutation journal. A delayed conflicting update must not overwrite a newer
+   revision or be blindly retried; committed values are not rolled back.
+   Remaining review: reject mixed authorized and unauthorized reads as a whole,
+   and redact write-only validation errors.
    A schema-valid agent write also does not prove identity verification or a
    completed external action. Consider separating intake from trusted-result
    sections; only authorized platform result bindings may update verified status or
@@ -2849,7 +2900,9 @@ The numbering below matches G1–G13 in the focused review document.
    external operation, preserve confirmed/failed/unknown outcomes, and retry
    ambiguous writes only with provider-supported idempotency or reconciliation.
    Late receipts must not revive canceled model work or apply stale context
-   patches. Bind action confirmation to exact arguments and expiry. A start
+   patches. The policy for new context writes from late external results remains
+   pending; G3 already allows submitted local context commands to finish.
+   Bind action confirmation to exact arguments and expiry. A start
    event is not proof of successful completion.
 5. **Private tool data and archive projections:** current tool events carry
    arguments/results through the gateway. Reusing that path for context would
@@ -2921,9 +2974,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
 2. Start a room, save intake through the agent tool, then read it on another
    turn. Transfer to a read-only agent; the value remains available but writes
    fail. Inspect client events and confirm private tool values are absent.
-3. Queue a context update, then interrupt or transfer before authority commit.
-   It must reject stale work. Reverse the order and confirm the earlier committed
-   write remains. Retry the same mutation and confirm it does not apply twice.
+3. Submit a context update, then interrupt the conversation before authority
+   commit while keeping the same room and agent activation. Confirm it can
+   finish under normal authorization/revision checks without resuming cancelled
+   speech. Correct it with another tool call using the resulting revision.
+   Also race two updates against the same revision: if the correction commits
+   first, the delayed original must conflict and must not be blindly retried.
+   Separately transfer/deactivate the agent or end the room before commit and
+   confirm the existing lifecycle checks reject the pending update. A value
+   committed before any of these events remains committed, without rollback.
 4. Submit a fake booking, commit it remotely, and delay its response while
    interrupting. Confirm one external action, an honest receipt/unknown outcome,
    no stale response, and no blind duplicate on retry. Change confirmed arguments
@@ -3236,6 +3295,29 @@ For the approved 2026-09-07 supplied-only context clarification:
   remain unchanged. All 19 local links/anchors resolve; route consistency,
   terminology, local-path hygiene, and `git diff --check` pass. No runtime tests
   were run for this documentation-only correction.
+
+For the approved 2026-09-07 context-update interruption simplification:
+
+- Updated the original context contract and synchronized G3 in the focused
+  review: an already-submitted local context update can finish despite
+  conversational interruption, and a correction is another tool call. The
+  proposed live-turn/tool-cancellation guard and mutation-ID journal are not
+  required for this rule. Committed values are not rolled back.
+- Preserved the existing bounded authorization transaction, including agent
+  activation, permissions, schema, and section revision checks. Transfer,
+  deactivation, and room end remain distinct lifecycle boundaries. A conflicting
+  delayed update cannot overwrite a newer revision or be blindly replayed.
+- Replaced planned acceptance step 3 and the corresponding review scenario
+  with interruption-then-correction, both update orderings, unchanged lifecycle
+  checks, and no revival of cancelled speech. Kept external tool outcomes in
+  G4 rather than making this a blanket tool-cancellation policy. Mixed-read
+  authorization, unfilled-section access, and trusted-result rules still need
+  review; no runtime code or new call-definition fields were introduced.
+- Verified all 10 JSON examples are unchanged and parse, both complete definition
+  contracts remain consistent, and the existing authorization transaction is
+  unchanged. All 20 local links/anchors resolve. Route consistency, removal of
+  superseded cancellation assertions, terminology, local-path hygiene, and
+  `git diff --check` pass. Runtime tests were not run for this docs-only change.
 
 ## Verification evidence
 
