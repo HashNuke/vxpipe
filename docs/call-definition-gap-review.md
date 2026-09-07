@@ -2,9 +2,10 @@
 
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-07 UTC
-Status: G1 and G2's web routes, initial context, client authentication/storage,
-explicit entry participants/startup, and one participant per definition key per
-call approved; remaining G2 questions and G3–G13 pending review.
+Status: G1 and G2's web routes, initial context, API-key admission with prepared
+token-join or direct-backend connection, explicit entry participants/startup, and
+one participant per definition key per call approved; remaining G2 questions and
+G3–G13 pending review.
 Documentation only; no runtime implementation.
 
 ## Conclusion and scope
@@ -101,7 +102,7 @@ handler, not necessarily that connection's human participant. The approved
 entry-role refinement below makes both initial participants explicit.
 
 Approved routing: create tenant-scoped participant connection keys as routing
-metadata, with separate HTTPS operations to start and join:
+metadata, with separate HTTPS operations to prepare and join:
 
 ```http
 POST /api/tenants/{tenant_key}/participants/{participant_key}/calls
@@ -109,10 +110,12 @@ POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/se
 ```
 
 Use a 16-character cryptographically random URL-safe tenant key, UUID participant
-connection keys, and UUID call IDs, separate from database primary keys. A start
-route selects a deployment/definition and initiating participant, which must
-match that definition's `entry_caller`. A join route must identify the particular
-tenant and call and resolve the participant using that call's pinned definition.
+connection keys, and UUID call IDs, separate from database primary keys. The
+preparation route selects a deployment/definition and initiating participant,
+which must match that definition's `entry_caller`; it stores the pinned plan and
+context and returns a scoped join token without starting the room. A join route
+must identify the particular tenant and call and resolve the participant using
+that call's pinned definition.
 It cannot choose a call from a reusable support key alone. Authorization precedes
 issuing the call-specific transport session.
 WebRTC is the first browser transport; routing can also serve a future WebSocket
@@ -129,10 +132,11 @@ Validate refs when parsing/saving the definition and retain resolved refs in the
 pinned call plan. The benefit is explicit intent, not an assumption that runtime
 must otherwise repeatedly scan the catalog or query the database.
 
-For caller/reception/billing/human-support, initially prepare only caller and
-reception. Activate an agent receiver once its required connection/capabilities
-are ready. Other catalog entries do not automatically start providers or dial
-out; prepare them when an authorized transfer/admission needs them. Dialing is
+For caller/reception/billing/human-support, live startup prepares only caller and
+reception; token issuance alone starts neither. Activate an agent receiver once
+its required connection/capabilities are ready. Other catalog entries do not
+automatically start providers or dial out; prepare them when an authorized
+transfer/admission needs them. Dialing is
 not evidence that a human has joined. A human receiver does not imply an AI
 receiver, and a human-to-human call may begin without any AI participant.
 Transfers change current control/routing, not the pinned initial-role refs.
@@ -163,47 +167,69 @@ the separate `input_schema` and JSON Pointer initialization mappings. For order
 `ORD-1042`, it supplies `initial_context: {order: {id: "ORD-1042"}}` to a definition
 declaring that section. Admission initializes it; several agents can read it
 while none has write access. The definition declares the data shape and
-permissions, not a second remapping layer. Initial context cannot override
-providers, tools, either entry ref, tenant, or other definition policy.
+permissions, not a second remapping layer. The authorized backend may prefill
+any declared section, including one that no agent can write. Initial context
+cannot override providers, tools, either entry ref, tenant, or other definition
+policy.
 
-**Approved authentication and credential storage:** the gateway issues
-tenant-scoped client IDs and random secrets through an authorized management
-operation. The integrating backend keeps the secret, authorizes access to the
-order, and HMAC-signs the call-start payload. The client ID is carried in a
-header, and the POST envelope contains initial context and the signature, never
-the secret. Vxpipe verifies the signature and tenant/operation permissions before
-admission. A valid HMAC identifies the application that approved the context;
-it is not independent proof of the speaker's identity. CORS is a browser access
-policy, not authentication; the backend may POST directly, or a browser may
-forward an already-signed envelope without possessing the secret.
+**Approved authentication and connection flows:** replace separate client IDs,
+client secrets, and HMAC-signed envelopes with a gateway-issued API key in the
+backend's `Authorization: Bearer <api_key>` header over HTTPS/WSS. Payloads are
+unsigned. The backend authorizes the business context; key verification checks
+the integrating application's tenant/operation authority, not customer identity.
 
-Store the client ID and tenant/permission metadata normally, and encrypt the
-client secret using Cloak/Cloak.Ecto with AES-256-GCM. A separate runtime OTP
-setting supplies the 32-byte encryption key; a deployment environment mapping
-such as `VXPIPE_CREDENTIALS_KEY` is illustrative, not implemented configuration.
-Keep that key outside the database and separate from client secrets and other
-applications' keys. Gateway credential logic uses a store port; the planned
-persistence adapter owns Ecto, encrypted fields, and the vault. The call engine
-receives neither credentials nor signatures. This follows the inspected
-encrypted-Ecto implementation and the [Cloak.Ecto documentation][cloak-ecto].
+1. **Backend prepares, browser joins:** the backend POSTs initial context to the
+   preparation endpoint, which grants no CORS access. Vxpipe validates it, stores
+   a prepared call with pinned revision/context, and returns an opaque short-lived
+   join token scoped to that call and participant. No room/providers start yet.
+   The frontend receives only the token, not private context or the API key.
+   Authorized joining activates that same call; conversation waits for transport
+   and required capabilities. The browser cannot replace the prepared context,
+   and joining must not return its private contents in a snapshot. Later event,
+   tool, and speech disclosure remains a separate policy responsibility.
+2. **Backend connects directly:** a non-browser WSS client supplies its API key
+   in the handshake header. Authenticate before upgrade, then receive unsigned
+   context in a bounded first application message. Validate before starting the
+   room/providers. This path needs no browser join token.
 
-The client secret is returned once at issuance, then excluded from ordinary
-responses and logs. A hash-only store is unsuitable for recovering the HMAC
-verification key. Retain the encryption key securely across restores, and keep
-database-key rotation separate from client-secret rotation. Credential issuance
-does not belong in call JSON or the MCP integration catalog. See the
-[approved context and credential contract][signed-admission] for ownership,
+A WebSocket upgrade is a [GET handshake][websocket-handshake], not a JSON POST
+that upgrades. Browser WebSockets require server-side [Origin validation][websocket-origins],
+not ordinary HTTP CORS grants. Browser HTTP join/signaling can use a configured
+CORS allowlist; neither policy replaces authentication. The [browser WebSocket
+interface][browser-websocket] cannot supply arbitrary authorization headers;
+token delivery (for example, the first message) still needs its wire contract.
+Keep credentials/context out of query strings and logs. Existing browser WebRTC
+remains supported; this auth decision does not switch its media transport.
+
+The gateway generates random API keys through authorized management and returns
+each once to the backend. Gateway authentication uses a credential-store port;
+persistence owns storage, Calls owns preparation/activation, and the engine
+receives neither keys nor join tokens. The previously approved encrypted-at-rest
+[Cloak/Ecto pattern][cloak-ecto] remains a viable baseline, with its runtime key
+outside the database. Dropping HMAC removes the need to recover a signing secret,
+so a hash-based API-key verifier is now an alternative to review, not a silently
+approved replacement. MCP/provider secrets are separate from gateway keys.
+
+The join token is delegated, short-lived access, not a second long-lived
+integration credential or proof of a person's identity. Apply scope, TLS, and
+limited lifetime consistent with [bearer-token security][bearer-tokens]. See the
+[approved context and admission contract][api-admission] for ownership,
 alternatives, and future verification steps.
 
 The following G2 proposals remain open and must be reviewed separately:
 
-**Signature profile and credential lifecycle:** define exact names and signed
-bytes, HMAC algorithm, method/route/body coverage, expiry/replay handling,
-idempotent retries, administrator bootstrap, permission granularity, and
-rotation/revocation procedures. HMAC alone neither binds unsigned routing data
-nor prevents reuse of a valid request. These are required design follow-ups, not
-an approved wire format or a claim of implemented authentication. See the
-[HTTP Message Signatures security considerations][http-signatures].
+**API-key storage and lifecycle:** review encrypted storage versus hash-based
+verification, administrator bootstrap, permission granularity, multiple-key
+management, rotation/revocation, and redaction. HMAC algorithm, canonicalization,
+and signature fields are no longer questions for this contract.
+
+**Prepared-call and token lifecycle:** specify token lifetime, claim/reissue and
+retry rules, unused preparation expiry/retention and limits, and crash recovery.
+Concurrent joins must not activate duplicate rooms or participants; token claim
+and activation cannot hold a database transaction across external work. Exact
+transport routes, token delivery, initialization limits/timeouts, and errors
+remain unapproved wire details. Deferred browser startup does not impose token
+preparation on an inbound telephony call or an already-authorized outbound dial.
 
 **Reconnect and retry lifecycle details:** the approved singleton participant
 binding is not permission to resume an ended/revoked session. Specify reconnect
@@ -556,8 +582,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
 | Initialize a required context field directly, with no input mapping or dummy default | Compilation succeeds; absent required initial data fails before room startup; partial/default assembly follows a separately approved rule |
-| Provision a tenant client and submit backend-signed initial order context | Valid authorized request starts the call; agents can read the order but cannot rewrite it; bad signatures, cross-tenant requests, and schema-invalid values fail |
-| Persist the generated secret and restart with the runtime encryption key | Raw storage contains ciphertext; verification works with the correct key; wrong/missing key fails closed; ordinary responses and logs never expose secrets |
+| Prepare private order context using a backend API key, then join from the browser using only a token | Preparation pins/stores context without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and context fail |
+| Connect a backend WSS client with an API key and send unsigned context as its first message | Invalid authentication fails before upgrade; invalid/missing/oversized context cannot start the room; browser Origin and HTTP CORS policies are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
 | Interrupt while a context update is queued | Ordering determines one commit-before-interrupt or a stale-work rejection; replayed mutation ID cannot write twice |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
@@ -590,10 +616,11 @@ synthetic identities, destinations, and data; do not operate example endpoints.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
-- Do not put HMAC client secrets in browsers, call definitions, plaintext database
-  fields, or a hash-only store. Keep the independent encryption key outside the
-  database. Secret encryption does not replace the pending signature/replay and
-  credential-management contracts.
+- The earlier client-ID/HMAC contract is superseded: no signature envelope or
+  canonicalization is needed for these backend API-key flows. Never put API keys
+  in browsers, definitions, or plaintext database fields. Encrypted storage
+  remains a viable baseline; hash-based verification needs separate review.
+  Neither option replaces TLS, scoped-token lifecycle, or credential management.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
 - Do not move mixing, recording coordination, or room context into persistence.
@@ -616,6 +643,10 @@ startup/readiness checks. A separate subsequent decision approves one participan
 per definition key per call and adds future duplicate/reconnect/race acceptance
 cases. Runtime tests remain out of scope; the labnote records documentation
 verification separately from those unimplemented checks.
+The API-key follow-up supersedes the HMAC wire contract, separates prepared-call
+tokens from live room sessions, and checks WebSocket handshake/Origin/browser
+constraints against first-party specifications. It does not implement the new
+routes, choose a new key-storage format, or change the current browser transport.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
@@ -624,7 +655,7 @@ verification separately from those unimplemented checks.
 [context-design]: ../labnotes/20260905-0405-call-definition-design.md#working-room-context-schema-candidate
 [context-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
-[signed-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-client-credentials--approved-g2-decisions
+[api-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-api-key-admission--approved-g2-decisions
 [entry-participants]: ../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions
 [participant-cardinality]: ../labnotes/20260905-0405-call-definition-design.md#one-participant-per-definition-key--approved-g2-decision
 [presence]: ../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology
@@ -649,4 +680,7 @@ verification separately from those unimplemented checks.
 [warm-transfer]: https://docs.vapi.ai/calls/assistant-based-warm-transfer
 [mcp-http]: https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/docs/specification/2026-07-28/basic/transports/streamable-http.mdx
 [cloak-ecto]: https://cloak-ecto.hexdocs.pm/install.html
-[http-signatures]: https://www.rfc-editor.org/rfc/rfc9421.html#section-7.2
+[websocket-handshake]: https://www.rfc-editor.org/rfc/rfc6455.html#section-4.1
+[websocket-origins]: https://www.rfc-editor.org/rfc/rfc6455.html#section-10.2
+[browser-websocket]: https://websockets.spec.whatwg.org/#the-websocket-interface
+[bearer-tokens]: https://www.rfc-editor.org/rfc/rfc6750.html#section-5
