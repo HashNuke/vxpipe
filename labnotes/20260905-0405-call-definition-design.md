@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-34 individual decisions still awaiting review, rather than counting its
+32 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -121,6 +121,9 @@ reads and date/current-time tooling. R14 disallows all automatic executor retrie
 R15 skips classification, and R16 defers retry/idempotency enhancements. R13 now
 allows protected backend-initialized dial variables while model transfers remain
 restricted to participant refs.
+R20/R21 now use periodic cleanup sweeps: external call-owned objects first, then
+database data, with definitive missing objects accepted and failed work retried
+from retained records/references. The exact sweep interval is not selected.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -1898,7 +1901,8 @@ default. Completed-call finite retention starts at `ended_at`, without expiring
 active calls or assigning an expiry to forever. The current application/tenant
 period applies to past and future calls, not a per-call pinned period. Expiry
 deletes the call record and all associated Vxpipe-managed data. Exact storage
-configuration and cleanup mechanics remain G5 review questions. General
+configuration remains a G5 review question; cleanup uses periodic external-first
+deletion under the retention contract below. General
 sensitive-input redaction is deferred as described below.
 
 ### Sensitive input and deferred redaction — approved G5 boundary
@@ -3329,7 +3333,8 @@ live but save only metadata. Both are supported without changing tool behavior.
 Retention periods use application configuration with tenant overrides and an
 application retain-forever default. Completed-call finite retention starts at
 `ended_at`, using the current period for both past and future calls. Exact
-configuration syntax and cleanup mechanics remain under review; general
+configuration syntax remains under review; periodic external-first cleanup is
+approved below. General
 sensitive-input redaction is deferred. Expiry deletes the entire call and its associated
 Vxpipe-managed history and artifacts. This decision does not add runtime
 persistence or guarantee complete room recovery.
@@ -3397,7 +3402,8 @@ prerequisite to the normal variable-save transaction. An explicitly database-fre
 deployment has no database-commit guarantee; a database-backed call must never
 silently fall back to it when storage fails. Storage duration resolves as below.
 Referenced snapshots are deleted with the expired call, including its latest
-snapshot. Cleanup mechanics and exact database schema remain follow-ups.
+snapshot. Cleanup follows the ordered periodic contract below; the exact database
+schema remains an implementation follow-up.
 This checkpoint adds no runtime behavior or migrations.
 
 ### Retention periods — approved application and tenant policy
@@ -3473,13 +3479,45 @@ control, not something this cleanup can promise to erase.
 Both database rows and stored objects must be deleted. This is one deletion
 scope, not an atomic transaction spanning the database and object storage.
 Cleanup is not complete while call-owned data remains in either. Pending or late
-archival/publication work must not recreate purged call data. The coordination
-and deletion ordering are implementation questions, not a reason to retain data
-permanently or add a new per-call retention policy.
+archival/publication work must not recreate purged call data.
 
-Unstarted-record cleanup and deletion-job behavior/scheduling/cross-store
-mechanics remain under review; the whole-call deletion scope is now approved.
-No automatic cleanup is implemented here. This retention decision does not alter
+**Periodic external-first cleanup — approved R20/R21:**
+
+1. Background sweeps select completed calls that meet the current application/
+   tenant retention period from `ended_at`. Crossing the threshold does not
+   instantly delete a call or start a per-call expiry timer. Keep the existing
+   forever, active-call, and missing-`ended_at` exclusions. The sweep interval and
+   deployment default are not selected here; there is no approved hourly cadence
+   or exact deletion SLA.
+2. Delete all managed call-owned external objects/copies before deleting call-owned
+   database data or the call record. A definitive object-key-not-found response
+   means that object is already absent. Only after every relevant object is
+   absent may database cleanup proceed.
+3. Actual object-store errors, timeout/unknown outcomes, and authentication or
+   permission failures are not missing-key success. Keep the call/artifact rows
+   and their object references so a later sweep can retry. If a job crashes after
+   deleting some or all objects, the later job repeats deletes from those records;
+   already-missing objects succeed before the remaining database cleanup.
+4. A database deletion failure also leaves the call for a later sweep. Use these
+   retained call/artifact records as progress rather than adding a per-object
+   journal, separate reconciliation subsystem, or permanent tombstone. After
+   successful cleanup, no call record, snapshot, or summary remains.
+
+For example, deletion removes the audio object and then the worker stops before
+removing the database row. The next sweep finds the eligible call, sees that the
+audio key is already absent, deletes any other remaining call-owned objects, and
+then removes its database data. A network timeout is not evidence that a key is
+absent, so it cannot justify deleting the references needed for the next attempt.
+
+The cleanup and archive/publisher owners must coordinate at their existing
+responsibility boundary to prevent late work recreating purged data. External-
+first ordering alone does not solve that race. No elaborate coordination
+mechanism or new durable journal is approved here. Shared definitions/configured
+assets remain untouched, including reusable opening audio not owned by one call.
+Internal sweep retries are distinct from the tool/MCP executor's no-retry policy.
+
+Unstarted-record housekeeping and exact storage/retention configuration remain
+separate. No automatic cleanup is implemented here. This decision does not alter
 the requirement to commit a variable snapshot before update-tool success.
 
 ### Usage and cost belong to provider operations, with optional turn links
@@ -4131,7 +4169,8 @@ tenant overrides and application settings, with retain forever as the applicatio
 default. Normal transaction errors return variable-save failure; no extra commit
 reconciliation is required. Completed-call finite retention starts at `ended_at`;
 active calls are not expired, and forever has no expiry threshold. Exact
-configuration and cleanup mechanics remain under review; general voice/LLM-input
+configuration remains under review; periodic external-first cleanup is approved.
+General voice/LLM-input
 redaction is deferred. Current application/tenant periods apply to all calls, past and future,
 without per-call retention settings. Expiry deletes the entire call and all
 associated Vxpipe-managed data, including its record and latest variable snapshot.
@@ -4144,8 +4183,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **34 individual decisions awaiting review**, enumerated as R17–R50
-in the focused gap review. R01–R06, R08, and R10–R15 are resolved;
+There are **32 individual decisions awaiting review**, enumerated as R17–R19
+and R22–R50 in the focused gap review. R01–R06, R08, R10–R15, and R20/R21 are resolved;
 R07's caller reconnection and R16's retry exceptions are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4162,7 +4201,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R17–R21.
+for unstarted records. The next five pending decisions are R17–R19 and R22–R23.
 
 ### Baseline and scope
 
@@ -4370,8 +4409,8 @@ The numbering below matches G1–G13 in the focused review document.
    and advances the call's latest-snapshot pointer transactionally before update
    success. Application retention defaults to retain forever, with tenant settings
    overriding application values. Transaction error means variable-save failure;
-   extra commit-status lookup/reconciliation is not required. Exact configuration,
-   cleanup mechanics remain proposals for review. General voice/LLM-input
+   extra commit-status lookup/reconciliation is not required. Exact configuration
+   remains under review. General voice/LLM-input
    redaction is deferred; deterministic collection such as DTMF need not involve
    the LLM, but its recording/logging paths still need explicit protection.
    Completed-call finite retention starts at `ended_at`;
@@ -4381,6 +4420,11 @@ The numbering below matches G1–G13 in the focused review document.
    Expiry deletes the call record and all associated Vxpipe-managed data, including
    every variable snapshot, usage history, recording, and export. Shared definitions
    and application/tenant configuration remain.
+   R20/R21 use periodic background sweeps, not instant per-call expiry timers.
+   Delete all external objects first, then database data; definitive key-not-found
+   succeeds, while errors/unknown outcomes preserve rows/references for retry.
+   No new progress journal or permanent tombstone; late writers still require
+   coordination. Exact interval/default is unspecified, not an hourly policy.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -4504,9 +4548,18 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    transcripts, tool/usage history, variable snapshots, recordings, and exports:
    verify all call-owned rows and objects are deleted, including the call record
    and latest snapshot, while shared definitions/configuration and other calls
-   remain untouched. An object-store failure must not be reported as complete
-   cleanup, and late publication must not recreate the deleted data. Cleanup
-   mechanics remain separate. These are planned checks, not current playground
+   remain untouched. Cross the threshold without running a sweep and expect no
+   immediate per-call deletion. Run a controlled sweep: all managed external
+   objects must be absent before deleting call-owned database data. Definitive
+   key-not-found counts as absent; network/authentication/permission failures and
+   unknown outcomes retain rows/references for a later sweep. Crash after partial
+   or complete object removal but before database deletion, then repeat the sweep:
+   missing-object deletes succeed and database cleanup completes only once all
+   objects are absent. A database failure also leaves retryable work without a
+   separate progress journal. Late publication must not recreate deleted data;
+   verify coordination rather than assume ordering solves the race. Leave no
+   permanent tombstone/summary/snapshot after success. Do not assert an unapproved
+   sweep interval. These are planned checks, not current playground
    guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
@@ -4814,6 +4867,9 @@ Retries/idempotency enhancements now live in a deferred issue; call-creation
 idempotency and admission recovery remain separate pending work.
 R13's later protected-variable routing decision supersedes the remaining dynamic
 destination proposal without introducing conversational template bindings.
+The R20/R21 cleanup decision supersedes earlier unselected ordering/scheduling
+proposals. Historical counts and checks do not override the periodic external-
+first contract; the exact sweep interval remains deployment tuning to select.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -5864,6 +5920,33 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   fences/links/URLs, local targets/anchors, resolved/pending IDs/count, protected
   routing and unrelated contracts, terminology/path hygiene, and whitespace.
   No runtime or browser tests were run.
+
+### Periodic external-first retention cleanup — approved R20/R21, 2026-09-07
+
+- Approved periodic background sweeps selecting completed calls under current
+  tenant/application retention from `ended_at`, not instant threshold-triggered
+  deletion or per-call timers. No fixed period/policy is copied to each call.
+  Exact cadence/default is unspecified; no hourly frequency or deletion SLA.
+- Delete all managed call-owned external objects/copies first, then call-owned
+  database data and the call record. Definitive key-not-found means already
+  absent; actual failures/timeouts/authentication/permission/unknown outcomes keep
+  the database records and references for a later sweep.
+- Resume after partial deletion/crash by repeating deletes from retained call/
+  artifact rows. Missing objects succeed; database failure also leaves retryable
+  work. No per-object progress journal, separate reconciliation subsystem, or
+  permanent tombstone. Complete cleanup leaves no call row, summary, or snapshot.
+- Retained the late-writer coordination requirement: external-first ordering
+  alone cannot prevent recreation. No new detailed writer-fencing mechanism is
+  approved. Shared configuration/assets and unrelated calls are not deleted;
+  internal cleanup retries do not change the no-automatic-tool-retry policy.
+- R20/R21 are resolved; actual R22 remote-protocol support is unchanged. Current
+  backlog: 32 individual decisions, R17–R19 and R22–R50. Updated canonical
+  retention sections/summaries and planned crash/error/not-found/writer tests.
+- Documentation only; no cleanup job or stored-data deletion performed. Checks
+  cover exact three-file scope, all 16 existing JSON examples and fences unchanged,
+  unchanged links/URLs, local anchors, exact statuses/count, ordering/failure and
+  prior routing/admission/variables contracts, terminology/path hygiene, and
+  whitespace. No runtime or browser tests.
 
 ## Verification evidence
 

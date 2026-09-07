@@ -883,9 +883,28 @@ and exported artifacts. This is not a soft delete or a payload-only purge that
 keeps a call summary. Shared call definitions and application/tenant configuration
 remain; call-specific copies and references do not. Database rows and stored
 objects are both in scope, not one cross-store database transaction. Pending or
-late archive/publication work must not recreate deleted call data. Exact duration
-encoding, unstarted-record cleanup, deletion scheduling, and cross-store cleanup
-mechanics remain under review; this decision implements no deletion job.
+late archive/publication work must not recreate deleted call data.
+
+Periodic background sweeps select eligible completed calls using the current
+tenant/application setting and `ended_at`; crossing the threshold does not trigger
+instant deletion or a per-call timer. The sweep interval/default remains deployment
+configuration to choose, not an approved hourly frequency or exact deletion SLA.
+Delete all managed call-owned external objects/copies first, then the call-owned
+database data and call record. Definitive object-key-not-found counts as already
+absent, but database cleanup waits until every relevant external object is absent.
+An object-store timeout, permission/authentication error, or other unknown/failure
+is not not-found: keep the database record and artifact references for a later sweep.
+
+After a crash or partial failure, repeat deletion from those retained records;
+already-missing objects succeed and database cleanup follows when all are absent.
+A database failure also leaves work for a later sweep. No per-object progress
+journal or permanent tombstone is required; successful cleanup leaves no call
+record, summary, or snapshot. Cleanup and archive/publisher owners must coordinate
+so late writes cannot recreate purged data; external-first ordering alone does
+not solve that race, and no elaborate coordination mechanism is selected here.
+These background cleanup retries are not MCP/tool executor retries. Exact duration
+encoding and unstarted-record housekeeping remain separate; no job is implemented
+by this documentation decision.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and
