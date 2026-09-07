@@ -30,7 +30,9 @@ subtree, but already-submitted variable requests can finish. Additional schema
 complexity limits are not adopted now; datatype and value-size checks remain.
 G3 is resolved. G4's ordinary-interruption rule is approved: submitted MCP calls
 finish within their existing timeout because interrupting speech does not imply
-intent to cancel a tool. Remaining G2/G4 questions and G5–G13 are pending review.
+intent to cancel a tool. A submitted MCP request that times out without a
+definitive remote result reports outcome `unknown`. Retry policy is still pending.
+Remaining G2/G4 questions and G5–G13 are pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
@@ -44,7 +46,8 @@ question. Naming and agent-mediated MCP result updates are also resolved;
 dedicated variable ownership and submitted-write lifetime are approved, and
 additional schema-complexity caps are not adopted now. G3 is closed in
 documentation, reducing the count from 12 to 11; implementation remains pending.
-The MCP-interruption decision resolves only part of G4, so the count stays at 11.
+MCP interruption and timeout-outcome reporting resolve only part of G4, so the
+count stays at 11.
 
 ## Conclusion and scope
 
@@ -74,7 +77,7 @@ integration examples, not proof that every advertised behavior is enforced.
 
 | Scenario and concrete evidence | What our design can express | Missing work or limitation |
 | --- | --- | --- |
-| Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. Confirmation, idempotency, timeout/unknown outcomes, and timezone bindings still need their contracts. The external scheduling system remains the booking authority. |
+| Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. A timeout without a definitive remote result reports unknown; confirmation, idempotency, recovery, and timezone bindings still need their contracts. The external scheduling system remains the booking authority. |
 | Intent routing: [assistant][intent], [request overrides][intent-request], [instruction handler][instructions] | One agent retrieves instructions through a tool; alternatively several specialized agent definitions transfer by ref | Define typed personalization and trusted ingress metadata, provenance of retrieved instructions, and closed participant destinations. Runtime text must not grant tools or introduce arbitrary telephone destinations. |
 | Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Waiting for the other party, answer classification, optional beep evidence, delivery deadline, and speak-then-end are runtime behavior, not solved by a prompt alone. |
 | SMS verification: [assistant][sms], [code tool][code], [SMS tool][sms-tool] | Agent-scoped remote tools, typed verification variables, provider-neutral external action | Requires an external verification service or trusted host implementation. That service owns verification, expiry, attempt limits, recipient binding, and replay protection; the agent can record its returned outcome in permitted call variables. Storing an outcome does not override the service's rules. Do not run JSON-provided JavaScript. |
@@ -549,11 +552,25 @@ additional unsent tool calls from the interrupted turn.
 
 Transfer still terminates the source agent's local execution subtree, including
 model/tool workers; room shutdown also stops their work. Local termination is
-not remote rollback. Explicit cancellation, timeout outcomes, retries/idempotency,
-confirmation, and recovery after shutdown remain pending. No durable operation
+not remote rollback. Explicit cancellation, retries/idempotency, confirmation,
+and recovery after shutdown remain pending. No durable operation
 worker or ledger is approved by the ordinary-interruption decision. Today's
 model request task still contains tool execution and is killed by interruption;
 the approved separation needs implementation.
+
+**Approved timeout-outcome reporting:** when a submitted MCP request reaches its
+timeout without a definitive remote result, report outcome `unknown`. The timeout
+is the known local cause; remote success or failure is unconfirmed. For example,
+the booking service may have created a booking before its response was lost.
+Do not present that timeout as confirmed failure or rollback. Keep an already-known
+definitive success/failure result; pre-submission validation errors do not become
+unknown merely because this classification exists. Unknown does not count as
+success or automatically change Call Variables.
+
+This approves reporting, not retry behavior. Automatic retry/no-retry policy,
+idempotency, status lookup, reconciliation, later receipts, and durable operation
+storage remain proposals. The existing local timeout remains in effect; no new
+wire format or operation-worker architecture is approved here.
 
 The labnote names retries, cancellation, and idempotency, but does not yet settle
 the remaining interactions. A booking or SMS can succeed remotely before the local
@@ -573,7 +590,8 @@ Whether and how those results can initiate
 new variable updates remains under review; this proposal does not cancel G3's
 already-submitted local variable commands or bypass their revision checks.
 
-Default mutating operations to no automatic retry after an ambiguous submission.
+**Retry proposal — still unapproved:** default mutating operations to no automatic
+retry after an ambiguous submission.
 Permit retry only with a documented provider idempotency contract or a safe
 reconciliation strategy. MCP request IDs are correlation, not business-action
 idempotency keys. Business validation, slot uniqueness, and atomic booking
@@ -861,6 +879,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Read/update variables while the room authority is not servicing messages | Direct tool requests finish in the dedicated variables process without a hidden authorization or commit round trip |
 | Submit A's update, transfer to B, and let the update execute after A stops | A's execution subtree, capabilities, and model/tool workers terminate without restarting; its already-sent update may still commit under normal checks, B can read/refresh it under its own grants, and A's speech does not resume; stopping the variables process itself gives no pending-write completion guarantee |
 | Submit an MCP read or action, delay its response, then interrupt speech or send interrupting text | The submitted request continues to its result or existing timeout while the agent remains running; its result stays tied to the invocation for subsequent reasoning, without reviving cancelled output, executing unsent old-turn tools, or automatically changing variables; transfer still terminates local agent workers |
+| Commit a fake remote booking but withhold its response until timeout | Report outcome unknown with timeout as the cause, not confirmed failure, success, or rollback; no automatic variable mutation; already-known definitive results stay definitive; retry behavior remains a separate pending decision |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
@@ -1096,6 +1115,18 @@ and routes/external references are unchanged. G3's authorization transaction and
 implemented-runtime descriptions are preserved; interruption/review consistency,
 terminology, path hygiene, and whitespace checks pass. No runtime or browser tests
 were run for this documentation-only change.
+
+The timeout-outcome follow-up approves reporting `unknown` when a submitted MCP
+request times out without a definitive remote result. Local timeout is not proof
+of remote failure or rollback, and any already-known definitive result remains
+definitive. Retry policy is explicitly still unapproved, alongside reconciliation
+and storage; no wire schema or runtime behavior changed. The lost-booking-response
+acceptance case and active design summaries are synchronized. G4 remains partly
+resolved with 11 open groups. Verification confirms 15 unchanged valid JSON
+examples, both definition fixtures, 31 local links/anchors, unchanged routes and
+external references, and preserved G3 and implemented-runtime contracts.
+Timeout/interruption policy, retry-review boundaries, terminology, path hygiene,
+and whitespace checks pass. No runtime or browser tests were run.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

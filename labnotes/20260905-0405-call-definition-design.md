@@ -61,9 +61,11 @@ existing datatype and value-size limits without required-variable completeness.
 G3 is resolved in documentation. G4's conversational-interruption rule is now
 approved: interrupting speech does not express intent to cancel a submitted MCP
 tool call, so let that call finish within its existing timeout without reviving
-the interrupted output. G2's remaining admission details, the rest of G4, and
-G5–G13 remain pending user review. Approval of documentation does not authorize
-runtime implementation.
+the interrupted output. A submitted MCP request that times out without a
+definitive remote result is reported as outcome `unknown`, not confirmed failure.
+Retry policy is not approved by this decision. G2's remaining admission details,
+the rest of G4, and G5–G13 remain pending user review. Approval of documentation
+does not authorize runtime implementation.
 
 ## Constraints
 
@@ -1425,8 +1427,9 @@ This is the ordinary-interruption rule while the agent remains running. Transfer
 still terminates its execution subtree, including its model/tool workers; room
 shutdown also ends their work. Local termination does not guarantee cancellation
 or rollback of an action already submitted to the remote system. Timeout outcome
-reporting, retries/idempotency, explicit cancellation, confirmation policy, and
-recovery of remote outcomes after shutdown remain separate G4 review questions.
+reporting is approved below; retries/idempotency, explicit cancellation,
+confirmation policy, and recovery of remote outcomes after shutdown remain
+separate G4 review questions.
 No new operation ledger or durable worker design is approved by this decision.
 
 The runtime does not implement this separation yet. `ModelInference` currently
@@ -1435,6 +1438,26 @@ task on interruption. Implementation must separate the lifetime of a submitted
 MCP invocation from the interrupted model/output turn while retaining its agent
 ownership and existing timeout. Do not describe this as current playground
 behavior.
+
+#### MCP timeouts with unconfirmed outcomes — approved G4 decision
+
+If a submitted MCP request reaches its timeout without a definitive remote
+result, report the outcome as `unknown`. The local timeout is known; whether
+the remote action succeeded or failed is not. Do not tell the agent or caller
+that an action definitely failed or was rolled back merely because its response
+did not arrive. The existing timeout still bounds the local wait.
+
+For example, a booking service creates a booking but its response is lost.
+Vxpipe reports that the booking outcome could not be confirmed, not that the
+booking failed. Retain a definitive success/failure result if one is already
+known; this rule does not turn known outcomes or pre-submission validation errors
+into unknown outcomes. Unknown is not a successful tool result and does not
+automatically populate Call Variables.
+
+This approves outcome reporting only, not automatic retry or no-retry policy,
+idempotency configuration, status lookup, reconciliation, durable operation
+storage, or a new wire envelope. Those remain separate G4 decisions. Recovery
+after agent/room shutdown and treatment of later receipts also remain open.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
@@ -3297,8 +3320,9 @@ without a current-activation check. Source-agent subtree shutdown prevents new
 work, not completion of already-submitted variable requests. Additional schema
 complexity limits are not adopted now; datatype and value-size checks remain.
 G3 is resolved in documentation. G4 now preserves submitted MCP calls across
-ordinary conversational interruption; its other questions, remaining G2 details,
-and G5–G13 remain unapproved.
+ordinary conversational interruption and reports a timeout without a definitive
+remote result as outcome `unknown`. Retry/recovery and its other questions,
+remaining G2 details, and G5–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3315,8 +3339,8 @@ write-only error question. Naming and agent-mediated MCP result updates are also
 resolved. The dedicated variables-process ownership and submitted-write lifecycle
 are approved, and additional schema-complexity caps are not adopted now. That
 closes G3 and reduces the count from 12 to 11; implementation is still pending.
-G4's ordinary-interruption rule is now approved, but its other questions keep
-that group open and the overall count at 11.
+G4's ordinary-interruption rule and unknown-outcome reporting on timeout are now
+approved, but its other questions keep that group open and the overall count at 11.
 
 ### Baseline and scope
 
@@ -3459,12 +3483,15 @@ The numbering below matches G1–G13 in the focused review document.
    Remote MCPs need no knowledge of Vxpipe. The platform-only result-section and
    automatic result-mapping proposals are withdrawn. External services still own
    their business rules; copied variable values do not replace those services.
-4. **External side effects — conversational interruption partly resolved:**
+4. **External side effects — interruption and timeout reporting resolved:**
    interrupting speech does not show intent to cancel a tool call. Submitted MCP
    requests, including reads, continue to result or their existing timeout while
    the agent remains running. Completion remains associated with the invocation
    for subsequent reasoning, not a revival of old model output or an automatic
    variable write. Transfer still shuts down the source's local execution subtree.
+   A submitted MCP request that times out without a definitive result reports
+   outcome `unknown`, not confirmed failure or rollback. Preserve a definitive
+   outcome if already known. This settles timeout reporting, not retry policy.
    The following proposals remain unapproved: a terminated/timed-out request may
    already have booked or sent something remotely. Possible resolution: separate
    tool invocation from external operation, preserve confirmed/failed/unknown
@@ -3604,12 +3631,18 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    Check no Call Variables change without a separate variable-update command.
    Repeat for a read-only tool; interruption is not cancellation intent in either
    case. Keep a separate timeout case to prove the existing deadline still
-   applies. Transfer/shutdown must still terminate the local agent workers, with
+   applies. In that case, let the fake service commit a booking but withhold its
+   response until the local deadline expires. Assert the reported outcome is
+   `unknown`, with timeout as the cause, not confirmed failure, success, or rollback.
+   Also check an already-known definitive result is not replaced with unknown
+   and no variables are populated automatically. Retry behavior is a separate,
+   still-unapproved contract, not an assertion in this timeout-reporting case.
+   Transfer/shutdown must still terminate the local agent workers, with
    no assertion that local termination undoes an external action. Use explicit
    acknowledgements and monitors, not sleeps or liveness polling.
-   After the remaining G4 policies are approved, add cases for a remote commit
-   followed by timeout/lost response, ambiguous retries, and changed confirmation
-   arguments; those behaviors are not settled by the interruption decision.
+   After the remaining G4 policies are approved, add cases for ambiguous retries,
+   late-result reconciliation, and changed confirmation arguments; those behaviors
+   are not settled by interruption or timeout-outcome reporting.
 5. Return a synthetic confirmation from a fake remote MCP booking tool that
    knows nothing about Vxpipe. Confirm the result alone changes no call variables.
    Let the agent call `update_variables` for its read+write `booking` section:
@@ -4230,6 +4263,26 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   review boundaries, restricted terminology, local-path hygiene, and
   `git diff --check` pass. Reviewed the complete documentation diff. Documentation
   only; no runtime or browser tests were run.
+
+### Unknown MCP timeout outcomes — approved 2026-09-07
+
+- Approved reporting outcome `unknown` when a submitted MCP request times out
+  without a definitive remote result. Timeout describes the local wait, not
+  proof of remote failure or rollback; preserve a definitive outcome if already
+  known. The existing timeout and explicit variable-update rules remain intact.
+- Kept retry/no-retry policy, idempotency, reconciliation, later receipts, explicit
+  cancellation, and operation storage unapproved. This is outcome reporting, not
+  approval of a new wire schema, durable worker, or retry mechanism.
+- Updated the original contract, architecture, G4 status, and planned acceptance
+  case: a fake booking commits remotely, its response is withheld, and local
+  timeout reports unknown without asserting success/failure or changing variables.
+  G4 remains partly resolved and the count remains 11 open numbered groups.
+- Verification: all 15 JSON examples and both definition fixtures are unchanged
+  and parse; all 31 local links/anchors resolve. Routes, external references,
+  G3's authorization transaction, and implemented-runtime descriptions are
+  unchanged. Interruption/timeout reporting, retry-review boundaries, restricted
+  terminology, local-path hygiene, and `git diff --check` pass. Reviewed the
+  complete documentation diff. No runtime or browser tests were run.
 
 ## Verification evidence
 
