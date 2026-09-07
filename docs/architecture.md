@@ -221,22 +221,25 @@ endpoint, or generic confirmation state machine is introduced.
 ### First messages and transfer responsibility
 
 Optional call-level `opening_audio` plays to `entry_caller` before
-`entry_receiver` begins participating. Its source may be an audio-file URL (WAV
-or another supported format) or fixed configured text. For text, render and cache
+`entry_receiver` begins the normal conversation. Its source may be an audio-file
+URL (WAV or another supported format) or fixed configured text. For text, render and cache
 audio using the initial receiving agent's resolved TTS service and voice,
 including configured defaults. Do not generate its text through an LLM, choose
 an arbitrary first participant, or start a later transfer agent to supply a voice.
 Without an initial agent/usable TTS profile, text-source applicability remains
 open rather than silently inventing one.
 
-Establish the caller connection and minimal file-playback/transport path. Hold
-the receiver's activation and normal room audio services, including STT, TTS,
-model execution, recording, and conversational media processing, until opening
-playback completes. Rendering the fixed-text asset is a narrow TTS exception to
-that gate, not activation of the agent or normal conversation. Downloading,
-rendering, caching, or enqueueing audio is not completed playback. Omission means
-normal startup with no announcement delay; configured failed/incomplete playback
-cannot silently release normal services.
+Room and participant capabilities may start and warm up while opening audio
+plays. The gate controls media delivery, not process startup: do not route user
+or other participant audio into capabilities or normal conversational media paths
+until playback completes. Receiving a packet at the transport is not permission
+to forward it to STT, a recorder, or another consumer. Opening-asset rendering
+and playback remain allowed, while the receiver's ordinary greeting and
+conversation still wait until completion. This approves neither text barge-in
+nor capture/retrospective replay of the blocked interval; no buffer/replay
+mechanism is introduced. Downloading, rendering, caching, or enqueueing audio is
+not completed playback. Omission means normal startup with no announcement
+delay; failed/incomplete configured playback cannot silently open the media gate.
 
 Cache reusable generated audio by exact text, resolved TTS provider/model/voice,
 and output-affecting settings, scoped to the tenant/configured binding. Changed
@@ -372,8 +375,9 @@ attaches the gateway session. Vxpipe sends `bot-ready` only after room admission
 the requested participant, and the required agent pipeline are ready. A
 connected transport is not sufficient evidence that the bot can process input.
 When a startup notice is configured, the caller transport can be established for
-file playback while receiver activation and the normal pipeline remain gated.
-The notice must complete before that conversational readiness is reached.
+playback and room/participant capabilities may warm up concurrently. Participant
+audio delivery and normal conversation remain gated until playback completes;
+provider readiness alone does not release that gate.
 
 ### Standard message mapping
 
@@ -694,6 +698,13 @@ supported; a future WebSocket adapter needs its token-delivery encoding, not a
 separate initialization flow. Proposed deadlines/byte limits for the removed
 direct-WebSocket setup message are not adopted or transferred to another route.
 
+Call creation already accepts any declared initial variables from the authorized
+creator, integrating backend, or trusted ingress adapter. Telephony ingress uses
+that same contract for values it can supply; no additional customer-lookup or
+admission-resolver feature is required. Unknown values remain unfilled and can
+be populated later by the usual permitted variable tools. Caller number alone
+must not silently become verified customer identity.
+
 Join tokens expire five minutes after issuance by default. The authenticated
 backend requesting a token may request a longer lifetime, including when
 requesting one for an existing call. No additional maximum is approved here.
@@ -704,9 +715,11 @@ ports own credentials and token handling; the engine receives neither secret.
 
 An authorized backend may replace an expired token for an eligible unstarted
 call record, preserving its pinned definition and initial variables without
-starting a room at issuance. Whether another token supersedes earlier unused
-tokens remains under review. Same-call caller reconnection is deferred: a fresh
-token is not proof that the same person is returning. Once the logical call ends,
+starting a room at issuance. Another token does not supersede earlier unused
+tokens: each keeps its own expiry and single-use status. Admission still enforces
+tenant/call/participant eligibility so distinct tokens cannot create duplicate
+callers or take over active connections. Same-call caller reconnection is deferred:
+a fresh token is not proof that the same person is returning. Once the logical call ends,
 the next call has a new record and identity. This does not prevent first admission
 of an eligible transfer destination or other not-yet-admitted participant into
 an existing live call. Accepted tokens stay consumed; pending admission must be

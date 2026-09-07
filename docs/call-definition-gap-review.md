@@ -64,17 +64,19 @@ such as DTMF need not involve the LLM. G7's three first-message modes and
 first-activation-only greeting are approved. G8's source-agent responsibility
 until committed handoff and failure return to that agent are approved. Optional
 call-level `opening_audio` plays a supplied file or cached fixed-text TTS before
-receiver activation and normal room audio services. All API clients now use
+normal conversation. Room/participant capabilities may warm up during playback,
+but participant audio is withheld until it completes. All API clients now use
 preparation followed by token joining, without a separate direct-start path.
 Other configuration, lifecycle, protocol, and persistence questions remain below.
 Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **42 individual decisions** in the numbered backlog below.
-R01–R05 and R08 are resolved; R07's same-call caller reconnection is deferred, and
-R09 is superseded by removal of direct WebSocket setup. R06 remains open only for
-supersession of earlier unused tokens. R11 personalization is still pending;
+Current review count: **40 individual decisions** in the numbered backlog below.
+R01–R06, R08, and R10 are resolved; R07's same-call caller reconnection is deferred,
+and R09 is superseded by removal of direct WebSocket setup. Additional tokens do
+not supersede earlier unused ones; initial variables already belong to creation.
+R11 personalization is still pending;
 the separate startup-notice decision does not resolve it. G1 and G3 are resolved;
 G2/G4/G5/G7/G8 are partly resolved, while G6 and G9–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
@@ -98,11 +100,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**42 pending decisions (R06 and R10–R50).** This is the current approval backlog,
+**40 pending decisions (R11–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
-Each row is one independently reviewable policy/contract choice. R01–R05 and R08
-are resolved, R07 is deferred, and R09 is superseded, all excluded from the count.
-The next five pending decisions are **R06 and R10–R13**. Mark rows resolved or
+Each row is one independently reviewable policy/contract choice. R01–R06, R08,
+and R10 are resolved, R07 is deferred, and R09 is superseded, all excluded from
+the count. The next five pending decisions are **R11–R15**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -112,11 +114,11 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R03 | G2 | **Resolved:** multiple independently revocable keys are allowed, including overlap during rotation. |
 | R04 | G2 | **Resolved:** revocation blocks further use of that API key, not previously issued join tokens or established connections; tokens are not coupled to API keys for revocation. |
 | R05 | G2 | **Resolved:** tokens default to five minutes from issuance; the authenticated requester may request a longer lifetime, with no additional maximum approved here. |
-| R06 | G2 | Replacement issuance for an eligible unstarted call is approved; does issuing another token leave earlier unused tokens valid or supersede them? |
+| R06 | G2 | **Resolved:** another token for the same eligible unstarted call does not invalidate earlier unused tokens; each keeps its own expiry/single-use status, with shared admission checks preventing duplicates/takeover. |
 | R07 | G2 | **Deferred:** same-call caller reconnection is outside the initial slice. After the logical call ends, connecting again starts a new call; temporary transport interruption is not automatically call termination. |
 | R08 | G2 | **Resolved:** all API clients use authenticated preparation to obtain a token, then token-based joining; no separate direct WebSocket start/initialization path. |
 | R09 | G2 | **Superseded:** the direct WebSocket initial-variables message is removed, so its proposed setup deadline/size policy is not applicable or adopted elsewhere. |
-| R10 | G2 | Should inbound telephony admission perform a trusted initial-variables lookup, or leave values unfilled for later tools? |
+| R10 | G2 | **Resolved:** already covered by call creation, which accepts declared initial variables from the authorized creator/backend/trusted ingress; unknown values stay unfilled for permitted tools, without a new automatic lookup/resolver feature. |
 | R11 | G2 | Which variable bindings may personalize prompts/greetings, and what happens when a referenced value is absent? |
 | R12 | G2 | Where do locale/timezone come from, and which time-dependent values are pinned versus observed at runtime? |
 | R13 | G2 | May dial destinations come from call variables, and what trusted outbound restrictions apply? |
@@ -310,8 +312,9 @@ must otherwise repeatedly scan the catalog or query the database.
 
 For caller/reception/billing/human-support, live startup selects only caller and
 reception; token issuance alone starts neither. If `opening_audio` is configured,
-establish caller playback first and hold reception plus normal
-room audio services until playback completes. Otherwise use normal startup.
+establish caller playback; room/participant capabilities may start and warm up,
+but withhold participant audio and normal conversation until playback completes.
+Otherwise use normal startup.
 Activate an agent receiver only after any notice and required readiness.
 Other catalog entries do not automatically start providers or dial out; prepare them when an authorized
 transfer/admission needs them. Dialing is
@@ -440,6 +443,15 @@ API key's later revocation. Exact duration field/units are implementation detail
 requesting a longer lifetime does not extend the live-call duration or impose
 an expiry on the prepared call record.
 
+**Approved additional unused tokens (R06):** issuing another token for the same
+eligible unstarted prepared call does not invalidate earlier unused tokens.
+Each retains its own expiry and single-use status. All claims still pass the
+same tenant/call/participant eligibility checks; two distinct tokens do not allow
+duplicate caller admission, active-connection takeover, or reuse of an ended call.
+For example, if the first issuance response is lost, the backend can request
+another token without revoking the first. Whichever valid token admits the caller
+first does not grant another token permission to admit that caller again.
+
 **Approved single-use admission and existing-call recovery:** an unused,
 unexpired token may retry before acceptance. Once admission is accepted, it
 stays consumed even if startup fails or the browser loses the response. Only
@@ -496,11 +508,12 @@ a never-started record has no live duration. Creation at 10:00, start at 10:15,
 and end at 10:18 means a three-minute call. Provider billing intervals remain
 separate. See the [approved timing contract][call-start-timing].
 
-The following G2 proposals remain open and must be reviewed separately:
+Remaining G2 review and resolved follow-up clarifications:
 
-**Remaining token details and separate storage policy:** specify repeated
-issuance requests or superseding other unused tokens, and detailed crash
-reconciliation. Retention periods now have an application default
+**Remaining token details and separate storage policy:** detailed crash
+reconciliation and issuance idempotency still need their implementation/remaining
+contract. Additional issuance does not supersede unused tokens (R06 resolved).
+Retention periods now have an application default
 of retain forever with tenant overrides; finite-expiry cleanup and storage limits
 remain separate review questions. Single-use claim, backend-mediated recovery,
 the existing-call token route, and the absence of automatic call-record expiry
@@ -526,16 +539,15 @@ call termination remain unspecified. Pending-startup reconciliation must not
 silently admit an already-started caller again. Multi-instance selection is not
 required.
 
-**Telephony initial-variables sourcing:** an inbound phone call cannot establish
-the example's trusted `customer.id` by itself. Variable validation does not require
-that variable to be present at admission. The approved direct-variables
-shape eliminates remapping, not the need for a trustworthy source of values.
-There is no definition-default fallback. Keep authorized initial variables,
-trusted ingress metadata, and subsequent agent assertions distinguishable; do
-not silently copy ingress data into business variables. Provider-asserted
-caller number is a routing/contact claim, not verified customer identity. An
-admission resolver can perform a bounded lookup before room creation; otherwise
-leave identity unverified for a tool to establish later.
+**Initial variables already cover telephony (R10 resolved):** the authorized
+creator, integrating backend, or trusted ingress adapter supplies any known
+declared `initial_variables` when creating the call. A telephony adapter uses
+that same contract; there is no additional required automatic customer lookup or
+admission resolver. Unknown values stay unfilled for the normal permitted variable
+tools to populate. This does not require complete variables or definition
+defaults. Provider caller number remains ingress/contact metadata, not silently
+verified customer identity. R10 repeated an existing contract, rather than
+requiring a new admission feature.
 
 **Personalization and evaluation time:** consider allowlisted bindings for prompt
 and first-message personalization, locale, IANA timezone, and dynamic dial
@@ -1031,8 +1043,8 @@ separate control-plane feature; document when supplied bearer tokens expire.
 
 **Approved optional `opening_audio`:** play an audio-file URL (WAV or another
 supported format) or audio rendered from fixed configured text to `entry_caller`
-before `entry_receiver` activation. It is call-level, not a participant greeting,
-mandatory notice, or approval of R11's prompt/variable interpolation.
+before `entry_receiver` starts normal conversation. It is call-level, not a
+participant greeting, mandatory notice, or approval of R11's prompt/variable interpolation.
 
 For text, render/cache audio using the initial receiving agent's resolved TTS
 service and voice, including defaults. No LLM generates the text; no arbitrary
@@ -1044,16 +1056,21 @@ cache keys/logs. Reusable configured assets are not per-call recordings/exports.
 Render timing and cache/fetch infrastructure are not selected, and asset
 preparation itself starts no call process tree or call clock.
 
-First establish only the caller connection and minimal transport/playback path.
-Normal agents, STT, TTS, model execution, recording, and conversational media
-services stay gated until playback completes. Fixed-text asset rendering is a
-narrow TTS exception, not activation of those normal services. Downloading,
-rendering/caching, or enqueueing a file is not playback completion. A configured
-notice that fails or has not completed does not silently release the gate.
+Room/participant capabilities may initialize and warm up during playback. The
+gate is on audio delivery: withhold user and other participant audio from
+capabilities and normal conversational media paths until playback completes.
+Transport receipt does not authorize delivery to STT, recording, or other
+consumers. Opening rendering/playback remains allowed; the receiver's greeting
+and ordinary conversation still wait. Capture/retrospective replay of blocked
+audio and text barge-in are not approved or implemented by this decision; no
+buffer/replay mechanism is added. Downloading, rendering/caching, or enqueueing a
+file is not playback completion. Failed/incomplete configured playback does not
+silently release the media gate.
 Omitting `opening_audio` uses normal startup without an announcement delay.
 
 For example, play a fixed recording announcement, then activate the receiver and
-its ordinary greeting policy. Do not start recording during the opening audio.
+its ordinary greeting policy. A recorder may start but receives no participant
+audio while the opening-audio gate is closed.
 The actual call-start timestamp remains the live-start occurrence, not notice
 completion. Exact completion evidence, source schema/supported formats, failure
 handling, and later-participant notices need separate design; this does not
@@ -1288,6 +1305,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Overlap two keys during rotation, then revoke only one | Further authentication with the revoked key fails, including token issuance; other keys and established connections continue; already-issued unused tokens still pass their independent admission checks |
 | Issue default and explicitly longer-lived tokens using a fake clock | Default expiry is five minutes from issuance; an authenticated fifteen-minute request remains valid after five minutes and expires at fifteen; applies to preparation and existing-call tokens; the browser cannot extend an issued deadline |
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
+| Issue two tokens for the same eligible unstarted call, then race their claims | Issuing the second leaves the first valid under its own expiry/single-use rules; shared participant/call admission permits only one caller and no takeover, duplicate startup, ended-call reuse, or caller reconnect |
+| Create a call through an authorized backend or trusted telephony ingress with known/unknown initial variables | Supplied declared values initialize through the existing contract; missing values remain unfilled for permitted tools; no new automatic lookup/resolver, completeness/default requirement, or verified identity inferred from caller number |
 | Request a fresh token for an unstarted prepared call, then admit a new transfer destination into a separate live call | Backend API-key authorization preserves each call record; issuance starts no room; joining starts the prepared call once or first-admits the eligible destination without resetting the live room or variables |
 | Disconnect an admitted caller, then attempt same-call joining; separately end a call and create another | Fresh tokens do not authorize caller reconnection in this slice; an ended call cannot resume, and a newly authorized call has a new record/identity; do not infer that temporary transport loss or another participant leaving ended the call |
 | Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/variables remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
@@ -1322,8 +1341,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
 | Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
 | Start agents in each first-message mode, repeat readiness, and reactivate them | Wait-for-input sends no unsolicited greeting; fixed/generated greeting runs once on first activation after readiness; repeated readiness/reactivation does not replay it; another participant or call has its own first activation; caller reconnect support is not required |
-| Start with no notice, then with a configured fixed audio notice whose completion is controlled | No notice uses normal startup; configured playback uses only the caller transport/file path, and receiver/normal audio services remain stopped until completion; downloading/enqueueing/failure does not open the gate; subsequent greeting policy remains unchanged and started_at is not reset to notice completion |
-| Configure fixed text opening audio and reuse/change its resolved voice binding | Render/cache with the initial agent's resolved TTS/voice without starting the model/normal services; changed text/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no implicit agent/voice is chosen when unavailable |
+| Start with no notice, then with opening playback whose completion is controlled while capabilities warm up | No notice uses normal startup; all room/participant capabilities may start during playback but receive no user/participant audio until completion; transport receipt/provider readiness/download/enqueue/failure cannot release the media gate; normal greeting waits, started_at is unchanged, and no blocked-audio replay is implicitly authorized |
+| Configure fixed text opening audio and reuse/change its resolved voice binding | Render/cache with the initial agent's resolved TTS/voice; capability warmup need not wait but ordinary conversation and participant media do; changed text/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no implicit agent/voice is chosen when unavailable |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
 | Slow the recording upload or archive consumer | Live mix progresses; recording/archive becomes explicitly incomplete according to policy, not silently complete |
 | Replay admission events and crash between admission stages | One durable call and at most one current fenced room; uncertain dialing is reconciled |
@@ -1651,11 +1670,24 @@ exception; no LLM or implicit human-only agent is needed. Cache identity tracks
 text, resolved TTS/output settings, and tenant/configured binding. Omission means
 normal startup. Playback completion, not download/render/enqueue, releases the
 gate; exact evidence/failure/source/cache mechanisms remain unselected. R11's
-variable interpolation is not approved by fixed text. Current count: 42 pending
+variable interpolation is not approved by fixed text. At that checkpoint: 42 pending
 decisions, R06 and R10–R50. Checks cover unchanged fences, 15 valid JSON examples,
 37 local links/anchors, unchanged external URLs, scope/count, prior contracts,
 terminology/path hygiene, and whitespace. Documentation only; no runtime or
 browser tests were run.
+
+The capability-warmup follow-up replaces opening audio's process-start gate with
+a participant-media input gate: capabilities may initialize concurrently, but
+receive no user/participant audio until playback completes. Ordinary greeting/
+conversation still wait; no text barge-in or retrospective replay is approved.
+R06 now preserves earlier unused tokens when another is issued, with independent
+expiry/single-use and shared admission checks. R10 is closed as already covered
+by initial variables supplied at call creation; no automatic lookup/resolver is
+required. R09 remains superseded, not a new limits approval. Current count: 40
+individual pending decisions, R11–R50. Verification checks unchanged fences,
+15 valid JSON examples, 37 local links/anchors, unchanged URLs, exact scope/count,
+media/admission boundaries and prior contracts, terminology/path hygiene, and
+whitespace. No runtime or browser tests were run for this documentation checkpoint.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
