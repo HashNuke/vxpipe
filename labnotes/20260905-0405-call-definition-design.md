@@ -95,6 +95,8 @@ over application settings, with retain forever as the application default.
 Normal transaction errors return variable-save failure; no extra database-commit
 reconciliation is required for this slice. Finite retention for completed calls
 starts at `ended_at`; active calls are not expired and forever has no threshold.
+Current application/tenant periods apply to all calls, past and future, without
+per-call retention settings.
 Exact configuration, cleanup, sensitive-input handling, G2's remaining admission
 details, the rest of G4, and G6–G13 remain pending user review.
 Approval of documentation does not authorize runtime implementation.
@@ -1670,8 +1672,10 @@ suppresses it. Private variable history uses the approved turn/tool-linked full
 snapshots and call-level latest pointer described there. Retention periods use
 application settings with tenant overrides and an application retain-forever
 default. Completed-call finite retention starts at `ended_at`, without expiring
-active calls or assigning an expiry to forever. Exact storage configuration,
-cleanup, and sensitive transcript handling remain G5 review questions.
+active calls or assigning an expiry to forever. The current application/tenant
+period applies to past and future calls, not a per-call pinned period. Exact
+storage configuration, cleanup, and sensitive transcript handling remain G5
+review questions.
 
 ### Initial agent-transfer history policies
 
@@ -2861,11 +2865,12 @@ The relational `calls` row should contain durable identity and summary state,
 not every detail as one mutable JSON document. It records tenant/application,
 definition revision, plan digest, direction, route/invocation identity, current
 room/incarnation, lifecycle state, distinct `created_at`, `started_at`, and
-`ended_at` timestamps, terminal reason, archive status, retention-policy identity,
-and `latest_variables_snapshot_id` for the latest retained variables snapshot.
-Provider-native call IDs belong in a
-separate call-leg/provider-identity record with appropriate uniqueness and
-redaction.
+`ended_at` timestamps, terminal reason, archive status, and
+`latest_variables_snapshot_id` for the latest retained variables snapshot.
+Do not store a per-call retention period, policy version, or fixed expiry; use
+the current application/tenant setting when evaluating expiry. Provider-native
+call IDs belong in a separate call-leg/provider-identity record with appropriate
+uniqueness and redaction.
 
 ### Record creation and actual call start — approved timing contract
 
@@ -2926,7 +2931,7 @@ The minimum relational shapes are:
   call/room-incarnation identity, originating turn/tool invocation, source
   participant, revisions, and commit timestamp when variable retention is enabled;
 - `artifacts`: object key, kind, participant/connection/track correlation,
-  timing, codec/content type, bytes, checksum, retention, and publication state;
+  timing, codec/content type, bytes, checksum, and publication state;
   and
 - an outbox/job table for idempotent post-call publication and retries.
 
@@ -2982,9 +2987,10 @@ its arguments/result for operational review. Another call may show the result
 live but save only metadata. Both are supported without changing tool behavior.
 Retention periods use application configuration with tenant overrides and an
 application retain-forever default. Completed-call finite retention starts at
-`ended_at`. Exact configuration syntax, cleanup, and broader sensitive-input/
-redaction policy remain under review. This decision does not add runtime
-persistence or guarantee complete room recovery.
+`ended_at`, using the current period for both past and future calls. Exact
+configuration syntax, cleanup, and broader sensitive-input/redaction policy
+remain under review. This decision does not add runtime persistence or guarantee
+complete room recovery.
 
 ### Variable history snapshots and the latest pointer — approved G5 decision
 
@@ -3082,9 +3088,25 @@ seven-day retention, reaches its expiry threshold the following Wednesday.
 When `ended_at` is unset, do not substitute creation time. This completed-call
 rule does not introduce automatic expiry for prepared/unstarted records.
 
-Policy changes affecting existing data, unstarted-record cleanup, deletion-job
-behavior/scheduling, and cleanup of snapshots referenced by a call remain under
-review.
+The current application/tenant retention period applies to all calls, past and
+future. Resolve the current tenant override or application fallback when
+evaluating expiry. Do not pin the period, a policy version, or a fixed expiry
+in a call record, room plan, or artifact as its governing retention setting.
+The call's existing tenant/application identity and `ended_at` are sufficient
+inputs; changing policy requires no per-call policy rewrite or migration.
+This rejects applying changes only to new calls, which would require maintaining
+separate historical retention settings per call. Pinned call definitions, capture
+permissions, and client visibility do not become mutable as a side effect.
+
+For example, changing a tenant from 90 days to seven days makes a call that ended
+14 days ago eligible for cleanup. Increasing the period or choosing forever
+changes eligibility for data still present, but cannot restore deleted data.
+Application changes affect inheriting tenants; an explicit tenant override still
+wins. These policy changes do not expire active calls or substitute creation time
+when `ended_at` is unset. Eligibility is not a promise of immediate deletion.
+
+Unstarted-record cleanup, deletion-job behavior/scheduling, and cleanup of
+snapshots referenced by a call remain under review.
 No automatic cleanup is implemented here. This retention decision does not alter
 the requirement to commit a variable snapshot before update-tool success.
 
@@ -3221,7 +3243,8 @@ combined recording.
 Recording remains a separate capability and retention choice. Disabling speech
 recognition or synthesis does not disable recording, and enabling either does not
 authorize recording. Participant/room policy must explicitly allow the media
-tap, artifact type, access scope, and retention period.
+tap, artifact type, and access scope. Storage duration follows the current
+application/tenant retention period, not a participant-specific period.
 
 ### `CallDetailsPublisher` is a final projector, not the live recorder
 
@@ -3730,8 +3753,10 @@ tenant overrides and application settings, with retain forever as the applicatio
 default. Normal transaction errors return variable-save failure; no extra commit
 reconciliation is required. Completed-call finite retention starts at `ended_at`;
 active calls are not expired, and forever has no expiry threshold. Exact
-configuration, cleanup, and sensitive-input handling remain under review. Other
-G4 questions, remaining G2 details, and G6–G13 remain unapproved.
+configuration, cleanup, and sensitive-input handling remain under review. Current
+application/tenant periods apply to all calls, past and future, without per-call
+retention settings. Other G4 questions, remaining G2 details, and G6–G13 remain
+unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3943,7 +3968,8 @@ The numbering below matches G1–G13 in the focused review document.
    extra commit-status lookup/reconciliation is not required. Exact configuration,
    cleanup, broader redaction, and sensitive user-input handling remain proposals
    for review. Completed-call finite retention starts at `ended_at`; active calls
-   are not expired, and forever has no expiry threshold.
+   are not expired, and forever has no expiry threshold. The current application/
+   tenant period applies to past and future calls; no per-call retention settings.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -4057,8 +4083,12 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    archive-written timestamps: the finite expiry threshold must use `ended_at`
    plus the period, with no reset from a later write. Active calls must not expire;
    missing `ended_at` must not fall back to creation time, and forever must produce
-   no expiry threshold. Cleanup mechanics remain separate. These are planned
-   checks, not current playground guarantees.
+   no expiry threshold. Change retention from 90 days to seven after a call ended
+   14 days ago: expect eligibility under the new setting without rewriting call
+   records. Increase the period or choose forever and verify eligibility changes
+   for data still present, without restoring deleted data. An explicit tenant
+   override must still win over an application change. Cleanup mechanics remain
+   separate. These are planned checks, not current playground guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
    variable, read back that partial object,
@@ -5062,6 +5092,28 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   documentation files changed. Retention-clock/default/precedence checks,
   retained review status, restricted terminology, local-path hygiene, and
   whitespace checks pass.
+
+### Current retention applies to all calls — approved 2026-09-07
+
+- Approved the current application/tenant retention period for all calls, past
+  and future. Resolve it when evaluating expiry, using tenant override before
+  application fallback; do not maintain a historical period or fixed expiry per
+  call. This rejects the new-calls-only proposal and its per-call policy storage.
+- Shortening a period can make existing completed calls eligible for cleanup;
+  increasing it or selecting forever changes eligibility only for remaining data
+  and cannot restore deleted data. The `ended_at` clock, active-call exemption,
+  and missing-ended_at handling remain unchanged.
+- Aligned the call/artifact record descriptions and room-plan pinning with this
+  decision. Definition versions, capture permissions, and client visibility remain
+  separate. Updated the original retention contract, summaries, architecture,
+  gap review, and planned policy-change checks.
+- The other four proposals in this review batch remain pending. G5 is still
+  partly resolved and the count remains 11 open review groups. No cleanup job,
+  runtime/configuration/UI change, or migration is implemented here.
+- Verification: existing fenced examples and all 15 JSON examples are unchanged
+  and valid; links and external URLs are unchanged. Three-file scope, current
+  policy/precedence/clock rules, unrelated review sections, terminology/local-path
+  hygiene, and whitespace checks pass. No runtime or browser tests were run.
 
 ## Verification evidence
 

@@ -689,9 +689,15 @@ or client-selected. For a completed call with finite retention, the expiry
 threshold is `ended_at + retention_period`, not record creation or a later storage
 write. Do not expire retained data while the call is active. Retain forever has
 no expiry threshold; an unset `ended_at` must not fall back to `created_at`.
-Exact duration encoding, policy changes affecting existing data, unstarted-record
-cleanup, and cleanup of referenced snapshots remain under review; this decision
-implements no deletion job.
+Use the current application/tenant period for all calls, past and future. Resolve
+the current tenant override or application fallback when evaluating expiry; do
+not pin a retention period, policy version, or fixed expiry on each call. A
+shorter period can make older completed calls immediately eligible for cleanup.
+A longer period or forever changes eligibility for data still present, but cannot
+restore deleted data. Application changes do not override an explicit tenant
+setting. Exact duration encoding, unstarted-record cleanup, and cleanup of
+referenced snapshots remain under review; this decision implements no deletion
+job.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and
@@ -751,8 +757,11 @@ A resolved room plan pins:
 - provider adapters and capability snapshots;
 - transport, codec, and media policies;
 - turn, interruption, tool, and fallback policies;
-- artifact, retention, and event policies; and
+- artifact capture and event policies; and
 - secret reference generations without storing secret values.
+
+Stored-data retention periods are not pinned in the room plan; the current
+application/tenant setting applies to existing and future calls.
 
 The container exposes readiness only after required engine and gateway services
 can accept work. Termination drains admitted sessions according to policy,
