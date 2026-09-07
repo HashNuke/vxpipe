@@ -83,9 +83,12 @@ are not a security guarantee, and Vxpipe still enforces tool access.
 G5's call-level client tool visibility and explicitly full-visibility sample
 calls are approved, with all tool events hidden when visibility is unspecified.
 Per-tool overrides are approved, scoped to the participant definition key plus
-its local configured tool key, with the call-wide default as fallback. Exact
-configuration syntax, private archival/retention questions, G2's remaining
-admission details, the rest of G4, and G6–G13 remain pending user review.
+its local configured tool key, with the call-wide default as fallback. Tool-history
+storage is independently configured: metadata by default when enabled, with
+explicit arguments/results retention and existing credential/header exclusions.
+Exact configuration syntax, private variable-history projections, retention
+periods, sensitive-input handling, G2's remaining admission details, the rest of
+G4, and G6–G13 remain pending user review.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -1646,9 +1649,10 @@ exposing integration credentials or raw transport requests.
 
 This supersedes the earlier mandatory metadata-only client default and separate
 sample-debug session grant. It is an approved design boundary, not current
-gateway behavior. Private archive payloads, retention, and sensitive transcript
-handling remain separate G5 review questions; client visibility alone does not
-authorize storing those payloads.
+gateway behavior. Tool-history storage is approved as an independent policy,
+described in the persistence section below: client visibility neither enables nor
+suppresses it. Private variable-history projections, exact storage configuration,
+retention periods, and sensitive transcript handling remain G5 review questions.
 
 ### Initial agent-transfer history policies
 
@@ -2916,6 +2920,30 @@ interrupted generated text was heard. Word timing, confidence, and provenance
 may be retained as a bounded sidecar when a provider supplies them; their
 absence must not be replaced with invented precision.
 
+### Tool-history storage is independent of client visibility — approved G5 decision
+
+Store tool-call data according to storage policy regardless of client visibility.
+When tool-history storage is enabled, retain invocation identity, participant/tool
+identity, timing, and outcome by default. Retaining arguments/results requires
+explicit selection in the storage policy. Integration credentials and
+authorization headers remain excluded before persistence, even when payload
+retention is selected; removing them only from the final export is insufficient.
+
+The call-ledger/storage consumer must receive its own projection from the engine
+event source, not reuse the browser-filtered stream. A hidden client tool event
+can still have its permitted arguments/result stored. Conversely, full client
+visibility, including in sample calls, does not implicitly enable payload storage.
+Storage access does not grant browser access, agent tool execution, or broader
+agent variable permissions. Database work remains on the existing asynchronous
+consumer path, not inline with tool execution or room state updates.
+
+For example, keep a booking tool hidden from the browser while explicitly saving
+its arguments/result for operational review. Another call may show the result
+live but save only metadata. Both are supported without changing tool behavior.
+Exact configuration syntax, retention periods, private variable-history payloads,
+and broader sensitive-input/redaction policy remain under review. This decision
+does not add runtime persistence, choose storage durations, or guarantee recovery.
+
 ### Usage and cost belong to provider operations, with optional turn links
 
 A turn can incur multiple independent charges. One agent turn may require
@@ -3522,9 +3550,11 @@ agent instructions and enforceable business authorization to the application/MCP
 G5's call-level client tool visibility and full-visibility sample calls are
 approved, with tool events hidden by default. Per-tool overrides use participant
 definition key plus local configured tool key, otherwise falling back to the
-call-wide default. Exact configuration syntax and private archive/retention
-policies remain under review. Other G4 questions, remaining G2 details, and G6–G13
-remain unapproved.
+call-wide default. Independent tool-history storage retains metadata by default
+when enabled and arguments/results by explicit selection, with credential/header
+exclusions. Exact configuration syntax, private variable-history projections,
+retention periods, and sensitive-input handling remain under review. Other G4
+questions, remaining G2 details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3724,9 +3754,11 @@ The numbering below matches G1–G13 in the focused review document.
    Omitted visibility hides all tool events; joining browsers cannot change it.
    Per-tool overrides target participant definition key plus local configured
    tool key and take precedence over the call-wide default. Exact configuration
-   syntax and runtime implementation remain pending. Private
-   archive payloads, independently authorized variable journals, retention/redaction
-   before storage, and sensitive user-input handling remain proposals for review.
+   syntax and runtime implementation remain pending. Tool-history storage is
+   independent: metadata by default when enabled, arguments/results by explicit
+   selection, and integration credentials/authorization headers excluded before
+   persistence. Private variable-history projections, retention periods, broader
+   redaction, and sensitive user-input handling remain proposals for review.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -3813,7 +3845,13 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    only the originating participant/tool binding's override applies. Repeat
    with bindings to the same remote operation and check that an unlisted binding
    inherits the call-wide default. A hidden binding must stay hidden even when
-   the call-wide default is full. These are planned checks, not current
+   the call-wide default is full. With client tool events hidden, explicitly
+   enable tool payload storage and verify permitted synthetic arguments/results
+   reach the storage consumer while no tool events reach the browser. Reverse
+   the settings: full client visibility with tool-history storage enabled but
+   no payload retention selection must store only invocation/participant/tool
+   identity, timing, and outcome. Check credential/header exclusions before
+   persistence, not just on export. These are planned checks, not current
    playground guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
@@ -4704,6 +4742,29 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   examples parse. Links and external URLs are unchanged. Only the three intended
   documentation files changed; targeting/fallback, retained review status,
   restricted terminology, local-path hygiene, and whitespace checks pass.
+
+### Independent tool-history storage — approved 2026-09-07
+
+- Approved retaining tool-call data according to storage policy independently
+  of client visibility. With tool-history storage enabled, metadata is the
+  default; arguments/results require explicit retention selection.
+- Retained invocation and participant/tool identity, timing, and outcome for
+  operational history. Client-hidden events can still have permitted payloads
+  stored; full sample visibility does not implicitly enable payload retention.
+- Keep storage on its own engine-event projection and asynchronous consumer
+  path. Exclude integration credentials and authorization headers before writing.
+  Neither stored payloads nor client visibility change agent tool/variable grants.
+- Updated architecture, the original persistence/visibility contracts, G5 status,
+  and planned cross-policy acceptance checks. Private variable-history payloads,
+  retention periods, broader redaction, and configuration syntax remain open.
+  G5 stays partly resolved; the count remains 11 open review groups.
+- Documentation only: no runtime, database, or sample UI changes; no runtime or
+  browser tests were run. No storage duration or new recovery guarantee is set.
+- Verification: all existing fenced examples and all 15 JSON examples are
+  unchanged and valid. Links and external URLs are unchanged; only the three
+  intended documentation files changed. Independent-storage/default checks,
+  retained review status, restricted terminology, local-path hygiene, and
+  whitespace checks pass.
 
 ## Verification evidence
 

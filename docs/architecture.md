@@ -632,8 +632,20 @@ credential/header exclusions still apply even to full tool visibility.
 
 This is an approved visibility contract, not current gateway behavior. The
 current tool-event path still sends arguments/results without this audience
-distinction. Private archival payloads, retention, and sensitive transcript
-handling remain separate review items; client visibility does not approve storage.
+distinction.
+
+Tool-history storage is independent of client visibility. When tool-history
+storage is enabled, retain invocation identity, participant/tool identity, timing,
+and outcome by default; retaining arguments/results requires explicit selection
+in the storage policy. Hidden client events must not suppress independently
+authorized storage, and full client visibility must not enable payload storage
+implicitly. The storage consumer receives its own engine-event projection, not
+the browser-filtered stream. Integration credentials and authorization headers
+remain excluded before persistence, including when arguments/results are retained.
+Storing a payload does not grant a client access to it. This is an approved design,
+not newly implemented persistence. Exact storage configuration, retention periods,
+private variable-history projections, and sensitive transcript handling remain
+under review.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and

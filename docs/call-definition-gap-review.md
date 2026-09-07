@@ -43,9 +43,11 @@ authorization. Prompts are not security checks; Vxpipe tool-access checks remain
 G5's call-level client tool visibility and explicitly full-visibility sample
 calls are approved, with all tool events hidden when visibility is unspecified.
 Per-tool overrides are also approved: target the participant definition key plus
-its local configured tool key, with the call-wide default as fallback. Exact
-configuration syntax and private archival/retention questions remain pending,
-alongside remaining G2/G4 questions and G6–G13.
+its local configured tool key, with the call-wide default as fallback. Independent
+tool-history storage is approved: metadata by default when enabled, with explicit
+arguments/results retention and existing credential/header exclusions. Exact
+configuration syntax, private variable-history projections, retention periods,
+and sensitive-input handling remain pending alongside G2/G4 questions and G6–G13.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
@@ -709,10 +711,26 @@ Existing credential/header exclusions still apply; visibility grants neither
 tool execution nor additional agent variable or cross-call access. The current
 gateway has not implemented this distinction.
 
-**Still under review:** private archive projections, retention/redaction, and
-sensitive user-input handling. Client visibility does not authorize persisting
-all observed payloads. Model, authorized operator, call-ledger consumer,
-telemetry, and browser remain different audiences. G5 stays partly resolved.
+**Approved independent tool-history storage:** retain tool-call data according
+to storage policy regardless of what the client may see. When tool-history storage
+is enabled, invocation identity, participant/tool identity, timing, and outcome
+are retained by default. Arguments/results require explicit retention selection.
+Hidden tool events can therefore have stored payloads when storage permits them;
+full client visibility does not automatically enable payload retention. Project
+storage events independently from the engine source, not from the browser-filtered
+stream, and exclude integration credentials and authorization headers before
+persistence. Retaining data does not authorize its disclosure to clients.
+
+For example, a booking invocation hidden from the browser can still have its
+arguments/result saved for an authorized operational review. A sample call can
+show that result live while retaining only tool metadata. This avoids coupling
+operational history to frontend disclosure choices; it does not introduce
+runtime persistence or a final storage configuration schema.
+
+**Still under review:** private variable-history projections, exact storage
+configuration and retention periods, and broader redaction/sensitive user-input
+handling. Model, authorized operator, call-ledger consumer, telemetry, and browser
+remain different audiences. G5 stays partly resolved.
 
 The archive also needs a separate permissioned private variables payload/patch:
 it cannot rebuild section values from metadata-only public events. Apply
@@ -977,6 +995,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Configure an agent to ask before booking, then attempt an unavailable tool | Domain-specific conversational confirmation uses the prompt/tool flow without a platform token; prompt instructions cannot grant tool access or substitute for enforceable application/MCP authorization |
 | Create calls with hidden, metadata-only, and full client tool visibility | Gateway sends no tool events, metadata-only events, or tool arguments/results respectively; sample calls explicitly select full visibility; an authorized creation override wins over the pinned definition value and a joining browser cannot change it; credential/header exclusions still apply |
 | Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
+| Hide client tool events while retaining payloads, then show full events with metadata-only storage | First call stores permitted synthetic arguments/results but emits no client tool events; second shows payloads live but stores only invocation and participant/tool identity, timing, and outcome; storage never uses the browser-filtered stream, and integration credentials/authorization headers are excluded before persistence |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
