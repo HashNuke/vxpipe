@@ -22,7 +22,8 @@ admission routes, direct initial context, API-key authentication with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call are
-approved and documented below.
+approved and documented below. Record creation and actual live-call start also
+have distinct timestamps; preparation is not call duration.
 G2's remaining admission details and the other suggestions remain pending user
 review. Approval of documentation does not authorize runtime implementation.
 
@@ -1296,8 +1297,10 @@ not another long-lived integration credential.
 Prepared-call storage and live room startup are separate stages. A prepared call
 is just a database record with its pinned definition and initial context;
 issuing a token does not start the call process tree, connect providers, or dial
-the receiver. The token expires, but the unstarted record has no separate
-automatic admission deadline. An authorized backend can request a fresh token
+the receiver. Its `created_at` records creation; `started_at` stays unset until
+the call actually starts, not merely when a token is issued or consumed. The
+token expires, but the unstarted record has no separate automatic admission
+deadline. An authorized backend can request a fresh token
 for that same eligible record. The definition and values are pinned at
 preparation, not reselected from a newer deployment at join. Token claim and
 activation must coordinate idempotently without holding a database transaction
@@ -2061,10 +2064,44 @@ multiple telephony legs and a recovered room receives another incarnation.
 The relational `calls` row should contain durable identity and summary state,
 not every detail as one mutable JSON document. It records tenant/application,
 definition revision, plan digest, direction, route/invocation identity, current
-room/incarnation, lifecycle state, start/end timestamps, terminal reason, archive
-status, and retention-policy identity. Provider-native call IDs belong in a
+room/incarnation, lifecycle state, distinct `created_at`, `started_at`, and
+`ended_at` timestamps, terminal reason, archive status, and retention-policy
+identity. Provider-native call IDs belong in a
 separate call-leg/provider-identity record with appropriate uniqueness and
 redaction.
+
+### Record creation and actual call start — approved timing contract
+
+The call record exists independently of its live runtime. Keep these timestamps
+distinct in call details and persistence:
+
+- `created_at` is when the call record is first created. It is not the call's
+  start time and does not change when a token is reissued or the caller joins.
+- `started_at` is unset (`null` in JSON) until the first actual live-call start:
+  the admitted caller starts the call runtime and the call transitions to
+  `running`. Record creation, token issuance/reissuance, token consumption, and
+  a still-pending startup do not set it. If admission fails before the call
+  starts, it remains unset.
+- The authoritative live-start transition supplies the occurrence timestamp.
+  Calls persists that timestamp through its repository port when recording the
+  running call; delayed database writes or event delivery must not substitute
+  their own write/receipt time. Do not default `started_at` to the row's insert
+  timestamp or fill it when preparation is saved.
+- Set the first live-start time once for that call ID. Reconnects, transfers,
+  duplicate event delivery, token reissuance, and recovery of the same call do
+  not restart the call clock. Room-incarnation and participant/leg timings are
+  separate facts, not replacements for the original `started_at`.
+- Report elapsed call duration from actual start, not creation. For an ended
+  call this is the interval from `started_at` to `ended_at`; prepared waiting
+  time is excluded. A call that never starts has no live duration. Any
+  `max_duration_ms` call limit likewise starts with the live call, not with the
+  stored record or token. Provider billing intervals remain separately measured.
+
+For example, a record created at 10:00, actually started at 10:15, and ended at
+10:18 represents a three-minute call, not an eighteen-minute call. The fifteen
+minutes before joining are preparation wait, with no live call process tree.
+This defines timestamp semantics only; no database columns or runtime lifecycle
+implementation are added in this checkpoint.
 
 ### Persist facts incrementally and derive the transcript
 
@@ -2361,6 +2398,10 @@ Gateway webhook/API handler
   <- admitted call/session result
 ```
 
+The running-state write records the actual live-start occurrence timestamp,
+not the earlier record creation/admission-request time or the database write
+time. It preserves the call's first `started_at` when retried or reconciled.
+
 Browser preparation splits this workflow at the durable boundary: resolve and
 pin the plan/context, persist the prepared call, then return the scoped join
 token without creating a room. An authorized join claims that preparation and
@@ -2531,7 +2572,8 @@ build on stable call and event identities rather than inventing their own.
 The first multi-agent slice needs protocol-neutral events for:
 
 - call admission requested, resolved, started, failed, and ended with stable
-  call identity and pinned definition revision;
+  call identity and pinned definition revision; actual live start carries its
+  occurrence timestamp, distinct from record creation and event persistence;
 - call plan resolved;
 - agent participant admitted and ready;
 - agent participant activated and deactivated;
@@ -2748,6 +2790,9 @@ The numbering below matches G1–G13 in the focused review document.
    or active-connection takeover. Token expiry does not end an established call.
    Unstarted call records have no separate automatic expiry; an expired token
    prevents joining with that token, not later authorized fresh-token issuance.
+   Their `created_at` is distinct from `started_at`, which remains unset until
+   actual live startup and is preserved across reconnects/recovery. Call duration
+   excludes preparation wait.
    Record retention/cleanup is separate. G2 still needs API-key management
    review, token TTL settings, storage/retention policy, telephony context
    sourcing, personalization, timezone and dynamic destinations, plus reconnect
@@ -2945,6 +2990,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     joining rechecks eligibility and cannot admit a second connection. Exact
     status responses, timing, and crash-recovery tests await those detailed
     contracts; these steps describe future behavior, not tests run here.
+21. Use a fake clock to create a record at 10:00, then issue/expire/reissue tokens
+    and leave startup pending: `created_at` stays 10:00 and `started_at` remains
+    unset. Actually start the call at 10:15, delay persistence, and confirm its
+    `started_at` is still 10:15 rather than the write time. End at 10:18 and
+    report three minutes of live duration, not eighteen. Verify the configured
+    call-duration limit also ignores preparation wait. Duplicate delivery,
+    reconnect, transfer, and same-call recovery preserve the first start time;
+    failure before live startup leaves it unset. These are future project-owned
+    lifecycle/projection tests, not tests run for this documentation checkpoint.
 
 ### Review checkpoint verification
 
@@ -3111,6 +3165,23 @@ For the approved 2026-09-07 token-only expiry clarification:
 - Verified all 10 JSON examples are unchanged and parse, both complete definition
   contracts remain consistent, and all 18 local links/anchors resolve. The three
   route shapes, terminology, local-path hygiene, and `git diff --check` pass.
+
+For the approved 2026-09-07 actual call-start timing clarification:
+
+- Separated `created_at` from `started_at` in the original labnote and focused
+  review. A stored, unstarted call has no start timestamp; token operations and
+  pending/failed-before-start admission do not create one.
+- Actual live startup supplies the timestamp persisted by Calls, not database
+  insertion or delayed event receipt. Reconnect, transfer, and recovery preserve
+  the first start time; live duration and its configured limit exclude the
+  preparation interval.
+- Added future acceptance step 21 with distinct creation, live-start, and end
+  times, delayed persistence, duplicate/recovery handling, and pre-start failure.
+  No implementation, database schema, dependency, or runtime test was changed.
+- Verified all 10 JSON examples are unchanged and parse, both complete definition
+  contracts remain consistent, and all 19 local links/anchors resolve. Route and
+  timing-example consistency, terminology, local-path hygiene, and
+  `git diff --check` pass.
 
 ## Verification evidence
 

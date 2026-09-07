@@ -7,6 +7,7 @@ hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call approved;
 remaining G2 questions and G3–G13 pending review.
+Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
 ## Conclusion and scope
@@ -263,6 +264,19 @@ no separate automatic admission deadline. Token expiry rejects use of that token
 but does not expire or delete the unstarted record; an authorized backend can
 obtain a fresh token for the same eligible record and later joining starts its
 room. Record retention/cleanup is a separate policy, not a token-expiry effect.
+
+**Approved call-start timing:** `created_at` records database record creation;
+`started_at` remains unset until the first actual live-call start, when caller
+admission starts the runtime and the call transitions to running. Token issuance,
+reissuance, consumption, and pending startup are not a start. Failure before the
+call starts leaves `started_at` unset.
+
+Persist the authoritative live-start occurrence timestamp, not the later write
+or delivery time. Reconnects, transfers, duplicate events, and same-call recovery
+preserve it. Live duration and `max_duration_ms` exclude the preparation wait;
+a never-started record has no live duration. Creation at 10:00, start at 10:15,
+and end at 10:18 means a three-minute call. Provider billing intervals remain
+separate. See the [approved timing contract][call-start-timing].
 
 The following G2 proposals remain open and must be reviewed separately:
 
@@ -638,6 +652,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
 | Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting context |
 | Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/context remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
+| Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
 | Interrupt while a context update is queued | Ordering determines one commit-before-interrupt or a stale-work rejection; replayed mutation ID cannot write twice |
@@ -684,6 +699,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
 - Do not impose an additional automatic admission expiry on unstarted call
   records. Token expiry already blocks use of that token; authorized reissuance
   can reuse the same record. Record retention/cleanup is a separate decision.
+- Do not use record creation, token redemption, or event-persistence time as the
+  call's start time. Record actual live start once and exclude preparation wait
+  from call duration; reconnects do not start a new call clock.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
 - Do not move mixing, recording coordination, or room context into persistence.
@@ -724,6 +742,10 @@ clarification rejects a separate automatic admission deadline for unstarted reco
 expire, records remain, and authorized fresh-token issuance can reuse them.
 Token TTL settings, record-retention policy, and detailed crash handling remain
 open. These are documentation decisions, not implemented runtime behavior.
+The later timing clarification distinguishes record creation from actual live
+start and preserves that start across delayed persistence and recovery. Its
+future acceptance cases cover duration, token operations, and pre-start failure;
+no runtime timestamp or database schema was changed.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
@@ -734,6 +756,7 @@ open. These are documentation decisions, not implemented runtime behavior.
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
 [api-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-api-key-admission--approved-g2-decisions
 [join-token-recovery]: ../labnotes/20260905-0405-call-definition-design.md#single-use-join-tokens-and-existing-call-recovery--approved-g2-decisions
+[call-start-timing]: ../labnotes/20260905-0405-call-definition-design.md#record-creation-and-actual-call-start--approved-timing-contract
 [entry-participants]: ../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions
 [participant-cardinality]: ../labnotes/20260905-0405-call-definition-design.md#one-participant-per-definition-key--approved-g2-decision
 [presence]: ../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology
