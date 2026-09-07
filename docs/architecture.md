@@ -173,8 +173,10 @@ remote result reports outcome `unknown`; a local timeout does not establish
 remote failure or rollback. Preserve any already-known definitive result.
 The tool executor must not automatically retry that request; return the unknown
 outcome to the agent. A later agent-requested tool call is a separate invocation,
-not an internal retry or an exactly-once guarantee. Other retry/idempotency and
-explicit cancellation policies remain under review.
+not an internal retry or an exactly-once guarantee. Other retry/idempotency
+policies remain under review. Explicit per-invocation cancellation is
+[deferred for later review](issues/explicit-tool-call-cancellation.md), not
+required for the current slice; its opt-in policy is not approved.
 This is planned behavior, not the current model-task cancellation behavior
 described in the implemented slices below.
 
@@ -192,7 +194,7 @@ Adapters must preserve accompanying text and tool calls and encode these updates
 for their provider; result data remains untrusted tool output. One application
 contract avoids provider-specific lifecycle branches. This requires implementation
 and per-provider interoperability checks; it is not guaranteed by context encoding
-alone. Explicit cancellation policy remains under review. Existing interruption,
+alone. Explicit cancellation is deferred as noted above. Existing interruption,
 timeout, transfer/shutdown, and variable-update rules still apply, without a
 durable operation worker or post-shutdown recovery requirement.
 

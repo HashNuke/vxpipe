@@ -59,8 +59,10 @@ that timeout resolve only part of G4, so the count stays at 11.
 Deferring late notifications removes that scenario from the current MCP scope;
 other G4 questions still need review.
 Excluding generic platform confirmation settles that question without closing G4.
-The common background-tool workflow is approved; explicit cancellation remains
-pending, so the review count stays at 11.
+The common background-tool workflow is approved. Explicit cancellation is
+[deferred for later review](issues/explicit-tool-call-cancellation.md), not
+required for this slice; the proposed opt-in policy is not approved. Other G4
+questions remain pending, so the review count stays at 11.
 
 ## Conclusion and scope
 
@@ -565,9 +567,11 @@ additional unsent tool calls from the interrupted turn.
 
 Transfer still terminates the source agent's local execution subtree, including
 model/tool workers; room shutdown also stops their work. Local termination is
-not remote rollback. Explicit cancellation and other retry/idempotency policies
-remain pending; generic platform confirmation is excluded for now and late
-recovery notifications are deferred below.
+not remote rollback. Explicit per-invocation cancellation is deferred to the
+[cancellation issue](issues/explicit-tool-call-cancellation.md). The opt-in and
+generated-tool proposal is recorded there for review, not adopted. Other
+retry/idempotency policies remain pending; generic platform confirmation is
+excluded for now and late recovery notifications are deferred below.
 No durable operation worker or ledger is approved by the ordinary-interruption
 decision. Today's
 model request task still contains tool execution and is killed by interruption;
@@ -650,10 +654,10 @@ revision, and expiry is out of scope. No confirmation token, approval endpoint,
 call-definition option, or generic confirmation state is required for this slice.
 
 Remaining proposal, not approved: classifying tools as read-only, idempotent write,
-or non-idempotent write using trusted configuration. Other retry exceptions and
-explicit cancellation also remain under review. Do not announce successful sending
-or booking from a request-start event. Progress speech is separate from result
-speech, with only one owner of each utterance.
+or non-idempotent write using trusted configuration. Other retry exceptions remain
+under review; explicit cancellation is deferred, not a current-slice prerequisite.
+Do not announce successful sending or booking from a request-start event.
+Progress speech is separate from result speech, with only one owner of each utterance.
 
 ### G5 — P1: Private variables would leak through the existing tool event path
 

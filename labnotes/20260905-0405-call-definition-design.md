@@ -69,6 +69,10 @@ not confirmed failure.
 The tool executor must not automatically retry that request; return the unknown
 outcome to the agent. A later agent-requested call is a separate invocation,
 not an internal retry or a guarantee against duplicate external actions.
+Explicit per-invocation cancellation is deferred to
+[a separate issue](../docs/issues/explicit-tool-call-cancellation.md) for later
+review, not required for this slice. Its opt-in and generated-tool policy has
+not been approved.
 Late booking confirmations and similar notifications are external events for a
 future gateway-to-active-room/agent communication mechanism, not a current MCP
 timeout-reconciliation requirement. That scenario is deferred.
@@ -1439,10 +1443,12 @@ This is the ordinary-interruption rule while the agent remains running. Transfer
 still terminates its execution subtree, including its model/tool workers; room
 shutdown also ends their work. Local termination does not guarantee cancellation
 or rollback of an action already submitted to the remote system. Timeout outcome
-reporting is approved below; other retry/idempotency policies and explicit
-cancellation remain separate G4 review questions. Generic platform confirmation
-is out of scope as documented below. External recovery notifications after
-timeout or shutdown are deferred to the future event mechanism.
+reporting is approved below; other retry/idempotency policies remain G4 review
+questions. Explicit cancellation is deferred to the
+[cancellation issue](../docs/issues/explicit-tool-call-cancellation.md), not
+required for this slice. Generic platform confirmation is out of scope as
+documented below. External recovery notifications after timeout or shutdown are
+deferred to the future event mechanism.
 No new operation ledger or durable worker design is approved by this decision.
 
 The runtime does not implement this separation yet. `ModelInference` currently
@@ -1490,9 +1496,10 @@ interoperability still need verification; accepting a message in a local context
 does not prove a provider accepts it or that a model follows its instructions.
 
 The separation makes targeted local cancellation possible without stopping the
-conversation, but explicit cancellation exposure and policy remain under G4
-review. Ordinary interruption, transfer/shutdown, existing deadlines, unknown
-remote outcomes, and no automatic executor retry retain their approved rules.
+conversation, but explicit cancellation exposure and policy are deferred for
+later review in the cancellation issue. Ordinary interruption, transfer/shutdown,
+existing deadlines, unknown remote outcomes, and no automatic executor retry
+retain their approved rules.
 No durable worker, outcome ledger, automatic variable update, or recovery after
 agent shutdown is introduced. An on-time background result is not the deferred
 external-notification scenario after a timeout.
@@ -1529,9 +1536,10 @@ A later tool call requested by the agent is a separate invocation, not a hidden
 retry by the executor. This distinction is not an exactly-once or deduplication
 guarantee: the separate invocation may still repeat an external action. No
 automatic-retry exception based on tool classification or idempotency metadata
-is approved now. Policies for other failures and explicit cancellation remain
-separate G4 decisions. External late-result handling is deferred below, not a
-prerequisite for this slice. No new wire envelope or retry configuration is added.
+is approved now. Policies for other failures remain separate G4 decisions;
+explicit cancellation is deferred to the cancellation issue. External late-result
+handling is deferred below, not a prerequisite for this slice. No new wire
+envelope or retry configuration is added.
 
 #### Late business notifications are external events — deferred
 
@@ -3463,7 +3471,8 @@ additional prerequisite for the current MCP slice.
 Generic platform-level confirmation is also excluded for now. Other G4 questions
 remain, so the review count is unchanged.
 The provider-independent acknowledgement/background-result workflow is approved;
-explicit cancellation policy remains pending and the count stays at 11.
+explicit cancellation is deferred to its issue for later review. Other G4
+questions remain pending and the count stays at 11.
 
 ### Baseline and scope
 
@@ -3621,8 +3630,9 @@ The numbering below matches G1–G13 in the focused review document.
    or other external event could reach the relevant room/agent while the room
    is active. Handling that scenario, including reconciliation and operation
    storage solely for it, is deferred and not required for the current slice.
-   Other retry exceptions and explicit cancellation remain unapproved. Any
-   future retry exception would need its own idempotency/reconciliation contract;
+   Other retry exceptions remain unapproved. Explicit cancellation is deferred
+   to its issue and is not a current-slice prerequisite. Any future retry
+   exception would need its own idempotency/reconciliation contract;
    none is approved by the no-retry default. Generic platform-level confirmation
    is excluded for now: agent instructions can request conversational confirmation,
    while the application/MCP owns enforceable business authorization. Prompts
@@ -4520,6 +4530,25 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   of tool-access and prior MCP contracts. Review status, restricted terminology,
   local-path hygiene, and `git diff --check` pass. Documentation only; no runtime
   or browser tests were run.
+
+### Explicit tool cancellation deferred — 2026-09-07
+
+- Moved the opt-in cancellation proposal to
+  [its issue](../docs/issues/explicit-tool-call-cancellation.md) for later review.
+  Recording the proposal does not approve a `cancellable` schema option,
+  generated cancellation tools, or their implementation.
+- Retained the background-tool workflow and existing interruption,
+  transfer/shutdown, timeout, unknown-outcome, and no-automatic-retry decisions.
+  Local worker cancellation and remote business cancellation remain distinct.
+- Updated active review status and architecture references. Other G4 questions
+  remain open; the overall count stays at 11 numbered groups. Historical
+  checkpoint entries above retain the status at their respective decisions.
+- This checkpoint changes documentation only. The issue records future
+  verification needs; no runtime or browser tests were run.
+- Verification: all existing fenced examples are unchanged and all 15 JSON
+  examples parse. All nine issue links/backlinks and anchors resolve; external
+  URLs are unchanged. The diff contains only the four intended documentation
+  paths, with restricted terminology, local-path, and whitespace checks passing.
 
 ## Verification evidence
 
