@@ -1,7 +1,7 @@
 # Call definition design
 
 Research date: 2026-09-05 UTC
-Last updated: 2026-09-06 UTC
+Last updated: 2026-09-07 UTC
 
 ## Goal
 
@@ -18,9 +18,10 @@ runtime behavior.
 
 The [design gap review](#design-gap-review--pending-approval) records questions
 and possible solutions. G1's unified agent `tools` map and G2's tenant-scoped web
-admission routing are approved and documented below. G2's input/binding questions
-and the other suggestions remain pending user review. Approval of documentation
-does not authorize runtime implementation.
+admission routes, direct initial context, backend HMAC signing, and encrypted
+client-credential storage are approved and documented below. G2's remaining
+admission details and the other suggestions remain pending user review. Approval
+of documentation does not authorize runtime implementation.
 
 ## Constraints
 
@@ -137,7 +138,7 @@ assuming an agent must own the room for its entire lifetime:
   selected tools, and direct transfer allowlists;
 - human participants with any participant-specific, non-secret connection
   intent;
-- typed invocation inputs and typed room context; and
+- typed room-context schemas and matching per-call initial values; and
 - bounded call policies and references to artifact/event policies.
 
 The agent name in the definition is a stable logical role, not a PID, runtime
@@ -225,8 +226,9 @@ scratch state. It remains available while humans continue the call after the
 last agent participant leaves.
 
 The definition declares named top-level context sections. Each section is an
-object with a schema and optional safe default. Invocation input may initialize
-fields only through definition-declared bindings. Typed facts should not be
+object with a schema and optional safe default. An authorized invocation supplies
+initial values directly in that section structure; no separate input schema or
+input-to-context mapping is required. Typed facts should not be
 re-extracted from a transcript when an authoritative invocation value or tool
 result already exists.
 
@@ -304,25 +306,17 @@ room-context portion is:
 {
   "schema_version": "20260906.02",
   "entrypoint": "reception",
-  "input_schema": {
-    "type": "object",
-    "properties": {
-      "customer_id": {"type": "string", "minLength": 1}
-    },
-    "required": ["customer_id"],
-    "additionalProperties": false
-  },
   "room_context": {
     "sections": {
       "customer": {
         "schema": {
           "type": "object",
           "properties": {
-            "id": {"type": "string"}
+            "id": {"type": "string", "minLength": 1}
           },
+          "required": ["id"],
           "additionalProperties": false
-        },
-        "default": {}
+        }
       },
       "intake": {
         "schema": {
@@ -335,14 +329,7 @@ room-context portion is:
         },
         "default": {}
       }
-    },
-    "initialization": [
-      {
-        "input": "/customer_id",
-        "section": "customer",
-        "path": "/id"
-      }
-    ]
+    }
   },
   "participants": {
     "reception": {
@@ -380,12 +367,18 @@ The schema fields and runtime values have distinct jobs:
 - `room_context.sections` defines the only legal top-level sections and the
   shape of each section. The initial version requires every section root to be
   an object.
-- A section `default` is definition data and must validate against its schema.
-  An omitted default starts as an empty object only when that object is valid.
-- `room_context.initialization` is a closed list of JSON Pointer bindings from
-  validated invocation input to a field in a declared section. It is not an
-  expression language or arbitrary deep merge. The compiler validates both
-  endpoints, and the complete initialized section must pass its schema.
+- `CallInvocation.initial_context` supplies values by declared section name,
+  matching these schemas directly. It replaces the earlier `input_schema` and
+  `room_context.initialization` mapping. For example, the caller supplies
+  `customer: {id: "customer-456"}`, not a separate `customer_id` input to map.
+- A section `default` is definition data. Required values can instead be supplied
+  at admission, as with `customer.id` above; the complete initialized context
+  must validate before room/provider startup. The interaction between partial
+  defaults and partial supplied sections remains a G3 review item, not an
+  approved deep-merge rule. This example supplies the complete `customer` section
+  and uses the complete empty default for `intake`.
+- Admission initializes context independently of agent write grants. Both
+  agents can read `customer`, but neither can change it through context tools.
 - `context_permissions` is present only on agent participants and refers only
   to declared top-level sections. It does not control client or human access.
 - Application configuration supplies hard limits for total context bytes,
@@ -660,8 +653,9 @@ leg as that participant. `admission: start_call` means a matching incoming leg
 may create the call and room; joining a pre-existing telephony room still needs
 an explicit admission mode and an unambiguous provider-leg correlation mechanism.
 The approved web start/join routes are specified separately below. A fixed
-number can live in the definition. A number that genuinely varies per call may
-instead bind to a declared, validated invocation input.
+number can live in the definition. Selecting a number that genuinely varies per
+call remains a G2 personalization question; the direct initial-context decision
+does not introduce automatic context-to-dial bindings.
 
 `service` selects a configured telephony adapter; it is not a credential. API
 keys, webhook verification material, provider account/application identifiers,
@@ -746,7 +740,7 @@ Application integration catalog
   including the tool bindings selected independently in each agent's `tools` map.
   It does not own MCP endpoints or credentials.
 - A call invocation owns caller/destination identity, definition selection,
-  permitted runtime variables, transport attachment, and idempotency. It does
+  schema-validated initial context, transport attachment, and idempotency. It does
   not override the definition's entrypoint and carries no MCP authentication.
 - A resolved call plan pins all references, defaults, adapter capabilities,
   selected integration/catalog revisions, discovered tool schemas, policy
@@ -806,7 +800,7 @@ The initial dated schema should contain only:
 - an `entrypoint` ref into the participant catalog;
 - shared capability-profile defaults;
 - named inline `participants`, each typed as human or agent;
-- typed invocation-input and room-context schemas;
+- typed room-context schemas for initial values and subsequent mutations;
 - shared call policies for turns, interruption, limits, failure, and ending; and
 - artifact/event policy references.
 
@@ -824,9 +818,9 @@ Each agent participant should contain:
 - optional limits stricter than the call defaults.
 
 Each human participant may contain a provider-neutral connection intent, such as
-a configured service ref, `dial` or `receive` mode, number or declared input
-binding, and admission behavior. It contains no credentials or provider command
-payloads.
+a configured service ref, `dial` or `receive` mode, a fixed number, and admission
+behavior. Dynamic destination selection remains pending G2 review. The intent
+contains no credentials or provider command payloads.
 
 The compiler resolves each agent participant's transfer refs into an immutable
 allowlist. It derives one platform transfer-tool schema whose destination
@@ -1029,9 +1023,10 @@ fallback semantics.
 
 ### Runtime overrides
 
-Avoid arbitrary deep-merge overrides. `CallInvocation` may provide only fields
-declared as invocation inputs by the definition. Provider selection, tool grants,
-guardrails, and routing must not be silently replaced by caller-supplied maps.
+Avoid arbitrary deep-merge overrides. `CallInvocation.initial_context` may
+provide only sections and fields permitted by the definition's context schemas.
+Provider selection, tool grants, guardrails, and routing must not be silently
+replaced by caller-supplied maps. Initial context is data, not a definition patch.
 
 MCP integration selection and authentication are not invocation overrides. They
 resolve from the authenticated tenant's integration catalog with an
@@ -1142,9 +1137,97 @@ or permission to join another call. The planned database-neutral Calls admission
 boundary owns route/definition resolution; the gateway does not acquire direct
 Repo responsibility. The room holds the resulting pinned plan for runtime work.
 
-This resolves G2's participant-routing question only. Input sources, permitted
-bindings, personalization, and the other pending G2 semantics are not approved
-by this routing decision. No endpoint or ID generator was implemented here.
+The routing decision is supplemented by the approved initial-context and
+authentication contract below. Participant startup/cardinality, personalization,
+and the remaining security/lifecycle details are still pending G2 review. No
+endpoint or ID generator was implemented here.
+
+### Initial context and client credentials — approved G2 decisions
+
+The integrating application supplies initial room-context values directly in
+the structure declared by the call definition. There is no second input schema
+or input-to-context binding layer. The reusable definition declares schemas,
+optional defaults, and agent permissions; the call invocation supplies the
+per-call values. Supplying initial context does not edit the stored definition
+or grant an agent write access.
+
+For example, a shopping application starts support for order `ORD-1042`. The
+definition declares an `order` section containing `id`. Its backend authorizes
+the customer's access to that order and supplies
+`initial_context: {order: {id: "ORD-1042"}}`. Reception and billing may both have
+`order: ["read"]`, while no agent has `write`. Admission initializes the section
+once, and transfers preserve it without allowing an agent to rewrite the order
+ID. The representative JSON below uses the same mechanism for `customer.id`.
+
+The agreed call-initiation authentication flow is:
+
+1. An authorized administrator provisions a tenant-scoped API client through
+   the gateway's credential-management boundary. Vxpipe generates the public
+   client ID and a cryptographically random client secret. The secret is
+   returned once for installation on the integrating application's backend.
+2. That backend authorizes its own business request and signs the call-start
+   payload with the client secret using HMAC. The client ID goes in a request
+   header; the POST envelope carries initial context and its signature. Neither
+   the client secret nor the database encryption key is sent in that request.
+3. The gateway verifies the signature with that client's secret and checks the
+   client's tenant and permissions against the selected admission route. A
+   public client ID or tenant/participant URL alone is not authentication.
+4. The planned Calls admission workflow resolves the pinned definition and
+   validates initial context. The engine receives a trusted principal, the
+   resolved plan, and initialized context, not signing credentials or signatures.
+
+The client secret lives on the integrating application's backend, never in its
+browser bundle. A direct backend-to-gateway POST needs no browser CORS grant.
+If a browser forwards a backend-signed envelope, CORS permits that browser
+request but does not authenticate it; the signature still needs verification.
+The choice of relay flow is not fixed by this decision. Authentication proves
+which registered application approved the input, not independently that the
+speaker owns the order. That business authorization remains with the integrating
+application. Provider webhook authentication remains a separate ingress adapter
+concern; this does not impose client HMAC credentials on telephony providers.
+
+Credential storage follows the inspected encrypted-Ecto pattern:
+
+- Store client IDs, tenant ownership, and permissions as normal database data.
+  A tenant may have several API clients without sharing one client secret.
+- Store each client secret encrypted at rest using Cloak/Cloak.Ecto with
+  AES-256-GCM. Redact secret fields and keep decryption within the credential
+  boundary; ordinary credential-list responses must not load/return secrets.
+- Supply a separate Base64-encoded 32-byte encryption key through runtime OTP
+  application settings. A deployment may map an environment variable such as
+  `VXPIPE_CREDENTIALS_KEY` in `config/runtime.exs`; that variable name is
+  illustrative, not an implemented setting. Keep the key outside the database,
+  call definitions, and source control; do not reuse another application's key.
+- Gateway code owns issuance and verification through a credential-store port.
+  The planned persistence adapter owns its Ecto schema, encrypted type, vault,
+  and database operations. Neither gateway HTTP handlers nor the call engine
+  gains direct Repo responsibility. Admission clients are separate from the
+  application/tenant credentials used to call MCP integrations.
+
+Encryption at rest and request HMAC serve different purposes. Vxpipe needs to
+recover the signing secret to verify an HMAC, so a password-style one-way hash
+alone is not sufficient. Cloak's encrypted Ecto fields provide reversible
+storage; no external secret-management service is required for this approach.
+Retain and separately protect the encryption key across deployments and backups:
+losing it makes stored secrets unrecoverable. Database encryption-key rotation
+and individual client-secret rotation are distinct operations. See
+[Cloak.Ecto's encrypted-field documentation](https://cloak-ecto.hexdocs.pm/install.html).
+
+**Still pending, not a complete signing specification:** administrator bootstrap,
+exact header/envelope names, HMAC algorithm and signed-byte representation,
+coverage of method/route/body, expiry and replay handling, idempotent retry
+behavior, permission granularity, and rotation/revocation procedures. In
+particular, signing only context does not bind it to a route or stop a replay.
+The eventual signature profile must settle those checks; this checkpoint does
+not claim that HMAC alone supplies them. The
+[HTTP Message Signatures security considerations](https://www.rfc-editor.org/rfc/rfc9421.html#section-7.2)
+are implementation evidence to consult, not approval of a particular wire format.
+
+This resolves G2's direct-context input, signing ownership, gateway credential
+issuance, and encrypted-storage choices only. Partial/default context assembly
+(G3), participant startup/cardinality, telephony initial-context sourcing,
+personalization, and the security details above remain open. No credential was
+generated, dependency added, database created, or authentication code implemented.
 
 ## Representative JSON shape
 
@@ -1156,14 +1239,6 @@ candidate until the constructor and compiler tests make every field precise:
   "schema_version": "20260906.02",
   "name": "customer-support",
   "entrypoint": "reception",
-  "input_schema": {
-    "type": "object",
-    "properties": {
-      "customer_id": {"type": "string"}
-    },
-    "required": ["customer_id"],
-    "additionalProperties": false
-  },
   "defaults": {
     "capabilities": {
       "speech_to_text": "default-stt",
@@ -1177,11 +1252,11 @@ candidate until the constructor and compiler tests make every field precise:
         "schema": {
           "type": "object",
           "properties": {
-            "id": {"type": "string"}
+            "id": {"type": "string", "minLength": 1}
           },
+          "required": ["id"],
           "additionalProperties": false
-        },
-        "default": {}
+        }
       },
       "intake": {
         "schema": {
@@ -1194,14 +1269,7 @@ candidate until the constructor and compiler tests make every field precise:
         },
         "default": {}
       }
-    },
-    "initialization": [
-      {
-        "input": "/customer_id",
-        "section": "customer",
-        "path": "/id"
-      }
-    ]
+    }
   },
   "participants": {
     "caller": {
@@ -1269,9 +1337,10 @@ candidate until the constructor and compiler tests make every field precise:
 ```
 
 The corresponding embedded-host invocation selects a definition directly and
-carries declared inputs. It is not the HTTP request body for the keyed web
-routes above: those resolve the definition and participant from the route before
-constructing an invocation. Input binding and trust rules remain under review.
+carries initial context matching its section schemas. It is not the signed HTTP
+request body for the keyed web routes above: those resolve the definition and
+participant from the route and authenticate the request before constructing an
+invocation. The JSON illustrates data, not an HMAC wire format.
 
 ```json
 {
@@ -1279,8 +1348,8 @@ constructing an invocation. Input binding and trust rules remain under review.
     "id": "customer-support",
     "revision": 7
   },
-  "input": {
-    "customer_id": "customer-456"
+  "initial_context": {
+    "customer": {"id": "customer-456"}
   },
   "transport": {
     "type": "web"
@@ -1306,6 +1375,22 @@ this shape without changing its basic entrypoint and transfer-tool model, but
 they should be specified in separate focused checkpoints.
 
 ## Alternatives considered
+
+### Require a second input schema and mappings into room context
+
+Rejected for call-start context. The integrating backend can supply values in
+the definition's context-section shape directly. A separate `input_schema` and
+JSON Pointer initialization map duplicate that contract without helping the
+order-ID example. JSON Pointers remain useful for authorized context mutations;
+removing initialization bindings does not remove the context update tool.
+
+### Put signing secrets in call definitions, browsers, or plaintext database fields
+
+Rejected. Gateway-generated client credentials authenticate the integrating
+backend and are stored separately from call definitions and MCP integrations.
+The integrating backend signs; Vxpipe verifies using its encrypted copy of the
+secret. A hash-only store cannot recover that HMAC key. Keep the database
+encryption key in deployment configuration, separate from database contents.
 
 ### Start with a fully expressive JSON graph
 
@@ -1376,7 +1461,8 @@ tenant happens to use the same MCP server.
 
 ## Validation requirements
 
-Compilation should reject, with path-specific errors:
+Compilation and admission validation should reject at their respective
+boundaries, with path-specific errors:
 
 - malformed, unknown, or unsupported dated schema identifiers;
 - an absent or malformed entrypoint, or one naming an unknown participant;
@@ -1386,7 +1472,7 @@ Compilation should reject, with path-specific errors:
 - a user-authored `transfer` tool or another tool alias that collides with the
   compiler-generated platform tool;
 - a human connection intent with an unknown service, mode, admission behavior,
-  literal credential, or invalid input binding;
+  literal credential, or invalid destination;
 - a participant presence policy with an unknown activation condition, selector,
   or denied capability kind;
 - a capability denial whose `participants` value is not a non-empty selector
@@ -1409,14 +1495,14 @@ Compilation should reject, with path-specific errors:
 - tenant integration state escaping its tenant boundary;
 - forbidden or malformed custom authentication headers;
 - duplicate or invalid room-context section names and unsupported schemas;
-- a room-context default that fails its section schema;
-- an initialization binding with a malformed pointer, undeclared input,
-  unknown section, invalid destination path, or invalid final section value;
+- a room-context default containing an unknown field or invalid supplied value
+  (partial/default completion semantics still require G3 review);
 - an agent context permission naming an unknown section or permission other
   than `read` or `write`;
 - a transfer context projection containing a section the destination cannot
   read;
-- invocation defaults for undeclared fields;
+- initial context containing undeclared sections/fields, invalid values, or
+  required values missing from the complete initialized context at admission;
 - policies outside bounded ranges;
 - incompatible required capabilities; and
 - any private runtime term or literal secret at the public boundary.
@@ -1564,8 +1650,8 @@ permissions; stale source-agent tool calls fail their activation check.
 
 1. **Pure definition contract:** add failing tests for the smallest
    `20260906.02` participant-first definition with context sections, defaults,
-   input bindings, agent permissions, and direct transfer refs. Implement typed
-   constructors and path-specific errors without starting processes.
+   direct initial context, agent permissions, and direct transfer refs. Implement
+   typed constructors and path-specific errors without starting processes.
 2. **Pure context state:** add failing tests for initialization, projection,
    bounded pointer changes, atomic schema rejection, independent section
    revisions, and write-only redaction. Implement the pure `RoomContext` state
@@ -1603,7 +1689,8 @@ model turns and transfers without changing its ownership model.
 During implementation, run focused tests from `apps/vxpipe_call_engine` after
 each red and green step. The focused cases must demonstrate:
 
-- invocation input initializes only its declared destination field;
+- initial context initializes only schema-declared sections and fields;
+- admission can initialize a section that agents can read but none can write;
 - an agent reads only granted sections and receives section revisions;
 - an agent updates an allowed field/object through the platform tool;
 - a write-only agent receives no old or resulting section value;
@@ -1687,7 +1774,7 @@ verify provider request and identify configured integration
   -> normalize provider call/event ID and called number
   -> resolve one active indexed route
   -> load the route's immutable definition revision
-  -> validate invocation input and compile a resolved plan
+  -> validate initial context and compile a resolved plan
   -> idempotently create the durable call admission record
   -> start the room with call ID, plan, and initialized context
   -> mark the call running or record a typed admission failure
@@ -2208,9 +2295,9 @@ room incarnation, participant, turn, and activation identity.
 
 1. **Definition and invocation data:** red tests for a minimal one-agent
    participant catalog, entrypoint ref, dated schema validation, shared
-   capability defaults, agent overrides, input validation, and a credential-free
-   invocation. Implement immutable structs and pure path-specific validation
-   only.
+   capability defaults, agent overrides, initial-context validation, and a
+   credential-free invocation. Implement immutable structs and pure path-specific
+   validation only.
 2. **Basic plan resolution:** use fake closed capability-profile registries to
    prove defaults and overrides resolve into a self-contained, secret-free
    `ResolvedCallPlan`; unused profiles leave no runtime binding.
@@ -2269,8 +2356,8 @@ room incarnation, participant, turn, and activation identity.
 Proceed first with typed `CallDefinition`, `CallInvocation`, and
 `ResolvedCallPlan` contracts without MCP fields in the first proof. The smallest
 proof is an inline one-agent participant catalog using schema `"20260906.02"`, a
-definition-local `entrypoint` ref, shared capability-profile defaults, declared
-invocation inputs, typed room-context sections and initialization bindings,
+definition-local `entrypoint` ref, shared capability-profile defaults,
+typed room-context sections and directly supplied initial context,
 per-agent section permissions, and bounded limits becoming a self-contained
 immutable plan. Route the existing single-agent behavior through that plan
 before adding participant transfer or integration resolution.
@@ -2315,7 +2402,8 @@ Keep `entrypoint`, direct participant-ref transfer lists, agent-scoped tool
 enablement, immutable resolved plans, room-owned context, and live mixing. This
 checkpoint identifies missing contracts and inconsistencies; it does not add
 runtime functionality. G1 records the approved tool layout and G2 records the
-approved web admission routes. G2's remaining questions and G3–G13 are still
+approved web routes, direct initial context, backend HMAC signing, and encrypted
+client-credential storage. G2's remaining questions and G3–G13 are still
 unapproved. Detailed reasoning and evidence live
 in the [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -2325,7 +2413,9 @@ in the [call-definition gap review](../docs/call-definition-gap-review.md).
   clean before editing. Review documentation will be a separate checkpoint.
 - The original review preserved schema examples and decisions for comparison.
   Approved follow-ups align G1's tool examples and document G2's tenant-scoped
-  start/join routes. The other proposed corrections still require review.
+  start/join routes and authenticated direct-context admission. Obsolete input
+  mappings are removed from both context examples and the invocation example.
+  The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
 
@@ -2343,22 +2433,27 @@ The numbering below matches G1–G13 in the focused review document.
    `participants` and read-only `billing` access to `intake`; transfer and context
    tools remain compiler-derived. This resolves G1's documentation ambiguity,
    not the future compiler implementation or its verification.
-2. **Admission — routing approved; remaining semantics pending:** tenant-scoped
+2. **Admission — routes, initial context, and credentials approved:** tenant-scoped
    HTTPS routes select the participant connection key when starting a call and
    additionally the public call ID when joining one. Tenant keys are 16 URL-safe
    random characters; participant keys and call IDs are UUIDs, separate from
    database primary keys. Joining uses the call's pinned definition and requires
-   authorization before a transport session is issued. G2 still needs review of
-   input sources/trust, context bindings, personalization, timezone and dynamic
-   destinations, plus detailed initial materialization/participant cardinality.
-   A caller number or client-supplied customer ID is not verified identity.
-   The schema's existing initialization example remains a candidate, not an
-   approval of new source-binding fields or an admission resolver.
-3. **Context initialization and stale work:** requiring a fully valid default
-   before applying input bindings prevents required fields from being supplied
-   solely at invocation. Activation checks alone do not invalidate interrupted
-   work from the same activation. Possible resolution: validate partial defaults,
-   apply bindings, fully validate initialized values; check live turn/tool
+   authorization before a transport session is issued. Initial context now
+   matches the definition's sections directly; no separate input-binding layer.
+   The integrating backend holds the gateway-issued client secret and HMAC-signs
+   the payload. Vxpipe stores the secret encrypted with a separate runtime key.
+   Admission may initialize sections that agents can read but none can write.
+   G2 still needs review of the precise signature/replay and credential-lifecycle
+   contract, telephony context sourcing, personalization, timezone and dynamic
+   destinations, plus initial materialization/participant cardinality.
+   A valid signature authenticates the integrating application, not the speaker's
+   customer identity; the backend authorizes the supplied business context.
+3. **Context initialization and stale work:** G2 removed input mappings, but how
+   partial defaults combine with initial context remains open. A supplied
+   required field must not need a dummy default. Possible resolution: validate
+   partial defaults, assemble values under an explicit rule, then validate the
+   complete context. Activation checks alone do not invalidate interrupted work
+   from the same activation. Also consider checking live turn/tool
    identity and deadline at mutation commit; deduplicate mutation retries.
    Writes committed before interruption remain facts. Reject mixed authorized
    and unauthorized reads as a whole, and redact write-only validation errors.
@@ -2434,8 +2529,10 @@ The numbering below matches G1–G13 in the focused review document.
 These are future verification scenarios, not capabilities available in the
 playground today. Use deterministic fakes first and synthetic data throughout.
 
-1. Compile one complete definition whose required context value comes from input
-   with no dummy default. Missing input must fail before a room or provider starts.
+1. Compile one definition whose required context value comes directly from
+   `initial_context`, with no mapping or dummy default. Missing required values
+   must fail before a room or provider starts. Partial/default assembly cases
+   require the pending G3 decision before they can become acceptance tests.
 2. Start a room, save intake through the agent tool, then read it on another
    turn. Transfer to a read-only agent; the value remains available but writes
    fail. Inspect client events and confirm private tool values are absent.
@@ -2469,6 +2566,19 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     correlation must fail. Publish a newer definition and confirm joining an
     existing call still uses its earlier participant mapping. Verify that no
     database primary key appears in the public URL or session identifiers.
+12. After implementing the approved credential/context boundary, provision a
+    synthetic tenant client through an authorized management operation. Store
+    its secret on a test backend, start a call with a signed initial order ID,
+    and confirm the declared context is available to two read-only agents but
+    neither can update it. Reject bad signatures, wrong-tenant access, unknown
+    context fields, and attempts to change definition policy through context.
+13. Inspect the test credential record using the raw storage boundary: the client
+    ID is queryable but the secret is ciphertext. Confirm a valid runtime key
+    allows verification after restart, wrong/missing key cannot authenticate,
+    and secrets are absent from ordinary management responses, room state,
+    browser data, events, errors, and logs. Use only synthetic secrets. Add
+    replay/expiry, rotation/revocation, and admin-bootstrap cases once those
+    remaining contracts are reviewed; these checks do not approve them now.
 
 ### Review checkpoint verification
 
@@ -2490,8 +2600,26 @@ For the approved G2 routing follow-up, all 10 JSON fences still parse, all 14
 local links/anchors resolve, and both documents contain the same approved
 tenant-scoped start/join routes. Unified tool examples and labnote terminology
 checks still pass, as does `git diff --check`. Added future routing acceptance
-steps; no runtime tests or endpoint/ID implementation were added. Remaining G2
-input, personalization, and lifecycle proposals stay open for user review.
+steps; no runtime tests or endpoint/ID implementation were added. At that
+checkpoint, G2 input, personalization, and lifecycle proposals remained open.
+
+For the approved 2026-09-07 initial-context and credential follow-up:
+
+- Parsed all 10 JSON fences and resolved all 15 local links/anchors across the
+  labnote and focused review document.
+- Checked that both context examples agree, the invocation supplies the declared
+  required `customer.id` directly, and no JSON example retains `input_schema`,
+  an `input` envelope, or an initialization mapping. Both agents keep read-only
+  customer access, and billing keeps read-only intake access.
+- Rechecked unified tool layout, approved route strings, labnote terminology,
+  absence of local absolute paths, and `git diff --check`.
+- Added future signed-admission, read-only-context, ciphertext-storage, and
+  secret-redaction acceptance steps. These were not run: no runtime behavior or
+  authentication implementation changed. Precise signing/replay, credential
+  lifecycle, and partial/default context semantics remain pending review.
+- Kept `20260906.02` as the existing unreleased illustration; no schema release
+  or implementation was published. The next discussion is G2 participant
+  startup/cardinality, not authorization to implement it.
 
 ## Verification evidence
 
@@ -2570,11 +2698,18 @@ input, personalization, and lifecycle proposals stay open for user review.
   room-context values, with a pure `RoomContext` module owning validation and
   revision behavior. Context tools run outside the authority and use a bounded
   `GenServer.call` for the short authorization and atomic mutation transaction.
-- Specified a working `20260906.02` context shape with section schemas, explicit
-  invocation-input bindings, per-agent section permissions, independent
-  revisions, activation-scoped projections, and compiler-generated read/update
-  tools. The plan includes focused red-green checkpoints and manual acceptance
-  steps; no runtime implementation was performed in this checkpoint.
+- Specified a working `20260906.02` context shape with section schemas, direct
+  initial-context values (replacing the earlier input bindings), per-agent
+  section permissions, independent revisions, activation-scoped projections,
+  and compiler-generated read/update tools. The plan includes focused red-green
+  checkpoints and manual acceptance steps; no runtime implementation was
+  performed in this checkpoint.
+- Inspected an existing encrypted-Ecto credential implementation: a runtime
+  Base64-decoded 32-byte key, supervised Cloak vault, AES-GCM cipher, redacted
+  encrypted fields, and binary database columns. Applied that approved storage
+  pattern to the gateway client-credential design without accessing any real
+  credential or environment-file contents. HMAC signing remains at the
+  integrating backend, with credential verification outside the call engine.
 - Inspected the umbrella dependencies and persistence-related runtime surfaces.
   The repository currently has only gateway and call-engine applications and no
   Ecto/Repo boundary. The gateway directly creates an engine room, while room
@@ -2603,5 +2738,5 @@ input, personalization, and lifecycle proposals stay open for user review.
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx>
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/transports/streamable-http.mdx>
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2026-07-28/schema.json>
-- No implementation or test commands were run because this checkpoint changes
-  research documentation only.
+- No runtime test suite or browser checks were run; this checkpoint changes
+  research documentation only and uses the documentation checks recorded above.

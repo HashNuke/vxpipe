@@ -1,7 +1,8 @@
 # Call-definition gap review
 
 Reviewed: 2026-09-06 UTC
-Status: G1 and G2's web routing approved; remaining G2 questions and G3–G13 pending review.
+Last updated: 2026-09-07 UTC
+Status: G1 and G2's web routes, direct initial context, HMAC signing, and encrypted client credentials approved; remaining G2 questions and G3–G13 pending review.
 Documentation only; no runtime implementation.
 
 ## Conclusion and scope
@@ -90,7 +91,7 @@ supported-field/keyword matrix. Partial illustrations are not complete executabl
 definitions, and the broad representative JSON is not a commitment to implement
 every field in the first slice. No new dated schema release is published here.
 
-### G2 — Partly resolved: web routing approved; input and lifecycle questions pending
+### G2 — Partly resolved: routes, initial context, and client authentication approved
 
 At baseline, `transport.type: web` did not map an incoming connection to a
 participant definition. `entrypoint` identifies the initial handler, not
@@ -116,7 +117,53 @@ or room processes created for every saved definition. See the
 [approved web admission contract][web-admission]. No runtime implementation was
 authorized by this documentation decision.
 
+**Approved initial context:** the integrating application's backend supplies
+values directly in the section structure declared by the call definition. Drop
+the separate `input_schema` and JSON Pointer initialization mappings. For order
+`ORD-1042`, it supplies `initial_context: {order: {id: "ORD-1042"}}` to a definition
+declaring that section. Admission initializes it; several agents can read it
+while none has write access. The definition declares the data shape and
+permissions, not a second remapping layer. Initial context cannot override
+providers, tools, entrypoint, tenant, or other definition policy.
+
+**Approved authentication and credential storage:** the gateway issues
+tenant-scoped client IDs and random secrets through an authorized management
+operation. The integrating backend keeps the secret, authorizes access to the
+order, and HMAC-signs the call-start payload. The client ID is carried in a
+header, and the POST envelope contains initial context and the signature, never
+the secret. Vxpipe verifies the signature and tenant/operation permissions before
+admission. A valid HMAC identifies the application that approved the context;
+it is not independent proof of the speaker's identity. CORS is a browser access
+policy, not authentication; the backend may POST directly, or a browser may
+forward an already-signed envelope without possessing the secret.
+
+Store the client ID and tenant/permission metadata normally, and encrypt the
+client secret using Cloak/Cloak.Ecto with AES-256-GCM. A separate runtime OTP
+setting supplies the 32-byte encryption key; a deployment environment mapping
+such as `VXPIPE_CREDENTIALS_KEY` is illustrative, not implemented configuration.
+Keep that key outside the database and separate from client secrets and other
+applications' keys. Gateway credential logic uses a store port; the planned
+persistence adapter owns Ecto, encrypted fields, and the vault. The call engine
+receives neither credentials nor signatures. This follows the inspected
+encrypted-Ecto implementation and the [Cloak.Ecto documentation][cloak-ecto].
+
+The client secret is returned once at issuance, then excluded from ordinary
+responses and logs. A hash-only store is unsuitable for recovering the HMAC
+verification key. Retain the encryption key securely across restores, and keep
+database-key rotation separate from client-secret rotation. Credential issuance
+does not belong in call JSON or the MCP integration catalog. See the
+[approved context and credential contract][signed-admission] for ownership,
+alternatives, and future verification steps.
+
 The following G2 proposals remain open and must be reviewed separately:
+
+**Signature profile and credential lifecycle:** define exact names and signed
+bytes, HMAC algorithm, method/route/body coverage, expiry/replay handling,
+idempotent retries, administrator bootstrap, permission granularity, and
+rotation/revocation procedures. HMAC alone neither binds unsigned routing data
+nor prevents reuse of a valid request. These are required design follow-ups, not
+an approved wire format or a claim of implemented authentication. See the
+[HTTP Message Signatures security considerations][http-signatures].
 
 **Initial materialization and cardinality:** admit the initiating human, prepare
 the entrypoint, and activate the initial agent only when required
@@ -126,15 +173,16 @@ explicitly as no initial AI control, rather than assuming every entrypoint has
 model inference. Default each participant definition to one materialized
 instance per call until multi-instance selection is specified.
 
-**Input sources and bindings:** an inbound phone call cannot supply the example's
-required trusted `customer_id` by itself. Keep four namespaces distinct:
-definition constants, validated invocation inputs, trusted ingress metadata,
-and mutable room context. Provider-asserted
+**Telephony initial-context sourcing:** an inbound phone call cannot supply the
+example's required trusted `customer.id` by itself. The approved direct-context
+shape eliminates remapping, not the need for a trustworthy source of values.
+Keep definition defaults, authorized initial context, trusted ingress metadata,
+and subsequent agent assertions distinguishable. Provider-asserted
 caller number is a routing/contact claim, not verified customer identity. An
 admission resolver can perform a bounded lookup before room creation; otherwise
 leave identity unverified for a tool to establish later.
 
-**Personalization and evaluation time:** provide allowlisted bindings for prompt
+**Personalization and evaluation time:** consider allowlisted bindings for prompt
 and first-message personalization, locale, IANA timezone, and dynamic dial
 numbers. Specify when each value is evaluated:
 call-start time is pinned; “current time” is a typed clock/tool observation, not
@@ -149,14 +197,17 @@ need, not a reason to adopt their unrestricted authoring surface.
 
 ### G3 — P1: Context validation is not enough to establish authority
 
-The [context candidate][context-design] requires defaults to satisfy the full
-schema *before* initialization. A required field supplied only by invocation
-input consequently needs a dummy default or must be made optional. Proposed
-resolution: validate partial defaults for types/unknown keys, apply declared
-bindings, then validate the complete initialized section, including required
-fields. Reject overlapping bindings and specify missing-input behavior, null
-support, and JSON Pointer escaping. All initialization must succeed before any
-room/provider work starts.
+At baseline, the [context candidate][context-design] required defaults to satisfy
+the full schema *before* initialization, forcing dummy values or optional fields
+for data supplied only at call start. The approved G2 revision removes input
+mappings and allows initial values in the declared section shape, including a
+required value with no default. It does not settle partial/default assembly.
+Proposed resolution for review: validate supplied defaults for types/unknown
+keys, specify section replacement versus field merge, then validate the complete
+initialized section, including required fields. Specify missing/omitted and null
+behavior. No overlapping-input-binding rule is needed now that those mappings
+have been removed. All initialization must succeed before room/provider work
+starts; exact assembly semantics still need approval.
 
 The [authorization transaction][context-authorization] checks activation, but
 interruption can leave the same agent activation active. Require a still-live
@@ -461,7 +512,9 @@ Use scenario fixtures rather than copying complete third-party definitions:
 
 | Future acceptance test | Evidence of success |
 | --- | --- |
-| Initialize a required context field from invocation input, with no dummy default | Compilation succeeds; absent required input fails before room startup |
+| Initialize a required context field directly, with no input mapping or dummy default | Compilation succeeds; absent required initial data fails before room startup; partial/default assembly follows a separately approved rule |
+| Provision a tenant client and submit backend-signed initial order context | Valid authorized request starts the call; agents can read the order but cannot rewrite it; bad signatures, cross-tenant requests, and schema-invalid values fail |
+| Persist the generated secret and restart with the runtime encryption key | Raw storage contains ciphertext; verification works with the correct key; wrong/missing key fails closed; ordinary responses and logs never expose secrets |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
 | Interrupt while a context update is queued | Ordering determines one commit-before-interrupt or a stale-work rejection; replayed mutation ID cannot write twice |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
@@ -489,6 +542,12 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   or trusted host registration. They would expand the authoring trust boundary.
 - Do not treat prompt instructions, actor authentication, and verified customer
   identity as interchangeable authority.
+- Do not duplicate the room-context schema with a second call-input schema and
+  initialization map. The backend can supply the declared context shape directly.
+- Do not put HMAC client secrets in browsers, call definitions, plaintext database
+  fields, or a hash-only store. Keep the independent encryption key outside the
+  database. Secret encryption does not replace the pending signature/replay and
+  credential-management contracts.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
 - Do not move mixing, recording coordination, or room context into persistence.
@@ -499,6 +558,12 @@ protocol documentation, not a successful end-to-end deployment of the external
 examples. Documentation verification covers local link targets, fenced JSON
 syntax in the updated labnote, whitespace, and scoped diffs. Runtime tests and
 browser checks are not applicable to this documentation-only checkpoint.
+The approved credential-storage follow-up also inspected an existing Cloak/Ecto
+implementation: runtime key validation, supervised vault, encrypted binary
+fields, redaction, and binary database columns. No environment-file contents or
+real credentials were read, and no credentials were generated. The existing
+gateway still uses a development principal; this review adds no authentication
+implementation. The labnote records the follow-up's documentation-check results.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
@@ -507,6 +572,7 @@ browser checks are not applicable to this documentation-only checkpoint.
 [context-design]: ../labnotes/20260905-0405-call-definition-design.md#working-room-context-schema-candidate
 [context-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
+[signed-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-client-credentials--approved-g2-decisions
 [presence]: ../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology
 [persistence]: ../labnotes/20260905-0405-call-definition-design.md#persistence-call-records-usage-and-artifacts
 [terms]: architecture.md#domain-terminology
@@ -528,3 +594,5 @@ browser checks are not applicable to this documentation-only checkpoint.
 [voicemail-docs]: https://docs.vapi.ai/tools/voicemail-tool
 [warm-transfer]: https://docs.vapi.ai/calls/assistant-based-warm-transfer
 [mcp-http]: https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/docs/specification/2026-07-28/basic/transports/streamable-http.mdx
+[cloak-ecto]: https://cloak-ecto.hexdocs.pm/install.html
+[http-signatures]: https://www.rfc-editor.org/rfc/rfc9421.html#section-7.2
