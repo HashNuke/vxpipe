@@ -48,8 +48,8 @@ G5's call-level client tool visibility and explicitly full-visibility sample
 calls are approved, with all tool events hidden when visibility is unspecified.
 Per-tool overrides are also approved: target the participant definition key plus
 its local configured tool key, with the call-wide default as fallback. Independent
-tool-history storage is approved: metadata by default when enabled, with explicit
-arguments/results retention and existing credential/header exclusions. Variable
+tool-history storage always saves observed metadata, arguments/request payloads,
+and responses/results/errors, with existing credential/header exclusions. Variable
 history now uses turn/tool-linked full post-update snapshots, the existing saved
 tool arguments rather than a separate changeset, and a latest-snapshot pointer
 on the call record. Database-backed variable updates return success only after
@@ -129,7 +129,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R15 | G4 | **Resolved:** skip the trusted read-only/idempotent-write/side-effect classification layer for now. |
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
 | R17 | G5 | What public configuration layout expresses call-wide and participant/tool-specific client visibility? |
-| R18 | G5 | What public configuration layout selects stored call data and retained tool arguments/results independently of client visibility? |
+| R18 | G5 | What public configuration layout controls non-tool capture/storage such as transcripts, recordings, and usage? Tool storage is settled: all observed metadata, arguments/request payloads, and responses/results/errors are always stored, independent of client visibility, with no tool-storage configuration. |
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
@@ -925,28 +925,30 @@ Existing credential/header exclusions still apply; visibility grants neither
 tool execution nor additional agent variable or cross-call access. The current
 gateway has not implemented this distinction.
 
-**Approved independent tool-history storage:** retain tool-call data according
-to storage policy regardless of what the client may see. When tool-history storage
-is enabled, invocation identity, participant/tool identity, timing, and outcome
-are retained by default. Arguments/results require explicit retention selection.
-Hidden tool events can therefore have stored payloads when storage permits them;
-full client visibility does not automatically enable payload retention. Project
-storage events independently from the engine source, not from the browser-filtered
-stream, and exclude integration credentials and authorization headers before
-persistence. Retaining data does not authorize its disclosure to clients.
+**Approved independent tool-history storage:** always store all observed tool
+invocation data with the call: identity/participant/tool metadata, timing/outcomes,
+arguments/request payloads, and responses/results/errors. No tool-history enable
+switch, metadata-only storage mode, per-tool payload selection, or arguments/results
+opt-in. Hidden, metadata, or full client visibility does not alter this storage.
+Project storage events independently from the engine source, not the browser-
+filtered stream, excluding integration credentials and authorization headers
+before persistence. This is not raw wire credential capture or new general
+redaction. Retaining data does not authorize disclosure to clients. Save only
+observed outcomes: unknown timeouts remain unknown, not fabricated remote results.
 
 For example, a booking invocation hidden from the browser can still have its
 arguments/result saved for an authorized operational review. A sample call can
-show that result live while retaining only tool metadata. This avoids coupling
-operational history to frontend disclosure choices; it does not introduce
-runtime persistence or a final storage configuration schema.
+show that result live and saves the same complete observed tool history. General
+tool/event archival stays asynchronous; this capture policy does not add a SQL
+acknowledgement gate to every tool or resolve archival failure handling.
+Non-tool capture/storage configuration remains R18; no runtime persistence is added.
 
-**Approved variable history and latest-state lookup:** when variable retention
-is enabled, each committed update saves a full post-update snapshot linked to its
+**Approved variable history and latest-state lookup:** in a database-backed call,
+each committed update saves a full post-update snapshot linked to its
 originating turn and tool invocation, source participant, revisions, and commit
 timestamp. The saved update tool call and arguments already describe the requested
 change; no separate changeset or duplicate argument payload is needed. Argument
-retention uses the existing tool-storage policy, not a new default for every tool.
+storage follows the always-stored complete tool-history contract, not an opt-in.
 Several updates in one turn remain distinguishable by invocation and revision;
 rejected updates do not create successful state snapshots.
 
@@ -1054,7 +1056,7 @@ data; deletion ordering alone does not guarantee this, and the specific mechanis
 is not chosen here. Shared configuration/assets remain outside call-owned deletion.
 This background cleanup retry policy does not change the tool/MCP no-retry rule.
 
-**Still under review:** exact storage configuration. Unstarted-record
+**Still under review:** non-tool capture/storage configuration (R18). Unstarted-record
 housekeeping remains separate; no additional automatic
 expiry is approved for those records.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
@@ -1399,7 +1401,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Configure an agent to ask before booking, then attempt an unavailable tool | Domain-specific conversational confirmation uses the prompt/tool flow without a platform token; prompt instructions cannot grant tool access or substitute for enforceable application/MCP authorization |
 | Create calls with hidden, metadata-only, and full client tool visibility | Gateway sends no tool events, metadata-only events, or tool arguments/results respectively; sample calls explicitly select full visibility; an authorized creation override wins over the pinned definition value and a joining browser cannot change it; credential/header exclusions still apply |
 | Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
-| Hide client tool events while retaining payloads, then show full events with metadata-only storage | First call stores permitted synthetic arguments/results but emits no client tool events; second shows payloads live but stores only invocation and participant/tool identity, timing, and outcome; storage never uses the browser-filtered stream, and integration credentials/authorization headers are excluded before persistence |
+| Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
 | Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration changes neither capture enablement nor client visibility; cleanup mechanics remain separate from the approved whole-call deletion scope |
@@ -1806,6 +1808,16 @@ Current backlog: 31 individual decisions, R17, R18, and R22–R50. Checks cover 
 three-file scope, 16 unchanged valid JSON examples, links/anchors, encoding and
 inheritance, prior contracts, statuses/count, terminology/path hygiene, and
 whitespace. Documentation only; no runtime tests.
+
+The complete-tool-history follow-up supersedes metadata-default/opt-in storage:
+always retain all observed invocation metadata, arguments/request payloads, and
+responses/results/errors, regardless of client visibility. Credential/header
+exclusions, unknown-outcome semantics, asynchronous general archival, and the
+variable snapshot transaction boundary remain unchanged. R18 now asks only about
+non-tool capture/storage configuration; the total remains 31 pending individual
+decisions, R17, R18, and R22–R50. Checks cover exact three-file scope, 16 unchanged
+valid JSON examples, links/anchors, active-rule consistency, prior contracts,
+statuses/count, terminology/path hygiene, and whitespace. Documentation only.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

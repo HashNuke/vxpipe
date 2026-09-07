@@ -809,17 +809,21 @@ This is an approved visibility contract, not current gateway behavior. The
 current tool-event path still sends arguments/results without this audience
 distinction.
 
-Tool-history storage is independent of client visibility. When tool-history
-storage is enabled, retain invocation identity, participant/tool identity, timing,
-and outcome by default; retaining arguments/results requires explicit selection
-in the storage policy. Hidden client events must not suppress independently
-authorized storage, and full client visibility must not enable payload storage
-implicitly. The storage consumer receives its own engine-event projection, not
-the browser-filtered stream. Integration credentials and authorization headers
-remain excluded before persistence, including when arguments/results are retained.
-Storing a payload does not grant a client access to it.
+Tool-history storage is independent of client visibility. Always retain all
+observed invocation data with the call: invocation and participant/tool identity,
+metadata, timing/outcomes, arguments/request payloads, and responses/results/errors.
+There is no tool-history enable switch, metadata-only storage mode, per-tool
+payload selection, or arguments/results opt-in. Hidden client events do not
+suppress storage; metadata/full client selections do not change what is saved.
+The storage consumer receives its own engine-event projection, not the browser-
+filtered stream. Integration credentials and authorization headers remain excluded
+before persistence; this is not raw wire credential capture or a new general
+redaction feature. Store observed outcomes only: an unknown timeout stays unknown,
+without fabricating a remote response. Storing data does not grant client access.
+General tool/event archival remains asynchronous; this capture policy does not
+make every tool completion wait for SQL or implement archival failure handling.
 
-When variable retention is enabled, save a full post-update Call Variables
+In a database-backed call, save a full post-update Call Variables
 snapshot for each committed update, linked to the originating turn and tool
 invocation, source participant, revisions, and commit timestamp. Reuse the saved
 update tool call and its arguments; do not create a separate changeset. Compute
@@ -844,8 +848,8 @@ tool/turn/usage archival remains asynchronous. Full history snapshots are not
 client events or broader agent tool results.
 Retained initial values form a baseline snapshot with no invented turn/tool call,
 so the pointer also works before the first update.
-These are approved designs, not newly implemented persistence. Exact storage
-configuration remains under review; general sensitive-input redaction is deferred.
+These are approved designs, not newly implemented persistence. Non-tool capture/
+storage configuration remains under review; general sensitive-input redaction is deferred.
 A configured database failure must not silently fall back to memory-only success; an explicitly
 database-free deployment has no database-commit guarantee.
 
@@ -868,7 +872,7 @@ while explicit tenant `"forever"` overrides a finite application period. This is
 not a call-definition, creation, or participant option. No human-readable duration
 parser, null sentinel, or per-call policy copy is introduced.
 Forever means no age-based expiration by Vxpipe, not automatic capture of every
-payload or a backup/recovery guarantee. Existing storage enablement, credential
+non-tool payload or a backup/recovery guarantee. Non-tool capture settings, credential
 exclusions, and client visibility remain separate. Periods are not agent-defined
 or client-selected. For a completed call with finite retention, the expiry
 threshold is `ended_at + retention_period`, not record creation or a later storage
