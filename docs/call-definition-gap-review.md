@@ -42,7 +42,9 @@ conversational confirmation and the application/MCP owns enforceable business
 authorization. Prompts are not security checks; Vxpipe tool-access checks remain.
 G5's call-level client tool visibility and explicitly full-visibility sample
 calls are approved, with all tool events hidden when visibility is unspecified.
-Per-tool selections and private archival/retention questions remain pending,
+Per-tool overrides are also approved: target the participant definition key plus
+its local configured tool key, with the call-wide default as fallback. Exact
+configuration syntax and private archival/retention questions remain pending,
 alongside remaining G2/G4 questions and G6–G13.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -683,7 +685,21 @@ without payloads, or including arguments/results. This replaces a mandatory
 metadata-only projection plus special debug-session authorization. When both
 definition and creation omit visibility, hide tool events entirely. Metadata
 and full visibility require explicit selection. Exact field/enum names and
-selective per-tool visibility remain proposals for review, not approved schema.
+configuration layout remain under review, not a frozen schema.
+
+**Approved per-tool targeting:** an override identifies the participant definition
+key plus its configured local key in that participant's `tools` map. It selects
+hidden, metadata-only, or full visibility for that binding and takes precedence
+over the call-wide default; other tools inherit that default. Resolve this identity
+from the invocation's server-owned participant/tool binding and pin the selections
+with the call policy. Do not match solely on a remote MCP operation name or trust
+client-supplied labels. This applies to the unified built-in/MCP tool map without
+changing which tools an agent may execute.
+
+For example, `reception` and `billing` can both configure `lookup_customer`.
+Expose reception's lookup at metadata-only detail while billing's stays hidden.
+Those are separate targets even if both bindings select the same remote operation;
+changing one visibility override must not expose the other's events or payloads.
 
 **Approved sample configuration:** calls created for `samples/` explicitly select
 full tool visibility for the debug UI through the same trusted call-creation
@@ -960,6 +976,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | After a separately approved idempotency/reconciliation policy, exercise a retry | Verify any promised duplicate prevention against that policy and provider behavior; it is not guaranteed by the executor's no-automatic-retry default alone |
 | Configure an agent to ask before booking, then attempt an unavailable tool | Domain-specific conversational confirmation uses the prompt/tool flow without a platform token; prompt instructions cannot grant tool access or substitute for enforceable application/MCP authorization |
 | Create calls with hidden, metadata-only, and full client tool visibility | Gateway sends no tool events, metadata-only events, or tool arguments/results respectively; sample calls explicitly select full visibility; an authorized creation override wins over the pinned definition value and a joining browser cannot change it; credential/header exclusions still apply |
+| Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |

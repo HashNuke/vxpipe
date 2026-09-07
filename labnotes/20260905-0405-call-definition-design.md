@@ -82,7 +82,9 @@ authorization belongs to the integrating application/MCP. Prompt instructions
 are not a security guarantee, and Vxpipe still enforces tool access.
 G5's call-level client tool visibility and explicitly full-visibility sample
 calls are approved, with all tool events hidden when visibility is unspecified.
-Per-tool selections, private archival/retention questions, G2's remaining
+Per-tool overrides are approved, scoped to the participant definition key plus
+its local configured tool key, with the call-wide default as fallback. Exact
+configuration syntax, private archival/retention questions, G2's remaining
 admission details, the rest of G4, and G6–G13 remain pending user review.
 Approval of documentation does not authorize runtime implementation.
 
@@ -1608,8 +1610,25 @@ Supported visibility behaviors are:
 These describe behavior, not final JSON key or enum names. When neither
 definition nor call creation selects visibility, hide tool events entirely.
 Metadata-only and full visibility require explicit selection; metadata is not
-a mandatory disclosure floor for every call. Selecting individual tools and
-their detail levels is a possible follow-up, not yet an approved schema contract.
+a mandatory disclosure floor for every call. Per-tool overrides may select any
+of these same detail levels. An explicit binding override takes precedence over
+the call-wide default; tools with no override inherit that default.
+
+Identify a visibility override by the participant definition key plus the local
+configured key in that participant's `tools` map. These are definition-local
+references, not runtime participant IDs or remote MCP operation names. The
+executor's server-owned participant/tool binding supplies the identity for each
+invocation; a joining client cannot select a different identity to change its
+visibility. This works with the unified built-in/MCP tool map and does not alter
+tool execution permissions. Resolve and pin the selections with the call policy.
+
+For example, both `reception` and `billing` may configure `lookup_customer`.
+With the call-wide default hidden, an override can expose only reception's lookup
+at metadata-only detail; billing's lookup stays hidden. Sharing a local name or
+binding to the same remote operation must not share visibility between agents.
+The two-part target is approved; the exact JSON layout and field/enum names are
+still under review. No new schema release or generated-tool configuration is
+introduced by this decision.
 
 Calls created for the `samples/` playground explicitly select full tool visibility
 because it is our developer debug UI. This uses the same call policy available
@@ -3501,9 +3520,11 @@ deferred to future external-event delivery to active rooms/agents. Generic
 platform confirmation is out of scope; conversational confirmation belongs to
 agent instructions and enforceable business authorization to the application/MCP.
 G5's call-level client tool visibility and full-visibility sample calls are
-approved, with tool events hidden by default. Selective per-tool visibility and
-private archive/retention policies remain under review. Other G4 questions,
-remaining G2 details, and G6–G13 remain unapproved.
+approved, with tool events hidden by default. Per-tool overrides use participant
+definition key plus local configured tool key, otherwise falling back to the
+call-wide default. Exact configuration syntax and private archive/retention
+policies remain under review. Other G4 questions, remaining G2 details, and G6–G13
+remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3701,7 +3722,9 @@ The numbering below matches G1–G13 in the focused review document.
    selection, and pin it with the call. Support no tool events, metadata only,
    or full arguments/results; sample calls explicitly select full visibility.
    Omitted visibility hides all tool events; joining browsers cannot change it.
-   Selective per-tool configuration and implementation remain pending. Private
+   Per-tool overrides target participant definition key plus local configured
+   tool key and take precedence over the call-wide default. Exact configuration
+   syntax and runtime implementation remain pending. Private
    archive payloads, independently authorized variable journals, retention/redaction
    before storage, and sensitive user-input handling remain proposals for review.
 6. **Remote integration compatibility:** configured and enabled are specified,
@@ -3785,8 +3808,13 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    not change the pinned value. Hidden tool events must not stop tool execution
    or conversational audio. Check unchanged agent variable grants and credential/
    header exclusions in every mode. Omit visibility at definition and creation
-   and verify no tool events reach the client. These are planned checks, not
-   current playground guarantees.
+   and verify no tool events reach the client. Configure two agents with the
+   same local tool key and different visibility overrides, then invoke each:
+   only the originating participant/tool binding's override applies. Repeat
+   with bindings to the same remote operation and check that an unlisted binding
+   inherits the call-wide default. A hidden binding must stay hidden even when
+   the call-wide default is full. These are planned checks, not current
+   playground guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
    variable, read back that partial object,
@@ -4657,6 +4685,25 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   intended documentation files changed. Hidden-default/precedence checks,
   pending per-tool policy, review count, restricted terminology, local-path
   hygiene, and whitespace checks pass.
+
+### Per-tool visibility targets local participant bindings — approved 2026-09-07
+
+- Approved participant definition key plus local configured tool key as the
+  visibility target. Do not use a remote MCP operation name alone: two agents
+  can use the same local name or remote operation with different visibility.
+- A binding override selects hidden, metadata-only, or full detail; unlisted
+  bindings inherit the call-wide default, which is hidden when unspecified.
+  Pin selections with the call and resolve invocation identity server-side.
+  Existing call-creation precedence and tool/variable permissions are unchanged.
+- Updated the original contract, architecture, G5 summary, and planned acceptance
+  steps. Exact configuration syntax and private archive/retention decisions
+  remain open. G5 is partly resolved; the count stays at 11 open groups.
+- Documentation only: no runtime or sample UI changes, and no runtime/browser
+  tests were run. Existing schema examples remain unchanged.
+- Verification: all existing fenced examples are unchanged and all 15 JSON
+  examples parse. Links and external URLs are unchanged. Only the three intended
+  documentation files changed; targeting/fallback, retained review status,
+  restricted terminology, local-path hygiene, and whitespace checks pass.
 
 ## Verification evidence
 

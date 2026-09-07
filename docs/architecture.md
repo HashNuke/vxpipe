@@ -612,7 +612,14 @@ joining. The gateway applies it to that call's authorized client connections.
 The policy can hide tool events entirely, expose lifecycle metadata only, or
 include arguments/results. When neither source specifies visibility, hide all
 tool events. Both metadata and full payload visibility require explicit selection.
-Per-tool selections and their configuration shape remain proposals for review.
+Per-tool overrides select one of the same detail levels and take precedence over
+the call-wide default. Target each override by the participant definition key
+plus its local key in that participant's `tools` map, not by a remote MCP operation
+name alone. The same local tool name on two agents is two independent targets;
+tools without an override inherit the call-wide default. Resolve each invocation's
+target from its server-owned participant/tool binding, not client-supplied labels.
+Pin these selections with the rest of the call policy. The exact configuration
+shape and field/enum names remain under review.
 
 Calls created for the `samples/` playground explicitly select full tool
 visibility. This is the same call policy available to other integrations, not
