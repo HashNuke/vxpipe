@@ -49,7 +49,10 @@ calls are approved, with all tool events hidden when visibility is unspecified.
 Per-tool overrides are also approved: target the participant definition key plus
 its local configured tool key, with the call-wide default as fallback. Independent
 tool-history storage always saves observed metadata, arguments/request payloads,
-and responses/results/errors, with existing credential/header exclusions. Variable
+and responses/results/errors, with existing credential/header exclusions. Available
+transcripts/turn details, committed variables, and observed usage/model/cost data
+are always stored without per-category toggles; audio requires enabled and
+permitted recording, not automatic processing for archival purposes. Variable
 history now uses turn/tool-linked full post-update snapshots, the existing saved
 tool arguments rather than a separate changeset, and a latest-snapshot pointer
 on the call record. Database-backed variable updates return success only after
@@ -72,8 +75,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **30 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17, and R19–R21 are resolved; R07's same-call caller
+Current review count: **29 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, and R17–R21 are resolved; R07's same-call caller
 reconnection and R16's retry exceptions are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -103,11 +106,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**30 pending decisions (R18 and R22–R50).** This is the current approval backlog,
+**29 pending decisions (R22–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17, and R19–R21 are resolved; R07/R16 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R18 and R22–R25**. Mark rows resolved or
+R10–R15 and R17–R21 are resolved; R07/R16 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R22–R26**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -129,7 +132,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R15 | G4 | **Resolved:** skip the trusted read-only/idempotent-write/side-effect classification layer for now. |
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
 | R17 | G5 | **Resolved:** `tool_visibility` is `hidden`, `metadata`, or `full`; optional `tool_visibility_overrides` maps participant definition key to local tool binding key to level. Binding overrides win; omission hides events; trusted creation may replace the definition policy pair. |
-| R18 | G5 | What public configuration layout controls non-tool capture/storage such as transcripts, recordings, and usage? Tool storage is settled: all observed metadata, arguments/request payloads, and responses/results/errors are always stored, independent of client visibility, with no tool-storage configuration. |
+| R18 | G5 | **Resolved:** always store available transcripts, turn details, usage/model/cost observations, committed variable snapshots, and complete observed tool history; no per-category storage toggles. Store audio only when recording is explicitly enabled and permitted; do not start prohibited processing or invent missing data for archival completeness. |
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
@@ -952,7 +955,24 @@ arguments/result saved for an authorized operational review. A sample call can
 show that result live and saves the same complete observed tool history. General
 tool/event archival stays asynchronous; this capture policy does not add a SQL
 acknowledgement gate to every tool or resolve archival failure handling.
-Non-tool capture/storage configuration remains R18; no runtime persistence is added.
+No runtime persistence is added by this documentation decision.
+
+**Approved available call data (R18):** always save available transcripts, turn
+details, and observed usage/model/cost information, alongside committed variables
+and complete tool history. No separate storage toggle per category. Preserve
+typed-text provenance, provider-final speech facts, and generated versus confirmed
+delivered/spoken agent text, including interrupted/truncated state. Do not start
+STT or other prohibited processing for archival completeness; missing or forbidden
+transcription does not justify inventing a transcript. Missing usage/prices remain
+unavailable, not zero or invented estimates; R44–R46 still govern pending accounting
+details. General archival remains asynchronous without a new SQL acknowledgement
+gate for every ordinary turn/tool.
+
+Call audio is stored only through an explicitly enabled and permitted recording
+capability. Participant/room denials and the `opening_audio` media-input gate still
+apply. Do not auto-start recording for history, or add a redundant storage matrix.
+Credential/header exclusions and privacy, client visibility, and agent grants
+remain unchanged. This resolves R18, not the remaining archival failure contracts.
 
 **Approved variable history and latest-state lookup:** in a database-backed call,
 each committed update saves a full post-update snapshot linked to its
@@ -1067,8 +1087,7 @@ data; deletion ordering alone does not guarantee this, and the specific mechanis
 is not chosen here. Shared configuration/assets remain outside call-owned deletion.
 This background cleanup retry policy does not change the tool/MCP no-retry rule.
 
-**Still under review:** non-tool capture/storage configuration (R18). Unstarted-record
-housekeeping remains separate; no additional automatic
+Unstarted-record housekeeping remains separate; no additional automatic
 expiry is approved for those records.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
 different audiences. G5 stays partly resolved. Success now proves the snapshot
@@ -1287,14 +1306,16 @@ The async archive is correctly described as potentially lossy on node failure.
 Specify per-consumer bounded queue/overflow behavior and independent private
 versus public projections. A slow browser must not stall the ledger, and a slow
 ledger must not silently turn an archive into a complete record. Record missing
-sequence ranges or an incomplete watermark. A retention policy can intentionally
-omit data; distinguish that from accidental loss. Required-audit mode needs the
+sequence ranges or an incomplete watermark. Distinguish data never produced
+because a capability was absent/prohibited, completed-call retention deletion,
+and accidental loss of required available history; there is no optional transcript/
+tool/usage storage selection. Required-audit mode needs the
 explicit durable acknowledgement protocol, not a larger mailbox.
 
 There is also an immediate source gap: the engine's text-input start/completion
 events contain modality and IDs but not submitted text. Add a committed-input
-fact, with visibility and retention policy, before claiming the event stream can
-rebuild the human text transcript. [Room authority][authority].
+fact, with the approved private-storage/client-visibility boundary, before claiming
+the event stream can rebuild the human text transcript. [Room authority][authority].
 
 Call end, operation settlement, artifact finalization, and archive publication
 are different states. The proposed `(call_id, archive_schema_version)` job key
@@ -1414,9 +1435,10 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
 | Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
+| Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Always save available text/turn/tool/variable/usage facts without category toggles; preserve typed provenance and generated-versus-delivered text; missing usage/prices remain unavailable, no STT is started or transcript invented, and audio is stored only by explicitly enabled recording subject to denials and the opening input gate |
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
 | Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
-| Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration changes neither capture enablement nor client visibility; cleanup mechanics remain separate from the approved whole-call deletion scope |
+| Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration neither starts processing/recording nor changes client visibility; cleanup follows the approved periodic external-first whole-call contract |
 | Create a record before its call starts, then end it with finite retention | Expiry is computed from ended_at plus the current application/tenant period, not created_at or storage-write time; active calls are not expired, later archive writes do not reset the clock, forever has no expiry, and missing ended_at does not fall back to creation time |
 | Change retention after calls already exist | The current setting applies to past and future calls without per-call policy copies; shortening 90 days to seven makes a 14-day-old completed call eligible, increasing the period or choosing forever changes eligibility only for remaining data, and an explicit tenant override still wins over application changes |
 | Configure `call_retention` as `"forever"` or `{"seconds":2592000}` | Application omission retains forever; tenant omission inherits; explicit tenant forever overrides finite application retention; the seconds object denotes 30 days and is not copied into call definitions or records |
@@ -1835,10 +1857,21 @@ R17 now specifies `tool_visibility` plus `tool_visibility_overrides`, keyed by
 participant definition and local tool binding. Trusted creation can replace the
 policy pair; an effective binding override still wins over its default. Samples
 use full with no overrides, not a browser grant. Complete observed tool storage
-is unchanged. Current backlog: 30 individual decisions, R18 and R22–R50. Checked
+is unchanged. At that checkpoint: 30 individual decisions, R18 and R22–R50. Checked
 exact three-file scope, 16 preserved JSON examples plus two new valid visibility
 examples, existing fences/links/anchors, policy precedence, prior contracts,
 statuses/count, terminology/path hygiene, and whitespace. Documentation only.
+
+R18 now resolves the remaining storage question: always retain available
+transcripts, turn details, and usage/model/cost observations alongside tools and
+committed variables, without per-category switches. Audio requires enabled and
+permitted recording; archival needs do not start STT or bypass the opening gate.
+Unavailable facts stay unavailable. Async general archival, transaction-confirmed
+variable updates, credentials, client visibility, and remaining accounting choices
+are unchanged. Current backlog: 29 individual decisions, R22–R50. Verified exact
+three-file scope, 18 unchanged valid JSON examples/fences, links/anchors, active
+capture/permission boundaries, prior contracts, statuses/count, terminology/path
+hygiene, and whitespace. Documentation only; no runtime tests.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

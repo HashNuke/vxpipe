@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-30 individual decisions still awaiting review, rather than counting its
+29 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -126,8 +126,10 @@ database data, with definitive missing objects accepted and failed work retried
 from retained records/references. The exact sweep interval is not selected.
 R19 chooses application/tenant `call_retention` as `"forever"` or an explicit
 seconds-duration object, without changing retention behavior or adding per-call policy.
-R18's tool-storage question is settled by always storing complete observed tool
-history; only its non-tool capture/storage configuration question remains pending.
+R18 always stores complete observed tool history and available transcripts, turn
+details, usage/model/cost data, and committed variables without per-category
+storage toggles. Audio requires explicitly enabled and permitted recording;
+archival needs do not start STT or bypass capability permissions.
 R17 defines `tool_visibility` and participant/local-tool `tool_visibility_overrides`,
 including trusted full-visibility sample policy replacement with no overrides.
 Approval of documentation does not authorize runtime implementation.
@@ -1928,8 +1930,8 @@ application settings with tenant overrides and an application retain-forever
 default. Completed-call finite retention starts at `ended_at`, without expiring
 active calls or assigning an expiry to forever. The current application/tenant
 period applies to past and future calls, not a per-call pinned period. Expiry
-deletes the call record and all associated Vxpipe-managed data. Non-tool storage
-configuration remains a G5 review question; cleanup uses periodic external-first
+deletes the call record and all associated Vxpipe-managed data. Available history
+is always stored without category toggles; cleanup uses periodic external-first
 deletion under the retention contract below. General
 sensitive-input redaction is deferred as described below.
 
@@ -1947,7 +1949,7 @@ add a DTMF collector, tool schema, provider API, or new endpoint. DTMF alone doe
 not guarantee confidentiality: raw digits or tones can still reach recording,
 logging, or tool-result paths unless the integration explicitly controls them.
 
-Existing credential/header exclusions, agent grants, storage selection, and
+Existing credential/header exclusions, agent grants, recording permissions, and
 client visibility remain mandatory. Apply those exclusions before persistence
 and client delivery, not just at final export. Hidden tool events do not redact
 information already present in spoken audio, transcripts, or model context.
@@ -3314,17 +3316,16 @@ from retained events where the retention policy permits it. Do not put audio,
 large transcripts, or a continually rewritten all-call JSON blob on the `calls`
 row.
 
-Transcript persistence is a policy independent of whether STT or TTS happens to
-be enabled. Capability enablement permits realtime processing; retention decides
-what may be stored and for how long. A call with text input can have a transcript
-without STT, and a call may use STT/TTS while policy forbids retaining text or
-audio.
-
-When transcript retention is enabled, keep source facts distinct:
+Always save available transcripts, turn details, and observed usage/model/cost
+information with the call, alongside complete observed tool history and committed
+variable snapshots. No separate storage toggle per category. This does not start
+STT, TTS, or prohibited processing merely to produce archival data. A text-only
+call retains its submitted text without STT; if speech recognition is absent or
+prohibited, do not fabricate a speech transcript. Keep source facts distinct:
 
 - committed human text input stores the submitted text and `text` provenance;
 - human audio stores the provider-final committed transcript and provider/model
-  identity; partial replacements are optional debug/event retention, not new
+  identity; observed partial replacements are event facts, not new
   transcript turns;
 - agent output stores generated text separately from confirmed delivered/spoken
   text, including interrupted or truncated state; and
@@ -3333,9 +3334,18 @@ When transcript retention is enabled, keep source facts distinct:
 
 This follows the existing engine rule that generated assistant text and audio
 confirmed as played are different facts. A final transcript must not claim that
-interrupted generated text was heard. Word timing, confidence, and provenance
-may be retained as a bounded sidecar when a provider supplies them; their
+interrupted generated text was heard. Preserve supplied word timing, confidence,
+and provenance as bounded sidecar data when a provider supplies them; their
 absence must not be replaced with invented precision.
+
+Store call audio only through the recording capability when explicitly enabled
+and permitted. It remains subject to participant/room denials and the
+`opening_audio` media-input gate, not an auto-enabled archive feature or redundant
+storage-switch matrix. Available history does not grant wider client visibility
+or agent access. Credential/header exclusions remain unchanged. General turn/tool/
+usage archival stays asynchronous; variable snapshots retain their transaction-
+confirmed tool-success boundary. Missing usage/prices stay unavailable, not zero
+or invented observations; detailed accounting choices remain R44–R46.
 
 ### Tool-history storage is independent of client visibility — approved G5 decision
 
@@ -3364,9 +3374,8 @@ observed invocation for operational review. Another call may show the result liv
 and saves the same complete history. Neither needs a tool-storage setting.
 Retention periods use application configuration with tenant overrides and an
 application retain-forever default. Completed-call finite retention starts at
-`ended_at`, using the current period for both past and future calls. Exact
-non-tool capture/storage configuration remains under review; periodic external-first
-cleanup is approved below. General
+`ended_at`, using the current period for both past and future calls. Periodic
+external-first cleanup is approved below. General
 sensitive-input redaction is deferred. Expiry deletes the entire call and its associated
 Vxpipe-managed history and artifacts. This decision does not add runtime
 persistence or guarantee complete room recovery.
@@ -3454,9 +3463,9 @@ not call-definition, call-creation, or participant options, and are not copied
 onto each call. No human-readable duration parser or null/magic sentinel is added.
 
 Forever means Vxpipe applies no age-based expiration to retained data. It does
-not enable storage that is disabled, retain otherwise excluded credentials,
+not start STT or recording, bypass capability denials, retain excluded credentials,
 expose stored payloads to clients, keep room processes or live buffers forever,
-or promise backup/recovery. Non-tool capture settings, privacy, and
+or promise backup/recovery. Capability permissions, privacy, and
 client visibility remain separate from how long permitted stored data is kept.
 
 For example, leaving both levels unspecified retains permitted stored history
@@ -3484,8 +3493,8 @@ in a call record, room plan, or artifact as its governing retention setting.
 The call's existing tenant/application identity and `ended_at` are sufficient
 inputs; changing policy requires no per-call policy rewrite or migration.
 This rejects applying changes only to new calls, which would require maintaining
-separate historical retention settings per call. Pinned call definitions, capture
-permissions, and client visibility do not become mutable as a side effect.
+separate historical retention settings per call. Pinned call definitions,
+capability permissions, and client visibility do not become mutable as a side effect.
 
 For example, changing a tenant from 90 days to seven days makes a call that ended
 14 days ago eligible for cleanup. Increasing the period or choosing forever
@@ -3556,8 +3565,8 @@ mechanism or new durable journal is approved here. Shared definitions/configured
 assets remain untouched, including reusable opening audio not owned by one call.
 Internal sweep retries are distinct from the tool/MCP executor's no-retry policy.
 
-Unstarted-record housekeeping and exact storage configuration remain
-separate. No automatic cleanup is implemented here. This decision does not alter
+Unstarted-record housekeeping remains separate. No automatic cleanup is
+implemented here. This decision does not alter
 the requirement to commit a variable snapshot before update-tool success.
 
 ### Usage and cost belong to provider operations, with optional turn links
@@ -3567,6 +3576,10 @@ several model requests because of tool rounds, several TTS requests because text
 is segmented, and a long-lived STT stream that spans multiple human turns.
 Telephony and MCP charges may be call-, leg-, or operation-scoped. Therefore a
 single cost column on `call_turns` is insufficient.
+
+Always store available usage/model/cost observations; there is no separate usage
+storage toggle. Unavailable units or prices remain unavailable, not invented or
+zero. The detailed accounting choices in R44–R46 remain under review.
 
 Store one immutable usage record per billable provider operation. Link it to a
 turn when attribution is honest, but allow a nullable turn link and retain call,
@@ -3690,10 +3703,12 @@ only to repair or produce another presentation format. It is not the source of
 the participant or monitor audio and is not required to obtain the normal
 combined recording.
 
-Recording remains a separate capability and retention choice. Disabling speech
+Recording remains an explicitly enabled and permitted capability, not a separate
+per-category archival toggle. Disabling speech
 recognition or synthesis does not disable recording, and enabling either does not
 authorize recording. Participant/room policy must explicitly allow the media
-tap, artifact type, and access scope. Storage duration follows the current
+tap, artifact type, and access scope; the opening-audio input gate still applies.
+Storage duration follows the current
 application/tenant retention period, not a participant-specific period.
 
 ### `CallDetailsPublisher` is a final projector, not the live recorder
@@ -4001,8 +4016,9 @@ build on stable call and event identities rather than inventing their own.
   streaming STT sessions, segmented TTS, call legs, or later reconciliation.
 - **Only a combined live recording:** loses separate speaker tracks and makes
   overlap, remixes, and artifact repair harder.
-- **Retention implied by STT/TTS:** confuses processing permission with storage
-  permission; transcripts and audio require explicit artifact/retention policy.
+- **Archival needs enabling processing:** available transcripts/turns and usage
+  observations are stored, but this does not start STT or authorize recording;
+  audio needs an explicitly enabled, permitted recording capability.
 
 ## Observable runtime contracts needed
 
@@ -4208,8 +4224,10 @@ pointer transaction before returning success. Retention periods resolve from
 tenant overrides and application settings, with retain forever as the application
 default. Normal transaction errors return variable-save failure; no extra commit
 reconciliation is required. Completed-call finite retention starts at `ended_at`;
-active calls are not expired, and forever has no expiry threshold. Non-tool storage
-configuration remains under review; periodic external-first cleanup is approved.
+active calls are not expired, and forever has no expiry threshold. Available
+transcripts/turns and usage/model/cost facts are always stored; audio requires
+enabled, permitted recording. No per-category toggles or invented missing data;
+periodic external-first cleanup is approved.
 General voice/LLM-input
 redaction is deferred. Current application/tenant periods apply to all calls, past and future,
 without per-call retention settings. Expiry deletes the entire call and all
@@ -4223,8 +4241,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **30 individual decisions awaiting review**, enumerated as R18
-and R22–R50 in the focused gap review. R01–R06, R08, R10–R15, R17, and R19–R21 are resolved;
+There are **29 individual decisions awaiting review**, enumerated as R22–R50
+in the focused gap review. R01–R06, R08, R10–R15, and R17–R21 are resolved;
 R07's caller reconnection and R16's retry exceptions are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4241,7 +4259,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R18 and R22–R25.
+for unstarted records. The next five pending decisions are R22–R26.
 
 ### Baseline and scope
 
@@ -4454,7 +4472,9 @@ The numbering below matches G1–G13 in the focused review document.
    seconds-duration object; omitted tenant settings inherit, while explicit
    forever overrides finite application retention. Transaction error means
    variable-save failure; extra commit-status lookup/reconciliation is not
-   required. Non-tool storage configuration remains under review. General voice/LLM-input
+   required. Available transcripts, turn details, and usage/model/cost facts are
+   always stored without category toggles; audio needs enabled, permitted recording.
+   This does not start forbidden processing or invent missing data. General voice/LLM-input
    redaction is deferred; deterministic collection such as DTMF need not involve
    the LLM, but its recording/logging paths still need explicit protection.
    Completed-call finite retention starts at `ended_at`;
@@ -4568,7 +4588,14 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    visibility and expect the same stored history without a tool-storage setting.
    Keep unknown outcomes unknown without inventing a remote response. Check
    credential/header exclusions before persistence, not just on export. In a
-   database-backed call, verify the initial
+   database-backed call, also archive text-only input and an interrupted agent
+   response: available text/turn/tool/variable/usage facts must be retained without
+   category switches, typed provenance preserved, and generated text not mistaken
+   for confirmed delivery. Missing speech/usage/prices stay unavailable; do not
+   start STT or invent values. Compare disabled, denied, and permitted recording:
+   only enabled, permitted recording stores audio, after the opening media-input
+   gate permits delivery. Confirm ordinary archival adds no new SQL success gate.
+   Verify the initial
    baseline is reachable through the call pointer without an invented turn, and
    hold a snapshot commit behind a test-owned barrier. Assert no update-tool
    success, newly published values/revisions, or success event before confirmation.
@@ -4928,6 +4955,9 @@ The later complete-tool-history decision supersedes historical metadata-default,
 payload opt-in, and tool-storage enablement rules; client visibility levels remain.
 R17's later visibility-key/map decision supersedes historical statements that
 the exact visibility syntax is open. No new runtime behavior follows from it.
+R18's later available-history decision supersedes historical optional transcript,
+usage, or history storage selection. Audio still requires explicit permitted
+recording; this is not permission to generate missing history or bypass denials.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6063,6 +6093,27 @@ storage/client projection boundary and credential exclusions still apply.
 - Verified exact three-file scope, 16 preserved JSON examples plus two new valid
   visibility examples, existing fences/links/anchors, statuses/count, prior
   contracts, terminology/path hygiene, and whitespace. No runtime/browser tests.
+
+### Available call history without category toggles — approved R18, 2026-09-07
+
+- Always save available transcripts, turn details, and usage/model/cost
+  observations alongside complete tools and committed variables. No per-category
+  storage switches. Preserved typed-text provenance, provider-final speech facts,
+  generated versus confirmed spoken/delivered agent text, and interruption state.
+- Store audio only through explicitly enabled and permitted recording, respecting
+  participant/room denials and the opening-audio media-input gate. Do not start
+  STT or recording merely to produce archival data. Missing transcripts, usage,
+  or prices remain unavailable, not fabricated or treated as zero.
+- Preserved asynchronous general archival, snapshot/latest-pointer transactions
+  before variable-tool success, credential exclusions, agent/client permissions,
+  and whole-call retention. Detailed accounting and archival failure choices
+  remain pending; no new general SQL acknowledgement boundary.
+- R18 is resolved; 29 individual decisions remain, R22–R50. The next five are
+  R22–R26; their proposals are not adopted by this decision.
+- Documentation only. Verified exact three-file scope, all 18 existing JSON
+  examples/fences unchanged, links/anchors, active capture/permission boundaries,
+  prior contracts, statuses/count, terminology/path hygiene, and whitespace.
+  No runtime or browser tests.
 
 ## Verification evidence
 

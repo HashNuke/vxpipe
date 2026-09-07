@@ -844,6 +844,24 @@ without fabricating a remote response. Storing data does not grant client access
 General tool/event archival remains asynchronous; this capture policy does not
 make every tool completion wait for SQL or implement archival failure handling.
 
+Always save available transcripts, turn details, and observed usage/model/cost
+information with the call, alongside the complete tool history and committed
+variable snapshots. There is no separate storage toggle per category. Preserve
+typed-text provenance and provider-final speech facts, and distinguish generated
+agent text from confirmed delivered/spoken text, including interruptions. Do not
+start STT or any prohibited processing just to produce an archive; absent or
+prohibited transcription yields no invented transcript. Missing usage or prices
+remain unavailable, never fabricated or recorded as zero; detailed accounting
+contracts remain under review.
+
+Store call audio only when the recording capability is explicitly enabled and
+permitted. Recording remains a room capability subject to participant/room
+denials and the `opening_audio` media-input gate, not an automatically enabled
+archival feature or another storage-toggle matrix. Available ordinary turn/tool/
+usage data still follows asynchronous archival; this policy adds no general SQL
+acknowledgement gate. Credential/header exclusions and visibility/agent grants
+remain unchanged.
+
 In a database-backed call, save a full post-update Call Variables
 snapshot for each committed update, linked to the originating turn and tool
 invocation, source participant, revisions, and commit timestamp. Reuse the saved
@@ -869,8 +887,8 @@ tool/turn/usage archival remains asynchronous. Full history snapshots are not
 client events or broader agent tool results.
 Retained initial values form a baseline snapshot with no invented turn/tool call,
 so the pointer also works before the first update.
-These are approved designs, not newly implemented persistence. Non-tool capture/
-storage configuration remains under review; general sensitive-input redaction is deferred.
+These are approved designs, not newly implemented persistence. General sensitive-
+input redaction and detailed accounting/archival failure contracts remain separate.
 A configured database failure must not silently fall back to memory-only success; an explicitly
 database-free deployment has no database-commit guarantee.
 
@@ -892,9 +910,10 @@ configuration defaults to `"forever"`; omitted tenant configuration inherits it,
 while explicit tenant `"forever"` overrides a finite application period. This is
 not a call-definition, creation, or participant option. No human-readable duration
 parser, null sentinel, or per-call policy copy is introduced.
-Forever means no age-based expiration by Vxpipe, not automatic capture of every
-non-tool payload or a backup/recovery guarantee. Non-tool capture settings, credential
-exclusions, and client visibility remain separate. Periods are not agent-defined
+Forever means no age-based expiration by Vxpipe, not permission to start STT or
+recording, retain excluded credentials, or claim a backup/recovery guarantee.
+Capability permissions, credential exclusions, and client visibility remain
+separate from storage duration. Periods are not agent-defined
 or client-selected. For a completed call with finite retention, the expiry
 threshold is `ended_at + retention_period`, not record creation or a later storage
 write. Do not expire retained data while the call is active. Retain forever has
