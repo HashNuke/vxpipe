@@ -42,6 +42,9 @@ value level, without constructing nested nulls or storing a default. The first
 update populates the section, and later updates add data iteratively. Datatype
 and supplied-value checks remain; required-field completeness is not enforced
 at setup or on updates.
+Agent section access is read-only or read+write; write-only access is not
+supported. Every writer can read that section, and omitted grants provide no
+access. The write-only projection and error-handling proposals are withdrawn.
 G2's remaining admission details, the remaining G3 questions, and the other
 suggestions remain pending user review. Approval of documentation does not
 authorize runtime implementation.
@@ -345,13 +348,19 @@ language. For example, `address` is a section and its direct `city` and
 `initial_context` and held by the room; it does not remove the call definition's
 `room_context.sections` schema wrapper or change revision metadata.
 
-Each agent declares `context_permissions` keyed by section name. Permissions are
-a set containing `read`, `write`, both, or neither:
+Each agent declares `context_permissions` keyed by section name. The supported
+grants are read-only or read+write:
 
-- `read` includes the section in the model-visible room-context projection;
-- `write` permits a validated room-context update request for that section;
-- `write` does not imply `read`; and
+- `["read"]` includes the section in the model-visible room-context projection
+  but does not permit updates;
+- `["read", "write"]` permits reading and validated updates to that section; and
 - an omitted section is neither visible nor writable.
+
+Write access always includes read access. A standalone `["write"]` grant is
+invalid at definition compilation; do not silently add a read grant or create
+a write-only mode. This removes the need for a separate revision-only projection
+or special write-only validation-error handling. The existing section boundary,
+all-or-nothing read authorization, and privacy of ungranted sections remain.
 
 Start with top-level section permissions rather than dot notation, wildcards,
 or array indexing. This gives each section a clear schema, ownership, revision,
@@ -367,8 +376,9 @@ applications and definition authors, not a ban on nested objects or an automatic
 flattening step. When nesting is useful, object updates must preserve omitted
 nested fields through recursive merging.
 
-An agent never mutates the map directly. Read or write grants cause the engine to
-offer platform-owned context tools constrained to that agent's granted sections.
+An agent never mutates the map directly. Read grants cause the engine to offer
+the read tool; read+write grants also enable the update tools. Each tool is
+constrained to that agent's granted sections.
 The room authority validates the current room incarnation, agent participant,
 agent activation, section permission, expected section revision, patch bounds,
 and the resulting section's populated values against its schema before applying
@@ -401,11 +411,11 @@ call the authority for a short state operation. Every call is bounded and return
 a typed unavailable/timeout result to the model rather than waiting indefinitely.
 
 At the start of an agent turn, the room creates an immutable projection for the
-current activation. Readable sections include their value and revision. A
-write-only section exposes its revision but not its value, so the agent can make
-an optimistic update without gaining read access. Model inference inserts this
-projection as a transient engine-owned context message; it is regenerated for
-each turn and is not appended to private conversation history. A read tool can
+current activation. Granted sections include their value and revision, including
+every section the agent can update. Ungranted sections expose neither values nor
+revision metadata. Model inference inserts this projection as a transient
+engine-owned context message; it is regenerated for each turn and is not appended
+to private conversation history. A read tool can
 refresh the projection during a multi-round tool loop if another authorized
 actor has changed it.
 
@@ -776,12 +786,13 @@ must preserve omitted fields at every object depth. The authority applies all
 changes to a copy, checks populated values without required-field completeness,
 then commits all of them or none of them.
 
-A successful result always returns the section name, new section revision, and
-new global revision. It includes the resulting value only when the same agent
-also has `read` permission. A revision conflict returns the current revision but
-never leaks a write-only value. Invalid paths, oversized changes, a failed
-resulting schema, stale activation, wrong incarnation, and missing permission do
-not change the context or revisions.
+A successful result always returns the section name, new section revision,
+new global revision, and resulting value to the authorized agent: every writer
+has read access to that section. An authorized revision conflict returns the
+current revision; the agent can refresh the value with the read tool. Errors
+must not disclose ungranted sections or private execution data. Invalid paths,
+oversized changes, a failed resulting schema, stale activation, wrong
+incarnation, and missing permission do not change the context or revisions.
 
 The public `RoomContextUpdated` event contains section name, changed paths,
 revisions, source participant and activation, tool-call/correlation identity,
@@ -1904,6 +1915,14 @@ a forbidden section receives a permission error and no values, so the agent
 can correct the request rather than treating a partial response as complete.
 This does not add field-level grants or change write authorization.
 
+### Allow agents to write sections they cannot read
+
+Rejected. Agent section grants are read-only or read+write, with no access when
+omitted. A standalone write grant is invalid. Every writable section uses the
+same value-and-revision read projection, so no revision-only writable view or
+write-only error policy is needed. This does not broaden access to other
+sections, other participants, public events, or artifacts.
+
 ### Keep separate client-ID/HMAC authentication for browser-forwarded payloads
 
 Superseded. The backend sends initial context directly under API-key
@@ -2041,6 +2060,7 @@ boundaries, with path-specific errors:
   properties; context values belong in the call-setup payload, not the definition;
 - an agent context permission naming an unknown section or permission other
   than `read` or `write`;
+- an agent section grant containing `write` without `read`;
 - a transfer context projection containing a section the destination cannot
   read;
 - initial context containing undeclared sections/fields, non-object section
@@ -2219,8 +2239,8 @@ binding supplies a value.
 Before the first provider request in a turn, the authority supplies a frozen
 activation-scoped projection. Model inference renders it as a distinct transient
 engine message after the agent's system prompt and before private conversation
-history. The message contains readable values and section revisions, plus
-revision-only metadata for writable-but-unreadable sections. It is rebuilt on
+history. The message contains values and section revisions for read-only and
+read+write sections; ungranted sections are absent. It is rebuilt on
 the next turn and never becomes a historical user or assistant message.
 
 After a successful context update, the tool result supplies the new revision and
@@ -2235,12 +2255,13 @@ permissions; stale source-agent tool calls fail their activation check.
 1. **Pure definition contract:** add failing tests for the smallest
    `20260906.02` participant-first definition with context schemas and no context
    defaults, direct initial context, agent permissions, and direct transfer refs.
+   Accept read-only/read+write grants and reject standalone write grants.
    Implement typed constructors and path-specific errors without starting processes.
 2. **Pure context state:** add failing tests for initialization, projection,
    absent-section null reads without mutation, iterative population, bounded
    pointer changes, atomic datatype rejection without required-field checks,
-   independent section revisions, and write-only redaction. Implement the pure
-   `RoomContext` state module.
+   independent section revisions, and exclusion of ungranted sections. Implement
+   the pure `RoomContext` state module.
 3. **Room ownership:** add failing room tests proving creation pins a resolved
    plan and initialized context; a correct update commits once; wrong
    incarnation, stale activation, missing grant, revision conflict, invalid
@@ -2254,7 +2275,7 @@ permissions; stale source-agent tool calls fail their activation check.
    from host modules and MCP bindings.
 5. **Turn projection:** add failing model tests proving current readable context
    is present in every provider request, is not appended to private history,
-   write-only values are absent, and an update result is available to the next
+   ungranted sections are absent, and an update result is available to the next
    model round.
 6. **Transfer continuity:** with two deterministic agent participants, prove a
    value written by the source remains room-owned, the destination sees only its
@@ -2281,7 +2302,11 @@ each red and green step. The focused cases must demonstrate:
 - setup accepts partial or explicitly empty section objects while still rejecting
   populated values of the wrong datatype and other invalid supplied values;
 - admission can initialize a section that agents can read but none can write;
+- definition compilation accepts read-only and read+write grants, and rejects
+  a standalone write grant without implicitly granting read access;
 - an agent reads only granted sections and receives section revisions;
+- read-only agents receive the read tool but not update tools for that section;
+  read+write agents receive both and can read their successful update results;
 - a read containing a forbidden section returns a permission error and no
   values, even when other requested sections are readable; a corrected request
   for permitted sections succeeds without adding unrequested sections;
@@ -2310,7 +2335,8 @@ each red and green step. The focused cases must demonstrate:
   permitting absence does not imply accepting an explicit null;
 - no clear operation deletes a key or generates stored nulls for unfilled
   context; a null read response is not a clear operation;
-- a write-only agent receives no old or resulting section value;
+- ungranted sections expose neither values nor revision metadata in model
+  projections; error responses cannot bypass those access rules;
 - an unknown section, unauthorized section, stale activation, wrong incarnation,
   bad pointer, revision conflict, invalid resulting schema, or size violation
   performs no mutation and emits no success event;
@@ -3092,6 +3118,8 @@ objects and preserving omitted fields. Missing authorized reads return one null
 at the requested value level without storing placeholders. First writes populate
 sections; subsequent writes collect fields iteratively. Datatypes still match,
 but required-field presence is not validated at setup or on updates.
+Agent section grants are read-only or read+write, so the write-only projection
+and error-handling proposals no longer apply.
 Explicit null assignment clears nullable fields without removing keys;
 physical deletion is deferred. Root keys are
 section names and direct section keys are literal field names; deeper updates
@@ -3108,7 +3136,8 @@ This counts the numbered groups, not individual edge cases or implementation
 tasks. Section-level merging, recursive preservation inside nested objects,
 explicit-null clearing, root-section/direct-field addressing, missing reads,
 and iterative population without required-field checks are resolved
-within G3, but its remaining questions keep the group open.
+within G3. The read-only/read+write permission decision also removes the
+write-only error question, but other questions keep the group open.
 The count therefore remains 12; it is not reduced for each resolved sub-decision.
 
 ### Baseline and scope
@@ -3146,6 +3175,9 @@ The count therefore remains 12; it is not reduced for each resolved sub-decision
   The incremental-population follow-up returns a single null for a missing read
   value and allows first writes to populate it. It supersedes required-field
   completeness checks, while retaining datatype and supplied-value validation.
+  The permission follow-up limits agent section grants to read-only or
+  read+write. Standalone write grants, revision-only writable projections, and
+  special write-only errors are no longer part of the design.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -3230,7 +3262,10 @@ The numbering below matches G1–G13 in the focused review document.
    Addressing is resolved: root section names and direct literal field names,
    with deeper changes expressed as objects through `update_context`. Final
    terminology remains open.
-   Other remaining review includes write-only validation-error redaction.
+   Permissions are read-only or read+write; standalone write grants are invalid.
+   Every writable section is also readable, removing the write-only error
+   question and revision-only writable projection. Ungranted sections stay
+   absent from projections. Schema-complexity bounds remain for review.
    A schema-valid agent write also does not prove identity verification or a
    completed external action. Consider separating intake from trusted-result
    sections; only authorized platform result bindings may update verified status or
@@ -3315,9 +3350,14 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    allowed, not instructions to populate defaults. Repeat with missing fields
    inside a supplied nested object; no required-field check demands them.
 2. Start a room, save intake through the agent tool, then read it on another
-   turn. Transfer to a read-only agent; the value remains available but writes
-   fail. Request both a readable and a forbidden section; expect a permission
-   error with no values, then retry the readable section alone successfully.
+   turn. First check definition compilation accepts `["read"]` and
+   `["read", "write"]`, rejects `["write"]` without silently adding read, and
+   grants no access to an omitted section. Read-only grants expose the read
+   tool; read+write grants also expose updates and their resulting section value.
+   Verify ungranted sections expose neither values nor revision metadata in
+   model projections. Transfer to a read-only agent; the value remains available
+   but writes fail. Request both a readable and a forbidden section; expect a
+   permission error with no values, then retry the readable section alone successfully.
    Confirm success does not add unrequested sections. Inspect client events
    and confirm private tool values are absent. Before writing an unfilled section,
    read it: expect one null in its value slot, not nested nulls, with no stored
@@ -3472,6 +3512,8 @@ These entries are chronological evidence, not competing current contracts.
 The later incremental-population decision supersedes earlier required-field
 completeness checks and closes the missing-read/first-write questions. Earlier
 checkpoint test descriptions retain what was verified or planned at that time.
+The later permission decision also removes write-only access and its special
+projection/error handling; it is not a remaining implementation option.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -3843,6 +3885,28 @@ For the approved 2026-09-07 missing-read and incremental-population decision:
   admission routes are preserved, and review-count/terminology/path hygiene and
   `git diff --check` pass. No runtime or browser tests were run for this
   documentation-only checkpoint.
+
+For the approved 2026-09-07 read-only/read+write permission decision:
+
+- Limited agent section grants to read-only or read+write; omission grants no
+  access. Standalone write grants are invalid, not normalized into broader
+  permissions. Existing definition examples already use the supported grants.
+- Updated value/revision projections, update results, definition checks, and
+  future acceptance steps. Every writer can read its section; ungranted sections
+  expose neither values nor revision metadata in model projections. Removed
+  revision-only writable views and the write-only error review question.
+- Retained section-level authorization, datatype checks without required-field
+  completeness, incremental population, deep merge, revisions, and lifecycle
+  fencing. Public events and other participants gain no new context access.
+- Updated the original labnote and focused review only. Other G3 questions keep
+  the count at 12 open numbered groups; no runtime implementation or schema
+  release was introduced.
+- Verification: all 13 JSON examples are unchanged and parse; both definition
+  examples use only supported section grants. The seven write-authorization
+  checks are unchanged, all 20 local links/anchors resolve, and the old
+  write-only execution/error paths are absent from the active design. Route,
+  review-count, terminology, path-hygiene, and `git diff --check` checks pass.
+  No runtime or browser tests were run for this documentation-only checkpoint.
 
 ## Verification evidence
 

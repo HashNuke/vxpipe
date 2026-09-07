@@ -17,6 +17,9 @@ Unpopulated authorized reads return a single null at the requested value level,
 without nested placeholders or stored defaults. Updates populate context
 iteratively: datatype checks remain, but required-field completeness is not
 validated at setup or on updates.
+Agent section grants are read-only or read+write, never write-only. Every writer
+can read its section; omitted grants give no access. The write-only projection
+and error-handling proposals are withdrawn.
 Final naming remains open for the object/field tools;
 remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
@@ -28,7 +31,8 @@ not counted separately here. Object merge versus replacement and preservation of
 omitted nested fields, explicit-null clearing, direct-field addressing, missing
 reads, and iterative population without required-field checks are
 resolved within G3; its other questions remain open, so the group count has
-not changed.
+not changed. The read-only/read+write decision removes the write-only error
+question without closing the remaining G3 group.
 
 ## Conclusion and scope
 
@@ -415,6 +419,17 @@ The agent can retry with permitted sections only; successful reads do not add
 unrequested sections. This clarifies existing section grants, not a new
 field-level permission system. Error responses must not expose hidden values.
 
+**Approved permission simplification:** agent section grants are `["read"]` or
+`["read", "write"]`; an omitted section grants no access. Standalone
+`["write"]` is invalid at definition compilation, not silently expanded into
+read+write. Every writable section is readable, with its value and revision in
+the normal model projection and its resulting value in successful update results.
+Ungranted sections expose neither values nor revision metadata in that projection.
+Read-only grants expose the read tool; read+write grants also expose update tools.
+This withdraws revision-only writable views and the special write-only error
+proposal. Ordinary authorization and context privacy still apply to errors,
+other sections, public events, and other participants.
+
 **Approved object merge, further details pending:** offer both
 `update_context(section_name, data)` for multiple fields in one call and
 `update_context_field(section_name, field_name, value)` for a single-field
@@ -462,9 +477,9 @@ value is automatically populated with null, and section roots remain objects.
 Separate deletion tools and physical key removal are deferred, not prerequisites
 for clearing a value. No null-means-delete convention is adopted.
 
-The following G3 proposals remain unapproved. Write-only errors must not echo
-existing values or schema-validator data. Bound schema complexity as well as
-value bytes so validation cannot monopolize the room process.
+The following G3 proposals remain unapproved. Bound schema complexity as well as
+value bytes so validation cannot monopolize the room process. There is no
+remaining write-only error decision because write-only grants are unsupported.
 
 Finally, separate **agent assertions** from **verified facts**. For example,
 `intake` may be agent-writable; `verification` and committed booking receipts
@@ -770,6 +785,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
+| Compile read-only, read+write, and standalone write grants; leave another section ungranted | First two grants succeed; standalone write fails without silently adding read; read-only grants expose reads, read+write grants also expose updates and their resulting values; ungranted sections expose neither values nor revisions in model projections |
 | Read an unpopulated section, then populate it over multiple updates | Read returns one null in the requested value slot, no nested placeholders or state/revision change; first object or field write creates supplied data, later writes add fields; partial reads do not fill missing children; unknown/forbidden sections still fail |
 | Merge several fields with the object tool, then change one field with the field tool | One call per operation; omitted stored fields remain; missing fields need not be supplied; wrong datatypes/invalid populated values reject atomically; the same write grant/revision boundary applies |
 | Update only a nested address city, then exercise a shallow address section | An existing postal code and omitted siblings remain recursively; a missing postal code is neither required nor invented; wrong nested datatypes reject the whole update; shallow and permitted nested shapes work without automatic flattening |
@@ -815,6 +831,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   corrections use another tool call, not blind retries of an obsolete patch.
 - Do not silently ignore forbidden sections in a context read. Return a
   permission error and no values so the agent can correct its request.
+- Do not support write-only agent section grants or a revision-only writable
+  projection. A section is read-only, read+write, or ungranted; standalone write
+  is invalid. Existing public-event and cross-participant privacy still apply.
 - Do not replace a complete context section with the partial object passed to
   `update_context`. Recursively merge objects, preserve omitted fields at every
   object depth, and validate populated values without demanding missing fields;
@@ -938,6 +957,17 @@ Verification parsed all 13 JSON examples, confirmed the only example changes
 are the two context `required` removals, and checked both definition contracts,
 unrelated write checks, 20 local links/anchors, routes, review counts, and
 documentation hygiene. `git diff --check` passed; no runtime/browser tests ran.
+The permission follow-up limits agent section access to read-only or read+write,
+with no access when omitted and standalone write grants rejected. It removes
+revision-only writable projections and the write-only error review question,
+aligns update results and planned acceptance steps, and preserves ungranted
+section privacy. Existing JSON examples already match this decision. Other G3
+questions remain, leaving 12 open groups; no runtime implementation changed.
+Verification confirmed all 13 JSON examples are unchanged and parse, both
+definitions use supported grants, all seven write-authorization checks remain,
+and all 20 local links/anchors resolve. Superseded write-only paths, routes,
+review counts, documentation hygiene, and `git diff --check` were checked;
+no runtime or browser tests were run.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
