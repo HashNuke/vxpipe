@@ -51,8 +51,10 @@ tool arguments rather than a separate changeset, and a latest-snapshot pointer
 on the call record. Database-backed variable updates return success only after
 that snapshot/pointer transaction commits. Retention periods resolve from tenant
 override, then application setting; the application default is retain forever.
-Exact configuration syntax, cleanup/expiry semantics, and sensitive-input handling
-remain pending alongside G2/G4 questions and G6–G13. Extra database-commit
+Finite retention for completed calls starts at `ended_at`; active calls are not
+expired, and forever has no expiry threshold. Exact configuration syntax, cleanup
+semantics, and sensitive-input handling remain pending alongside G2/G4 questions
+and G6–G13. Extra database-commit
 reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -782,7 +784,18 @@ For example, with no settings, retained history has no age-based expiry; an
 application period can instead be inherited, and one tenant can override it
 without changing another tenant's period. Periods are not agent/client settings.
 
-**Still under review:** exact configuration, finite-expiry clock/cleanup, policy
+**Approved retention clock:** for completed calls, finite retention starts at
+`ended_at`. The expiry threshold is `ended_at + retention_period`; neither call
+record creation nor later snapshot/archive writes start or reset that clock.
+Do not expire data while the call is active. Forever has no expiry threshold.
+An unset `ended_at` is not permission to substitute `created_at`; cleanup of
+unstarted records remains separate from this completed-call rule.
+
+For example, a record created Monday for a call that ends Wednesday retains its
+data until the following Wednesday under a seven-day period. This defines the
+age threshold, not an exact deletion-job schedule or a new cleanup implementation.
+
+**Still under review:** exact configuration, cleanup of unstarted records, policy
 changes affecting existing data, referenced-snapshot cleanup, and broader
 redaction/sensitive user-input handling.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
@@ -1054,6 +1067,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
 | Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration changes neither capture enablement nor client visibility; finite cleanup awaits its own approved semantics |
+| Create a record before its call starts, then end it with finite retention | Expiry is computed from ended_at plus the resolved period, not created_at or storage-write time; active calls are not expired, later archive writes do not reset the clock, forever has no expiry, and missing ended_at does not fall back to creation time |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |

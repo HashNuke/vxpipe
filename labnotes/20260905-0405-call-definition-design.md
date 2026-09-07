@@ -93,9 +93,10 @@ the runtime owner. Database-backed updates return success only after the snapsho
 and latest-pointer transaction commits. Retention periods use tenant overrides
 over application settings, with retain forever as the application default.
 Normal transaction errors return variable-save failure; no extra database-commit
-reconciliation is required for this slice. Exact configuration, finite-expiry/
-cleanup, sensitive-input handling, G2's remaining admission details, the rest of
-G4, and G6–G13 remain pending user review.
+reconciliation is required for this slice. Finite retention for completed calls
+starts at `ended_at`; active calls are not expired and forever has no threshold.
+Exact configuration, cleanup, sensitive-input handling, G2's remaining admission
+details, the rest of G4, and G6–G13 remain pending user review.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -1668,8 +1669,9 @@ described in the persistence section below: client visibility neither enables no
 suppresses it. Private variable history uses the approved turn/tool-linked full
 snapshots and call-level latest pointer described there. Retention periods use
 application settings with tenant overrides and an application retain-forever
-default. Exact storage configuration, finite-expiry/cleanup, and sensitive
-transcript handling remain G5 review questions.
+default. Completed-call finite retention starts at `ended_at`, without expiring
+active calls or assigning an expiry to forever. Exact storage configuration,
+cleanup, and sensitive transcript handling remain G5 review questions.
 
 ### Initial agent-transfer history policies
 
@@ -2979,9 +2981,10 @@ For example, keep a booking tool hidden from the browser while explicitly saving
 its arguments/result for operational review. Another call may show the result
 live but save only metadata. Both are supported without changing tool behavior.
 Retention periods use application configuration with tenant overrides and an
-application retain-forever default. Exact configuration syntax, finite-expiry/
-cleanup, and broader sensitive-input/redaction policy remain under review. This
-decision does not add runtime persistence or guarantee complete room recovery.
+application retain-forever default. Completed-call finite retention starts at
+`ended_at`. Exact configuration syntax, cleanup, and broader sensitive-input/
+redaction policy remain under review. This decision does not add runtime
+persistence or guarantee complete room recovery.
 
 ### Variable history snapshots and the latest pointer — approved G5 decision
 
@@ -3067,8 +3070,21 @@ tenant override changes only that tenant's effective period. An explicit forever
 selection is also a period choice, not an absent configuration or zero-duration
 expiry. Exact serialized values/units are not frozen by this prose contract.
 
-Finite-expiry clock origin, policy changes affecting existing data, deletion-job
-behavior, and cleanup of snapshots referenced by a call remain under review.
+For completed calls with a finite period, retention starts at `ended_at`.
+Compute the expiry threshold as `ended_at + retention_period`, not from
+`created_at`, `started_at`, individual snapshot insertion, or final archive
+publication. A later storage write does not reset the call's retention clock.
+Do not expire retained data while the call is active. Forever has no expiry
+threshold, regardless of how old a call is.
+
+For example, a record created Monday for a call that ends Wednesday, with
+seven-day retention, reaches its expiry threshold the following Wednesday.
+When `ended_at` is unset, do not substitute creation time. This completed-call
+rule does not introduce automatic expiry for prepared/unstarted records.
+
+Policy changes affecting existing data, unstarted-record cleanup, deletion-job
+behavior/scheduling, and cleanup of snapshots referenced by a call remain under
+review.
 No automatic cleanup is implemented here. This retention decision does not alter
 the requirement to commit a variable snapshot before update-tool success.
 
@@ -3712,9 +3728,10 @@ latest persisted snapshot. Database-backed update tools wait for the snapshot/
 pointer transaction before returning success. Retention periods resolve from
 tenant overrides and application settings, with retain forever as the application
 default. Normal transaction errors return variable-save failure; no extra commit
-reconciliation is required. Exact configuration, finite-expiry/cleanup, and
-sensitive-input handling remain under review. Other G4 questions, remaining G2
-details, and G6–G13 remain unapproved.
+reconciliation is required. Completed-call finite retention starts at `ended_at`;
+active calls are not expired, and forever has no expiry threshold. Exact
+configuration, cleanup, and sensitive-input handling remain under review. Other
+G4 questions, remaining G2 details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3839,7 +3856,7 @@ The numbering below matches G1–G13 in the focused review document.
    excludes preparation wait.
    Record cleanup is separate from admission/token expiry. Retention periods now
    have an application retain-forever default with tenant overrides. G2 still needs
-   API-key management review, token TTL settings, finite-expiry/cleanup, telephony
+   API-key management review, token TTL settings, cleanup, telephony
    variables sourcing, personalization, timezone and dynamic destinations, plus reconnect
    eligibility/deadlines, issuance retry
    details, and admission/transfer crash handling.
@@ -3924,8 +3941,9 @@ The numbering below matches G1–G13 in the focused review document.
    success. Application retention defaults to retain forever, with tenant settings
    overriding application values. Transaction error means variable-save failure;
    extra commit-status lookup/reconciliation is not required. Exact configuration,
-   finite-expiry/cleanup, broader redaction, and sensitive user-input handling
-   remain proposals for review.
+   cleanup, broader redaction, and sensitive user-input handling remain proposals
+   for review. Completed-call finite retention starts at `ended_at`; active calls
+   are not expired, and forever has no expiry threshold.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -4035,8 +4053,12 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    Separately omit retention settings at both levels and expect retain forever;
    set an application period and verify tenant inheritance, then override one
    tenant without affecting another. Duration selection must not enable additional
-   capture or client disclosure. Finite-expiry cleanup awaits its own reviewed
-   semantics. These are planned checks, not current playground guarantees.
+   capture or client disclosure. Use distinct record-created, started, ended, and
+   archive-written timestamps: the finite expiry threshold must use `ended_at`
+   plus the period, with no reset from a later write. Active calls must not expire;
+   missing `ended_at` must not fall back to creation time, and forever must produce
+   no expiry threshold. Cleanup mechanics remain separate. These are planned
+   checks, not current playground guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
    variable, read back that partial object,
@@ -5021,6 +5043,25 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   intended documentation files changed. Transaction success/error scope, retained
   review status, restricted terminology, local-path hygiene, and whitespace checks
   pass.
+
+### Completed-call retention starts at ended_at — approved 2026-09-07
+
+- Approved `ended_at` as the start of finite retention for completed calls.
+  The threshold is `ended_at + retention_period`, not record creation or later
+  snapshot/archive writes. Do not expire active-call data; forever has no expiry.
+- Missing `ended_at` does not fall back to `created_at` or introduce an automatic
+  expiry for prepared records. Cleanup scheduling, referenced snapshots, and
+  policy changes affecting existing data remain under review.
+- Updated the original retention contract, architecture, review status, and
+  planned timestamp/active-call/forever checks. No other pending proposals were
+  approved here; G5 stays partly resolved and 11 review groups remain open.
+- Documentation only: no runtime/configuration/UI changes or deletion jobs;
+  no runtime or browser tests were run.
+- Verification: existing fenced examples and all 15 JSON examples are unchanged
+  and valid. Links and external URLs are unchanged; only the three intended
+  documentation files changed. Retention-clock/default/precedence checks,
+  retained review status, restricted terminology, local-path hygiene, and
+  whitespace checks pass.
 
 ## Verification evidence
 

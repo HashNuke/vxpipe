@@ -685,9 +685,13 @@ wins; otherwise inherit the application setting, including its forever default.
 Forever means no age-based expiration by Vxpipe, not automatic capture of every
 payload or a backup/recovery guarantee. Existing storage enablement, credential
 exclusions, and client visibility remain separate. Periods are not agent-defined
-or client-selected. Exact duration encoding, finite-expiry timing, effects of
-policy changes on existing data, and cleanup of referenced snapshots remain
-under review; this decision implements no deletion job.
+or client-selected. For a completed call with finite retention, the expiry
+threshold is `ended_at + retention_period`, not record creation or a later storage
+write. Do not expire retained data while the call is active. Retain forever has
+no expiry threshold; an unset `ended_at` must not fall back to `created_at`.
+Exact duration encoding, policy changes affecting existing data, unstarted-record
+cleanup, and cleanup of referenced snapshots remain under review; this decision
+implements no deletion job.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and
