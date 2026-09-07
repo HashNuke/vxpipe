@@ -66,6 +66,9 @@ definitive remote result is reported as outcome `unknown`, not confirmed failure
 The tool executor must not automatically retry that request; return the unknown
 outcome to the agent. A later agent-requested call is a separate invocation,
 not an internal retry or a guarantee against duplicate external actions.
+Late booking confirmations and similar notifications are external events for a
+future gateway-to-active-room/agent communication mechanism, not a current MCP
+timeout-reconciliation requirement. That scenario is deferred.
 G2's remaining admission details, the rest of G4, and G5–G13 remain pending user
 review. Approval of documentation does not authorize runtime implementation.
 
@@ -1430,8 +1433,8 @@ still terminates its execution subtree, including its model/tool workers; room
 shutdown also ends their work. Local termination does not guarantee cancellation
 or rollback of an action already submitted to the remote system. Timeout outcome
 reporting is approved below; retries/idempotency, explicit cancellation,
-confirmation policy, and recovery of remote outcomes after shutdown remain
-separate G4 review questions.
+and confirmation policy remain separate G4 review questions. External recovery
+notifications after timeout or shutdown are deferred to the future event mechanism.
 No new operation ledger or durable worker design is approved by this decision.
 
 The runtime does not implement this separation yet. `ModelInference` currently
@@ -1465,9 +1468,28 @@ A later tool call requested by the agent is a separate invocation, not a hidden
 retry by the executor. This distinction is not an exactly-once or deduplication
 guarantee: the separate invocation may still repeat an external action. No
 automatic-retry exception based on tool classification or idempotency metadata
-is approved now. Policies for other failures, explicit cancellation, status
-lookup, reconciliation, durable operation storage, and later receipts remain
-separate G4 decisions. No new wire envelope or retry configuration is added.
+is approved now. Policies for other failures and explicit cancellation remain
+separate G4 decisions. External late-result handling is deferred below, not a
+prerequisite for this slice. No new wire envelope or retry configuration is added.
+
+#### Late business notifications are external events — deferred
+
+A booking confirmation arriving after the MCP request timed out is an external
+concern, not a reason to keep the original tool execution open or add late-result
+reconciliation now. For example, the booking call times out and reports unknown;
+a few seconds later the booking service sends a success webhook to the gateway.
+
+In the future, a general external-event mechanism could route that information
+to the relevant call room or agent if the room is still active. Defer this entire
+scenario for now. It is not a current MCP requirement, new gateway endpoint, or
+automatic follow-up tool result. Do not add polling, webhook ingestion, background
+reconciliation, durable operation workers, or an outcome ledger solely to support it.
+
+Event authentication, correlation, delivery, handling when a room is inactive,
+and how an agent uses the event or updates variables belong to that future design.
+This decision does not select those mechanisms, restart an ended call, or change
+the approved timeout/unknown/no-automatic-retry behavior. Existing variable and
+conversation-history contracts remain unchanged.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
@@ -2388,8 +2410,9 @@ newer update from B.
 Completion does not revive a cancelled model response or resume stale audio.
 A missing acknowledgement does not undo a committed write. No separate mutation
 ID deduplication/journal subsystem is approved by this decision, and the policy
-for external MCP/host side effects or late external results remains under G4
-review. No extra call-definition fields are needed.
+for other external MCP/host side effects remains under G4 review. Late business
+notifications are deferred to the future external-event mechanism, not handled
+as new variable writes in this slice. No extra call-definition fields are needed.
 
 ### Agent model and tool integration
 
@@ -3332,8 +3355,9 @@ complexity limits are not adopted now; datatype and value-size checks remain.
 G3 is resolved in documentation. G4 now preserves submitted MCP calls across
 ordinary conversational interruption and reports a timeout without a definitive
 remote result as outcome `unknown`, without automatic executor retry. Later
-agent-requested calls are separate invocations. Other retry/recovery questions,
-remaining G2 details, and G5–G13 remain unapproved.
+agent-requested calls are separate invocations. Late business notifications are
+deferred to future external-event delivery to active rooms/agents. Other retry
+questions, remaining G2 details, and G5–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3353,6 +3377,8 @@ closes G3 and reduces the count from 12 to 11; implementation is still pending.
 G4's ordinary-interruption rule, unknown-outcome reporting on timeout, and no
 automatic executor retry for that timeout are approved. Its other questions keep
 that group open and the overall count at 11.
+Late confirmations are explicitly deferred as an external-event concern, not an
+additional prerequisite for the current MCP slice.
 
 ### Baseline and scope
 
@@ -3506,17 +3532,15 @@ The numbering below matches G1–G13 in the focused review document.
    outcome if already known. The executor does not automatically retry that
    request; a later agent-requested call is a separate invocation, without an
    exactly-once guarantee.
-   The following proposals remain unapproved: a terminated/timed-out request may
-   already have booked or sent something remotely. Possible resolution: separate
-   tool invocation from external operation, preserve confirmed/failed/unknown
-   outcomes, and consider any future automatic-retry exception only with
-   provider-supported idempotency or reconciliation. No such exception is
-   approved by the default no-retry decision.
-   Late receipts must not revive canceled model work or apply stale variables
-   patches. The policy for new variable writes from late external results remains
-   pending; G3 already allows submitted local variable commands to finish.
-   Bind action confirmation to exact arguments and expiry. A start
-   event is not proof of successful completion.
+   Late booking confirmations are an external concern: a future gateway webhook
+   or other external event could reach the relevant room/agent while the room
+   is active. Handling that scenario, including reconciliation and operation
+   storage solely for it, is deferred and not required for the current slice.
+   Other retry exceptions and explicit cancellation remain unapproved. Any
+   future retry exception would need its own idempotency/reconciliation contract;
+   none is approved by the no-retry default. Generic action confirmation tied
+   to arguments and expiry remains a proposal. A start event is not proof of
+   successful completion.
 5. **Private tool data and archive projections:** current tool events carry
    arguments/results through the gateway. Reusing that path for variables would
    leak values despite metadata-only variable events. Possible resolution:
@@ -3659,8 +3683,9 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    no assertion that local termination undoes an external action. Use explicit
    acknowledgements and monitors, not sleeps or liveness polling.
    After the remaining G4 policies are approved, add cases for other failure/retry
-   policies, late-result reconciliation, and changed confirmation arguments;
-   those behaviors are not settled by the unknown-timeout no-retry default.
+   policies and changed confirmation arguments. Do not require a late-confirmation
+   webhook or reconciliation test for this slice: that scenario belongs to the
+   deferred external-event mechanism, not the unknown-timeout no-retry contract.
 5. Return a synthetic confirmation from a fake remote MCP booking tool that
    knows nothing about Vxpipe. Confirm the result alone changes no call variables.
    Let the agent call `update_variables` for its read+write `booking` section:
@@ -4323,6 +4348,30 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   executor retries and new agent invocations. Retry scope, remaining-review
   status, restricted terminology, local-path hygiene, and `git diff --check`
   pass. Documentation only; no runtime or browser tests were run.
+
+### Late confirmations are deferred external events — approved 2026-09-07
+
+- Classified late booking confirmations as an external concern. A future
+  general event mechanism could receive a gateway webhook and route the
+  information to the relevant call room/agent if the room is still active.
+  Handling that scenario is not important for the current MCP slice.
+- Deferred event ingress/delivery, polling, late-result reconciliation, and
+  operation storage solely for that scenario. No new endpoint, event payload,
+  background worker, or automatic continuation of the old tool call is approved.
+  Authentication, correlation, inactive-room behavior, and agent handling belong
+  to the future design, not extra decisions required for this slice.
+- Removed late-result processing from current acceptance requirements and
+  updated the original contract, architecture, and focused review. Kept ordinary
+  interruption, timeout-as-unknown, no automatic executor retry, and variable
+  ownership/permissions unchanged. Other G4 questions keep it partly resolved;
+  the overall count remains 11 open numbered groups.
+- Verification: all 15 JSON examples and both definition fixtures are unchanged
+  and parse; all 31 local links/anchors resolve. API routes, external references,
+  G3's authorization transaction, and implemented-runtime descriptions are
+  unchanged. Reviewed the complete diff for deferred scope and preservation of
+  the approved MCP policies. Remaining-review status, restricted terminology,
+  local-path hygiene, and `git diff --check` pass. Documentation only; no runtime
+  or browser tests were run.
 
 ## Verification evidence
 

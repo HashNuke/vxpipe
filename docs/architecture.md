@@ -173,10 +173,18 @@ remote result reports outcome `unknown`; a local timeout does not establish
 remote failure or rollback. Preserve any already-known definitive result.
 The tool executor must not automatically retry that request; return the unknown
 outcome to the agent. A later agent-requested tool call is a separate invocation,
-not an internal retry or an exactly-once guarantee. Other retry/idempotency,
-explicit cancellation, and remote-outcome recovery policies remain under review.
+not an internal retry or an exactly-once guarantee. Other retry/idempotency and
+explicit cancellation policies remain under review.
 This is planned behavior, not the current model-task cancellation behavior
 described in the implemented slices below.
+
+Late business confirmations are an external-event concern deferred beyond this
+MCP slice. A future gateway webhook or other external event could inform the
+relevant room/agent if the room is still active—for example, a booking success
+notification arriving after a timeout. No event endpoint, late-result delivery,
+polling, reconciliation worker, or operation ledger is required now for that
+scenario. Authentication, correlation, inactive-room behavior, and agent handling
+of those events belong to the future design; no such runtime support is added here.
 
 ## Architectural boundaries
 

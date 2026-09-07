@@ -33,6 +33,8 @@ finish within their existing timeout because interrupting speech does not imply
 intent to cancel a tool. A submitted MCP request that times out without a
 definitive remote result reports outcome `unknown`, without automatic executor
 retry; a later agent-requested tool call is a separate invocation.
+Late confirmations are deferred as external events that a future gateway
+mechanism could route to an active call room/agent, not current MCP reconciliation.
 Remaining G2/G4 questions and G5–G13 are pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -49,6 +51,8 @@ additional schema-complexity caps are not adopted now. G3 is closed in
 documentation, reducing the count from 12 to 11; implementation remains pending.
 MCP interruption, timeout-outcome reporting, and no automatic executor retry for
 that timeout resolve only part of G4, so the count stays at 11.
+Deferring late notifications removes that scenario from the current MCP scope;
+other G4 questions still need review.
 
 ## Conclusion and scope
 
@@ -553,9 +557,10 @@ additional unsent tool calls from the interrupted turn.
 
 Transfer still terminates the source agent's local execution subtree, including
 model/tool workers; room shutdown also stops their work. Local termination is
-not remote rollback. Explicit cancellation, retries/idempotency, confirmation,
-and recovery after shutdown remain pending. No durable operation
-worker or ledger is approved by the ordinary-interruption decision. Today's
+not remote rollback. Explicit cancellation, other retry/idempotency policies,
+and confirmation remain pending; late recovery notifications are deferred below.
+No durable operation worker or ledger is approved by the ordinary-interruption
+decision. Today's
 model request task still contains tool execution and is killed by interruption;
 the approved separation needs implementation.
 
@@ -575,10 +580,10 @@ an automatic retry could create another one. A later agent-requested tool call
 is a separate invocation, not a hidden executor retry. This does not provide
 exactly-once execution or prevent the agent from requesting a duplicate action.
 
-Other failure/retry policies, idempotency configuration, status lookup,
-reconciliation, later receipts, and durable operation storage remain proposals.
-The existing local timeout remains in effect; no new wire format or
-operation-worker architecture is approved here.
+Other failure/retry policies and idempotency configuration remain proposals.
+Late business notifications and mechanisms to reconcile them are deferred below.
+The existing local timeout remains in effect; no new wire format or operation-worker
+architecture is approved here.
 
 The labnote names retries, cancellation, and idempotency, but does not yet settle
 the remaining interactions. A booking or SMS can succeed remotely before the local
@@ -587,16 +592,20 @@ discarding the result entirely can erase the only explanation of what happened.
 The [scheduling workflow][workflow] even configures retries on booking POSTs;
 that alone does not prove deduplication by the external API.
 
-Remaining proposal, not approved: distinguish a conversational tool invocation
-from an external operation. A supervised operation worker owns a stable operation
-ID, bounded deadline, attempts, and one of confirmed success, confirmed failure, or unknown
-outcome. An interrupted turn loses output authority, but ordinary interruption
-does not cancel submitted reads or writes. A submitted external action with an
-uncertain outcome may need a receipt/status reconciliation path. Late external
-facts can enter the private operation ledger without resuming an old model turn.
-Whether and how those results can initiate
-new variable updates remains under review; this proposal does not cancel G3's
-already-submitted local variable commands or bypass their revision checks.
+**Approved scope decision — defer late business notifications:** a late booking
+confirmation is an external concern. In a future scenario, an MCP booking times
+out, then the booking service sends a success webhook to the gateway. A general
+external-event mechanism could route that information to the relevant room or
+agent if the room is still active. This is not important for the current MCP
+slice and does not require continuing or completing the original tool invocation.
+
+Defer webhook/event ingestion, late-result delivery, polling, reconciliation,
+and operation storage solely for this scenario. The earlier proposal for a
+supervised operation worker with stable IDs/attempts and a private outcome ledger
+is not a prerequisite. Future event authentication, correlation, delivery,
+inactive-room handling, and agent use of the information remain undesigned here.
+No event endpoint, automatic variable mapping, or call restart is approved.
+The current timeout/unknown/no-automatic-retry and G3 variable contracts stand.
 
 **Potential retry exceptions — still unapproved:** any future automatic retry
 after an ambiguous submission would need a documented provider idempotency
@@ -606,8 +615,9 @@ correlation, not business-action idempotency keys. Business validation, slot uni
 remain responsibilities of the external system; call variables are not its
 transaction database.
 
-Tool policy should distinguish read-only, idempotent write, and non-idempotent
-write using trusted configuration, not model arguments or untrusted remote
+Remaining proposal, not approved: tool policy should distinguish read-only,
+idempotent write, and non-idempotent write using trusted configuration, not model
+arguments or untrusted remote
 annotations. Bind any required confirmation to the exact validated action
 arguments, requesting participant, variables revision where relevant, and expiry.
 Changing the action invalidates confirmation. Do not announce successful sending
@@ -899,6 +909,10 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Replay admission events and crash between admission stages | One durable call and at most one current fenced room; uncertain dialing is reconciled |
 | Reconcile late usage after call end | Corrected archive has a new publication revision; totals do not double-count observations |
 
+Late booking webhook/external-event delivery is deliberately not an acceptance
+requirement for the current MCP slice. Add such scenarios only when the deferred
+external-event mechanism is separately designed and authorized.
+
 These are planned red-green tests, not tests run during this review. Before each
 implementation checkpoint, write and run the smallest failing project-owned
 contract test, then implement it and run the umbrella completion checks. Add
@@ -1148,6 +1162,20 @@ definition fixtures, all 31 local links/anchors, and unchanged routes/external
 references. Prior G3 and implemented-runtime descriptions are preserved; retry
 scope, remaining-review status, terminology, path hygiene, and whitespace checks
 pass. No runtime changes or runtime/browser tests.
+
+The subsequent late-confirmation decision defers this scenario as an external
+event concern. A future gateway mechanism could route a booking success webhook
+to the relevant active room/agent; it is not current MCP timeout reconciliation.
+No webhook endpoint, polling, durable outcome worker/ledger, or automatic tool
+continuation is required now. Event authentication, correlation, inactive-room
+behavior, and agent handling belong to that future design. Active scope and
+acceptance requirements are synchronized with the original labnote and architecture;
+timeout/unknown/no-automatic-retry behavior remains unchanged. G4 is still partly
+resolved and the count remains 11. Verification confirms 15 unchanged valid JSON
+examples, both definition fixtures, all 31 local links/anchors, unchanged routes
+and external references, and preserved G3/implemented-runtime contracts.
+Deferred scope, prior MCP policies, remaining-review status, terminology, path
+hygiene, and whitespace checks pass. No runtime or browser tests were run.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
