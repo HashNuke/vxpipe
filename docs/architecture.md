@@ -161,6 +161,17 @@ and no automatic result-mapping layer is required. These are approved design
 contracts, not newly implemented runtime features; see the
 [call-definition design](../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned).
 
+The approved MCP lifecycle also distinguishes speech interruption from tool
+cancellation: an already-submitted read or action continues to its result or
+existing timeout while the agent remains running. Interrupting speech is not
+evidence of intent to cancel the tool. Keep its result tied to the invocation
+for subsequent reasoning without reviving cancelled model output or speech,
+automatically updating variables, or starting additional unsent old-turn tools.
+Transfer and room shutdown still end local agent execution; this does not undo
+remote side effects. Timeout/retry, explicit cancellation, and remote-outcome
+recovery policies remain under review. This is planned behavior, not the current
+model-task cancellation behavior described in the implemented slices below.
+
 ## Architectural boundaries
 
 ```text

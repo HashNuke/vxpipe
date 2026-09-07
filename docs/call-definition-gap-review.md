@@ -28,11 +28,13 @@ and revisions, and receives tool calls directly without `RoomAuthority` or a
 current-activation check. Agent transfer shuts down the source's execution
 subtree, but already-submitted variable requests can finish. Additional schema
 complexity limits are not adopted now; datatype and value-size checks remain.
-G3 is resolved; remaining G2 questions and G4–G13 are pending review.
+G3 is resolved. G4's ordinary-interruption rule is approved: submitted MCP calls
+finish within their existing timeout because interrupting speech does not imply
+intent to cancel a tool. Remaining G2/G4 questions and G5–G13 are pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Review count: **11 open numbered groups** — G2 partly resolved, G4–G13
+Review count: **11 open numbered groups** — G2/G4 partly resolved, G5–G13
 awaiting approval; G1 and G3 resolved in documentation. Individual sub-decisions are
 not counted separately here. Object merge versus replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -42,6 +44,7 @@ question. Naming and agent-mediated MCP result updates are also resolved;
 dedicated variable ownership and submitted-write lifetime are approved, and
 additional schema-complexity caps are not adopted now. G3 is closed in
 documentation, reducing the count from 12 to 11; implementation remains pending.
+The MCP-interruption decision resolves only part of G4, so the count stays at 11.
 
 ## Conclusion and scope
 
@@ -530,24 +533,43 @@ automatic result-to-variable mappings are withdrawn, not prerequisites for MCP.
 Read-only initial values remain supported; recording tool results requires
 read+write permission on the chosen section. Booking/verification rules remain
 the external service's responsibility. A copied result is not that service's
-source of truth; G4 still owns remote retry/cancellation and uncertain outcomes.
+source of truth; G4 still owns other remote retry/cancellation and uncertain-outcome
+questions beyond the approved conversational-interruption rule below.
 
-### G4 — P1: Tool cancellation does not roll back an external action
+### G4 — P1, partly resolved: Tool cancellation does not roll back an external action
 
-The labnote names retries, cancellation, and idempotency, but does not settle
-their interaction. A booking or SMS can succeed remotely before the local
-request times out or is killed by barge-in. Retrying blindly can duplicate it;
+**Approved conversational-interruption rule:** the user interrupting speech does
+not establish that they intended to cancel a tool call. Let an already-submitted
+MCP request finish within its existing timeout while the agent remains running,
+for both read-only tools and actions. Spoken or typed interruption stops the old
+conversational output, not that request. Keep its result associated with the
+invocation for subsequent agent reasoning without reviving the cancelled model
+continuation or speech. The result alone does not mutate variables or authorize
+additional unsent tool calls from the interrupted turn.
+
+Transfer still terminates the source agent's local execution subtree, including
+model/tool workers; room shutdown also stops their work. Local termination is
+not remote rollback. Explicit cancellation, timeout outcomes, retries/idempotency,
+confirmation, and recovery after shutdown remain pending. No durable operation
+worker or ledger is approved by the ordinary-interruption decision. Today's
+model request task still contains tool execution and is killed by interruption;
+the approved separation needs implementation.
+
+The labnote names retries, cancellation, and idempotency, but does not yet settle
+the remaining interactions. A booking or SMS can succeed remotely before the local
+request times out or is terminated during transfer. Retrying blindly can duplicate it;
 discarding the result entirely can erase the only explanation of what happened.
 The [scheduling workflow][workflow] even configures retries on booking POSTs;
 that alone does not prove deduplication by the external API.
 
-Proposal: distinguish a conversational tool invocation from an external
-operation. A supervised operation worker owns a stable operation ID, bounded
-deadline, attempts, and one of confirmed success, confirmed failure, or unknown
-outcome. An interrupted turn loses output authority; safe external read work can
-be canceled, while an already submitted external write needs a receipt/status
-reconciliation path. Late external facts can enter the private operation ledger
-without resuming an old model turn. Whether and how those results can initiate
+Remaining proposal, not approved: distinguish a conversational tool invocation
+from an external operation. A supervised operation worker owns a stable operation
+ID, bounded deadline, attempts, and one of confirmed success, confirmed failure, or unknown
+outcome. An interrupted turn loses output authority, but ordinary interruption
+does not cancel submitted reads or writes. A submitted external action with an
+uncertain outcome may need a receipt/status reconciliation path. Late external
+facts can enter the private operation ledger without resuming an old model turn.
+Whether and how those results can initiate
 new variable updates remains under review; this proposal does not cancel G3's
 already-submitted local variable commands or bypass their revision checks.
 
@@ -838,6 +860,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Interrupt after submitting a variable update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry |
 | Read/update variables while the room authority is not servicing messages | Direct tool requests finish in the dedicated variables process without a hidden authorization or commit round trip |
 | Submit A's update, transfer to B, and let the update execute after A stops | A's execution subtree, capabilities, and model/tool workers terminate without restarting; its already-sent update may still commit under normal checks, B can read/refresh it under its own grants, and A's speech does not resume; stopping the variables process itself gives no pending-write completion guarantee |
+| Submit an MCP read or action, delay its response, then interrupt speech or send interrupting text | The submitted request continues to its result or existing timeout while the agent remains running; its result stays tied to the invocation for subsequent reasoning, without reviving cancelled output, executing unsent old-turn tools, or automatically changing variables; transfer still terminates local agent workers |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
@@ -1055,6 +1078,24 @@ links/anchors resolve, and API routes/external references are unchanged. Ownersh
 lifecycle, review counts, terminology, local-path hygiene, and whitespace checks
 pass. No runtime implementation, tests, or published schema changed; no runtime
 or browser tests were run for this documentation-only checkpoint.
+
+The subsequent MCP-interruption decision approves finishing submitted requests
+despite ordinary spoken or typed interruption, within the existing timeout.
+Interrupted speech is not evidence of cancellation intent, for reads or actions.
+Keep the result associated with its invocation for subsequent reasoning without
+resuming the old model/speech, running unsent old-turn tools, or automatically
+changing variables. Transfer/room shutdown still end local agent work, without
+guaranteeing remote rollback. Current model-task cancellation needs to change
+when implementing this policy; no runtime behavior was changed here.
+The contradictory planned remote-cancellation assertion is replaced and new
+barrier-based acceptance steps cover request completion, timeout, and output
+isolation. Other G4 policies remain proposals; the group is partly resolved and
+the overall count remains 11. Verification confirms all 15 JSON examples and two
+definition fixtures are unchanged and valid, all 31 local links/anchors resolve,
+and routes/external references are unchanged. G3's authorization transaction and
+implemented-runtime descriptions are preserved; interruption/review consistency,
+terminology, path hygiene, and whitespace checks pass. No runtime or browser tests
+were run for this documentation-only change.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

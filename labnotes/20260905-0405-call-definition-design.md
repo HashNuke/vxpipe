@@ -58,9 +58,12 @@ source agent's entire execution subtree; already-submitted variable requests
 may still finish under the normal permission, datatype, size, and revision checks.
 Additional schema-depth/property-count limits are not adopted now; retain the
 existing datatype and value-size limits without required-variable completeness.
-G3 is resolved in documentation. G2's remaining admission details and G4–G13
-remain pending user review. Approval of documentation does not authorize runtime
-implementation.
+G3 is resolved in documentation. G4's conversational-interruption rule is now
+approved: interrupting speech does not express intent to cancel a submitted MCP
+tool call, so let that call finish within its existing timeout without reviving
+the interrupted output. G2's remaining admission details, the rest of G4, and
+G5–G13 remain pending user review. Approval of documentation does not authorize
+runtime implementation.
 
 ## Constraints
 
@@ -435,7 +438,9 @@ tools. Vxpipe owns the variables and authorizes the agent's separate update.
 There is no automatic mapping layer or platform-only result section required
 for this flow. The external service remains responsible for its booking and
 verification rules; a copied result in our variables is not the service's source
-of truth. External-operation retries and cancellation remain under G4 review.
+of truth. Submitted MCP calls survive ordinary conversational interruption as
+approved below; other external-operation retry/cancellation questions remain
+under G4 review.
 
 One `CallVariables` GenServer per room incarnation is the sole runtime owner of
 mutable values and revisions. It holds the compiled variable schemas and
@@ -1394,6 +1399,42 @@ An agent-participant destination receives only its own bindings; a human
 destination receives no model tool surface. Tool results and events retain
 participant and activation identity so late source output cannot revive the old
 model loop or speech, even when both agents use the same configured integration.
+
+#### Submitted MCP calls and conversational interruption — approved G4 decision
+
+An interruption of speech is not evidence that the user intended to cancel a
+tool call. Once an MCP request has been submitted, let it finish within its
+existing timeout even if the user speaks or sends interrupting text. This
+applies to reads as well as actions; do not infer cancellation intent from the
+interruption or from a read/write classification.
+
+Stop the interrupted conversational output, not the submitted MCP request.
+Keep its result associated with the original tool invocation for subsequent
+agent reasoning; completion must not revive the cancelled model continuation
+or resume old speech. The result alone does not mutate Call Variables: the agent
+still uses a separate authorized variable-update tool when appropriate. This
+does not authorize additional unsent tool calls from the cancelled model turn.
+
+For example, an agent submits a booking request and the user starts speaking
+before the response arrives. Keep that request running to its result or timeout;
+do not cancel it merely because speech was interrupted. Receiving a booking
+confirmation is distinct from resuming the interrupted utterance or undoing the
+booking.
+
+This is the ordinary-interruption rule while the agent remains running. Transfer
+still terminates its execution subtree, including its model/tool workers; room
+shutdown also ends their work. Local termination does not guarantee cancellation
+or rollback of an action already submitted to the remote system. Timeout outcome
+reporting, retries/idempotency, explicit cancellation, confirmation policy, and
+recovery of remote outcomes after shutdown remain separate G4 review questions.
+No new operation ledger or durable worker design is approved by this decision.
+
+The runtime does not implement this separation yet. `ModelInference` currently
+executes tools inside its model request task, and `cancel_current/1` kills that
+task on interruption. Implementation must separate the lifetime of a submitted
+MCP invocation from the interrupted model/output turn while retaining its agent
+ownership and existing timeout. Do not describe this as current playground
+behavior.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
@@ -3158,9 +3199,13 @@ does not reject or undo a variable request already submitted by that agent.
    leases outside the public plan.
 10. **Remote MCP execution:** behind the engine-owned tool backend, configure one
    HTTPS MCP integration, enable one tool on one agent, call it, preserve
-   the existing room/RTVI lifecycle, and prove interruption or transfer away
-   from the agent participant cancels the remote request. Do not add stdio or an
-   MCP server endpoint.
+   room/RTVI identity and event attribution, and prove ordinary spoken or typed
+   interruption leaves an already-submitted request running until result or its
+   existing timeout, without reviving cancelled speech. Keep the result tied to
+   its invocation for subsequent reasoning, with no automatic variable mutation
+   or additional old-turn tool execution. Separately prove transfer shuts down
+   the agent's local execution subtree, without claiming remote rollback.
+   Do not add stdio or an MCP server endpoint.
 11. **Agent-to-agent participant transfer:** use two deterministic agent
    participants and one compiler-derived transfer tool to prove only the active
    agent participant receives turns, only its declared destination refs are
@@ -3251,15 +3296,16 @@ GenServer now owns values and validates direct tool requests using pinned grants
 without a current-activation check. Source-agent subtree shutdown prevents new
 work, not completion of already-submitted variable requests. Additional schema
 complexity limits are not adopted now; datatype and value-size checks remain.
-G3 is resolved in documentation; G2's remaining questions and G4–G13 remain
-unapproved.
+G3 is resolved in documentation. G4 now preserves submitted MCP calls across
+ordinary conversational interruption; its other questions, remaining G2 details,
+and G5–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Remaining review count — 2026-09-07
 
-There are **11 open review groups** out of the original 13: G2 is partly
-resolved, and G4–G13 still need approval. G1 and G3 are resolved in documentation.
+There are **11 open review groups** out of the original 13: G2 and G4 are partly
+resolved, and G5–G13 still need approval. G1 and G3 are resolved in documentation.
 This counts the numbered groups, not individual edge cases or implementation
 tasks. Section-level merging, recursive preservation inside nested objects,
 explicit-null clearing, root-section/direct-variable addressing, missing reads,
@@ -3269,6 +3315,8 @@ write-only error question. Naming and agent-mediated MCP result updates are also
 resolved. The dedicated variables-process ownership and submitted-write lifecycle
 are approved, and additional schema-complexity caps are not adopted now. That
 closes G3 and reduces the count from 12 to 11; implementation is still pending.
+G4's ordinary-interruption rule is now approved, but its other questions keep
+that group open and the overall count at 11.
 
 ### Baseline and scope
 
@@ -3411,9 +3459,16 @@ The numbering below matches G1–G13 in the focused review document.
    Remote MCPs need no knowledge of Vxpipe. The platform-only result-section and
    automatic result-mapping proposals are withdrawn. External services still own
    their business rules; copied variable values do not replace those services.
-4. **External side effects:** a canceled request may already have booked or
-   sent something remotely. Possible resolution: separate tool invocation from
-   external operation, preserve confirmed/failed/unknown outcomes, and retry
+4. **External side effects — conversational interruption partly resolved:**
+   interrupting speech does not show intent to cancel a tool call. Submitted MCP
+   requests, including reads, continue to result or their existing timeout while
+   the agent remains running. Completion remains associated with the invocation
+   for subsequent reasoning, not a revival of old model output or an automatic
+   variable write. Transfer still shuts down the source's local execution subtree.
+   The following proposals remain unapproved: a terminated/timed-out request may
+   already have booked or sent something remotely. Possible resolution: separate
+   tool invocation from external operation, preserve confirmed/failed/unknown
+   outcomes, and retry
    ambiguous writes only with provider-supported idempotency or reconciliation.
    Late receipts must not revive canceled model work or apply stale variables
    patches. The policy for new variable writes from late external results remains
@@ -3541,10 +3596,20 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    liveness polling, to establish the sequence. Stopping the variables process
    itself is different: pending work has no completion guarantee. Committed
    values are not rolled back because their source agent stopped.
-4. Submit a fake booking, commit it remotely, and delay its response while
-   interrupting. Confirm one external action, an honest receipt/unknown outcome,
-   no stale response, and no blind duplicate on retry. Change confirmed arguments
-   and prove the earlier confirmation cannot authorize the new action.
+4. With a fake MCP, acknowledge request submission and delay its response using
+   a test-owned barrier. Interrupt speech or send interrupting text while keeping
+   the agent running; confirm the request is not cancelled. Release the response
+   and confirm it remains associated with that invocation for subsequent reasoning,
+   without reviving the cancelled model continuation, old speech, or unsent tools.
+   Check no Call Variables change without a separate variable-update command.
+   Repeat for a read-only tool; interruption is not cancellation intent in either
+   case. Keep a separate timeout case to prove the existing deadline still
+   applies. Transfer/shutdown must still terminate the local agent workers, with
+   no assertion that local termination undoes an external action. Use explicit
+   acknowledgements and monitors, not sleeps or liveness polling.
+   After the remaining G4 policies are approved, add cases for a remote commit
+   followed by timeout/lost response, ambiguous retries, and changed confirmation
+   arguments; those behaviors are not settled by the interruption decision.
 5. Return a synthetic confirmation from a fake remote MCP booking tool that
    knows nothing about Vxpipe. Confirm the result alone changes no call variables.
    Let the agent call `update_variables` for its read+write `booking` section:
@@ -4132,6 +4197,39 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   Reviewed the complete documentation diff. No runtime implementation,
   dependencies, or schema release changed; no runtime/browser tests were run
   for this documentation-only checkpoint.
+
+### Submitted MCP calls survive speech interruption — approved 2026-09-07
+
+- Approved the distinction between interrupting speech and intending to cancel
+  a tool: ordinary spoken or typed interruption leaves an already-submitted MCP
+  request running until its result or existing timeout while the agent remains
+  running. This applies to reads as well as actions, without inferring intent
+  from interruption or tool classification.
+- Keep the result associated with its invocation for subsequent agent reasoning,
+  without reviving the cancelled model continuation or old speech. Do not run
+  additional unsent old-turn tools or automatically map results into Call Variables;
+  the agent still makes a separate authorized variable-update call when appropriate.
+- Retained agent-subtree termination on transfer and room shutdown. Stopping
+  local workers does not guarantee remote cancellation or rollback. Explicit
+  cancellation, timeout/unknown outcomes, retries/idempotency, confirmation, and
+  post-shutdown recovery remain unapproved G4 questions; this decision does not
+  introduce an operation ledger or durable-worker mechanism.
+- Rechecked `ModelInference`: tools execute in its request task, and interruption
+  invokes `cancel_current/1`, which kills that task. Separating submitted MCP
+  invocation lifetime from conversational output therefore needs implementation;
+  its agent ownership and existing timeout must remain intact.
+- Replaced the contradictory planned MCP test that cancelled remote requests on
+  interruption. Added deterministic delayed-result/read/action and timeout cases,
+  with no stale output, automatic variable mutation, or unsent-tool execution.
+  The original labnote, architecture, and focused review now agree. G4 is partly
+  resolved; the count remains 11 open groups, G2/G4 and G5–G13.
+- Verification: all 15 JSON examples and both complete definition fixtures are
+  unchanged and parse; all 31 local links/anchors resolve. API routes and external
+  references are unchanged. G3's authorization transaction and the architecture's
+  implemented-runtime descriptions are unchanged. Interruption policy, remaining
+  review boundaries, restricted terminology, local-path hygiene, and
+  `git diff --check` pass. Reviewed the complete documentation diff. Documentation
+  only; no runtime or browser tests were run.
 
 ## Verification evidence
 
