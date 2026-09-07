@@ -2,10 +2,10 @@
 
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-07 UTC
-Status: G1 and G2's web routes, initial context, API-key admission with prepared
-token-join or direct-backend connection, explicit entry participants/startup, and
-one participant per definition key per call approved; remaining G2 questions and
-G3–G13 pending review.
+Status: G1 and G2's web routes, initial context, API-key admission with one-way
+hash storage and prepared token-join or direct-backend connection, explicit entry
+participants/startup, and one participant per definition key per call approved;
+remaining G2 questions and G3–G13 pending review.
 Documentation only; no runtime implementation.
 
 ## Conclusion and scope
@@ -204,11 +204,22 @@ remains supported; this auth decision does not switch its media transport.
 The gateway generates random API keys through authorized management and returns
 each once to the backend. Gateway authentication uses a credential-store port;
 persistence owns storage, Calls owns preparation/activation, and the engine
-receives neither keys nor join tokens. The previously approved encrypted-at-rest
-[Cloak/Ecto pattern][cloak-ecto] remains a viable baseline, with its runtime key
-outside the database. Dropping HMAC removes the need to recover a signing secret,
-so a hash-based API-key verifier is now an alternative to review, not a silently
-approved replacement. MCP/provider secrets are separate from gateway keys.
+receives neither keys nor join tokens.
+
+**Approved API-key storage:** persist only a one-way cryptographic digest of each
+high-entropy generated key with its tenant/permission metadata. Hash the supplied
+key to verify it and apply authorization; do not accept the stored digest as a
+credential. Do not keep plaintext or decryptable copies. Ordinary management
+responses and logs expose neither keys nor hashes. The original key is returned
+once, and a lost key must be replaced through authorized management, not retrieved.
+This replaces reversible storage for Vxpipe-issued API keys; API-key verification
+does not need a credential-decryption key.
+
+MCP/provider credentials are different: Vxpipe must be able to retrieve and send
+them to remote services. They remain in their configured secret boundary, with
+encryption at rest if stored in the database and its runtime key kept outside it.
+The [Cloak/Ecto pattern][cloak-ecto] remains applicable to those recoverable
+secrets, not gateway-issued API keys. This decision adds no dependency or vault.
 
 The join token is delegated, short-lived access, not a second long-lived
 integration credential or proof of a person's identity. Apply scope, TLS, and
@@ -218,10 +229,11 @@ alternatives, and future verification steps.
 
 The following G2 proposals remain open and must be reviewed separately:
 
-**API-key storage and lifecycle:** review encrypted storage versus hash-based
-verification, administrator bootstrap, permission granularity, multiple-key
-management, rotation/revocation, and redaction. HMAC algorithm, canonicalization,
-and signature fields are no longer questions for this contract.
+**API-key management lifecycle:** administrator bootstrap, permission
+granularity, multiple-key management, and rotation/revocation still need review.
+One-way hash storage is resolved; exact key encoding/hash profile remains an
+implementation detail to specify. HMAC algorithm, canonicalization, and
+signature fields are no longer questions for this contract.
 
 **Prepared-call and token lifecycle:** specify token lifetime, claim/reissue and
 retry rules, unused preparation expiry/retention and limits, and crash recovery.
@@ -584,6 +596,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Initialize a required context field directly, with no input mapping or dummy default | Compilation succeeds; absent required initial data fails before room startup; partial/default assembly follows a separately approved rule |
 | Prepare private order context using a backend API key, then join from the browser using only a token | Preparation pins/stores context without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and context fail |
 | Connect a backend WSS client with an API key and send unsigned context as its first message | Invalid authentication fails before upgrade; invalid/missing/oversized context cannot start the room; browser Origin and HTTP CORS policies are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
+| Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
 | Interrupt while a context update is queued | Ordering determines one commit-before-interrupt or a stale-work rejection; replayed mutation ID cannot write twice |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
@@ -618,9 +631,10 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   initial roles explicitly. Listing a participant does not make it live.
 - The earlier client-ID/HMAC contract is superseded: no signature envelope or
   canonicalization is needed for these backend API-key flows. Never put API keys
-  in browsers, definitions, or plaintext database fields. Encrypted storage
-  remains a viable baseline; hash-based verification needs separate review.
-  Neither option replaces TLS, scoped-token lifecycle, or credential management.
+  in browsers, definitions, or plaintext database fields. Reversible storage is
+  also rejected for Vxpipe-issued keys: keep only a one-way hash. Recoverable
+  upstream credentials remain a separate concern. Hash storage does not replace
+  TLS, scoped-token lifecycle, or credential management.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
 - Do not move mixing, recording coordination, or room context into persistence.
@@ -646,7 +660,11 @@ verification separately from those unimplemented checks.
 The API-key follow-up supersedes the HMAC wire contract, separates prepared-call
 tokens from live room sessions, and checks WebSocket handshake/Origin/browser
 constraints against first-party specifications. It does not implement the new
-routes, choose a new key-storage format, or change the current browser transport.
+routes or change the current browser transport. At that checkpoint, key storage
+was left open. The subsequent approved storage decision selects one-way hashes
+for Vxpipe-issued API keys, replaces the earlier encrypted-storage baseline for
+those keys, and adds future storage/verification/redaction acceptance checks.
+No authentication implementation, migration, dependency, or secret was changed.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

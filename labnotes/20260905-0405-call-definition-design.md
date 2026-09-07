@@ -18,9 +18,10 @@ runtime behavior.
 
 The [design gap review](#design-gap-review--pending-approval) records questions
 and possible solutions. G1's unified agent `tools` map and G2's tenant-scoped web
-admission routes, direct initial context, API-key authentication with prepared
-token-join or direct-backend connection, explicit entry participants/startup, and
-one participant per definition key per call are approved and documented below.
+admission routes, direct initial context, API-key authentication with one-way
+hash storage and prepared token-join or direct-backend connection, explicit entry
+participants/startup, and one participant per definition key per call are
+approved and documented below.
 G2's remaining admission details and the other suggestions remain pending user
 review. Approval of documentation does not authorize runtime implementation.
 
@@ -1328,12 +1329,23 @@ WebSockets. See the [browser WebSocket interface](https://websockets.spec.whatwg
   engine receives only the trusted principal, plan, and context. No API key or
   join token becomes room context or a public event. These credentials remain
   separate from application/tenant MCP integration credentials.
-- The previously approved Cloak/Ecto encrypted-at-rest pattern can store the API
-  keys, with a separate runtime encryption key outside the database and source
-  control. However, dropping HMAC removes the requirement to recover a signing
-  secret. A hash-based API-key verifier is now an alternative for separate
-  review, not a storage change silently approved here. The previous claim that
-  hash-only storage cannot work applied to HMAC, not bearer-key verification.
+- **Approved storage: one-way hashes for Vxpipe-issued API keys.** Persist only
+  a cryptographic digest of each high-entropy random key alongside its tenant
+  and permission metadata, never the plaintext key or a decryptable copy.
+  Authentication hashes the supplied key and checks the stored record and its
+  authorization; the stored digest is not itself an accepted API credential.
+  Ordinary management responses and logs expose neither keys nor their hashes.
+- Return the original key only at issuance. A lost key cannot be retrieved;
+  issue a replacement through authorized management. Verifying API keys needs
+  no decryption or database encryption key. This supersedes the earlier
+  reversible-storage choice for gateway API keys: HMAC needed a recoverable
+  signing secret, but these requests now supply the key for verification.
+- This decision does not hash MCP/provider credentials that Vxpipe must send to
+  remote services. Those credentials must remain recoverable through their
+  configured secret boundary; if persisted in the database, protect them with
+  encryption at rest and keep its runtime encryption key outside the database
+  and source control. The existing encrypted-field pattern remains applicable
+  there, not to Vxpipe-issued API keys. No new vault dependency is added here.
   [Encrypted-field documentation](https://cloak-ecto.hexdocs.pm/install.html).
 
 API-key authentication establishes the integrating application's authority, not
@@ -1343,8 +1355,8 @@ scope; possession is not proof of a person's identity. Treat it as a secret,
 short-lived bearer credential. [Bearer-token security](https://www.rfc-editor.org/rfc/rfc6750.html#section-5).
 Provider webhook authentication remains a separate adapter concern.
 
-**Still pending:** API-key storage review, administrator bootstrap, permission
-granularity, rotation/revocation, token lifetime/claim/reissue, preparation
+**Still pending:** administrator bootstrap, permission granularity,
+rotation/revocation, token lifetime/claim/reissue, preparation
 retention and limits, precise transport messages/routes/timeouts, reconnect and
 retry/crash recovery. HMAC algorithm selection, payload canonicalization, and
 signature-envelope fields are no longer implementation questions. Partial/default
@@ -2558,8 +2570,8 @@ Keep `entry_caller` and `entry_receiver`, direct participant-ref transfer lists,
 agent-scoped tool enablement, immutable resolved plans, room-owned context, and
 live mixing. This checkpoint identifies missing contracts and inconsistencies;
 it does not add runtime functionality. G1 records the approved tool layout and
-G2 records the approved web routes, direct initial context, backend API keys,
-prepared-token and direct-backend connection flows, explicit initial
+G2 records the approved web routes, direct initial context, one-way-hashed
+backend API keys, prepared-token and direct-backend connection flows, explicit initial
 participants/startup, and one participant per definition key per call. G2's
 remaining questions and G3–G13 are still unapproved. Detailed reasoning and
 evidence live in the [call-definition gap review](../docs/call-definition-gap-review.md).
@@ -2576,6 +2588,8 @@ evidence live in the [call-definition gap review](../docs/call-definition-gap-re
   records startup behavior. The subsequent cardinality decision allows only one
   participant per definition key in each call. The admission simplification
   supersedes client-ID/HMAC signing with API keys and two connection flows.
+  Its storage follow-up approves one-way hashes for Vxpipe-issued keys while
+  keeping recoverable upstream credentials separate.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2615,11 +2629,13 @@ The numbering below matches G1–G13 in the focused review document.
    Each definition key can bind only one participant in that call. A different
    person cannot claim an occupied key, and authorized reconnect/re-entry uses
    the existing participant rather than creating another identity.
-   G2 still needs API-key storage/management review, scoped-token lifecycle and
+   API-key storage is resolved: persist only one-way hashes, show keys once,
+   and verify submitted keys without recovering secrets. Upstream MCP/provider
+   credentials remain separate and recoverable where needed.
+   G2 still needs API-key management review, scoped-token lifecycle and
    preparation limits, telephony context sourcing, personalization, timezone and
    dynamic destinations, plus reconnect eligibility and admission/transfer
-   retry/failure handling. The earlier encrypted-storage decision remains a
-   viable baseline; hash verification is now an alternative to review.
+   retry/failure handling.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
 3. **Context initialization and stale work:** G2 removed input mappings, but how
@@ -2754,7 +2770,7 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     policies separately; lack of CORS grants must never bypass authentication.
     Preserve the browser WebRTC admission/signaling path. Keys/tokens stay out of
     URLs, ordinary management responses, room state, events, errors, and logs;
-    only the delegated join token reaches the browser. Add storage-specific,
+    only the delegated join token reaches the browser. Add
     token expiry/claim/reissue, preparation-retention, retry, rotation/revocation,
     and admin-bootstrap cases after those exact contracts are reviewed. These
     are future checks, not a claim of implemented authentication or storage.
@@ -2780,6 +2796,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     `human-supervisor` independently and repeat the original definition in a
     different call to prove the limit is per key per call, not global. These
     are future runtime checks; exact retry/transport responses remain unspecified.
+17. Issue a synthetic API key once and inspect its raw storage record: it contains
+    only the one-way digest and metadata, with no plaintext or decryptable key.
+    Restart the authentication boundary and verify the original key still works
+    without a credential-decryption key. Wrong keys and attempts to submit the
+    stored digest as the API key fail. Check tenant/permission enforcement and
+    that ordinary management responses, events, and logs expose neither key nor
+    digest. No retrieval operation can recover a lost key; authorized replacement
+    issues a new one. Upstream credential retrieval remains outside this test.
+    These are future project-owned boundary checks, not tests of a hash library.
 
 ### Review checkpoint verification
 
@@ -2884,10 +2909,28 @@ For the approved 2026-09-07 API-key admission simplification:
   invocation context, and unified tools. Resolved all 17 local links/anchors;
   checked route agreement, terminology, local-path hygiene, and whitespace.
   `git diff --check` passed. The candidate schema remains `20260906.02`.
-- Next review: API-key storage. The earlier encrypted-storage baseline has not
-  been silently replaced; dropping HMAC makes hash-based verification possible.
-  Token expiry/claim/reissue and unused preparation retention remain subsequent
-  G2 questions, alongside inbound telephony context sourcing and personalization.
+- At that checkpoint, API-key storage was next: encryption had not yet been
+  replaced, and hash verification required approval. The following decision
+  resolves that choice; token lifecycle and other G2 questions remain open.
+
+For the approved 2026-09-07 one-way API-key storage follow-up:
+
+- Approved hash-only storage for gateway-issued keys in this original labnote
+  and synchronized the focused review. Verification hashes the presented key;
+  no recoverable key copy or API-key decryption key is required. Keys are shown
+  once and replaced if lost. The earlier reversible-storage choice is superseded
+  for these keys, not for upstream secrets Vxpipe must retrieve and send.
+- Updated G2's status, rejected alternatives, and future acceptance step 17.
+  Credential management and token lifetime/claim/reissue remain pending; no
+  precise key encoding/hash profile, migration, or runtime implementation is
+  introduced by this documentation decision.
+- Verified all 10 JSON examples are unchanged and parse, both complete examples
+  retain consistent entry/context/tool contracts, and all 17 local links/anchors
+  resolve. Route, terminology, local-path hygiene, and `git diff --check` checks
+  passed. No runtime tests were run for this documentation-only checkpoint.
+- Next review remains within G2: prepared-call token expiry, claim/reuse, and
+  retry behavior. For example, decide what happens if a browser redeems a token
+  but loses its connection before joining completes; no policy is approved here.
 
 ## Verification evidence
 
@@ -2978,8 +3021,9 @@ For the approved 2026-09-07 API-key admission simplification:
   encrypted fields, and binary database columns. Applied that approved storage
   pattern to the earlier gateway client-credential design without accessing any
   real credential or environment-file contents. The later API-key decision
-  supersedes HMAC and reopens the storage choice; authentication remains outside
-  the call engine.
+  superseded HMAC; the subsequent storage decision selects one-way hashes for
+  Vxpipe-issued keys. Recoverable upstream credentials remain a separate concern,
+  and authentication remains outside the call engine.
 - Inspected the umbrella dependencies and persistence-related runtime surfaces.
   The repository currently has only gateway and call-engine applications and no
   Ecto/Repo boundary. The gateway directly creates an engine room, while room
