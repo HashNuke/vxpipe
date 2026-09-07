@@ -2,15 +2,17 @@
 
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-07 UTC
-Status: G1 and G2's web routes, direct initial context, HMAC signing, and encrypted client credentials approved; remaining G2 questions and G3–G13 pending review.
+Status: G1 and G2's web routes, initial context, client authentication/storage,
+and explicit entry participants/startup approved; remaining G2 questions and
+G3–G13 pending review.
 Documentation only; no runtime implementation.
 
 ## Conclusion and scope
 
-Keep the participant-first definition, `entrypoint`, direct `transfers` ref
-lists, agent-scoped tool enablement, room-owned context, and immutable resolved
-plan. The scenarios below do not require nodes, edges, named transfers, or a
-general expression language. The missing pieces are mostly enforceable runtime
+Keep the participant-first definition, `entry_caller` and `entry_receiver`,
+direct `transfers` ref lists, agent-scoped tool enablement, room-owned context,
+and immutable resolved plan. The scenarios below do not require nodes, edges,
+named transfers, or a general expression language. The missing pieces are mostly enforceable runtime
 contracts around those primitives, not a different top-level JSON structure.
 
 This reviews the [call-definition labnote][design] and
@@ -91,11 +93,12 @@ supported-field/keyword matrix. Partial illustrations are not complete executabl
 definitions, and the broad representative JSON is not a commitment to implement
 every field in the first slice. No new dated schema release is published here.
 
-### G2 — Partly resolved: routes, initial context, and client authentication approved
+### G2 — Partly resolved: admission, authentication, and entry roles approved
 
 At baseline, `transport.type: web` did not map an incoming connection to a
-participant definition. `entrypoint` identifies the initial handler, not
-necessarily that connection's human participant.
+participant definition. The original `entrypoint` identified only the initial
+handler, not necessarily that connection's human participant. The approved
+entry-role refinement below makes both initial participants explicit.
 
 Approved routing: create tenant-scoped participant connection keys as routing
 metadata, with separate HTTPS operations to start and join:
@@ -107,15 +110,37 @@ POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/se
 
 Use a 16-character cryptographically random URL-safe tenant key, UUID participant
 connection keys, and UUID call IDs, separate from database primary keys. A start
-route selects a deployment/definition and initiating participant. A join route
-must identify the particular tenant and call and resolve the participant using
-that call's pinned definition. It cannot choose a call from a reusable support
-key alone. Authorization precedes issuing the call-specific transport session.
+route selects a deployment/definition and initiating participant, which must
+match that definition's `entry_caller`. A join route must identify the particular
+tenant and call and resolve the participant using that call's pinned definition.
+It cannot choose a call from a reusable support key alone. Authorization precedes
+issuing the call-specific transport session.
 WebRTC is the first browser transport; routing can also serve a future WebSocket
 adapter. These are generic gateway handlers backed by route records, not code
 or room processes created for every saved definition. See the
 [approved web admission contract][web-admission]. No runtime implementation was
 authorized by this documentation decision.
+
+**Approved entry roles and startup:** replace `entrypoint` with `entry_caller`
+and `entry_receiver`. Both are required string refs to different existing keys
+in the same `participants` map; neither embeds a participant definition. The
+caller stays in the catalog with the receiver and possible transfer targets.
+Validate refs when parsing/saving the definition and retain resolved refs in the
+pinned call plan. The benefit is explicit intent, not an assumption that runtime
+must otherwise repeatedly scan the catalog or query the database.
+
+For caller/reception/billing/human-support, initially prepare only caller and
+reception. Activate an agent receiver once its required connection/capabilities
+are ready. Other catalog entries do not automatically start providers or dial
+out; prepare them when an authorized transfer/admission needs them. Dialing is
+not evidence that a human has joined. A human receiver does not imply an AI
+receiver, and a human-to-human call may begin without any AI participant.
+Transfers change current control/routing, not the pinned initial-role refs.
+The refs describe conversational roles, not which backend submits the request
+or originates a carrier leg; connection configuration retains that job. See the
+[approved entry and startup contract][entry-participants]. Participant-instance
+cardinality and duplicate/reconnect handling are still open, and no runtime
+startup behavior was implemented.
 
 **Approved initial context:** the integrating application's backend supplies
 values directly in the section structure declared by the call definition. Drop
@@ -124,7 +149,7 @@ the separate `input_schema` and JSON Pointer initialization mappings. For order
 declaring that section. Admission initializes it; several agents can read it
 while none has write access. The definition declares the data shape and
 permissions, not a second remapping layer. Initial context cannot override
-providers, tools, entrypoint, tenant, or other definition policy.
+providers, tools, either entry ref, tenant, or other definition policy.
 
 **Approved authentication and credential storage:** the gateway issues
 tenant-scoped client IDs and random secrets through an authorized management
@@ -165,13 +190,15 @@ nor prevents reuse of a valid request. These are required design follow-ups, not
 an approved wire format or a claim of implemented authentication. See the
 [HTTP Message Signatures security considerations][http-signatures].
 
-**Initial materialization and cardinality:** admit the initiating human, prepare
-the entrypoint, and activate the initial agent only when required
-media/capabilities are ready. Dialing an
-outbound recipient does not mean they have answered. Define a human entrypoint
-explicitly as no initial AI control, rather than assuming every entrypoint has
-model inference. Default each participant definition to one materialized
-instance per call until multi-instance selection is specified.
+**Participant cardinality and duplicate admission:** initial role selection and
+startup are resolved above; the number of live instances per definition ref is
+not. For example, two staff members might try to join one call through the same
+`human-support-agent` route. Proposal for review: allow at most one live runtime
+participant per definition ref in the first version. A different staff member
+cannot silently share that identity or replace its connection. Distinguish an
+authorized reconnect from a second participant, and define repeated/concurrent
+join or transfer behavior. If multiple instances are later supported, transfers
+need an unambiguous instance-selection rule in addition to the definition ref.
 
 **Telephony initial-context sourcing:** an inbound phone call cannot supply the
 example's required trusted `customer.id` by itself. The approved direct-context
@@ -512,6 +539,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 
 | Future acceptance test | Evidence of success |
 | --- | --- |
+| Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
+| Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
 | Initialize a required context field directly, with no input mapping or dummy default | Compilation succeeds; absent required initial data fails before room startup; partial/default assembly follows a separately approved rule |
 | Provision a tenant client and submit backend-signed initial order context | Valid authorized request starts the call; agents can read the order but cannot rewrite it; bad signatures, cross-tenant requests, and schema-invalid values fail |
 | Persist the generated secret and restart with the runtime encryption key | Raw storage contains ciphertext; verification works with the correct key; wrong/missing key fails closed; ordinary responses and logs never expose secrets |
@@ -544,6 +573,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   identity as interchangeable authority.
 - Do not duplicate the room-context schema with a second call-input schema and
   initialization map. The backend can supply the declared context shape directly.
+- Do not embed the caller in an entry field or infer it from catalog scanning.
+  Both entry fields reference one participant catalog; compilation resolves
+  initial roles explicitly. Listing a participant does not make it live.
 - Do not put HMAC client secrets in browsers, call definitions, plaintext database
   fields, or a hash-only store. Keep the independent encryption key outside the
   database. Secret encryption does not replace the pending signature/replay and
@@ -564,6 +596,10 @@ fields, redaction, and binary database columns. No environment-file contents or
 real credentials were read, and no credentials were generated. The existing
 gateway still uses a development principal; this review adds no authentication
 implementation. The labnote records the follow-up's documentation-check results.
+The subsequent entry-role follow-up checks both examples for distinct resolvable
+string refs, removes the obsolete entry field/type proposal, and records future
+startup/readiness checks. Runtime tests remain out of scope; instance cardinality
+has not been approved by this rename.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
@@ -573,6 +609,7 @@ implementation. The labnote records the follow-up's documentation-check results.
 [context-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
 [signed-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-client-credentials--approved-g2-decisions
+[entry-participants]: ../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions
 [presence]: ../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology
 [persistence]: ../labnotes/20260905-0405-call-definition-design.md#persistence-call-records-usage-and-artifacts
 [terms]: architecture.md#domain-terminology

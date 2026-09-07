@@ -18,10 +18,11 @@ runtime behavior.
 
 The [design gap review](#design-gap-review--pending-approval) records questions
 and possible solutions. G1's unified agent `tools` map and G2's tenant-scoped web
-admission routes, direct initial context, backend HMAC signing, and encrypted
-client-credential storage are approved and documented below. G2's remaining
-admission details and the other suggestions remain pending user review. Approval
-of documentation does not authorize runtime implementation.
+admission routes, direct initial context, backend HMAC signing, encrypted
+client-credential storage, and explicit entry participants/startup are approved
+and documented below. G2's remaining admission details and the other suggestions
+remain pending user review. Approval of documentation does not authorize runtime
+implementation.
 
 ## Constraints
 
@@ -123,7 +124,7 @@ node taxonomy in the initial authoring contract.
 ### Use a participant-first public authoring model
 
 The common path across the reviewed systems is not a graph. It is one reusable
-agent, or a named set of focused agents with one initial entrypoint and explicit,
+agent, or a named set of focused agents with one initial handler and explicit,
 allowlisted participant handoffs. Graphs appear as a separate structured-flow
 product or a code-level orchestration mechanism when deterministic sequencing
 is actually needed.
@@ -131,7 +132,8 @@ is actually needed.
 The public `CallDefinition` should therefore be participant-first without
 assuming an agent must own the room for its entire lifetime:
 
-- one `entrypoint` naming a definition-local participant;
+- `entry_caller` and `entry_receiver` string refs naming definition-local
+  participants;
 - shared capability-profile defaults;
 - a map of every participant the room is allowed to materialize;
 - agent participants with prompts, first-message behavior, capability overrides,
@@ -147,10 +149,53 @@ that owns conversational control. Re-entering the same agent may reuse its
 private history according to policy, but stale work from an earlier activation
 must still be rejected.
 
-The entrypoint resolves within the definition's `participants` map. Its
-participant definition determines whether the initial participant is human or
-agent and how it is materialized. This permits an initially human-only call and
-a definition with no agent participants.
+Both entry refs resolve within the same `participants` map, including the caller.
+Each referenced definition determines the participant's kind and connection
+intent. This permits an initially human-only call and a definition with no agent
+participants. Neither entry field contains an inline participant definition.
+
+### Entry participants and startup — approved G2 decisions
+
+Replace the earlier single `entrypoint` field with two required string refs:
+
+- `entry_caller` names the initial calling participant.
+- `entry_receiver` names the initial receiving participant, human or agent.
+- Both must name existing, different keys in `participants`. The caller remains
+  in that catalog alongside receivers and possible transfer destinations.
+- These refs describe the initial conversational roles, not the actor sending
+  an HTTP request or the server issuing a carrier dial command. Connection
+  configuration still determines whether to receive a connection or dial out.
+- Transfers change live control/routing, not the pinned initial entry refs.
+  There is no mutable "current receiver" hidden inside `entry_receiver`.
+
+For the representative support definition, `entry_caller: "caller"` and
+`entry_receiver: "reception"` select the two initial participants. Billing and
+human support remain catalog entries available for later admission or transfer:
+
+1. Prepare/admit the caller and receiver according to their connection intents.
+   An agent receiver starts interacting when the required connection and
+   capabilities are ready.
+2. Do not start every listed agent's providers or dial every listed human at
+   room creation. The catalog defines possibilities, not current room membership.
+3. An authorized transfer prepares its destination before committing control.
+   A dial-out human destination is dialed when needed, and dialing alone does
+   not establish that the person has joined.
+4. A human receiver does not cause an implicit AI receiver to be created. If
+   both initial participants are human, the call can begin without an AI agent.
+
+Definition validation resolves and checks the two refs when parsing/saving the
+definition. Admission pins the selected revision and resolved participant refs
+in the call plan. Runtime orchestration uses that in-memory plan; it does not
+scan participant definitions or re-query a mutable definition to discover the
+caller. Explicit roles remove ambiguity even though avoiding a repeated loop
+is not the main reason for this shape.
+
+This resolves initial role identification and catalog-versus-startup behavior.
+How many live participants may share one definition ref, duplicate admission,
+and reconnect/instance selection remain pending G2 review. No runtime startup
+behavior or schema release was implemented by this documentation decision.
+
+### Runtime participant and transfer identities
 
 `Participant` is the room-level runtime identity. Its `kind` may be `human` or
 `agent`. An agent in the call definition is reusable configuration; when the
@@ -180,12 +225,14 @@ command. The room then validates and commits the actual control mutation.
 ### Track active control directly; do not introduce a graph
 
 The room already has the state needed for participant transfers. The resolved
-plan needs an entrypoint, named participant specs, and resolved tool bindings,
-while the room tracks an optional active agent participant and its fresh
-activation ID:
+plan needs the two initial participant refs, named participant specs, and
+resolved tool bindings, while the room tracks an optional active agent
+participant and its fresh activation ID. For an agent receiver, the control
+flow is:
 
 ```text
-admit and activate the entrypoint's agent participant
+prepare/admit entry_caller and entry_receiver
+  -> when the receiver is an agent, activate after connection/capability readiness
   -> the participant converses or requests an allowlisted transfer tool
   -> tool executor validates the target and asks the room to commit the transfer
   -> previous activation becomes stale
@@ -305,7 +352,8 @@ room-context portion is:
 ```json
 {
   "schema_version": "20260906.02",
-  "entrypoint": "reception",
+  "entry_caller": "caller",
+  "entry_receiver": "reception",
   "room_context": {
     "sections": {
       "customer": {
@@ -332,6 +380,14 @@ room-context portion is:
     }
   },
   "participants": {
+    "caller": {
+      "type": "human",
+      "connection": {
+        "service": "web",
+        "mode": "receive",
+        "admission": "start_call"
+      }
+    },
     "reception": {
       "type": "agent",
       "context_permissions": {
@@ -741,7 +797,7 @@ Application integration catalog
   It does not own MCP endpoints or credentials.
 - A call invocation owns caller/destination identity, definition selection,
   schema-validated initial context, transport attachment, and idempotency. It does
-  not override the definition's entrypoint and carries no MCP authentication.
+  not override either entry ref and carries no MCP authentication.
 - A resolved call plan pins all references, defaults, adapter capabilities,
   selected integration/catalog revisions, discovered tool schemas, policy
   versions, and credential-lease references without retaining secret values.
@@ -760,7 +816,6 @@ Use validated Elixir structs as the canonical in-process representation:
 
 ```text
 CallDefinition
-CallDefinition.Entrypoint
 CallDefinition.Participant
 CallDefinition.AgentParticipant
 CallDefinition.HumanParticipant
@@ -797,7 +852,7 @@ The initial dated schema should contain only:
 - `schema_version` as a `YYYYMMDD.NN` string;
 - optional display metadata, while durable ID and revision stay in the resource
   envelope;
-- an `entrypoint` ref into the participant catalog;
+- `entry_caller` and `entry_receiver` string refs into the participant catalog;
 - shared capability-profile defaults;
 - named inline `participants`, each typed as human or agent;
 - typed room-context schemas for initial values and subsequent mutations;
@@ -1087,7 +1142,7 @@ participant can remain admitted without those capabilities.
 ### Web participant admission routes — approved G2 routing
 
 The gateway identifies a web participant through a tenant-scoped connection
-route, not by guessing from `transport.type` or the definition's `entrypoint`.
+route, not by guessing from `transport.type` or scanning participant definitions.
 Saving a definition can create an opaque connection key and routing record for
 each eligible web participant definition. Publishing/enabling makes the route
 callable; saving a draft must not silently expose it. These are records behind
@@ -1104,7 +1159,10 @@ POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/se
 - The first route starts a new call as the selected initiating participant. It
   resolves the tenant and participant connection key to a deployment/definition
   and participant ref, authorizes admission, and starts the room with a pinned
-  revision. The definition's `entrypoint` remains the initial handler.
+  revision. For this caller-start route, the selected participant must match
+  `entry_caller`; `entry_receiver` identifies the initial handler. The route
+  cannot silently replace either ref or make a transfer-only participant the
+  initial caller.
 - The second route joins an existing call as the selected participant. It
   resolves the tenant and call first, then uses that call's pinned definition
   and participant mapping rather than the latest deployment. A support
@@ -1138,9 +1196,10 @@ boundary owns route/definition resolution; the gateway does not acquire direct
 Repo responsibility. The room holds the resulting pinned plan for runtime work.
 
 The routing decision is supplemented by the approved initial-context and
-authentication contract below. Participant startup/cardinality, personalization,
-and the remaining security/lifecycle details are still pending G2 review. No
-endpoint or ID generator was implemented here.
+authentication contract below and the approved two-entry startup contract above.
+Participant cardinality, personalization, and the remaining security/lifecycle
+details are still pending G2 review. No endpoint or ID generator was implemented
+here.
 
 ### Initial context and client credentials — approved G2 decisions
 
@@ -1225,7 +1284,7 @@ are implementation evidence to consult, not approval of a particular wire format
 
 This resolves G2's direct-context input, signing ownership, gateway credential
 issuance, and encrypted-storage choices only. Partial/default context assembly
-(G3), participant startup/cardinality, telephony initial-context sourcing,
+(G3), participant cardinality, telephony initial-context sourcing,
 personalization, and the security details above remain open. No credential was
 generated, dependency added, database created, or authentication code implemented.
 
@@ -1238,7 +1297,8 @@ candidate until the constructor and compiler tests make every field precise:
 {
   "schema_version": "20260906.02",
   "name": "customer-support",
-  "entrypoint": "reception",
+  "entry_caller": "caller",
+  "entry_receiver": "reception",
   "defaults": {
     "capabilities": {
       "speech_to_text": "default-stt",
@@ -1371,10 +1431,19 @@ Provider/profile strings are closed registry names resolved by the host. They
 do not name Elixir modules. Inline prompts may later be replaced by immutable
 prompt references without changing the runtime semantics. Agent-scoped tools,
 knowledge, guardrails, MCP enablement, and artifact-policy references fit into
-this shape without changing its basic entrypoint and transfer-tool model, but
+this shape without changing its initial-role refs and transfer-tool model, but
 they should be specified in separate focused checkpoints.
 
 ## Alternatives considered
+
+### Embed the caller definition inside an entry field or infer it by scanning
+
+Rejected. Both `entry_caller` and `entry_receiver` are refs into one participant
+catalog. Embedding the caller would introduce a second participant-definition
+location; inferring it from connection options would leave initial roles
+implicit. Parse/save-time validation and the pinned call plan already avoid
+repeated runtime discovery. The earlier `entrypoint` name is superseded rather
+than retained as a second way to choose the receiver in the working candidate.
 
 ### Require a second input schema and mappings into room context
 
@@ -1398,9 +1467,9 @@ Rejected for both the public definition and the initial private plan. A graph
 front-loads node taxonomy, expression semantics, parallelism, joins,
 compensation, graph migration, and visual-editor concerns before Vxpipe can
 switch between two agents. Even a minimal `agent`/`end` graph makes the common
-case less direct than an entrypoint with transfer tools and risks making the
-graph rather than the room the source of truth. Named agent specs, resolved tool
-bindings, and the room's active-agent-participant state are sufficient.
+case less direct than explicit entry refs with transfer tools and risks making
+the graph rather than the room the source of truth. Named agent specs, resolved
+tool bindings, and the room's active-agent-participant state are sufficient.
 
 ### Make executable Elixir modules the only definition
 
@@ -1465,7 +1534,8 @@ Compilation and admission validation should reject at their respective
 boundaries, with path-specific errors:
 
 - malformed, unknown, or unsupported dated schema identifiers;
-- an absent or malformed entrypoint, or one naming an unknown participant;
+- an absent or non-string `entry_caller` or `entry_receiver`, an entry ref naming
+  an unknown participant, or both refs naming the same participant;
 - duplicate or invalid names;
 - an unknown participant type or type-specific field on the wrong participant;
 - a transfer list with an unknown, duplicate, or invalid participant ref;
@@ -1508,9 +1578,9 @@ boundaries, with path-specific errors:
 - any private runtime term or literal secret at the public boundary.
 
 Transfer cycles are not inherently invalid: callers may legitimately return to
-the entrypoint's agent participant. They require bounded transfers and session
-duration. Unreachable agents should initially be a compiler warning or a lint
-error, not necessarily a runtime-invalid definition.
+the initial receiver's agent participant. They require bounded transfers and
+session duration. Unreachable agents should initially be a compiler warning or
+a lint error, not necessarily a runtime-invalid definition.
 
 At runtime, destination resolution must produce a concrete participant ID and a
 supported `human` or `agent` kind before the room commits the transfer. A missing
@@ -2294,7 +2364,7 @@ room incarnation, participant, turn, and activation identity.
 ## Suggested red-green checkpoints
 
 1. **Definition and invocation data:** red tests for a minimal one-agent
-   participant catalog, entrypoint ref, dated schema validation, shared
+   participant catalog, both entry refs, dated schema validation, shared
    capability defaults, agent overrides, initial-context validation, and a
    credential-free invocation. Implement immutable structs and pure path-specific
    validation only.
@@ -2356,7 +2426,8 @@ room incarnation, participant, turn, and activation identity.
 Proceed first with typed `CallDefinition`, `CallInvocation`, and
 `ResolvedCallPlan` contracts without MCP fields in the first proof. The smallest
 proof is an inline one-agent participant catalog using schema `"20260906.02"`, a
-definition-local `entrypoint` ref, shared capability-profile defaults,
+human caller and agent receiver selected by definition-local entry refs,
+shared capability-profile defaults,
 typed room-context sections and directly supplied initial context,
 per-agent section permissions, and bounded limits becoming a self-contained
 immutable plan. Route the existing single-agent behavior through that plan
@@ -2372,7 +2443,7 @@ over an application-wide integration with the same stable ID; neither catalog
 exposes its tools to every agent automatically. Do not begin an MCP transport
 implementation until the general call-definition boundary exists.
 
-Use the participant-definition public input with one entrypoint and
+Use the participant-definition public input with two explicit entry refs and
 agent-scoped tools. The private plan contains resolved participant specs,
 connection intents, transfer allowlists, and tool bindings; it does not contain
 generic nodes or edges. The room directly owns the pinned plan, participant
@@ -2398,14 +2469,14 @@ boundaries described above.
 ## Design gap review — pending approval
 
 The existing participant-first structure still fits the intended scenarios.
-Keep `entrypoint`, direct participant-ref transfer lists, agent-scoped tool
-enablement, immutable resolved plans, room-owned context, and live mixing. This
-checkpoint identifies missing contracts and inconsistencies; it does not add
-runtime functionality. G1 records the approved tool layout and G2 records the
-approved web routes, direct initial context, backend HMAC signing, and encrypted
-client-credential storage. G2's remaining questions and G3–G13 are still
-unapproved. Detailed reasoning and evidence live
-in the [call-definition gap review](../docs/call-definition-gap-review.md).
+Keep `entry_caller` and `entry_receiver`, direct participant-ref transfer lists,
+agent-scoped tool enablement, immutable resolved plans, room-owned context, and
+live mixing. This checkpoint identifies missing contracts and inconsistencies;
+it does not add runtime functionality. G1 records the approved tool layout and G2 records the
+approved web routes, direct initial context, backend HMAC signing, encrypted
+client-credential storage, and explicit initial participants/startup. G2's
+remaining questions and G3–G13 are still unapproved. Detailed reasoning and
+evidence live in the [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Baseline and scope
 
@@ -2415,6 +2486,8 @@ in the [call-definition gap review](../docs/call-definition-gap-review.md).
   Approved follow-ups align G1's tool examples and document G2's tenant-scoped
   start/join routes and authenticated direct-context admission. Obsolete input
   mappings are removed from both context examples and the invocation example.
+  A further approved follow-up replaces `entrypoint` with two entry refs and
+  records startup behavior without approving participant-instance cardinality.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2433,19 +2506,23 @@ The numbering below matches G1–G13 in the focused review document.
    `participants` and read-only `billing` access to `intake`; transfer and context
    tools remain compiler-derived. This resolves G1's documentation ambiguity,
    not the future compiler implementation or its verification.
-2. **Admission — routes, initial context, and credentials approved:** tenant-scoped
-   HTTPS routes select the participant connection key when starting a call and
-   additionally the public call ID when joining one. Tenant keys are 16 URL-safe
-   random characters; participant keys and call IDs are UUIDs, separate from
+2. **Admission — routes, context, credentials, and entry roles approved:**
+   tenant-scoped HTTPS routes select the participant connection key when starting
+   a call and additionally the public call ID when joining one. Tenant keys are
+   16 URL-safe random characters; participant keys and call IDs are UUIDs, separate from
    database primary keys. Joining uses the call's pinned definition and requires
    authorization before a transport session is issued. Initial context now
    matches the definition's sections directly; no separate input-binding layer.
    The integrating backend holds the gateway-issued client secret and HMAC-signs
    the payload. Vxpipe stores the secret encrypted with a separate runtime key.
    Admission may initialize sections that agents can read but none can write.
+   `entry_caller` and `entry_receiver` are required refs to different participants
+   in the same catalog. Startup prepares those two, not every catalog entry;
+   other participants are admitted later as required. Initial refs remain pinned
+   across transfers. The caller-start route must agree with `entry_caller`.
    G2 still needs review of the precise signature/replay and credential-lifecycle
    contract, telephony context sourcing, personalization, timezone and dynamic
-   destinations, plus initial materialization/participant cardinality.
+   destinations, plus participant cardinality and duplicate/reconnect admission.
    A valid signature authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
 3. **Context initialization and stale work:** G2 removed input mappings, but how
@@ -2579,6 +2656,19 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     browser data, events, errors, and logs. Use only synthetic secrets. Add
     replay/expiry, rotation/revocation, and admin-bootstrap cases once those
     remaining contracts are reviewed; these checks do not approve them now.
+14. Compile both entry refs as strings resolving to different catalog members.
+    Reject missing refs, inline objects in entry fields, unknown refs, and a
+    caller equal to the receiver. The caller-start route must match the declared
+    caller; a different role cannot silently replace it. Confirm both refs remain
+    pinned through a transfer and after publishing a newer definition.
+15. Start the caller/reception/billing/support fixture with fake connections and
+    providers. Only the initial caller and receiver are prepared; billing and
+    human support start no provider or dial work just because they are listed.
+    Delay readiness and confirm the agent does not interact prematurely. A later
+    transfer prepares its destination without treating a dial request as an
+    established connection. In a human-to-human entry fixture, no implicit AI
+    receiver is created. Cardinality and duplicate/reconnect scenarios require
+    the separate pending decision before implementation.
 
 ### Review checkpoint verification
 
@@ -2618,8 +2708,28 @@ For the approved 2026-09-07 initial-context and credential follow-up:
   authentication implementation changed. Precise signing/replay, credential
   lifecycle, and partial/default context semantics remain pending review.
 - Kept `20260906.02` as the existing unreleased illustration; no schema release
-  or implementation was published. The next discussion is G2 participant
-  startup/cardinality, not authorization to implement it.
+  or implementation was published. At that checkpoint, the next discussion was
+  G2 participant startup/cardinality, not authorization to implement it.
+
+For the approved 2026-09-07 entry-role and startup follow-up:
+
+- Updated this original labnote's contract, both JSON definition examples,
+  resolved-plan discussion, validation requirements, routing, alternatives,
+  implementation checkpoints, and review status. The focused review document
+  is synchronized with these decisions, not a replacement for this labnote.
+- Parsed all 10 JSON fences and resolved all 16 local links/anchors. Both
+  definition examples have distinct string entry refs naming existing catalog
+  participants, and the smaller context example now includes its human caller.
+- Checked transfer refs, direct initial context, read-only grants, unified tools,
+  unchanged route shapes, terminology, and absence of local absolute paths.
+  `entrypoint` remains only in historical/rejected-shape explanations; no JSON
+  example or proposed struct list retains the old entry field/type.
+- Added future acceptance steps 14–15 for entry validation, startup/readiness,
+  human-only entry, and pinned initial roles across transfer. No runtime test
+  suite was run, and no schema release or runtime functionality was implemented.
+  `git diff --check` passed.
+- The next unresolved G2 question is participant-instance cardinality and
+  duplicate/reconnect admission. It has not been approved by the entry rename.
 
 ## Verification evidence
 
@@ -2643,7 +2753,8 @@ For the approved 2026-09-07 initial-context and credential follow-up:
   unified `tools` map. Other agents in the same call do not inherit that surface.
 - Refined the authoring contract after review: schema identifiers use the
   date-based `YYYYMMDD.NN` format; the current proposal is `"20260906.02"`.
-  `entrypoint` is a definition-local participant ref, participant-control
+  `entry_caller` and `entry_receiver` are definition-local participant refs;
+  they replace the earlier single entry field. Participant-control
   transfers are engine-owned tools, a room may continue without an active agent
   participant, and neither the public definition nor resolved plan uses generic
   nodes or edges.
