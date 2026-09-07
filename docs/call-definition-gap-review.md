@@ -3,8 +3,8 @@
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-07 UTC
 Status: G1 and G2's web routes, initial context, client authentication/storage,
-and explicit entry participants/startup approved; remaining G2 questions and
-G3–G13 pending review.
+explicit entry participants/startup, and one participant per definition key per
+call approved; remaining G2 questions and G3–G13 pending review.
 Documentation only; no runtime implementation.
 
 ## Conclusion and scope
@@ -138,9 +138,24 @@ receiver, and a human-to-human call may begin without any AI participant.
 Transfers change current control/routing, not the pinned initial-role refs.
 The refs describe conversational roles, not which backend submits the request
 or originates a carrier leg; connection configuration retains that job. See the
-[approved entry and startup contract][entry-participants]. Participant-instance
-cardinality and duplicate/reconnect handling are still open, and no runtime
-startup behavior was implemented.
+[approved entry and startup contract][entry-participants]. No runtime startup
+behavior was implemented.
+
+**Approved participant cardinality:** each definition key binds at most one
+runtime participant per call, for humans and agents alike. Once a staff member
+occupies `human-support-agent`, another person cannot join under that key, share
+its identity, or replace their connection. An authorized reconnect resumes the
+existing participant; permitted agent re-entry retains its participant identity
+and receives a fresh activation. Different staff roles use different definition
+keys, and another call gets its own independent participants.
+
+Enforce the binding during admission and transfer preparation, including races
+and repeated requests: neither a second participant nor duplicate pending
+preparation may be created. Direct transfer refs remain unambiguous without an
+instance-selection field. The count is a fixed contract, not a JSON option.
+Detailed reconnect eligibility, wire responses, and admission/transfer retry
+semantics remain follow-ups; cardinality itself is resolved. See the
+[approved one-participant contract][participant-cardinality].
 
 **Approved initial context:** the integrating application's backend supplies
 values directly in the section structure declared by the call definition. Drop
@@ -190,15 +205,12 @@ nor prevents reuse of a valid request. These are required design follow-ups, not
 an approved wire format or a claim of implemented authentication. See the
 [HTTP Message Signatures security considerations][http-signatures].
 
-**Participant cardinality and duplicate admission:** initial role selection and
-startup are resolved above; the number of live instances per definition ref is
-not. For example, two staff members might try to join one call through the same
-`human-support-agent` route. Proposal for review: allow at most one live runtime
-participant per definition ref in the first version. A different staff member
-cannot silently share that identity or replace its connection. Distinguish an
-authorized reconnect from a second participant, and define repeated/concurrent
-join or transfer behavior. If multiple instances are later supported, transfers
-need an unambiguous instance-selection rule in addition to the definition ref.
+**Reconnect and retry lifecycle details:** the approved singleton participant
+binding is not permission to resume an ended/revoked session. Specify reconnect
+eligibility and deadlines, transport replacement, and repeat/concurrent
+join/transfer responses without creating a second participant or allowing a
+different person to take over. Do not reopen multi-instance selection as a
+requirement for the approved initial contract.
 
 **Telephony initial-context sourcing:** an inbound phone call cannot supply the
 example's required trusted `customer.id` by itself. The approved direct-context
@@ -539,6 +551,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 
 | Future acceptance test | Evidence of success |
 | --- | --- |
+| Two staff members try to join as the same definition; the original member reconnects | Only the original authorized participant is retained; the second person's admission fails without takeover; another definition or call has its own independent participant |
+| Race admissions/transfers and re-enter an agent definition | One participant and no duplicate pending preparation per key per call; agent re-entry retains identity with a fresh activation |
 | Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
 | Initialize a required context field directly, with no input mapping or dummy default | Compilation succeeds; absent required initial data fails before room startup; partial/default assembly follows a separately approved rule |
@@ -598,8 +612,10 @@ gateway still uses a development principal; this review adds no authentication
 implementation. The labnote records the follow-up's documentation-check results.
 The subsequent entry-role follow-up checks both examples for distinct resolvable
 string refs, removes the obsolete entry field/type proposal, and records future
-startup/readiness checks. Runtime tests remain out of scope; instance cardinality
-has not been approved by this rename.
+startup/readiness checks. A separate subsequent decision approves one participant
+per definition key per call and adds future duplicate/reconnect/race acceptance
+cases. Runtime tests remain out of scope; the labnote records documentation
+verification separately from those unimplemented checks.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
@@ -610,6 +626,7 @@ has not been approved by this rename.
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
 [signed-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-client-credentials--approved-g2-decisions
 [entry-participants]: ../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions
+[participant-cardinality]: ../labnotes/20260905-0405-call-definition-design.md#one-participant-per-definition-key--approved-g2-decision
 [presence]: ../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology
 [persistence]: ../labnotes/20260905-0405-call-definition-design.md#persistence-call-records-usage-and-artifacts
 [terms]: architecture.md#domain-terminology

@@ -19,8 +19,9 @@ runtime behavior.
 The [design gap review](#design-gap-review--pending-approval) records questions
 and possible solutions. G1's unified agent `tools` map and G2's tenant-scoped web
 admission routes, direct initial context, backend HMAC signing, encrypted
-client-credential storage, and explicit entry participants/startup are approved
-and documented below. G2's remaining admission details and the other suggestions
+client-credential storage, explicit entry participants/startup, and one
+participant per definition key per call are approved and documented below.
+G2's remaining admission details and the other suggestions
 remain pending user review. Approval of documentation does not authorize runtime
 implementation.
 
@@ -191,9 +192,40 @@ caller. Explicit roles remove ambiguity even though avoiding a repeated loop
 is not the main reason for this shape.
 
 This resolves initial role identification and catalog-versus-startup behavior.
-How many live participants may share one definition ref, duplicate admission,
-and reconnect/instance selection remain pending G2 review. No runtime startup
-behavior or schema release was implemented by this documentation decision.
+The subsequent cardinality decision below fixes one participant per definition
+key per call. No runtime startup behavior or schema release was implemented by
+these documentation decisions.
+
+### One participant per definition key — approved G2 decision
+
+Each participant definition key can identify at most one runtime participant in
+a call. This applies to human and agent definitions, including both entry refs
+and every transfer target. The same reusable definition may serve many calls;
+each call has its own participants, never a shared cross-call identity.
+
+For example, once one staff member is admitted as `human-support-agent`, a second
+person cannot join that call under the same key. Reject the second admission
+without replacing the first person's connection or sharing their participant
+identity. A second staff role needs a different definition key, such as
+`human-supervisor`; the rule does not limit the number of distinct human roles.
+
+An authorized reconnect resumes the existing participant. Where agent re-entry
+is permitted, it uses the bound participant with a fresh activation, not a new
+instance of its definition. A disconnect or transfer does not make the key
+available for a different person to take over. Reconnect eligibility, deadlines,
+and transport replacement details remain lifecycle work; knowing a definition
+key is not proof of permission to resume its participant.
+
+Admission and transfer preparation must enforce this invariant centrally,
+including concurrent requests. Repeated work must not create another participant
+or duplicate an already-pending dial/agent preparation. A transfer ref therefore
+selects either the call's existing participant for that definition or its one
+not-yet-admitted participant; no multi-instance selector is needed. Detailed
+retry responses remain part of the pending admission/transfer protocols.
+
+This is a fixed contract, not a new cardinality option in the call JSON. It
+resolves G2's participant-count and duplicate-person ambiguity; it does not
+authorize runtime implementation or define every reconnect/failure policy.
 
 ### Runtime participant and transfer identities
 
@@ -1197,7 +1229,7 @@ Repo responsibility. The room holds the resulting pinned plan for runtime work.
 
 The routing decision is supplemented by the approved initial-context and
 authentication contract below and the approved two-entry startup contract above.
-Participant cardinality, personalization, and the remaining security/lifecycle
+Personalization and the remaining security/lifecycle
 details are still pending G2 review. No endpoint or ID generator was implemented
 here.
 
@@ -1284,7 +1316,7 @@ are implementation evidence to consult, not approval of a particular wire format
 
 This resolves G2's direct-context input, signing ownership, gateway credential
 issuance, and encrypted-storage choices only. Partial/default context assembly
-(G3), participant cardinality, telephony initial-context sourcing,
+(G3), telephony initial-context sourcing,
 personalization, and the security details above remain open. No credential was
 generated, dependency added, database created, or authentication code implemented.
 
@@ -1587,6 +1619,11 @@ supported `human` or `agent` kind before the room commits the transfer. A missin
 identity, a kind mismatch, a destination absent from the active agent's transfer
 allowlist, or a stale source participant/activation rejects the operation
 without changing control or routing.
+
+Admission and destination preparation must also preserve one participant per
+definition key per call. Concurrent or repeated operations cannot allocate a
+second identity for an already-bound key, and a different person cannot take
+over an existing participant through the same route.
 
 ## Room-context implementation plan
 
@@ -2474,7 +2511,8 @@ agent-scoped tool enablement, immutable resolved plans, room-owned context, and
 live mixing. This checkpoint identifies missing contracts and inconsistencies;
 it does not add runtime functionality. G1 records the approved tool layout and G2 records the
 approved web routes, direct initial context, backend HMAC signing, encrypted
-client-credential storage, and explicit initial participants/startup. G2's
+client-credential storage, explicit initial participants/startup, and one
+participant per definition key per call. G2's
 remaining questions and G3–G13 are still unapproved. Detailed reasoning and
 evidence live in the [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -2487,7 +2525,8 @@ evidence live in the [call-definition gap review](../docs/call-definition-gap-re
   start/join routes and authenticated direct-context admission. Obsolete input
   mappings are removed from both context examples and the invocation example.
   A further approved follow-up replaces `entrypoint` with two entry refs and
-  records startup behavior without approving participant-instance cardinality.
+  records startup behavior. The subsequent cardinality decision allows only one
+  participant per definition key in each call.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2520,9 +2559,13 @@ The numbering below matches G1–G13 in the focused review document.
    in the same catalog. Startup prepares those two, not every catalog entry;
    other participants are admitted later as required. Initial refs remain pinned
    across transfers. The caller-start route must agree with `entry_caller`.
+   Each definition key can bind only one participant in that call. A different
+   person cannot claim an occupied key, and authorized reconnect/re-entry uses
+   the existing participant rather than creating another identity.
    G2 still needs review of the precise signature/replay and credential-lifecycle
    contract, telephony context sourcing, personalization, timezone and dynamic
-   destinations, plus participant cardinality and duplicate/reconnect admission.
+   destinations, plus detailed reconnect eligibility and admission/transfer
+   retry/failure handling.
    A valid signature authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
 3. **Context initialization and stale work:** G2 removed input mappings, but how
@@ -2667,8 +2710,17 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     Delay readiness and confirm the agent does not interact prematurely. A later
     transfer prepares its destination without treating a dial request as an
     established connection. In a human-to-human entry fixture, no implicit AI
-    receiver is created. Cardinality and duplicate/reconnect scenarios require
-    the separate pending decision before implementation.
+    receiver is created.
+16. Admit one staff member as `human-support-agent`, then attempt a second
+    person's admission through the same call/participant route. Reject the
+    second without replacing or sharing the first participant's identity.
+    Exercise an authorized reconnect and agent re-entry: the participant ID
+    stays bound to its definition, while an agent gets a fresh activation.
+    Race two admissions or transfer preparations and confirm at most one
+    participant and one pending preparation exist for that definition. Admit
+    `human-supervisor` independently and repeat the original definition in a
+    different call to prove the limit is per key per call, not global. These
+    are future runtime checks; exact retry/transport responses remain unspecified.
 
 ### Review checkpoint verification
 
@@ -2728,8 +2780,23 @@ For the approved 2026-09-07 entry-role and startup follow-up:
   human-only entry, and pinned initial roles across transfer. No runtime test
   suite was run, and no schema release or runtime functionality was implemented.
   `git diff --check` passed.
-- The next unresolved G2 question is participant-instance cardinality and
-  duplicate/reconnect admission. It has not been approved by the entry rename.
+- At that checkpoint, participant-instance cardinality and duplicate/reconnect
+  admission were next; the entry rename alone had not approved a count limit.
+
+For the approved 2026-09-07 one-participant follow-up:
+
+- Recorded one participant per definition key per call in this original labnote
+  and synchronized the G2 review status. Authorized reconnect/re-entry retains
+  identity; another person cannot share or take over an occupied definition key.
+  The contract adds no JSON option or multi-instance selection mechanism.
+- Added future acceptance step 16 for duplicate-person admission, reconnect,
+  agent activation, concurrent preparation, and isolation across definitions
+  and calls. Exact reconnect deadlines and retry responses remain pending.
+- Parsed all 10 JSON fences, resolved all 17 local links/anchors, and checked
+  entry refs, existing context grants/tool layout, terminology, local-path
+  hygiene, and `git diff --check`. No runtime tests or behavior changed.
+- Next review: G2 initial-context sourcing for an inbound phone call, which
+  cannot by itself supply the example's required customer/order identifier.
 
 ## Verification evidence
 
