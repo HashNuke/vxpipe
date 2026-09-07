@@ -171,10 +171,12 @@ Transfer and room shutdown still end local agent execution; this does not undo
 remote side effects. A submitted MCP request that times out without a definitive
 remote result reports outcome `unknown`; a local timeout does not establish
 remote failure or rollback. Preserve any already-known definitive result.
-This approves reporting only: retry/idempotency, explicit cancellation, and
-remote-outcome recovery policies remain under review. This is planned behavior,
-not the current model-task cancellation behavior described in the implemented
-slices below.
+The tool executor must not automatically retry that request; return the unknown
+outcome to the agent. A later agent-requested tool call is a separate invocation,
+not an internal retry or an exactly-once guarantee. Other retry/idempotency,
+explicit cancellation, and remote-outcome recovery policies remain under review.
+This is planned behavior, not the current model-task cancellation behavior
+described in the implemented slices below.
 
 ## Architectural boundaries
 

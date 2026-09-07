@@ -31,7 +31,8 @@ complexity limits are not adopted now; datatype and value-size checks remain.
 G3 is resolved. G4's ordinary-interruption rule is approved: submitted MCP calls
 finish within their existing timeout because interrupting speech does not imply
 intent to cancel a tool. A submitted MCP request that times out without a
-definitive remote result reports outcome `unknown`. Retry policy is still pending.
+definitive remote result reports outcome `unknown`, without automatic executor
+retry; a later agent-requested tool call is a separate invocation.
 Remaining G2/G4 questions and G5–G13 are pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -46,8 +47,8 @@ question. Naming and agent-mediated MCP result updates are also resolved;
 dedicated variable ownership and submitted-write lifetime are approved, and
 additional schema-complexity caps are not adopted now. G3 is closed in
 documentation, reducing the count from 12 to 11; implementation remains pending.
-MCP interruption and timeout-outcome reporting resolve only part of G4, so the
-count stays at 11.
+MCP interruption, timeout-outcome reporting, and no automatic executor retry for
+that timeout resolve only part of G4, so the count stays at 11.
 
 ## Conclusion and scope
 
@@ -567,10 +568,17 @@ definitive success/failure result; pre-submission validation errors do not becom
 unknown merely because this classification exists. Unknown does not count as
 success or automatically change Call Variables.
 
-This approves reporting, not retry behavior. Automatic retry/no-retry policy,
-idempotency, status lookup, reconciliation, later receipts, and durable operation
-storage remain proposals. The existing local timeout remains in effect; no new
-wire format or operation-worker architecture is approved here.
+**Approved executor retry default:** do not automatically retry a submitted MCP
+request after a timeout leaves its outcome unknown. Return that outcome to the
+agent instead of silently resubmitting the request. A booking may already exist;
+an automatic retry could create another one. A later agent-requested tool call
+is a separate invocation, not a hidden executor retry. This does not provide
+exactly-once execution or prevent the agent from requesting a duplicate action.
+
+Other failure/retry policies, idempotency configuration, status lookup,
+reconciliation, later receipts, and durable operation storage remain proposals.
+The existing local timeout remains in effect; no new wire format or
+operation-worker architecture is approved here.
 
 The labnote names retries, cancellation, and idempotency, but does not yet settle
 the remaining interactions. A booking or SMS can succeed remotely before the local
@@ -590,11 +598,11 @@ Whether and how those results can initiate
 new variable updates remains under review; this proposal does not cancel G3's
 already-submitted local variable commands or bypass their revision checks.
 
-**Retry proposal — still unapproved:** default mutating operations to no automatic
-retry after an ambiguous submission.
-Permit retry only with a documented provider idempotency contract or a safe
-reconciliation strategy. MCP request IDs are correlation, not business-action
-idempotency keys. Business validation, slot uniqueness, and atomic booking
+**Potential retry exceptions — still unapproved:** any future automatic retry
+after an ambiguous submission would need a documented provider idempotency
+contract or a safe reconciliation strategy. No tool-classification or metadata
+exception is approved by the default no-retry decision. MCP request IDs are
+correlation, not business-action idempotency keys. Business validation, slot uniqueness, and atomic booking
 remain responsibilities of the external system; call variables are not its
 transaction database.
 
@@ -879,8 +887,9 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Read/update variables while the room authority is not servicing messages | Direct tool requests finish in the dedicated variables process without a hidden authorization or commit round trip |
 | Submit A's update, transfer to B, and let the update execute after A stops | A's execution subtree, capabilities, and model/tool workers terminate without restarting; its already-sent update may still commit under normal checks, B can read/refresh it under its own grants, and A's speech does not resume; stopping the variables process itself gives no pending-write completion guarantee |
 | Submit an MCP read or action, delay its response, then interrupt speech or send interrupting text | The submitted request continues to its result or existing timeout while the agent remains running; its result stays tied to the invocation for subsequent reasoning, without reviving cancelled output, executing unsent old-turn tools, or automatically changing variables; transfer still terminates local agent workers |
-| Commit a fake remote booking but withhold its response until timeout | Report outcome unknown with timeout as the cause, not confirmed failure, success, or rollback; no automatic variable mutation; already-known definitive results stay definitive; retry behavior remains a separate pending decision |
-| Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
+| Commit a fake remote booking but withhold its response until timeout | Report outcome unknown with timeout as the cause, not confirmed failure, success, or rollback; no automatic variable mutation; already-known definitive results stay definitive; the executor makes no automatic retry |
+| Explicitly request another tool call after an unknown timeout | A separate agent-requested invocation is distinguishable from an executor retry; no exactly-once or external deduplication guarantee is implied |
+| After a separately approved idempotency/reconciliation policy, exercise a retry | Verify any promised duplicate prevention against that policy and provider behavior; it is not guaranteed by the executor's no-automatic-retry default alone |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
@@ -1127,6 +1136,18 @@ examples, both definition fixtures, 31 local links/anchors, unchanged routes and
 external references, and preserved G3 and implemented-runtime contracts.
 Timeout/interruption policy, retry-review boundaries, terminology, path hygiene,
 and whitespace checks pass. No runtime or browser tests were run.
+
+The subsequent retry decision approves no automatic executor retry after an
+unknown-outcome timeout. Return the outcome to the agent; a later requested tool
+call is a separate invocation, without exactly-once or external deduplication
+guarantees. No metadata-based retry exception is approved. Active design summaries
+and the one-invocation/separate-invocation acceptance steps are synchronized with
+the original labnote and architecture. Other G4 questions remain open and the
+count stays at 11. Verification confirms 15 unchanged valid JSON examples, both
+definition fixtures, all 31 local links/anchors, and unchanged routes/external
+references. Prior G3 and implemented-runtime descriptions are preserved; retry
+scope, remaining-review status, terminology, path hygiene, and whitespace checks
+pass. No runtime changes or runtime/browser tests.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

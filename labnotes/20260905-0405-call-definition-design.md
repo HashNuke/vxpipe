@@ -63,9 +63,11 @@ approved: interrupting speech does not express intent to cancel a submitted MCP
 tool call, so let that call finish within its existing timeout without reviving
 the interrupted output. A submitted MCP request that times out without a
 definitive remote result is reported as outcome `unknown`, not confirmed failure.
-Retry policy is not approved by this decision. G2's remaining admission details,
-the rest of G4, and G5–G13 remain pending user review. Approval of documentation
-does not authorize runtime implementation.
+The tool executor must not automatically retry that request; return the unknown
+outcome to the agent. A later agent-requested call is a separate invocation,
+not an internal retry or a guarantee against duplicate external actions.
+G2's remaining admission details, the rest of G4, and G5–G13 remain pending user
+review. Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
 
@@ -1454,10 +1456,18 @@ known; this rule does not turn known outcomes or pre-submission validation error
 into unknown outcomes. Unknown is not a successful tool result and does not
 automatically populate Call Variables.
 
-This approves outcome reporting only, not automatic retry or no-retry policy,
-idempotency configuration, status lookup, reconciliation, durable operation
-storage, or a new wire envelope. Those remain separate G4 decisions. Recovery
-after agent/room shutdown and treatment of later receipts also remain open.
+The approved executor policy is no automatic retry of a submitted MCP request
+whose timeout leaves its outcome unknown. Return that outcome to the agent;
+do not silently resubmit the request. A booking whose response was lost may
+already exist, so repeating the request could create a second booking.
+
+A later tool call requested by the agent is a separate invocation, not a hidden
+retry by the executor. This distinction is not an exactly-once or deduplication
+guarantee: the separate invocation may still repeat an external action. No
+automatic-retry exception based on tool classification or idempotency metadata
+is approved now. Policies for other failures, explicit cancellation, status
+lookup, reconciliation, durable operation storage, and later receipts remain
+separate G4 decisions. No new wire envelope or retry configuration is added.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
@@ -3321,7 +3331,8 @@ work, not completion of already-submitted variable requests. Additional schema
 complexity limits are not adopted now; datatype and value-size checks remain.
 G3 is resolved in documentation. G4 now preserves submitted MCP calls across
 ordinary conversational interruption and reports a timeout without a definitive
-remote result as outcome `unknown`. Retry/recovery and its other questions,
+remote result as outcome `unknown`, without automatic executor retry. Later
+agent-requested calls are separate invocations. Other retry/recovery questions,
 remaining G2 details, and G5–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
@@ -3339,8 +3350,9 @@ write-only error question. Naming and agent-mediated MCP result updates are also
 resolved. The dedicated variables-process ownership and submitted-write lifecycle
 are approved, and additional schema-complexity caps are not adopted now. That
 closes G3 and reduces the count from 12 to 11; implementation is still pending.
-G4's ordinary-interruption rule and unknown-outcome reporting on timeout are now
-approved, but its other questions keep that group open and the overall count at 11.
+G4's ordinary-interruption rule, unknown-outcome reporting on timeout, and no
+automatic executor retry for that timeout are approved. Its other questions keep
+that group open and the overall count at 11.
 
 ### Baseline and scope
 
@@ -3491,12 +3503,15 @@ The numbering below matches G1–G13 in the focused review document.
    variable write. Transfer still shuts down the source's local execution subtree.
    A submitted MCP request that times out without a definitive result reports
    outcome `unknown`, not confirmed failure or rollback. Preserve a definitive
-   outcome if already known. This settles timeout reporting, not retry policy.
+   outcome if already known. The executor does not automatically retry that
+   request; a later agent-requested call is a separate invocation, without an
+   exactly-once guarantee.
    The following proposals remain unapproved: a terminated/timed-out request may
    already have booked or sent something remotely. Possible resolution: separate
    tool invocation from external operation, preserve confirmed/failed/unknown
-   outcomes, and retry
-   ambiguous writes only with provider-supported idempotency or reconciliation.
+   outcomes, and consider any future automatic-retry exception only with
+   provider-supported idempotency or reconciliation. No such exception is
+   approved by the default no-retry decision.
    Late receipts must not revive canceled model work or apply stale variables
    patches. The policy for new variable writes from late external results remains
    pending; G3 already allows submitted local variable commands to finish.
@@ -3635,14 +3650,17 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    response until the local deadline expires. Assert the reported outcome is
    `unknown`, with timeout as the cause, not confirmed failure, success, or rollback.
    Also check an already-known definitive result is not replaced with unknown
-   and no variables are populated automatically. Retry behavior is a separate,
-   still-unapproved contract, not an assertion in this timeout-reporting case.
+   and no variables are populated automatically. Observe the fake MCP through
+   an explicit executor-completion acknowledgement and assert exactly one
+   invocation: the executor must not resubmit the unknown-outcome request.
+   Then explicitly request another tool call from the agent and verify it is
+   a separate invocation, not a hidden retry or an exactly-once guarantee.
    Transfer/shutdown must still terminate the local agent workers, with
    no assertion that local termination undoes an external action. Use explicit
    acknowledgements and monitors, not sleeps or liveness polling.
-   After the remaining G4 policies are approved, add cases for ambiguous retries,
-   late-result reconciliation, and changed confirmation arguments; those behaviors
-   are not settled by interruption or timeout-outcome reporting.
+   After the remaining G4 policies are approved, add cases for other failure/retry
+   policies, late-result reconciliation, and changed confirmation arguments;
+   those behaviors are not settled by the unknown-timeout no-retry default.
 5. Return a synthetic confirmation from a fake remote MCP booking tool that
    knows nothing about Vxpipe. Confirm the result alone changes no call variables.
    Let the agent call `update_variables` for its read+write `booking` section:
@@ -4283,6 +4301,28 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   unchanged. Interruption/timeout reporting, retry-review boundaries, restricted
   terminology, local-path hygiene, and `git diff --check` pass. Reviewed the
   complete documentation diff. No runtime or browser tests were run.
+
+### No automatic retry after an unknown timeout — approved 2026-09-07
+
+- Approved the executor default: return the unknown outcome for a submitted MCP
+  request whose timeout leaves its remote result unconfirmed; do not silently
+  retry that request. It may already have completed its external action.
+- A later agent-requested tool call is a separate invocation, not an executor
+  retry. This provides no exactly-once guarantee and does not prevent a separate
+  invocation from duplicating an external action. No automatic-retry exception
+  based on tool metadata or classification is approved now.
+- Updated the original contract, architecture, review status, and acceptance
+  steps to observe one executor invocation through its completion acknowledgement,
+  then distinguish a separately requested call. Other retry/failure policies,
+  reconciliation, later receipts, and explicit cancellation remain open. G4 is
+  still partly resolved; the count remains 11 open numbered groups.
+- Verification: all 15 JSON examples and both definition fixtures are unchanged
+  and parse; all 31 local links/anchors resolve. Routes, external references,
+  G3's authorization transaction, and implemented-runtime descriptions are
+  unchanged. Reviewed the complete diff, including the distinction between
+  executor retries and new agent invocations. Retry scope, remaining-review
+  status, restricted terminology, local-path hygiene, and `git diff --check`
+  pass. Documentation only; no runtime or browser tests were run.
 
 ## Verification evidence
 
