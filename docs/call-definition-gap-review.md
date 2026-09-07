@@ -6,7 +6,8 @@ Status: G1 and G2's web routes, initial context, API-key admission with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call approved;
-remaining G2 questions and G3–G13 pending review.
+G3 initialization approved with no context defaults; remaining G2/G3 questions
+and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
@@ -179,6 +180,8 @@ permissions, not a second remapping layer. The authorized backend may prefill
 any declared section, including one that no agent can write. Initial context
 cannot override providers, tools, either entry ref, tenant, or other definition
 policy.
+There are no context defaults: only values supplied at call setup prefill it.
+Schemas describe the allowed structure; they do not manufacture initial values.
 
 **Approved authentication and connection flows:** replace separate client IDs,
 client secrets, and HMAC-signed envelopes with a gateway-issued API key in the
@@ -305,8 +308,9 @@ preserve the same call and participant; multi-instance selection is not required
 **Telephony initial-context sourcing:** an inbound phone call cannot supply the
 example's required trusted `customer.id` by itself. The approved direct-context
 shape eliminates remapping, not the need for a trustworthy source of values.
-Keep definition defaults, authorized initial context, trusted ingress metadata,
-and subsequent agent assertions distinguishable. Provider-asserted
+There is no definition-default fallback. Keep authorized initial context,
+trusted ingress metadata, and subsequent agent assertions distinguishable; do
+not silently copy ingress data into business context. Provider-asserted
 caller number is a routing/contact claim, not verified customer identity. An
 admission resolver can perform a bounded lookup before room creation; otherwise
 leave identity unverified for a tool to establish later.
@@ -316,27 +320,35 @@ and first-message personalization, locale, IANA timezone, and dynamic dial
 numbers. Specify when each value is evaluated:
 call-start time is pinned; “current time” is a typed clock/tool observation, not
 a permanently frozen prompt variable. Missing required bindings fail early;
-optional values need explicit defaults. No arbitrary templates, code evaluation,
-tenant overrides, or unvalidated deep merges. Destination bindings remain
+optional bindings need explicit omission/fallback behavior without filling room
+context. No arbitrary templates, code evaluation, tenant overrides, or
+unvalidated deep merges. Destination bindings remain
 subject to tenant outbound-call policy and rate limits.
 
 The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
 need, not a reason to adopt their unrestricted authoring surface.
 
-### G3 — P1: Context validation is not enough to establish authority
+### G3 — P1, partly resolved: Supplied-only initialization; authority still pending
 
-At baseline, the [context candidate][context-design] required defaults to satisfy
-the full schema *before* initialization, forcing dummy values or optional fields
-for data supplied only at call start. The approved G2 revision removes input
-mappings and allows initial values in the declared section shape, including a
-required value with no default. It does not settle partial/default assembly.
-Proposed resolution for review: validate supplied defaults for types/unknown
-keys, specify section replacement versus field merge, then validate the complete
-initialized section, including required fields. Specify missing/omitted and null
-behavior. No overlapping-input-binding rule is needed now that those mappings
-have been removed. All initialization must succeed before room/provider work
-starts; exact assembly semantics still need approval.
+**Approved initialization:** the [context candidate][context-design] has no
+default values. Its earlier section defaults and proposed merge rules are
+withdrawn. Only an authorized call-setup invocation prefills context in the
+declared section shape. Reject section-level and nested schema `default`
+declarations. Capability/provider configuration defaults are a separate concern
+and remain unchanged.
+
+Validate supplied values and required setup data before room/provider work.
+Missing required values fail; omitted optional fields/sections remain unfilled,
+not automatically `{}`, `null`, or another value. Callers may explicitly supply
+an empty object where valid. Schemas and permissions do not populate data, and
+later authorized context updates remain supported. Both labnote examples omit
+context defaults; the invocation prefills only `customer.id`, leaving `intake`
+unfilled. There is no default-merge or input-remapping contract left to decide.
+
+The following runtime authority proposals remain unapproved. Precise read and
+first-write behavior for an unset section also needs its implementation contract
+without introducing default values.
 
 The [authorization transaction][context-authorization] checks activation, but
 interruption can leave the same agent activation active. Require a still-live
@@ -645,7 +657,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Race admissions/transfers and re-enter an agent definition | One participant and no duplicate pending preparation per key per call; agent re-entry retains identity with a fresh activation |
 | Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
-| Initialize a required context field directly, with no input mapping or dummy default | Compilation succeeds; absent required initial data fails before room startup; partial/default assembly follows a separately approved rule |
+| Declare schemas with no context defaults and supply only a required customer ID at setup | Required data and supplied values validate before startup; optional intake stays unfilled; context default declarations fail; capability defaults still work; explicit empty objects validate without filling values |
 | Prepare private order context using a backend API key, then join from the browser using only a token | Preparation pins/stores context without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and context fail |
 | Connect a backend WSS client with an API key and send unsigned context as its first message | Invalid authentication fails before upgrade; invalid/missing/oversized context cannot start the room; browser Origin and HTTP CORS policies are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
@@ -683,6 +695,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   identity as interchangeable authority.
 - Do not duplicate the room-context schema with a second call-input schema and
   initialization map. The backend can supply the declared context shape directly.
+- Do not populate context from definition defaults, merge in fallback values,
+  or turn omitted optional values into empty objects or nulls. Only supplied
+  setup data prefills context; later writes still need their existing grants.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
@@ -746,6 +761,11 @@ The later timing clarification distinguishes record creation from actual live
 start and preserves that start across delayed persistence and recovery. Its
 future acceptance cases cover duration, token operations, and pre-start failure;
 no runtime timestamp or database schema was changed.
+The subsequent context correction removes defaults from both labnote schema
+examples and approves supplied-only initialization. It replaces the merge-rule
+proposal, retains capability/profile defaults, and updates planned acceptance
+checks. G3's remaining runtime authority questions are still open; no context
+compiler or runtime implementation was changed.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

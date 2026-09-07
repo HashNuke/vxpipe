@@ -24,8 +24,10 @@ call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call are
 approved and documented below. Record creation and actual live-call start also
 have distinct timestamps; preparation is not call duration.
-G2's remaining admission details and the other suggestions remain pending user
-review. Approval of documentation does not authorize runtime implementation.
+G3's initialization rule is also approved: context has no default values and is
+prefilled only from supplied call-setup data. G2's remaining admission details,
+the remaining G3 authority questions, and the other suggestions remain pending
+user review. Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
 
@@ -308,10 +310,11 @@ room-owned `room_context`, separate from every agent's private model history and
 scratch state. It remains available while humans continue the call after the
 last agent participant leaves.
 
-The definition declares named top-level context sections. Each section is an
-object with a schema and optional safe default. An authorized invocation supplies
-initial values directly in that section structure; no separate input schema or
-input-to-context mapping is required. Typed facts should not be
+The definition declares named top-level context sections. Each section describes
+an object schema, not initial values or defaults. Only an authorized call-setup
+invocation prefills values, directly in that section structure; no separate
+input schema, input-to-context mapping, or default-merge layer is required.
+Unprovided optional context remains unfilled. Typed facts should not be
 re-extracted from a transcript when an authoritative invocation value or tool
 result already exists.
 
@@ -410,8 +413,7 @@ room-context portion is:
             "topic": {"type": "string"}
           },
           "additionalProperties": false
-        },
-        "default": {}
+        }
       }
     }
   },
@@ -463,12 +465,18 @@ The schema fields and runtime values have distinct jobs:
   matching these schemas directly. It replaces the earlier `input_schema` and
   `room_context.initialization` mapping. For example, the caller supplies
   `customer: {id: "customer-456"}`, not a separate `customer_id` input to map.
-- A section `default` is definition data. Required values can instead be supplied
-  at admission, as with `customer.id` above; the complete initialized context
-  must validate before room/provider startup. The interaction between partial
-  defaults and partial supplied sections remains a G3 review item, not an
-  approved deep-merge rule. This example supplies the complete `customer` section
-  and uses the complete empty default for `intake`.
+- Context has no default values, at either section or nested schema-property
+  level. The definition describes shape and permissions only; reject context
+  `default` declarations rather than using or silently ignoring them. There is
+  no merge precedence to specify. This does not remove capability/provider
+  configuration defaults elsewhere in the call definition.
+- Validate the supplied initial values before room/provider startup. Required
+  setup values such as `customer.id` must be provided; no dummy value, coercion,
+  or schema default fills a missing field. Optional omitted fields/sections
+  stay unfilled, rather than receiving automatic `{}`, `null`, or other values.
+  An explicitly supplied empty object is allowed only where its schema permits.
+  The invocation example prefills `customer.id` only; `intake` has no initial
+  value. Later authorized context updates are still supported.
 - Admission initializes context independently of agent write grants. Both
   agents can read `customer`, but neither can change it through context tools.
 - `context_permissions` is present only on agent participants and refers only
@@ -498,6 +506,9 @@ RoomContext
 The global revision supports snapshots and event correlation. The section
 revision is the optimistic-concurrency token used by tools. Independent sections
 can change without causing unrelated updates to conflict.
+Declarations and revision metadata do not themselves populate section values.
+The precise read/first-write contract for an unfilled section remains to be
+settled without introducing defaults.
 
 ### Platform context tool contracts
 
@@ -834,8 +845,8 @@ Application integration catalog
 - A call invocation owns caller/destination identity, definition selection,
   schema-validated initial context, transport attachment, and idempotency. It does
   not override either entry ref and carries no MCP authentication.
-- A resolved call plan pins all references, defaults, adapter capabilities,
-  selected integration/catalog revisions, discovered tool schemas, policy
+- A resolved call plan pins all references, capability/profile defaults, adapter
+  capabilities, selected integration/catalog revisions, discovered tool schemas, policy
   versions, and credential-lease references without retaining secret values.
 - A running room owns mutable state. Editing a definition cannot mutate an
   existing room.
@@ -1252,9 +1263,9 @@ G2 review. No endpoint or ID generator was implemented here.
 
 The integrating application supplies initial room-context values directly in
 the structure declared by the call definition. There is no second input schema
-or input-to-context binding layer. The reusable definition declares schemas,
-optional defaults, and agent permissions; the call invocation supplies the
-per-call values. The authorized backend may prefill any schema-declared section,
+or input-to-context binding layer. The reusable definition declares schemas and
+agent permissions, with no context defaults; the call invocation supplies any
+initial values. The authorized backend may prefill any schema-declared section,
 including one that no agent can write. Supplying initial context does not edit
 the stored definition or grant an agent write access.
 
@@ -1381,7 +1392,8 @@ storage-limit policies, precise transport messages/timeouts and WebSocket routes
 reconnect eligibility/deadlines, and detailed retry/crash reconciliation. Single-use claim
 and existing-call token issuance are approved below. HMAC algorithm selection,
 payload canonicalization, and signature-envelope fields are no longer
-implementation questions. Partial/default context assembly (G3), telephony
+implementation questions. Context-default assembly is eliminated: only supplied
+setup values prefill context. The remaining G3 authority questions, telephony
 initial-context sourcing, and personalization
 also remain open. No credentials, configuration, dependencies, database, or
 runtime authentication/transport behavior were changed in this checkpoint.
@@ -1487,8 +1499,7 @@ candidate until the constructor and compiler tests make every field precise:
             "topic": {"type": "string"}
           },
           "additionalProperties": false
-        },
-        "default": {}
+        }
       }
     }
   },
@@ -1589,6 +1600,10 @@ submit a third destination or see the latter participant's service and number.
 The compiler also exposes read and update context tools restricted to the
 participant's declared section permissions.
 
+In this invocation, only `customer.id` is prefilled. Declaring the `intake`
+section does not initialize it to an empty object or manufacture any values;
+it remains unfilled until a permitted update supplies data.
+
 Provider/profile strings are closed registry names resolved by the host. They
 do not name Elixir modules. Inline prompts may later be replaced by immutable
 prompt references without changing the runtime semantics. Agent-scoped tools,
@@ -1614,6 +1629,14 @@ the definition's context-section shape directly. A separate `input_schema` and
 JSON Pointer initialization map duplicate that contract without helping the
 order-ID example. JSON Pointers remain useful for authorized context mutations;
 removing initialization bindings does not remove the context update tool.
+
+### Put default values in context definitions or merge them into setup data
+
+Rejected. Context declarations provide schemas and permissions, not initial
+values. Only supplied call-setup data prefills context; omitted optional data
+stays unfilled. There is no context-default construction or merge layer. This
+does not change capability/profile configuration defaults or later authorized
+context updates.
 
 ### Keep separate client-ID/HMAC authentication for browser-forwarded payloads
 
@@ -1748,8 +1771,8 @@ boundaries, with path-specific errors:
 - tenant integration state escaping its tenant boundary;
 - forbidden or malformed custom authentication headers;
 - duplicate or invalid room-context section names and unsupported schemas;
-- a room-context default containing an unknown field or invalid supplied value
-  (partial/default completion semantics still require G3 review);
+- any context `default` declaration, including section-level and nested schema
+  properties; context values belong in the call-setup payload, not the definition;
 - an agent context permission naming an unknown section or permission other
   than `read` or `write`;
 - a transfer context projection containing a section the destination cannot
@@ -1818,7 +1841,7 @@ CallDefinition + CallInvocation
 ```
 
 `ResolvedCallPlan` is immutable. `RoomContext` is mutable and belongs to the room
-incarnation. A focused pure module owns default construction, projection,
+incarnation. A focused pure module owns supplied-value initialization, projection,
 pointer mutation, size checks, schema validation, and revision changes;
 `RoomAuthority` owns the module's state and decides whether an operation is
 authorized at this moment.
@@ -1907,9 +1930,9 @@ permissions; stale source-agent tool calls fail their activation check.
 ### Incremental red-green checkpoints
 
 1. **Pure definition contract:** add failing tests for the smallest
-   `20260906.02` participant-first definition with context sections, defaults,
-   direct initial context, agent permissions, and direct transfer refs. Implement
-   typed constructors and path-specific errors without starting processes.
+   `20260906.02` participant-first definition with context schemas and no context
+   defaults, direct initial context, agent permissions, and direct transfer refs.
+   Implement typed constructors and path-specific errors without starting processes.
 2. **Pure context state:** add failing tests for initialization, projection,
    bounded pointer changes, atomic schema rejection, independent section
    revisions, and write-only redaction. Implement the pure `RoomContext` state
@@ -1948,6 +1971,8 @@ During implementation, run focused tests from `apps/vxpipe_call_engine` after
 each red and green step. The focused cases must demonstrate:
 
 - initial context initializes only schema-declared sections and fields;
+- context initialization uses only supplied values, rejects default declarations,
+  and leaves omitted optional context unfilled;
 - admission can initialize a section that agents can read but none can write;
 - an agent reads only granted sections and receives section revisions;
 - an agent updates an allowed field/object through the platform tool;
@@ -2719,9 +2744,11 @@ G2 records the approved web routes, direct initial context, hash-only API-key
 storage, single-use join tokens with existing-call recovery and no automatic
 call-record expiry, prepared-token and direct-backend connection flows, explicit
 initial participants/startup, and one
-participant per definition key per call. G2's
-remaining questions and G3–G13 are still unapproved. Detailed reasoning and
-evidence live in the [call-definition gap review](../docs/call-definition-gap-review.md).
+participant per definition key per call. G3's initialization rule now permits
+only supplied setup values, with no context defaults. G2's remaining questions,
+the remaining G3 authority questions, and G4–G13 are still unapproved. Detailed
+reasoning and evidence live in the
+[call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Baseline and scope
 
@@ -2741,6 +2768,8 @@ evidence live in the [call-definition gap review](../docs/call-definition-gap-re
   issuance for the existing call record, separate from browser joining.
   The expiry clarification rejects an additional unstarted-call deadline: only
   the token expires, while record retention remains a separate concern.
+  The context correction removes default values from both schema examples and
+  the initialization contract. Capability/profile defaults remain unchanged.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2800,11 +2829,12 @@ The numbering below matches G1–G13 in the focused review document.
    details, and admission/transfer crash handling.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
-3. **Context initialization and stale work:** G2 removed input mappings, but how
-   partial defaults combine with initial context remains open. A supplied
-   required field must not need a dummy default. Possible resolution: validate
-   partial defaults, assemble values under an explicit rule, then validate the
-   complete context. Activation checks alone do not invalidate interrupted work
+3. **Context initialization resolved; authority details pending:** there are no
+   context defaults and no initialization merge. Only authorized call-setup
+   input prefills context. Validate that supplied data, reject missing required
+   setup values, and leave omitted optional values unfilled. Both context schema
+   examples now omit defaults; capability/profile configuration is unchanged.
+   Remaining review: activation checks alone do not invalidate interrupted work
    from the same activation. Also consider checking live turn/tool
    identity and deadline at mutation commit; deduplicate mutation retries.
    Writes committed before interruption remain facts. Reject mixed authorized
@@ -2882,9 +2912,12 @@ These are future verification scenarios, not capabilities available in the
 playground today. Use deterministic fakes first and synthetic data throughout.
 
 1. Compile one definition whose required context value comes directly from
-   `initial_context`, with no mapping or dummy default. Missing required values
-   must fail before a room or provider starts. Partial/default assembly cases
-   require the pending G3 decision before they can become acceptance tests.
+   `initial_context`, with no mapping or defaults. Missing required setup values
+   and invalid supplied values must fail before a room or provider starts.
+   Reject section-level and nested context defaults; retain ordinary capability
+   defaults. Supply only `customer.id` and confirm no `intake` value is invented.
+   With no required setup data, omission prefills no values. Explicitly supplied
+   empty objects must validate, not act as instructions to populate defaults.
 2. Start a room, save intake through the agent tool, then read it on another
    turn. Transfer to a read-only agent; the value remains available but writes
    fail. Inspect client events and confirm private tool values are absent.
@@ -3038,7 +3071,8 @@ authentication is superseded by the API-key decision below):
   secret-redaction acceptance steps. These were not run: no runtime behavior or
   authentication implementation changed. At that checkpoint, precise
   signing/replay, credential lifecycle, and partial/default context semantics
-  remained pending; the later API-key decision removes the signing questions.
+  remained pending; later decisions remove the signing questions and reject
+  context defaults rather than defining assembly rules.
 - Kept `20260906.02` as the existing unreleased illustration; no schema release
   or implementation was published. At that checkpoint, the next discussion was
   G2 participant startup/cardinality, not authorization to implement it.
@@ -3182,6 +3216,26 @@ For the approved 2026-09-07 actual call-start timing clarification:
   contracts remain consistent, and all 19 local links/anchors resolve. Route and
   timing-example consistency, terminology, local-path hygiene, and
   `git diff --check` pass.
+
+For the approved 2026-09-07 supplied-only context clarification:
+
+- Removed context defaults from both definition examples and the compiler,
+  initialization, and review contracts. Context declarations define schemas
+  and permissions only; initial values come exclusively from authorized
+  call-setup data. There is no default construction or merge precedence.
+- Retained required setup validation and later permission-checked updates.
+  Omitted optional context stays unfilled; an explicitly supplied empty object
+  must satisfy its schema. The invocation prefills only `customer.id`, not
+  `intake`. Capability/provider configuration defaults are unchanged.
+- Updated planned acceptance checks and marked G3 initialization resolved in
+  both documents. Remaining authority questions and the precise read/first-write
+  contract for unfilled sections still need review; no runtime work was added.
+- Verified all 10 JSON examples parse and compared them with the prior commit:
+  their only changes are removal of the two `intake.default` properties. Entry,
+  context permissions, transfer refs, tools, and capability defaults otherwise
+  remain unchanged. All 19 local links/anchors resolve; route consistency,
+  terminology, local-path hygiene, and `git diff --check` pass. No runtime tests
+  were run for this documentation-only correction.
 
 ## Verification evidence
 
