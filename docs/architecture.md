@@ -861,6 +861,12 @@ mandatory; hiding a tool event is not transcript or audio redaction.
 Stored call-data retention periods are application configuration with tenant
 overrides. The application default is retain forever. An explicit tenant setting
 wins; otherwise inherit the application setting, including its forever default.
+The setting is `call_retention`: use the JSON string `"forever"` or a finite
+duration object such as `{"seconds":2592000}` (30 days). Omitted application
+configuration defaults to `"forever"`; omitted tenant configuration inherits it,
+while explicit tenant `"forever"` overrides a finite application period. This is
+not a call-definition, creation, or participant option. No human-readable duration
+parser, null sentinel, or per-call policy copy is introduced.
 Forever means no age-based expiration by Vxpipe, not automatic capture of every
 payload or a backup/recovery guarantee. Existing storage enablement, credential
 exclusions, and client visibility remain separate. Periods are not agent-defined
@@ -902,8 +908,8 @@ journal or permanent tombstone is required; successful cleanup leaves no call
 record, summary, or snapshot. Cleanup and archive/publisher owners must coordinate
 so late writes cannot recreate purged data; external-first ordering alone does
 not solve that race, and no elaborate coordination mechanism is selected here.
-These background cleanup retries are not MCP/tool executor retries. Exact duration
-encoding and unstarted-record housekeeping remain separate; no job is implemented
+These background cleanup retries are not MCP/tool executor retries.
+Unstarted-record housekeeping remains separate; no job is implemented
 by this documentation decision.
 
 Silent live monitoring uses an authenticated monitor participant with explicit

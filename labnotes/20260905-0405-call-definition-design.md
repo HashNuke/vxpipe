@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-32 individual decisions still awaiting review, rather than counting its
+31 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -124,6 +124,8 @@ restricted to participant refs.
 R20/R21 now use periodic cleanup sweeps: external call-owned objects first, then
 database data, with definitive missing objects accepted and failed work retried
 from retained records/references. The exact sweep interval is not selected.
+R19 chooses application/tenant `call_retention` as `"forever"` or an explicit
+seconds-duration object, without changing retention behavior or adding per-call policy.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -3413,6 +3415,14 @@ overrides. The application default is retain forever. An explicitly configured
 tenant period wins; otherwise inherit the application period, including its
 forever default. Periods are not agent-defined or client-selected settings.
 
+**Approved R19 encoding:** the application/tenant setting `call_retention` accepts
+the JSON string `"forever"` or a finite duration object, for example
+`{"seconds":2592000}` for 30 days. Omitted application configuration defaults to
+`"forever"`; omitted tenant configuration inherits the application value. An
+explicit tenant `"forever"` overrides even a finite application period. These are
+not call-definition, call-creation, or participant options, and are not copied
+onto each call. No human-readable duration parser or null/magic sentinel is added.
+
 Forever means Vxpipe applies no age-based expiration to retained data. It does
 not enable storage that is disabled, retain otherwise excluded credentials,
 expose stored payloads to clients, keep room processes or live buffers forever,
@@ -3423,7 +3433,7 @@ For example, leaving both levels unspecified retains permitted stored history
 forever. Configuring an application period changes the inherited value, and a
 tenant override changes only that tenant's effective period. An explicit forever
 selection is also a period choice, not an absent configuration or zero-duration
-expiry. Exact serialized values/units are not frozen by this prose contract.
+expiry. The serialized setting uses the string or seconds object above.
 
 For completed calls with a finite period, retention starts at `ended_at`.
 Compute the expiry threshold as `ended_at + retention_period`, not from
@@ -3516,7 +3526,7 @@ mechanism or new durable journal is approved here. Shared definitions/configured
 assets remain untouched, including reusable opening audio not owned by one call.
 Internal sweep retries are distinct from the tool/MCP executor's no-retry policy.
 
-Unstarted-record housekeeping and exact storage/retention configuration remain
+Unstarted-record housekeeping and exact storage configuration remain
 separate. No automatic cleanup is implemented here. This decision does not alter
 the requirement to commit a variable snapshot before update-tool success.
 
@@ -4183,8 +4193,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **32 individual decisions awaiting review**, enumerated as R17–R19
-and R22–R50 in the focused gap review. R01–R06, R08, R10–R15, and R20/R21 are resolved;
+There are **31 individual decisions awaiting review**, enumerated as R17, R18,
+and R22–R50 in the focused gap review. R01–R06, R08, R10–R15, and R19–R21 are resolved;
 R07's caller reconnection and R16's retry exceptions are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4201,7 +4211,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R17–R19 and R22–R23.
+for unstarted records. The next five pending decisions are R17, R18, and R22–R24.
 
 ### Baseline and scope
 
@@ -4408,9 +4418,11 @@ The numbering below matches G1–G13 in the focused review document.
    originating turn/tool call, reuses saved tool arguments without a changeset,
    and advances the call's latest-snapshot pointer transactionally before update
    success. Application retention defaults to retain forever, with tenant settings
-   overriding application values. Transaction error means variable-save failure;
-   extra commit-status lookup/reconciliation is not required. Exact configuration
-   remains under review. General voice/LLM-input
+   overriding application values. `call_retention` uses `"forever"` or an explicit
+   seconds-duration object; omitted tenant settings inherit, while explicit
+   forever overrides finite application retention. Transaction error means
+   variable-save failure; extra commit-status lookup/reconciliation is not
+   required. Other storage configuration remains under review. General voice/LLM-input
    redaction is deferred; deterministic collection such as DTMF need not involve
    the LLM, but its recording/logging paths still need explicit protection.
    Completed-call finite retention starts at `ended_at`;
@@ -4559,7 +4571,10 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    separate progress journal. Late publication must not recreate deleted data;
    verify coordination rather than assume ordering solves the race. Leave no
    permanent tombstone/summary/snapshot after success. Do not assert an unapproved
-   sweep interval. These are planned checks, not current playground
+   sweep interval. Verify `call_retention: "forever"` and a duration value of
+   `{"seconds":2592000}` (30 days): application omission defaults forever, tenant
+   omission inherits, and explicit tenant forever overrides a finite application
+   period without a per-call policy copy. These are planned checks, not current playground
    guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
@@ -4870,6 +4885,8 @@ destination proposal without introducing conversational template bindings.
 The R20/R21 cleanup decision supersedes earlier unselected ordering/scheduling
 proposals. Historical counts and checks do not override the periodic external-
 first contract; the exact sweep interval remains deployment tuning to select.
+R19's later encoding decision supersedes historical statements that serialized
+retention values/units remain open; other storage configuration is still separate.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -5947,6 +5964,22 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   unchanged links/URLs, local anchors, exact statuses/count, ordering/failure and
   prior routing/admission/variables contracts, terminology/path hygiene, and
   whitespace. No runtime or browser tests.
+
+### Retention setting encoding — approved R19, 2026-09-07
+
+- Chose application/tenant `call_retention` as `"forever"` or an explicit finite
+  duration object, such as `{"seconds":2592000}` for 30 days. Application omission
+  defaults forever; tenant omission inherits; explicit tenant forever overrides
+  finite application retention. No call-level field, policy copy, null sentinel,
+  or human-readable duration parser.
+- Preserved current policy for past/future calls, the `ended_at` clock and
+  active/unstarted exclusions, whole-call deletion, and periodic external-first
+  cleanup. Exact sweep interval remains unspecified deployment tuning.
+- R19 is resolved; 31 individual decisions remain, R17, R18, and R22–R50.
+  Updated canonical contracts and planned encoding/inheritance checks.
+- Documentation only. Verified exact three-file scope, all 16 existing JSON
+  examples/fences unchanged, links/anchors, statuses/count, unchanged prior
+  contracts, terminology/path hygiene, and whitespace. No runtime tests.
 
 ## Verification evidence
 

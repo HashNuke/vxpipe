@@ -72,8 +72,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **32 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R20, and R21 are resolved; R07's same-call caller
+Current review count: **31 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, and R19–R21 are resolved; R07's same-call caller
 reconnection and R16's retry exceptions are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -103,11 +103,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**32 pending decisions (R17–R19 and R22–R50).** This is the current approval backlog,
+**31 pending decisions (R17, R18, and R22–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15 and R20/R21 are resolved; R07/R16 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R17–R19 and R22–R23**. Mark rows resolved or
+R10–R15 and R19–R21 are resolved; R07/R16 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R17, R18, and R22–R24**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -130,7 +130,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
 | R17 | G5 | What public configuration layout expresses call-wide and participant/tool-specific client visibility? |
 | R18 | G5 | What public configuration layout selects stored call data and retained tool arguments/results independently of client visibility? |
-| R19 | G5 | How are finite retention durations and explicit forever encoded in application/tenant settings? |
+| R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
 | R22 | G6 | Which remote MCP protocol revisions and HTTP transport variants will the first adapter support? |
@@ -984,6 +984,13 @@ For example, with no settings, retained history has no age-based expiry; an
 application period can instead be inherited, and one tenant can override it
 without changing another tenant's period. Periods are not agent/client settings.
 
+**Approved encoding (R19):** application/tenant `call_retention` accepts the JSON
+string `"forever"` or a finite duration object such as `{"seconds":2592000}` for
+30 days. Application omission defaults to `"forever"`; tenant omission inherits
+the application value, while explicit tenant `"forever"` overrides a finite
+application period. This is not a call-definition, creation, or participant field
+and adds no per-call policy copy, human-readable duration parser, or null sentinel.
+
 **Approved retention clock:** for completed calls, finite retention starts at
 `ended_at`. The expiry threshold is `ended_at + retention_period`; neither call
 record creation nor later snapshot/archive writes start or reset that clock.
@@ -1047,7 +1054,7 @@ data; deletion ordering alone does not guarantee this, and the specific mechanis
 is not chosen here. Shared configuration/assets remain outside call-owned deletion.
 This background cleanup retry policy does not change the tool/MCP no-retry rule.
 
-**Still under review:** exact storage/retention configuration. Unstarted-record
+**Still under review:** exact storage configuration. Unstarted-record
 housekeeping remains separate; no additional automatic
 expiry is approved for those records.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
@@ -1398,6 +1405,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration changes neither capture enablement nor client visibility; cleanup mechanics remain separate from the approved whole-call deletion scope |
 | Create a record before its call starts, then end it with finite retention | Expiry is computed from ended_at plus the current application/tenant period, not created_at or storage-write time; active calls are not expired, later archive writes do not reset the clock, forever has no expiry, and missing ended_at does not fall back to creation time |
 | Change retention after calls already exist | The current setting applies to past and future calls without per-call policy copies; shortening 90 days to seven makes a 14-day-old completed call eligible, increasing the period or choosing forever changes eligibility only for remaining data, and an explicit tenant override still wins over application changes |
+| Configure `call_retention` as `"forever"` or `{"seconds":2592000}` | Application omission retains forever; tenant omission inherits; explicit tenant forever overrides finite application retention; the seconds object denotes 30 days and is not copied into call definitions or records |
 | Expire a call with retained history, snapshots, recordings, and exports | Remove the call record and all call-owned rows and objects, including latest snapshots and call-specific copies; no summary-only row remains; shared definitions/configuration and other calls remain untouched; incomplete object deletion is not complete cleanup, and late publication must not recreate purged data |
 | Cross the retention threshold, run a sweep, and interrupt external/database deletion | Eligibility alone does not run an instant timer; the sweep uses current settings and deletes all external objects first, then database data; definitive key-not-found is success, actual failures retain records/references for later sweeps, and repeated missing-object deletion safely resumes without a new progress journal |
 | Race a late publisher against retention cleanup | Writer/cleanup coordination prevents recreation after purge; ordering alone is not treated as proof; no permanent call summary/tombstone remains after complete cleanup |
@@ -1784,12 +1792,20 @@ external-first deletion, then database cleanup. Definitive missing keys count as
 absent; actual/unknown object failures preserve call/artifact references for a
 later sweep, including crash or database-failure recovery. No per-object journal,
 permanent tombstone, hourly frequency, or exact deletion SLA is adopted. Late
-writers still must be coordinated; ordering alone is insufficient. Current
+writers still must be coordinated; ordering alone is insufficient. At that checkpoint,
 backlog: 32 individual decisions, R17–R19 and R22–R50. Actual R22 (remote protocol
 support) is unchanged. Checks cover three-file scope, 16 unchanged valid JSON
 examples, unchanged links/URLs, local anchors, statuses/count, cleanup boundaries
 and prior contracts, terminology/path hygiene, and whitespace. No runtime or
 browser tests; no stored call data was deleted.
+
+The R19 follow-up chooses application/tenant `call_retention` as `"forever"` or
+an explicit seconds-duration object. Omission/inheritance and current-policy
+behavior are unchanged; no call-level policy or duration parser is introduced.
+Current backlog: 31 individual decisions, R17, R18, and R22–R50. Checks cover exact
+three-file scope, 16 unchanged valid JSON examples, links/anchors, encoding and
+inheritance, prior contracts, statuses/count, terminology/path hygiene, and
+whitespace. Documentation only; no runtime tests.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
