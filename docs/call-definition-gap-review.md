@@ -45,9 +45,11 @@ calls are approved, with all tool events hidden when visibility is unspecified.
 Per-tool overrides are also approved: target the participant definition key plus
 its local configured tool key, with the call-wide default as fallback. Independent
 tool-history storage is approved: metadata by default when enabled, with explicit
-arguments/results retention and existing credential/header exclusions. Exact
-configuration syntax, private variable-history projections, retention periods,
-and sensitive-input handling remain pending alongside G2/G4 questions and G6–G13.
+arguments/results retention and existing credential/header exclusions. Variable
+history now uses turn/tool-linked full post-update snapshots, the existing saved
+tool arguments rather than a separate changeset, and a latest-snapshot pointer
+on the call record. Exact configuration syntax, retention periods, and
+sensitive-input handling remain pending alongside G2/G4 questions and G6–G13.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
@@ -727,16 +729,36 @@ show that result live while retaining only tool metadata. This avoids coupling
 operational history to frontend disclosure choices; it does not introduce
 runtime persistence or a final storage configuration schema.
 
-**Still under review:** private variable-history projections, exact storage
-configuration and retention periods, and broader redaction/sensitive user-input
-handling. Model, authorized operator, call-ledger consumer, telemetry, and browser
-remain different audiences. G5 stays partly resolved.
+**Approved variable history and latest-state lookup:** when variable retention
+is enabled, each committed update saves a full post-update snapshot linked to its
+originating turn and tool invocation, source participant, revisions, and commit
+timestamp. The saved update tool call and arguments already describe the requested
+change; no separate changeset or duplicate argument payload is needed. Argument
+retention uses the existing tool-storage policy, not a new default for every tool.
+Several updates in one turn remain distinguishable by invocation and revision;
+rejected updates do not create successful state snapshots.
 
-The archive also needs a separate permissioned private variables payload/patch:
-it cannot rebuild section values from metadata-only public events. Apply
-retention/redaction before persistence, not just before final export. Never put
-expected verification codes or credentials into prompts, public events, or
-ordinary archives. User-spoken verification input can itself enter STT/model
+`CallVariables` captures the exact post-commit values for the private storage
+consumer. It must not fetch a later live snapshot and label it as an earlier
+update. Insert the history snapshot and conditionally advance
+`calls.latest_variables_snapshot_id` in one database transaction, scoped to the
+same call and guarded against stale revisions/incarnations. Retries must neither
+duplicate a snapshot nor move the pointer backward. Latest persisted values need
+one indexed lookup or simple join, not history aggregation or a second mutable
+variables store. The live GenServer remains authoritative and does not wait for
+this asynchronous database work.
+Snapshots do not expand client visibility or the updating agent's read grants.
+Retained initial values have a baseline snapshot and pointer without fabricating
+a conversational turn or tool invocation.
+
+**Still under review:** exact storage configuration and retention periods, and
+broader redaction/sensitive user-input handling. Model, authorized operator,
+call-ledger consumer, telemetry, and browser remain different audiences. G5 stays
+partly resolved. The snapshot history is not a new crash-recovery guarantee.
+
+Apply retention/redaction before persistence, not just before final export.
+Never put expected verification codes or credentials into prompts, public events,
+or ordinary archives. User-spoken verification input can itself enter STT/model
 history; sensitive collection requires explicit transient/redaction policy or an
 out-of-band verification step. Do not label a code-hidden tool as end-to-end
 secret handling if the input transcript still retains the code.
@@ -996,6 +1018,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Create calls with hidden, metadata-only, and full client tool visibility | Gateway sends no tool events, metadata-only events, or tool arguments/results respectively; sample calls explicitly select full visibility; an authorized creation override wins over the pinned definition value and a joining browser cannot change it; credential/header exclusions still apply |
 | Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
 | Hide client tool events while retaining payloads, then show full events with metadata-only storage | First call stores permitted synthetic arguments/results but emits no client tool events; second shows payloads live but stores only invocation and participant/tool identity, timing, and outcome; storage never uses the browser-filtered stream, and integration credentials/authorization headers are excluded before persistence |
+| Update variables twice in one turn, then update on another turn while storage is delayed | Each committed update retains its exact full post-update snapshot linked to the original turn/invocation and revision; reuse saved tool arguments without a separate changeset; failed updates add no successful state snapshot; latest-snapshot lookup follows the call pointer |
+| Retry or reorder snapshot delivery and fail the storage transaction | No duplicate history entry, cross-call pointer, or latest-pointer regression; snapshot insert and any pointer advance are atomic, with both rolled back on transaction failure; an older snapshot may enter history without replacing the pointer; live variable tools continue without waiting for SQL, and snapshots never leak through public events or tool results |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |

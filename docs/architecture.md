@@ -642,10 +642,25 @@ authorized storage, and full client visibility must not enable payload storage
 implicitly. The storage consumer receives its own engine-event projection, not
 the browser-filtered stream. Integration credentials and authorization headers
 remain excluded before persistence, including when arguments/results are retained.
-Storing a payload does not grant a client access to it. This is an approved design,
-not newly implemented persistence. Exact storage configuration, retention periods,
-private variable-history projections, and sensitive transcript handling remain
-under review.
+Storing a payload does not grant a client access to it.
+
+When variable retention is enabled, save a full post-update Call Variables
+snapshot for each committed update, linked to the originating turn and tool
+invocation, source participant, revisions, and commit timestamp. Reuse the saved
+update tool call and its arguments; do not create a separate changeset. Capture
+the snapshot in `CallVariables` at commit, not by reading a later live state.
+The private storage consumer inserts it and conditionally advances
+`calls.latest_variables_snapshot_id` in one database transaction, with revision
+and incarnation checks preventing stale delivery from moving the pointer backward.
+An indexed lookup or simple join retrieves the latest persisted snapshot without
+scanning history or keeping another mutable variables copy. The GenServer remains
+the live owner; asynchronous persistence may lag it and never gates an update on
+SQL. Full history snapshots are not client events or broader agent tool results.
+Retained initial values form a baseline snapshot with no invented turn/tool call,
+so the pointer also works before the first update.
+These are approved designs, not newly implemented persistence. Exact storage
+configuration, retention periods, and sensitive transcript handling remain under
+review.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and

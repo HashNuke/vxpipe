@@ -86,9 +86,12 @@ Per-tool overrides are approved, scoped to the participant definition key plus
 its local configured tool key, with the call-wide default as fallback. Tool-history
 storage is independently configured: metadata by default when enabled, with
 explicit arguments/results retention and existing credential/header exclusions.
-Exact configuration syntax, private variable-history projections, retention
-periods, sensitive-input handling, G2's remaining admission details, the rest of
-G4, and G6–G13 remain pending user review.
+Variable history uses full post-update snapshots linked to the originating turn
+and tool invocation, reusing saved tool arguments without a separate changeset.
+The call record points to the latest persisted snapshot; the GenServer remains
+the live owner. Exact configuration syntax, retention periods, sensitive-input
+handling, G2's remaining admission details, the rest of G4, and G6–G13 remain
+pending user review.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -889,9 +892,11 @@ incarnation, and missing permission do not change the variables or revisions.
 
 The public `CallVariablesUpdated` event contains section name, changed paths,
 revisions, source participant and activation, tool-call/correlation identity,
-and outcome. It does not broadcast the new value. Durable recovery may persist
-an encrypted/private state event or checkpoint through a separate sink, while
-client projections remain permissioned and redacted.
+and outcome. It does not broadcast the new value. Retained update history uses a
+separate private full snapshot captured at commit and linked to its turn/tool
+invocation; it does not add full values to this public event or to the agent's
+tool result. The persistence section specifies its latest-snapshot pointer.
+Recovery guarantees remain separate from asynchronous history retention.
 
 ### Tools and authoritative control must remain separate
 
@@ -1651,8 +1656,10 @@ This supersedes the earlier mandatory metadata-only client default and separate
 sample-debug session grant. It is an approved design boundary, not current
 gateway behavior. Tool-history storage is approved as an independent policy,
 described in the persistence section below: client visibility neither enables nor
-suppresses it. Private variable-history projections, exact storage configuration,
-retention periods, and sensitive transcript handling remain G5 review questions.
+suppresses it. Private variable history uses the approved turn/tool-linked full
+snapshots and call-level latest pointer described there. Exact storage
+configuration, retention periods, and sensitive transcript handling remain G5
+review questions.
 
 ### Initial agent-transfer history policies
 
@@ -2824,8 +2831,9 @@ The relational `calls` row should contain durable identity and summary state,
 not every detail as one mutable JSON document. It records tenant/application,
 definition revision, plan digest, direction, route/invocation identity, current
 room/incarnation, lifecycle state, distinct `created_at`, `started_at`, and
-`ended_at` timestamps, terminal reason, archive status, and retention-policy
-identity. Provider-native call IDs belong in a
+`ended_at` timestamps, terminal reason, archive status, retention-policy identity,
+and `latest_variables_snapshot_id` for the latest retained variables snapshot.
+Provider-native call IDs belong in a
 separate call-leg/provider-identity record with appropriate uniqueness and
 redaction.
 
@@ -2884,8 +2892,9 @@ The minimum relational shapes are:
   operation, including actual provider/model and request lifecycle;
 - `usage_records`: normalized billable units and cost observations linked to a
   provider operation and, when meaningful, a turn;
-- `call_variable_sections`: the latest privately retained section value and
-  revision when variable retention is enabled;
+- variable snapshot history: immutable full Call Variables snapshots with
+  call/room-incarnation identity, originating turn/tool invocation, source
+  participant, revisions, and commit timestamp when variable retention is enabled;
 - `artifacts`: object key, kind, participant/connection/track correlation,
   timing, codec/content type, bytes, checksum, retention, and publication state;
   and
@@ -2940,9 +2949,57 @@ consumer path, not inline with tool execution or room state updates.
 For example, keep a booking tool hidden from the browser while explicitly saving
 its arguments/result for operational review. Another call may show the result
 live but save only metadata. Both are supported without changing tool behavior.
-Exact configuration syntax, retention periods, private variable-history payloads,
-and broader sensitive-input/redaction policy remain under review. This decision
-does not add runtime persistence, choose storage durations, or guarantee recovery.
+Exact configuration syntax, retention periods, and broader sensitive-input/
+redaction policy remain under review. This decision does not add runtime
+persistence, choose storage durations, or guarantee recovery.
+
+### Variable history snapshots and the latest pointer — approved G5 decision
+
+When variable retention is enabled, save a full post-update Call Variables
+snapshot for each committed `update_variables` or `update_variable` invocation.
+Link it to the call, room incarnation, originating turn, tool invocation, source
+participant/activation, section/global revisions, and commit timestamp. Several
+updates in one turn remain separate snapshots identified by invocation and revision,
+not one overwritten history row. A delayed update stays linked to its original
+turn even if a later turn or agent is now active. Rejected updates do not create
+successful state snapshots; their failures remain tool-history outcomes.
+
+Reuse the saved tool call and its arguments to inspect the requested change.
+There is no separate changeset, patch journal, or duplicate argument payload in
+the snapshot record. Argument retention is selected through the existing
+tool-storage policy; this decision does not change unrelated tools' metadata-only
+default. The snapshot records the resulting state after merge, not just the
+arguments or a claim that an attempted update succeeded.
+
+`CallVariables` captures the complete post-commit values and revisions together
+before publishing them to the private storage consumer. Do not query the live
+owner later and attach newer values to an earlier turn. Full means all populated
+Call Variables, including unchanged sections, not only the updating agent's
+readable section. Missing variables stay absent; no defaults are synthesized.
+This is a private retention payload, not a larger tool result, public event, or
+room snapshot for clients. Existing agent grants and storage/privacy boundaries
+remain in force. Retained supplied initial values form a baseline snapshot with
+no invented tool call or conversational turn. Initialize the call's pointer to
+that baseline so latest lookup works before any update. Saving this baseline
+does not start a prepared call's room or its live-call clock.
+
+Store `latest_variables_snapshot_id` on the call record. An indexed lookup by
+that ID, or a simple join, returns the latest persisted values without aggregating
+history or maintaining a second mutable variables copy. This replaces the earlier
+proposed `call_variable_sections` latest-state projection. In the storage consumer,
+insert a snapshot and conditionally advance the same call's pointer in one
+database transaction. An older snapshot can enter history without replacing the
+latest pointer; transaction failure rolls back the insert and any pointer change.
+Use the existing event identity, revisions, and room-incarnation fencing for
+idempotency and stale-delivery checks: retries must not duplicate history or move
+the pointer backward, and a pointer must never reference another call's snapshot.
+
+The pointer identifies latest persisted state, which may lag the live GenServer
+while asynchronous storage catches up. Live reads and writes still use
+`CallVariables`; neither SQL nor the room authority is on the variable-tool path.
+This adds no synchronous write-ahead requirement or crash-recovery guarantee.
+Storage duration, cleanup of referenced snapshots, and exact database schema
+remain implementation/review follow-ups; this checkpoint adds no migrations.
 
 ### Usage and cost belong to provider operations, with optional turn links
 
@@ -3228,6 +3285,9 @@ turn, variable change, usage observation, transfer, and terminal event available
 for storage.
 
 Variable events retain their section/global revisions and source attribution.
+For retained update history, the private projection also carries the full
+post-commit snapshot and original turn/tool linkage. The storage consumer writes
+history and its latest call pointer transactionally without changing public events.
 Dispatcher delivery order is not an atomic ordering of variable commits with
 transfers: a source-agent update may commit after that agent shuts down. Reporting
 an update does not route its authorization or state mutation through `RoomAuthority`.
@@ -3314,9 +3374,14 @@ transaction across room/provider work.
    participant, activation, and final turn events idempotently. Build
    `call_turns` as a projection and prove partial STT updates do not create
    duplicate turns.
-5. **Variable projection:** persist authorized private variable section revisions
-   asynchronously and finalize the last retained snapshot at call end. Prove
-   public events and room snapshots still contain no variable value.
+5. **Variable projection:** persist private full post-update snapshots linked to
+   turns/tool invocations, reusing recorded tool arguments rather than a separate
+   changeset. Insert history and conditionally advance the call's latest-snapshot
+   pointer in one asynchronous storage transaction. Test exact commit-state capture,
+   repeated and stale delivery, and latest lookup without replaying history. Prove
+   public events and room snapshots still contain no variable value. Finalization
+   uses the last retained snapshot without claiming that pending/lost delivery
+   was persisted.
 6. **Model usage:** change the model provider contract to preserve each response's
    usage, emit one usage event per provider request/tool round, and persist exact
    units/provider/model/cost provenance. Derive turn and call totals without
@@ -3552,9 +3617,11 @@ approved, with tool events hidden by default. Per-tool overrides use participant
 definition key plus local configured tool key, otherwise falling back to the
 call-wide default. Independent tool-history storage retains metadata by default
 when enabled and arguments/results by explicit selection, with credential/header
-exclusions. Exact configuration syntax, private variable-history projections,
-retention periods, and sensitive-input handling remain under review. Other G4
-questions, remaining G2 details, and G6–G13 remain unapproved.
+exclusions. Variable history now saves full post-update snapshots linked to turns
+and tool invocations, without separate changesets; the call record points to the
+latest persisted snapshot. Exact configuration syntax, retention periods, and
+sensitive-input handling remain under review. Other G4 questions, remaining G2
+details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3757,8 +3824,11 @@ The numbering below matches G1–G13 in the focused review document.
    syntax and runtime implementation remain pending. Tool-history storage is
    independent: metadata by default when enabled, arguments/results by explicit
    selection, and integration credentials/authorization headers excluded before
-   persistence. Private variable-history projections, retention periods, broader
-   redaction, and sensitive user-input handling remain proposals for review.
+   persistence. Variable history uses full post-update snapshots linked to the
+   originating turn/tool call, reuses saved tool arguments without a changeset,
+   and advances the call's latest-snapshot pointer transactionally. Retention
+   periods, broader redaction, and sensitive user-input handling remain proposals
+   for review.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -3851,8 +3921,20 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    the settings: full client visibility with tool-history storage enabled but
    no payload retention selection must store only invocation/participant/tool
    identity, timing, and outcome. Check credential/header exclusions before
-   persistence, not just on export. These are planned checks, not current
-   playground guarantees.
+   persistence, not just on export. Enable variable retention, verify the initial
+   baseline is reachable through the call pointer without an invented turn, and
+   make two successful updates in one turn, then another in a later turn while
+   storage delivery is delayed. Check each stored snapshot contains the full exact
+   post-commit values and original turn/tool identity, including unchanged
+   sections, without a separate changeset. Retry delivery, deliver an older
+   revision after a newer one, and fail a storage transaction: history must not
+   duplicate, the latest pointer must not regress or cross calls, and snapshot
+   insertion plus any pointer advance must be atomic, with both rolled back on
+   transaction failure. An older snapshot can be stored without changing the
+   latest pointer. A failed variable update adds no successful state snapshot.
+   Fetch latest persisted values by the call's snapshot pointer and confirm that
+   live tools still use the GenServer while storage lags. These are planned checks,
+   not current playground guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
    variable, read back that partial object,
@@ -4763,6 +4845,31 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
 - Verification: all existing fenced examples and all 15 JSON examples are
   unchanged and valid. Links and external URLs are unchanged; only the three
   intended documentation files changed. Independent-storage/default checks,
+  retained review status, restricted terminology, local-path hygiene, and
+  whitespace checks pass.
+
+### Turn-linked variable snapshots and latest lookup — approved 2026-09-07
+
+- Record full post-update variable snapshots associated with originating turns
+  and tool invocations. Reuse the saved update-tool arguments; the initially
+  discussed separate changeset is unnecessary and is not adopted.
+- Capture exact committed values in `CallVariables` for private asynchronous
+  retention. Multiple updates in a turn remain distinguishable; rejected updates
+  add no successful state snapshot. Live ownership and agent grants are unchanged.
+- Adopt the call-record `latest_variables_snapshot_id` pointer, replacing the
+  proposed separate latest-section projection. Latest persisted values need an
+  indexed lookup or join, not history aggregation or a second mutable copy.
+- Insert the snapshot and conditionally advance its same-call pointer in the
+  storage consumer, with existing identity/revision/incarnation checks preventing
+  duplicate history and stale-pointer regression. This does not put SQL on the
+  tool path or promise that asynchronous storage is crash-lossless.
+- Updated the original variable/event/persistence contracts, architecture, G5
+  summaries, and planned checks. Exact configuration, retention/cleanup, and
+  sensitive-input policy remain open; G5 stays partly resolved, with 11 groups open.
+- Documentation only: no runtime/database/UI changes or runtime/browser tests.
+- Verification: all existing fenced examples and all 15 JSON examples are
+  unchanged and valid. Links and external URLs are unchanged; only the three
+  intended documentation files changed. Snapshot/turn/pointer consistency,
   retained review status, restricted terminology, local-path hygiene, and
   whitespace checks pass.
 
