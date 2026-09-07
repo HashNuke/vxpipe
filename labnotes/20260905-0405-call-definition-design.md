@@ -89,9 +89,12 @@ explicit arguments/results retention and existing credential/header exclusions.
 Variable history uses full post-update snapshots linked to the originating turn
 and tool invocation, reusing saved tool arguments without a separate changeset.
 The call record points to the latest persisted snapshot; the GenServer remains
-the live owner. Exact configuration syntax, retention periods, sensitive-input
-handling, G2's remaining admission details, the rest of G4, and G6–G13 remain
-pending user review.
+the runtime owner. Database-backed updates return success only after the snapshot
+and latest-pointer transaction commits. Retention periods use tenant overrides
+over application settings, with retain forever as the application default.
+Exact configuration, finite-expiry/cleanup, uncertain database outcomes,
+sensitive-input handling, G2's remaining admission details, the rest of G4, and
+G6–G13 remain pending user review.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -494,9 +497,11 @@ capabilities and model/tool workers. Once shutdown completes it cannot issue new
 requests. An update already sent to `CallVariables` is not retracted by caller
 termination and may commit afterwards. The variables process needs no activation
 mirror, deactivation notification, or per-operation room-authority round trip.
-It never executes provider, remote tool, or database work in its callback. Calls
-remain bounded and return typed unavailable/timeout results; a timeout or lost
-reply does not prove an already-submitted update was cancelled.
+It never executes model/provider or remote MCP tool work. For database-backed
+updates it waits on a configured snapshot-persistence port before publishing
+new values or returning success; the adapter owns SQL/Ecto. Calls remain bounded
+and return typed unavailable/timeout results; a timeout or lost reply does not
+prove an already-submitted update was cancelled or a transaction rolled back.
 
 At the start of an agent turn, the model/tool worker obtains an immutable
 projection directly from `CallVariables` using its trusted identity and grants.
@@ -880,7 +885,9 @@ Patch. An internal whole-section replacement must not turn `update_variables`
 into replacement of the section by its partial input: the merged candidate
 must preserve omitted variables at every object depth. The variables process applies all
 changes to a copy, checks populated values without required-variable completeness,
-then commits all of them or none of them.
+then commits all of them or none of them. In database-backed mode, it first
+requires the candidate snapshot/latest-pointer transaction to commit before
+adopting the new values/revisions or returning success.
 
 A successful result always returns the section name, new section revision,
 new global revision, and resulting value to the authorized agent: every writer
@@ -893,10 +900,11 @@ incarnation, and missing permission do not change the variables or revisions.
 The public `CallVariablesUpdated` event contains section name, changed paths,
 revisions, source participant and activation, tool-call/correlation identity,
 and outcome. It does not broadcast the new value. Retained update history uses a
-separate private full snapshot captured at commit and linked to its turn/tool
+separate private full snapshot committed with the update and linked to its turn/tool
 invocation; it does not add full values to this public event or to the agent's
 tool result. The persistence section specifies its latest-snapshot pointer.
-Recovery guarantees remain separate from asynchronous history retention.
+Acknowledged updates require committed snapshots; full room recovery remains a
+separate contract.
 
 ### Tools and authoritative control must remain separate
 
@@ -1657,9 +1665,10 @@ sample-debug session grant. It is an approved design boundary, not current
 gateway behavior. Tool-history storage is approved as an independent policy,
 described in the persistence section below: client visibility neither enables nor
 suppresses it. Private variable history uses the approved turn/tool-linked full
-snapshots and call-level latest pointer described there. Exact storage
-configuration, retention periods, and sensitive transcript handling remain G5
-review questions.
+snapshots and call-level latest pointer described there. Retention periods use
+application settings with tenant overrides and an application retain-forever
+default. Exact storage configuration, finite-expiry/cleanup, uncertain database
+outcomes, and sensitive transcript handling remain G5 review questions.
 
 ### Initial agent-transfer history policies
 
@@ -2488,10 +2497,12 @@ required for variable reads and writes. Ordinary updates occupy only the
 variables process, not the room authority.
 
 Database or control-plane storage is not the live owner. The room is created
-with the exact resolved definition revision and initialized values. Normal reads,
-updates, and transfers use that in-memory snapshot. Durability later records
-private variable checkpoints and ordered updates so recovery can restore the same
-plan revision and values without adopting a newly published definition.
+with the exact resolved definition revision and initialized values. Normal reads
+and transfers use that in-memory snapshot. A database-backed update validates
+against it and commits a full candidate snapshot through the persistence port
+before publishing the new in-memory values and returning success. Reconstructing
+a room after restart remains a separate design; stored values must not cause it
+to adopt a newly published definition.
 
 ### Authorization transaction
 
@@ -2528,17 +2539,27 @@ In order, the variables process verifies:
 7. that the candidate is an object and its populated values match the compiled
    schema's datatypes and value constraints, without requiring missing variables.
 
-Only after all checks pass does it replace the section, increment that section's
-revision and the global revision, and emit the ordered update event. Any failure
-returns a typed result and preserves both values and revisions. Reads run the
-same room/agent identity checks and require every requested section to be
+After all checks pass, compute the complete candidate snapshot and next section/
+global revisions. For a database-backed call, commit the snapshot and conditional
+latest-pointer update through the configured persistence port. Only confirmed
+commit allows the owner to replace the section, publish the new revisions, emit
+the ordered update event, and return success. Serialize updates through this
+boundary so a second candidate cannot be committed from unconfirmed state.
+Validation or a confirmed transaction failure returns a typed error and preserves
+current values/revisions. A timeout or missing commit reply is not proof of either
+commit or rollback; uncertain-outcome/restart handling remains a separate review
+item and must not silently become success. Reads run the same room/agent identity
+checks and require every requested section to be
 readable. A forbidden section produces a permission error for the whole request
 with no variable values; the variables process does not filter it into partial
 success.
 
 The variables process does not call the authority for a second authorization
-check or execute provider, remote tool, or database work inside its callback.
-Provider requests and tool rounds remain in the agent's supervised workers.
+check or execute model/provider or remote MCP work. It waits for its configured
+snapshot-persistence port on database-backed updates; the adapter, not the engine,
+owns SQL and Ecto. The persistence request belongs to the variables/room lifecycle,
+not to the source agent's execution subtree. Provider requests and other tool
+rounds remain in the agent's supervised workers.
 The general prohibition on cyclic synchronous calls still applies; add a focused
 regression test proving variable operations can finish while `RoomAuthority` is
 not servicing messages.
@@ -2562,7 +2583,9 @@ source agent's execution subtree to prevent further requests, including its
 capabilities and model/tool workers, without letting supervision restart that
 departed execution. A queued or executing variable update may finish after that
 shutdown. Stopping the room's variables process is different; a pending operation
-may then fail or lose its reply, and no completion or durability is implied.
+may then fail or lose its reply. That is not a completion guarantee, nor does it
+undo a database transaction that already committed. A returned update success
+in database-backed mode requires that commit.
 
 Keep `expected_revision` to prevent lost updates. If the original update commits
 first, the correcting call uses the resulting revision, refreshing its permitted
@@ -2635,6 +2658,8 @@ the variables process may still finish without an activation check.
    untrusted identity, missing grant, revision conflict, invalid schema, and
    oversized input leave state unchanged. Add bounded direct read/update calls
    and protocol-neutral events without storing variable state in `RoomAuthority`.
+   Use a controlled snapshot-port fake: an update cannot publish new state or
+   return success before commit confirmation; confirmed failure preserves state.
 4. **Platform tool surface:** once remaining tool details are settled, add failing
    executor/model tests proving the read tool and both update tools appear only
    when the active agent has the matching grant, their section schemas are
@@ -2652,10 +2677,11 @@ the variables process may still finish without an activation check.
    source update may still commit after termination; a revision conflict still
    rejects it. Prove the variables survive transfer and human-only periods,
    and distinguish agent shutdown from stopping the room's variables process.
-7. **Durability and external access:** only after the in-memory contract is
-   stable, define private checkpoint/event persistence and separate authenticated
-   host or client read/update commands. Do not reuse agent permissions for human
-   or client authorization.
+7. **Database integration and external access:** implement the snapshot commit
+   port in the persistence adapter and verify its transaction in the tagged
+   PostgreSQL lane. Database-backed variable tools require this before claiming
+   success implies storage. Separately design authenticated host/client read and
+   update commands; do not reuse agent permissions for human/client authorization.
 
 The first usable vertical slice should complete checkpoints 1 through 4 with one
 agent and two sections. Checkpoints 5 and 6 then make variables useful across real
@@ -2753,7 +2779,7 @@ artifacts, and derived publication:
 | Definition drafts and immutable revisions | `vxpipe_calls` | PostgreSQL |
 | Inbound number/service routing | `vxpipe_calls` | indexed PostgreSQL rows |
 | Pinned definition and resolved plan for a running call | `RoomAuthority` | call row plus non-secret resolved-plan snapshot/digest |
-| Mutable call variables | room-scoped `CallVariables` GenServer | private section snapshots and/or ordered variable updates |
+| Mutable call variables | room-scoped `CallVariables` GenServer | full turn/tool-linked snapshots and a call-level latest pointer, committed before update success |
 | Ordered call, turn, tool, transfer, and provider-usage facts | engine events | append-only PostgreSQL ledger plus query projections |
 | Live participant and monitor audio | room media mixer | bounded realtime mix and mix-minus streams |
 | Participant tracks and the live full mix | room recording capability | object storage plus relational artifact metadata |
@@ -2943,15 +2969,17 @@ event source, not reuse the browser-filtered stream. A hidden client tool event
 can still have its permitted arguments/result stored. Conversely, full client
 visibility, including in sample calls, does not implicitly enable payload storage.
 Storage access does not grant browser access, agent tool execution, or broader
-agent variable permissions. Database work remains on the existing asynchronous
-consumer path, not inline with tool execution or room state updates.
+agent variable permissions. General tool-history archival remains asynchronous.
+The variable snapshot transaction below is an explicit acknowledgement boundary
+for variable-update tools, not a reason to gate every tool or room event on SQL.
 
 For example, keep a booking tool hidden from the browser while explicitly saving
 its arguments/result for operational review. Another call may show the result
 live but save only metadata. Both are supported without changing tool behavior.
-Exact configuration syntax, retention periods, and broader sensitive-input/
-redaction policy remain under review. This decision does not add runtime
-persistence, choose storage durations, or guarantee recovery.
+Retention periods use application configuration with tenant overrides and an
+application retain-forever default. Exact configuration syntax, finite-expiry/
+cleanup, and broader sensitive-input/redaction policy remain under review. This
+decision does not add runtime persistence or guarantee complete room recovery.
 
 ### Variable history snapshots and the latest pointer — approved G5 decision
 
@@ -2971,8 +2999,9 @@ tool-storage policy; this decision does not change unrelated tools' metadata-onl
 default. The snapshot records the resulting state after merge, not just the
 arguments or a claim that an attempted update succeeded.
 
-`CallVariables` captures the complete post-commit values and revisions together
-before publishing them to the private storage consumer. Do not query the live
+`CallVariables` computes the complete candidate values and next revisions together
+after validation, without yet publishing them as current state. It sends this
+exact snapshot to its configured persistence port. Do not query the live
 owner later and attach newer values to an earlier turn. Full means all populated
 Call Variables, including unchanged sections, not only the updating agent's
 readable section. Missing variables stay absent; no defaults are synthesized.
@@ -2986,20 +3015,59 @@ does not start a prepared call's room or its live-call clock.
 Store `latest_variables_snapshot_id` on the call record. An indexed lookup by
 that ID, or a simple join, returns the latest persisted values without aggregating
 history or maintaining a second mutable variables copy. This replaces the earlier
-proposed `call_variable_sections` latest-state projection. In the storage consumer,
+proposed `call_variable_sections` latest-state projection. In the persistence adapter,
 insert a snapshot and conditionally advance the same call's pointer in one
-database transaction. An older snapshot can enter history without replacing the
-latest pointer; transaction failure rolls back the insert and any pointer change.
+database transaction. For a new update, a failed prior-revision/pointer check
+rejects the whole transaction; merely inserting an older candidate without
+advancing the pointer must not count as success. Transaction failure rolls back
+the insert and any pointer change. Recognizing an already-committed operation
+on retry is not a new update and must not replace newer in-memory values.
 Use the existing event identity, revisions, and room-incarnation fencing for
 idempotency and stale-delivery checks: retries must not duplicate history or move
 the pointer backward, and a pointer must never reference another call's snapshot.
 
-The pointer identifies latest persisted state, which may lag the live GenServer
-while asynchronous storage catches up. Live reads and writes still use
-`CallVariables`; neither SQL nor the room authority is on the variable-tool path.
-This adds no synchronous write-ahead requirement or crash-recovery guarantee.
-Storage duration, cleanup of referenced snapshots, and exact database schema
-remain implementation/review follow-ups; this checkpoint adds no migrations.
+The variable-update tool returns success only after this database transaction
+commits. On confirmation, `CallVariables` adopts the exact committed values and
+revisions, emits the update event, and replies. Confirmed transaction failure
+leaves current state unchanged; no failed database write becomes memory-only
+success. No second candidate update may pass an unresolved predecessor. Database
+latency therefore affects the variable-update tool, but does not block
+`RoomAuthority`, media, or unrelated capabilities. There is no separate changeset
+or new write-ahead journal: the snapshot/pointer transaction is the required write.
+
+This supersedes the earlier proposal to acknowledge a memory update and persist
+its snapshot later. General call/tool/usage events can still be archived
+asynchronously. A lost reply does not undo a committed snapshot; exact uncertain
+commit and process-restart handling remain open, and successful snapshot storage
+does not by itself implement full room recovery. An explicitly database-free
+deployment has no database-commit guarantee; a database-backed call must never
+silently fall back to it when storage fails. Storage duration resolves as below;
+cleanup of referenced snapshots and exact database schema remain follow-ups.
+This checkpoint adds no runtime behavior or migrations.
+
+### Retention periods — approved application and tenant policy
+
+Configure stored call-data retention periods at application level, with tenant
+overrides. The application default is retain forever. An explicitly configured
+tenant period wins; otherwise inherit the application period, including its
+forever default. Periods are not agent-defined or client-selected settings.
+
+Forever means Vxpipe applies no age-based expiration to retained data. It does
+not enable storage that is disabled, retain otherwise excluded credentials,
+expose stored payloads to clients, keep room processes or live buffers forever,
+or promise backup/recovery. Capture enablement, payload selection, privacy, and
+client visibility remain separate from how long permitted stored data is kept.
+
+For example, leaving both levels unspecified retains permitted stored history
+forever. Configuring an application period changes the inherited value, and a
+tenant override changes only that tenant's effective period. An explicit forever
+selection is also a period choice, not an absent configuration or zero-duration
+expiry. Exact serialized values/units are not frozen by this prose contract.
+
+Finite-expiry clock origin, policy changes affecting existing data, deletion-job
+behavior, and cleanup of snapshots referenced by a call remain under review.
+No automatic cleanup is implemented here. This retention decision does not alter
+the requirement to commit a variable snapshot before update-tool success.
 
 ### Usage and cost belong to provider operations, with optional turn links
 
@@ -3173,6 +3241,12 @@ work with an inline/static call definition, an in-memory event sink, and no
 database. Do not put Ecto schemas or direct `Repo` calls in `vxpipe_gateway`
 either; the gateway owns HTTP/webhook verification and protocol translation, not
 definition revisioning or call-ledger transactions.
+The engine defines a small typed snapshot-commit port for database-backed variable
+updates, injected through application/supervision settings. The persistence
+adapter implements it alongside the repository ports owned by `vxpipe_calls`.
+This is dependency inversion, not an engine dependency on Calls, Ecto, or Repo.
+An explicitly database-free mode makes no database durability claim and is never
+an automatic fallback for a failed configured persistence adapter.
 
 The target umbrella split is:
 
@@ -3280,14 +3354,17 @@ RoomAuthority commits a lifecycle transition / CallVariables commits an update
 The dispatcher acceptance is a short in-memory operation with explicit queue
 bounds. The call-ledger consumer performs database work in its own process,
 batches when useful, retries idempotently by event ID, and reports lag/failure.
-This keeps Ecto latency out of both state owners while still making every committed
-turn, variable change, usage observation, transfer, and terminal event available
-for storage.
+This keeps ordinary archival latency out of the room authority while making
+committed turns, variable events, usage observations, transfers, and terminal
+events available for storage. Variable snapshot commits are the explicit exception:
+their tools wait for the snapshot port rather than this asynchronous event sink.
 
 Variable events retain their section/global revisions and source attribution.
-For retained update history, the private projection also carries the full
-post-commit snapshot and original turn/tool linkage. The storage consumer writes
-history and its latest call pointer transactionally without changing public events.
+For retained update history, the full snapshot and call pointer have already
+committed through the snapshot port before the update event is emitted. A private
+projection can reference that snapshot and its original turn/tool linkage; the
+ordinary ledger consumer must not create a second snapshot or become its commit
+gate.
 Dispatcher delivery order is not an atomic ordering of variable commits with
 transfers: a source-agent update may commit after that agent shuts down. Reporting
 an update does not route its authorization or state mutation through `RoomAuthority`.
@@ -3295,19 +3372,20 @@ an update does not route its authorization or state mutation through `RoomAuthor
 There are therefore two different meanings of “inline”:
 
 - A call-variable tool makes an inline bounded `GenServer.call` to
-  `CallVariables`, which authorizes and atomically mutates its own live state
-  before the tool succeeds. The room authority is not on this request path.
-- An archival database insert is not made inline by either state owner; it follows
-  the ordered event path because delaying every room command on PostgreSQL would
-  couple realtime availability to database latency.
+  `CallVariables`, which authorizes and computes the candidate, waits for the
+  configured snapshot/pointer transaction, then publishes the committed state and
+  returns success. The room authority is not on this request path; the adapter
+  owns SQL and the bounded database transaction.
+- Ordinary archival inserts follow the ordered event path and do not gate room
+  commands or other tool results. The acknowledged variable-snapshot write does
+  not make the whole room or media path synchronous with PostgreSQL.
 
 Call admission itself is durably inserted before room creation because it is
 outside the room hot path and needs idempotency for webhook retries. Call events,
 transcript projections, usage, and artifact metadata are normally persisted
-asynchronously. If a future recovery guarantee requires a particular variables or
-lifecycle mutation to be journaled before acknowledgement, that command uses an
-explicit durable-journal protocol and pending state rather than adding an Ecto
-query to either state owner's callback.
+asynchronously. Variable snapshot/pointer transactions are committed before their
+update-tool acknowledgement. This does not require a separate mutation journal
+or decide the broader room lifecycle/recovery protocol.
 
 `vxpipe_calls` is preferable to a generic `core` application: it has the cohesive
 responsibility of a call's durable-neutral application lifecycle outside the
@@ -3320,16 +3398,17 @@ Dependency inversion avoids a compile cycle. `vxpipe_calls` defines small ports
 such as definition repository, inbound route repository, call ledger, and
 publication outbox, and receives configured implementation modules in its
 supervision options. `vxpipe_persistence` depends on those contracts to implement
-them; `vxpipe_calls` does not compile against Ecto. The managed release includes
-and starts the persistence adapter before reporting admission readiness. The
+them, and also implements the engine-owned snapshot-commit port; neither
+`vxpipe_calls` nor the call engine compiles against Ecto. The managed release
+includes and starts the persistence adapter before reporting admission readiness. The
 standalone JSON-configured release supplies static/in-memory implementations and
 does not start a Repo.
 
 The gateway therefore requires a call-admission implementation, not a database.
 In managed mode that implementation uses `vxpipe_persistence`; in standalone
 mode it uses the validated JSON catalog. The call engine requires only an already
-resolved plan and configured event/media sinks. It neither looks up a number nor
-writes a database row itself.
+resolved plan, configured event/media sinks, and a snapshot port for database-backed
+variable updates. It neither looks up a number nor issues SQL itself.
 
 The engine event fan-out needs a first-class subscriber/sink boundary. The
 current room authority sends most domain events only to the participant
@@ -3347,13 +3426,17 @@ idempotently inserts events, and the room remains available through a temporary
 database slowdown. This may lose the final buffered events during a node failure
 and is not sufficient to promise room recovery.
 
-Recovery-grade variables and room state is a separate contract. It requires a
-durable append/checkpoint acknowledgement before an externally acknowledged
-state transition, or an equivalent replicated log. Do not call it durable
-recovery merely because asynchronous event rows usually arrive. If that mode is
-added, model the room command as pending while an external journal worker writes;
-do not execute Ecto queries inside `RoomAuthority` or hold a synchronous database
-transaction across room/provider work.
+Variable updates have a stronger approved acknowledgement contract: a successful
+tool result means its snapshot and latest-pointer transaction already committed.
+The owner waits for that confirmation before making new values current. A lost
+reply can still leave a committed database snapshot; uncertain commit/restart
+handling needs explicit review and must not be mistaken for a definite rollback.
+
+Full room recovery remains a separate contract for restoring the pinned plan,
+variables, participants, capabilities, and lifecycle safely. Committed variable
+snapshots do not by themselves implement that recovery, nor make all asynchronous
+events lossless. Do not execute Ecto queries inside `RoomAuthority` or hold a
+database transaction across room/provider work.
 
 ### Persistence red-green checkpoints
 
@@ -3374,14 +3457,14 @@ transaction across room/provider work.
    participant, activation, and final turn events idempotently. Build
    `call_turns` as a projection and prove partial STT updates do not create
    duplicate turns.
-5. **Variable projection:** persist private full post-update snapshots linked to
+5. **Variable commit boundary:** persist private full post-update snapshots linked to
    turns/tool invocations, reusing recorded tool arguments rather than a separate
    changeset. Insert history and conditionally advance the call's latest-snapshot
-   pointer in one asynchronous storage transaction. Test exact commit-state capture,
-   repeated and stale delivery, and latest lookup without replaying history. Prove
-   public events and room snapshots still contain no variable value. Finalization
-   uses the last retained snapshot without claiming that pending/lost delivery
-   was persisted.
+   pointer in one transaction before tool success or publication of new in-memory
+   state. Test a held commit, confirmed failure, duplicate/stale persistence requests,
+   and latest lookup without replaying history. Prove public events and room
+   snapshots still contain no variable value. Finalization uses committed snapshots,
+   not an assumption that unconfirmed attempts were persisted.
 6. **Model usage:** change the model provider contract to preserve each response's
    usage, emit one usage event per provider request/tool round, and persist exact
    units/provider/model/cost provenance. Derive turn and call totals without
@@ -3619,9 +3702,12 @@ call-wide default. Independent tool-history storage retains metadata by default
 when enabled and arguments/results by explicit selection, with credential/header
 exclusions. Variable history now saves full post-update snapshots linked to turns
 and tool invocations, without separate changesets; the call record points to the
-latest persisted snapshot. Exact configuration syntax, retention periods, and
-sensitive-input handling remain under review. Other G4 questions, remaining G2
-details, and G6–G13 remain unapproved.
+latest persisted snapshot. Database-backed update tools wait for the snapshot/
+pointer transaction before returning success. Retention periods resolve from
+tenant overrides and application settings, with retain forever as the application
+default. Exact configuration, finite-expiry/cleanup, uncertain database outcomes,
+and sensitive-input handling remain under review. Other G4 questions, remaining
+G2 details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3744,9 +3830,10 @@ The numbering below matches G1–G13 in the focused review document.
    Their `created_at` is distinct from `started_at`, which remains unset until
    actual live startup and is preserved across reconnects/recovery. Call duration
    excludes preparation wait.
-   Record retention/cleanup is separate. G2 still needs API-key management
-   review, token TTL settings, storage/retention policy, telephony variables
-   sourcing, personalization, timezone and dynamic destinations, plus reconnect
+   Record cleanup is separate from admission/token expiry. Retention periods now
+   have an application retain-forever default with tenant overrides. G2 still needs
+   API-key management review, token TTL settings, finite-expiry/cleanup, telephony
+   variables sourcing, personalization, timezone and dynamic destinations, plus reconnect
    eligibility/deadlines, issuance retry
    details, and admission/transfer crash handling.
    A valid API key authenticates the integrating application, not the speaker's
@@ -3826,9 +3913,11 @@ The numbering below matches G1–G13 in the focused review document.
    selection, and integration credentials/authorization headers excluded before
    persistence. Variable history uses full post-update snapshots linked to the
    originating turn/tool call, reuses saved tool arguments without a changeset,
-   and advances the call's latest-snapshot pointer transactionally. Retention
-   periods, broader redaction, and sensitive user-input handling remain proposals
-   for review.
+   and advances the call's latest-snapshot pointer transactionally before update
+   success. Application retention defaults to retain forever, with tenant settings
+   overriding application values. Exact configuration, finite-expiry/cleanup,
+   uncertain database outcomes, broader redaction, and sensitive user-input handling
+   remain proposals for review.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -3923,18 +4012,22 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    identity, timing, and outcome. Check credential/header exclusions before
    persistence, not just on export. Enable variable retention, verify the initial
    baseline is reachable through the call pointer without an invented turn, and
-   make two successful updates in one turn, then another in a later turn while
-   storage delivery is delayed. Check each stored snapshot contains the full exact
-   post-commit values and original turn/tool identity, including unchanged
-   sections, without a separate changeset. Retry delivery, deliver an older
-   revision after a newer one, and fail a storage transaction: history must not
-   duplicate, the latest pointer must not regress or cross calls, and snapshot
-   insertion plus any pointer advance must be atomic, with both rolled back on
-   transaction failure. An older snapshot can be stored without changing the
-   latest pointer. A failed variable update adds no successful state snapshot.
-   Fetch latest persisted values by the call's snapshot pointer and confirm that
-   live tools still use the GenServer while storage lags. These are planned checks,
-   not current playground guarantees.
+   hold a snapshot commit behind a test-owned barrier. Assert no update-tool
+   success, newly published values/revisions, or success event before confirmation.
+   Release commit and verify the snapshot and latest pointer exist before success.
+   Make two updates in one turn and another later; each snapshot must contain
+   the exact resulting state, unchanged sections, and original turn/tool identity,
+   without a separate changeset. Retry a persisted operation, submit a stale one,
+   and fail a transaction: no duplicate history, pointer regression, cross-call
+   pointer, or partially committed snapshot/pointer pair is allowed. A confirmed
+   transaction failure preserves the prior in-memory values/revisions and returns
+   no success. Verify `RoomAuthority` and media can progress while the variable
+   tool waits for storage. Fetch latest values directly through the call pointer.
+   Separately omit retention settings at both levels and expect retain forever;
+   set an application period and verify tenant inheritance, then override one
+   tenant without affecting another. Duration selection must not enable additional
+   capture or client disclosure. Finite-expiry cleanup awaits its own reviewed
+   semantics. These are planned checks, not current playground guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
    variable, read back that partial object,
@@ -4872,6 +4965,34 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   intended documentation files changed. Snapshot/turn/pointer consistency,
   retained review status, restricted terminology, local-path hygiene, and
   whitespace checks pass.
+
+### Retention defaults and committed variable updates — approved 2026-09-07
+
+- Approved retention periods at application and tenant level. Tenant settings
+  override application values; the application default is retain forever.
+  This means no age-based expiration, not broader capture/client access or
+  unbounded live buffers. Finite-expiry/cleanup and exact configuration remain open.
+- Clarified that database-backed variable-update tools return success only after
+  the full snapshot and latest-pointer transaction commits. The earlier
+  acknowledge-memory-first/asynchronous-snapshot proposal is superseded.
+- `CallVariables` validates and serializes candidates, waits on an engine-owned
+  snapshot-persistence port, then adopts the committed state and returns success.
+  The adapter owns Ecto/SQL; no room-authority hop or reverse engine dependency
+  on Calls is introduced. General tool/turn/usage archival remains asynchronous.
+- Confirmed transaction failure cannot become memory-only success. An unknown
+  commit outcome is neither success nor proof of rollback; precise uncertain
+  commit/restart handling remains open. Snapshot durability does not automatically
+  restore a crashed room. No separate changeset or mutation journal is added.
+- Updated ownership, authorization, persistence interaction, G5 status, and
+  planned commit-barrier/retention-resolution checks across the original labnote,
+  architecture, and gap review. G5 stays partly resolved; 11 groups remain open.
+- Documentation only: no runtime, database migrations, configuration files, or
+  deletion jobs changed. No runtime or browser tests were run.
+- Verification: all existing fenced examples and all 15 JSON examples are
+  unchanged and valid. Links and external URLs are unchanged; only the three
+  intended documentation files changed. Commit-before-success, retention
+  precedence/default, retained review status, restricted terminology, local-path
+  hygiene, and whitespace checks pass.
 
 ## Verification evidence
 

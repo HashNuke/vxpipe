@@ -143,6 +143,11 @@ compiled variable schemas, and per-agent grants. It handles tool reads/updates
 directly, without routing through `RoomAuthority` or consulting it for each
 authorization. Datatype and value-size checks remain, with incremental population
 and no required-variable completeness or additional schema-complexity caps now.
+For database-backed variable updates, success requires the snapshot and call's
+latest-snapshot pointer transaction to commit. The variables process validates
+and serializes the update, waits on its configured snapshot-persistence port,
+then adopts the committed values/revisions and returns success. `RoomAuthority`
+is not on this path; the storage adapter owns SQL and Ecto, not the call engine.
 
 The variables process lives under the room supervisor, outside agent execution
 subtrees, and survives transfers and human-only periods. Transfer terminates the
@@ -647,25 +652,46 @@ Storing a payload does not grant a client access to it.
 When variable retention is enabled, save a full post-update Call Variables
 snapshot for each committed update, linked to the originating turn and tool
 invocation, source participant, revisions, and commit timestamp. Reuse the saved
-update tool call and its arguments; do not create a separate changeset. Capture
-the snapshot in `CallVariables` at commit, not by reading a later live state.
-The private storage consumer inserts it and conditionally advances
-`calls.latest_variables_snapshot_id` in one database transaction, with revision
-and incarnation checks preventing stale delivery from moving the pointer backward.
+update tool call and its arguments; do not create a separate changeset. Compute
+the exact candidate snapshot in `CallVariables`, not by reading a later live
+state. Its configured persistence adapter inserts the snapshot and conditionally
+advances `calls.latest_variables_snapshot_id` in one database transaction, with
+revision and incarnation checks preventing stale writes or pointer regression.
+For a new update, a failed pointer/revision precondition rejects the transaction;
+inserting a stale snapshot without advancing the pointer is not update success.
+Only after confirmed database commit may the variables process publish the new
+in-memory values/revisions, emit the update event, and return tool success.
+Validation or a confirmed transaction failure leaves current values unchanged;
+an unknown commit outcome is not success or proof of rollback.
 An indexed lookup or simple join retrieves the latest persisted snapshot without
 scanning history or keeping another mutable variables copy. The GenServer remains
-the live owner; asynchronous persistence may lag it and never gates an update on
-SQL. Full history snapshots are not client events or broader agent tool results.
+the runtime owner; its in-memory state is the committed working copy, not an
+acknowledged update waiting for background persistence. Database latency affects
+the variable-update tool, not `RoomAuthority` or media processing. Ordinary
+tool/turn/usage archival remains asynchronous. Full history snapshots are not
+client events or broader agent tool results.
 Retained initial values form a baseline snapshot with no invented turn/tool call,
 so the pointer also works before the first update.
 These are approved designs, not newly implemented persistence. Exact storage
-configuration, retention periods, and sensitive transcript handling remain under
-review.
+configuration, uncertain-commit/restart handling, and sensitive transcript
+handling remain under review. A configured database failure must not silently
+fall back to memory-only success; an explicitly database-free deployment has no
+database-commit guarantee.
+
+Stored call-data retention periods are application configuration with tenant
+overrides. The application default is retain forever. An explicit tenant setting
+wins; otherwise inherit the application setting, including its forever default.
+Forever means no age-based expiration by Vxpipe, not automatic capture of every
+payload or a backup/recovery guarantee. Existing storage enablement, credential
+exclusions, and client visibility remain separate. Periods are not agent-defined
+or client-selected. Exact duration encoding, finite-expiry timing, effects of
+policy changes on existing data, and cleanup of referenced snapshots remain
+under review; this decision implements no deletion job.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and
-sampled media/metrics outside the room hot path. Debugging does not enable
-unbounded event or raw-audio retention.
+sampled media/metrics outside the room hot path. Debugging alone does not change
+storage retention or remove bounded live-buffer limits.
 
 Telemetry includes:
 
