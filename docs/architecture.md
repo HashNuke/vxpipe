@@ -695,9 +695,18 @@ not pin a retention period, policy version, or fixed expiry on each call. A
 shorter period can make older completed calls immediately eligible for cleanup.
 A longer period or forever changes eligibility for data still present, but cannot
 restore deleted data. Application changes do not override an explicit tenant
-setting. Exact duration encoding, unstarted-record cleanup, and cleanup of
-referenced snapshots remain under review; this decision implements no deletion
-job.
+setting.
+
+Retention expiry deletes the entire call and all Vxpipe-managed data belonging
+to it: the call record, transcript, events, tool history, variable snapshots
+(including the latest), participant/leg records, usage/cost records, recordings,
+and exported artifacts. This is not a soft delete or a payload-only purge that
+keeps a call summary. Shared call definitions and application/tenant configuration
+remain; call-specific copies and references do not. Database rows and stored
+objects are both in scope, not one cross-store database transaction. Pending or
+late archive/publication work must not recreate deleted call data. Exact duration
+encoding, unstarted-record cleanup, deletion scheduling, and cross-store cleanup
+mechanics remain under review; this decision implements no deletion job.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and

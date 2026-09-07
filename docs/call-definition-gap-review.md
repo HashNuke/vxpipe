@@ -53,8 +53,9 @@ that snapshot/pointer transaction commits. Retention periods resolve from tenant
 override, then application setting; the application default is retain forever.
 Finite retention for completed calls starts at `ended_at`; active calls are not
 expired, and forever has no expiry threshold. Current application/tenant periods
-apply to all calls, past and future, without per-call retention settings. Exact
-configuration syntax, cleanup semantics, and sensitive-input handling remain
+apply to all calls, past and future, without per-call retention settings. Expiry
+deletes the call record and all associated Vxpipe-managed data, not just payloads.
+Exact configuration syntax, cleanup mechanics, and sensitive-input handling remain
 pending alongside G2/G4 questions and G6–G13. Extra database-commit reconciliation
 is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
@@ -809,8 +810,26 @@ deleted data. Application changes affect tenants inheriting that setting, not
 tenants with explicit overrides. Active-call and missing-ended_at rules remain;
 this approval chooses neither a deletion schedule nor a cleanup implementation.
 
+**Approved deletion scope:** after retention expires, delete the entire call and
+all associated Vxpipe-managed data. This includes the call record, transcript,
+events, tool calls/results, all variable snapshots including the latest,
+participant/leg and admission records, usage/cost history, recordings if present,
+artifact metadata, and published exports. Delete call-specific copies as well;
+keeping a summary row or hiding the call with a soft-delete flag is insufficient.
+Shared definitions and application/tenant configuration remain. This does not
+claim control over independent copies held by integrating apps or providers.
+
+For example, expiring a recorded call removes its database rows, latest-snapshot
+reference and snapshot history, audio objects, and exported call-details JSON.
+No referenced snapshot is kept merely because it was the latest. Object storage
+and the database require separate operations; cleanup is not complete while
+call-owned data remains in either. Pending or late archival/publication work must
+not recreate the deleted data. No cleanup implementation or schedule is selected
+by this scope decision.
+
 **Still under review:** exact configuration, cleanup of unstarted records,
-referenced-snapshot cleanup, and broader redaction/sensitive user-input handling.
+deletion scheduling/cross-store mechanics, and broader redaction/sensitive
+user-input handling.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
 different audiences. G5 stays partly resolved. Success now proves the snapshot
 transaction committed, not that complete room restart/recovery is implemented.
@@ -1079,9 +1098,10 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Hide client tool events while retaining payloads, then show full events with metadata-only storage | First call stores permitted synthetic arguments/results but emits no client tool events; second shows payloads live but stores only invocation and participant/tool identity, timing, and outcome; storage never uses the browser-filtered stream, and integration credentials/authorization headers are excluded before persistence |
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
 | Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
-| Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration changes neither capture enablement nor client visibility; finite cleanup awaits its own approved semantics |
+| Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration changes neither capture enablement nor client visibility; cleanup mechanics remain separate from the approved whole-call deletion scope |
 | Create a record before its call starts, then end it with finite retention | Expiry is computed from ended_at plus the current application/tenant period, not created_at or storage-write time; active calls are not expired, later archive writes do not reset the clock, forever has no expiry, and missing ended_at does not fall back to creation time |
 | Change retention after calls already exist | The current setting applies to past and future calls without per-call policy copies; shortening 90 days to seven makes a 14-day-old completed call eligible, increasing the period or choosing forever changes eligibility only for remaining data, and an explicit tenant override still wins over application changes |
+| Expire a call with retained history, snapshots, recordings, and exports | Remove the call record and all call-owned rows and objects, including latest snapshots and call-specific copies; no summary-only row remains; shared definitions/configuration and other calls remain untouched; incomplete object deletion is not complete cleanup, and late publication must not recreate purged data |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |

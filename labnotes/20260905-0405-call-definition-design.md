@@ -96,9 +96,10 @@ Normal transaction errors return variable-save failure; no extra database-commit
 reconciliation is required for this slice. Finite retention for completed calls
 starts at `ended_at`; active calls are not expired and forever has no threshold.
 Current application/tenant periods apply to all calls, past and future, without
-per-call retention settings.
-Exact configuration, cleanup, sensitive-input handling, G2's remaining admission
-details, the rest of G4, and G6–G13 remain pending user review.
+per-call retention settings. Expiry deletes the entire call and all associated
+Vxpipe-managed data, including the call record itself.
+Exact configuration, cleanup mechanics, sensitive-input handling, G2's remaining
+admission details, the rest of G4, and G6–G13 remain pending user review.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -1673,8 +1674,9 @@ snapshots and call-level latest pointer described there. Retention periods use
 application settings with tenant overrides and an application retain-forever
 default. Completed-call finite retention starts at `ended_at`, without expiring
 active calls or assigning an expiry to forever. The current application/tenant
-period applies to past and future calls, not a per-call pinned period. Exact
-storage configuration, cleanup, and sensitive transcript handling remain G5
+period applies to past and future calls, not a per-call pinned period. Expiry
+deletes the call record and all associated Vxpipe-managed data. Exact storage
+configuration, cleanup mechanics, and sensitive transcript handling remain G5
 review questions.
 
 ### Initial agent-transfer history policies
@@ -2988,9 +2990,10 @@ live but save only metadata. Both are supported without changing tool behavior.
 Retention periods use application configuration with tenant overrides and an
 application retain-forever default. Completed-call finite retention starts at
 `ended_at`, using the current period for both past and future calls. Exact
-configuration syntax, cleanup, and broader sensitive-input/redaction policy
-remain under review. This decision does not add runtime persistence or guarantee
-complete room recovery.
+configuration syntax, cleanup mechanics, and broader sensitive-input/redaction
+policy remain under review. Expiry deletes the entire call and its associated
+Vxpipe-managed history and artifacts. This decision does not add runtime
+persistence or guarantee complete room recovery.
 
 ### Variable history snapshots and the latest pointer — approved G5 decision
 
@@ -3053,8 +3056,9 @@ its snapshot later. General call/tool/usage events can still be archived
 asynchronously. Full process/room recovery remains a separate concern, not a
 prerequisite to the normal variable-save transaction. An explicitly database-free
 deployment has no database-commit guarantee; a database-backed call must never
-silently fall back to it when storage fails. Storage duration resolves as below;
-cleanup of referenced snapshots and exact database schema remain follow-ups.
+silently fall back to it when storage fails. Storage duration resolves as below.
+Referenced snapshots are deleted with the expired call, including its latest
+snapshot. Cleanup mechanics and exact database schema remain follow-ups.
 This checkpoint adds no runtime behavior or migrations.
 
 ### Retention periods — approved application and tenant policy
@@ -3105,8 +3109,37 @@ Application changes affect inheriting tenants; an explicit tenant override still
 wins. These policy changes do not expire active calls or substitute creation time
 when `ended_at` is unset. Eligibility is not a promise of immediate deletion.
 
-Unstarted-record cleanup, deletion-job behavior/scheduling, and cleanup of
-snapshots referenced by a call remain under review.
+Retention expiry deletes the entire call and all Vxpipe-managed data belonging
+to it, not just its transcript or recording:
+
+- the call record itself, including initial variables, any call-specific pinned
+  definition/plan copy, and its latest-snapshot reference;
+- participant/leg, agent activation, admission/token/claim, event/debug, and turn
+  records, including transcripts;
+- tool invocations and retained arguments/results, provider operations, and
+  usage/token/model/cost history;
+- every variable snapshot, including the baseline and latest snapshot;
+- all recordings if present, including separate tracks, live mixes, derivatives,
+  and their metadata/manifests; and
+- published call-details documents, other call-specific exports/copies, and
+  call-owned publication/outbox data.
+
+The list is illustrative, not an exemption for other stored call-specific data.
+Do not leave a soft-deleted call, summary-only record, or latest snapshot behind.
+Shared call definitions and application/tenant configuration are not owned by
+this call and remain; their call-specific copies and references are deleted.
+Independent copies held by integrating apps or providers are outside Vxpipe's
+control, not something this cleanup can promise to erase.
+
+Both database rows and stored objects must be deleted. This is one deletion
+scope, not an atomic transaction spanning the database and object storage.
+Cleanup is not complete while call-owned data remains in either. Pending or late
+archival/publication work must not recreate purged call data. The coordination
+and deletion ordering are implementation questions, not a reason to retain data
+permanently or add a new per-call retention policy.
+
+Unstarted-record cleanup and deletion-job behavior/scheduling/cross-store
+mechanics remain under review; the whole-call deletion scope is now approved.
 No automatic cleanup is implemented here. This retention decision does not alter
 the requirement to commit a variable snapshot before update-tool success.
 
@@ -3753,10 +3786,11 @@ tenant overrides and application settings, with retain forever as the applicatio
 default. Normal transaction errors return variable-save failure; no extra commit
 reconciliation is required. Completed-call finite retention starts at `ended_at`;
 active calls are not expired, and forever has no expiry threshold. Exact
-configuration, cleanup, and sensitive-input handling remain under review. Current
-application/tenant periods apply to all calls, past and future, without per-call
-retention settings. Other G4 questions, remaining G2 details, and G6–G13 remain
-unapproved.
+configuration, cleanup mechanics, and sensitive-input handling remain under
+review. Current application/tenant periods apply to all calls, past and future,
+without per-call retention settings. Expiry deletes the entire call and all
+associated Vxpipe-managed data, including its record and latest variable snapshot.
+Other G4 questions, remaining G2 details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3966,10 +4000,14 @@ The numbering below matches G1–G13 in the focused review document.
    success. Application retention defaults to retain forever, with tenant settings
    overriding application values. Transaction error means variable-save failure;
    extra commit-status lookup/reconciliation is not required. Exact configuration,
-   cleanup, broader redaction, and sensitive user-input handling remain proposals
-   for review. Completed-call finite retention starts at `ended_at`; active calls
-   are not expired, and forever has no expiry threshold. The current application/
-   tenant period applies to past and future calls; no per-call retention settings.
+   cleanup mechanics, broader redaction, and sensitive user-input handling remain
+   proposals for review. Completed-call finite retention starts at `ended_at`;
+   active calls are not expired, and forever has no expiry threshold. The current
+   application/tenant period applies to past and future calls; no per-call
+   retention settings.
+   Expiry deletes the call record and all associated Vxpipe-managed data, including
+   every variable snapshot, usage history, recording, and export. Shared definitions
+   and application/tenant configuration remain.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -4087,8 +4125,14 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    14 days ago: expect eligibility under the new setting without rewriting call
    records. Increase the period or choose forever and verify eligibility changes
    for data still present, without restoring deleted data. An explicit tenant
-   override must still win over an application change. Cleanup mechanics remain
-   separate. These are planned checks, not current playground guarantees.
+   override must still win over an application change. Expire a call with retained
+   transcripts, tool/usage history, variable snapshots, recordings, and exports:
+   verify all call-owned rows and objects are deleted, including the call record
+   and latest snapshot, while shared definitions/configuration and other calls
+   remain untouched. An object-store failure must not be reported as complete
+   cleanup, and late publication must not recreate the deleted data. Cleanup
+   mechanics remain separate. These are planned checks, not current playground
+   guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
    variable, read back that partial object,
@@ -5114,6 +5158,27 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   and valid; links and external URLs are unchanged. Three-file scope, current
   policy/precedence/clock rules, unrelated review sections, terminology/local-path
   hygiene, and whitespace checks pass. No runtime or browser tests were run.
+
+### Retention expiry deletes the entire call — approved 2026-09-07
+
+- Approved deletion of the call record and everything stored for that call after
+  retention expires: transcripts, tool/usage history, all variable snapshots,
+  recordings if present, exports, and other call-owned rows/copies. A soft delete
+  or retained summary/latest snapshot does not satisfy this scope.
+- Shared definitions and application/tenant configuration remain. Both database
+  and object-storage data are in scope; no cross-store atomicity is claimed.
+  Pending or late archival/publication must not recreate deleted call data.
+- Updated architecture, the gap review, the original retention/snapshot
+  contracts, summaries, and planned whole-call cleanup checks. Current-policy
+  resolution, the `ended_at` clock, and active/forever rules remain unchanged.
+- This resolves item 2 of the five-item review batch; the other three proposals
+  remain pending. G5 stays partly resolved and 11 review groups remain open.
+  Scheduling and cleanup mechanics remain to be designed. No runtime, deletion
+  job, migration, or UI was changed, and no stored call data was deleted.
+- Verification: unchanged fenced examples and 15 valid JSON examples, unchanged
+  links/URLs, three-file scope, deletion and existing retention contracts,
+  unrelated review sections, terminology/local-path hygiene, and whitespace
+  checks pass. No runtime or browser tests were run.
 
 ## Verification evidence
 
