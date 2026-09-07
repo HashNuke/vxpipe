@@ -80,10 +80,11 @@ Generic platform-level confirmation is also out of scope for now. Agent
 instructions handle conversational confirmation; any enforceable business
 authorization belongs to the integrating application/MCP. Prompt instructions
 are not a security guarantee, and Vxpipe still enforces tool access.
-G5's ordinary-client redaction and authorized sample-debug visibility are
-approved. Its private archival/retention questions, G2's remaining admission
-details, the rest of G4, and G6–G13 remain pending user review. Approval of
-documentation does not authorize runtime implementation.
+G5's call-level client tool visibility and explicitly full-visibility sample
+calls are approved, with all tool events hidden when visibility is unspecified.
+Per-tool selections, private archival/retention questions, G2's remaining
+admission details, the rest of G4, and G6–G13 remain pending user review.
+Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
 
@@ -1157,8 +1158,9 @@ Application integration catalog
   including the tool bindings selected independently in each agent's `tools` map.
   It does not own MCP endpoints or credentials.
 - A call invocation owns caller/destination identity, definition selection,
-  schema-validated initial variables, transport attachment, and idempotency. It does
-  not override either entry ref and carries no MCP authentication.
+  schema-validated initial variables, transport attachment, idempotency, and an
+  optional authorized client tool-visibility selection. It does not override
+  either entry ref and carries no MCP authentication.
 - A resolved call plan pins all references, capability/profile defaults, adapter
   capabilities, selected integration/catalog revisions, discovered tool schemas, policy
   versions, and credential-lease references without retaining secret values.
@@ -1217,7 +1219,8 @@ The initial dated schema should contain only:
 - shared capability-profile defaults;
 - named inline `participants`, each typed as human or agent;
 - typed call-variable schemas for initial values and subsequent mutations;
-- shared call policies for turns, interruption, limits, failure, and ending; and
+- shared call policies for turns, interruption, limits, failure, ending, and
+  client tool visibility; and
 - artifact/event policy references.
 
 Each agent participant should contain:
@@ -1586,32 +1589,47 @@ or typed plan, never decoded call JSON or credentials.
 
 ### Tool event visibility and sample debugging — approved G5 decision
 
-Ordinary clients receive tool invocation ID, tool name, and lifecycle status by
-default, not tool arguments or results. Keep private execution payloads separate
-from client projections. An agent may be authorized to read internal billing
-notes without the caller being authorized to inspect those notes in a tool
-event. Frontend concealment alone does not prevent disclosure.
+Client access to tool events is a property of the call, not a special entitlement
+inferred from which frontend is connected. The call definition declares its
+client tool visibility. The authorized backend/OTP host may explicitly select a
+different visibility when creating the call; that selection overrides the
+definition's value. Resolve and store the effective value with the call record
+and immutable resolved plan. A prepared call remains a record until admission;
+this policy needs no live process tree before the caller joins.
 
-The `samples/` playground is a developer debug UI. It may display tool calls,
-arguments, and results through an explicitly server-authorized debug projection
-for its session. The development flow should preserve that inspection capability
-without changing the ordinary-client default. A browser-provided flag or the
-choice of frontend route does not grant debug visibility. The exact server-side
-admission/configuration mechanism remains an implementation decision; no new
-call-definition option or API field is introduced by this approval.
+Supported visibility behaviors are:
 
-Debug inspection is separate from tool execution and variable permissions: it
-does not expand an agent's grants or allow inspecting other calls. The existing
-credential/header exclusions remain in force; enabling tool-payload inspection
-does not authorize exposing integration credentials or raw transport requests.
-It also does not expose the entire variables store or private room snapshot.
+| Call policy | What an authorized client receives |
+| --- | --- |
+| Hidden tool activity | No tool lifecycle events or payloads |
+| Lifecycle metadata only | Invocation ID, tool name, and status, without arguments/results |
+| Full tool visibility | Tool lifecycle events including arguments/results |
 
-This is an approved visibility policy, not newly implemented behavior. Current
-tool events carry arguments/results through the gateway without this audience
-distinction. The samples UI can retain payload inspection when the server-side
-projection boundary is implemented. Private archive payloads, retention, and
-sensitive transcript handling remain separate G5 review questions; debug
-visibility alone does not authorize storing those payloads.
+These describe behavior, not final JSON key or enum names. When neither
+definition nor call creation selects visibility, hide tool events entirely.
+Metadata-only and full visibility require explicit selection; metadata is not
+a mandatory disclosure floor for every call. Selecting individual tools and
+their detail levels is a possible follow-up, not yet an approved schema contract.
+
+Calls created for the `samples/` playground explicitly select full tool visibility
+because it is our developer debug UI. This uses the same call policy available
+to integrations, not a frontend-specific bypass or additional debug-session
+authorization. The backend/dev setup makes the trusted selection; a joining
+browser, frontend flag, or UI route cannot change a prepared call's policy.
+Editing the stored definition later does not change an existing call's value.
+
+The gateway filters tool events before sending them, not merely before rendering
+them. Hiding tool events does not disable tool execution, ordinary conversation,
+or TTS. Full visibility does not expand an agent's variable/tool grants, authorize
+access to another call, or expose the entire variables store or private snapshot.
+Existing credential/header exclusions remain in force; it does not authorize
+exposing integration credentials or raw transport requests.
+
+This supersedes the earlier mandatory metadata-only client default and separate
+sample-debug session grant. It is an approved design boundary, not current
+gateway behavior. Private archive payloads, retention, and sensitive transcript
+handling remain separate G5 review questions; client visibility alone does not
+authorize storing those payloads.
 
 ### Initial agent-transfer history policies
 
@@ -1633,6 +1651,12 @@ Avoid arbitrary deep-merge overrides. `CallInvocation.initial_variables` may
 provide only sections and variables permitted by the definition's variable schemas.
 Provider selection, tool grants, guardrails, and routing must not be silently
 replaced by caller-supplied maps. Initial variables are data, not a definition patch.
+
+Client tool visibility is an explicit approved creation-time policy selection,
+separate from initial variables. Only the authorized backend/OTP host may use
+it to override the definition's visibility; it is not an arbitrary definition
+patch or an option accepted from the joining browser. Pin the effective value
+with the prepared call and resolved plan.
 
 MCP integration selection and authentication are not invocation overrides. They
 resolve from the authenticated tenant's integration catalog with an
@@ -3476,9 +3500,10 @@ agent-requested calls are separate invocations. Late business notifications are
 deferred to future external-event delivery to active rooms/agents. Generic
 platform confirmation is out of scope; conversational confirmation belongs to
 agent instructions and enforceable business authorization to the application/MCP.
-G5's ordinary-client redaction and authorized sample-debug visibility are
-approved; private archive/retention policies remain under review. Other G4
-questions, remaining G2 details, and G6–G13 remain unapproved.
+G5's call-level client tool visibility and full-visibility sample calls are
+approved, with tool events hidden by default. Selective per-tool visibility and
+private archive/retention policies remain under review. Other G4 questions,
+remaining G2 details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3671,13 +3696,14 @@ The numbering below matches G1–G13 in the focused review document.
    while the application/MCP owns enforceable business authorization. Prompts
    are not a security guarantee; Vxpipe's tool-access checks remain. A start event
    is not proof of successful completion.
-5. **Private tool data and archive projections — partly resolved:** ordinary
-   clients receive lifecycle metadata without arguments/results by default.
-   The sample debug UI may inspect payloads through a server-authorized debug
-   projection for its session; frontend flags cannot grant access. Current
-   gateway behavior still needs this separation. Private archive payloads,
-   independently authorized variable journals, retention/redaction before
-   storage, and sensitive user-input handling remain proposals for review.
+5. **Private tool data and archive projections — partly resolved:** resolve
+   client tool visibility from the definition and any authorized call-creation
+   selection, and pin it with the call. Support no tool events, metadata only,
+   or full arguments/results; sample calls explicitly select full visibility.
+   Omitted visibility hides all tool events; joining browsers cannot change it.
+   Selective per-tool configuration and implementation remain pending. Private
+   archive payloads, independently authorized variable journals, retention/redaction
+   before storage, and sensitive user-input handling remain proposals for review.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -3750,14 +3776,17 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    model projections. Transfer to a read-only agent; the value remains available
    but writes fail. Request both a readable and a forbidden section; expect a
    permission error with no values, then retry the readable section alone successfully.
-   Confirm success does not add unrequested sections. Inspect ordinary-client
-   events and confirm private tool values are absent. In a separate sample-debug
-   session, have the server explicitly authorize payload inspection and verify
-   synthetic tool arguments/results are visible for that call. A browser-supplied
-   debug flag without authorization must not expose them. Confirm the ordinary
-   session stays redacted, no agent variable grants change, and integration
-   credentials/headers are not exposed in either projection. These are planned
-   checks for the future projection boundary, not current playground guarantees.
+   Confirm success does not add unrequested sections. Create separate calls with
+   hidden, metadata-only, and full client tool visibility; verify no tool events,
+   metadata-only events, or synthetic arguments/results respectively. Sample calls
+   explicitly use full visibility through trusted setup, without an extra debug
+   session grant. Test definition inheritance and an authorized creation override;
+   editing the definition or sending a browser debug flag after preparation must
+   not change the pinned value. Hidden tool events must not stop tool execution
+   or conversational audio. Check unchanged agent variable grants and credential/
+   header exclusions in every mode. Omit visibility at definition and creation
+   and verify no tool events reach the client. These are planned checks, not
+   current playground guarantees.
    Before writing an unfilled section, read it: expect one null in its value slot,
    not nested nulls, with no stored value or revision change. Write only one
    variable, read back that partial object,
@@ -4608,6 +4637,26 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   examples parse. Links and external URLs are unchanged. Only the three intended
   documentation files changed; G5 status, retained review count, restricted
   terminology, local-path hygiene, and whitespace checks pass.
+
+### Client tool visibility belongs to call setup — approved 2026-09-07
+
+- Refined the visibility decision: configure it in the definition or select it
+  explicitly during authorized call creation, with creation taking precedence.
+  Pin the effective policy with the call; joining clients do not choose it.
+- Include no tool events as a valid behavior, not just payload redaction. Sample
+  calls explicitly select full tool visibility through the same call policy;
+  a separate frontend/debug-session entitlement is not required.
+- Replaced the active special-debug-projection contract, updated the runtime
+  override boundary and planned tests, and retained historical checkpoint notes.
+  Omitted visibility hides all tool events; exact schema names and selective
+  per-tool visibility remain under review. No per-tool policy is approved here.
+  Archive/retention questions remain open; the review count stays at 11 groups.
+- Documentation only; no gateway, engine, or sample UI behavior changed.
+- Verification: all existing fenced examples and all 15 JSON examples are
+  unchanged and valid. Links and external URLs are unchanged; only the three
+  intended documentation files changed. Hidden-default/precedence checks,
+  pending per-tool policy, review count, restricted terminology, local-path
+  hygiene, and whitespace checks pass.
 
 ## Verification evidence
 

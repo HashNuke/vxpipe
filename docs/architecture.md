@@ -604,24 +604,29 @@ Public projections exclude:
 - unapproved provider-native payloads; and
 - transcript, tool, or media data outside the actor's visibility scope.
 
-Tool lifecycle events sent to ordinary clients contain invocation ID, tool name,
-and status by default, not arguments or results. Keep the private execution
-payload separate from this client projection; an agent's permission to read a
-value does not grant its caller permission to inspect that value through events.
+Client tool-event visibility is a call-level policy declared in the call
+definition or explicitly selected by the authorized backend/OTP host when
+creating the call. A creation-time selection overrides the definition's value;
+resolve and pin the effective policy with the call record/resolved plan before
+joining. The gateway applies it to that call's authorized client connections.
+The policy can hide tool events entirely, expose lifecycle metadata only, or
+include arguments/results. When neither source specifies visibility, hide all
+tool events. Both metadata and full payload visibility require explicit selection.
+Per-tool selections and their configuration shape remain proposals for review.
 
-The `samples/` playground is a developer debug UI and may display tool arguments
-and results through an explicitly server-authorized debug projection for its
-session. The default development flow should preserve that inspection capability
-without widening ordinary-client visibility. A frontend flag, UI route, or hiding
-fields in the interface is not an authorization boundary. Debug inspection does
-not itself grant tool execution, variable access, or access to other calls.
-Existing credential/header exclusions still apply; debugging is not raw transport
-inspection. Exact admission/configuration wiring remains to be implemented.
+Calls created for the `samples/` playground explicitly select full tool
+visibility. This is the same call policy available to other integrations, not
+a frontend-specific exception or an additional debug-session grant. A frontend
+flag, UI route, or rendering choice cannot change a prepared call's visibility;
+filter events before sending them to the browser. Keep private execution payloads
+separate from these projections. Visibility does not grant tool execution,
+additional agent variable permissions, or access to another call. Existing
+credential/header exclusions still apply even to full tool visibility.
 
 This is an approved visibility contract, not current gateway behavior. The
 current tool-event path still sends arguments/results without this audience
 distinction. Private archival payloads, retention, and sensitive transcript
-handling remain separate review items; debug visibility does not approve storage.
+handling remain separate review items; client visibility does not approve storage.
 
 Silent live monitoring uses an authenticated monitor participant with explicit
 scopes, topic grants, retention, and rate limits. It consumes projected events and
