@@ -793,11 +793,32 @@ plus its local key in that participant's `tools` map, not by a remote MCP operat
 name alone. The same local tool name on two agents is two independent targets;
 tools without an override inherit the call-wide default. Resolve each invocation's
 target from its server-owned participant/tool binding, not client-supplied labels.
-Pin these selections with the rest of the call policy. The exact configuration
-shape and field/enum names remain under review.
+Pin these selections with the rest of the call policy. Use `tool_visibility`
+for the call-wide `hidden`, `metadata`, or `full` default, and optional
+`tool_visibility_overrides` for participant-key → local-tool-key → level:
+
+```json
+{
+  "tool_visibility": "hidden",
+  "tool_visibility_overrides": {
+    "reception": {
+      "lookup_order": "metadata",
+      "create_booking": "full"
+    }
+  }
+}
+```
+
+Omitting both means hidden with no overrides. An authorized creation-time
+selection replaces this effective policy pair from the definition; omitting
+the creation policy inherits the definition. This is not a deep-merge/patch API.
+Within the selected pair, a binding override still wins over the default.
 
 Calls created for the `samples/` playground explicitly select full tool
-visibility. This is the same call policy available to other integrations, not
+visibility using effective `{"tool_visibility":"full"}` with no overrides.
+An inherited restrictive binding override would still win, so the trusted sample
+creation replaces the policy pair rather than changing only its default. This
+is the same call policy available to other integrations, not
 a frontend-specific exception or an additional debug-session grant. A frontend
 flag, UI route, or rendering choice cannot change a prepared call's visibility;
 filter events before sending them to the browser. Keep private execution payloads

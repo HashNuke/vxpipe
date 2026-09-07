@@ -72,8 +72,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **31 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, and R19–R21 are resolved; R07's same-call caller
+Current review count: **30 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, R17, and R19–R21 are resolved; R07's same-call caller
 reconnection and R16's retry exceptions are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -103,11 +103,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**31 pending decisions (R17, R18, and R22–R50).** This is the current approval backlog,
+**30 pending decisions (R18 and R22–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15 and R19–R21 are resolved; R07/R16 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R17, R18, and R22–R24**. Mark rows resolved or
+R10–R15, R17, and R19–R21 are resolved; R07/R16 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R18 and R22–R25**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -128,7 +128,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R14 | G4 | **Resolved:** no automatic tool/MCP executor retries initially, including known non-submission failures; return the outcome and treat any later model-requested call as a separate invocation. |
 | R15 | G4 | **Resolved:** skip the trusted read-only/idempotent-write/side-effect classification layer for now. |
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
-| R17 | G5 | What public configuration layout expresses call-wide and participant/tool-specific client visibility? |
+| R17 | G5 | **Resolved:** `tool_visibility` is `hidden`, `metadata`, or `full`; optional `tool_visibility_overrides` maps participant definition key to local tool binding key to level. Binding overrides win; omission hides events; trusted creation may replace the definition policy pair. |
 | R18 | G5 | What public configuration layout controls non-tool capture/storage such as transcripts, recordings, and usage? Tool storage is settled: all observed metadata, arguments/request payloads, and responses/results/errors are always stored, independent of client visibility, with no tool-storage configuration. |
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
@@ -900,8 +900,16 @@ The policy supports hiding tool events entirely, exposing lifecycle metadata
 without payloads, or including arguments/results. This replaces a mandatory
 metadata-only projection plus special debug-session authorization. When both
 definition and creation omit visibility, hide tool events entirely. Metadata
-and full visibility require explicit selection. Exact field/enum names and
-configuration layout remain under review, not a frozen schema.
+and full visibility require explicit selection. The call-wide key is
+`tool_visibility`, with values `hidden`, `metadata`, or `full`. Optional
+`tool_visibility_overrides` maps participant definition key to local configured
+tool key to that same level, without an additional container or schema variant.
+For example, `{"tool_visibility":"hidden","tool_visibility_overrides":{"reception":{"lookup_order":"metadata","create_booking":"full"}}}`
+exposes only the two named reception bindings at their selected levels.
+Omitting both means hidden with no overrides. An explicit trusted creation
+selection replaces this effective policy pair; omission inherits the definition.
+No deep-merge/patch API is implied, and binding overrides in the effective pair
+still take precedence over its default.
 
 **Approved per-tool targeting:** an override identifies the participant definition
 key plus its configured local key in that participant's `tools` map. It selects
@@ -918,8 +926,11 @@ Those are separate targets even if both bindings select the same remote operatio
 changing one visibility override must not expose the other's events or payloads.
 
 **Approved sample configuration:** calls created for `samples/` explicitly select
-full tool visibility for the debug UI through the same trusted call-creation
-mechanism. No frontend-specific exception or additional debug-session grant is
+full tool visibility for the debug UI through effective `{"tool_visibility":"full"}`
+with no overrides, using the same trusted call-creation mechanism. Replace the
+policy pair so restrictive definition overrides are not accidentally inherited;
+merely changing the default to full would not override a hidden binding.
+No frontend-specific exception or additional debug-session grant is
 required. A browser flag, route, or visual concealment cannot change that policy.
 Existing credential/header exclusions still apply; visibility grants neither
 tool execution nor additional agent variable or cross-call access. The current
@@ -1401,6 +1412,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Configure an agent to ask before booking, then attempt an unavailable tool | Domain-specific conversational confirmation uses the prompt/tool flow without a platform token; prompt instructions cannot grant tool access or substitute for enforceable application/MCP authorization |
 | Create calls with hidden, metadata-only, and full client tool visibility | Gateway sends no tool events, metadata-only events, or tool arguments/results respectively; sample calls explicitly select full visibility; an authorized creation override wins over the pinned definition value and a joining browser cannot change it; credential/header exclusions still apply |
 | Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
+| Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
 | Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
@@ -1804,7 +1816,7 @@ browser tests; no stored call data was deleted.
 The R19 follow-up chooses application/tenant `call_retention` as `"forever"` or
 an explicit seconds-duration object. Omission/inheritance and current-policy
 behavior are unchanged; no call-level policy or duration parser is introduced.
-Current backlog: 31 individual decisions, R17, R18, and R22–R50. Checks cover exact
+At that checkpoint: 31 individual decisions, R17, R18, and R22–R50. Checks cover exact
 three-file scope, 16 unchanged valid JSON examples, links/anchors, encoding and
 inheritance, prior contracts, statuses/count, terminology/path hygiene, and
 whitespace. Documentation only; no runtime tests.
@@ -1813,10 +1825,19 @@ The complete-tool-history follow-up supersedes metadata-default/opt-in storage:
 always retain all observed invocation metadata, arguments/request payloads, and
 responses/results/errors, regardless of client visibility. Credential/header
 exclusions, unknown-outcome semantics, asynchronous general archival, and the
-variable snapshot transaction boundary remain unchanged. R18 now asks only about
-non-tool capture/storage configuration; the total remains 31 pending individual
+variable snapshot transaction boundary remain unchanged. R18 then asked only about
+non-tool capture/storage configuration; that checkpoint retained 31 pending individual
 decisions, R17, R18, and R22–R50. Checks cover exact three-file scope, 16 unchanged
 valid JSON examples, links/anchors, active-rule consistency, prior contracts,
+statuses/count, terminology/path hygiene, and whitespace. Documentation only.
+
+R17 now specifies `tool_visibility` plus `tool_visibility_overrides`, keyed by
+participant definition and local tool binding. Trusted creation can replace the
+policy pair; an effective binding override still wins over its default. Samples
+use full with no overrides, not a browser grant. Complete observed tool storage
+is unchanged. Current backlog: 30 individual decisions, R18 and R22–R50. Checked
+exact three-file scope, 16 preserved JSON examples plus two new valid visibility
+examples, existing fences/links/anchors, policy precedence, prior contracts,
 statuses/count, terminology/path hygiene, and whitespace. Documentation only.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md

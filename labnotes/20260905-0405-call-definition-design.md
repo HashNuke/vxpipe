@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-31 individual decisions still awaiting review, rather than counting its
+30 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -128,6 +128,8 @@ R19 chooses application/tenant `call_retention` as `"forever"` or an explicit
 seconds-duration object, without changing retention behavior or adding per-call policy.
 R18's tool-storage question is settled by always storing complete observed tool
 history; only its non-tool capture/storage configuration question remains pending.
+R17 defines `tool_visibility` and participant/local-tool `tool_visibility_overrides`,
+including trusted full-visibility sample policy replacement with no overrides.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -1857,8 +1859,8 @@ Supported visibility behaviors are:
 | Lifecycle metadata only | Invocation ID, tool name, and status, without arguments/results |
 | Full tool visibility | Tool lifecycle events including arguments/results |
 
-These describe behavior, not final JSON key or enum names. When neither
-definition nor call creation selects visibility, hide tool events entirely.
+Use `tool_visibility` with `hidden`, `metadata`, or `full` for these behaviors.
+When neither definition nor call creation selects visibility, hide tool events entirely.
 Metadata-only and full visibility require explicit selection; metadata is not
 a mandatory disclosure floor for every call. Per-tool overrides may select any
 of these same detail levels. An explicit binding override takes precedence over
@@ -1876,12 +1878,34 @@ For example, both `reception` and `billing` may configure `lookup_customer`.
 With the call-wide default hidden, an override can expose only reception's lookup
 at metadata-only detail; billing's lookup stays hidden. Sharing a local name or
 binding to the same remote operation must not share visibility between agents.
-The two-part target is approved; the exact JSON layout and field/enum names are
-still under review. No new schema release or generated-tool configuration is
-introduced by this decision.
+The optional `tool_visibility_overrides` map uses participant definition keys,
+then local tool binding keys, each selecting one of the same levels:
+
+```json
+{
+  "tool_visibility": "hidden",
+  "tool_visibility_overrides": {
+    "reception": {
+      "lookup_order": "metadata",
+      "create_booking": "full"
+    }
+  }
+}
+```
+
+This illustrative policy exposes reception's `lookup_order` metadata and
+`create_booking` payloads; other bindings inherit hidden, including the same
+local tool names on another participant. Omitting both keys means hidden with
+no overrides. A trusted creation-time selection replaces this effective policy
+pair from the definition; omitted creation policy inherits it. This does not
+define a deep-merge/patch API or another configuration container. Within the
+selected pair, an explicit binding override always wins over its default.
 
 Calls created for the `samples/` playground explicitly select full tool visibility
-because it is our developer debug UI. This uses the same call policy available
+because it is our developer debug UI: effective `{"tool_visibility":"full"}`
+with no overrides. The trusted creator replaces the policy pair; setting only
+the default to full while retaining a hidden binding override would not expose
+that binding. This uses the same call policy available
 to integrations, not a frontend-specific bypass or additional debug-session
 authorization. The backend/dev setup makes the trusted selection; a joining
 browser, frontend flag, or UI route cannot change a prepared call's policy.
@@ -4199,8 +4223,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **31 individual decisions awaiting review**, enumerated as R17, R18,
-and R22–R50 in the focused gap review. R01–R06, R08, R10–R15, and R19–R21 are resolved;
+There are **30 individual decisions awaiting review**, enumerated as R18
+and R22–R50 in the focused gap review. R01–R06, R08, R10–R15, R17, and R19–R21 are resolved;
 R07's caller reconnection and R16's retry exceptions are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4217,7 +4241,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R17, R18, and R22–R24.
+for unstarted records. The next five pending decisions are R18 and R22–R25.
 
 ### Baseline and scope
 
@@ -4416,8 +4440,10 @@ The numbering below matches G1–G13 in the focused review document.
    or full arguments/results; sample calls explicitly select full visibility.
    Omitted visibility hides all tool events; joining browsers cannot change it.
    Per-tool overrides target participant definition key plus local configured
-   tool key and take precedence over the call-wide default. Exact configuration
-   syntax and runtime implementation remain pending. Tool-history storage always
+   tool key and take precedence over the call-wide default. `tool_visibility`
+   and `tool_visibility_overrides` now define that policy pair; trusted creation
+   can replace it, and samples use full with no overrides. Runtime implementation
+   remains pending. Tool-history storage always
    retains observed metadata, arguments/request payloads, and responses/results/errors,
    independently of visibility, with credentials/authorization headers excluded before
    persistence. Variable history uses full post-update snapshots linked to the
@@ -4530,7 +4556,12 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    same local tool key and different visibility overrides, then invoke each:
    only the originating participant/tool binding's override applies. Repeat
    with bindings to the same remote operation and check that an unlisted binding
-   inherits the call-wide default. A hidden binding must stay hidden even when
+   inherits the call-wide default. Exercise the documented `tool_visibility` /
+   `tool_visibility_overrides` example: reception's `lookup_order` emits metadata,
+   `create_booking` emits full detail, and unlisted bindings stay hidden. Trusted
+   sample creation replaces the policy pair with full and no overrides; an
+   omitted creation policy inherits the definition. No browser upgrade is allowed.
+   A hidden binding in the effective pair must stay hidden even when
    the call-wide default is full. With client tool events hidden, verify complete
    observed synthetic metadata, arguments/request payloads, and responses/results/errors
    reach storage while no tool events reach the browser. Select metadata or full
@@ -4895,6 +4926,8 @@ R19's later encoding decision supersedes historical statements that serialized
 retention values/units remain open; other storage configuration is still separate.
 The later complete-tool-history decision supersedes historical metadata-default,
 payload opt-in, and tool-storage enablement rules; client visibility levels remain.
+R17's later visibility-key/map decision supersedes historical statements that
+the exact visibility syntax is open. No new runtime behavior follows from it.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6012,6 +6045,24 @@ storage/client projection boundary and credential exclusions still apply.
 - Documentation only. Checked exact three-file scope, unchanged 16 valid JSON
   examples/fences and links/anchors, obsolete active storage rules, prior
   contracts, statuses/count, terminology/path hygiene, and whitespace. No runtime tests.
+
+### Tool visibility configuration — approved R17, 2026-09-07
+
+- Adopted `tool_visibility` (`hidden`, `metadata`, or `full`) and optional
+  `tool_visibility_overrides`, keyed by participant definition then local tool
+  binding. Omission hides all events; binding overrides win over the default,
+  and identical local names on different participants remain independent.
+- Trusted creation may replace the effective policy pair from the definition;
+  omitted creation policy inherits it. Samples use full with no overrides, not
+  a default-only edit that would retain hidden bindings. No deep-merge/patch API,
+  extra debug grant, or browser-controlled upgrade.
+- Pinned server-side projection, execution/variable grants, credential exclusions,
+  and complete observed tool storage remain unchanged. Added illustrative JSON
+  policy examples and planned precedence/omission/sample checks; no runtime changes.
+- R17 is resolved; 30 individual decisions remain, R18 and R22–R50.
+- Verified exact three-file scope, 16 preserved JSON examples plus two new valid
+  visibility examples, existing fences/links/anchors, statuses/count, prior
+  contracts, terminology/path hygiene, and whitespace. No runtime/browser tests.
 
 ## Verification evidence
 
