@@ -70,7 +70,8 @@ acknowledgement and later-result approach for every model provider, rather than
 selecting a provider-native async-tool workflow. A submitted MCP request that
 times out without a definitive remote result is reported as outcome `unknown`,
 not confirmed failure.
-The tool executor must not automatically retry that request; return the unknown
+The tool executor must not automatically retry any failed invocation, including
+known non-submission failures. For an ambiguous timeout, return the unknown
 outcome to the agent. A later agent-requested call is a separate invocation,
 not an internal retry or a guarantee against duplicate external actions.
 Explicit per-invocation cancellation is deferred to
@@ -108,13 +109,17 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-40 individual decisions still awaiting review, rather than counting its
+35 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
 call-level `opening_audio` allows capability warmup but gates participant audio
 delivery and normal conversation until playback completes. R10 is already
-covered by initial variables at call creation; R11 personalization remains open.
+covered by initial variables at call creation. R11/R12 leave personalization and
+business-time context to application/agent instructions with permitted variable
+reads and date/current-time tooling. R14 disallows all automatic executor retries,
+R15 skips classification, and R16 defers retry/idempotency enhancements. R13's
+dynamic destination question is separate and still pending at this checkpoint.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -345,7 +350,8 @@ first-message policy. Already-warmed capabilities need not be restarted.
 This is initial call startup, not every agent activation or transfer. Notices
 for later-joining participants, exact transport-specific completion evidence,
 and playback failure behavior need separate design; no new mechanisms are
-approved for them here. R11's prompt/greeting variable bindings remain pending.
+approved for them here. R11 separately leaves personalization to agent instructions
+and permitted variable reads; fixed opening text introduces no interpolation engine.
 
 Keep `started_at` tied to actual live-call start. Do not delay or reset it to
 opening-audio completion or receiver activation. A room that has actually started
@@ -1227,7 +1233,7 @@ may create the call and room; joining a pre-existing telephony room still needs
 an explicit admission mode and an unambiguous provider-leg correlation mechanism.
 The approved web start/join routes are specified separately below. A fixed
 number can live in the definition. Selecting a number that genuinely varies per
-call remains a G2 personalization question; the direct initial-variables decision
+call remains the separate R13 destination question; the direct initial-variables decision
 does not introduce automatic variable-to-dial bindings.
 
 `service` selects a configured telephony adapter; it is not a credential. API
@@ -1603,8 +1609,9 @@ This is the ordinary-interruption rule while the agent remains running. Transfer
 still terminates its execution subtree, including its model/tool workers; room
 shutdown also ends their work. Local termination does not guarantee cancellation
 or rollback of an action already submitted to the remote system. Timeout outcome
-reporting is approved below; other retry/idempotency policies remain G4 review
-questions. Explicit cancellation is deferred to the
+reporting is approved below. No automatic executor retries apply initially,
+including known non-submission failures; retry/idempotency enhancements are
+deferred. Explicit cancellation is deferred to the
 [cancellation issue](../docs/issues/explicit-tool-call-cancellation.md), not
 required for this slice. Generic platform confirmation is out of scope as
 documented below. External recovery notifications after timeout or shutdown are
@@ -1687,16 +1694,23 @@ known; this rule does not turn known outcomes or pre-submission validation error
 into unknown outcomes. Unknown is not a successful tool result and does not
 automatically populate Call Variables.
 
-The approved executor policy is no automatic retry of a submitted MCP request
-whose timeout leaves its outcome unknown. Return that outcome to the agent;
-do not silently resubmit the request. A booking whose response was lost may
-already exist, so repeating the request could create a second booking.
+The approved initial tool/MCP executor policy is no automatic retry of any failed
+invocation (R14), including known non-submission failures. Return the definitive
+error or unknown outcome to the agent; do not silently submit another attempt.
+A booking whose response was lost may already exist, so repeating the request
+could create a second booking. A definite validation/non-submission error remains
+definite rather than being relabeled unknown.
 
 A later tool call requested by the agent is a separate invocation, not a hidden
 retry by the executor. This distinction is not an exactly-once or deduplication
 guarantee: the separate invocation may still repeat an external action. No
 automatic-retry exception based on tool classification or idempotency metadata
-is approved now. Policies for other failures remain separate G4 decisions;
+is approved now. Skip the trusted read-only/idempotent-write/side-effect
+classification layer (R15). Automatic retries and business-idempotency exceptions
+(R16) are deferred to the
+[retry/idempotency issue](../docs/issues/automatic-tool-retries-and-idempotency.md),
+not required to implement this baseline. Call-creation idempotency (R39), admission
+crash recovery (R40), and ordinary database transaction semantics remain separate;
 explicit cancellation is deferred to the cancellation issue. External late-result
 handling is deferred below, not a prerequisite for this slice. No new wire
 envelope or retry configuration is added.
@@ -1983,8 +1997,9 @@ Repo responsibility. The room holds the resulting pinned plan for runtime work.
 
 The routing decision is supplemented by the approved initial-variables and
 authentication contract below and the approved two-entry startup contract above.
-Personalization and the remaining security/lifecycle details are still pending
-G2 review. No endpoint or ID generator was implemented here.
+Personalization is handled through agent instructions and permitted variable
+reads, while the remaining security/lifecycle details still need G2 review.
+No endpoint or ID generator was implemented here.
 
 ### Initial variables and API-key admission — approved G2 decisions
 
@@ -2156,8 +2171,8 @@ issuance are approved below. HMAC algorithm selection,
 payload canonicalization, and signature-envelope fields are no longer
 implementation questions. Variable-default assembly is eliminated: only supplied
 setup values prefill variables. G3's variable ownership is settled below;
-personalization remains open, while R10's telephony variables already use call
-creation. No credentials, configuration, dependencies, database, or
+R11/R12's instruction-based personalization/time ownership is approved, and R10's
+telephony variables already use call creation. No credentials, configuration, dependencies, database, or
 runtime authentication/transport behavior were changed in this checkpoint.
 
 ### Single-use join tokens and existing-call recovery — approved G2 decisions
@@ -2255,6 +2270,30 @@ for this admission contract; there is no additional unstarted-call TTL. It does
 not yet settle record cleanup, transport failure/end triggers, status/error
 response shapes, issuance idempotency, or the precise pending-admission
 crash reconciler. No runtime endpoint or authentication code is implemented here.
+
+### Agent instructions own personalization and business time — approved R11/R12
+
+Leave personalization in agent instructions. The agent uses its existing enabled
+`read_variables` tool to obtain only sections it may read and handles missing
+information through those instructions and conversation. No interpolation,
+template, binding engine, or new missing-binding compiler/default behavior is
+required. Existing section permissions, null/absence behavior, and datatype
+checks remain unchanged.
+
+Locale, timezone, and business-time interpretation belong to the integrating
+application and its agent instructions. Provide date/current-time tooling for a
+fresh observation through the ordinary enabled-tool boundary; do not freeze the
+current time as a call-start value. This is tool capability intent, not a new
+named room capability or a frozen tool name/schema. No call-level locale/timezone
+fields or default hierarchy are approved. Authoritative `created_at`, `started_at`,
+and `ended_at` retain their existing meanings.
+
+For example, an agent can read permitted order variables to personalize its
+response and obtain the current date/time when discussing availability according
+to the application's instructions. It need not expand a prompt template first.
+This does not grant tool/variable permissions or decide R13's separate dynamic
+dial-destination policy. Opening audio remains fixed configured text or a file,
+not a new interpolation surface. No runtime tool or schema was added here.
 
 ## Representative JSON shape
 
@@ -4027,11 +4066,12 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **40 individual decisions awaiting review**, enumerated as R11–R50
-in the focused gap review. R01–R06, R08, and R10 are resolved; R07's same-call
-caller reconnection is deferred and R09's removed direct-setup limits are
+There are **35 individual decisions awaiting review**, enumerated as R13 and
+R17–R50 in the focused gap review. R01–R06, R08, R10–R12, R14, and R15 are resolved;
+R07's caller reconnection and R16's retry exceptions are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
-and initial variables already belong to creation; R11 personalization remains open.
+and initial variables already belong to creation. Personalization/time context
+stay with application/agent instructions; dynamic destinations remain R13.
 G1/G3 are closed; G2/G4/G5/G7/G8 are partly resolved. G headings are background
 organization, not the current count. Earlier progress entries retain their
 historical group counts and do not describe the current individual-item total.
@@ -4043,7 +4083,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R11–R15.
+for unstarted records. The next five pending decisions are R13 and R17–R20.
 
 ### Baseline and scope
 
@@ -4155,12 +4195,15 @@ The numbering below matches G1–G13 in the focused review document.
    preparation wait.
    Record cleanup is separate from admission/token expiry. Retention periods now
    have an application retain-forever default with tenant overrides. G2 still needs
-   personalization, timezone and dynamic destinations,
+   dynamic destinations,
    plus temporary transport failure versus call-end triggers, issuance retry
    details, and admission/transfer crash handling. R10 already uses initial
    variables supplied by an authorized creator/backend/trusted ingress, leaving
    unknown values unfilled without a new automatic resolver. There is no blanket
    participant-disconnect hangup rule.
+   R11 leaves personalization to instructions/permitted variable reads, and R12
+   leaves locale/timezone/business-time context to the integrating app with date
+   tooling. No new template engine or call-level time configuration is required.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business variables.
 3. **Variable initialization, interruption, reads, and object merging resolved:**
@@ -4211,14 +4254,16 @@ The numbering below matches G1–G13 in the focused review document.
    variable write. Transfer still shuts down the source's local execution subtree.
    A submitted MCP request that times out without a definitive result reports
    outcome `unknown`, not confirmed failure or rollback. Preserve a definitive
-   outcome if already known. The executor does not automatically retry that
-   request; a later agent-requested call is a separate invocation, without an
+   outcome if already known. The executor does not automatically retry any
+   failure, including known non-submission; a later agent-requested call is a separate invocation, without an
    exactly-once guarantee.
    Late booking confirmations are an external concern: a future gateway webhook
    or other external event could reach the relevant room/agent while the room
    is active. Handling that scenario, including reconciliation and operation
    storage solely for it, is deferred and not required for the current slice.
-   Other retry exceptions remain unapproved. Explicit cancellation is deferred
+   R15 skips trusted tool classification; R16's retry/idempotency exceptions are
+   deferred to their issue. R39/R40 admission concerns and ordinary database
+   transaction handling remain separate. Explicit cancellation is deferred
    to its issue and is not a current-slice prerequisite. Any future retry
    exception would need its own idempotency/reconciliation contract;
    none is approved by the no-retry default. Generic platform-level confirmation
@@ -4452,8 +4497,11 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    Repeat the same contract for every supported model adapter; keep live-provider
    interoperability in the tagged integration lane. These are planned checks,
    not behavior available in the current playground.
-   After the remaining G4 policies are approved, add cases for other failure/retry
-   policies. Do not add a generic confirmation-token or changed-confirmation-arguments
+   Return a known non-submission error or definite remote failure and verify the
+   executor makes no automatic second attempt. Keep known errors definite, and
+   distinguish a later model-requested invocation. No operation-classification
+   fixture or automatic-retry exception is required for this baseline; those
+   enhancements are deferred to their issue. Do not add a generic confirmation-token or changed-confirmation-arguments
    test: that mechanism is out of scope. Domain-specific conversational confirmation
    can be exercised with an agent prompt and fake tool; separately prove that
    prompt instructions cannot grant access to an unavailable tool. Do not require
@@ -4636,6 +4684,13 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     keys/logs. Rendering/caching is neither playback completion nor live call
     start. Do not invent a voice/agent for human-only entry. Exact cache storage,
     render timing, and unsupported-profile behavior remain unselected.
+25. Use agent instructions with permitted variable-read and date/current-time
+    tools. Confirm the existing section grants still constrain reads and missing
+    values remain unfilled; personalization needs no template expansion/default
+    layer. Obtain fresh date/time observations without changing call timestamps
+    or introducing call-level locale/timezone fields. Tool identity/encoding and
+    business-time interpretation follow their owning contracts; no new public
+    schema or runtime tool is claimed by this documentation check.
 
 ### Review checkpoint verification
 
@@ -4658,6 +4713,10 @@ The subsequent opening-audio clarification supersedes the stop-all-capabilities
 gate: startup/warmup is allowed while participant media is withheld until playback
 completes. Earlier R06/R10 questions are resolved by independent unused tokens
 and the existing initial-variables creation contract.
+The R11/R12 and R14–R16 decisions supersede earlier personalization-binding,
+platform timezone-hierarchy, and current-scope tool-retry/classification proposals.
+Retries/idempotency enhancements now live in a deferred issue; call-creation
+idempotency and admission recovery remain separate pending work.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -5652,6 +5711,34 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   URLs, resolved/pending IDs/count, earlier auth/retention/variable contracts,
   terminology/path hygiene, and whitespace. Documentation only; no runtime,
   endpoint, schema, configuration, or browser changes/tests.
+
+### Instruction-owned personalization and deferred executor retries — approved 2026-09-07
+
+- Resolved R11: keep personalization in agent instructions using the existing
+  permitted variable-read tools, without a template/interpolation/binding engine.
+  Missing values and permissions retain their existing variable contracts.
+- Resolved R12: locale/timezone/business-time context belongs to the integrating
+  application and agent instructions. Provide date/current-time tooling for fresh
+  observations; no call-level fields/default hierarchy, frozen new tool schema,
+  or change to authoritative call timestamps is approved.
+- Resolved R14 with no automatic tool/MCP executor retries for any failure,
+  including known non-submission. Known errors remain definite; ambiguous remote
+  outcomes remain unknown. A later model-requested invocation is distinct, not
+  an exactly-once or deduplication guarantee.
+- Resolved R15 by skipping trusted read-only/idempotent-write/side-effect
+  classification now. Deferred R16's automatic retry/business-idempotency
+  exceptions to `docs/issues/automatic-tool-retries-and-idempotency.md`, recording
+  future correlation/idempotency, attempts, budgets, and verification questions
+  without adopting a retry mechanism. R39 call-creation idempotency, R40 admission
+  recovery, and normal database transactions are not deferred or changed by it.
+- Updated active contracts, review scenarios, architecture, and future checks.
+  R13 remains a separate pending destination question at this checkpoint. The
+  individual backlog is 35: R13 and R17–R50; stable resolved/deferred IDs remain.
+- Documentation only. Verification covers the exact four files, unchanged
+  existing fenced examples and 15 valid JSON examples, preserved existing links
+  and external URLs plus the new issue links, local targets/anchors, exact
+  statuses/count, previous admission/opening/retention/variables contracts,
+  terminology/local-path hygiene, and whitespace. No runtime or browser tests.
 
 ## Verification evidence
 

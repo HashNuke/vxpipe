@@ -166,6 +166,16 @@ and no automatic result-mapping layer is required. These are approved design
 contracts, not newly implemented runtime features; see the
 [call-definition design](../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned).
 
+Personalization belongs in agent instructions. Agents use their existing
+permitted `read_variables` tools to obtain known values and handle missing
+information conversationally; no new interpolation, template, or variable-binding
+engine is required. Locale, timezone, and business-time interpretation belong to
+the integrating application and its agent instructions. Provide date/current-time
+tooling through the usual enabled-tool boundary when an agent needs a fresh
+observation. This does not introduce call-level locale/timezone fields, a default
+hierarchy, or a frozen new tool name/schema. It changes neither authoritative
+call timestamps nor the separate pending policy for dynamic dial destinations.
+
 The approved MCP lifecycle also distinguishes speech interruption from tool
 cancellation: an already-submitted read or action continues to its result or
 existing timeout while the agent remains running. Interrupting speech is not
@@ -176,10 +186,15 @@ Transfer and room shutdown still end local agent execution; this does not undo
 remote side effects. A submitted MCP request that times out without a definitive
 remote result reports outcome `unknown`; a local timeout does not establish
 remote failure or rollback. Preserve any already-known definitive result.
-The tool executor must not automatically retry that request; return the unknown
-outcome to the agent. A later agent-requested tool call is a separate invocation,
-not an internal retry or an exactly-once guarantee. Other retry/idempotency
-policies remain under review. Explicit per-invocation cancellation is
+The initial tool/MCP executor does not automatically retry any failed invocation,
+including known non-submission failures, not just ambiguous timeouts. Return its
+known error or unknown outcome to the agent. A later agent-requested tool call is
+a separate invocation, not an internal retry or an exactly-once guarantee. Do not
+add a trusted read-only/idempotent-write/side-effect classification layer now.
+Automatic retries and business-idempotency exceptions are
+[deferred for later review](issues/automatic-tool-retries-and-idempotency.md).
+This scope does not settle call-creation idempotency or admission crash recovery,
+and does not change ordinary database transaction handling. Explicit per-invocation cancellation is
 [deferred for later review](issues/explicit-tool-call-cancellation.md), not
 required for the current slice; its opt-in policy is not approved.
 This is planned behavior, not the current model-task cancellation behavior
