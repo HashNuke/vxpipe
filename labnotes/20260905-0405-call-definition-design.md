@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-35 individual decisions still awaiting review, rather than counting its
+34 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -118,8 +118,9 @@ delivery and normal conversation until playback completes. R10 is already
 covered by initial variables at call creation. R11/R12 leave personalization and
 business-time context to application/agent instructions with permitted variable
 reads and date/current-time tooling. R14 disallows all automatic executor retries,
-R15 skips classification, and R16 defers retry/idempotency enhancements. R13's
-dynamic destination question is separate and still pending at this checkpoint.
+R15 skips classification, and R16 defers retry/idempotency enhancements. R13 now
+allows protected backend-initialized dial variables while model transfers remain
+restricted to participant refs.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -1231,10 +1232,85 @@ the participant. `mode: receive` tells ingress to adopt an incoming provider
 leg as that participant. `admission: start_call` means a matching incoming leg
 may create the call and room; joining a pre-existing telephony room still needs
 an explicit admission mode and an unambiguous provider-leg correlation mechanism.
-The approved web start/join routes are specified separately below. A fixed
-number can live in the definition. Selecting a number that genuinely varies per
-call remains the separate R13 destination question; the direct initial-variables decision
-does not introduce automatic variable-to-dial bindings.
+The approved web start/join routes are specified separately below. A fixed number
+can live in the definition. R13 also allows a declared creation-time variable as
+the connection's number source, under the protected-routing rules below.
+
+#### Protected dynamic dial destinations — approved R13 decision
+
+For a dialing participant, choose either existing literal `connection.number` or
+candidate `connection.number_from_variable`, never both. The latter identifies
+one declared section and one direct variable by name. It is not a template,
+expression, dot path, or caller-supplied variable reference.
+
+For example, this call-definition excerpt routes the same support role to the
+authorized number selected by the integrating backend for each call:
+
+```json
+{
+  "call_variables": {
+    "sections": {
+      "routing": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "support_number": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "participants": {
+    "reception": {
+      "type": "agent",
+      "transfers": ["human-support-agent"]
+    },
+    "human-support-agent": {
+      "type": "human",
+      "connection": {
+        "service": "configured-telephony-service",
+        "mode": "dial",
+        "number_from_variable": {
+          "section": "routing",
+          "variable": "support_number"
+        }
+      }
+    }
+  }
+}
+```
+
+This is a focused excerpt, not a complete new schema release; the normal entry
+refs, caller, agent prompt, and capability configuration are omitted. At creation,
+the authorized backend supplies `initial_variables.routing.support_number` using
+the ordinary section-shaped payload. It must choose a permitted destination for
+its business request, not blindly relay an arbitrary number from the caller.
+
+Every agent must lack write permission to each section referenced by
+`number_from_variable`. Reject the definition if any agent can write that
+section, even if the agent requesting the transfer cannot. Existing section
+permissions suffice; no per-variable grant or new runtime mutation API is added.
+Agent read access is optional and not necessary for engine resolution. In the
+excerpt no agent grant to `routing` is present; adding a read-only grant would
+not authorize changing its destination.
+
+The resolver uses the trusted pinned connection definition/reference and protected
+backend-initialized data. Validate the selected value before asking the provider
+to dial. A missing, null, or invalid number yields the existing typed transfer
+failure and leaves the source responsible; do not fabricate a default or require
+all call variables to be populated at creation. Literal-number definitions keep
+their existing behavior.
+
+The generated transfer tool still takes only destination participant refs from
+the source agent's compiler-derived `transfers` allowlist. Neither number,
+provider, URL, nor variable reference is a tool argument; the executor rechecks
+the source's allowlist instead of trusting model/schema compliance. The agent
+can decide when to request an allowed transfer and which explicitly permitted
+role to select. It cannot select an arbitrary dial destination. Business timing
+restrictions, if required, must be enforced outside the LLM; no generic outbound
+allowlist/region matrix or expression system is approved here. This is documented
+candidate syntax and behavior, not an implemented transfer or variable resolver.
 
 `service` selects a configured telephony adapter; it is not a credential. API
 keys, webhook verification material, provider account/application identifiers,
@@ -1398,8 +1474,8 @@ Each agent participant should contain:
 - optional limits stricter than the call defaults.
 
 Each human participant may contain a provider-neutral connection intent, such as
-a configured service ref, `dial` or `receive` mode, a fixed number, and admission
-behavior. Dynamic destination selection remains pending G2 review. The intent
+a configured service ref, `dial` or `receive` mode, a literal number or protected
+`number_from_variable` source, and admission behavior. The intent
 contains no credentials or provider command payloads.
 
 The compiler resolves each agent participant's transfer refs into an immutable
@@ -2291,8 +2367,8 @@ and `ended_at` retain their existing meanings.
 For example, an agent can read permitted order variables to personalize its
 response and obtain the current date/time when discussing availability according
 to the application's instructions. It need not expand a prompt template first.
-This does not grant tool/variable permissions or decide R13's separate dynamic
-dial-destination policy. Opening audio remains fixed configured text or a file,
+This does not grant tool/variable permissions; R13's protected connection source
+is separate from conversational personalization. Opening audio remains fixed configured text or a file,
 not a new interpolation surface. No runtime tool or schema was added here.
 
 ## Representative JSON shape
@@ -3747,7 +3823,9 @@ The gateway therefore requires a call-admission implementation, not a database.
 In managed mode that implementation uses `vxpipe_persistence`; in standalone
 mode it uses the validated JSON catalog. The call engine requires only an already
 resolved plan, configured event/media sinks, and a snapshot port for database-backed
-variable updates. It neither looks up a number nor issues SQL itself.
+variable updates. It issues no SQL or external directory lookup to find a number;
+protected variable-based dial sources resolve from trusted call-owned data under
+the pinned connection definition.
 
 The engine event fan-out needs a first-class subscriber/sink boundary. The
 current room authority sends most domain events only to the participant
@@ -4066,12 +4144,13 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **35 individual decisions awaiting review**, enumerated as R13 and
-R17–R50 in the focused gap review. R01–R06, R08, R10–R12, R14, and R15 are resolved;
+There are **34 individual decisions awaiting review**, enumerated as R17–R50
+in the focused gap review. R01–R06, R08, and R10–R15 are resolved;
 R07's caller reconnection and R16's retry exceptions are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
-stay with application/agent instructions; dynamic destinations remain R13.
+stay with application/agent instructions; R13 uses protected initial routing
+variables without expanding the model's transfer arguments.
 G1/G3 are closed; G2/G4/G5/G7/G8 are partly resolved. G headings are background
 organization, not the current count. Earlier progress entries retain their
 historical group counts and do not describe the current individual-item total.
@@ -4083,7 +4162,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R13 and R17–R20.
+for unstarted records. The next five pending decisions are R17–R21.
 
 ### Baseline and scope
 
@@ -4195,8 +4274,7 @@ The numbering below matches G1–G13 in the focused review document.
    preparation wait.
    Record cleanup is separate from admission/token expiry. Retention periods now
    have an application retain-forever default with tenant overrides. G2 still needs
-   dynamic destinations,
-   plus temporary transport failure versus call-end triggers, issuance retry
+   temporary transport failure versus call-end triggers, issuance retry
    details, and admission/transfer crash handling. R10 already uses initial
    variables supplied by an authorized creator/backend/trusted ingress, leaving
    unknown values unfilled without a new automatic resolver. There is no blanket
@@ -4204,6 +4282,12 @@ The numbering below matches G1–G13 in the focused review document.
    R11 leaves personalization to instructions/permitted variable reads, and R12
    leaves locale/timezone/business-time context to the integrating app with date
    tooling. No new template engine or call-level time configuration is required.
+   R13 permits either a literal dial number or a direct section/variable source
+   protected from every agent's writes. The backend supplies an authorized number
+   at creation; engine resolution needs no agent read grant. Transfers still
+   accept only allowlisted participant refs, and missing/null/invalid numbers fail
+   before dialing with source responsibility retained. No generic outbound policy
+   matrix or variable-expression language is introduced.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business variables.
 3. **Variable initialization, interruption, reads, and object merging resolved:**
@@ -4691,6 +4775,17 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     or introducing call-level locale/timezone fields. Tool identity/encoding and
     business-time interpretation follow their owning contracts; no new public
     schema or runtime tool is claimed by this documentation check.
+26. Compile the protected routing excerpt and an equivalent literal-number
+    fixture. Reject both number sources together, unknown section/variable refs,
+    or any agent write grant to a referenced routing section. With no agent read
+    grant, trusted resolution still uses the backend-initialized number. A
+    read-only grant remains optional. Attempt arbitrary number/provider/URL/
+    variable-ref transfer arguments and a destination outside the source's
+    compiled list; none may reach a provider dial. Missing/null/invalid routing
+    values yield the typed failure before dialing, keeping source responsibility
+    and not inventing defaults. A permitted participant-ref transfer resolves its
+    pinned source even after a definition revision changes. These are future
+    checks, not an implemented resolver, general policy matrix, or timing guard.
 
 ### Review checkpoint verification
 
@@ -4717,6 +4812,8 @@ The R11/R12 and R14–R16 decisions supersede earlier personalization-binding,
 platform timezone-hierarchy, and current-scope tool-retry/classification proposals.
 Retries/idempotency enhancements now live in a deferred issue; call-creation
 idempotency and admission recovery remain separate pending work.
+R13's later protected-variable routing decision supersedes the remaining dynamic
+destination proposal without introducing conversational template bindings.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -5739,6 +5836,34 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   and external URLs plus the new issue links, local targets/anchors, exact
   statuses/count, previous admission/opening/retention/variables contracts,
   terminology/local-path hygiene, and whitespace. No runtime or browser tests.
+
+### Protected creation-time dial routing — approved R13, 2026-09-07
+
+- Kept literal participant numbers and added candidate `number_from_variable`
+  with direct section/variable keys as a mutually exclusive alternative. The
+  trusted backend selects an authorized number and supplies it through ordinary
+  initial variables; no blind forwarding of caller-selected destinations.
+- Require every agent to lack write permission to referenced routing sections;
+  reject definitions that grant it. Read permission is optional and not required
+  for trusted resolution. No per-variable grants or runtime routing-mutation API.
+- The resolver uses the pinned definition/reference and protected initialized
+  data. Missing/null/invalid numbers fail before dialing through the existing
+  typed outcome, retaining source-agent responsibility and avoiding defaults.
+  Updated the old no-number-lookup wording to distinguish internal resolution
+  from forbidden SQL/external-directory work in the engine.
+- Model-facing transfers remain destination-participant refs only, with executor
+  rechecks of the compiler-derived source allowlist. No phone/provider/URL/
+  variable-ref arguments. The model may choose timing and among allowed roles;
+  any business timing enforcement belongs outside the LLM, not a new guardrail
+  feature here. No generic outbound allowlist/region matrix or expression system.
+- Added one focused candidate excerpt and future source/grant/validation tests.
+  R13 is resolved at this scope; 34 individual decisions remain, R17–R50.
+  The retry/idempotency issue and R39/R40 status are unchanged.
+- Documentation only. Verification covers the three-file scope, all 15 existing
+  JSON examples unchanged plus the new valid routing excerpt, unchanged existing
+  fences/links/URLs, local targets/anchors, resolved/pending IDs/count, protected
+  routing and unrelated contracts, terminology/path hygiene, and whitespace.
+  No runtime or browser tests were run.
 
 ## Verification evidence
 

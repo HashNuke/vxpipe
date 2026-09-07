@@ -174,7 +174,7 @@ the integrating application and its agent instructions. Provide date/current-tim
 tooling through the usual enabled-tool boundary when an agent needs a fresh
 observation. This does not introduce call-level locale/timezone fields, a default
 hierarchy, or a frozen new tool name/schema. It changes neither authoritative
-call timestamps nor the separate pending policy for dynamic dial destinations.
+call timestamps nor the trusted destination-resolution boundary described below.
 
 The approved MCP lifecycle also distinguishes speech interruption from tool
 cancellation: an already-submitted read or action continues to its result or
@@ -292,6 +292,29 @@ Failure handling must respect capability denials; it is not permission to resume
 forbidden processing. Warm consultation, exact acceptance evidence, deadlines,
 and failure of safe restoration remain separate review decisions. These are
 approved designs, not newly implemented transfer or greeting behavior.
+
+Dial destinations may be literal participant `connection.number` values or come
+from a declared creation-time variable, using the candidate alternative
+`number_from_variable: {"section": "routing", "variable": "support_number"}`.
+The two sources are mutually exclusive. Section/variable names are direct keys,
+not expressions or a nested path language. The trusted integrating backend must
+choose an authorized destination and supply it through `initial_variables`, not
+blindly forward a caller-provided phone number.
+
+Reject a definition if any agent has write permission to a section referenced
+for dialing this way. Agent read permission is optional and unnecessary for
+trusted engine resolution; no per-variable permission type is introduced.
+Resolve the pinned connection reference against that protected initialized data.
+Missing, null, or invalid numbers fail the transfer before dialing, through the
+existing typed failure/source-agent responsibility contract, without a default.
+
+The model still requests only a permitted destination participant ref. It cannot
+provide a number, provider, URL, or variable ref as transfer arguments; the
+executor rechecks the source's compiler-derived allowlist. It may choose when to
+request transfer and among explicitly allowed roles, not an arbitrary dial
+destination. If the business needs timing restrictions, enforce them outside the
+LLM. This adds no generic outbound allowlist/region policy or runtime mutation API,
+and the candidate field is documented design, not implemented schema/runtime.
 
 ## Architectural boundaries
 

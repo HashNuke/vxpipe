@@ -72,14 +72,15 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **35 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R12, R14, and R15 are resolved; R07's same-call caller
+Current review count: **34 individual decisions** in the numbered backlog below.
+R01–R06, R08, and R10–R15 are resolved; R07's same-call caller
 reconnection and R16's retry exceptions are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
 Personalization and business-time interpretation belong to agent/application
 instructions with permitted variable/date tools; no template or timezone hierarchy
-is added. R13's destination policy remains open. G1 and G3 are resolved;
+is added. R13 allows protected backend-initialized routing variables while
+transfers remain participant-ref-only. G1 and G3 are resolved;
 G2/G4/G5/G7/G8 are partly resolved, while G6 and G9–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
@@ -102,11 +103,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**35 pending decisions (R13 and R17–R50).** This is the current approval backlog,
+**34 pending decisions (R17–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R12, R14, and R15 are resolved; R07/R16 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R13 and R17–R20**. Mark rows resolved or
+R10–R15 are resolved; R07/R16 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R17–R21**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -123,7 +124,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R10 | G2 | **Resolved:** already covered by call creation, which accepts declared initial variables from the authorized creator/backend/trusted ingress; unknown values stay unfilled for permitted tools, without a new automatic lookup/resolver feature. |
 | R11 | G2 | **Resolved:** personalization stays in agent instructions using permitted variable reads; no new interpolation/template/binding engine. |
 | R12 | G2 | **Resolved:** locale/timezone/business-time context belongs to the integrating application and agent instructions, with date/current-time tooling; no new call-level fields/default hierarchy. |
-| R13 | G2 | May dial destinations come from call variables, and what trusted outbound restrictions apply? |
+| R13 | G2 | **Resolved:** the backend may prefill an authorized dial destination through a declared variable; a participant selects that protected section/variable instead of a literal number, while transfer tools accept only allowed participant refs. |
 | R14 | G4 | **Resolved:** no automatic tool/MCP executor retries initially, including known non-submission failures; return the outcome and treat any later model-requested call as a separate invocation. |
 | R15 | G4 | **Resolved:** skip the trusted read-only/idempotent-write/side-effect classification layer for now. |
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
@@ -566,10 +567,28 @@ enabled-tool contract. Do not add call-level locale/timezone fields or a default
 hierarchy. Exact new tool naming/schema is not selected here. Authoritative call
 timestamps remain separate from conversational time interpretation.
 
-**Dynamic dial destinations (R13 still pending):** selecting destinations from
-call variables and the applicable trusted outbound restrictions remain a separate
-question. Personalization does not grant the model authority to dial arbitrary
-numbers or bypass approved transfer refs.
+**Approved dynamic dial destinations (R13):** a participant connection may use
+either its existing literal `number` or candidate
+`number_from_variable: {"section": "routing", "variable": "support_number"}`,
+never both. These are direct declared section/variable keys, not expressions or
+paths. The trusted backend chooses an authorized number and supplies it through
+`initial_variables`; it must not blindly relay a caller-selected destination.
+
+Reject definitions granting any agent write access to a routing section referenced
+this way. Read permission is optional and not needed for engine resolution;
+existing section grants suffice without a new per-variable permission type.
+The engine resolves the pinned definition/reference against protected initialized
+data. Missing/null/invalid values fail before dialing through the existing typed
+transfer failure, retaining the source agent without inventing a default number.
+
+The agent still invokes transfer with only `human-support-agent` or another
+compiler-allowlisted participant ref, not a phone number, provider, URL, or
+variable reference. The executor rechecks the source's derived allowlist. The
+model may choose timing and among permitted roles; arbitrary destination choice
+is not delegated. Business timing restrictions, if needed, belong outside the
+LLM. No generic outbound region/allowlist matrix, runtime routing-variable update
+API, or expression system is approved. Literal-number behavior remains supported;
+this is candidate definition syntax, not implemented runtime.
 
 The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
@@ -1360,6 +1379,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Expire a call with retained history, snapshots, recordings, and exports | Remove the call record and all call-owned rows and objects, including latest snapshots and call-specific copies; no summary-only row remains; shared definitions/configuration and other calls remain untouched; incomplete object deletion is not complete cleanup, and late publication must not recreate purged data |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
+| Dial a participant using a literal number or protected creation-time routing variable | Exactly one number source is accepted; the trusted initialized value resolves without agent read permission; any agent write grant to its section rejects the definition; missing/null/invalid values fail before dialing and retain source responsibility |
+| Ask transfer to use arbitrary dial data or bypass its participant allowlist | Number/provider/URL/variable-ref arguments and unlisted destinations fail; executor rechecks the source allowlist; permitted role selection uses only its pinned connection source, with no new expression or outbound policy matrix |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
 | Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
 | Start agents in each first-message mode, repeat readiness, and reactivate them | Wait-for-input sends no unsolicited greeting; fixed/generated greeting runs once on first activation after readiness; repeated readiness/reactivation does not replay it; another participant or call has its own first activation; caller reconnect support is not required |
@@ -1715,12 +1736,24 @@ The instruction/time/retry follow-up resolves R11/R12 with agent instructions,
 permitted variable reads and date/current-time tooling, without a template engine
 or locale/timezone field hierarchy. R14 permits no automatic executor retries,
 including definite non-submission failures; R15 skips operation classification.
-R16 moves to the dedicated retry/idempotency issue. R13 remains pending at this
-checkpoint, alongside R17–R50: 35 individual decisions. R39/R40 and ordinary
+R16 moves to the dedicated retry/idempotency issue. At that checkpoint R13
+remained pending alongside R17–R50: 35 individual decisions. R39/R40 and ordinary
 database transaction behavior remain separate. Checks cover four-file scope,
 15 unchanged valid JSON examples, preserved existing links/URLs and the new issue
 links, local targets/anchors, backlog statuses/count, prior contracts, terminology/
 path hygiene and whitespace. Documentation only; no runtime or browser tests.
+
+The R13 follow-up approves protected creation-time dial variables as an alternative
+to literal participant numbers. The backend chooses an authorized number; no
+agent may write its referenced section, and agent read permission is not needed
+for trusted resolution. Transfer remains participant-ref-only with executor
+allowlist enforcement; missing/null/invalid numbers fail before dialing and return
+control to the source. No generic policy matrix or expression language is added.
+Current backlog: 34 individual decisions, R17–R50. Checks cover three-file scope,
+15 preserved existing JSON examples plus one new valid routing excerpt, unchanged
+existing fences/links/URLs, local anchors, routing permissions and source exclusivity,
+prior contracts, exact count/status, terminology/path hygiene, and whitespace.
+Documentation only; no runtime or browser tests.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
