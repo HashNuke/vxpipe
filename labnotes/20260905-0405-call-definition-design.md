@@ -30,8 +30,10 @@ already-submitted context update finish under the existing authorization and
 revision checks; a correction uses another tool call, not cancellation or
 rollback. Reads containing a forbidden section now explicitly fail as a whole
 with a permission error. Object-level and single-field update tools are requested;
-`update_context` merges supplied fields into the existing section and preserves
-omitted fields. Final names and nested/removal details remain under review.
+`update_context` deep-merges supplied objects into the existing section and
+preserves omitted fields, including nested fields. Authors should prefer simple,
+shallow sections. Final names and explicit removal/null details remain under
+review.
 G2's remaining admission details, the remaining G3 questions, and the other
 suggestions remain pending user review. Approval of documentation does not
 authorize runtime implementation.
@@ -339,6 +341,14 @@ audit stream, and atomic update boundary. If field-level grants become necessary
 use unambiguous JSON Pointer paths in a later dated schema rather than inventing
 dot-path escaping rules.
 
+Authoring guidance: keep context simple and shallow where practical. For example,
+make `address` a section containing `city` and `postal_code`, rather than burying
+it under several objects in another section. The section can then have its own
+schema, permissions, and revision boundary. This is guidance for integrating
+applications and definition authors, not a ban on nested objects or an automatic
+flattening step. When nesting is useful, object updates must preserve omitted
+nested fields through recursive merging.
+
 An agent never mutates the map directly. Read or write grants cause the engine to
 offer platform-owned context tools constrained to that agent's granted sections.
 The room authority validates the current room incarnation, agent participant,
@@ -569,11 +579,14 @@ sketches, not complete wire schemas: they omit revision and engine-private
 execution metadata for brevity. A field-update convenience does not introduce
 field-level permissions; the existing section write grant still governs it.
 
-Approved object-update behavior: `update_context(section_name, data)` merges the
-supplied fields into that section's existing data. Supplied fields add or update
-schema-permitted values; omitted section fields keep their current values.
-The tool does not replace the entire section with the submitted object, and
-omission is not deletion. One call can change several fields atomically.
+Approved object-update behavior: `update_context(section_name, data)` recursively
+merges supplied objects into that section's existing data. Where both old and
+incoming values are objects, merge their fields recursively instead of replacing
+the old object wholesale. Supplied fields add or update schema-permitted values;
+omitted fields keep their current values at every object depth. The tool does
+not replace the entire section with the submitted object, and omission is not
+deletion. One call can change several fields atomically. This is a deep merge;
+a deep copy alone duplicates a value without defining how updates combine.
 
 For example, updating only `topic` preserves the existing `summary`. These labels
 illustrate the merge; they are not a new request/response envelope:
@@ -595,16 +608,32 @@ failure, or a revision conflict leave the whole section and revisions unchanged.
 This merges existing runtime data, not definition defaults into initial context;
 the supplied-only initialization rule is unchanged.
 
-Nested-object merge behavior, explicit removal/null handling, and final tool
-names still need review. This decision establishes preservation of omitted
-section fields without choosing those additional rules. The earlier mutation
-list already allowed multiple field changes in one call; it remains a possible
-internal representation behind the simpler object/field tool surface.
+If a schema permits an address nested inside a section, changing only its city
+also preserves its postal code. This is another merge illustration, not a new
+wire envelope or a requirement to nest addresses:
+
+```json
+{
+  "before": {"address": {"city": "Oldtown", "postal_code": "12345"}},
+  "data": {"address": {"city": "Newtown"}},
+  "after": {"address": {"city": "Newtown", "postal_code": "12345"}}
+}
+```
+
+The preferred shallow alternative is an `address` section: the author can then
+use `update_context("address", {"city": "Newtown"})`, retaining its postal code
+under the same merge rule. No existing schema example is automatically flattened.
+
+Explicit removal/null handling, field-addressing details, and final tool names
+still need review. Recursive object merging adds neither array-element merging
+nor deletion semantics. The earlier mutation list already allowed multiple field
+changes in one call; it remains a possible internal representation behind the
+simpler object/field tool surface.
 
 The existing internal command candidate below can represent a bounded atomic
 section update; the exact lowering from the two tools must preserve the approved
-merge behavior and account for the remaining nested/removal decisions. It is
-not a third model-facing update tool:
+recursive merge behavior and account for the remaining removal/field-addressing
+details. It is not a third model-facing update tool:
 
 ```json
 {
@@ -623,8 +652,9 @@ fields; arrays are replaced as values rather than edited by index. An empty path
 may replace the complete section object. This is deliberately not full JSON
 Patch. An internal whole-section replacement must not turn `update_context`
 into replacement of the section by its partial input: the merged candidate
-must preserve omitted fields. The authority applies all changes to a copy,
-validates the complete result, then commits all of them or none of them.
+must preserve omitted fields at every object depth. The authority applies all
+changes to a copy, validates the complete result, then commits all of them or
+none of them.
 
 A successful result always returns the section name, new section revision, and
 new global revision. It includes the resulting value only when the same agent
@@ -1709,8 +1739,9 @@ context updates.
 Rejected for `update_context`. Merge the supplied fields into the existing
 section and preserve omitted fields. Replacing the section with the submitted
 object would lose previously collected data or require the agent to resend it
-on every update. Validate and commit the complete merged result atomically;
-explicit removal and nested-object behavior remain separate review questions.
+on every update. The same rule applies to partial nested objects: recursively
+merge them rather than losing omitted children. Validate and commit the complete
+merged result atomically; explicit removal remains a separate review question.
 
 ### Cancel submitted context updates when a conversational turn is interrupted
 
@@ -1962,8 +1993,9 @@ trusted fields include tenant, room, incarnation, source participant, agent
 participant, agent activation, originating command, correlation, and tool-call
 IDs. Requested sections, expected revision, and proposed update data are the
 model-supplied inputs. The update bindings normalize object/field requests into
-the engine command while preserving omitted section fields; exact nested and
-removal mappings remain under review.
+the engine command while preserving omitted section fields. The object tool must
+also preserve omitted nested fields; field-addressing and removal mappings remain
+under review.
 
 `RoomAuthority.update_context/2` performs one bounded `GenServer.call`. In order,
 the authority verifies:
@@ -2105,6 +2137,10 @@ each red and green step. The focused cases must demonstrate:
   one field through the field-update tool, without removing omitted section fields;
 - an object update preserves an omitted existing required field, validates the
   complete merged result, and rejects an invalid multi-field update atomically;
+- a partial nested-object update preserves omitted sibling values and required
+  nested fields at every object depth; nested validation failure changes nothing;
+- shallow sections and schema-permitted nested objects both work without
+  automatic flattening or an implicit ban on nesting;
 - a write-only agent receives no old or resulting section value;
 - an unknown section, unauthorized section, stale activation, wrong incarnation,
   bad pointer, revision conflict, invalid resulting schema, or size violation
@@ -2882,9 +2918,10 @@ only supplied setup values, with no context defaults. Its interruption rule
 allows submitted context commands to finish under existing authorization and
 revision checks, with corrections made through later tool calls. Read requests
 containing a forbidden section fail as a whole with a permission error. The two
-update forms are retained, with object updates merging supplied fields and
-preserving omitted section fields. Nested/removal details and final naming,
-G2's remaining questions, the other G3 questions, and G4–G13 remain unapproved.
+update forms are retained, with object updates recursively merging supplied
+objects and preserving omitted fields. Explicit removal/null details and final
+naming, G2's remaining questions, the other G3 questions, and G4–G13 remain
+unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -2893,9 +2930,9 @@ Detailed reasoning and evidence live in the
 There are **12 open review groups** out of the original 13: G2 and G3 are partly
 resolved, and G4–G13 still need approval. G1 is resolved in documentation.
 This counts the numbered groups, not individual edge cases or implementation
-tasks. The merge decision resolves one question inside G3, not the whole group.
-Next discussion: whether object merging also preserves omitted fields inside
-nested objects. No nested-merge behavior is approved by the section-level rule.
+tasks. Section-level merging and recursive preservation inside nested objects
+are now resolved within G3, but its remaining questions keep the group open.
+The count therefore remains 12; it is not reduced for each resolved sub-decision.
 
 ### Baseline and scope
 
@@ -2923,7 +2960,9 @@ nested objects. No nested-merge behavior is approved by the section-level rule.
   entire request to fail without values. It also records the requested object
   and field update tools without selecting merge/replace semantics or new names.
   The merge follow-up selects preservation of omitted section fields and
-  atomic validation of the merged result; nested/removal details remain open.
+  atomic validation of the merged result. The recursive-merge clarification
+  preserves omitted nested fields too and recommends shallow authoring such as
+  a dedicated `address` section; explicit removal/null details remain open.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2995,10 +3034,12 @@ The numbering below matches G1–G13 in the focused review document.
    revision or be blindly retried; committed values are not rolled back.
    Mixed authorized/unauthorized reads fail as a whole with a permission error
    and no values; do not ignore forbidden names. A corrected request can succeed.
-   Object-level updates merge supplied fields into existing section data,
-   preserving omitted fields and validating the complete merged result. The
-   single-field tool remains available; nested/removal behavior and final
-   terminology remain open.
+   Object-level updates deep-merge supplied objects into existing section data,
+   preserving omitted fields recursively and validating the complete merged
+   result. Prefer simple, shallow sections, such as a dedicated `address`,
+   without banning schema-permitted nesting. The single-field tool remains
+   available; explicit removal/null, field addressing, and final terminology
+   remain open.
    Other remaining review includes write-only validation-error redaction.
    A schema-valid agent write also does not prove identity verification or a
    completed external action. Consider separating intake from trusted-result
@@ -3092,7 +3133,11 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    the existing `intake.summary` remains. Test a writable section with an existing
    required field omitted from the update: the merged result still validates.
    A bad field or invalid merged result must reject the whole update without
-   changing values or revisions. Nested/removal cases await their own decision.
+   changing values or revisions. Repeat with a partial nested address: changing
+   its city must retain the postal code, including when that omitted field is
+   required. Verify preservation across deeper objects and atomic rejection of
+   invalid nested values. Also exercise a shallow `address` section without
+   automatic flattening. Explicit removal/null cases await their own decision.
 3. Submit a context update, then interrupt the conversation before authority
    commit while keeping the same room and agent activation. Confirm it can
    finish under normal authorization/revision checks without resuming cancelled
@@ -3469,21 +3514,45 @@ For the approved 2026-09-07 object-update merge decision:
   remain, and one tool call commits a schema-valid merged result atomically.
   Required values already present need not be resent. Invalid data or a revision
   conflict leaves values and revisions unchanged; initialization still has no
-  defaults. Nested-object, removal/null, and final naming details remain open.
+  defaults. At that checkpoint, nested-object, removal/null, and final naming
+  details remained open; the recursive-merge clarification below resolves nesting.
 - Added a before/data/after illustration and future acceptance checks for
   preservation of omitted fields, retained required fields, multi-field atomic
   validation, and unchanged permission/revision boundaries. The existing internal
   mutation example is not a third model-facing tool or a replacement shortcut.
 - Counted the original 13 numbered review groups: G1 is resolved, G2/G3 are
   partly resolved, and G4–G13 await approval, leaving 12 open groups. This is not
-  a count of individual edge cases. Nested-object merge behavior is next to
-  discuss, not an additional approved feature.
+  a count of individual edge cases. At that checkpoint, nested-object merge
+  behavior was next to discuss, not yet an approved feature.
 - Verified all 11 JSON examples parse: the previous 10 are unchanged, and the
   new illustration preserves `summary` while updating `topic`. Both complete
   definition contracts and the seven write-authorization checks are unchanged.
   All 20 local links/anchors resolve; the group count, route consistency,
   terminology, local-path hygiene, and `git diff --check` pass. No runtime
   implementation, runtime tests, or browser checks were part of this checkpoint.
+
+For the approved 2026-09-07 recursive-merge and shallow-context clarification:
+
+- Confirmed that `update_context` performs a deep merge, not merely a deep copy:
+  when old and supplied values are objects, merge recursively and retain omitted
+  fields at every object depth. The nested address example retains `postal_code`
+  when only `city` changes. Existing schema, permission, revision, and atomic
+  validation boundaries remain in place.
+- Added authoring guidance to favor simple, shallow sections, such as making
+  `address` its own section. This does not forbid nesting, flatten data at runtime,
+  add field-level permissions, or introduce a new depth limit. Neither full
+  definition example was changed. Removal/null and field-addressing details,
+  final naming, and the other review questions remain open.
+- Updated both documents and future verification scenarios for omitted nested
+  siblings/required fields, deeper objects, nested validation failures, and
+  shallow authoring. G3's nested-merge question is resolved; the count remains
+  12 open numbered groups because other G3 decisions still need review.
+- Verified all 12 JSON examples parse: the prior 11 are unchanged and the new
+  nested illustration produces the expected recursive merge. Both complete
+  definition contracts and the seven write-authorization checks are unchanged.
+  All 20 local links/anchors resolve; review counts, route consistency,
+  terminology, local-path hygiene, and `git diff --check` pass. No runtime
+  implementation or runtime/browser tests were part of this documentation update.
 
 ## Verification evidence
 
