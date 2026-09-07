@@ -220,9 +220,43 @@ endpoint, or generic confirmation state machine is introduced.
 
 ### First messages and transfer responsibility
 
+Optional call-level `opening_audio` plays to `entry_caller` before
+`entry_receiver` begins participating. Its source may be an audio-file URL (WAV
+or another supported format) or fixed configured text. For text, render and cache
+audio using the initial receiving agent's resolved TTS service and voice,
+including configured defaults. Do not generate its text through an LLM, choose
+an arbitrary first participant, or start a later transfer agent to supply a voice.
+Without an initial agent/usable TTS profile, text-source applicability remains
+open rather than silently inventing one.
+
+Establish the caller connection and minimal file-playback/transport path. Hold
+the receiver's activation and normal room audio services, including STT, TTS,
+model execution, recording, and conversational media processing, until opening
+playback completes. Rendering the fixed-text asset is a narrow TTS exception to
+that gate, not activation of the agent or normal conversation. Downloading,
+rendering, caching, or enqueueing audio is not completed playback. Omission means
+normal startup with no announcement delay; configured failed/incomplete playback
+cannot silently release normal services.
+
+Cache reusable generated audio by exact text, resolved TTS provider/model/voice,
+and output-affecting settings, scoped to the tenant/configured binding. Changed
+text or voice must not reuse stale audio; secrets belong in neither cache keys
+nor logs. The configured reusable asset is not a per-call recording/export, and
+does not acquire per-call retention. Render timing, cache storage/eviction, and
+source fetching are not selected. Asset preparation itself starts no call tree
+and does not set `started_at`.
+
+This is an initial-call barrier, separate from each agent's greeting and from
+transfer behavior. Required transport-specific completion evidence, failure
+handling, source configuration/formats, and notices for later joiners are not
+selected here. Record `started_at` at actual live-call start, not at notice
+completion or receiver activation; the notice does not reset the clock. This is
+playback ordering, not mandatory disclosure or a promise of consent/compliance.
+
 Each agent participant chooses its first-message behavior: wait for input, speak
 fixed greeting text, or generate a greeting. Apply that choice on its first
-activation in a call, once required connections/capabilities are ready. Reconnect
+activation in a call, after any configured startup notice and once required
+connections/capabilities are ready. Reconnect
 and later reactivation of the same participant do not replay its startup greeting.
 A new call has its own first activation. Greetings use normal authorized output;
 this does not bypass capability denials. Exact encoding remains an implementation
@@ -320,7 +354,11 @@ authority.
 ### Session startup
 
 RTVI does not authenticate a user or create transport credentials. Before the
-RTVI handshake, a Vxpipe start endpoint must:
+RTVI handshake, Vxpipe uses one client admission workflow: authenticated call
+creation/preparation returns a scoped join token, then the client joins with that
+token. A backend client uses the same flow as a browser client; there is no
+separate API-key-authenticated direct WebSocket start path. Across preparation
+and token-based admission the gateway must:
 
 1. authenticate the caller;
 2. authorize creation of or admission to a room;
@@ -333,6 +371,9 @@ After the media transport connects, `client-ready` negotiates RTVI version and
 attaches the gateway session. Vxpipe sends `bot-ready` only after room admission,
 the requested participant, and the required agent pipeline are ready. A
 connected transport is not sufficient evidence that the bot can process input.
+When a startup notice is configured, the caller transport can be established for
+file playback while receiver activation and the normal pipeline remain gated.
+The notice must complete before that conversational readiness is reached.
 
 ### Standard message mapping
 
@@ -642,6 +683,16 @@ the token's own expiry, single-use status, tenant/call/participant scope, and
 current lifecycle eligibility. An otherwise eligible unused token remains valid
 after the requesting API key is revoked. Obtaining another token still requires
 valid API-key authentication.
+
+All API clients prepare/create the call with an authenticated request containing
+initial variables, receive a scoped token, and use token-based joining. The
+backend may hand the token to a browser or use it itself. Joining does not accept
+replacement initial variables or an API key as a direct-start alternative.
+Existing-call token issuance still serves eligible unstarted records and first
+admission of eligible participants into live calls. The browser WebRTC path stays
+supported; a future WebSocket adapter needs its token-delivery encoding, not a
+separate initialization flow. Proposed deadlines/byte limits for the removed
+direct-WebSocket setup message are not adopted or transferred to another route.
 
 Join tokens expire five minutes after issuance by default. The authenticated
 backend requesting a token may request a longer lifetime, including when

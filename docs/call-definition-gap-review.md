@@ -62,15 +62,20 @@ deletes the call record and all associated Vxpipe-managed data, not just payload
 General voice/LLM-input redaction is deferred; deterministic sensitive collection
 such as DTMF need not involve the LLM. G7's three first-message modes and
 first-activation-only greeting are approved. G8's source-agent responsibility
-until committed handoff and failure return to that agent are approved. Other
-configuration, lifecycle, protocol, and persistence questions remain below.
+until committed handoff and failure return to that agent are approved. Optional
+call-level `opening_audio` plays a supplied file or cached fixed-text TTS before
+receiver activation and normal room audio services. All API clients now use
+preparation followed by token joining, without a separate direct-start path.
+Other configuration, lifecycle, protocol, and persistence questions remain below.
 Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **44 individual decisions** in the numbered backlog below.
-R01–R05 are resolved; R07's same-call caller reconnection is deferred. R06 remains
-open only for supersession of earlier unused tokens. G1 and G3 are resolved;
+Current review count: **42 individual decisions** in the numbered backlog below.
+R01–R05 and R08 are resolved; R07's same-call caller reconnection is deferred, and
+R09 is superseded by removal of direct WebSocket setup. R06 remains open only for
+supersession of earlier unused tokens. R11 personalization is still pending;
+the separate startup-notice decision does not resolve it. G1 and G3 are resolved;
 G2/G4/G5/G7/G8 are partly resolved, while G6 and G9–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
@@ -93,12 +98,12 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**44 pending decisions (R06 and R08–R50).** This is the current approval backlog,
+**42 pending decisions (R06 and R10–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
-Each row is one independently reviewable policy/contract choice. R01–R05 are
-resolved and R07 is deferred below, all excluded from the pending count. The next
-five pending decisions are **R06 and R08–R11**. Mark rows resolved or deferred
-as decisions are made and update this count; do not renumber the remaining IDs.
+Each row is one independently reviewable policy/contract choice. R01–R05 and R08
+are resolved, R07 is deferred, and R09 is superseded, all excluded from the count.
+The next five pending decisions are **R06 and R10–R13**. Mark rows resolved or
+deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
 | --- | --- | --- |
@@ -109,8 +114,8 @@ as decisions are made and update this count; do not renumber the remaining IDs.
 | R05 | G2 | **Resolved:** tokens default to five minutes from issuance; the authenticated requester may request a longer lifetime, with no additional maximum approved here. |
 | R06 | G2 | Replacement issuance for an eligible unstarted call is approved; does issuing another token leave earlier unused tokens valid or supersede them? |
 | R07 | G2 | **Deferred:** same-call caller reconnection is outside the initial slice. After the logical call ends, connecting again starts a new call; temporary transport interruption is not automatically call termination. |
-| R08 | G2 | What is the WebSocket admission contract for routes, token delivery, initialization, and failure responses? |
-| R09 | G2 | What size and deadline limits apply to the direct WebSocket client's initial setup message? |
+| R08 | G2 | **Resolved:** all API clients use authenticated preparation to obtain a token, then token-based joining; no separate direct WebSocket start/initialization path. |
+| R09 | G2 | **Superseded:** the direct WebSocket initial-variables message is removed, so its proposed setup deadline/size policy is not applicable or adopted elsewhere. |
 | R10 | G2 | Should inbound telephony admission perform a trusted initial-variables lookup, or leave values unfilled for later tools? |
 | R11 | G2 | Which variable bindings may personalize prompts/greetings, and what happens when a referenced value is absent? |
 | R12 | G2 | Where do locale/timezone come from, and which time-dependent values are pinned versus observed at runtime? |
@@ -303,10 +308,12 @@ Validate refs when parsing/saving the definition and retain resolved refs in the
 pinned call plan. The benefit is explicit intent, not an assumption that runtime
 must otherwise repeatedly scan the catalog or query the database.
 
-For caller/reception/billing/human-support, live startup prepares only caller and
-reception; token issuance alone starts neither. Activate an agent receiver once
-its required connection/capabilities are ready. Other catalog entries do not
-automatically start providers or dial out; prepare them when an authorized
+For caller/reception/billing/human-support, live startup selects only caller and
+reception; token issuance alone starts neither. If `opening_audio` is configured,
+establish caller playback first and hold reception plus normal
+room audio services until playback completes. Otherwise use normal startup.
+Activate an agent receiver only after any notice and required readiness.
+Other catalog entries do not automatically start providers or dial out; prepare them when an authorized
 transfer/admission needs them. Dialing is
 not evidence that a human has joined. A human receiver does not imply an AI
 receiver, and a human-to-human call may begin without any AI participant.
@@ -345,27 +352,32 @@ policy.
 There are no variable defaults: only values supplied at call setup prefill it.
 Schemas describe the allowed structure; they do not manufacture initial values.
 
-**Approved authentication and connection flows:** replace separate client IDs,
-client secrets, and HMAC-signed envelopes with a gateway-issued API key in the
-backend's `Authorization: Bearer <api_key>` header over HTTPS/WSS. Payloads are
+**Approved authentication and common connection flow (R08):** replace separate
+client IDs, client secrets, and HMAC-signed envelopes with a gateway-issued API
+key in the backend's `Authorization: Bearer <api_key>` header over HTTPS. Payloads are
 unsigned. The backend authorizes the business variables; key verification checks
 the integrating application's tenant/operation authority, not customer identity.
 
-1. **Backend prepares, browser joins:** the backend POSTs initial variables to the
+1. **Prepare/create:** the backend POSTs initial variables to the
    preparation endpoint, which grants no CORS access. Vxpipe validates it, stores
    a prepared call with pinned revision/variables, and returns an opaque short-lived
-   single-use join token scoped to that call and participant. No room/providers
-   start yet.
-   The frontend receives only the token, not private variables or the API key.
+   single-use join token scoped to that call and participant. No room or live
+   conversational providers start yet; opening-asset preparation is separate.
+2. **Join with the token:** the backend may give its frontend only the token,
+   not private variables or the API key, or join using the token itself.
    Accepted admission atomically consumes the token before activating that same
    call, not when the browser receives confirmation; conversation waits for
-   transport and required capabilities. The browser cannot replace the prepared
-   variables, and joining must not return its private contents in a snapshot. Later event,
-   tool, and speech disclosure remains a separate policy responsibility.
-2. **Backend connects directly:** a non-browser WSS client supplies its API key
-   in the handshake header. Authenticate before upgrade, then receive unsigned
-   variables in a bounded first application message. Validate before starting the
-   room/providers. This path needs no browser join token.
+   transport, any configured startup notice, and required capabilities. No client
+   can replace the prepared variables, and joining must not return their private
+   contents in a snapshot. Later event, tool, and speech disclosure remains a
+   separate policy responsibility.
+
+The former direct backend WebSocket path is superseded: no API key in a media
+socket handshake starts a call, and no first-message initial-variables setup is
+required. This removes R09's specific setup-limit question; the proposed ten
+seconds/64 KiB are not approved for HTTP preparation, token exchange, or any
+other route. Existing-call token issuance and eligible first admissions to live
+calls remain supported under the same authorization/lifecycle rules.
 
 A WebSocket upgrade is a [GET handshake][websocket-handshake], not a JSON POST
 that upgrades. Browser WebSockets require server-side [Origin validation][websocket-origins],
@@ -498,9 +510,12 @@ revocation effects, and default/requested token lifetime. Exact key encoding,
 hash profile, and duration encoding are implementation details, not additional
 approval items. HMAC algorithm, canonicalization, and signature variables are
 no longer questions for this contract.
-Exact WebSocket routes, token delivery, initialization limits/timeouts, and errors
-remain unapproved wire details. Deferred browser startup does not impose token
-preparation on an inbound telephony call or an already-authorized outbound dial.
+Future WebSocket token-delivery encoding and structured failure responses are
+transport implementation work, not a second direct-start workflow. Removing the
+direct setup message does not approve new limits on another endpoint.
+Provider webhooks are not API/browser clients; telephony adapters retain their
+authenticated ingress and common admission responsibilities, not a separate
+direct API-client start endpoint.
 
 **Admission and transport-failure lifecycle details:** the singleton participant
 binding and fresh-token route are not permission to resume an ended call or evict
@@ -1014,9 +1029,40 @@ separate control-plane feature; document when supplied bearer tokens expire.
 
 ### G7 — P2: Conversation lifecycle needs more than `first_message: generated`
 
+**Approved optional `opening_audio`:** play an audio-file URL (WAV or another
+supported format) or audio rendered from fixed configured text to `entry_caller`
+before `entry_receiver` activation. It is call-level, not a participant greeting,
+mandatory notice, or approval of R11's prompt/variable interpolation.
+
+For text, render/cache audio using the initial receiving agent's resolved TTS
+service and voice, including defaults. No LLM generates the text; no arbitrary
+first map member or later transfer agent supplies the voice. Text applicability
+without an initial agent/usable TTS remains open. The cache distinguishes exact
+text, resolved provider/model/voice, output-affecting settings, and tenant/
+configured binding. Changed inputs must not reuse stale output; no secrets in
+cache keys/logs. Reusable configured assets are not per-call recordings/exports.
+Render timing and cache/fetch infrastructure are not selected, and asset
+preparation itself starts no call process tree or call clock.
+
+First establish only the caller connection and minimal transport/playback path.
+Normal agents, STT, TTS, model execution, recording, and conversational media
+services stay gated until playback completes. Fixed-text asset rendering is a
+narrow TTS exception, not activation of those normal services. Downloading,
+rendering/caching, or enqueueing a file is not playback completion. A configured
+notice that fails or has not completed does not silently release the gate.
+Omitting `opening_audio` uses normal startup without an announcement delay.
+
+For example, play a fixed recording announcement, then activate the receiver and
+its ordinary greeting policy. Do not start recording during the opening audio.
+The actual call-start timestamp remains the live-start occurrence, not notice
+completion. Exact completion evidence, source schema/supported formats, failure
+handling, and later-participant notices need separate design; this does not
+introduce per-transfer playback or a consent guarantee. R11 remains pending.
+
 **Approved first-message behavior:** each agent participant chooses wait-for-input,
 fixed greeting text, or a generated greeting. Apply it on the participant's first
-activation in that call, once its required connections/capabilities are ready.
+activation in that call, after any startup notice and once its required
+connections/capabilities are ready.
 Reconnect and later reactivation do not replay the startup greeting. A different
 participant gets its own first activation, and a new call starts afresh.
 For example, an inbound receiver can welcome the caller immediately; an outbound
@@ -1236,7 +1282,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
 | Declare schemas with no variable defaults and supply partial initial variables | Supplied datatypes/value constraints validate before startup; missing variables do not fail, including in nested objects; intake stays unfilled; variable defaults fail; capability defaults still work; explicit empty section objects are accepted without filling values |
 | Prepare private order variables using a backend API key, then join from the browser using only a token | Preparation pins/stores variables without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and variables fail |
-| Connect a backend WSS client with an API key and send unsigned variables as its first message | Invalid authentication fails before upgrade; a missing message, malformed/oversized variables, or wrong datatypes cannot start the room; empty variables and partial sections are allowed; browser Origin and HTTP CORS are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
+| Prepare from an authenticated backend, then join separately with browser and backend clients | Both clients use the same token-admission contract; neither an API key on a media socket nor first-message initial variables bypass preparation; browser Origin and HTTP CORS remain separate; existing WebRTC stays supported; no removed direct-setup limits are implicitly adopted |
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
 | Bootstrap a fresh installation and use separate tenant-scoped keys | Trusted OTP/CLI administration creates the first key; tenant boundaries and the `admin`/`calls` scope split are enforced without assuming a scope hierarchy or definition allowlists |
 | Overlap two keys during rotation, then revoke only one | Further authentication with the revoked key fails, including token issuance; other keys and established connections continue; already-issued unused tokens still pass their independent admission checks |
@@ -1276,6 +1322,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
 | Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
 | Start agents in each first-message mode, repeat readiness, and reactivate them | Wait-for-input sends no unsolicited greeting; fixed/generated greeting runs once on first activation after readiness; repeated readiness/reactivation does not replay it; another participant or call has its own first activation; caller reconnect support is not required |
+| Start with no notice, then with a configured fixed audio notice whose completion is controlled | No notice uses normal startup; configured playback uses only the caller transport/file path, and receiver/normal audio services remain stopped until completion; downloading/enqueueing/failure does not open the gate; subsequent greeting policy remains unchanged and started_at is not reset to notice completion |
+| Configure fixed text opening audio and reuse/change its resolved voice binding | Render/cache with the initial agent's resolved TTS/voice without starting the model/normal services; changed text/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no implicit agent/voice is chosen when unavailable |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
 | Slow the recording upload or archive consumer | Live mix progresses; recording/archive becomes explicitly incomplete according to policy, not silently complete |
 | Replay admission events and crash between admission stages | One durable call and at most one current fenced room; uncertain dialing is reconciled |
@@ -1586,12 +1634,28 @@ logical call termination requires a new call rather than resuming the old one.
 First admission of a transfer destination into a live room remains supported.
 Earlier running-caller reconnect promises in historical checkpoints are
 superseded. R06 still asks whether issuance supersedes unused tokens; temporary
-transport failure is not declared to end a call. Current count: 44 pending
+transport failure is not declared to end a call. At that checkpoint: 44 pending
 individual decisions, R06 and R08–R50. Verification checks three-file scope,
 unchanged fenced examples and 15 valid JSON examples, unchanged links/URLs,
 backlog IDs/count, admission boundaries, retained unrelated contracts,
 terminology/local-path hygiene, and whitespace. No runtime or browser tests
 were run for this documentation-only checkpoint.
+
+The common-admission follow-up resolves R08: every API client prepares with
+authenticated initial variables, receives a token, and joins with it. The removed
+direct WebSocket setup supersedes R09 and does not adopt its proposed limits on
+other routes. Optional call-level `opening_audio` plays a file URL or cached audio
+from fixed text before receiver/normal service activation. Text rendering uses
+the initial agent's resolved TTS voice/profile as a narrow asset-preparation
+exception; no LLM or implicit human-only agent is needed. Cache identity tracks
+text, resolved TTS/output settings, and tenant/configured binding. Omission means
+normal startup. Playback completion, not download/render/enqueue, releases the
+gate; exact evidence/failure/source/cache mechanisms remain unselected. R11's
+variable interpolation is not approved by fixed text. Current count: 42 pending
+decisions, R06 and R10–R50. Checks cover unchanged fences, 15 valid JSON examples,
+37 local links/anchors, unchanged external URLs, scope/count, prior contracts,
+terminology/path hygiene, and whitespace. Documentation only; no runtime or
+browser tests were run.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
