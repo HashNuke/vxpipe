@@ -51,8 +51,9 @@ tool arguments rather than a separate changeset, and a latest-snapshot pointer
 on the call record. Database-backed variable updates return success only after
 that snapshot/pointer transaction commits. Retention periods resolve from tenant
 override, then application setting; the application default is retain forever.
-Exact configuration syntax, cleanup/expiry semantics, uncertain database outcomes,
-and sensitive-input handling remain pending alongside G2/G4 questions and G6–G13.
+Exact configuration syntax, cleanup/expiry semantics, and sensitive-input handling
+remain pending alongside G2/G4 questions and G6–G13. Extra database-commit
+reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
@@ -755,10 +756,12 @@ in one same-call transaction, with revision/incarnation checks and idempotent
 snapshot identity. A stale new update must fail the transaction, not insert its
 snapshot and report success after skipping pointer advancement. A repeated
 already-committed operation must not roll back newer memory or the latest pointer.
-Only after commit confirmation does the owner adopt the new
-values/revisions, emit the event, and return success. Validation or confirmed
-transaction failure leaves current values/revisions unchanged. Uncertain database
-outcomes must not be labelled successful or definitely rolled back.
+Only after commit confirmation does the owner adopt the new values/revisions,
+emit the event, and return success. Validation failures retain their existing
+errors; a transaction error returns variable-save failure. Both leave current
+in-memory values/revisions unchanged and emit no update-success event. Normal
+transaction success/error handling is sufficient for this slice; the proposed extra commit-status lookup or
+reconciliation workflow is not required.
 
 Latest persisted values need one indexed lookup or simple join, not history
 aggregation or a second mutable variables store. The GenServer is the runtime
@@ -780,8 +783,8 @@ application period can instead be inherited, and one tenant can override it
 without changing another tenant's period. Periods are not agent/client settings.
 
 **Still under review:** exact configuration, finite-expiry clock/cleanup, policy
-changes affecting existing data, referenced-snapshot cleanup, uncertain database
-commit/restart handling, and broader redaction/sensitive user-input handling.
+changes affecting existing data, referenced-snapshot cleanup, and broader
+redaction/sensitive user-input handling.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
 different audiences. G5 stays partly resolved. Success now proves the snapshot
 transaction committed, not that complete room restart/recovery is implemented.
@@ -1049,7 +1052,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
 | Hide client tool events while retaining payloads, then show full events with metadata-only storage | First call stores permitted synthetic arguments/results but emits no client tool events; second shows payloads live but stores only invocation and participant/tool identity, timing, and outcome; storage never uses the browser-filtered stream, and integration credentials/authorization headers are excluded before persistence |
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
-| Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Confirmed failure changes neither memory nor durable snapshot/pointer; no duplicate snapshot, cross-call pointer, or stale regression; variable tools wait for commit without routing through the room authority, and snapshots never leak through public events or tool results |
+| Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration changes neither capture enablement nor client visibility; finite cleanup awaits its own approved semantics |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |

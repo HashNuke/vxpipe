@@ -661,8 +661,10 @@ For a new update, a failed pointer/revision precondition rejects the transaction
 inserting a stale snapshot without advancing the pointer is not update success.
 Only after confirmed database commit may the variables process publish the new
 in-memory values/revisions, emit the update event, and return tool success.
-Validation or a confirmed transaction failure leaves current values unchanged;
-an unknown commit outcome is not success or proof of rollback.
+Validation failures retain their existing errors; a transaction error returns
+variable-save failure. Both leave current in-memory values/revisions unchanged
+and emit no update-success event. Use normal transaction handling; no additional
+commit-status lookup or reconciliation workflow is required for this slice.
 An indexed lookup or simple join retrieves the latest persisted snapshot without
 scanning history or keeping another mutable variables copy. The GenServer remains
 the runtime owner; its in-memory state is the committed working copy, not an
@@ -673,10 +675,9 @@ client events or broader agent tool results.
 Retained initial values form a baseline snapshot with no invented turn/tool call,
 so the pointer also works before the first update.
 These are approved designs, not newly implemented persistence. Exact storage
-configuration, uncertain-commit/restart handling, and sensitive transcript
-handling remain under review. A configured database failure must not silently
-fall back to memory-only success; an explicitly database-free deployment has no
-database-commit guarantee.
+configuration and sensitive transcript handling remain under review. A configured
+database failure must not silently fall back to memory-only success; an explicitly
+database-free deployment has no database-commit guarantee.
 
 Stored call-data retention periods are application configuration with tenant
 overrides. The application default is retain forever. An explicit tenant setting

@@ -92,9 +92,10 @@ The call record points to the latest persisted snapshot; the GenServer remains
 the runtime owner. Database-backed updates return success only after the snapshot
 and latest-pointer transaction commits. Retention periods use tenant overrides
 over application settings, with retain forever as the application default.
-Exact configuration, finite-expiry/cleanup, uncertain database outcomes,
-sensitive-input handling, G2's remaining admission details, the rest of G4, and
-G6–G13 remain pending user review.
+Normal transaction errors return variable-save failure; no extra database-commit
+reconciliation is required for this slice. Exact configuration, finite-expiry/
+cleanup, sensitive-input handling, G2's remaining admission details, the rest of
+G4, and G6–G13 remain pending user review.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -1667,8 +1668,8 @@ described in the persistence section below: client visibility neither enables no
 suppresses it. Private variable history uses the approved turn/tool-linked full
 snapshots and call-level latest pointer described there. Retention periods use
 application settings with tenant overrides and an application retain-forever
-default. Exact storage configuration, finite-expiry/cleanup, uncertain database
-outcomes, and sensitive transcript handling remain G5 review questions.
+default. Exact storage configuration, finite-expiry/cleanup, and sensitive
+transcript handling remain G5 review questions.
 
 ### Initial agent-transfer history policies
 
@@ -2545,12 +2546,13 @@ latest-pointer update through the configured persistence port. Only confirmed
 commit allows the owner to replace the section, publish the new revisions, emit
 the ordered update event, and return success. Serialize updates through this
 boundary so a second candidate cannot be committed from unconfirmed state.
-Validation or a confirmed transaction failure returns a typed error and preserves
-current values/revisions. A timeout or missing commit reply is not proof of either
-commit or rollback; uncertain-outcome/restart handling remains a separate review
-item and must not silently become success. Reads run the same room/agent identity
-checks and require every requested section to be
-readable. A forbidden section produces a permission error for the whole request
+Validation failures retain their existing typed errors. A transaction error
+returns variable-save failure. Both leave current in-memory values/revisions
+unchanged and emit no update-success event.
+Use the transaction's normal success/error result; the proposed extra commit-status
+lookup and reconciliation workflow are not required for this slice. Reads run the
+same room/agent identity checks and require every requested section to be readable.
+A forbidden section produces a permission error for the whole request
 with no variable values; the variables process does not filter it into partial
 success.
 
@@ -3028,18 +3030,19 @@ the pointer backward, and a pointer must never reference another call's snapshot
 
 The variable-update tool returns success only after this database transaction
 commits. On confirmation, `CallVariables` adopts the exact committed values and
-revisions, emits the update event, and replies. Confirmed transaction failure
-leaves current state unchanged; no failed database write becomes memory-only
-success. No second candidate update may pass an unresolved predecessor. Database
-latency therefore affects the variable-update tool, but does not block
+revisions, emits the update event, and replies. A transaction error returns
+variable-save failure and leaves current in-memory state unchanged, with no
+update-success event; no failed database write becomes memory-only success.
+Use ordinary transaction handling without an extra commit-status lookup or
+reconciliation workflow. No second candidate update may pass a pending predecessor.
+Database latency therefore affects the variable-update tool, but does not block
 `RoomAuthority`, media, or unrelated capabilities. There is no separate changeset
 or new write-ahead journal: the snapshot/pointer transaction is the required write.
 
 This supersedes the earlier proposal to acknowledge a memory update and persist
 its snapshot later. General call/tool/usage events can still be archived
-asynchronously. A lost reply does not undo a committed snapshot; exact uncertain
-commit and process-restart handling remain open, and successful snapshot storage
-does not by itself implement full room recovery. An explicitly database-free
+asynchronously. Full process/room recovery remains a separate concern, not a
+prerequisite to the normal variable-save transaction. An explicitly database-free
 deployment has no database-commit guarantee; a database-backed call must never
 silently fall back to it when storage fails. Storage duration resolves as below;
 cleanup of referenced snapshots and exact database schema remain follow-ups.
@@ -3428,9 +3431,12 @@ and is not sufficient to promise room recovery.
 
 Variable updates have a stronger approved acknowledgement contract: a successful
 tool result means its snapshot and latest-pointer transaction already committed.
-The owner waits for that confirmation before making new values current. A lost
-reply can still leave a committed database snapshot; uncertain commit/restart
-handling needs explicit review and must not be mistaken for a definite rollback.
+The owner waits for that confirmation before making new values current. A
+transaction error returns variable-save failure without publishing the candidate.
+No separate commit-status lookup, polling, or reconciliation subsystem is required
+for this slice. Transaction atomicity covers the snapshot and pointer together;
+it does not guarantee reply delivery. A lost reply does not undo a committed
+snapshot. This limitation does not add another current implementation prerequisite.
 
 Full room recovery remains a separate contract for restoring the pinned plan,
 variables, participants, capabilities, and lifecycle safely. Committed variable
@@ -3705,9 +3711,10 @@ and tool invocations, without separate changesets; the call record points to the
 latest persisted snapshot. Database-backed update tools wait for the snapshot/
 pointer transaction before returning success. Retention periods resolve from
 tenant overrides and application settings, with retain forever as the application
-default. Exact configuration, finite-expiry/cleanup, uncertain database outcomes,
-and sensitive-input handling remain under review. Other G4 questions, remaining
-G2 details, and G6–G13 remain unapproved.
+default. Normal transaction errors return variable-save failure; no extra commit
+reconciliation is required. Exact configuration, finite-expiry/cleanup, and
+sensitive-input handling remain under review. Other G4 questions, remaining G2
+details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3915,8 +3922,9 @@ The numbering below matches G1–G13 in the focused review document.
    originating turn/tool call, reuses saved tool arguments without a changeset,
    and advances the call's latest-snapshot pointer transactionally before update
    success. Application retention defaults to retain forever, with tenant settings
-   overriding application values. Exact configuration, finite-expiry/cleanup,
-   uncertain database outcomes, broader redaction, and sensitive user-input handling
+   overriding application values. Transaction error means variable-save failure;
+   extra commit-status lookup/reconciliation is not required. Exact configuration,
+   finite-expiry/cleanup, broader redaction, and sensitive user-input handling
    remain proposals for review.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
@@ -4019,9 +4027,10 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    the exact resulting state, unchanged sections, and original turn/tool identity,
    without a separate changeset. Retry a persisted operation, submit a stale one,
    and fail a transaction: no duplicate history, pointer regression, cross-call
-   pointer, or partially committed snapshot/pointer pair is allowed. A confirmed
-   transaction failure preserves the prior in-memory values/revisions and returns
-   no success. Verify `RoomAuthority` and media can progress while the variable
+   pointer, or partially committed snapshot/pointer pair is allowed. A transaction
+   error returns variable-save failure, preserves prior in-memory values/revisions,
+   and emits no success event, without requiring an extra commit-status lookup.
+   Verify `RoomAuthority` and media can progress while the variable
    tool waits for storage. Fetch latest values directly through the call pointer.
    Separately omit retention settings at both levels and expect retain forever;
    set an application period and verify tenant inheritance, then override one
@@ -4993,6 +5002,25 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   intended documentation files changed. Commit-before-success, retention
   precedence/default, retained review status, restricted terminology, local-path
   hygiene, and whitespace checks pass.
+
+### Normal variable-save transaction handling — approved 2026-09-07
+
+- Use the database transaction's normal success/error result. Commit permits
+  adoption of the candidate state and tool success; an error returns variable-save
+  failure, preserves current in-memory state, and emits no update-success event.
+- The extra commit-status lookup/reconciliation proposal is not required for
+  this slice. Preserve transaction atomicity and existing invocation/revision
+  safeguards without adding a recovery subsystem. Lost replies do not undo commits;
+  complete room recovery remains separate from this ordinary save path.
+- Updated the original contract, architecture, gap-review status, and planned
+  error-path checks. Retention defaults and MCP timeout behavior are unchanged;
+  G5 remains partly resolved, with 11 open groups.
+- Documentation only; no runtime/database/UI changes or runtime/browser tests.
+- Verification: all existing fenced examples and all 15 JSON examples are
+  unchanged and valid. Links and external URLs are unchanged; only the three
+  intended documentation files changed. Transaction success/error scope, retained
+  review status, restricted terminology, local-path hygiene, and whitespace checks
+  pass.
 
 ## Verification evidence
 
