@@ -3,8 +3,9 @@
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-07 UTC
 Status: G1 and G2's web routes, initial context, API-key admission with one-way
-hash storage and prepared token-join or direct-backend connection, explicit entry
-participants/startup, and one participant per definition key per call approved;
+hash storage, single-use tokens with existing-call recovery, prepared token-join
+or direct-backend connection, explicit entry participants/startup, and one
+participant per definition key per call approved;
 remaining G2 questions and G3–G13 pending review.
 Documentation only; no runtime implementation.
 
@@ -102,11 +103,13 @@ handler, not necessarily that connection's human participant. The approved
 entry-role refinement below makes both initial participants explicit.
 
 Approved routing: create tenant-scoped participant connection keys as routing
-metadata, with separate HTTPS operations to prepare and join:
+metadata, with separate HTTPS operations to prepare, join, and issue fresh tokens
+for an existing call record:
 
 ```http
 POST /api/tenants/{tenant_key}/participants/{participant_key}/calls
 POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/sessions
+POST /api/tenants/{tenant_key}/calls/{call_id}/participants/{participant_key}/join-tokens
 ```
 
 Use a 16-character cryptographically random URL-safe tenant key, UUID participant
@@ -118,6 +121,10 @@ must identify the particular tenant and call and resolve the participant using
 that call's pinned definition.
 It cannot choose a call from a reusable support key alone. Authorization precedes
 issuing the call-specific transport session.
+The `join-tokens` route is backend-only and API-key-authenticated, with no CORS
+grants. It issues for an authorized participant in an existing prepared or live
+call record, not a newly created call, and does not itself start a room. The
+separate browser-facing join operation consumes the token.
 WebRTC is the first browser transport; routing can also serve a future WebSocket
 adapter. These are generic gateway handlers backed by route records, not code
 or room processes created for every saved definition. See the
@@ -181,11 +188,13 @@ the integrating application's tenant/operation authority, not customer identity.
 1. **Backend prepares, browser joins:** the backend POSTs initial context to the
    preparation endpoint, which grants no CORS access. Vxpipe validates it, stores
    a prepared call with pinned revision/context, and returns an opaque short-lived
-   join token scoped to that call and participant. No room/providers start yet.
+   single-use join token scoped to that call and participant. No room/providers
+   start yet.
    The frontend receives only the token, not private context or the API key.
-   Authorized joining activates that same call; conversation waits for transport
-   and required capabilities. The browser cannot replace the prepared context,
-   and joining must not return its private contents in a snapshot. Later event,
+   Accepted admission atomically consumes the token before activating that same
+   call, not when the browser receives confirmation; conversation waits for
+   transport and required capabilities. The browser cannot replace the prepared
+   context, and joining must not return its private contents in a snapshot. Later event,
    tool, and speech disclosure remains a separate policy responsibility.
 2. **Backend connects directly:** a non-browser WSS client supplies its API key
    in the handshake header. Authenticate before upgrade, then receive unsigned
@@ -227,6 +236,27 @@ limited lifetime consistent with [bearer-token security][bearer-tokens]. See the
 [approved context and admission contract][api-admission] for ownership,
 alternatives, and future verification steps.
 
+**Approved single-use admission and existing-call recovery:** an unused,
+unexpired token may retry before acceptance. Once admission is accepted, it
+stays consumed even if startup fails or the browser loses the response. Only
+one racing attempt may claim it; no transaction spans room/provider startup.
+
+Recovery after acceptance or token expiry goes through the integrating backend,
+which rechecks the user's authorization and uses its API key with `join-tokens`.
+Vxpipe checks the tenant/call/participant and current eligibility, reconciles an
+in-progress admission first, and rejects ended calls, revoked/unauthorized
+access, and active-connection takeover. Recheck eligibility at token claim;
+issuance does not guarantee that a later join is still allowed. A caller's old
+token or public call ID alone never authorizes fresh-token issuance.
+
+Issuance preserves the existing call record and pinned definition/context. For
+an eligible prepared call, subsequent joining activates the room once; an
+eligible reconnect to a running call attaches to the same participant/room and
+preserves current context rather than reinitializing it. Expiry prevents future
+token claims, not continuation of an already accepted call. Gateway owns token
+authentication; Calls coordinates the lifecycle through persistence ports.
+See the [approved recovery contract][join-token-recovery].
+
 The following G2 proposals remain open and must be reviewed separately:
 
 **API-key management lifecycle:** administrator bootstrap, permission
@@ -235,20 +265,20 @@ One-way hash storage is resolved; exact key encoding/hash profile remains an
 implementation detail to specify. HMAC algorithm, canonicalization, and
 signature fields are no longer questions for this contract.
 
-**Prepared-call and token lifecycle:** specify token lifetime, claim/reissue and
-retry rules, unused preparation expiry/retention and limits, and crash recovery.
-Concurrent joins must not activate duplicate rooms or participants; token claim
-and activation cannot hold a database transaction across external work. Exact
-transport routes, token delivery, initialization limits/timeouts, and errors
+**Prepared-call expiry and remaining token details:** specify TTL settings,
+unused preparation expiry/retention and limits, repeated issuance requests or
+superseding other unused tokens, and detailed crash reconciliation. Single-use
+claim, backend-mediated recovery, and the existing-call token route are resolved.
+Exact WebSocket routes, token delivery, initialization limits/timeouts, and errors
 remain unapproved wire details. Deferred browser startup does not impose token
 preparation on an inbound telephony call or an already-authorized outbound dial.
 
 **Reconnect and retry lifecycle details:** the approved singleton participant
-binding is not permission to resume an ended/revoked session. Specify reconnect
-eligibility and deadlines, transport replacement, and repeat/concurrent
-join/transfer responses without creating a second participant or allowing a
-different person to take over. Do not reopen multi-instance selection as a
-requirement for the approved initial contract.
+binding and fresh-token route are not permission to resume an ended/revoked
+session or evict an active connection. Specify reconnect eligibility/grace
+periods, how failed transports are confirmed disconnected, and detailed
+join/transfer responses and crash fencing. The approved recovery rules already
+preserve the same call and participant; multi-instance selection is not required.
 
 **Telephony initial-context sourcing:** an inbound phone call cannot supply the
 example's required trusted `customer.id` by itself. The approved direct-context
@@ -597,6 +627,9 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Prepare private order context using a backend API key, then join from the browser using only a token | Preparation pins/stores context without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and context fail |
 | Connect a backend WSS client with an API key and send unsigned context as its first message | Invalid authentication fails before upgrade; invalid/missing/oversized context cannot start the room; browser Origin and HTTP CORS policies are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
+| Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
+| Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting context |
+| Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
 | Interrupt while a context update is queued | Ordering determines one commit-before-interrupt or a stale-work rejection; replayed mutation ID cannot write twice |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
@@ -635,6 +668,10 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   also rejected for Vxpipe-issued keys: keep only a one-way hash. Recoverable
   upstream credentials remain a separate concern. Hash storage does not replace
   TLS, scoped-token lifecycle, or credential management.
+- Do not reuse consumed join tokens, silently take over a connection, or recreate
+  a call after losing its admission response. Backend-authorized recovery must
+  reconcile and reuse the existing call/participant. Token expiry is not an
+  automatic hangup of an established call.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
 - Do not move mixing, recording coordination, or room context into persistence.
@@ -665,6 +702,12 @@ was left open. The subsequent approved storage decision selects one-way hashes
 for Vxpipe-issued API keys, replaces the earlier encrypted-storage baseline for
 those keys, and adds future storage/verification/redaction acceptance checks.
 No authentication implementation, migration, dependency, or secret was changed.
+The subsequent token-recovery decision approves single-use consumption at
+accepted admission and the backend-only existing-call `join-tokens` route. Both
+documents now distinguish prepared records from live rooms, token issuance from
+browser joining, and token expiry from call duration. Future acceptance cases
+cover races, lost responses, and recovery without duplicate calls or takeover;
+TTL values, unused-preparation policy, and detailed crash handling remain open.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
@@ -674,6 +717,7 @@ No authentication implementation, migration, dependency, or secret was changed.
 [context-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
 [api-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-api-key-admission--approved-g2-decisions
+[join-token-recovery]: ../labnotes/20260905-0405-call-definition-design.md#single-use-join-tokens-and-existing-call-recovery--approved-g2-decisions
 [entry-participants]: ../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions
 [participant-cardinality]: ../labnotes/20260905-0405-call-definition-design.md#one-participant-per-definition-key--approved-g2-decision
 [presence]: ../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology
