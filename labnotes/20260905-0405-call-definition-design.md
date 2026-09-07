@@ -34,8 +34,9 @@ with a permission error. Object-level and single-field update tools are requeste
 preserves omitted fields, including nested fields. Authors should prefer simple,
 shallow sections. Explicit `null` clears a field while retaining its key, only
 when its schema permits null; omission preserves the existing value. Physical
-field deletion is deferred. Final names and field-addressing details remain
-under review.
+field deletion is deferred. Context root keys are section names; direct keys
+inside a section are field names. The field tool uses literal names, with nested
+updates expressed through the object tool. Final tool names remain under review.
 G2's remaining admission details, the remaining G3 questions, and the other
 suggestions remain pending user review. Approval of documentation does not
 authorize runtime implementation.
@@ -329,6 +330,14 @@ Unprovided optional context remains unfilled. Typed facts should not be
 re-extracted from a transcript when an authoritative invocation value or tool
 result already exists.
 
+The naming hierarchy is explicit: root keys in the context data are section
+names, and direct keys inside each section object are field names. Any deeper
+objects are nested data within that field, not extra section names or a path
+language. For example, `address` is a section and its direct `city` and
+`postal_code` keys are fields. This describes the data supplied in
+`initial_context` and held by the room; it does not remove the call definition's
+`room_context.sections` schema wrapper or change revision metadata.
+
 Each agent declares `context_permissions` keyed by section name. Permissions are
 a set containing `read`, `write`, both, or neither:
 
@@ -588,6 +597,20 @@ sketches, not complete wire schemas: they omit revision and engine-private
 execution metadata for brevity. A field-update convenience does not introduce
 field-level permissions; the existing section write grant still governs it.
 
+Approved addressing: `section_name` selects one exact declared root section,
+and `field_name` selects one exact schema-declared direct key in that section.
+`update_context_field` does not split dots, parse JSON Pointers, or interpret
+array-index notation. A name with no matching direct field fails validation;
+the tool never creates or traverses a nested path from it. If a schema permits
+a literal key containing punctuation, it still names only that exact key.
+
+For example, `update_context_field("address", "city", "Newtown")` addresses a
+direct field. For a section containing a nested address, use
+`update_context("profile", {"address": {"city": "Newtown"}})` instead. The
+object form deep-merges that data and retains omitted nested values; deeper
+updates need no additional path syntax or tool. Both forms keep the same
+section permission, validation, and revision boundary.
+
 Approved object-update behavior: `update_context(section_name, data)` recursively
 merges supplied objects into that section's existing data. Where both old and
 incoming values are objects, merge their fields recursively instead of replacing
@@ -660,13 +683,14 @@ because section roots must be objects.
 
 Separate field-deletion tools and physical key removal are deferred. There is
 no null-means-delete convention or new array-element merge operation. Final
-tool names and field-addressing details still need review. The earlier mutation
-list remains a possible internal representation behind the object/field tools.
+tool names still need review. Addressing is settled: section keys select root
+objects, field names select direct keys, and partial nested updates use the
+object tool. The earlier mutation list remains a possible internal representation.
 
 The existing internal command candidate below can represent a bounded atomic
 section update; the exact lowering from the two tools must preserve the approved
-recursive merge and explicit-null assignment behavior; field-addressing details
-remain under review. It is not a third model-facing update tool:
+recursive merge, explicit-null assignment, and literal-field behavior. It is
+not a third model-facing update tool:
 
 ```json
 {
@@ -679,7 +703,10 @@ remain under review. It is not a third model-facing update tool:
 }
 ```
 
-Paths are RFC 6901 JSON Pointers relative to the selected section. The initial
+Paths in this internal candidate are RFC 6901 JSON Pointers relative to the
+selected section, not model-facing field names. If this representation is used,
+the binding must encode each literal field name as one path component rather
+than interpreting its punctuation as traversal. The initial
 mutation language for these tools uses bounded `set` operations, including
 explicit null assignment. The earlier `remove` operation is deferred along with
 physical field deletion. Arrays are replaced as values rather than edited by
@@ -1757,8 +1784,9 @@ than retained as a second way to choose the receiver in the working candidate.
 Rejected for call-start context. The integrating backend can supply values in
 the definition's context-section shape directly. A separate `input_schema` and
 JSON Pointer initialization map duplicate that contract without helping the
-order-ID example. JSON Pointers remain useful for authorized context mutations;
-removing initialization bindings does not remove the context update tool.
+order-ID example. JSON Pointers remain a possible internal representation for
+authorized mutations, not syntax accepted by the field tool. Removing
+initialization bindings does not remove the context update tool.
 
 ### Put default values in context definitions or merge them into setup data
 
@@ -1784,6 +1812,13 @@ Rejected for the initial context tools. Use explicit null assignment through
 either update form, retain the field's key, and validate nullability under its
 schema. Omission means preserve, not clear; optional does not imply nullable.
 Do not add a field-deletion tool for this decision.
+
+### Interpret field names as nested paths
+
+Rejected. Root keys identify sections and direct section keys identify fields.
+The field tool performs literal-name lookup only. Use a nested object through
+`update_context` for deeper partial updates; do not expose the internal pointer
+representation, dot paths, or array-index syntax as a second addressing system.
 
 ### Cancel submitted context updates when a conversational turn is interrupted
 
@@ -2037,7 +2072,8 @@ IDs. Requested sections, expected revision, and proposed update data are the
 model-supplied inputs. The update bindings normalize object/field requests into
 the engine command while preserving omitted section fields. The object tool must
 also preserve omitted nested fields and treat explicit null as assignment,
-not deletion. Field-addressing details remain under review.
+not deletion. The field binding resolves a literal direct key and must not
+interpret it as a path, including when encoding an internal pointer.
 
 `RoomAuthority.update_context/2` performs one bounded `GenServer.call`. In order,
 the authority verifies:
@@ -2177,6 +2213,11 @@ each red and green step. The focused cases must demonstrate:
   for permitted sections succeeds without adding unrequested sections;
 - an agent can update multiple fields through one object-update tool call, or
   one field through the field-update tool, without removing omitted section fields;
+- root keys select sections and field names select direct schema-declared keys;
+  unmatched names fail validation without creating or traversing nested paths;
+- names containing dots, slashes, or index-like punctuation never navigate;
+  when explicitly declared as literal fields, they update only that exact key;
+- nested partial changes use the object tool and preserve omitted siblings;
 - an object update preserves an omitted existing required field, validates the
   complete merged result, and rejects an invalid multi-field update atomically;
 - a partial nested-object update preserves omitted sibling values and required
@@ -2967,9 +3008,10 @@ revision checks, with corrections made through later tool calls. Read requests
 containing a forbidden section fail as a whole with a permission error. The two
 update forms are retained, with object updates recursively merging supplied
 objects and preserving omitted fields. Explicit null assignment clears nullable
-fields without removing keys; physical deletion is deferred. Field addressing,
-final naming, G2's remaining questions, the other G3 questions, and G4–G13 remain
-unapproved.
+fields without removing keys; physical deletion is deferred. Root keys are
+section names and direct section keys are literal field names; deeper updates
+use the object tool. Final naming, G2's remaining questions, the other G3
+questions, and G4–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -2978,9 +3020,9 @@ Detailed reasoning and evidence live in the
 There are **12 open review groups** out of the original 13: G2 and G3 are partly
 resolved, and G4–G13 still need approval. G1 is resolved in documentation.
 This counts the numbered groups, not individual edge cases or implementation
-tasks. Section-level merging, recursive preservation inside nested objects, and
-explicit-null clearing are resolved within G3, but its remaining questions keep
-the group open.
+tasks. Section-level merging, recursive preservation inside nested objects,
+explicit-null clearing, and root-section/direct-field addressing are resolved
+within G3, but its remaining questions keep the group open.
 The count therefore remains 12; it is not reduced for each resolved sub-decision.
 
 ### Baseline and scope
@@ -3013,6 +3055,8 @@ The count therefore remains 12; it is not reduced for each resolved sub-decision
   preserves omitted nested fields too and recommends shallow authoring such as
   a dedicated `address` section. Explicit null now clears nullable fields without
   removing their keys; physical field deletion is deferred.
+  The addressing follow-up fixes root keys as section names and direct section
+  keys as literal field names; the object tool handles deeper partial updates.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -3090,7 +3134,9 @@ The numbering below matches G1–G13 in the focused review document.
    without banning schema-permitted nesting. The single-field tool remains
    available. Explicit null clears schema-nullable fields while retaining their
    keys; omission preserves existing values. Physical deletion is deferred.
-   Field addressing and final terminology remain open.
+   Addressing is resolved: root section names and direct literal field names,
+   with deeper changes expressed as objects through `update_context`. Final
+   terminology remains open.
    Other remaining review includes write-only validation-error redaction.
    A schema-valid agent write also does not prove identity verification or a
    completed external action. Consider separating intake from trusted-result
@@ -3194,6 +3240,12 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    reject null even when optional. Include an invalid clear in a multi-field
    update and verify no partial commit. An omitted field must not be cleared;
    no separate delete tool or automatic null population is introduced.
+   Verify direct-field addressing with an `address` section and nested updates
+   with a separate object-shaped fixture. A field argument such as `address.city`
+   or `/address/city` must not navigate into an object; if no exact direct field
+   is declared, it fails validation. Where a schema explicitly declares a
+   punctuation-bearing literal key, only that key changes. Internal pointer
+   encoding must preserve this behavior, with all grants/revision checks intact.
 3. Submit a context update, then interrupt the conversation before authority
    commit while keeping the same room and agent activation. Confirm it can
    finish under normal authorization/revision checks without resuming cancelled
@@ -3632,6 +3684,29 @@ For the approved 2026-09-07 explicit-null clearing decision:
   unchanged. All 20 local links/anchors resolve; review counts, route consistency,
   terminology, local-path hygiene, and `git diff --check` pass. No runtime
   implementation or runtime/browser tests were part of this documentation update.
+
+For the approved 2026-09-07 section/field addressing decision:
+
+- Defined the data hierarchy in the original labnote and focused review: context
+  root keys are section names, direct section keys are field names, and deeper
+  objects are data within those fields. The definition's schema wrapper and
+  revision metadata are unchanged.
+- Made the field tool a literal direct-key operation with no dot, pointer, or
+  array-index interpretation. Unknown direct names fail validation; explicitly
+  declared punctuation-bearing keys remain literal. Partial nested updates use
+  the object tool and its existing deep merge. Any internal pointer encoding
+  must preserve these semantics without adding an agent-facing path language.
+- Updated planned acceptance cases for direct fields, nested objects, unknown
+  names, and literal punctuation under the same section grants and revisions.
+  G3's addressing question is resolved; final naming and other review questions
+  remain open, leaving the count at 12 numbered groups. No runtime tool, schema
+  version, dependency, or permission model was changed.
+- Verified all 13 JSON examples are unchanged and parse, both complete definition
+  contracts and the seven write-authorization checks are unchanged, and all 20
+  local links/anchors resolve. Addressing examples, removal of superseded open
+  questions, review counts, route consistency, terminology, local-path hygiene,
+  and `git diff --check` pass. Runtime/browser tests were not run for this
+  documentation-only checkpoint.
 
 ## Verification evidence
 

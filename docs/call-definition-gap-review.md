@@ -11,8 +11,9 @@ updates continue through conversational interruption under existing checks.
 Reads containing a forbidden section fail with a permission error and no values.
 Object updates recursively merge objects and preserve omitted nested fields;
 shallow sections are preferred. Explicit null clears nullable fields without
-deleting their keys; physical deletion is deferred. Field addressing and naming
-remain open for the object/field tools;
+deleting their keys; physical deletion is deferred. Context root keys name
+sections, direct section keys name fields, and the field tool uses literal names.
+Final naming remains open for the object/field tools;
 remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -20,8 +21,9 @@ Documentation only; no runtime implementation.
 Review count: **12 open numbered groups** — G2 and G3 partly resolved, G4–G13
 awaiting approval; G1 resolved in documentation. Individual sub-decisions are
 not counted separately here. Object merge versus replacement and preservation of
-omitted nested fields, plus explicit-null clearing, are resolved within G3;
-its other questions remain open, so the group count has not changed.
+omitted nested fields, explicit-null clearing, and direct-field addressing are
+resolved within G3; its other questions remain open, so the group count has
+not changed.
 
 ## Conclusion and scope
 
@@ -401,9 +403,21 @@ runtime values without introducing defaults or an initialization merge.
 Prefer simple, shallow context: make `address` its own section with `city` and
 `postal_code`, giving it an explicit schema, grant, and revision boundary.
 This is authoring guidance, not a ban on schema-permitted nesting or a runtime
-flattening step. Field addressing and final terminology remain for review;
+flattening step. Final terminology remains for review;
 recursive object merging does not add array-element merge operations. No schema
 keys or runtime modules are renamed yet.
+
+**Approved addressing:** keys at the root of context data are section names;
+direct keys within each section object are field names. The definition's schema
+wrapper and revision metadata are not renamed. `update_context_field` selects
+one exact declared direct field; it does not interpret dots, JSON Pointers, or
+array-index notation. Unmatched names fail validation rather than traversing or
+creating a path. An explicitly declared punctuation-bearing key remains literal.
+For example, use `update_context_field("address", "city", "Newtown")` for a
+direct field. For a nested address in another section, use
+`update_context("profile", {"address": {"city": "Newtown"}})` and its recursive
+merge behavior. Internal pointer encoding must preserve literal-name semantics.
+No new tool, field-level permission system, or path syntax is introduced.
 
 **Approved clearing behavior:** both update forms accept explicitly supplied
 null for a schema-nullable field. It stores null while retaining the key, rather
@@ -730,6 +744,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Merge several fields with the object tool, then change one field with the field tool | One call per operation; omitted fields remain, including existing required fields; the complete merged result validates atomically; invalid updates change nothing; the same write grant/revision boundary applies |
 | Update only a nested address city, then exercise a shallow address section | Nested postal code and other omitted siblings remain recursively, including required fields; invalid nested values reject the whole update; shallow and permitted nested shapes work without automatic flattening |
 | Clear an apartment using explicit null through each update form | A nullable field remains present with null; omitted fields stay unchanged; required nullable keys stay present; non-nullable fields reject null atomically even if optional; no deletion tool or automatic null defaults |
+| Select a direct field, then attempt a dot/pointer/index-like field name | Only exact declared direct keys are addressed; unmatched names fail, punctuation is never traversal, explicitly declared literal keys remain literal, and nested changes use the object tool |
 | Interrupt after submitting a context update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
@@ -772,6 +787,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
 - Do not interpret explicit null as key deletion or add a tool solely to clear
   a value. Store null through either update form when its schema allows it;
   optionality alone does not grant nullability.
+- Do not interpret model-facing section or field names as paths. Root keys name
+  sections, direct section keys name fields, and nested object updates already
+  provide the mechanism for deeper changes. Internal pointers stay internal.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
@@ -866,6 +884,11 @@ their keys, leaves omission as preservation, and defers physical deletion. Both
 documents update nullable-field requirements and planned verification without
 changing runtime behavior or adding a new model-facing tool. G3 still has other
 open questions, so the numbered review-group count remains 12.
+The addressing decision now fixes context root keys as section names and direct
+section keys as literal field names. It routes deeper partial changes through
+the object-update tool, separates model-facing names from internal pointer
+encoding, and adds future direct-key/path-confusion checks. Other G3 questions
+remain open; no runtime tool or schema-wrapper change was introduced.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
