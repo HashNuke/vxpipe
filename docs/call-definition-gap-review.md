@@ -40,11 +40,13 @@ mechanism could route to an active call room/agent, not current MCP reconciliati
 Generic platform confirmation is excluded for now: agent instructions handle
 conversational confirmation and the application/MCP owns enforceable business
 authorization. Prompts are not security checks; Vxpipe tool-access checks remain.
-Remaining G2/G4 questions and G5–G13 are pending review.
+G5's ordinary-client redaction and authorized sample-debug visibility are
+approved. Its private archival/retention questions remain pending, alongside
+remaining G2/G4 questions and G6–G13.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Review count: **11 open numbered groups** — G2/G4 partly resolved, G5–G13
+Review count: **11 open numbered groups** — G2/G4/G5 partly resolved, G6–G13
 awaiting approval; G1 and G3 resolved in documentation. Individual sub-decisions are
 not counted separately here. Object merge versus replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -659,7 +661,7 @@ under review; explicit cancellation is deferred, not a current-slice prerequisit
 Do not announce successful sending or booking from a request-start event.
 Progress speech is separate from result speech, with only one owner of each utterance.
 
-### G5 — P1: Private variables would leak through the existing tool event path
+### G5 — P1, partly resolved: Private variables would leak through the existing tool event path
 
 This is a concrete integration hazard, not just an omitted future feature.
 `RoomAuthority.emit_tool_call_started/4` puts arguments in an event;
@@ -668,12 +670,25 @@ This is a concrete integration hazard, not just an omitted future feature.
 but reusing that path for private variables or verification defeats the proposed
 section permissions even if variable-update events contain only metadata.
 
-Proposal: keep private execution payloads separate from audience-specific
-events. Model, authorized operator, call-ledger consumer, telemetry, and browser
-are different audiences. Default public tool lifecycle events to safe IDs,
-status, and approved display names, with arguments/results omitted. Keep the
-standard RTVI lifecycle usable without distributing private tool content.
-Gateway authorization remains necessary even when an internal event is trusted.
+**Approved client visibility:** keep private execution payloads separate from
+client projections. Ordinary clients receive invocation ID, tool name, and
+lifecycle status by default, with arguments/results omitted. The authorized agent
+and server-side execution can use the payload without exposing it to the caller.
+Keep the client protocol lifecycle usable without distributing private content.
+
+**Approved sample-debug exception:** the `samples/` playground is for developer
+debugging and may show tool arguments/results through a server-authorized debug
+projection for its session. Preserve that capability in the development flow;
+do not make payload visibility the default for other clients. A frontend flag,
+route, or visual concealment does not grant debug access. Existing credential
+and header exclusions still apply. Debug inspection grants neither tool execution
+nor broader variable/call access. Exact authorization wiring is not specified
+here, and the current gateway has not implemented this distinction.
+
+**Still under review:** private archive projections, retention/redaction, and
+sensitive user-input handling. The debug exception does not authorize persisting
+all observed payloads. Model, authorized operator, call-ledger consumer,
+telemetry, and browser remain different audiences. G5 stays partly resolved.
 
 The archive also needs a separate permissioned private variables payload/patch:
 it cannot rebuild section values from metadata-only public events. Apply
@@ -936,6 +951,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Explicitly request another tool call after an unknown timeout | A separate agent-requested invocation is distinguishable from an executor retry; no exactly-once or external deduplication guarantee is implied |
 | After a separately approved idempotency/reconciliation policy, exercise a retry | Verify any promised duplicate prevention against that policy and provider behavior; it is not guaranteed by the executor's no-automatic-retry default alone |
 | Configure an agent to ask before booking, then attempt an unavailable tool | Domain-specific conversational confirmation uses the prompt/tool flow without a platform token; prompt instructions cannot grant tool access or substitute for enforceable application/MCP authorization |
+| Observe a tool with synthetic private arguments/results from ordinary and sample-debug sessions | Ordinary client receives lifecycle metadata only; server-authorized debug session receives the payload for its permitted call; a client-supplied debug flag cannot grant access; credential/header exclusions still apply |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |

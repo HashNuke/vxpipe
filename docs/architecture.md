@@ -604,8 +604,27 @@ Public projections exclude:
 - unapproved provider-native payloads; and
 - transcript, tool, or media data outside the actor's visibility scope.
 
-Live debugging is an authenticated monitor participant with explicit scopes,
-topic grants, retention, and rate limits. It consumes projected events and
+Tool lifecycle events sent to ordinary clients contain invocation ID, tool name,
+and status by default, not arguments or results. Keep the private execution
+payload separate from this client projection; an agent's permission to read a
+value does not grant its caller permission to inspect that value through events.
+
+The `samples/` playground is a developer debug UI and may display tool arguments
+and results through an explicitly server-authorized debug projection for its
+session. The default development flow should preserve that inspection capability
+without widening ordinary-client visibility. A frontend flag, UI route, or hiding
+fields in the interface is not an authorization boundary. Debug inspection does
+not itself grant tool execution, variable access, or access to other calls.
+Existing credential/header exclusions still apply; debugging is not raw transport
+inspection. Exact admission/configuration wiring remains to be implemented.
+
+This is an approved visibility contract, not current gateway behavior. The
+current tool-event path still sends arguments/results without this audience
+distinction. Private archival payloads, retention, and sensitive transcript
+handling remain separate review items; debug visibility does not approve storage.
+
+Silent live monitoring uses an authenticated monitor participant with explicit
+scopes, topic grants, retention, and rate limits. It consumes projected events and
 sampled media/metrics outside the room hot path. Debugging does not enable
 unbounded event or raw-audio retention.
 

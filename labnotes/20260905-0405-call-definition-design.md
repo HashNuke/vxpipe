@@ -80,8 +80,10 @@ Generic platform-level confirmation is also out of scope for now. Agent
 instructions handle conversational confirmation; any enforceable business
 authorization belongs to the integrating application/MCP. Prompt instructions
 are not a security guarantee, and Vxpipe still enforces tool access.
-G2's remaining admission details, the rest of G4, and G5–G13 remain pending user
-review. Approval of documentation does not authorize runtime implementation.
+G5's ordinary-client redaction and authorized sample-debug visibility are
+approved. Its private archival/retention questions, G2's remaining admission
+details, the rest of G4, and G6–G13 remain pending user review. Approval of
+documentation does not authorize runtime implementation.
 
 ## Constraints
 
@@ -1581,6 +1583,35 @@ The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
 level engine command and should eventually receive only a resolved-plan identity
 or typed plan, never decoded call JSON or credentials.
+
+### Tool event visibility and sample debugging — approved G5 decision
+
+Ordinary clients receive tool invocation ID, tool name, and lifecycle status by
+default, not tool arguments or results. Keep private execution payloads separate
+from client projections. An agent may be authorized to read internal billing
+notes without the caller being authorized to inspect those notes in a tool
+event. Frontend concealment alone does not prevent disclosure.
+
+The `samples/` playground is a developer debug UI. It may display tool calls,
+arguments, and results through an explicitly server-authorized debug projection
+for its session. The development flow should preserve that inspection capability
+without changing the ordinary-client default. A browser-provided flag or the
+choice of frontend route does not grant debug visibility. The exact server-side
+admission/configuration mechanism remains an implementation decision; no new
+call-definition option or API field is introduced by this approval.
+
+Debug inspection is separate from tool execution and variable permissions: it
+does not expand an agent's grants or allow inspecting other calls. The existing
+credential/header exclusions remain in force; enabling tool-payload inspection
+does not authorize exposing integration credentials or raw transport requests.
+It also does not expose the entire variables store or private room snapshot.
+
+This is an approved visibility policy, not newly implemented behavior. Current
+tool events carry arguments/results through the gateway without this audience
+distinction. The samples UI can retain payload inspection when the server-side
+projection boundary is implemented. Private archive payloads, retention, and
+sensitive transcript handling remain separate G5 review questions; debug
+visibility alone does not authorize storing those payloads.
 
 ### Initial agent-transfer history policies
 
@@ -3445,15 +3476,17 @@ agent-requested calls are separate invocations. Late business notifications are
 deferred to future external-event delivery to active rooms/agents. Generic
 platform confirmation is out of scope; conversational confirmation belongs to
 agent instructions and enforceable business authorization to the application/MCP.
-Other retry/cancellation questions, remaining G2 details, and G5–G13 remain
-unapproved.
+G5's ordinary-client redaction and authorized sample-debug visibility are
+approved; private archive/retention policies remain under review. Other G4
+questions, remaining G2 details, and G6–G13 remain unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Remaining review count — 2026-09-07
 
-There are **11 open review groups** out of the original 13: G2 and G4 are partly
-resolved, and G5–G13 still need approval. G1 and G3 are resolved in documentation.
+There are **11 open review groups** out of the original 13: G2, G4, and G5 are
+partly resolved, and G6–G13 still need approval. G1 and G3 are resolved in
+documentation.
 This counts the numbered groups, not individual edge cases or implementation
 tasks. Section-level merging, recursive preservation inside nested objects,
 explicit-null clearing, root-section/direct-variable addressing, missing reads,
@@ -3638,12 +3671,13 @@ The numbering below matches G1–G13 in the focused review document.
    while the application/MCP owns enforceable business authorization. Prompts
    are not a security guarantee; Vxpipe's tool-access checks remain. A start event
    is not proof of successful completion.
-5. **Private tool data and archive projections:** current tool events carry
-   arguments/results through the gateway. Reusing that path for variables would
-   leak values despite metadata-only variable events. Possible resolution:
-   audience-specific lifecycle projections, private execution payloads, and an
-   independently authorized private variable journal. Apply retention before
-   storage, including sensitive user input, not only during final export.
+5. **Private tool data and archive projections — partly resolved:** ordinary
+   clients receive lifecycle metadata without arguments/results by default.
+   The sample debug UI may inspect payloads through a server-authorized debug
+   projection for its session; frontend flags cannot grant access. Current
+   gateway behavior still needs this separation. Private archive payloads,
+   independently authorized variable journals, retention/redaction before
+   storage, and sensitive user-input handling remain proposals for review.
 6. **Remote integration compatibility:** configured and enabled are specified,
    but supported protocol revisions, result types, tool-schema features, and
    unsupported server interactions need a tested profile. Possible resolution:
@@ -3716,10 +3750,17 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    model projections. Transfer to a read-only agent; the value remains available
    but writes fail. Request both a readable and a forbidden section; expect a
    permission error with no values, then retry the readable section alone successfully.
-   Confirm success does not add unrequested sections. Inspect client events
-   and confirm private tool values are absent. Before writing an unfilled section,
-   read it: expect one null in its value slot, not nested nulls, with no stored
-   value or revision change. Write only one variable, read back that partial object,
+   Confirm success does not add unrequested sections. Inspect ordinary-client
+   events and confirm private tool values are absent. In a separate sample-debug
+   session, have the server explicitly authorize payload inspection and verify
+   synthetic tool arguments/results are visible for that call. A browser-supplied
+   debug flag without authorization must not expose them. Confirm the ordinary
+   session stays redacted, no agent variable grants change, and integration
+   credentials/headers are not exposed in either projection. These are planned
+   checks for the future projection boundary, not current playground guarantees.
+   Before writing an unfilled section, read it: expect one null in its value slot,
+   not nested nulls, with no stored value or revision change. Write only one
+   variable, read back that partial object,
    then add another variable in a later update. Repeat for the variable tool's first
    write and for a newly populated nested object. Verify a multi-variable object update
    needs one tool call and commits atomically; a variable update uses the same
@@ -4549,6 +4590,24 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   examples parse. All nine issue links/backlinks and anchors resolve; external
   URLs are unchanged. The diff contains only the four intended documentation
   paths, with restricted terminology, local-path, and whitespace checks passing.
+
+### Default tool redaction and sample-debug visibility — approved 2026-09-07
+
+- Approved metadata-only tool lifecycle events for ordinary clients, with
+  arguments/results visible to the sample debug UI through an explicitly
+  server-authorized session projection. Frontend concealment or a client flag
+  is not the boundary, and development debugging must remain useful.
+- Retained credential/header exclusions and independent agent, variable, and
+  call-access permissions. Debug inspection does not approve payload persistence.
+- Updated the original contract, architecture, G5 status, and planned tests.
+  G5 is partly resolved; archive/retention and sensitive-input policies remain
+  under review. The count remains 11 open numbered groups.
+- Documentation only: no runtime or sample frontend behavior was changed, and
+  no browser or live-provider checks were run.
+- Verification: all existing fenced examples are unchanged and all 15 JSON
+  examples parse. Links and external URLs are unchanged. Only the three intended
+  documentation files changed; G5 status, retained review count, restricted
+  terminology, local-path hygiene, and whitespace checks pass.
 
 ## Verification evidence
 
