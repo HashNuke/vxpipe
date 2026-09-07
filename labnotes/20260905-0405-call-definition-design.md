@@ -32,8 +32,10 @@ rollback. Reads containing a forbidden section now explicitly fail as a whole
 with a permission error. Object-level and single-field update tools are requested;
 `update_context` deep-merges supplied objects into the existing section and
 preserves omitted fields, including nested fields. Authors should prefer simple,
-shallow sections. Final names and explicit removal/null details remain under
-review.
+shallow sections. Explicit `null` clears a field while retaining its key, only
+when its schema permits null; omission preserves the existing value. Physical
+field deletion is deferred. Final names and field-addressing details remain
+under review.
 G2's remaining admission details, the remaining G3 questions, and the other
 suggestions remain pending user review. Approval of documentation does not
 authorize runtime implementation.
@@ -504,11 +506,18 @@ The schema fields and runtime values have distinct jobs:
 
 The `schema` objects use a closed Vxpipe-supported subset of JSON Schema-shaped
 keywords. The initial subset should cover object, string, boolean, integer,
-number, arrays as replaceable values, properties, required fields, enums,
-bounded strings/arrays/numbers, and `additionalProperties: false`. The dated
+number, explicit nullable field types, arrays as replaceable values, properties,
+required fields, enums, bounded strings/arrays/numbers, and
+`additionalProperties: false`. The dated
 Vxpipe schema defines exactly which keywords work; accepting this shape must not
 claim support for arbitrary JSON Schema vocabularies, references, or executable
 formats.
+
+Nullability is explicit, not inferred from a field being optional. `required`
+governs whether a field must be present; the field's schema separately decides
+whether `null` is an allowed value. A required nullable field can therefore be
+cleared while retaining its key. No field gains an automatic null default, and
+section roots remain objects.
 
 Each runtime section has independent revision state:
 
@@ -624,16 +633,40 @@ The preferred shallow alternative is an `address` section: the author can then
 use `update_context("address", {"city": "Newtown"})`, retaining its postal code
 under the same merge rule. No existing schema example is automatically flattened.
 
-Explicit removal/null handling, field-addressing details, and final tool names
-still need review. Recursive object merging adds neither array-element merging
-nor deletion semantics. The earlier mutation list already allowed multiple field
-changes in one call; it remains a possible internal representation behind the
-simpler object/field tool surface.
+Approved clearing behavior: an explicit `null` sets a field's value to null;
+it does not remove the key. Both `update_context_field("address", "apartment",
+null)` and `update_context("address", {"apartment": null})` express the same
+clear operation when the address schema permits a nullable apartment field.
+Omitting `apartment` instead preserves its previous value.
+
+For such a nullable field, the result is (illustrative values, not a wire envelope):
+
+```json
+{
+  "section": "address",
+  "before": {"city": "Newtown", "apartment": "4B"},
+  "data": {"apartment": null},
+  "after": {"city": "Newtown", "apartment": null}
+}
+```
+
+During deep merge, an explicitly supplied null is an assigned value, not a
+request to recurse into the old value, skip the update, or delete the field.
+The complete result must still validate: clearing a non-nullable field rejects
+the entire update without changing values or revisions. The existing permission
+and expected-revision checks apply to clears too. Unfilled context is not
+automatically materialized as null, and a section root cannot be cleared to null
+because section roots must be objects.
+
+Separate field-deletion tools and physical key removal are deferred. There is
+no null-means-delete convention or new array-element merge operation. Final
+tool names and field-addressing details still need review. The earlier mutation
+list remains a possible internal representation behind the object/field tools.
 
 The existing internal command candidate below can represent a bounded atomic
 section update; the exact lowering from the two tools must preserve the approved
-recursive merge behavior and account for the remaining removal/field-addressing
-details. It is not a third model-facing update tool:
+recursive merge and explicit-null assignment behavior; field-addressing details
+remain under review. It is not a third model-facing update tool:
 
 ```json
 {
@@ -647,9 +680,10 @@ details. It is not a third model-facing update tool:
 ```
 
 Paths are RFC 6901 JSON Pointers relative to the selected section. The initial
-mutation language supports only bounded `set` and `remove` operations on object
-fields; arrays are replaced as values rather than edited by index. An empty path
-may replace the complete section object. This is deliberately not full JSON
+mutation language for these tools uses bounded `set` operations, including
+explicit null assignment. The earlier `remove` operation is deferred along with
+physical field deletion. Arrays are replaced as values rather than edited by
+index. An empty path may replace the complete section object. This is deliberately not full JSON
 Patch. An internal whole-section replacement must not turn `update_context`
 into replacement of the section by its partial input: the merged candidate
 must preserve omitted fields at every object depth. The authority applies all
@@ -1741,7 +1775,15 @@ section and preserve omitted fields. Replacing the section with the submitted
 object would lose previously collected data or require the agent to resend it
 on every update. The same rule applies to partial nested objects: recursively
 merge them rather than losing omitted children. Validate and commit the complete
-merged result atomically; explicit removal remains a separate review question.
+merged result atomically. Explicit null assignment clears a nullable field while
+retaining its key; physical removal is deferred.
+
+### Treat null as deletion or require a separate tool just to clear a value
+
+Rejected for the initial context tools. Use explicit null assignment through
+either update form, retain the field's key, and validate nullability under its
+schema. Omission means preserve, not clear; optional does not imply nullable.
+Do not add a field-deletion tool for this decision.
 
 ### Cancel submitted context updates when a conversational turn is interrupted
 
@@ -1994,8 +2036,8 @@ participant, agent activation, originating command, correlation, and tool-call
 IDs. Requested sections, expected revision, and proposed update data are the
 model-supplied inputs. The update bindings normalize object/field requests into
 the engine command while preserving omitted section fields. The object tool must
-also preserve omitted nested fields; field-addressing and removal mappings remain
-under review.
+also preserve omitted nested fields and treat explicit null as assignment,
+not deletion. Field-addressing details remain under review.
 
 `RoomAuthority.update_context/2` performs one bounded `GenServer.call`. In order,
 the authority verifies:
@@ -2141,6 +2183,11 @@ each red and green step. The focused cases must demonstrate:
   nested fields at every object depth; nested validation failure changes nothing;
 - shallow sections and schema-permitted nested objects both work without
   automatic flattening or an implicit ban on nesting;
+- both update forms clear a nullable field by storing null while retaining its
+  key, including inside an object merge; omitted fields stay unchanged;
+- null supplied to a non-nullable field rejects the entire update atomically;
+  optional does not imply nullable, and required nullable keys stay present;
+- no clear operation deletes a key or generates null values for unfilled context;
 - a write-only agent receives no old or resulting section value;
 - an unknown section, unauthorized section, stale activation, wrong incarnation,
   bad pointer, revision conflict, invalid resulting schema, or size violation
@@ -2919,8 +2966,9 @@ allows submitted context commands to finish under existing authorization and
 revision checks, with corrections made through later tool calls. Read requests
 containing a forbidden section fail as a whole with a permission error. The two
 update forms are retained, with object updates recursively merging supplied
-objects and preserving omitted fields. Explicit removal/null details and final
-naming, G2's remaining questions, the other G3 questions, and G4–G13 remain
+objects and preserving omitted fields. Explicit null assignment clears nullable
+fields without removing keys; physical deletion is deferred. Field addressing,
+final naming, G2's remaining questions, the other G3 questions, and G4–G13 remain
 unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
@@ -2930,8 +2978,9 @@ Detailed reasoning and evidence live in the
 There are **12 open review groups** out of the original 13: G2 and G3 are partly
 resolved, and G4–G13 still need approval. G1 is resolved in documentation.
 This counts the numbered groups, not individual edge cases or implementation
-tasks. Section-level merging and recursive preservation inside nested objects
-are now resolved within G3, but its remaining questions keep the group open.
+tasks. Section-level merging, recursive preservation inside nested objects, and
+explicit-null clearing are resolved within G3, but its remaining questions keep
+the group open.
 The count therefore remains 12; it is not reduced for each resolved sub-decision.
 
 ### Baseline and scope
@@ -2962,7 +3011,8 @@ The count therefore remains 12; it is not reduced for each resolved sub-decision
   The merge follow-up selects preservation of omitted section fields and
   atomic validation of the merged result. The recursive-merge clarification
   preserves omitted nested fields too and recommends shallow authoring such as
-  a dedicated `address` section; explicit removal/null details remain open.
+  a dedicated `address` section. Explicit null now clears nullable fields without
+  removing their keys; physical field deletion is deferred.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -3038,8 +3088,9 @@ The numbering below matches G1–G13 in the focused review document.
    preserving omitted fields recursively and validating the complete merged
    result. Prefer simple, shallow sections, such as a dedicated `address`,
    without banning schema-permitted nesting. The single-field tool remains
-   available; explicit removal/null, field addressing, and final terminology
-   remain open.
+   available. Explicit null clears schema-nullable fields while retaining their
+   keys; omission preserves existing values. Physical deletion is deferred.
+   Field addressing and final terminology remain open.
    Other remaining review includes write-only validation-error redaction.
    A schema-valid agent write also does not prove identity verification or a
    completed external action. Consider separating intake from trusted-result
@@ -3137,7 +3188,12 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    its city must retain the postal code, including when that omitted field is
    required. Verify preservation across deeper objects and atomic rejection of
    invalid nested values. Also exercise a shallow `address` section without
-   automatic flattening. Explicit removal/null cases await their own decision.
+   automatic flattening. Clear a nullable apartment using each update form and
+   confirm its key remains present with null while other fields stay unchanged.
+   Check nullable required fields retain their keys, and non-nullable fields
+   reject null even when optional. Include an invalid clear in a multi-field
+   update and verify no partial commit. An omitted field must not be cleared;
+   no separate delete tool or automatic null population is introduced.
 3. Submit a context update, then interrupt the conversation before authority
    commit while keeping the same room and agent activation. Confirm it can
    finish under normal authorization/revision checks without resuming cancelled
@@ -3541,8 +3597,8 @@ For the approved 2026-09-07 recursive-merge and shallow-context clarification:
 - Added authoring guidance to favor simple, shallow sections, such as making
   `address` its own section. This does not forbid nesting, flatten data at runtime,
   add field-level permissions, or introduce a new depth limit. Neither full
-  definition example was changed. Removal/null and field-addressing details,
-  final naming, and the other review questions remain open.
+  definition example was changed. At that checkpoint, removal/null and
+  field-addressing details, final naming, and other review questions remained open.
 - Updated both documents and future verification scenarios for omitted nested
   siblings/required fields, deeper objects, nested validation failures, and
   shallow authoring. G3's nested-merge question is resolved; the count remains
@@ -3551,6 +3607,29 @@ For the approved 2026-09-07 recursive-merge and shallow-context clarification:
   nested illustration produces the expected recursive merge. Both complete
   definition contracts and the seven write-authorization checks are unchanged.
   All 20 local links/anchors resolve; review counts, route consistency,
+  terminology, local-path hygiene, and `git diff --check` pass. No runtime
+  implementation or runtime/browser tests were part of this documentation update.
+
+For the approved 2026-09-07 explicit-null clearing decision:
+
+- Resolved clearing in both update forms: explicitly supplied null is stored
+  as the field value while retaining its key; omission preserves the old value.
+  Deep merge does not skip null or interpret it as deletion. No separate tool
+  is needed to clear a value, and physical key removal is deferred along with
+  the earlier internal `remove` operation.
+- Recorded explicit nullable-field support in the schema requirements. Optional
+  does not imply nullable, required nullable fields retain their keys, and a
+  non-nullable field rejects null under the same atomic schema/permission/revision
+  checks as other writes. Section roots remain objects; missing context is not
+  automatically populated with null. No schema version or runtime API changed.
+- Added a clearing illustration and planned acceptance cases for both tools,
+  retained keys and other fields, non-nullable rejection, required/optional
+  distinctions, and atomic failure of a multi-field update. G3's clearing
+  question is resolved; its other questions keep the count at 12 open groups.
+- Verified all 13 JSON examples parse: the prior 12 are unchanged and the new
+  clearing example retains `apartment` with null and preserves `city`. Both
+  complete definition contracts and the seven write-authorization checks are
+  unchanged. All 20 local links/anchors resolve; review counts, route consistency,
   terminology, local-path hygiene, and `git diff --check` pass. No runtime
   implementation or runtime/browser tests were part of this documentation update.
 

@@ -10,8 +10,9 @@ G3 initialization approved with no context defaults, and submitted context
 updates continue through conversational interruption under existing checks.
 Reads containing a forbidden section fail with a permission error and no values.
 Object updates recursively merge objects and preserve omitted nested fields;
-shallow sections are preferred. Explicit removal/null details and naming remain
-open for the object/field tools;
+shallow sections are preferred. Explicit null clears nullable fields without
+deleting their keys; physical deletion is deferred. Field addressing and naming
+remain open for the object/field tools;
 remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -19,8 +20,8 @@ Documentation only; no runtime implementation.
 Review count: **12 open numbered groups** — G2 and G3 partly resolved, G4–G13
 awaiting approval; G1 resolved in documentation. Individual sub-decisions are
 not counted separately here. Object merge versus replacement and preservation of
-omitted nested fields are resolved within G3; its other questions remain open,
-so the group count has not changed.
+omitted nested fields, plus explicit-null clearing, are resolved within G3;
+its other questions remain open, so the group count has not changed.
 
 ## Conclusion and scope
 
@@ -400,9 +401,21 @@ runtime values without introducing defaults or an initialization merge.
 Prefer simple, shallow context: make `address` its own section with `city` and
 `postal_code`, giving it an explicit schema, grant, and revision boundary.
 This is authoring guidance, not a ban on schema-permitted nesting or a runtime
-flattening step. Explicit removal/null handling, field addressing, and final
-terminology remain for review; recursive object merging does not add array-element
-merge or deletion rules. No schema keys or runtime modules are renamed yet.
+flattening step. Field addressing and final terminology remain for review;
+recursive object merging does not add array-element merge operations. No schema
+keys or runtime modules are renamed yet.
+
+**Approved clearing behavior:** both update forms accept explicitly supplied
+null for a schema-nullable field. It stores null while retaining the key, rather
+than skipping or deleting it. For example, clearing `address.apartment` changes
+`"4B"` to null without removing `apartment` or altering the other address fields.
+An omitted field remains unchanged. Nullability must be explicit: optional does
+not imply nullable, and a required nullable field stays present when cleared.
+The complete merged result, write grant, and expected revision still validate;
+null in a non-nullable field fails the whole update without mutation. No missing
+value is automatically populated with null, and section roots remain objects.
+Separate deletion tools and physical key removal are deferred, not prerequisites
+for clearing a value. No null-means-delete convention is adopted.
 
 The following G3 proposals remain unapproved. Precise read and first-write
 behavior for an unset section also needs its implementation contract without
@@ -716,6 +729,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
 | Merge several fields with the object tool, then change one field with the field tool | One call per operation; omitted fields remain, including existing required fields; the complete merged result validates atomically; invalid updates change nothing; the same write grant/revision boundary applies |
 | Update only a nested address city, then exercise a shallow address section | Nested postal code and other omitted siblings remain recursively, including required fields; invalid nested values reject the whole update; shallow and permitted nested shapes work without automatic flattening |
+| Clear an apartment using explicit null through each update form | A nullable field remains present with null; omitted fields stay unchanged; required nullable keys stay present; non-nullable fields reject null atomically even if optional; no deletion tool or automatic null defaults |
 | Interrupt after submitting a context update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
@@ -755,6 +769,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
 - Do not replace a complete context section with the partial object passed to
   `update_context`. Recursively merge objects, preserve omitted fields at every
   object depth, and validate the complete result; omission is not deletion.
+- Do not interpret explicit null as key deletion or add a tool solely to clear
+  a value. Store null through either update form when its schema allows it;
+  optionality alone does not grant nullability.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
@@ -842,8 +859,13 @@ The subsequent clarification approves recursive object merging and preservation
 of omitted nested fields. It recommends shallow authoring, such as an `address`
 section, without banning nesting. The original note adds a nested illustration
 and planned verification, while retaining the 12 open-group count and the
-remaining removal/null, field-addressing, and naming questions. No runtime code,
+then-open removal/null, field-addressing, and naming questions. No runtime code,
 schema flattening, or new nesting limit was introduced.
+The clearing decision now assigns explicit null to nullable fields while keeping
+their keys, leaves omission as preservation, and defers physical deletion. Both
+documents update nullable-field requirements and planned verification without
+changing runtime behavior or adding a new model-facing tool. G3 still has other
+open questions, so the numbered review-group count remains 12.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
