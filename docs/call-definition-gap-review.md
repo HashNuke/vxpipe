@@ -23,19 +23,25 @@ and error-handling proposals are withdrawn.
 Naming is approved as Call Variables, grouped into sections with variables inside.
 The agent receives MCP results and then updates variables through Vxpipe tools;
 no remote MCP awareness or automatic result-mapping layer is required.
-remaining G2/G3 questions and G4–G13 pending review.
+A dedicated room-scoped `CallVariables` GenServer owns values, schemas, grants,
+and revisions, and receives tool calls directly without `RoomAuthority` or a
+current-activation check. Agent transfer shuts down the source's execution
+subtree, but already-submitted variable requests can finish. Additional schema
+complexity limits are not adopted now; datatype and value-size checks remain.
+G3 is resolved; remaining G2 questions and G4–G13 are pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Review count: **12 open numbered groups** — G2 and G3 partly resolved, G4–G13
-awaiting approval; G1 resolved in documentation. Individual sub-decisions are
+Review count: **11 open numbered groups** — G2 partly resolved, G4–G13
+awaiting approval; G1 and G3 resolved in documentation. Individual sub-decisions are
 not counted separately here. Object merge versus replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
 reads, and iterative population without required-variable checks are
-resolved within G3; its other questions remain open, so the group count has
-not changed. The read-only/read+write decision removes the write-only error
+resolved within G3. The read-only/read+write decision removes the write-only error
 question. Naming and agent-mediated MCP result updates are also resolved;
-schema-complexity bounds keep G3 open.
+dedicated variable ownership and submitted-write lifetime are approved, and
+additional schema-complexity caps are not adopted now. G3 is closed in
+documentation, reducing the count from 12 to 11; implementation remains pending.
 
 ## Conclusion and scope
 
@@ -356,7 +362,7 @@ The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
 need, not a reason to adopt their unrestricted authoring surface.
 
-### G3 — P1, partly resolved: Variable initialization, authorization, and updates
+### G3 — P1, resolved: Variable initialization, authorization, and updates
 
 **Approved initialization:** the [variables candidate][variable-design] has no
 default values. Its earlier section defaults and proposed merge rules are
@@ -389,7 +395,7 @@ populate a declared direct variable in a new section. For an `address` section
 with string variables, an agent can save `city` first and `postal_code` later.
 Missing variables do not fail validation, including within nested objects. A
 number supplied for either string variable still fails, with no partial commit.
-The same section grants, lifecycle, revision, and size checks apply.
+The same section grants, room/agent identity, revision, and size checks apply.
 
 This defers required-variable completeness checks, not datatype or other
 supplied-value validation. It applies to both initial variables and updates;
@@ -402,9 +408,12 @@ lists while retaining datatype and value constraints.
 finish, and use another tool call for a correction. The
 [variables interruption contract][variable-interruption] adds no live-turn or
 tool-cancellation check to the [authorization transaction][variable-authorization].
-Room/incarnation, participant/activation, permission, deadline, schema, limits,
-and expected section revision still apply. Transfer/deactivation and room end
-remain different from conversational interruption and can invalidate a command.
+Room/incarnation, trusted agent identity, permission, deadline, schema, limits,
+and expected section revision still apply, but current activation is not checked.
+Transfer terminates the source agent's execution subtree, including capabilities
+and model/tool workers, to prevent further requests. Already-submitted variable
+requests can still finish after source termination. Stopping the room's variables
+process itself is different: pending work has no completion guarantee.
 
 If the original update commits first, the correction uses the resulting revision,
 refreshing its permitted view if necessary. If the correction wins a race against
@@ -415,8 +424,8 @@ The earlier live-turn check and mutation-ID deduplication/journal proposal are
 withdrawn for this decision. External tool outcomes remain a separate G4 review.
 
 **Approved read authorization:** inform the agent of its permitted sections, but
-still validate every request at the authority. If any requested section is
-forbidden, return a permission error and no variable values, including otherwise
+still validate every request at the dedicated variables process. If any requested
+section is forbidden, return a permission error and no variable values, including otherwise
 permitted values from that same request. Do not silently filter forbidden names.
 The agent can retry with permitted sections only; successful reads do not add
 unrequested sections. This clarifies existing section grants, not a new
@@ -482,9 +491,27 @@ value is automatically populated with null, and section roots remain objects.
 Separate deletion tools and physical key removal are deferred, not prerequisites
 for clearing a value. No null-means-delete convention is adopted.
 
-The following G3 proposals remain unapproved. Bound schema complexity as well as
-value bytes so validation cannot monopolize the room process. There is no
-remaining write-only error decision because write-only grants are unsupported.
+**Approved ownership and limits:** one `CallVariables` GenServer per room
+incarnation owns values, revisions, compiled schemas, and pinned per-agent grants.
+Model/tool workers call it directly for reads, updates, and turn projections;
+`RoomAuthority` is neither a request intermediary nor a per-operation permission
+check. The variables process serializes its own validation and commits. Trusted
+identity comes from the engine binding, not model-supplied arguments.
+
+Keep it under the room supervisor, outside each agent's execution subtree. No
+activation mirror, deactivation acknowledgement, or live-agent query is needed
+for variable operations. A transfer can complete before an already-sent A update
+commits; B reads current committed data and may refresh later. Revision checks
+still protect against lost updates. No transfer-time flush is promised.
+Current tasks run under a shared task supervisor, so implementing the approved
+agent-wide shutdown requires supervision work; stopping one participant process
+or relying on `terminate/2` cleanup is not sufficient evidence.
+
+Do not add schema-depth or declared-variable-count limits now. There is no
+measured threshold or observed bottleneck motivating those proposed caps. Keep
+datatype, supplied-value, value-size, and operation bounds without requiring all
+variables to be populated. Additional complexity caps can be reconsidered with
+evidence. This resolves G3; the write-only error proposal is already withdrawn.
 
 **Approved naming and MCP result flow:** use Call Variables for the collection,
 section for a group such as `booking`, and variable for a value such as `status`.
@@ -769,8 +796,8 @@ This sequence is an option for review, not an approved implementation plan. Do
 not add the suggested variables or functionality before the user reviews the gaps.
 
 1. **Compiler and one-agent variables:** implement the approved G1 layout only
-   when runtime work is authorized; review G2–G3, the private-event part of
-   G5, and denial semantics in G9. Use one canonical fixture with two variables
+   when runtime work is authorized; resolve remaining G2 questions, the
+   private-event part of G5, and denial semantics in G9. Use one canonical fixture with two variables
    sections and an engine-owned variable tool. Prove the existing text/audio path
    works through a typed plan. Do not start with telephony or Ecto.
 2. **Safe remote action:** add one tenant-configured remote MCP integration,
@@ -808,7 +835,9 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Update only a nested address city, then exercise a shallow address section | An existing postal code and omitted siblings remain recursively; a missing postal code is neither required nor invented; wrong nested datatypes reject the whole update; shallow and permitted nested shapes work without automatic flattening |
 | Clear an apartment using explicit null through each update form | A nullable variable remains present with null; omitted variables stay unchanged; non-nullable variables reject explicit null atomically even though absence is allowed; no deletion tool or stored null defaults |
 | Select a direct variable, then attempt a dot/pointer/index-like variable name | Only exact declared direct keys are addressed; unmatched names fail, punctuation is never traversal, explicitly declared literal keys remain literal, and nested changes use the object tool |
-| Interrupt after submitting a variable update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
+| Interrupt after submitting a variable update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry |
+| Read/update variables while the room authority is not servicing messages | Direct tool requests finish in the dedicated variables process without a hidden authorization or commit round trip |
+| Submit A's update, transfer to B, and let the update execute after A stops | A's execution subtree, capabilities, and model/tool workers terminate without restarting; its already-sent update may still commit under normal checks, B can read/refresh it under its own grants, and A's speech does not resume; stopping the variables process itself gives no pending-write completion guarantee |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
@@ -1000,13 +1029,32 @@ MCP returns a tool result, and the agent separately updates Vxpipe variables
 under its existing permissions, datatypes, and revisions. The automatic mapping
 and platform-only result-section proposals are withdrawn. Revised acceptance
 steps cover that flow without imposing knowledge of Vxpipe on the MCP.
-Schema-complexity bounds remain open in G3; naming and MCP result handling do not.
-The count therefore remains 12 numbered groups, not 12 individual questions.
+At that naming checkpoint, schema-complexity bounds remained open in G3;
+naming and MCP result handling did not. The count was therefore 12 numbered
+groups, not 12 individual questions.
 Verification covered all 15 JSON examples across the design and architecture
 documents, confirming only the approved key renames, unchanged definition and
 authority semantics, and all 31 local links/anchors. External source URLs,
 routes, resolved-review markers, terminology, and `git diff --check` passed.
 No runtime or browser tests were run for this documentation-only checkpoint.
+
+The subsequent approved dedicated-owner decision makes `CallVariables` a
+room-scoped GenServer with direct tool calls and no current-activation check.
+Transfer terminates the source agent's execution subtree, including capabilities
+and model/tool workers, but does not cancel already-submitted variable requests.
+Normal identity, grant, deadline, datatype, size, and revision checks remain.
+The variables process survives transfer; stopping the variables process itself
+does not guarantee pending-write completion. Current shared task supervision
+still needs implementation work to enforce agent-wide shutdown.
+Additional schema-complexity limits are not adopted now. G3 is resolved in
+documentation and the current count is 11 open numbered groups, G2 and G4–G13.
+Ownership, lifecycle, persistence descriptions, and planned tests are synchronized
+with the original labnote and architecture. Verification confirms all 15 JSON
+examples and both complete definition fixtures are unchanged, all 31 local
+links/anchors resolve, and API routes/external references are unchanged. Ownership,
+lifecycle, review counts, terminology, local-path hygiene, and whitespace checks
+pass. No runtime implementation, tests, or published schema changed; no runtime
+or browser tests were run for this documentation-only checkpoint.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

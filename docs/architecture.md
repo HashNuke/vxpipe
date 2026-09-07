@@ -137,9 +137,23 @@ The planned definition uses `call_variables.sections`, invocation values use
 `initial_variables`, and per-agent section grants use `variable_permissions`.
 The tools are `read_variables(sections)`, `update_variables(section_name, data)`,
 and `update_variable(section_name, variable_name, value)`. Sections are read-only
-or read+write for an agent; omitted grants give no access. RoomAuthority retains
-ownership, datatype checks, revisions, and incremental updates without demanding
-all variables at once.
+or read+write for an agent; omitted grants give no access. A dedicated
+`CallVariables` GenServer per room incarnation owns the values, revisions,
+compiled variable schemas, and per-agent grants. It handles tool reads/updates
+directly, without routing through `RoomAuthority` or consulting it for each
+authorization. Datatype and value-size checks remain, with incremental population
+and no required-variable completeness or additional schema-complexity caps now.
+
+The variables process lives under the room supervisor, outside agent execution
+subtrees, and survives transfers and human-only periods. Transfer terminates the
+source agent's whole execution subtree, including its capabilities and model/tool
+workers. Requests already sent to the variables process may still commit after
+source shutdown under normal identity, permission, deadline, size, datatype, and
+revision checks; there is no current-activation check for variable access.
+This never resumes the old agent or its speech. Room shutdown also ends the
+variables process, so completion is not guaranteed if that owner itself stops.
+The current shared model/tool task supervisor must be addressed when implementing
+agent-wide shutdown; this lifecycle is not yet guaranteed by today's runtime.
 
 For a remote MCP booking, the agent receives the tool result and separately calls
 our variable-update tool. The remote MCP does not need Vxpipe-specific knowledge,

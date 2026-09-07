@@ -50,9 +50,17 @@ access. The write-only projection and error-handling proposals are withdrawn.
 MCP result handling is also settled: the agent receives the remote tool result
 and then updates Vxpipe's call variables through our tools. No MCP knowledge of
 Vxpipe internals or automatic result-to-variable mapping is required.
-G2's remaining admission details, the remaining G3 questions, and the other
-suggestions remain pending user review. Approval of documentation does not
-authorize runtime implementation.
+G3's ownership and lifecycle are now settled: a dedicated room-scoped
+`CallVariables` GenServer owns values, revisions, schemas, and section grants.
+Variable tools call it directly, without routing through `RoomAuthority` or
+checking whether the source agent is still active. Transfer shuts down the
+source agent's entire execution subtree; already-submitted variable requests
+may still finish under the normal permission, datatype, size, and revision checks.
+Additional schema-depth/property-count limits are not adopted now; retain the
+existing datatype and value-size limits without required-variable completeness.
+G3 is resolved in documentation. G2's remaining admission details and G4–G13
+remain pending user review. Approval of documentation does not authorize runtime
+implementation.
 
 ## Constraints
 
@@ -356,9 +364,9 @@ The approved names in the unreleased definition candidate are:
 | Merge several variables in a section | `update_variables(section_name, data)` |
 | Set one direct variable | `update_variable(section_name, variable_name, value)` |
 
-The planned pure state module is `CallVariables`; the private commands are
-`ReadCallVariables` and `UpdateCallVariables`, and the metadata-only update event
-is `CallVariablesUpdated`. This is a documentation rename of the unreleased
+The planned room-scoped state owner is the `CallVariables` GenServer; the private
+commands are `ReadCallVariables` and `UpdateCallVariables`, and the metadata-only
+update event is `CallVariablesUpdated`. These names belong to the unreleased
 candidate, not a runtime migration or a new schema release. The existing
 `Tool.Context` execution metadata is a different concept and is not renamed.
 
@@ -410,11 +418,12 @@ nested variables through recursive merging.
 An agent never mutates the map directly. Read grants cause the engine to offer
 the read tool; read+write grants also enable the update tools. Each tool is
 constrained to that agent's granted sections.
-The room authority validates the current room incarnation, agent participant,
-agent activation, section permission, expected section revision, patch bounds,
-and the resulting section's populated values against its schema before applying
-an update and emitting its event. Schema checks do not require missing variables
-to be filled first.
+The variables process validates the target room incarnation, trusted agent
+participant identity, section permission, expected section revision, update
+bounds, and the resulting section's populated values against its schema before
+applying an update and emitting its event. It does not check current agent
+activation or consult the room authority. Schema checks do not require missing
+variables to be filled first.
 MCP results do not update call variables implicitly. The agent calls the remote
 MCP tool, receives its result, then calls `update_variables` or `update_variable`
 to save the relevant data. For example, it calls a booking tool, receives a
@@ -428,31 +437,36 @@ for this flow. The external service remains responsible for its booking and
 verification rules; a copied result in our variables is not the service's source
 of truth. External-operation retries and cancellation remain under G4 review.
 
-The room authority is the sole runtime owner of the mutable values and revisions.
-It already serializes room mutations and owns the pinned resolved call plan, so a
-variable update can be ordered with transfers, activation changes, and room end.
-The variable behavior should live in a focused pure `CallVariables` data/reducer
-module, but its state must not be copied into another independently authoritative
-GenServer. Small JSON-compatible values live in the room heap; large documents,
-media, and tool artifacts live elsewhere and appear in variables only as bounded
-references.
+One `CallVariables` GenServer per room incarnation is the sole runtime owner of
+mutable values and revisions. It holds the compiled variable schemas and
+per-agent grants from the pinned resolved plan, and serializes its own reads,
+merges, validation, and commits. `RoomAuthority` retains the pinned plan and
+participant/lifecycle orchestration, not a second mutable variables map.
+The variables process lives under the room supervisor, outside each agent's
+execution subtree, so transfers and human-only periods do not destroy it.
+Large documents, media, and tool artifacts live elsewhere and appear in variables
+only as bounded references.
 
-Provider and tool work remains outside the room authority. A platform variable
-tool runs in the supervised model/tool request process and makes a bounded
-`GenServer.call` back to the room authority. The engine-owned tool context carries
-the trusted room, incarnation, agent participant, activation, command,
-correlation, and tool-call identities. The model supplies only the requested
-read or mutation. The authority authorizes that trusted identity and never
-accepts participant or permission claims from model arguments.
+A platform variable tool runs in the supervised model/tool request process and
+makes a bounded `GenServer.call` directly to `CallVariables`. Neither the request
+nor the authorization/commit passes through `RoomAuthority`. The engine-private
+tool context supplies the room/incarnation and trusted agent participant identity;
+activation, command, correlation, and tool-call IDs remain attribution metadata,
+not a current-activation condition for variable access. The model supplies only
+the requested read or mutation, never its identity or permission claims.
 
-This call direction is safe only while the authority does not synchronously wait
-for provider or tool completion. It may acknowledge dispatch to the capability
-worker, but the worker owns the external request lifecycle. That worker may then
-call the authority for a short state operation. Every call is bounded and returns
-a typed unavailable/timeout result to the model rather than waiting indefinitely.
+Transfer terminates the source agent's whole execution subtree, including its
+capabilities and model/tool workers. Once shutdown completes it cannot issue new
+requests. An update already sent to `CallVariables` is not retracted by caller
+termination and may commit afterwards. The variables process needs no activation
+mirror, deactivation notification, or per-operation room-authority round trip.
+It never executes provider, remote tool, or database work in its callback. Calls
+remain bounded and return typed unavailable/timeout results; a timeout or lost
+reply does not prove an already-submitted update was cancelled.
 
-At the start of an agent turn, the room creates an immutable projection for the
-current activation. Granted sections include their value and revision, including
+At the start of an agent turn, the model/tool worker obtains an immutable
+projection directly from `CallVariables` using its trusted identity and grants.
+Granted sections include their value and revision, including
 every section the agent can update. Ungranted sections expose neither values nor
 revision metadata. Model inference inserts this projection as a transient
 engine-owned variable message; it is regenerated for each turn and is not appended
@@ -574,6 +588,13 @@ The schema fields and runtime values have distinct jobs:
   section bytes, update bytes, and operations per update. A definition may
   lower those limits but cannot raise them.
 
+Do not add schema-depth or declared-variable-count limits now. There is no
+measured schema-size threshold or observed validation bottleneck behind that
+earlier proposal. Keep the existing datatype, supplied-value, byte, and operation
+checks; schema declaration count alone is not the amount of populated data an
+update must validate. Additional complexity caps can be reconsidered if evidence
+justifies them, not as a prerequisite for this slice.
+
 The `schema` objects use a closed Vxpipe-supported subset of JSON Schema-shaped
 keywords. The initial subset should cover object, string, boolean, integer,
 number, explicit nullable variable types, arrays as replaceable values, properties,
@@ -622,7 +643,7 @@ grant. Authors do not list these platform tools in the agent's general `tools`
 map. The generated tool schemas describe the permitted sections and their data
 shape, with closed section enums derived from that agent's grants.
 Variable update argument schemas must allow partial data objects too, rather
-than reintroducing required variables before the authority receives them.
+than reintroducing required variables before the variables process receives them.
 The read tool is named `read_variables`; the approved update names appear below.
 
 The read request and result are shaped as follows:
@@ -643,15 +664,16 @@ The read request and result are shaped as follows:
 }
 ```
 
-Read authorization is all-or-nothing. The authority checks every requested
-section against the trusted activation's read grants, even though the agent is
-already informed of the permitted sections. If any requested section is
+Read authorization is all-or-nothing. `CallVariables` checks every requested
+section against the trusted agent participant's read grants, even though the
+agent is already informed of the permitted sections. If any requested section is
 forbidden, return a permission error and no variable values, including values
 from otherwise permitted sections in that request. Do not silently ignore the
 forbidden names. The agent can correct its request and retry with permitted
 sections only. A successful read returns only the sections requested, not every
-readable section. Empty, unknown, stale, malformed, or oversized requests still
-return typed errors without values. Errors must not disclose hidden values.
+readable section. Empty, unknown, expired, wrong-incarnation, malformed, or
+oversized requests still return typed errors without values. Agent shutdown does
+not invalidate an already-submitted request. Errors must not disclose hidden values.
 
 #### Missing reads and incremental population — approved G3 decision
 
@@ -671,7 +693,7 @@ Reads neither create a value nor change revisions.
 The first `update_variables` on a declared but unpopulated section creates its
 value from the supplied object. Later updates use the same recursive merge.
 The variable-update form can likewise populate its declared direct variable in an
-unfilled section. Both keep the normal grants, lifecycle, revision, datatype,
+unfilled section. Both keep the normal grants, room identity, revision, datatype,
 and size checks. No other variables or nested placeholders are materialized.
 
 For example, an `address` section declares string variables `city` and `postal_code`:
@@ -740,7 +762,7 @@ illustrate the merge; they are not a new request/response envelope:
 }
 ```
 
-The authority checks the expected revision, merges into a copy, and validates
+The variables process checks the expected revision, merges into a copy, and validates
 the populated values in the resulting section, including retained variables,
 before committing. Missing variables are allowed, not merely variables already stored
 but omitted from the update. Invalid supplied variables, an invalid merged result,
@@ -822,7 +844,7 @@ physical variable deletion. Arrays are replaced as values rather than edited by
 index. An empty path may replace the complete section object. This is deliberately not full JSON
 Patch. An internal whole-section replacement must not turn `update_variables`
 into replacement of the section by its partial input: the merged candidate
-must preserve omitted variables at every object depth. The authority applies all
+must preserve omitted variables at every object depth. The variables process applies all
 changes to a copy, checks populated values without required-variable completeness,
 then commits all of them or none of them.
 
@@ -831,7 +853,7 @@ new global revision, and resulting value to the authorized agent: every writer
 has read access to that section. An authorized revision conflict returns the
 current revision; the agent can refresh the value with the read tool. Errors
 must not disclose ungranted sections or private execution data. Invalid paths,
-oversized changes, a failed resulting schema, stale activation, wrong
+oversized changes, a failed resulting schema, an expired deadline, wrong
 incarnation, and missing permission do not change the variables or revisions.
 
 The public `CallVariablesUpdated` event contains section name, changed paths,
@@ -1362,14 +1384,16 @@ through a turn. Credential revocation may invalidate its lease and make later
 tool calls fail, but must not silently switch the call to another tenant or
 application credential.
 
-A transfer away from an agent participant changes the effective tool surface.
-Before deactivating the source activation, its in-flight tool calls must be
-settled or cancelled. After the transition, source-agent bindings cannot accept
-new calls. An agent-participant destination receives only its own activation's
-bindings; a human-participant destination receives no model tool surface. Tool
-results and events carry participant and activation identity so a late result
-from the previous agent participant is rejected even when both agent
-participants use the same configured integration.
+A transfer away from an agent participant changes the effective tool surface
+and shuts down its execution subtree, including capabilities and model/tool
+workers. After shutdown, that source cannot issue new tool requests. Already-sent
+local variable requests can still finish in the room's `CallVariables` process;
+source termination does not cancel or roll them back. Remote side effects and
+uncertain outcomes remain under G4 review, not an automatic rollback guarantee.
+An agent-participant destination receives only its own bindings; a human
+destination receives no model tool surface. Tool results and events retain
+participant and activation identity so late source output cannot revive the old
+model loop or speech, even when both agents use the same configured integration.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
@@ -1660,8 +1684,8 @@ reconnect eligibility/deadlines, and detailed retry/crash reconciliation. Single
 and existing-call token issuance are approved below. HMAC algorithm selection,
 payload canonicalization, and signature-envelope fields are no longer
 implementation questions. Variable-default assembly is eliminated: only supplied
-setup values prefill variables. The remaining G3 authority questions, telephony
-initial-variables sourcing, and personalization
+setup values prefill variables. G3's variable ownership is settled below; telephony
+initial-variables sourcing and personalization
 also remain open. No credentials, configuration, dependencies, database, or
 runtime authentication/transport behavior were changed in this checkpoint.
 
@@ -1942,8 +1966,9 @@ representation, dot paths, or array-index syntax as a second addressing system.
 ### Cancel submitted variable updates when a conversational turn is interrupted
 
 Rejected. Conversation interruption does not cancel or undo an already-submitted
-local variable update. Let the command finish under the normal room, activation,
-permission, deadline, schema, and revision checks. Corrections use another
+local variable update. Let the command finish under the normal room identity,
+permission, deadline, schema, size, and revision checks, including after source
+agent shutdown. There is no current-activation check. Corrections use another
 variable-update tool call; conflicting old updates are not blindly retried.
 There is no additional live-turn/tool-cancellation check or mutation journal
 for this rule. External tool operations remain a separate review concern.
@@ -2144,40 +2169,56 @@ map addition:
   the current user message. It has no activation-scoped variable projection.
 - `Tool.Executor` exposes a static application-configured module list.
   `Tool.Context` carries trusted room and participant identities, but not an
-  agent activation identity, variable grants, or an engine-private route back to
-  the authority.
+  engine-private route to a variables process. No dedicated variable owner or
+  agent-lifetime variable tool binding is implemented yet.
 
 The existing placement of tool execution is useful: model and tool work runs in
 the supervised capability request task, outside `RoomAuthority`. Variable tools
-can therefore call the authority for a short authorization/state transaction
-without making the authority execute provider work.
+can call the dedicated variables process directly. However, current model/tool
+tasks use `Task.Supervisor.async_nolink` under a shared application supervisor;
+capability `terminate/2` attempts cleanup but is not a lifecycle guarantee.
+The approved transfer design must make the entire agent execution subtree,
+including those tasks, terminate together. Stopping only a participant process
+or relying on best-effort cleanup does not establish that contract today.
 
 ### Runtime ownership and boundaries
 
-Use one owner and several immutable views:
+Use a dedicated variable owner and immutable views:
 
 ```text
 CallDefinition + CallInvocation
   -> pure validation and compilation
-  -> ResolvedCallPlan + initialized CallVariables
-  -> RoomAuthority owns both for one room incarnation
-       ├── creates an activation-scoped read projection for each model turn
-       ├── answers authorized reads
-       ├── validates and commits authorized updates
-       └── orders variable events with transfer and lifecycle events
+  -> ResolvedCallPlan + initialized variable values
+  -> RoomAuthority holds the pinned plan and orchestrates room lifecycle
+  -> CallVariables GenServer owns variable state for one room incarnation
+       ├── holds compiled section schemas and per-agent grants from that plan
+       ├── answers direct authorized reads and per-turn projections
+       ├── merges, validates, and commits direct tool updates
+       └── advances revisions and emits variable update events
+
+Agent model/tool worker -> CallVariables -> reply to that worker
 ```
 
-`ResolvedCallPlan` is immutable. `CallVariables` is mutable and belongs to the room
-incarnation. A focused pure module owns supplied-value initialization, projection,
-pointer mutation, size checks, populated-value schema checks, and revision changes;
-`RoomAuthority` owns the module's state and decides whether an operation is
-authorized at this moment.
+`ResolvedCallPlan` is immutable. The `CallVariables` GenServer is the only owner
+of mutable variable values and revisions for the room incarnation. Keep pure
+initialization, projection, merge, and validation logic separately testable; it
+does not create another authoritative copy. The process owns authorization using
+trusted identity and pinned grants, and commits each update atomically with its
+revision checks. Neither operation routing nor authorization needs a synchronous
+call to `RoomAuthority`.
 
-Do not introduce a separate variable-store GenServer in the first implementation.
-Two independent state owners would require a transaction protocol to order
-variable updates with agent deactivation, transfer commit, and room end. If the
-variable store later requires sharding or an external store, `RoomAuthority` must remain the command
-sequencer and commit authority even if storage is delegated.
+Place `CallVariables` under the room supervisor, outside the per-agent execution
+subtrees. It survives A-to-B transfer and human-only periods. Room shutdown also
+ends the variables process; no write is guaranteed to finish if that process
+itself is stopped. Durability/recovery remains a separate checkpoint; do not
+silently recreate live variables from empty state or a newly published plan.
+
+This supersedes the earlier single-`RoomAuthority` ownership decision. We do not
+require variable commits to be atomic with agent deactivation: already-submitted
+requests may finish after source shutdown. No activation mirror, revocation
+acknowledgement, current-agent query, or worker-to-authority final commit is
+required for variable reads and writes. Ordinary updates occupy only the
+variables process, not the room authority.
 
 Database or control-plane storage is not the live owner. The room is created
 with the exact resolved definition revision and initialized values. Normal reads,
@@ -2194,22 +2235,24 @@ ReadCallVariables
 UpdateCallVariables
 ```
 
-The model/tool worker builds them from an engine-private execution context. The
-trusted fields include tenant, room, incarnation, source participant, agent
-participant, agent activation, originating command, correlation, and tool-call
-IDs. Requested sections, expected revision, and proposed update data are the
-model-supplied inputs. The update bindings normalize object/variable requests into
+The model/tool worker builds them from an engine-private execution context with
+the variables-process target and trusted tenant, room, incarnation, and agent
+participant identity. Source participant, agent activation, originating command,
+correlation, and tool-call IDs remain attribution metadata; activation is not
+checked against current room state. Requested sections, expected revision, and
+proposed update data are model-supplied inputs. The update bindings normalize
+object/variable requests into
 the engine command while preserving omitted section variables. The object tool must
 also preserve omitted nested variables and treat explicit null as assignment,
 not deletion. The variable binding resolves a literal direct key and must not
 interpret it as a path, including when encoding an internal pointer.
 
-`RoomAuthority.update_variables/2` performs one bounded `GenServer.call`. In order,
-the authority verifies:
+The platform tool makes one bounded `GenServer.call` directly to `CallVariables`.
+In order, the variables process verifies:
 
 1. the command deadline and tenant/room/incarnation identity;
-2. that the named agent participant is still admitted and its activation is the
-   current active activation;
+2. that the engine-bound agent participant identity belongs to this call's pinned
+   participant/grant mapping, without checking current activation or liveness;
 3. that the resolved plan grants that agent `write` on the named section;
 4. that the section is declared and `expected_revision` matches, even if its
    value is not populated yet;
@@ -2221,31 +2264,38 @@ the authority verifies:
 Only after all checks pass does it replace the section, increment that section's
 revision and the global revision, and emit the ordered update event. Any failure
 returns a typed result and preserves both values and revisions. Reads run the
-same identity and activation checks and require every requested section to be
+same room/agent identity checks and require every requested section to be
 readable. A forbidden section produces a permission error for the whole request
-with no variable values; the authority does not filter it into partial success.
+with no variable values; the variables process does not filter it into partial
+success.
 
-The authority must not make a synchronous provider/tool call that can call back
-into it. Dispatch to model inference may synchronously obtain a bounded
-acceptance acknowledgement, but the provider request and all tool rounds execute
-after that acknowledgement in the capability-owned task. Add a focused
-regression test for this call direction.
+The variables process does not call the authority for a second authorization
+check or execute provider, remote tool, or database work inside its callback.
+Provider requests and tool rounds remain in the agent's supervised workers.
+The general prohibition on cyclic synchronous calls still applies; add a focused
+regression test proving variable operations can finish while `RoomAuthority` is
+not servicing messages.
 
 ### Variable updates and conversational interruption — approved G3 decision
 
 A variable update is a bounded local room command. Once the tool submits it to
-`RoomAuthority`, a conversational interruption or cancellation of the model turn
-does not cancel that command or roll back a committed value. A later correction
-is another variable-update tool call. This avoids adding turn/tool cancellation
-tracking to the variable authorization transaction: the originating turn need
-not still be live. Tool-call/correlation IDs remain useful for attribution,
-not an additional cancellation check.
+`CallVariables`, a conversational interruption, cancellation of the model turn,
+or shutdown of the source agent does not retract that command or roll back a
+committed value. A later correction is another variable-update tool call. This
+avoids adding turn/tool cancellation
+tracking to the variable authorization transaction: neither the originating turn
+nor the source agent process needs to remain live. Tool-call/correlation and
+activation IDs remain useful for attribution, not an additional cancellation check.
 
 Letting the command finish does not guarantee success or bypass the checks
-above. The room/incarnation, admitted participant, current agent activation,
-permissions, bounded deadline, schema, limits, and expected section revision
-must still be valid. Transfer/deactivation or room end can therefore prevent a
-pending update even though conversation interruption alone cannot.
+above. The target room/incarnation, trusted agent identity, pinned permissions,
+bounded deadline, schema, limits, and expected section revision must still be
+valid. Transfer does not itself invalidate a queued request: it terminates the
+source agent's execution subtree to prevent further requests, including its
+capabilities and model/tool workers, without letting supervision restart that
+departed execution. A queued or executing variable update may finish after that
+shutdown. Stopping the room's variables process is different; a pending operation
+may then fail or lose its reply, and no completion or durability is implied.
 
 Keep `expected_revision` to prevent lost updates. If the original update commits
 first, the correcting call uses the resulting revision, refreshing its permitted
@@ -2253,6 +2303,13 @@ view if needed. If the correction commits first against the same revision, the
 delayed original update conflicts instead of overwriting it. Do not blindly
 retry that stale update with a newer revision; any subsequent call must reflect
 the current intended correction and existing permissions.
+
+For example, A sends an update and then transfers to B. A and its workers stop;
+the room's variables process may still commit A's submitted update. B reads the
+current committed revision and can refresh later if that update completes after
+its first read. No transfer-time flush or frozen "all A writes are finished"
+snapshot is promised. Revision conflicts still prevent silently overwriting a
+newer update from B.
 
 Completion does not revive a cancelled model response or resume stale audio.
 A missing acknowledgement does not undo a committed write. No separate mutation
@@ -2270,15 +2327,16 @@ Compile an activation-specific effective tool surface from three sources:
 - explicitly enabled remote MCP bindings.
 
 The platform variable tools are engine bindings, not arbitrary Elixir modules and
-not MCP calls. Their executor receives an engine-private authority target. Host
-tool modules keep receiving the existing redacted identity context, and remote
+not MCP calls. Their executor receives an engine-private variables-process target.
+Host tool modules keep receiving the existing redacted identity context, and remote
 MCP servers receive only their declared arguments. Neither receives a PID,
 permission map, resolved plan, or variable values unless an explicit authorized
 binding supplies a value.
 
-Before the first provider request in a turn, the authority supplies a frozen
-activation-scoped projection. Model inference renders it as a distinct transient
-engine message after the agent's system prompt and before private conversation
+Before the first provider request in a turn, the worker requests a frozen
+agent-permission-scoped projection directly from `CallVariables`. Model inference
+renders it as a distinct transient engine message after the agent's system prompt
+and before private conversation
 history. The message contains values and section revisions for read-only and
 read+write sections; ungranted sections are absent. It is rebuilt on
 the next turn and never becomes a historical user or assistant message.
@@ -2288,7 +2346,8 @@ an authorized value projection. The next model round in the same request can
 reason about its update. `read_variables` permits an explicit refresh if
 another authorized command changed variables during that tool loop. Transfer to a
 new agent creates a fresh projection and tool surface from the destination's own
-permissions; stale source-agent tool calls fail their activation check.
+permissions. Source-agent execution stops on transfer; requests already sent to
+the variables process may still finish without an activation check.
 
 ### Incremental red-green checkpoints
 
@@ -2301,27 +2360,30 @@ permissions; stale source-agent tool calls fail their activation check.
    absent-section null reads without mutation, iterative population, bounded
    pointer changes, atomic datatype rejection without required-variable checks,
    independent section revisions, and exclusion of ungranted sections. Implement
-   the pure `CallVariables` state module.
-3. **Room ownership:** add failing room tests proving creation pins a resolved
-   plan and initialized variables; a correct update commits once; wrong
-   incarnation, stale activation, missing grant, revision conflict, invalid
-   schema, and oversized input leave state unchanged. Add bounded read/update
-   calls to `RoomAuthority` and protocol-neutral events.
+   pure variable-state logic used by the GenServer.
+3. **Dedicated room variable owner:** add failing room tests proving creation
+   pins a resolved plan and starts one `CallVariables` process with initialized
+   values, schemas, and grants. A correct update commits once; wrong incarnation,
+   untrusted identity, missing grant, revision conflict, invalid schema, and
+   oversized input leave state unchanged. Add bounded direct read/update calls
+   and protocol-neutral events without storing variable state in `RoomAuthority`.
 4. **Platform tool surface:** once remaining tool details are settled, add failing
    executor/model tests proving the read tool and both update tools appear only
    when the active agent has the matching grant, their section schemas are
    closed, trusted identity is not model-controlled, and a variable update can
-   call the authority without deadlock. Route engine platform tools separately
-   from host modules and MCP bindings.
+   finish while `RoomAuthority` is not servicing messages. Route engine platform
+   tools separately from host modules and MCP bindings.
 5. **Turn projection:** add failing model tests proving current readable variables
    is present in every provider request, is not appended to private history,
    ungranted sections are absent, and an update result is available to the next
    model round.
 6. **Transfer continuity:** with two deterministic agent participants, prove a
    value written by the source remains room-owned, the destination sees only its
-   projection, and source operations arriving after deactivation are rejected.
-   Prove the variables remain present when the room temporarily has no active
-   agent participant.
+   projection, and terminating the source's execution subtree stops its
+   capabilities and model/tool workers without restarting them. An already-sent
+   source update may still commit after termination; a revision conflict still
+   rejects it. Prove the variables survive transfer and human-only periods,
+   and distinguish agent shutdown from stopping the room's variables process.
 7. **Durability and external access:** only after the in-memory contract is
    stable, define private checkpoint/event persistence and separate authenticated
    host or client read/update commands. Do not reuse agent permissions for human
@@ -2377,7 +2439,7 @@ each red and green step. The focused cases must demonstrate:
   variables; a null read response is not a clear operation;
 - ungranted sections expose neither values nor revision metadata in model
   projections; error responses cannot bypass those access rules;
-- an unknown section, unauthorized section, stale activation, wrong incarnation,
+- an unknown section, unauthorized section, untrusted identity, wrong incarnation,
   bad pointer, revision conflict, invalid resulting schema, or size violation
   performs no mutation and emits no success event;
 - two valid changes in one request commit atomically with one section revision;
@@ -2385,7 +2447,14 @@ each red and green step. The focused cases must demonstrate:
   update; a later correction uses a new call with the appropriate revision;
 - racing the original and correcting updates cannot silently overwrite a newer
   revision, and a stale update is not blindly replayed;
-- transfer/deactivation or room end still fences pending variable updates; and
+- direct variable reads/updates finish while `RoomAuthority` is not servicing
+  messages, proving there is no hidden authorization or commit round trip;
+- source-agent shutdown stops its capabilities and model/tool workers, but an
+  already-sent valid variable update can commit afterwards without stale speech;
+- B can read or refresh the resulting values under its own grants, and a queued
+  A update cannot silently overwrite a newer B revision;
+- the room-scoped variables process survives source-agent shutdown and human-only
+  periods, while stopping that process gives no pending-write completion guarantee; and
 - room snapshots and public events do not expose variable values.
 
 After each coherent code checkpoint, run the umbrella completion checks:
@@ -2416,7 +2485,7 @@ artifacts, and derived publication:
 | Definition drafts and immutable revisions | `vxpipe_calls` | PostgreSQL |
 | Inbound number/service routing | `vxpipe_calls` | indexed PostgreSQL rows |
 | Pinned definition and resolved plan for a running call | `RoomAuthority` | call row plus non-secret resolved-plan snapshot/digest |
-| Mutable call variables | `RoomAuthority` | private section snapshots and/or ordered variable updates |
+| Mutable call variables | room-scoped `CallVariables` GenServer | private section snapshots and/or ordered variable updates |
 | Ordered call, turn, tool, transfer, and provider-usage facts | engine events | append-only PostgreSQL ledger plus query projections |
 | Live participant and monitor audio | room media mixer | bounded realtime mix and mix-minus streams |
 | Participant tracks and the live full mix | room recording capability | object storage plus relational artifact metadata |
@@ -2669,6 +2738,7 @@ The intended room topology is:
 ```text
 RoomIncarnationSupervisor
 ├── RoomAuthority
+├── CallVariables
 ├── RoomParticipantSupervisor
 ├── RoomCapabilitySupervisor
 │   └── RoomRecording (when enabled)
@@ -2677,7 +2747,9 @@ RoomIncarnationSupervisor
 ```
 
 `RoomAuthority` authorizes participants, subscriptions, and recording policy,
-but does not process frames. `RoomMixer` owns realtime frame alignment and
+but does not process frames or own mutable variables. `CallVariables` owns
+variable state and access independently of agent execution subtrees.
+`RoomMixer` owns realtime frame alignment and
 fan-out. `RoomRecording` owns the room-scoped recording lifecycle and media taps.
 Call-scoped `ArtifactWriter` workers are started through the artifact
 application's owning dynamic supervisor; they monitor the recording session and
@@ -2855,8 +2927,8 @@ room exists, it owns hot mutable state and emits ordered protocol-neutral events
 to a supervised event dispatcher:
 
 ```text
-RoomAuthority commits a state transition
-  -> RoomEventDispatcher accepts the ordered event
+RoomAuthority commits a lifecycle transition / CallVariables commits an update
+  -> RoomEventDispatcher accepts the event for ordered delivery
        ├── gateway projection subscribers
        ├── call-ledger consumer -> CallLedger port -> vxpipe_persistence/Ecto
        ├── telemetry consumers
@@ -2866,16 +2938,21 @@ RoomAuthority commits a state transition
 The dispatcher acceptance is a short in-memory operation with explicit queue
 bounds. The call-ledger consumer performs database work in its own process,
 batches when useful, retries idempotently by event ID, and reports lag/failure.
-This keeps Ecto latency out of `RoomAuthority` while still making every committed
+This keeps Ecto latency out of both state owners while still making every committed
 turn, variable change, usage observation, transfer, and terminal event available
 for storage.
+
+Variable events retain their section/global revisions and source attribution.
+Dispatcher delivery order is not an atomic ordering of variable commits with
+transfers: a source-agent update may commit after that agent shuts down. Reporting
+an update does not route its authorization or state mutation through `RoomAuthority`.
 
 There are therefore two different meanings of “inline”:
 
 - A call-variable tool makes an inline bounded `GenServer.call` to
-  `RoomAuthority`, because the authority must authorize and atomically mutate
-  live state before the tool succeeds.
-- An archival database insert is not made inline by `RoomAuthority`; it follows
+  `CallVariables`, which authorizes and atomically mutates its own live state
+  before the tool succeeds. The room authority is not on this request path.
+- An archival database insert is not made inline by either state owner; it follows
   the ordered event path because delaying every room command on PostgreSQL would
   couple realtime availability to database latency.
 
@@ -2885,7 +2962,7 @@ transcript projections, usage, and artifact metadata are normally persisted
 asynchronously. If a future recovery guarantee requires a particular variables or
 lifecycle mutation to be journaled before acknowledgement, that command uses an
 explicit durable-journal protocol and pending state rather than adding an Ecto
-query to the authority callback.
+query to either state owner's callback.
 
 `vxpipe_calls` is preferable to a generic `core` application: it has the cohesive
 responsibility of a call's durable-neutral application lifecycle outside the
@@ -3013,7 +3090,7 @@ The first multi-agent slice needs protocol-neutral events for:
   acknowledged, timed out, or failed;
 - transfer packet created and delivered, with values redacted by visibility;
 - call-variable section initialized, updated, or rejected, including section
-  revision and authorized agent activation;
+  revision and trusted source-agent attribution, without a live-activation gate;
 - provider operation started/completed/failed/cancelled and normalized usage
   recorded, including actual provider/model and correlation scope;
 - recording track/segment started, finalized, incomplete, or failed;
@@ -3026,11 +3103,15 @@ The first multi-agent slice needs protocol-neutral events for:
 Only one agent participant may own generated conversational output for a
 connection/lane at a time. Inactive agent participants must not consume turns or
 emit user-visible output. They also must not advertise or invoke their MCP
-tools. A transition cancels or settles the source activation's outstanding tool
-work before enabling an agent-participant destination's tool surface.
+tools. A transfer shuts down the source agent's execution subtree, including its
+capabilities and model/tool workers, and the destination receives its own tool
+surface. Already-sent variable requests survive source shutdown in the separate
+room-scoped variables process; remote outcomes and reconciliation remain a G4
+decision.
 
-Late results from a previously active agent participant must be rejected by
-room incarnation, participant, turn, and activation identity.
+Late conversational output from a previously active agent participant must be
+rejected by room incarnation, participant, turn, and activation identity. This
+does not reject or undo a variable request already submitted by that agent.
 
 ## Suggested red-green checkpoints
 
@@ -3165,23 +3246,29 @@ physical deletion is deferred. Root keys are
 section names and direct section keys are literal variable names; deeper updates
 use the object tool. Call Variables and its tool names are approved. The agent
 records MCP results through these tools; the platform-only result-section and
-automatic mapping proposals are withdrawn. G2's remaining questions,
-schema-complexity bounds in G3, and G4–G13 remain unapproved.
+automatic mapping proposals are withdrawn. A dedicated room-scoped `CallVariables`
+GenServer now owns values and validates direct tool requests using pinned grants,
+without a current-activation check. Source-agent subtree shutdown prevents new
+work, not completion of already-submitted variable requests. Additional schema
+complexity limits are not adopted now; datatype and value-size checks remain.
+G3 is resolved in documentation; G2's remaining questions and G4–G13 remain
+unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Remaining review count — 2026-09-07
 
-There are **12 open review groups** out of the original 13: G2 and G3 are partly
-resolved, and G4–G13 still need approval. G1 is resolved in documentation.
+There are **11 open review groups** out of the original 13: G2 is partly
+resolved, and G4–G13 still need approval. G1 and G3 are resolved in documentation.
 This counts the numbered groups, not individual edge cases or implementation
 tasks. Section-level merging, recursive preservation inside nested objects,
 explicit-null clearing, root-section/direct-variable addressing, missing reads,
 and iterative population without required-variable checks are resolved
 within G3. The read-only/read+write permission decision also removes the
 write-only error question. Naming and agent-mediated MCP result updates are also
-resolved; schema-complexity bounds keep G3 open.
-The count therefore remains 12; it is not reduced for each resolved sub-decision.
+resolved. The dedicated variables-process ownership and submitted-write lifecycle
+are approved, and additional schema-complexity caps are not adopted now. That
+closes G3 and reduces the count from 12 to 11; implementation is still pending.
 
 ### Baseline and scope
 
@@ -3293,9 +3380,10 @@ The numbering below matches G1–G13 in the focused review document.
    first write populates the section, and later writes collect variables iteratively.
    Both variable schema examples now omit defaults and required-variable lists;
    capability/profile configuration is unchanged.
-   Submitted local variable updates continue despite conversational interruption;
-   corrections use another tool call. Keep room/activation, permission, deadline,
-   schema, and revision checks, but add no live-turn/tool-cancellation guard or
+   Submitted local variable updates continue despite conversational interruption
+   and source-agent shutdown; corrections use another tool call. Keep room/agent
+   identity, permission, deadline, schema, size, and revision checks, but add no
+   current-activation or live-turn/tool-cancellation guard or
    mutation journal. A delayed conflicting update must not overwrite a newer
    revision or be blindly retried; committed values are not rolled back.
    Mixed authorized/unauthorized reads fail as a whole with a permission error
@@ -3313,7 +3401,11 @@ The numbering below matches G1–G13 in the focused review document.
    Permissions are read-only or read+write; standalone write grants are invalid.
    Every writable section is also readable, removing the write-only error
    question and revision-only writable projection. Ungranted sections stay
-   absent from projections. Schema-complexity bounds remain for review.
+   absent from projections. Do not add schema-depth or declared-variable-count
+   caps now; datatype and value-size checks remain. A dedicated room-scoped
+   `CallVariables` GenServer owns state and permissions, and receives tool calls
+   directly without `RoomAuthority`. Transfer terminates the source agent's whole
+   execution subtree, not the variables process or its already-submitted requests.
    MCP result handling is settled too: the agent receives the MCP result, then
    saves relevant data through the variable tools under its normal permissions.
    Remote MCPs need no knowledge of Vxpipe. The platform-only result-section and
@@ -3433,15 +3525,22 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    is declared, it fails validation. Where a schema explicitly declares a
    punctuation-bearing literal key, only that key changes. Internal pointer
    encoding must preserve this behavior, with all grants/revision checks intact.
-3. Submit a variable update, then interrupt the conversation before authority
-   commit while keeping the same room and agent activation. Confirm it can
-   finish under normal authorization/revision checks without resuming cancelled
+3. Submit a variable update, then interrupt the conversation before the variables
+   process commits. Confirm it can finish under normal authorization/revision
+   checks without resuming cancelled
    speech. Correct it with another tool call using the resulting revision.
    Also race two updates against the same revision: if the correction commits
    first, the delayed original must conflict and must not be blindly retried.
-   Separately transfer/deactivate the agent or end the room before commit and
-   confirm the existing lifecycle checks reject the pending update. A value
-   committed before any of these events remains committed, without rollback.
+   Separately send A's update, transfer A to B, and confirm A's capabilities and
+   model/tool workers terminate without restart. Let the queued update execute
+   after A stops: it may still commit under the same grants, deadline, datatype,
+   size, and revision checks. B reads or refreshes the saved values under its own
+   permissions; the completion must not revive A or its audio. Verify direct
+   reads/updates finish while the room authority is not servicing messages.
+   Use test-owned acknowledgements/barriers and process monitors, not sleeps or
+   liveness polling, to establish the sequence. Stopping the variables process
+   itself is different: pending work has no completion guarantee. Committed
+   values are not rolled back because their source agent stopped.
 4. Submit a fake booking, commit it remotely, and delay its response while
    interrupting. Confirm one external action, an honest receipt/unknown outcome,
    no stale response, and no blind duplicate on retry. Change confirmed arguments
@@ -3449,7 +3548,8 @@ playground today. Use deterministic fakes first and synthetic data throughout.
 5. Return a synthetic confirmation from a fake remote MCP booking tool that
    knows nothing about Vxpipe. Confirm the result alone changes no call variables.
    Let the agent call `update_variables` for its read+write `booking` section:
-   the update commits under the normal datatype, revision, and lifecycle checks.
+   the update commits under the normal identity, grant, datatype, size, and
+   revision checks.
    An update to a read-only section must fail. Inspect permitted logs/events and
    archive projections for privacy; no automatic mapping or special trusted-result
    section is needed. Remote business validation remains the service's concern.
@@ -3993,6 +4093,46 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   section/variable terminology, resolved-review, route, privacy, and whitespace
   checks pass. No runtime or browser tests were run for this docs-only checkpoint.
 
+### Dedicated variable owner — approved 2026-09-07
+
+- Replaced the earlier room-authority-owned variable state with one room-scoped
+  `CallVariables` GenServer. Tools and per-turn projections call it directly;
+  it owns values, revisions, compiled schemas, and pinned per-agent grants.
+  `RoomAuthority` remains responsible for the pinned plan and room/participant
+  lifecycle, not variable authorization or commits.
+- Removed current-activation/admission-liveness checks from variable operations.
+  Trusted room/agent identity, section permissions, deadlines, datatypes,
+  supplied-value/size bounds, and optimistic revisions remain. Agent identity
+  and permissions cannot come from model arguments; activation IDs may still
+  identify the origin in events without becoming an access gate.
+- Approved source-agent subtree termination on transfer, including capabilities
+  and model/tool workers, without restarting the departed execution. The
+  separate variables process survives; requests already sent by A can finish
+  after A shuts down. This deliberately supersedes earlier checkpoint claims
+  that transfer/deactivation fences submitted variable writes. B can refresh
+  its permitted values, and revisions still prevent lost updates. No rollback,
+  transfer-time flush, or revival of A's model/speech is implied.
+- Rejected additional schema-depth or variable-count limits for now. The earlier
+  performance concern was unmeasured. Keep datatype and value-size checks while
+  allowing iterative population without required-variable completeness.
+- Rechecked the current room supervision and model/tool task path: tasks use a
+  shared task supervisor with `async_nolink`; `terminate/2` attempts cleanup.
+  The agent-wide shutdown guarantee therefore still needs implementation, not
+  an assumption that stopping a participant automatically stops all its workers.
+- Synchronized the ownership diagram/table, persistence event path, tool and
+  transfer contracts, future red-green tests, and manual acceptance steps with
+  the architecture and focused review. G3 is resolved in documentation, leaving
+  11 open numbered groups: G2 and G4–G13. Earlier review counts above describe
+  their historical checkpoints. Remote side-effect recovery remains unapproved.
+- Verification: all 15 fenced JSON examples parse and are unchanged from the
+  previous commit, including both complete definition fixtures. All 31 local
+  links/anchors resolve; API routes and external source URLs are unchanged.
+  Direct ownership/routing, removal of the activation gate, review status,
+  restricted terminology, local-path hygiene, and `git diff --check` pass.
+  Reviewed the complete documentation diff. No runtime implementation,
+  dependencies, or schema release changed; no runtime/browser tests were run
+  for this documentation-only checkpoint.
+
 ## Verification evidence
 
 - Reviewed existing Vxpipe architecture, product intent, current create-room
@@ -4067,10 +4207,10 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   adopting a newer revision.
 - Inspected the current room authority, room-incarnation supervisor, room
   snapshot, model-inference loop, and tool executor before planning variables.
-  Selected `RoomAuthority` as the sole owner and sequencer of bounded mutable
-  call-variable values, with a pure `CallVariables` module owning validation and
-  revision behavior. Variable tools run outside the authority and use a bounded
-  `GenServer.call` for the short authorization and atomic mutation transaction.
+  Initially selected `RoomAuthority` ownership; the approved dedicated-process
+  follow-up supersedes it. `CallVariables` now owns variable state, schemas,
+  grants, and atomic revision checks, and receives bounded calls directly from
+  model/tool workers. Source-agent shutdown does not cancel submitted updates.
 - Specified a working `20260906.02` variables shape with section schemas, direct
   initial-variable values (replacing the earlier input bindings), per-agent
   section permissions, independent revisions, activation-scoped projections,
