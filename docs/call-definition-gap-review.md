@@ -33,6 +33,8 @@ finish within their existing timeout because interrupting speech does not imply
 intent to cancel a tool. A submitted MCP request that times out without a
 definitive remote result reports outcome `unknown`, without automatic executor
 retry; a later agent-requested tool call is a separate invocation.
+Background execution uses one application-level running acknowledgement and
+later conversation update for every model provider, not native async branches.
 Late confirmations are deferred as external events that a future gateway
 mechanism could route to an active call room/agent, not current MCP reconciliation.
 Generic platform confirmation is excluded for now: agent instructions handle
@@ -57,6 +59,8 @@ that timeout resolve only part of G4, so the count stays at 11.
 Deferring late notifications removes that scenario from the current MCP scope;
 other G4 questions still need review.
 Excluding generic platform confirmation settles that question without closing G4.
+The common background-tool workflow is approved; explicit cancellation remains
+pending, so the review count stays at 11.
 
 ## Conclusion and scope
 
@@ -568,6 +572,22 @@ No durable operation worker or ledger is approved by the ordinary-interruption
 decision. Today's
 model request task still contains tool execution and is killed by interruption;
 the approved separation needs implementation.
+
+**Approved provider-independent background execution:** Vxpipe owns background
+invocations for every model provider, rather than switching to native async-tool
+semantics where available. Start supervised execution within the agent lifecycle,
+acknowledge accepted work with a correlated running tool response, and allow
+further conversation/TTS while it runs. Accompanying model text and tool calls
+must both survive the adapter boundary.
+
+Completion is a separate invocation-linked update to the latest conversation,
+not a second ordinary result for an already-acknowledged tool call. The agent
+coordinates any new speech with the current conversation. An acknowledgement is
+not business success; tool results remain untrusted data. Provider encodings and
+interoperability need verification. The original labnote includes planned tests
+for conversation during blocked execution, result ordering, and mixed text/tool
+output. This does not approve explicit cancellation policy, durable execution,
+or the deferred external-notification mechanism. Implementation remains pending.
 
 **Approved timeout-outcome reporting:** when a submitted MCP request reaches its
 timeout without a definitive remote result, report outcome `unknown`. The timeout

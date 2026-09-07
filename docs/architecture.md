@@ -178,6 +178,24 @@ explicit cancellation policies remain under review.
 This is planned behavior, not the current model-task cancellation behavior
 described in the implemented slices below.
 
+Background tools use application-level orchestration for every model provider;
+native async-tool support does not select a separate workflow. Vxpipe accepts and
+starts an independently supervised invocation within the agent's execution
+subtree, then returns a correlated running acknowledgement as the model's tool
+response. The same agent can continue conversation and feed TTS while that work
+runs. The acknowledgement is not a successful business result.
+
+Completion becomes a separate invocation-linked update to the latest conversation,
+not a second ordinary result for the acknowledged call or a replay of its old
+model turn. The agent coordinates subsequent speech with the current conversation.
+Adapters must preserve accompanying text and tool calls and encode these updates
+for their provider; result data remains untrusted tool output. One application
+contract avoids provider-specific lifecycle branches. This requires implementation
+and per-provider interoperability checks; it is not guaranteed by context encoding
+alone. Explicit cancellation policy remains under review. Existing interruption,
+timeout, transfer/shutdown, and variable-update rules still apply, without a
+durable operation worker or post-shutdown recovery requirement.
+
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the
 relevant room/agent if the room is still active—for example, a booking success

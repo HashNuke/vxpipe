@@ -61,8 +61,11 @@ existing datatype and value-size limits without required-variable completeness.
 G3 is resolved in documentation. G4's conversational-interruption rule is now
 approved: interrupting speech does not express intent to cancel a submitted MCP
 tool call, so let that call finish within its existing timeout without reviving
-the interrupted output. A submitted MCP request that times out without a
-definitive remote result is reported as outcome `unknown`, not confirmed failure.
+the interrupted output. Background tool execution uses the same application-level
+acknowledgement and later-result approach for every model provider, rather than
+selecting a provider-native async-tool workflow. A submitted MCP request that
+times out without a definitive remote result is reported as outcome `unknown`,
+not confirmed failure.
 The tool executor must not automatically retry that request; return the unknown
 outcome to the agent. A later agent-requested call is a separate invocation,
 not an internal retry or a guarantee against duplicate external actions.
@@ -1448,6 +1451,59 @@ task on interruption. Implementation must separate the lifetime of a submitted
 MCP invocation from the interrupted model/output turn while retaining its agent
 ownership and existing timeout. Do not describe this as current playground
 behavior.
+
+#### Provider-independent background tools — approved G4 decision
+
+Use application-level background tool orchestration for every model provider,
+including remote MCP invocations. Do not select a different conversation
+workflow when a provider offers native asynchronous function calls. Provider
+adapters translate messages; Vxpipe owns invocation lifetime and conversation
+ordering. This is a design decision, not an implemented runtime feature.
+
+For a background invocation:
+
+1. Validate and accept the enabled tool call under the existing trusted agent
+   identity and tool-access rules, and start independently supervised local
+   execution within that agent's execution subtree.
+2. Return a prompt tool acknowledgement indicating that the invocation is
+   running, correlated with the original tool-call ID. This acknowledges accepted
+   work, not business success. Do not acknowledge work that failed to start.
+3. Let the same agent handle further conversation and send text to TTS while
+   execution continues. Preserve text accompanying a model's tool calls; an
+   optional kickoff utterance is distinct from the eventual result.
+4. Deliver the result to the latest conversation as a separate, invocation-linked
+   update. Do not append a second ordinary tool response for the already
+   acknowledged call or replay the old model-turn context. The agent coordinates
+   any subsequent response with current user/bot speech rather than creating a
+   competing voice. Result data remains untrusted tool output, not instructions.
+
+For example, a report request starts in the background; the agent can acknowledge
+it and answer another question while it runs. When the report finishes within
+its deadline, the agent receives the result against the same invocation and can
+discuss it in the current conversation. The acknowledgement must not cause a
+second report request or imply that a report already exists.
+
+This approach is preferred over provider-native async branches because it keeps
+one conversation and lifecycle contract across model providers. No native async
+flag is required in the call definition. Provider-specific encoding and live
+interoperability still need verification; accepting a message in a local context
+does not prove a provider accepts it or that a model follows its instructions.
+
+The separation makes targeted local cancellation possible without stopping the
+conversation, but explicit cancellation exposure and policy remain under G4
+review. Ordinary interruption, transfer/shutdown, existing deadlines, unknown
+remote outcomes, and no automatic executor retry retain their approved rules.
+No durable worker, outcome ledger, automatic variable update, or recovery after
+agent shutdown is introduced. An on-time background result is not the deferred
+external-notification scenario after a timeout.
+
+`req_llm` 1.22.0 already leaves execution and subsequent model requests with its
+host. Its context helpers accept a running acknowledgement as a normal tool
+result, and responses can contain both text and tool calls. Vxpipe still needs
+independent invocation workers and conversation updates: its model loop waits
+for tools inside the model-turn task, and its buffered adapter currently drops
+accompanying text when returning tool calls. The model result contract must
+retain both without duplicating text already emitted by streaming.
 
 #### MCP timeouts with unconfirmed outcomes — approved G4 decision
 
@@ -3406,6 +3462,8 @@ Late confirmations are explicitly deferred as an external-event concern, not an
 additional prerequisite for the current MCP slice.
 Generic platform-level confirmation is also excluded for now. Other G4 questions
 remain, so the review count is unchanged.
+The provider-independent acknowledgement/background-result workflow is approved;
+explicit cancellation policy remains pending and the count stays at 11.
 
 ### Baseline and scope
 
@@ -3711,6 +3769,17 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    Transfer/shutdown must still terminate the local agent workers, with
    no assertion that local termination undoes an external action. Use explicit
    acknowledgements and monitors, not sleeps or liveness polling.
+   For the common background workflow, hold a submitted report request at a
+   barrier and verify its running acknowledgement reaches model history. Supply
+   another user turn and verify the agent responds and TTS receives text before
+   releasing the tool result. Release it and verify a separate completion update
+   reaches the latest history with the original invocation ID, not a second
+   ordinary response to the acknowledged tool call. Check mixed text/tool output
+   in buffered and streaming modes without lost or duplicated spoken text.
+   Exercise result arrival during user and bot speech to check response ordering.
+   Repeat the same contract for every supported model adapter; keep live-provider
+   interoperability in the tagged integration lane. These are planned checks,
+   not behavior available in the current playground.
    After the remaining G4 policies are approved, add cases for other failure/retry
    policies. Do not add a generic confirmation-token or changed-confirmation-arguments
    test: that mechanism is out of scope. Domain-specific conversational confirmation
@@ -4404,6 +4473,30 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   the approved MCP policies. Remaining-review status, restricted terminology,
   local-path hygiene, and `git diff --check` pass. Documentation only; no runtime
   or browser tests were run.
+
+### Provider-independent background tools — approved 2026-09-07
+
+- Selected application-level acknowledgement and later conversation updates for
+  all model providers. Native async-tool support does not select an alternative
+  lifecycle. Kept execution agent-owned and separate from individual model and
+  speech turns; explicit cancellation policy remains open.
+- Source inspection of installed `req_llm` 1.22.0 confirmed host-owned execution,
+  tool-result context helpers, and responses carrying text alongside tool calls.
+  Offline checks accepted a normal running acknowledgement and retained mixed
+  text/tool output. They also confirmed native delayed-result support exists,
+  but that provider-specific path is not the selected design.
+- The first offline probe through Mix was blocked by development runtime
+  configuration requiring a speech-provider key. Re-running directly against
+  compiled modules avoided application startup and credentials; all five
+  synthetic checks passed. No provider or MCP requests were made.
+- Updated the original contract, architecture, G4 summary, and planned test flow.
+  Runtime implementation, per-provider interoperability, and explicit cancellation
+  policy remain pending; 11 numbered review groups remain open.
+- Documentation verification: all existing fenced examples are unchanged and all
+  15 JSON examples parse. Link references and external URLs are unchanged. Only
+  the three intended documentation files changed; restricted terminology,
+  local-path hygiene, review-status preservation, and whitespace checks pass.
+  No runtime implementation or live-provider/browser verification was performed.
 
 ### Generic tool confirmation is out of scope — approved 2026-09-07
 
