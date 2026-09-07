@@ -121,6 +121,32 @@ and transcription behavior. When a provider emits speech-activity or endpointing
 evidence, its adapter normalizes that evidence into Vxpipe turn events; the call
 engine does not run a separate detector.
 
+### Call variables, conversation history, and model context
+
+The approved call-definition design uses **Call Variables** for typed, shared
+values grouped into sections. For example, `booking` is a section and `status`
+is a variable within it. Use "variable", not "field", for these named values.
+Object-valued variables may contain nested data without adding a path language.
+
+**Conversation history** contains messages and tool calls/results. A spoken
+transcript is a view of what participants said. **Model context** means everything
+supplied to the LLM: instructions, selected history, and permitted call variables.
+Neither history nor model context is the mutable variable store.
+
+The planned definition uses `call_variables.sections`, invocation values use
+`initial_variables`, and per-agent section grants use `variable_permissions`.
+The tools are `read_variables(sections)`, `update_variables(section_name, data)`,
+and `update_variable(section_name, variable_name, value)`. Sections are read-only
+or read+write for an agent; omitted grants give no access. RoomAuthority retains
+ownership, datatype checks, revisions, and incremental updates without demanding
+all variables at once.
+
+For a remote MCP booking, the agent receives the tool result and separately calls
+our variable-update tool. The remote MCP does not need Vxpipe-specific knowledge,
+and no automatic result-mapping layer is required. These are approved design
+contracts, not newly implemented runtime features; see the
+[call-definition design](../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned).
+
 ## Architectural boundaries
 
 ```text
@@ -417,7 +443,7 @@ detection; the call engine does not run a local VAD.
 ### Agent output and actual playout
 
 Generated LLM text, text submitted to TTS, synthesized audio, scheduled audio,
-and audio actually played are different facts. Conversation context and durable
+and audio actually played are different facts. Conversation history and durable
 transcripts must not claim that interrupted or dropped text was heard.
 
 Each agent utterance receives an ID. The output path reports queued text,
@@ -879,8 +905,8 @@ input and output boundaries:
 
 The engine does not expose provider token boundaries. It emits sentence-sized
 segments and closes the logical assistant turn only after model generation and
-all scheduled speech playout complete. Context is volatile and bounded by
-completed turn count, not tokens. Tools, token-aware compaction, durable history,
+all scheduled speech playout complete. Conversation history is volatile and
+bounded by completed turn count, not tokens. Tools, token-aware compaction, durable history,
 prompt-profile resolution, and provider fallback remain later checkpoints.
 Provider-driven spoken barge-in is implemented by the later checkpoint below.
 The detailed decision and verification evidence are in

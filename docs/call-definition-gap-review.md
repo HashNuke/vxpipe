@@ -2,25 +2,27 @@
 
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-07 UTC
-Status: G1 and G2's web routes, initial context, API-key admission with one-way
+Status: G1 and G2's web routes, initial variables, API-key admission with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call approved;
-G3 initialization approved with no context defaults, and submitted context
+G3 initialization approved with no variable defaults, and submitted variables
 updates continue through conversational interruption under existing checks.
 Reads containing a forbidden section fail with a permission error and no values.
-Object updates recursively merge objects and preserve omitted nested fields;
-shallow sections are preferred. Explicit null clears nullable fields without
-deleting their keys; physical deletion is deferred. Context root keys name
-sections, direct section keys name fields, and the field tool uses literal names.
+Object updates recursively merge objects and preserve omitted nested variables;
+shallow sections are preferred. Explicit null clears nullable variables without
+deleting their keys; physical deletion is deferred. Variables root keys name
+sections, direct section keys name variables, and the variable tool uses literal names.
 Unpopulated authorized reads return a single null at the requested value level,
-without nested placeholders or stored defaults. Updates populate context
-iteratively: datatype checks remain, but required-field completeness is not
+without nested placeholders or stored defaults. Updates populate variables
+iteratively: datatype checks remain, but required-variable completeness is not
 validated at setup or on updates.
 Agent section grants are read-only or read+write, never write-only. Every writer
 can read its section; omitted grants give no access. The write-only projection
 and error-handling proposals are withdrawn.
-Final naming remains open for the object/field tools;
+Naming is approved as Call Variables, grouped into sections with variables inside.
+The agent receives MCP results and then updates variables through Vxpipe tools;
+no remote MCP awareness or automatic result-mapping layer is required.
 remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -28,16 +30,17 @@ Documentation only; no runtime implementation.
 Review count: **12 open numbered groups** — G2 and G3 partly resolved, G4–G13
 awaiting approval; G1 resolved in documentation. Individual sub-decisions are
 not counted separately here. Object merge versus replacement and preservation of
-omitted nested fields, explicit-null clearing, direct-field addressing, missing
-reads, and iterative population without required-field checks are
+omitted nested variables, explicit-null clearing, direct-variable addressing, missing
+reads, and iterative population without required-variable checks are
 resolved within G3; its other questions remain open, so the group count has
 not changed. The read-only/read+write decision removes the write-only error
-question without closing the remaining G3 group.
+question. Naming and agent-mediated MCP result updates are also resolved;
+schema-complexity bounds keep G3 open.
 
 ## Conclusion and scope
 
 Keep the participant-first definition, `entry_caller` and `entry_receiver`,
-direct `transfers` ref lists, agent-scoped tool enablement, room-owned context,
+direct `transfers` ref lists, agent-scoped tool enablement, room-owned variables,
 and immutable resolved plan. The scenarios below do not require nodes, edges,
 named transfers, or a general expression language. The missing pieces are mostly enforceable runtime
 contracts around those primitives, not a different top-level JSON structure.
@@ -46,7 +49,7 @@ This reviews the [call-definition labnote][design] and
 [runtime architecture][architecture] at Vxpipe commit
 `e7a769e0ce4ec3cc0bb39faf300f759f125d9c4e`. Source inspection confirms that
 `CreateRoom` still selects a preset, not a call definition; tools are trusted
-Elixir modules; there is no definition compiler, room context, remote MCP client,
+Elixir modules; there is no definition compiler, call variables, remote MCP client,
 telephony transfer, database adapter, or room mixer implementing the proposal.
 “Design fit” below must not be read as “works in today's playground.”
 
@@ -62,10 +65,10 @@ integration examples, not proof that every advertised behavior is enforced.
 
 | Scenario and concrete evidence | What our design can express | Missing work or limitation |
 | --- | --- | --- |
-| Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped context, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. Define action confirmation, idempotency, timeout/unknown outcomes, result-to-context authority, and timezone bindings. The external scheduling system remains the booking authority. |
+| Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. Confirmation, idempotency, timeout/unknown outcomes, and timezone bindings still need their contracts. The external scheduling system remains the booking authority. |
 | Intent routing: [assistant][intent], [request overrides][intent-request], [instruction handler][instructions] | One agent retrieves instructions through a tool; alternatively several specialized agent definitions transfer by ref | Define typed personalization and trusted ingress metadata, provenance of retrieved instructions, and closed participant destinations. Runtime text must not grant tools or introduce arbitrary telephone destinations. |
 | Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Waiting for the other party, answer classification, optional beep evidence, delivery deadline, and speak-then-end are runtime behavior, not solved by a prompt alone. |
-| SMS verification: [assistant][sms], [code tool][code], [SMS tool][sms-tool] | Agent-scoped remote tools, typed verification context, provider-neutral external action | Requires an external verification service or trusted host implementation. Verification truth, expiry, attempt limits, recipient binding, and replay protection must not be writable by the model. Do not run JSON-provided JavaScript. |
+| SMS verification: [assistant][sms], [code tool][code], [SMS tool][sms-tool] | Agent-scoped remote tools, typed verification variables, provider-neutral external action | Requires an external verification service or trusted host implementation. That service owns verification, expiry, attempt limits, recipient binding, and replay protection; the agent can record its returned outcome in permitted call variables. Storing an outcome does not override the service's rules. Do not run JSON-provided JavaScript. |
 
 Two distinctions matter when using these sources:
 
@@ -85,7 +88,7 @@ Two distinctions matter when using these sources:
 ## Findings and proposed solutions
 
 Priorities indicate implementation gates, not a demand to build everything now:
-P1 blocks the corresponding first compiler/private-context/external-action slice;
+P1 blocks the corresponding first compiler/private-variables/external-action slice;
 P2 is required before claiming the relevant telephony or archive feature.
 
 ### G1 — Resolved in documentation: one agent tools map
@@ -111,14 +114,14 @@ appropriate catalog and policy. [Updated tool example][mcp-design],
 [representative JSON][json-design].
 
 The examples now use `participants.<ref>.type: agent` and consistently give
-`billing` read-only `intake` access. Transfer/context tools remain derived from
+`billing` read-only `intake` access. Transfer/variable tools remain derived from
 their existing grants; tool aliases must not collide with generated names.
 
 G1's authoring ambiguity is resolved, but no compiler was implemented. A future
 compiler checkpoint still needs canonical positive/negative fixtures and a
-supported-field/keyword matrix. Partial illustrations are not complete executable
+supported-variable/keyword matrix. Partial illustrations are not complete executable
 definitions, and the broad representative JSON is not a commitment to implement
-every field in the first slice. No new dated schema release is published here.
+every variable in the first slice. No new dated schema release is published here.
 
 ### G2 — Partly resolved: admission, authentication, and entry roles approved
 
@@ -141,7 +144,7 @@ Use a 16-character cryptographically random URL-safe tenant key, UUID participan
 connection keys, and UUID call IDs, separate from database primary keys. The
 preparation route selects a deployment/definition and initiating participant,
 which must match that definition's `entry_caller`; it stores the pinned plan and
-context and returns a scoped join token without starting the room. A join route
+variables and returns a scoped join token without starting the room. A join route
 must identify the particular tenant and call and resolve the participant using
 that call's pinned definition.
 It cannot choose a call from a reusable support key alone. Authorization precedes
@@ -188,44 +191,44 @@ keys, and another call gets its own independent participants.
 Enforce the binding during admission and transfer preparation, including races
 and repeated requests: neither a second participant nor duplicate pending
 preparation may be created. Direct transfer refs remain unambiguous without an
-instance-selection field. The count is a fixed contract, not a JSON option.
+instance-selection variable. The count is a fixed contract, not a JSON option.
 Detailed reconnect eligibility, wire responses, and admission/transfer retry
 semantics remain follow-ups; cardinality itself is resolved. See the
 [approved one-participant contract][participant-cardinality].
 
-**Approved initial context:** the integrating application's backend supplies
+**Approved initial variables:** the integrating application's backend supplies
 values directly in the section structure declared by the call definition. Drop
 the separate `input_schema` and JSON Pointer initialization mappings. For order
-`ORD-1042`, it supplies `initial_context: {order: {id: "ORD-1042"}}` to a definition
+`ORD-1042`, it supplies `initial_variables: {order: {id: "ORD-1042"}}` to a definition
 declaring that section. Admission initializes it; several agents can read it
 while none has write access. The definition declares the data shape and
 permissions, not a second remapping layer. The authorized backend may prefill
-any declared section, including one that no agent can write. Initial context
+any declared section, including one that no agent can write. Initial variables
 cannot override providers, tools, either entry ref, tenant, or other definition
 policy.
-There are no context defaults: only values supplied at call setup prefill it.
+There are no variable defaults: only values supplied at call setup prefill it.
 Schemas describe the allowed structure; they do not manufacture initial values.
 
 **Approved authentication and connection flows:** replace separate client IDs,
 client secrets, and HMAC-signed envelopes with a gateway-issued API key in the
 backend's `Authorization: Bearer <api_key>` header over HTTPS/WSS. Payloads are
-unsigned. The backend authorizes the business context; key verification checks
+unsigned. The backend authorizes the business variables; key verification checks
 the integrating application's tenant/operation authority, not customer identity.
 
-1. **Backend prepares, browser joins:** the backend POSTs initial context to the
+1. **Backend prepares, browser joins:** the backend POSTs initial variables to the
    preparation endpoint, which grants no CORS access. Vxpipe validates it, stores
-   a prepared call with pinned revision/context, and returns an opaque short-lived
+   a prepared call with pinned revision/variables, and returns an opaque short-lived
    single-use join token scoped to that call and participant. No room/providers
    start yet.
-   The frontend receives only the token, not private context or the API key.
+   The frontend receives only the token, not private variables or the API key.
    Accepted admission atomically consumes the token before activating that same
    call, not when the browser receives confirmation; conversation waits for
    transport and required capabilities. The browser cannot replace the prepared
-   context, and joining must not return its private contents in a snapshot. Later event,
+   variables, and joining must not return its private contents in a snapshot. Later event,
    tool, and speech disclosure remains a separate policy responsibility.
 2. **Backend connects directly:** a non-browser WSS client supplies its API key
    in the handshake header. Authenticate before upgrade, then receive unsigned
-   context in a bounded first application message. Validate before starting the
+   variables in a bounded first application message. Validate before starting the
    room/providers. This path needs no browser join token.
 
 A WebSocket upgrade is a [GET handshake][websocket-handshake], not a JSON POST
@@ -234,7 +237,7 @@ not ordinary HTTP CORS grants. Browser HTTP join/signaling can use a configured
 CORS allowlist; neither policy replaces authentication. The [browser WebSocket
 interface][browser-websocket] cannot supply arbitrary authorization headers;
 token delivery (for example, the first message) still needs its wire contract.
-Keep credentials/context out of query strings and logs. Existing browser WebRTC
+Keep credentials/variables out of query strings and logs. Existing browser WebRTC
 remains supported; this auth decision does not switch its media transport.
 
 The gateway generates random API keys through authorized management and returns
@@ -260,7 +263,7 @@ secrets, not gateway-issued API keys. This decision adds no dependency or vault.
 The join token is delegated, short-lived access, not a second long-lived
 integration credential or proof of a person's identity. Apply scope, TLS, and
 limited lifetime consistent with [bearer-token security][bearer-tokens]. See the
-[approved context and admission contract][api-admission] for ownership,
+[approved variables and admission contract][api-admission] for ownership,
 alternatives, and future verification steps.
 
 **Approved single-use admission and existing-call recovery:** an unused,
@@ -276,16 +279,16 @@ access, and active-connection takeover. Recheck eligibility at token claim;
 issuance does not guarantee that a later join is still allowed. A caller's old
 token or public call ID alone never authorizes fresh-token issuance.
 
-Issuance preserves the existing call record and pinned definition/context. For
+Issuance preserves the existing call record and pinned definition/variables. For
 an eligible prepared call, subsequent joining activates the room once; an
 eligible reconnect to a running call attaches to the same participant/room and
-preserves current context rather than reinitializing it. Expiry prevents future
+preserves current variables rather than reinitializing it. Expiry prevents future
 token claims, not continuation of an already accepted call. Gateway owns token
 authentication; Calls coordinates the lifecycle through persistence ports.
 See the [approved recovery contract][join-token-recovery].
 
 **Approved token-only expiry:** a prepared call is only a database record with
-its pinned definition and initial context, not a live call process tree. It has
+its pinned definition and initial variables, not a live call process tree. It has
 no separate automatic admission deadline. Token expiry rejects use of that token
 but does not expire or delete the unstarted record; an authorized backend can
 obtain a fresh token for the same eligible record and later joining starts its
@@ -310,7 +313,7 @@ The following G2 proposals remain open and must be reviewed separately:
 granularity, multiple-key management, and rotation/revocation still need review.
 One-way hash storage is resolved; exact key encoding/hash profile remains an
 implementation detail to specify. HMAC algorithm, canonicalization, and
-signature fields are no longer questions for this contract.
+signature variables are no longer questions for this contract.
 
 **Remaining token details and separate storage policy:** specify token TTL
 settings, repeated issuance requests or superseding other unused tokens, and
@@ -328,13 +331,13 @@ periods, how failed transports are confirmed disconnected, and detailed
 join/transfer responses and crash fencing. The approved recovery rules already
 preserve the same call and participant; multi-instance selection is not required.
 
-**Telephony initial-context sourcing:** an inbound phone call cannot establish
-the example's trusted `customer.id` by itself. Context validation does not require
-that field to be present at admission. The approved direct-context
+**Telephony initial-variables sourcing:** an inbound phone call cannot establish
+the example's trusted `customer.id` by itself. Variable validation does not require
+that variable to be present at admission. The approved direct-variables
 shape eliminates remapping, not the need for a trustworthy source of values.
-There is no definition-default fallback. Keep authorized initial context,
+There is no definition-default fallback. Keep authorized initial variables,
 trusted ingress metadata, and subsequent agent assertions distinguishable; do
-not silently copy ingress data into business context. Provider-asserted
+not silently copy ingress data into business variables. Provider-asserted
 caller number is a routing/contact claim, not verified customer identity. An
 admission resolver can perform a bounded lookup before room creation; otherwise
 leave identity unverified for a tool to establish later.
@@ -345,7 +348,7 @@ numbers. Specify when each value is evaluated:
 call-start time is pinned; “current time” is a typed clock/tool observation, not
 a permanently frozen prompt variable. Missing required bindings fail early;
 optional bindings need explicit omission/fallback behavior without filling room
-context. No arbitrary templates, code evaluation, tenant overrides, or
+variables. No arbitrary templates, code evaluation, tenant overrides, or
 unvalidated deep merges. Destination bindings remain
 subject to tenant outbound-call policy and rate limits.
 
@@ -353,52 +356,52 @@ The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
 need, not a reason to adopt their unrestricted authoring surface.
 
-### G3 — P1, partly resolved: Context initialization, authorization, and updates
+### G3 — P1, partly resolved: Variable initialization, authorization, and updates
 
-**Approved initialization:** the [context candidate][context-design] has no
+**Approved initialization:** the [variables candidate][variable-design] has no
 default values. Its earlier section defaults and proposed merge rules are
-withdrawn. Only an authorized call-setup invocation prefills context in the
+withdrawn. Only an authorized call-setup invocation prefills variables in the
 declared section shape. Reject section-level and nested schema `default`
 declarations. Capability/provider configuration defaults are a separate concern
 and remain unchanged.
 
 Validate supplied datatypes and value constraints before room/provider work,
-without requiring missing fields. Omitted fields/sections remain unfilled in
+without requiring missing variables. Omitted variables/sections remain unfilled in
 storage, not automatically `{}`, `null`, or another value. Callers may explicitly
-supply an empty section object and collect its fields later. Schemas and
-permissions do not populate data, and later authorized context updates remain
+supply an empty section object and collect its variables later. Schemas and
+permissions do not populate data, and later authorized variable updates remain
 supported. Both labnote examples omit
-context defaults; the invocation prefills only `customer.id`, leaving `intake`
+variable defaults; the invocation prefills only `customer.id`, leaving `intake`
 unfilled. There is no default-merge or input-remapping contract left to decide.
 
 **Approved missing reads and incremental population:** an authorized read of a
 declared but unpopulated section returns null in its value slot, retaining the
 normal revision metadata. Null is returned only at the requested value level;
-do not construct null-valued nested fields or store the response as context.
+do not construct null-valued nested variables or store the response as variables.
 A partial section is returned as stored, without filling missing children.
 Reads do not mutate state or revisions. Forbidden sections still fail the whole
 request, and unknown sections still receive the existing typed error. No new
-field-read API is introduced.
+variable-read API is introduced.
 
-The first `update_context` populates an unfilled section with its supplied
-object; later updates recursively merge into it. The field form can also
-populate a declared direct field in a new section. For an `address` section
-with string fields, an agent can save `city` first and `postal_code` later.
-Missing fields do not fail validation, including within nested objects. A
-number supplied for either string field still fails, with no partial commit.
+The first `update_variables` populates an unfilled section with its supplied
+object; later updates recursively merge into it. The variable form can also
+populate a declared direct variable in a new section. For an `address` section
+with string variables, an agent can save `city` first and `postal_code` later.
+Missing variables do not fail validation, including within nested objects. A
+number supplied for either string variable still fails, with no partial commit.
 The same section grants, lifecycle, revision, and size checks apply.
 
-This defers required-field completeness checks, not datatype or other
-supplied-value validation. It applies to both initial context and updates;
+This defers required-variable completeness checks, not datatype or other
+supplied-value validation. It applies to both initial variables and updates;
 there is no new final-completeness gate or configuration toggle. Call-definition
 structure, tool argument envelopes, and external tools' own required inputs
-remain separate contracts. The labnote examples remove their context `required`
+remain separate contracts. The labnote examples remove their variables `required`
 lists while retaining datatype and value constraints.
 
-**Approved interruption rule:** let an already-submitted local context update
+**Approved interruption rule:** let an already-submitted local variable update
 finish, and use another tool call for a correction. The
-[context interruption contract][context-interruption] adds no live-turn or
-tool-cancellation check to the [authorization transaction][context-authorization].
+[variables interruption contract][variable-interruption] adds no live-turn or
+tool-cancellation check to the [authorization transaction][variable-authorization].
 Room/incarnation, participant/activation, permission, deadline, schema, limits,
 and expected section revision still apply. Transfer/deactivation and room end
 remain different from conversational interruption and can invalidate a command.
@@ -413,11 +416,11 @@ withdrawn for this decision. External tool outcomes remain a separate G4 review.
 
 **Approved read authorization:** inform the agent of its permitted sections, but
 still validate every request at the authority. If any requested section is
-forbidden, return a permission error and no context values, including otherwise
+forbidden, return a permission error and no variable values, including otherwise
 permitted values from that same request. Do not silently filter forbidden names.
 The agent can retry with permitted sections only; successful reads do not add
 unrequested sections. This clarifies existing section grants, not a new
-field-level permission system. Error responses must not expose hidden values.
+variable-level permission system. Error responses must not expose hidden values.
 
 **Approved permission simplification:** agent section grants are `["read"]` or
 `["read", "write"]`; an omitted section grants no access. Standalone
@@ -427,52 +430,54 @@ the normal model projection and its resulting value in successful update results
 Ungranted sections expose neither values nor revision metadata in that projection.
 Read-only grants expose the read tool; read+write grants also expose update tools.
 This withdraws revision-only writable views and the special write-only error
-proposal. Ordinary authorization and context privacy still apply to errors,
+proposal. Ordinary authorization and variables privacy still apply to errors,
 other sections, public events, and other participants.
 
 **Approved object merge, further details pending:** offer both
-`update_context(section_name, data)` for multiple fields in one call and
-`update_context_field(section_name, field_name, value)` for a single-field
-change. These are working interface names, not final wire schemas. Both share
+`update_variables(section_name, data)` for multiple variables in one call and
+`update_variable(section_name, variable_name, value)` for a single-variable
+change. These names are approved; the sketches are not complete wire schemas. Both share
 the existing atomic section boundary, write grant, validation, and revision
 checks. The labnote's existing operation-list example already batched updates;
 it is retained as an internal command candidate, not a third model-facing tool.
-`update_context` recursively merges supplied objects into the existing section;
-omitted fields retain their values at every object depth. Where old and supplied
+`update_variables` recursively merges supplied objects into the existing section;
+omitted variables retain their values at every object depth. Where old and supplied
 values are both objects, recurse rather than replacing the object wholesale.
 For example, changing `intake.topic` preserves an existing `intake.summary`;
 changing a nested `address.city` preserves its `postal_code`. This is a deep
 merge, not just a deep copy. Check the expected revision and validate populated
-values in the merged result, including retained values but not missing fields,
+values in the merged result, including retained values but not missing variables,
 then commit once or reject the whole update without changing values or revisions.
 This changes runtime values without introducing defaults or an initialization merge.
-Prefer simple, shallow context: make `address` its own section with `city` and
+Prefer simple, shallow variables: make `address` its own section with `city` and
 `postal_code`, giving it an explicit schema, grant, and revision boundary.
 This is authoring guidance, not a ban on schema-permitted nesting or a runtime
-flattening step. Final terminology remains for review;
-recursive object merging does not add array-element merge operations. No schema
-keys or runtime modules are renamed yet.
+flattening step. Call Variables is the approved terminology;
+recursive object merging does not add array-element merge operations. Candidate
+keys and planned module names are aligned with Call Variables; runtime code is
+unchanged.
 
-**Approved addressing:** keys at the root of context data are section names;
-direct keys within each section object are field names. The definition's schema
-wrapper and revision metadata are not renamed. `update_context_field` selects
-one exact declared direct field; it does not interpret dots, JSON Pointers, or
+**Approved addressing:** keys at the root of variable data are section names;
+direct keys within each section object are variable names. The definition's schema
+wrapper is now `call_variables.sections`; its shape and revision metadata are
+unchanged. `update_variable` selects
+one exact declared direct variable; it does not interpret dots, JSON Pointers, or
 array-index notation. Unmatched names fail validation rather than traversing or
 creating a path. An explicitly declared punctuation-bearing key remains literal.
-For example, use `update_context_field("address", "city", "Newtown")` for a
-direct field. For a nested address in another section, use
-`update_context("profile", {"address": {"city": "Newtown"}})` and its recursive
+For example, use `update_variable("address", "city", "Newtown")` for a
+direct variable. For a nested address in another section, use
+`update_variables("profile", {"address": {"city": "Newtown"}})` and its recursive
 merge behavior. Internal pointer encoding must preserve literal-name semantics.
-No new tool, field-level permission system, or path syntax is introduced.
+No new tool, variable-level permission system, or path syntax is introduced.
 
 **Approved clearing behavior:** both update forms accept explicitly supplied
-null for a schema-nullable field. It stores null while retaining the key, rather
+null for a schema-nullable variable. It stores null while retaining the key, rather
 than skipping or deleting it. For example, clearing `address.apartment` changes
-`"4B"` to null without removing `apartment` or altering the other address fields.
-An omitted field remains unchanged. Nullability must be explicit: permitting an
-absent field does not imply accepting an explicit null, and cleared keys stay
+`"4B"` to null without removing `apartment` or altering the other address variables.
+An omitted variable remains unchanged. Nullability must be explicit: permitting an
+absent variable does not imply accepting an explicit null, and cleared keys stay
 present. Populated values, write grant, and expected revision still validate;
-null in a non-nullable field fails the whole update without mutation. No missing
+null in a non-nullable variable fails the whole update without mutation. No missing
 value is automatically populated with null, and section roots remain objects.
 Separate deletion tools and physical key removal are deferred, not prerequisites
 for clearing a value. No null-means-delete convention is adopted.
@@ -481,12 +486,24 @@ The following G3 proposals remain unapproved. Bound schema complexity as well as
 value bytes so validation cannot monopolize the room process. There is no
 remaining write-only error decision because write-only grants are unsupported.
 
-Finally, separate **agent assertions** from **verified facts**. For example,
-`intake` may be agent-writable; `verification` and committed booking receipts
-should be writable only by a trusted platform binding that validates the
-external result. Section-level permissions make this possible without new
-field-level permission syntax. A schema-valid `verified: true` written by an
-agent is not proof of verification.
+**Approved naming and MCP result flow:** use Call Variables for the collection,
+section for a group such as `booking`, and variable for a value such as `status`.
+The definition uses `call_variables.sections`, invocation data uses
+`initial_variables`, and an agent's section grants use `variable_permissions`.
+Tools are `read_variables(sections)`, `update_variables(section_name, data)`, and
+`update_variable(section_name, variable_name, value)`. Conversation history means
+messages and tool calls/results; model context includes instructions, selected
+history, and permitted variables. Neither is the mutable variable store.
+
+The agent calls a remote MCP booking tool, receives its result, then updates the
+relevant variables through our tools. The MCP needs no knowledge of Vxpipe's
+internals. Vxpipe owns the variables and enforces the agent's section permissions,
+datatype checks, and revisions. The proposed platform-only result sections and
+automatic result-to-variable mappings are withdrawn, not prerequisites for MCP.
+Read-only initial values remain supported; recording tool results requires
+read+write permission on the chosen section. Booking/verification rules remain
+the external service's responsibility. A copied result is not that service's
+source of truth; G4 still owns remote retry/cancellation and uncertain outcomes.
 
 ### G4 — P1: Tool cancellation does not roll back an external action
 
@@ -504,32 +521,32 @@ outcome. An interrupted turn loses output authority; safe external read work can
 be canceled, while an already submitted external write needs a receipt/status
 reconciliation path. Late external facts can enter the private operation ledger
 without resuming an old model turn. Whether and how those results can initiate
-new context updates remains under review; this proposal does not cancel G3's
-already-submitted local context commands or bypass their revision checks.
+new variable updates remains under review; this proposal does not cancel G3's
+already-submitted local variable commands or bypass their revision checks.
 
 Default mutating operations to no automatic retry after an ambiguous submission.
 Permit retry only with a documented provider idempotency contract or a safe
 reconciliation strategy. MCP request IDs are correlation, not business-action
 idempotency keys. Business validation, slot uniqueness, and atomic booking
-remain responsibilities of the external system; room context is not its
+remain responsibilities of the external system; call variables are not its
 transaction database.
 
 Tool policy should distinguish read-only, idempotent write, and non-idempotent
 write using trusted configuration, not model arguments or untrusted remote
 annotations. Bind any required confirmation to the exact validated action
-arguments, requesting participant, context revision where relevant, and expiry.
+arguments, requesting participant, variables revision where relevant, and expiry.
 Changing the action invalidates confirmation. Do not announce successful sending
 or booking from a request-start event. Progress speech is separate from result
 speech, with only one owner of each utterance.
 
-### G5 — P1: Private context would leak through the existing tool event path
+### G5 — P1: Private variables would leak through the existing tool event path
 
 This is a concrete integration hazard, not just an omitted future feature.
 `RoomAuthority.emit_tool_call_started/4` puts arguments in an event;
 `emit_tool_call_completed/5` includes the result. The
 [RTVI codec][codec] sends both to the client. Today's clock tool is harmless,
-but reusing that path for private context or verification defeats the proposed
-section permissions even if context-update events contain only metadata.
+but reusing that path for private variables or verification defeats the proposed
+section permissions even if variable-update events contain only metadata.
 
 Proposal: keep private execution payloads separate from audience-specific
 events. Model, authorized operator, call-ledger consumer, telemetry, and browser
@@ -538,7 +555,7 @@ status, and approved display names, with arguments/results omitted. Keep the
 standard RTVI lifecycle usable without distributing private tool content.
 Gateway authorization remains necessary even when an internal event is trusted.
 
-The archive also needs a separate permissioned private context payload/patch:
+The archive also needs a separate permissioned private variables payload/patch:
 it cannot rebuild section values from metadata-only public events. Apply
 retention/redaction before persistence, not just before final export. Never put
 expected verification codes or credentials into prompts, public events, or
@@ -565,7 +582,7 @@ profile in the resolved binding.
 
 Before the remote slice, specify bounded discovery/pagination, tool-schema
 compatibility, structured/text/error result normalization, and unsupported
-server requests. The context-schema subset must not silently truncate an MCP
+server requests. The variable-schema subset must not silently truncate an MCP
 tool schema. Reject unsupported schema features before advertising a tool.
 Sampling/elicitation and other unimplemented features should fail explicitly,
 not acquire ambient authority.
@@ -607,7 +624,7 @@ claim full answering-machine or IVR support from generic hangup/transfer tools.
 ### G8 — P2: A transfer allowlist is not the complete transfer policy
 
 Keep `transfers: ["specialist", "human-support-agent"]`. The labnote says a
-transfer declares warm/cold behavior, source disposition, and context projection,
+transfer declares warm/cold behavior, source disposition, and variable projection,
 but gives those settings no home after rejecting named transfer objects.
 
 Proposed location: a call-level handoff policy with source-agent outgoing
@@ -707,7 +724,7 @@ live mix. Track manifests need clock mapping across ingress/egress and room
 incarnations, explicit gaps, and evidence distinguishing scheduled, sent, and
 device-confirmed playback. A sink accepting audio does not prove a listener heard
 it. Post-call summary/evaluation is a separate optional, metered job; it cannot
-overwrite authoritative room context or invent missing transcript segments.
+overwrite authoritative call variables or invent missing transcript segments.
 
 ### G12 — P2: One usage row per operation is too restrictive for settlement
 
@@ -738,7 +755,7 @@ Compile required evidence/features against adapter capabilities; do not silently
 ignore unsupported options or import executable timing expressions. Keep hosted
 provider endpointing and the existing no-local-VAD/no-local-model scope.
 
-For long calls, declare token-aware history/tool-result/context budgets,
+For long calls, declare token-aware history/tool-result/model-context budgets,
 truncation or compaction policy with provenance, and provider failure/fallback
 outcomes. The current turn-count history bound does not bound a large prompt or
 tool response in model tokens. Fallback must preserve authorization, tool schema,
@@ -749,12 +766,12 @@ reason to add provider-native payloads to each participant definition.
 ## Possible checkpoint order and acceptance scenarios
 
 This sequence is an option for review, not an approved implementation plan. Do
-not add the suggested fields or functionality before the user reviews the gaps.
+not add the suggested variables or functionality before the user reviews the gaps.
 
-1. **Compiler and one-agent context:** implement the approved G1 layout only
+1. **Compiler and one-agent variables:** implement the approved G1 layout only
    when runtime work is authorized; review G2–G3, the private-event part of
-   G5, and denial semantics in G9. Use one canonical fixture with two context
-   sections and an engine-owned context tool. Prove the existing text/audio path
+   G5, and denial semantics in G9. Use one canonical fixture with two variables
+   sections and an engine-owned variable tool. Prove the existing text/audio path
    works through a typed plan. Do not start with telephony or Ecto.
 2. **Safe remote action:** add one tenant-configured remote MCP integration,
    enabled on one agent, with a fake scheduling backend. Cover G4/G6 and trusted
@@ -775,26 +792,26 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Race admissions/transfers and re-enter an agent definition | One participant and no duplicate pending preparation per key per call; agent re-entry retains identity with a fresh activation |
 | Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
-| Declare schemas with no context defaults and supply partial initial context | Supplied datatypes/value constraints validate before startup; missing fields do not fail, including in nested objects; intake stays unfilled; context defaults fail; capability defaults still work; explicit empty section objects are accepted without filling values |
-| Prepare private order context using a backend API key, then join from the browser using only a token | Preparation pins/stores context without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and context fail |
-| Connect a backend WSS client with an API key and send unsigned context as its first message | Invalid authentication fails before upgrade; a missing message, malformed/oversized context, or wrong datatypes cannot start the room; empty context and partial sections are allowed; browser Origin and HTTP CORS are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
+| Declare schemas with no variable defaults and supply partial initial variables | Supplied datatypes/value constraints validate before startup; missing variables do not fail, including in nested objects; intake stays unfilled; variable defaults fail; capability defaults still work; explicit empty section objects are accepted without filling values |
+| Prepare private order variables using a backend API key, then join from the browser using only a token | Preparation pins/stores variables without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and variables fail |
+| Connect a backend WSS client with an API key and send unsigned variables as its first message | Invalid authentication fails before upgrade; a missing message, malformed/oversized variables, or wrong datatypes cannot start the room; empty variables and partial sections are allowed; browser Origin and HTTP CORS are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
-| Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting context |
-| Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/context remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
+| Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting variables |
+| Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/variables remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
 | Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
 | Compile read-only, read+write, and standalone write grants; leave another section ungranted | First two grants succeed; standalone write fails without silently adding read; read-only grants expose reads, read+write grants also expose updates and their resulting values; ungranted sections expose neither values nor revisions in model projections |
-| Read an unpopulated section, then populate it over multiple updates | Read returns one null in the requested value slot, no nested placeholders or state/revision change; first object or field write creates supplied data, later writes add fields; partial reads do not fill missing children; unknown/forbidden sections still fail |
-| Merge several fields with the object tool, then change one field with the field tool | One call per operation; omitted stored fields remain; missing fields need not be supplied; wrong datatypes/invalid populated values reject atomically; the same write grant/revision boundary applies |
+| Read an unpopulated section, then populate it over multiple updates | Read returns one null in the requested value slot, no nested placeholders or state/revision change; first object or variable write creates supplied data, later writes add variables; partial reads do not fill missing children; unknown/forbidden sections still fail |
+| Merge several variables with the object tool, then change one variable with the variable tool | One call per operation; omitted stored variables remain; missing variables need not be supplied; wrong datatypes/invalid populated values reject atomically; the same write grant/revision boundary applies |
 | Update only a nested address city, then exercise a shallow address section | An existing postal code and omitted siblings remain recursively; a missing postal code is neither required nor invented; wrong nested datatypes reject the whole update; shallow and permitted nested shapes work without automatic flattening |
-| Clear an apartment using explicit null through each update form | A nullable field remains present with null; omitted fields stay unchanged; non-nullable fields reject explicit null atomically even though absence is allowed; no deletion tool or stored null defaults |
-| Select a direct field, then attempt a dot/pointer/index-like field name | Only exact declared direct keys are addressed; unmatched names fail, punctuation is never traversal, explicitly declared literal keys remain literal, and nested changes use the object tool |
-| Interrupt after submitting a context update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
+| Clear an apartment using explicit null through each update form | A nullable variable remains present with null; omitted variables stay unchanged; non-nullable variables reject explicit null atomically even though absence is allowed; no deletion tool or stored null defaults |
+| Select a direct variable, then attempt a dot/pointer/index-like variable name | Only exact declared direct keys are addressed; unmatched names fail, punctuation is never traversal, explicitly declared literal keys remain literal, and nested changes use the object tool |
+| Interrupt after submitting a variable update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
-| Request verification, then have the model write `verified: true` | Write is denied; only backend verification updates trusted status; codes/results stay out of public events |
+| Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
@@ -817,39 +834,42 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   or trusted host registration. They would expand the authoring trust boundary.
 - Do not treat prompt instructions, actor authentication, and verified customer
   identity as interchangeable authority.
-- Do not duplicate the room-context schema with a second call-input schema and
-  initialization map. The backend can supply the declared context shape directly.
-- Do not populate context from definition defaults, merge in fallback values,
+- Do not duplicate the call-variable schema with a second call-input schema and
+  initialization map. The backend can supply the declared variables shape directly.
+- Do not populate variables from definition defaults, merge in fallback values,
   or store empty objects or nulls for omitted values. Only supplied setup data
-  prefills context; later writes still need their existing grants. Returning
+  prefills variables; later writes still need their existing grants. Returning
   null for a missing requested value is a read representation, not a default.
-- Do not demand complete context before accepting setup or an update. Agents
-  collect fields iteratively; retain datatype/supplied-value checks without
-  required-field completeness checks at any object depth.
+- Do not demand complete variables before accepting setup or an update. Agents
+  collect variables iteratively; retain datatype/supplied-value checks without
+  required-variable completeness checks at any object depth.
 - Do not add turn/tool-cancellation tracking or rollback for submitted local
-  context updates. Let them finish under normal authorization/revision checks;
+  variable updates. Let them finish under normal authorization/revision checks;
   corrections use another tool call, not blind retries of an obsolete patch.
-- Do not silently ignore forbidden sections in a context read. Return a
+- Do not silently ignore forbidden sections in a variable read. Return a
   permission error and no values so the agent can correct its request.
+- Do not require remote MCPs to understand Vxpipe or write its call variables.
+  The agent receives the result and uses our variable tools; no automatic mapping
+  or platform-only result section is required for that flow.
 - Do not support write-only agent section grants or a revision-only writable
   projection. A section is read-only, read+write, or ungranted; standalone write
   is invalid. Existing public-event and cross-participant privacy still apply.
-- Do not replace a complete context section with the partial object passed to
-  `update_context`. Recursively merge objects, preserve omitted fields at every
-  object depth, and validate populated values without demanding missing fields;
+- Do not replace a complete variable section with the partial object passed to
+  `update_variables`. Recursively merge objects, preserve omitted variables at every
+  object depth, and validate populated values without demanding missing variables;
   omission is not deletion.
 - Do not interpret explicit null as key deletion or add a tool solely to clear
   a value. Store null through either update form when its schema allows it;
   optionality alone does not grant nullability.
-- Do not interpret model-facing section or field names as paths. Root keys name
-  sections, direct section keys name fields, and nested object updates already
+- Do not interpret model-facing section or variable names as paths. Root keys name
+  sections, direct section keys name variables, and nested object updates already
   provide the mechanism for deeper changes. Internal pointers stay internal.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
 - The earlier client-ID/HMAC contract is superseded: no signature envelope or
   canonicalization is needed for these backend API-key flows. Never put API keys
-  in browsers, definitions, or plaintext database fields. Reversible storage is
+  in browsers, definitions, or plaintext database variables. Reversible storage is
   also rejected for Vxpipe-issued keys: keep only a one-way hash. Recoverable
   upstream credentials remain a separate concern. Hash storage does not replace
   TLS, scoped-token lifecycle, or credential management.
@@ -865,7 +885,7 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   from call duration; reconnects do not start a new call clock.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
-- Do not move mixing, recording coordination, or room context into persistence.
+- Do not move mixing, recording coordination, or call variables into persistence.
   No new umbrella application was created as part of this review.
 
 Evidence is source inspection at the commits above and targeted first-party
@@ -875,7 +895,7 @@ syntax in the updated labnote, whitespace, and scoped diffs. Runtime tests and
 browser checks are not applicable to this documentation-only checkpoint.
 The approved credential-storage follow-up also inspected an existing Cloak/Ecto
 implementation: runtime key validation, supervised vault, encrypted binary
-fields, redaction, and binary database columns. No environment-file contents or
+variables, redaction, and binary database columns. No environment-file contents or
 real credentials were read, and no credentials were generated. The existing
 gateway still uses a development principal; this review adds no authentication
 implementation. The labnote records the follow-up's documentation-check results.
@@ -907,54 +927,54 @@ The later timing clarification distinguishes record creation from actual live
 start and preserves that start across delayed persistence and recovery. Its
 future acceptance cases cover duration, token operations, and pre-start failure;
 no runtime timestamp or database schema was changed.
-The subsequent context correction removes defaults from both labnote schema
+The subsequent variables correction removes defaults from both labnote schema
 examples and approves supplied-only initialization. It replaces the merge-rule
 proposal, retains capability/profile defaults, and updates planned acceptance
 checks. At that checkpoint, G3's remaining runtime authority questions were still
-open; no context compiler or runtime implementation was changed.
-The subsequent interruption decision lets submitted local context commands
+open; no variables compiler or runtime implementation was changed.
+The subsequent interruption decision lets submitted local variable commands
 finish while retaining authorization, lifecycle, and revision checks. It removes
 the proposed live-turn cancellation guard and mutation-ID journal requirement,
 updates the race/correction acceptance case, and leaves external-tool policy
 and the other G3 questions pending. No runtime cancellation behavior was changed.
 The read-authorization follow-up approves whole-request permission errors instead
 of filtering and updates the original read contract and future acceptance cases.
-It records the requested object and field update tools, retaining batching and
+It records the requested object and variable update tools, retaining batching and
 the existing section authorization boundary, with naming and update semantics
 pending at that checkpoint. No runtime implementation or schema rename was introduced.
 The subsequent object-update decision selects merging into existing section
-data while preserving omitted fields. The labnote adds a before/data/after
-illustration and planned checks for retained required fields and atomic invalid
+data while preserving omitted variables. The labnote adds a before/data/after
+illustration and planned checks for retained required variables and atomic invalid
 update rejection. At that checkpoint, nested/removal details and final naming
 remained open; no runtime merge implementation was introduced.
 The subsequent clarification approves recursive object merging and preservation
-of omitted nested fields. It recommends shallow authoring, such as an `address`
+of omitted nested variables. It recommends shallow authoring, such as an `address`
 section, without banning nesting. The original note adds a nested illustration
 and planned verification, while retaining the 12 open-group count and the
-then-open removal/null, field-addressing, and naming questions. No runtime code,
+then-open removal/null, variable-addressing, and naming questions. No runtime code,
 schema flattening, or new nesting limit was introduced.
-The clearing decision now assigns explicit null to nullable fields while keeping
+The clearing decision now assigns explicit null to nullable variables while keeping
 their keys, leaves omission as preservation, and defers physical deletion. Both
-documents update nullable-field requirements and planned verification without
+documents update nullable-variable requirements and planned verification without
 changing runtime behavior or adding a new model-facing tool. G3 still has other
 open questions, so the numbered review-group count remains 12.
-The addressing decision now fixes context root keys as section names and direct
-section keys as literal field names. It routes deeper partial changes through
+The addressing decision now fixes variables root keys as section names and direct
+section keys as literal variable names. It routes deeper partial changes through
 the object-update tool, separates model-facing names from internal pointer
 encoding, and adds future direct-key/path-confusion checks. Other G3 questions
 remain open; no runtime tool or schema-wrapper change was introduced.
 The missing-read and incremental-population decision returns one null at a
 requested absent value, without nested placeholders or a stored default. First
-writes populate a declared section; later writes collect fields iteratively.
-This supersedes earlier required-field completeness checks mentioned in the
+writes populate a declared section; later writes collect variables iteratively.
+This supersedes earlier required-variable completeness checks mentioned in the
 historical checkpoints above, while retaining datatype and supplied-value
-validation. Context-tool argument shapes must also allow partial objects. The
-two definition illustrations remove only their context `required` lists, and
+validation. Variable-tool argument shapes must also allow partial objects. The
+two definition illustrations remove only their variables `required` lists, and
 planned acceptance steps now cover absence, partial/nested collection, and wrong
 datatypes. G3's read/first-write questions are resolved; other G3 questions keep
 the count at 12 open groups. No runtime implementation was changed.
 Verification parsed all 13 JSON examples, confirmed the only example changes
-are the two context `required` removals, and checked both definition contracts,
+are the two variables `required` removals, and checked both definition contracts,
 unrelated write checks, 20 local links/anchors, routes, review counts, and
 documentation hygiene. `git diff --check` passed; no runtime/browser tests ran.
 The permission follow-up limits agent section access to read-only or read+write,
@@ -969,15 +989,34 @@ and all 20 local links/anchors resolve. Superseded write-only paths, routes,
 review counts, documentation hygiene, and `git diff --check` were checked;
 no runtime or browser tests were run.
 
+The final naming decision adopts Call Variables, with sections containing
+variables rather than "fields". Candidate keys, tool names, planned state and
+command types, persistence sketches, and local links use the same vocabulary.
+The runtime architecture distinguishes call variables from conversation history
+and model context. Existing execution metadata such as `Tool.Context` is not
+renamed; no runtime implementation or schema release was introduced.
+The MCP clarification resolves the result-writer question: an ordinary remote
+MCP returns a tool result, and the agent separately updates Vxpipe variables
+under its existing permissions, datatypes, and revisions. The automatic mapping
+and platform-only result-section proposals are withdrawn. Revised acceptance
+steps cover that flow without imposing knowledge of Vxpipe on the MCP.
+Schema-complexity bounds remain open in G3; naming and MCP result handling do not.
+The count therefore remains 12 numbered groups, not 12 individual questions.
+Verification covered all 15 JSON examples across the design and architecture
+documents, confirming only the approved key renames, unchanged definition and
+authority semantics, and all 31 local links/anchors. External source URLs,
+routes, resolved-review markers, terminology, and `git diff --check` passed.
+No runtime or browser tests were run for this documentation-only checkpoint.
+
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
 [mcp-design]: ../labnotes/20260905-0405-call-definition-design.md#applicationtenant-mcp-integrations-and-agent-enablement
 [json-design]: ../labnotes/20260905-0405-call-definition-design.md#representative-json-shape
-[context-design]: ../labnotes/20260905-0405-call-definition-design.md#working-room-context-schema-candidate
-[context-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
-[context-interruption]: ../labnotes/20260905-0405-call-definition-design.md#context-updates-and-conversational-interruption--approved-g3-decision
+[variable-design]: ../labnotes/20260905-0405-call-definition-design.md#working-call-variable-schema-candidate
+[variable-authorization]: ../labnotes/20260905-0405-call-definition-design.md#authorization-transaction
+[variable-interruption]: ../labnotes/20260905-0405-call-definition-design.md#variable-updates-and-conversational-interruption--approved-g3-decision
 [web-admission]: ../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing
-[api-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-context-and-api-key-admission--approved-g2-decisions
+[api-admission]: ../labnotes/20260905-0405-call-definition-design.md#initial-variables-and-api-key-admission--approved-g2-decisions
 [join-token-recovery]: ../labnotes/20260905-0405-call-definition-design.md#single-use-join-tokens-and-existing-call-recovery--approved-g2-decisions
 [call-start-timing]: ../labnotes/20260905-0405-call-definition-design.md#record-creation-and-actual-call-start--approved-timing-contract
 [entry-participants]: ../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions
