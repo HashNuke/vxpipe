@@ -75,16 +75,16 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **29 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, and R17–R21 are resolved; R07's same-call caller
-reconnection and R16's retry exceptions are deferred, while R09 is superseded by
+Current review count: **25 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, and R17–R23 are resolved; R07's same-call caller
+reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
 Personalization and business-time interpretation belong to agent/application
 instructions with permitted variable/date tools; no template or timezone hierarchy
 is added. R13 allows protected backend-initialized routing variables while
 transfers remain participant-ref-only. G1 and G3 are resolved;
-G2/G4/G5/G7/G8 are partly resolved, while G6 and G9–G13 still contain proposals.
+G2/G4/G5/G6/G7/G8 are partly resolved, while G9–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -106,11 +106,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**29 pending decisions (R22–R50).** This is the current approval backlog,
+**25 pending decisions (R26–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15 and R17–R21 are resolved; R07/R16 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R22–R26**. Mark rows resolved or
+R10–R15 and R17–R23 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R26–R30**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -136,10 +136,10 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
-| R22 | G6 | Which remote MCP protocol revisions and HTTP transport variants will the first adapter support? |
-| R23 | G6 | Which MCP tool-schema features will be accepted, and how will unsupported schemas fail before tool exposure? |
-| R24 | G6 | Which remote result types will be supported, and what reaches the agent for text, structured data, media, and errors? |
-| R25 | G6 | Which server-initiated MCP features, such as sampling or elicitation, are supported versus explicitly rejected? |
+| R22 | G6 | **Resolved:** initial remote adapter supports revision 2026-07-28 Streamable HTTP, JSON and request-scoped SSE responses, with revision-specific metadata/lifecycle; other revisions/legacy transports require explicit tested compatibility. |
+| R23 | G6 | **Resolved:** use a proper JSON Schema validator, baseline 2020-12, on actual outgoing arguments against pinned inputSchema before submission; reject unsupported enabled bindings before exposure, never weaken constraints or automatically fetch external refs. |
+| R24 | G6 | **Deferred:** store received responses and descriptors with observed outcomes; the agent chooses authorized next steps. Detailed result projection and document/media inspection belong to the dedicated issue, not automatic fetching or a text/JSON-only policy. |
+| R25 | G6 | **Deferred:** server-requested sampling/elicitation and related interactions belong to the dedicated issue; advertise no unimplemented capabilities, report missing capability clearly, and add no continuation/retry exception. |
 | R26 | G6 | May configured MCP endpoints reach private networks, and what TLS/redirect/egress restrictions apply? |
 | R27 | G7 | What startup-readiness deadline and failure outcome apply when required connections/providers never become ready? |
 | R28 | G7 | What should happen during caller silence: wait, prompt again, or end after a defined interval? |
@@ -1112,21 +1112,38 @@ the example HTTP webhooks, native SMS, or code tools are MCP endpoints. Keep
 those behind a remote MCP facade or an explicitly registered host tool; do not
 add arbitrary HTTP/JavaScript execution to the call-definition JSON.
 
-Define supported protocol revisions and server features at the adapter boundary.
-The checked [2026-07-28 Streamable HTTP specification][mcp-http] does remove
-protocol sessions and the GET stream, but still requires JSON and request-scoped
-SSE response handling. Older revisions have different lifecycle rules. Thus
-stateless must not be interpreted as “POST a JSON tool name to any server.”
-Either test a narrow revision profile and reject incompatible servers clearly,
-or implement and test explicit backward compatibility. Record the negotiated
-profile in the resolved binding.
+**Approved R22:** the initial remote profile is `2026-07-28` Streamable HTTP,
+supporting JSON and request-scoped SSE with revision-specific request metadata
+and lifecycle, not old initialize/session rules. Other revisions or legacy
+HTTP+SSE are not implicitly compatible; fail clearly unless explicitly implemented
+and tested. Pin the selected profile in the resolved binding.
+[Transport specification][mcp-http].
 
-Before the remote slice, specify bounded discovery/pagination, tool-schema
-compatibility, structured/text/error result normalization, and unsupported
-server requests. The variable-schema subset must not silently truncate an MCP
-tool schema. Reject unsupported schema features before advertising a tool.
-Sampling/elicitation and other unimplemented features should fail explicitly,
-not acquire ambient authority.
+**Approved R23:** validate actual outgoing arguments against the selected/discovered
+pinned `inputSchema` before submission, using a proper JSON Schema validator with
+2020-12 baseline. Enforce required/type/enum/nested constraints; incremental Call
+Variables rules are not MCP input rules. Unsupported dialect/features or model
+representation reject enabled bindings before exposure, without constraint
+weakening or automatic external `$ref` fetching. No library, new caps, or full
+output normalization design is chosen. [Schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+
+**Deferred R24:** store received responses, including structured content and
+attachment/resource descriptors, preserving success/error/unknown observations.
+The agent chooses whether to inspect a document through authorized available
+tools. Storage is not automatic linked-file download or proof of understanding;
+an uninspected attachment does not make a successful business action fail.
+Detailed result-to-model projection and inspection support live in the
+[result/document issue](issues/mcp-result-and-document-inspection.md), not an
+approved text/JSON-only filter or new reader/playback feature.
+
+**Deferred R25:** [server-requested interactions](issues/mcp-server-requested-interactions.md)
+remain future work. Do not advertise unimplemented sampling/elicitation or gain
+authority from server requests; report missing capability clearly. The selected
+revision's `input_required`/MRTR flow is not the older independent-request model.
+Continuation/resubmission requires its own future design, not an automatic retry
+exception. Ordinary agent dialogue and complete observed response storage remain.
+
+Discovery/pagination, egress, and credential lifecycle choices remain separate.
 
 Pin tool schemas, not the remote service's changing business data. Returned
 instructions are untrusted tool content, never new system policy or permission
@@ -1436,6 +1453,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
 | Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Always save available text/turn/tool/variable/usage facts without category toggles; preserve typed provenance and generated-versus-delivered text; missing usage/prices remain unavailable, no STT is started or transcript invented, and audio is stored only by explicitly enabled recording subject to denials and the opening input gate |
+| Exercise the selected remote revision with JSON/SSE and invalid tool arguments | Both response forms follow 2026-07-28 metadata/lifecycle; incompatible revisions fail clearly; a proper validator blocks missing required, wrong type/enum, and invalid nested inputs before submission; unsupported schemas reject enabled bindings before exposure without network ref fetching |
+| Receive structured data, a document descriptor, or input_required for an unsupported interaction | Preserve observed response/outcome without auto-fetching or claiming inspection; unauthorized tools remain unavailable; advertise no unimplemented sampling/elicitation capability, report its absence clearly, and do not auto-continue or resubmit |
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
 | Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration neither starts processing/recording nor changes client visibility; cleanup follows the approved periodic external-first whole-call contract |
@@ -1868,10 +1887,20 @@ committed variables, without per-category switches. Audio requires enabled and
 permitted recording; archival needs do not start STT or bypass the opening gate.
 Unavailable facts stay unavailable. Async general archival, transaction-confirmed
 variable updates, credentials, client visibility, and remaining accounting choices
-are unchanged. Current backlog: 29 individual decisions, R22–R50. Verified exact
+are unchanged. At that checkpoint: 29 individual decisions, R22–R50. Verified exact
 three-file scope, 18 unchanged valid JSON examples/fences, links/anchors, active
 capture/permission boundaries, prior contracts, statuses/count, terminology/path
 hygiene, and whitespace. Documentation only; no runtime tests.
+
+The remote-boundary follow-up resolves R22/R23 with the selected Streamable HTTP
+revision and validated outgoing MCP arguments. R24/R25 move to separate deferred
+issues; storing observed responses does not fetch attachments or implement
+sampling, elicitation, or continuation. R18's available-history rule is reaffirmed:
+audio exists only through available/integrated/enabled and permitted recording.
+Current backlog: 25 individual decisions, R26–R50; next five R26–R30 remain proposals.
+Checks cover exact five-file scope, 18 unchanged JSON examples/fences, old and new
+links/anchors, validation/result/authority boundaries, prior contracts,
+statuses/count, terminology/path hygiene, and whitespace. Documentation only.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

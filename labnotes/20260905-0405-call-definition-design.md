@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-29 individual decisions still awaiting review, rather than counting its
+25 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -132,6 +132,9 @@ storage toggles. Audio requires explicitly enabled and permitted recording;
 archival needs do not start STT or bypass capability permissions.
 R17 defines `tool_visibility` and participant/local-tool `tool_visibility_overrides`,
 including trusted full-visibility sample policy replacement with no overrides.
+R22 selects `2026-07-28` Streamable HTTP; R23 requires validated outgoing MCP
+arguments. R24 result/document inspection and R25 server-requested interactions
+are deferred to separate issues while observed response storage remains mandatory.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -179,8 +182,8 @@ The remote-MCP follow-up also reviewed the official MCP `2026-07-28` tool,
 Streamable HTTP, and schema specifications. That revision is stateless at the
 HTTP protocol layer, permits the tool list to vary with request authorization,
 and returns structured or unstructured content from `tools/call`. Those details
-drive the profile binding, credential precedence, discovery, and result
-normalization decisions below.
+drive the profile binding, credential precedence, and discovery decisions below;
+detailed result projection/inspection is now deferred as described in R24.
 
 ## Findings
 
@@ -1600,6 +1603,50 @@ validation, catalog TTL/refresh, health, concurrency, and circuit state. These
 can be reused by calls sharing the same application integration or tenant
 integration rather than repeated for every call. Catalog and connection state
 must never cross tenant/integration/credential boundaries.
+
+#### Initial remote protocol and input validation — approved R22/R23
+
+Target `2026-07-28` Streamable HTTP with JSON and request-scoped SSE responses,
+using its request metadata/lifecycle rather than legacy initialize/session rules.
+Other revisions and legacy HTTP+SSE need explicit tested compatibility; otherwise
+incompatible endpoints fail clearly. Pin this profile in the resolved binding.
+[MCP transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
+
+Use a proper JSON Schema validator with 2020-12 baseline to check actual outgoing
+arguments against the selected/discovered pinned `inputSchema` before submission.
+Enforce required/type/enum/nested constraints, unlike incremental Call Variables.
+Unsupported dialect/features or model representation reject enabled bindings
+before exposure. Never weaken constraints, submit unvalidated input, or fetch
+external `$ref`s automatically. No validator library, extra caps, or full output
+schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+
+For example, an enabled scheduling tool requires a date and a permitted slot
+value. Missing the date, choosing a value outside its enum, or supplying an
+invalid nested object fails before the remote request. The agent may correct its
+arguments in a separate invocation; the executor does not silently retry or
+relax the schema. This does not add required-variable checks to Call Variables.
+
+#### Received results and deferred server interactions — R24/R25
+
+Store received MCP responses, including structured content and attachment/resource
+descriptors, under complete observed tool history. Preserve reported success/error
+and unknown outcomes. The agent decides further steps, including inspecting a
+document through authorized available tools; a saved descriptor is not a downloaded
+file, an understood document, or permission for a new reader. No automatic
+attachment fetching/playback or generic media-inspection ability is approved.
+An uninspected file does not change a reported business success into failure.
+Detailed result-to-model projection, output normalization, and document/resource
+inspection support are [deferred in the result issue](../docs/issues/mcp-result-and-document-inspection.md).
+
+Server-requested sampling, elicitation, and related interactions are
+[deferred separately](../docs/issues/mcp-server-requested-interactions.md).
+Do not advertise unimplemented capabilities, gain authority from server input,
+or silently perform such requests; report missing capability clearly. In the
+selected revision, input requests use `input_required`/MRTR rather than older
+independent server requests. Continuation/resubmission needs later design and is
+not an approved automatic-retry exception. Ordinary agent conversation remains.
+Existing grants, privacy, credential exclusions, retention, and unknown-outcome
+semantics stay intact. No runtime adapter or new inspection tool is implemented.
 
 Each agent uses the same `tools` map for built-in and remote MCP bindings:
 
@@ -3338,7 +3385,7 @@ interrupted generated text was heard. Preserve supplied word timing, confidence,
 and provenance as bounded sidecar data when a provider supplies them; their
 absence must not be replaced with invented precision.
 
-Store call audio only through the recording capability when explicitly enabled
+Store available call audio only when recording is integrated, explicitly enabled,
 and permitted. It remains subject to participant/room denials and the
 `opening_audio` media-input gate, not an auto-enabled archive feature or redundant
 storage-switch matrix. Available history does not grant wider client visibility
@@ -4241,14 +4288,14 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-07
 
-There are **29 individual decisions awaiting review**, enumerated as R22–R50
-in the focused gap review. R01–R06, R08, R10–R15, and R17–R21 are resolved;
-R07's caller reconnection and R16's retry exceptions are deferred; R09's setup limits are
+There are **25 individual decisions awaiting review**, enumerated as R26–R50
+in the focused gap review. R01–R06, R08, R10–R15, and R17–R23 are resolved;
+R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
 stay with application/agent instructions; R13 uses protected initial routing
 variables without expanding the model's transfer arguments.
-G1/G3 are closed; G2/G4/G5/G7/G8 are partly resolved. G headings are background
+G1/G3 are closed; G2/G4/G5/G6/G7/G8 are partly resolved. G headings are background
 organization, not the current count. Earlier progress entries retain their
 historical group counts and do not describe the current individual-item total.
 
@@ -4259,7 +4306,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R22–R26.
+for unstarted records. The next five pending decisions are R26–R30.
 
 ### Baseline and scope
 
@@ -4489,13 +4536,16 @@ The numbering below matches G1–G13 in the focused review document.
    succeeds, while errors/unknown outcomes preserve rows/references for retry.
    No new progress journal or permanent tombstone; late writers still require
    coordination. Exact interval/default is unspecified, not an hourly policy.
-6. **Remote integration compatibility:** configured and enabled are specified,
-   but supported protocol revisions, result types, tool-schema features, and
-   unsupported server interactions need a tested profile. Possible resolution:
-   explicitly bounded discovery and JSON/SSE handling, fail-closed incompatibility,
-   credential-scoped caching, safe egress, and no permission changes from returned
-   instructions. Existing HTTP actions require a remote MCP facade or trusted
-   host adapter; they are not automatically MCP tools.
+6. **Remote integration compatibility — partly resolved:** R22 selects
+   `2026-07-28` Streamable HTTP with JSON/request-scoped SSE and its metadata/
+   lifecycle; incompatible revisions need explicit compatibility work. R23 uses
+   proper JSON Schema validation of outgoing arguments before submission, without
+   weakening schemas or automatically fetching refs. R24 result/document inspection
+   and R25 server-requested interactions are deferred, not automatic fetching,
+   server authority, or retry exceptions. Store received responses and let agents
+   choose authorized next steps. Discovery, egress, and credential lifecycle remain
+   pending. Existing HTTP actions still need a remote MCP facade or trusted host
+   adapter; they are not automatically MCP tools.
 7. **Greeting, silence, voicemail, and ending — partly resolved:** agent-selected
    wait-for-input, fixed greeting, and generated greeting modes are approved for
    first activation only; reconnect/reactivation do not replay the greeting.
@@ -4918,6 +4968,19 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     and not inventing defaults. A permitted participant-ref transfer resolves its
     pinned source even after a definition revision changes. These are future
     checks, not an implemented resolver, general policy matrix, or timing guard.
+27. Use a controlled `2026-07-28` remote endpoint that returns JSON and request-
+    scoped SSE in separate cases. Verify matching revision metadata/lifecycle
+    and clear rejection of incompatible versions without legacy fallback.
+    Pin a tool input schema, then submit missing required values, invalid types,
+    enum values, and nested data: no invalid request reaches the endpoint. Reject
+    unsupported enabled schemas before model exposure, never weaken them or
+    fetch external refs. Return structured content and a document descriptor:
+    save the observed response without automatically downloading/playing content
+    or relabeling remote success as failed inspection. Request an unimplemented
+    sampling/elicitation capability: it must not have been advertised and must
+    produce a clear missing-capability outcome without extra model authority or
+    automatic continuation/resubmission. Detailed inspection and server-interaction
+    tests await those deferred designs; these are planned checks, not runtime results.
 
 ### Review checkpoint verification
 
@@ -4958,6 +5021,9 @@ the exact visibility syntax is open. No new runtime behavior follows from it.
 R18's later available-history decision supersedes historical optional transcript,
 usage, or history storage selection. Audio still requires explicit permitted
 recording; this is not permission to generate missing history or bypass denials.
+R22/R23's later remote-profile and input-validation decisions supersede earlier
+unselected protocol/schema proposals. R24/R25 move detailed result inspection and
+server-driven interactions to deferred issues, not implicit implementation work.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6114,6 +6180,36 @@ storage/client projection boundary and credential exclusions still apply.
   examples/fences unchanged, links/anchors, active capture/permission boundaries,
   prior contracts, statuses/count, terminology/path hygiene, and whitespace.
   No runtime or browser tests.
+
+### Remote MCP profile and deferred interactions — R22–R25, 2026-09-07
+
+- R22 selects `2026-07-28` Streamable HTTP, JSON/request-scoped SSE, and its
+  revision-specific request metadata/lifecycle. Other revisions/legacy transports
+  need explicit tested compatibility; no old session assumptions or runtime claim.
+- R23 requires a proper JSON Schema validator, baseline 2020-12, for actual
+  outgoing arguments against the selected/discovered pinned input schema before
+  submission. Reject unsupported enabled bindings before exposure; no schema
+  weakening, unvalidated calls, automatic network refs, library choice, or new caps.
+  Incremental Call Variables remain exempt from required-variable completeness.
+- R24 saves received structured responses and resource/attachment descriptors
+  with observed outcomes. Agents choose authorized next steps; storing a link
+  does not fetch/understand it or negate reported success. Added a deferred
+  result/document-inspection issue rather than an automatic reader or text-only filter.
+- R25 defers sampling, elicitation, and related interactions in a separate issue.
+  No unsupported capability advertisement or ambient authority. `input_required` /
+  MRTR continuation is future work, not approval of automatic resubmission/retries.
+- Reaffirmed available history storage; audio requires recording to be available,
+  integrated, enabled, and permitted. Privacy, grants, retention, asynchronous
+  ordinary archival, and variable transaction acknowledgements are unchanged.
+- R22/R23 resolved and R24/R25 deferred: 25 individual decisions remain, R26–R50;
+  the next five R26–R30 remain proposals. Planned checks cover JSON/SSE transport,
+  required/type/enum/nested argument failures before submission, unsupported schema
+  rejection, descriptor storage without fetch, and unsupported interactions with
+  no capability advertisement, extra permissions, or automatic continuation.
+- Rechecked official transport/schema/tool/interaction references. Verified exact
+  five-file scope, 18 unchanged valid JSON examples/fences, existing and new
+  links/anchors, statuses/count, prior contracts, terminology/path hygiene, and
+  whitespace. Documentation only; no dependencies, runtime, or browser tests.
 
 ## Verification evidence
 

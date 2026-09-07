@@ -176,6 +176,32 @@ observation. This does not introduce call-level locale/timezone fields, a defaul
 hierarchy, or a frozen new tool name/schema. It changes neither authoritative
 call timestamps nor the trusted destination-resolution boundary described below.
 
+The initial remote MCP adapter targets revision `2026-07-28` Streamable HTTP,
+including `application/json` and request-scoped SSE responses with that revision's
+request metadata/lifecycle, not legacy initialization/session assumptions.
+Other revisions and legacy HTTP+SSE require explicit tested compatibility;
+incompatible endpoints fail clearly. [MCP transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
+
+Validate actual outgoing tool arguments against the selected/discovered pinned
+`inputSchema` before remote submission using a proper JSON Schema validator,
+baseline 2020-12. Enforce required/type/enum/nested constraints, unlike incremental
+Call Variables. Unsupported dialect/features or model representation reject the
+enabled binding before exposure; no weakened constraints, unvalidated calls, or
+automatic external `$ref` fetching. No library, extra caps, or complete output
+schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+
+Store received MCP responses, including structured content and attachment/resource
+descriptors, preserving reported success/error and unknown outcomes. The agent
+chooses further steps through its authorized tools; saving a descriptor does not
+download or inspect its target. No automatic file fetch/playback or arbitrary
+media reader is added. Detailed projection/inspection is
+[deferred](issues/mcp-result-and-document-inspection.md).
+Server-requested sampling, elicitation, and related interactions are separately
+[deferred](issues/mcp-server-requested-interactions.md): do not advertise
+unimplemented capabilities or acquire authority from their requests. Report
+missing capability clearly; continuation/resubmission is not an approved retry
+exception. These are design contracts, not implemented adapters.
+
 The approved MCP lifecycle also distinguishes speech interruption from tool
 cancellation: an already-submitted read or action continues to its result or
 existing timeout while the agent remains running. Interrupting speech is not
@@ -854,8 +880,8 @@ prohibited transcription yields no invented transcript. Missing usage or prices
 remain unavailable, never fabricated or recorded as zero; detailed accounting
 contracts remain under review.
 
-Store call audio only when the recording capability is explicitly enabled and
-permitted. Recording remains a room capability subject to participant/room
+Store available call audio only when recording is integrated, explicitly enabled,
+and permitted. Recording remains a room capability subject to participant/room
 denials and the `opening_audio` media-input gate, not an automatically enabled
 archival feature or another storage-toggle matrix. Available ordinary turn/tool/
 usage data still follows asynchronous archival; this policy adds no general SQL
