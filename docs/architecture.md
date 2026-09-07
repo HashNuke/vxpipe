@@ -186,6 +186,13 @@ polling, reconciliation worker, or operation ledger is required now for that
 scenario. Authentication, correlation, inactive-room behavior, and agent handling
 of those events belong to the future design; no such runtime support is added here.
 
+Generic platform-level confirmation before MCP tool execution is out of scope
+for now. Agent instructions can ask for conversational confirmation, while any
+enforceable business authorization belongs to the integrating application/MCP.
+Prompt instructions are not a security guarantee. Vxpipe still enforces tool
+access, trusted identity, and argument checks; no confirmation token, approval
+endpoint, or generic confirmation state machine is introduced.
+
 ## Architectural boundaries
 
 ```text

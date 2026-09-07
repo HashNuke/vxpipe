@@ -35,6 +35,9 @@ definitive remote result reports outcome `unknown`, without automatic executor
 retry; a later agent-requested tool call is a separate invocation.
 Late confirmations are deferred as external events that a future gateway
 mechanism could route to an active call room/agent, not current MCP reconciliation.
+Generic platform confirmation is excluded for now: agent instructions handle
+conversational confirmation and the application/MCP owns enforceable business
+authorization. Prompts are not security checks; Vxpipe tool-access checks remain.
 Remaining G2/G4 questions and G5–G13 are pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -53,6 +56,7 @@ MCP interruption, timeout-outcome reporting, and no automatic executor retry for
 that timeout resolve only part of G4, so the count stays at 11.
 Deferring late notifications removes that scenario from the current MCP scope;
 other G4 questions still need review.
+Excluding generic platform confirmation settles that question without closing G4.
 
 ## Conclusion and scope
 
@@ -82,7 +86,7 @@ integration examples, not proof that every advertised behavior is enforced.
 
 | Scenario and concrete evidence | What our design can express | Missing work or limitation |
 | --- | --- | --- |
-| Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. A timeout without a definitive remote result reports unknown; confirmation, idempotency, recovery, and timezone bindings still need their contracts. The external scheduling system remains the booking authority. |
+| Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. A timeout without a definitive remote result reports unknown. Conversational confirmation belongs in agent instructions; enforceable business authorization belongs to the application/MCP, with no generic platform confirmation now. Idempotency and timezone bindings still need their contracts; late recovery notifications are deferred. The external scheduling system remains the booking authority. |
 | Intent routing: [assistant][intent], [request overrides][intent-request], [instruction handler][instructions] | One agent retrieves instructions through a tool; alternatively several specialized agent definitions transfer by ref | Define typed personalization and trusted ingress metadata, provenance of retrieved instructions, and closed participant destinations. Runtime text must not grant tools or introduce arbitrary telephone destinations. |
 | Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Waiting for the other party, answer classification, optional beep evidence, delivery deadline, and speak-then-end are runtime behavior, not solved by a prompt alone. |
 | SMS verification: [assistant][sms], [code tool][code], [SMS tool][sms-tool] | Agent-scoped remote tools, typed verification variables, provider-neutral external action | Requires an external verification service or trusted host implementation. That service owns verification, expiry, attempt limits, recipient binding, and replay protection; the agent can record its returned outcome in permitted call variables. Storing an outcome does not override the service's rules. Do not run JSON-provided JavaScript. |
@@ -557,8 +561,9 @@ additional unsent tool calls from the interrupted turn.
 
 Transfer still terminates the source agent's local execution subtree, including
 model/tool workers; room shutdown also stops their work. Local termination is
-not remote rollback. Explicit cancellation, other retry/idempotency policies,
-and confirmation remain pending; late recovery notifications are deferred below.
+not remote rollback. Explicit cancellation and other retry/idempotency policies
+remain pending; generic platform confirmation is excluded for now and late
+recovery notifications are deferred below.
 No durable operation worker or ledger is approved by the ordinary-interruption
 decision. Today's
 model request task still contains tool execution and is killed by interruption;
@@ -615,12 +620,18 @@ correlation, not business-action idempotency keys. Business validation, slot uni
 remain responsibilities of the external system; call variables are not its
 transaction database.
 
-Remaining proposal, not approved: tool policy should distinguish read-only,
-idempotent write, and non-idempotent write using trusted configuration, not model
-arguments or untrusted remote
-annotations. Bind any required confirmation to the exact validated action
-arguments, requesting participant, variables revision where relevant, and expiry.
-Changing the action invalidates confirmation. Do not announce successful sending
+**Approved confirmation scope:** do not add a generic platform-level confirmation
+mechanism now. An agent may ask "Shall I confirm this booking?" through its prompt;
+that is conversational behavior. Any enforceable business authorization belongs
+to the integrating application/MCP. Prompts are not a security guarantee, and
+Vxpipe still enforces its tool allowlists, trusted identity, and argument checks.
+The earlier proposal for confirmation bound to arguments, participant, variable
+revision, and expiry is out of scope. No confirmation token, approval endpoint,
+call-definition option, or generic confirmation state is required for this slice.
+
+Remaining proposal, not approved: classifying tools as read-only, idempotent write,
+or non-idempotent write using trusted configuration. Other retry exceptions and
+explicit cancellation also remain under review. Do not announce successful sending
 or booking from a request-start event. Progress speech is separate from result
 speech, with only one owner of each utterance.
 
@@ -900,7 +911,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Commit a fake remote booking but withhold its response until timeout | Report outcome unknown with timeout as the cause, not confirmed failure, success, or rollback; no automatic variable mutation; already-known definitive results stay definitive; the executor makes no automatic retry |
 | Explicitly request another tool call after an unknown timeout | A separate agent-requested invocation is distinguishable from an executor retry; no exactly-once or external deduplication guarantee is implied |
 | After a separately approved idempotency/reconciliation policy, exercise a retry | Verify any promised duplicate prevention against that policy and provider behavior; it is not guaranteed by the executor's no-automatic-retry default alone |
-| Change an action after confirmation | Old confirmation cannot authorize the new arguments |
+| Configure an agent to ask before booking, then attempt an unavailable tool | Domain-specific conversational confirmation uses the prompt/tool flow without a platform token; prompt instructions cannot grant tool access or substitute for enforceable application/MCP authorization |
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
@@ -912,6 +923,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 Late booking webhook/external-event delivery is deliberately not an acceptance
 requirement for the current MCP slice. Add such scenarios only when the deferred
 external-event mechanism is separately designed and authorized.
+Generic confirmation-token and argument-bound-approval tests are likewise not
+requirements for this slice; Vxpipe's existing tool-access checks remain in scope.
 
 These are planned red-green tests, not tests run during this review. Before each
 implementation checkpoint, write and run the smallest failing project-owned
@@ -1176,6 +1189,19 @@ examples, both definition fixtures, all 31 local links/anchors, unchanged routes
 and external references, and preserved G3/implemented-runtime contracts.
 Deferred scope, prior MCP policies, remaining-review status, terminology, path
 hygiene, and whitespace checks pass. No runtime or browser tests were run.
+
+The subsequent confirmation decision excludes generic platform confirmation for
+now. Conversational confirmation belongs in agent instructions; enforceable
+business authorization belongs to the application/MCP. Prompts are not security
+checks and Vxpipe's tool-access rules remain. The generic argument-bound token
+proposal and its test requirement are removed from this slice, without adding
+an endpoint, schema option, or state machine. Original labnote, architecture,
+review status, and acceptance scope are synchronized. G4 is still partly resolved
+with 11 open groups. Verification confirms 15 unchanged valid JSON examples, both
+definition fixtures, all 31 local links/anchors, unchanged routes/external
+references, and preserved G3/implemented-runtime contracts. Confirmation scope,
+tool-access boundaries, review status, terminology, path hygiene, and whitespace
+checks pass. No runtime or browser tests were run.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

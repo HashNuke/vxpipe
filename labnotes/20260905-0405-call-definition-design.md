@@ -69,6 +69,10 @@ not an internal retry or a guarantee against duplicate external actions.
 Late booking confirmations and similar notifications are external events for a
 future gateway-to-active-room/agent communication mechanism, not a current MCP
 timeout-reconciliation requirement. That scenario is deferred.
+Generic platform-level confirmation is also out of scope for now. Agent
+instructions handle conversational confirmation; any enforceable business
+authorization belongs to the integrating application/MCP. Prompt instructions
+are not a security guarantee, and Vxpipe still enforces tool access.
 G2's remaining admission details, the rest of G4, and G5–G13 remain pending user
 review. Approval of documentation does not authorize runtime implementation.
 
@@ -1432,9 +1436,10 @@ This is the ordinary-interruption rule while the agent remains running. Transfer
 still terminates its execution subtree, including its model/tool workers; room
 shutdown also ends their work. Local termination does not guarantee cancellation
 or rollback of an action already submitted to the remote system. Timeout outcome
-reporting is approved below; retries/idempotency, explicit cancellation,
-and confirmation policy remain separate G4 review questions. External recovery
-notifications after timeout or shutdown are deferred to the future event mechanism.
+reporting is approved below; other retry/idempotency policies and explicit
+cancellation remain separate G4 review questions. Generic platform confirmation
+is out of scope as documented below. External recovery notifications after
+timeout or shutdown are deferred to the future event mechanism.
 No new operation ledger or durable worker design is approved by this decision.
 
 The runtime does not implement this separation yet. `ModelInference` currently
@@ -1490,6 +1495,23 @@ and how an agent uses the event or updates variables belong to that future desig
 This decision does not select those mechanisms, restart an ended call, or change
 the approved timeout/unknown/no-automatic-retry behavior. Existing variable and
 conversation-history contracts remain unchanged.
+
+#### Tool confirmation stays with agent instructions and the domain
+
+Do not add a generic platform-level confirmation mechanism for MCP tools now.
+For example, an agent can ask "Shall I confirm this booking?" as instructed in its
+prompt before calling the enabled booking tool. That is conversational behavior,
+not a Vxpipe-issued confirmation token or a platform state machine.
+
+Any enforceable business authorization or consent requirement belongs to the
+integrating application/MCP. Prompt instructions are not a security guarantee.
+Vxpipe must still enforce which tools the agent may use and its existing trusted
+identity and argument checks; this decision does not replace those with prompts.
+
+The earlier proposal to bind platform confirmation to arguments, participant,
+variable revision, and expiry is not required for this slice. No confirmation
+token, new call-definition option, approval endpoint, or generic confirmation
+state is introduced. Domain-specific tool behavior remains the domain's concern.
 
 The public engine boundary should accept a definition (or immutable definition
 reference) plus an invocation. The current `CreateRoom` command remains a lower
@@ -3356,8 +3378,11 @@ G3 is resolved in documentation. G4 now preserves submitted MCP calls across
 ordinary conversational interruption and reports a timeout without a definitive
 remote result as outcome `unknown`, without automatic executor retry. Later
 agent-requested calls are separate invocations. Late business notifications are
-deferred to future external-event delivery to active rooms/agents. Other retry
-questions, remaining G2 details, and G5–G13 remain unapproved.
+deferred to future external-event delivery to active rooms/agents. Generic
+platform confirmation is out of scope; conversational confirmation belongs to
+agent instructions and enforceable business authorization to the application/MCP.
+Other retry/cancellation questions, remaining G2 details, and G5–G13 remain
+unapproved.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
@@ -3379,6 +3404,8 @@ automatic executor retry for that timeout are approved. Its other questions keep
 that group open and the overall count at 11.
 Late confirmations are explicitly deferred as an external-event concern, not an
 additional prerequisite for the current MCP slice.
+Generic platform-level confirmation is also excluded for now. Other G4 questions
+remain, so the review count is unchanged.
 
 ### Baseline and scope
 
@@ -3538,9 +3565,11 @@ The numbering below matches G1–G13 in the focused review document.
    storage solely for it, is deferred and not required for the current slice.
    Other retry exceptions and explicit cancellation remain unapproved. Any
    future retry exception would need its own idempotency/reconciliation contract;
-   none is approved by the no-retry default. Generic action confirmation tied
-   to arguments and expiry remains a proposal. A start event is not proof of
-   successful completion.
+   none is approved by the no-retry default. Generic platform-level confirmation
+   is excluded for now: agent instructions can request conversational confirmation,
+   while the application/MCP owns enforceable business authorization. Prompts
+   are not a security guarantee; Vxpipe's tool-access checks remain. A start event
+   is not proof of successful completion.
 5. **Private tool data and archive projections:** current tool events carry
    arguments/results through the gateway. Reusing that path for variables would
    leak values despite metadata-only variable events. Possible resolution:
@@ -3683,8 +3712,11 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    no assertion that local termination undoes an external action. Use explicit
    acknowledgements and monitors, not sleeps or liveness polling.
    After the remaining G4 policies are approved, add cases for other failure/retry
-   policies and changed confirmation arguments. Do not require a late-confirmation
-   webhook or reconciliation test for this slice: that scenario belongs to the
+   policies. Do not add a generic confirmation-token or changed-confirmation-arguments
+   test: that mechanism is out of scope. Domain-specific conversational confirmation
+   can be exercised with an agent prompt and fake tool; separately prove that
+   prompt instructions cannot grant access to an unavailable tool. Do not require
+   a late-confirmation webhook or reconciliation test for this slice: that scenario belongs to the
    deferred external-event mechanism, not the unknown-timeout no-retry contract.
 5. Return a synthetic confirmation from a fake remote MCP booking tool that
    knows nothing about Vxpipe. Confirm the result alone changes no call variables.
@@ -4370,6 +4402,29 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   G3's authorization transaction, and implemented-runtime descriptions are
   unchanged. Reviewed the complete diff for deferred scope and preservation of
   the approved MCP policies. Remaining-review status, restricted terminology,
+  local-path hygiene, and `git diff --check` pass. Documentation only; no runtime
+  or browser tests were run.
+
+### Generic tool confirmation is out of scope — approved 2026-09-07
+
+- Excluded a generic platform-level confirmation mechanism for now. Agent
+  instructions may ask for conversational confirmation before a tool call; any
+  enforceable business authorization belongs to the integrating application/MCP.
+  Prompt instructions are not a security guarantee.
+- Retained Vxpipe's tool-access, trusted-identity, and argument checks. The earlier
+  proposal for platform confirmation tied to arguments, participant, variable
+  revision, and expiry is not required: no confirmation token, approval endpoint,
+  call-definition option, or generic confirmation state is introduced.
+- Updated the original contract, architecture, review status, and acceptance
+  scope. Replace the generic changed-confirmation-arguments test with the
+  domain-specific prompt/tool flow and proof that prompts cannot grant access
+  to an unavailable tool. Explicit cancellation and other tool/retry policies
+  remain under review; G4 is partly resolved and 11 groups remain open.
+- Verification: all 15 JSON examples and both definition fixtures are unchanged
+  and parse; all 31 local links/anchors resolve. Routes, external references,
+  G3's authorization transaction, and implemented-runtime descriptions are
+  unchanged. Reviewed the complete diff for confirmation scope and preservation
+  of tool-access and prior MCP contracts. Review status, restricted terminology,
   local-path hygiene, and `git diff --check` pass. Documentation only; no runtime
   or browser tests were run.
 
