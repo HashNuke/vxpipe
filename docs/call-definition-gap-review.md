@@ -7,7 +7,9 @@ hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
 entry participants/startup, and one participant per definition key per call approved;
 G3 initialization approved with no context defaults, and submitted context
-updates continue through conversational interruption under existing checks;
+updates continue through conversational interruption under existing checks.
+Reads containing a forbidden section fail with a permission error and no values.
+Object/field update tools are requested, with semantics and naming still open;
 remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
@@ -330,7 +332,7 @@ The [intent request][intent-request] supplies variable overrides, and the
 [scheduling prompt][scheduling] includes time formatting. These illustrate the
 need, not a reason to adopt their unrestricted authoring surface.
 
-### G3 — P1, partly resolved: Initialization and interruption; other details pending
+### G3 — P1, partly resolved: Initialization, interruption, and read authorization
 
 **Approved initialization:** the [context candidate][context-design] has no
 default values. Its earlier section defaults and proposed merge rules are
@@ -363,14 +365,29 @@ or its acknowledgement is lost. Completion cannot revive cancelled model speech.
 The earlier live-turn check and mutation-ID deduplication/journal proposal are
 withdrawn for this decision. External tool outcomes remain a separate G4 review.
 
+**Approved read authorization:** inform the agent of its permitted sections, but
+still validate every request at the authority. If any requested section is
+forbidden, return a permission error and no context values, including otherwise
+permitted values from that same request. Do not silently filter forbidden names.
+The agent can retry with permitted sections only; successful reads do not add
+unrequested sections. This clarifies existing section grants, not a new
+field-level permission system. Error responses must not expose hidden values.
+
+**Requested update surface, details pending:** offer both
+`update_context(section_name, data)` for multiple fields in one call and
+`update_context_field(section_name, field_name, value)` for a single-field
+change. These are working interface names, not final wire schemas. Both share
+the existing atomic section boundary, write grant, validation, and revision
+checks. The labnote's existing operation-list example already batched updates;
+it is retained as an internal command candidate, not a third model-facing tool.
+Object merge versus replacement, nested/removal behavior, and final terminology
+remain for review. No schema keys or runtime modules are renamed yet.
+
 The following G3 proposals remain unapproved. Precise read and first-write
 behavior for an unset section also needs its implementation contract without
-introducing default values.
-
-Resolve the read wording to all-or-nothing authorization: if any requested
-section is unreadable, return no section values. Write-only errors must not echo
-existing values or schema-validator data. Bound schema complexity as well as
-value bytes so validation cannot monopolize the room process.
+introducing default values. Write-only errors must not echo existing values or
+schema-validator data. Bound schema complexity as well as value bytes so
+validation cannot monopolize the room process.
 
 Finally, separate **agent assertions** from **verified facts**. For example,
 `intake` may be agent-writable; `verification` and committed booking receipts
@@ -675,7 +692,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/context remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
 | Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
-| Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
+| Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
+| Update several fields with the object tool, then one field with the field tool, after update semantics are approved | One tool call per operation, atomic section validation, and the same write grant/revision boundary; no implicit field-level grants |
 | Interrupt after submitting a context update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
 | Change an action after confirmation | Old confirmation cannot authorize the new arguments |
@@ -710,6 +728,8 @@ synthetic identities, destinations, and data; do not operate example endpoints.
 - Do not add turn/tool-cancellation tracking or rollback for submitted local
   context updates. Let them finish under normal authorization/revision checks;
   corrections use another tool call, not blind retries of an obsolete patch.
+- Do not silently ignore forbidden sections in a context read. Return a
+  permission error and no values so the agent can correct its request.
 - Do not embed the caller in an entry field or infer it from catalog scanning.
   Both entry fields reference one participant catalog; compilation resolves
   initial roles explicitly. Listing a participant does not make it live.
@@ -783,6 +803,11 @@ finish while retaining authorization, lifecycle, and revision checks. It removes
 the proposed live-turn cancellation guard and mutation-ID journal requirement,
 updates the race/correction acceptance case, and leaves external-tool policy
 and the other G3 questions pending. No runtime cancellation behavior was changed.
+The read-authorization follow-up approves whole-request permission errors instead
+of filtering and updates the original read contract and future acceptance cases.
+It records the requested object and field update tools, retaining batching and
+the existing section authorization boundary, with naming and update semantics
+still pending. No runtime implementation or schema rename was introduced.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

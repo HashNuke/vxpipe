@@ -28,9 +28,12 @@ G3's initialization rule is also approved: context has no default values and is
 prefilled only from supplied call-setup data. Its interruption rule lets an
 already-submitted context update finish under the existing authorization and
 revision checks; a correction uses another tool call, not cancellation or
-rollback. G2's remaining admission details, the remaining G3 questions, and the
-other suggestions remain pending user review. Approval of documentation does
-not authorize runtime implementation.
+rollback. Reads containing a forbidden section now explicitly fail as a whole
+with a permission error. Object-level and single-field update tools are requested;
+their final names and object-update semantics remain under review. G2's remaining
+admission details, the remaining G3 questions, and the other suggestions remain
+pending user review. Approval of documentation does not authorize runtime
+implementation.
 
 ## Constraints
 
@@ -515,10 +518,13 @@ settled without introducing defaults.
 
 ### Platform context tool contracts
 
-The compiler adds `read_room_context` when an active agent has at least one read
-grant and `update_room_context` when it has at least one write grant. Authors do
-not list these platform tools in the agent's general `tools` map. The generated
-tool schemas contain closed section enums derived from that agent's grants.
+The compiler adds a read tool when an active agent has at least one read grant,
+and object-level and single-field update tools when it has at least one write
+grant. Authors do not list these platform tools in the agent's general `tools`
+map. The generated tool schemas describe the permitted sections and their data
+shape, with closed section enums derived from that agent's grants.
+`read_room_context` remains the working read name; final terminology and tool
+names are under review alongside the update sketches below.
 
 The read request and result are shaped as follows:
 
@@ -538,12 +544,39 @@ The read request and result are shaped as follows:
 }
 ```
 
-The authority intersects the requested sections with the trusted activation's
-read grants even though the model-facing enum is already constrained. An empty,
-unknown, unreadable, stale, or oversized request returns a typed tool error and
-no values.
+Read authorization is all-or-nothing. The authority checks every requested
+section against the trusted activation's read grants, even though the agent is
+already informed of the permitted sections. If any requested section is
+forbidden, return a permission error and no context values, including values
+from otherwise permitted sections in that request. Do not silently ignore the
+forbidden names. The agent can correct its request and retry with permitted
+sections only. A successful read returns only the sections requested, not every
+readable section. Empty, unknown, stale, malformed, or oversized requests still
+return typed errors without values. Errors must not disclose hidden values.
 
-An update modifies exactly one top-level section atomically:
+The requested update surface offers both forms, using these working names:
+
+```text
+update_context(section_name, data)
+update_context_field(section_name, field_name, value)
+```
+
+The object form accepts multiple fields in one tool call; the field form offers
+a focused single-field change. Both use one atomic section update and the same
+authorization, schema, limits, and expected-revision checks. These are interface
+sketches, not complete wire schemas: they omit revision and engine-private
+execution metadata for brevity. A field-update convenience does not introduce
+field-level permissions; the existing section write grant still governs it.
+
+Still to decide: whether object data merges supplied fields or replaces the
+entire section, how nested data and removal are expressed, and final tool names.
+No option is selected by these sketches. The earlier mutation-list example
+already allowed multiple field changes in one call, so this is a clearer tool
+surface, not a requirement to perform one call per field.
+
+The existing internal command candidate below can represent a bounded atomic
+section update; the exact lowering from the two tools depends on the remaining
+update-semantics decision. It is not a third model-facing update tool:
 
 ```json
 {
@@ -560,7 +593,8 @@ Paths are RFC 6901 JSON Pointers relative to the selected section. The initial
 mutation language supports only bounded `set` and `remove` operations on object
 fields; arrays are replaced as values rather than edited by index. An empty path
 may replace the complete section object. This is deliberately not full JSON
-Patch. The authority applies all changes to a copy, validates the complete
+Patch. These internal operations do not decide the object tool's merge/replace
+semantics. The authority applies all changes to a copy, validates the complete
 result, then either commits all of them or none of them.
 
 A successful result always returns the section name, new section revision, and
@@ -1650,6 +1684,13 @@ context-update tool call; conflicting old updates are not blindly retried.
 There is no additional live-turn/tool-cancellation check or mutation journal
 for this rule. External tool operations remain a separate review concern.
 
+### Silently filter forbidden sections from a context read
+
+Rejected. The agent is informed of its readable sections. A request containing
+a forbidden section receives a permission error and no values, so the agent
+can correct the request rather than treating a partial response as complete.
+This does not add field-level grants or change write authorization.
+
 ### Keep separate client-ID/HMAC authentication for browser-forwarded payloads
 
 Superseded. The backend sends initial context directly under API-key
@@ -1882,8 +1923,9 @@ UpdateRoomContext
 The model/tool worker builds them from an engine-private execution context. The
 trusted fields include tenant, room, incarnation, source participant, agent
 participant, agent activation, originating command, correlation, and tool-call
-IDs. Requested sections, expected revision, and changes are the only relevant
-model-supplied fields.
+IDs. Requested sections, expected revision, and proposed update data are the
+model-supplied inputs. The update bindings normalize object/field requests into
+the engine command; their exact mapping awaits the update-semantics decision.
 
 `RoomAuthority.update_context/2` performs one bounded `GenServer.call`. In order,
 the authority verifies:
@@ -1900,8 +1942,9 @@ the authority verifies:
 Only after all checks pass does it replace the section, increment that section's
 revision and the global revision, and emit the ordered update event. Any failure
 returns a typed result and preserves both values and revisions. Reads run the
-same identity and activation checks, intersect requested names with the read
-grant set, and never return a partial unauthorized result.
+same identity and activation checks and require every requested section to be
+readable. A forbidden section produces a permission error for the whole request
+with no context values; the authority does not filter it into partial success.
 
 The authority must not make a synchronous provider/tool call that can call back
 into it. Dispatch to model inference may synchronously obtain a bounded
@@ -1943,7 +1986,7 @@ review. No extra call-definition fields are needed.
 Compile an activation-specific effective tool surface from three sources:
 
 - platform tools derived from the agent definition, including transfer, hangup,
-  and the two context tools;
+  and the read, object-update, and field-update context tools;
 - explicitly enabled application tools; and
 - explicitly enabled remote MCP bindings.
 
@@ -1983,11 +2026,12 @@ permissions; stale source-agent tool calls fail their activation check.
    incarnation, stale activation, missing grant, revision conflict, invalid
    schema, and oversized input leave state unchanged. Add bounded read/update
    calls to `RoomAuthority` and protocol-neutral events.
-4. **Platform tool surface:** add failing executor/model tests proving read and
-   update tools appear only when the active agent has the matching grant, their
-   section schemas are closed, trusted identity is not model-controlled, and a
-   context update can call the authority without deadlock. Route engine platform
-   tools separately from host modules and MCP bindings.
+4. **Platform tool surface:** once update semantics are approved, add failing
+   executor/model tests proving the read tool and both update tools appear only
+   when the active agent has the matching grant, their section schemas are
+   closed, trusted identity is not model-controlled, and a context update can
+   call the authority without deadlock. Route engine platform tools separately
+   from host modules and MCP bindings.
 5. **Turn projection:** add failing model tests proving current readable context
    is present in every provider request, is not appended to private history,
    write-only values are absent, and an update result is available to the next
@@ -2016,7 +2060,11 @@ each red and green step. The focused cases must demonstrate:
   and leaves omitted optional context unfilled;
 - admission can initialize a section that agents can read but none can write;
 - an agent reads only granted sections and receives section revisions;
-- an agent updates an allowed field/object through the platform tool;
+- a read containing a forbidden section returns a permission error and no
+  values, even when other requested sections are readable; a corrected request
+  for permitted sections succeeds without adding unrequested sections;
+- an agent can update multiple fields through one object-update tool call, or
+  one field through the field-update tool, under the approved update semantics;
 - a write-only agent receives no old or resulting section value;
 - an unknown section, unauthorized section, stale activation, wrong incarnation,
   bad pointer, revision conflict, invalid resulting schema, or size violation
@@ -2792,9 +2840,11 @@ initial participants/startup, and one
 participant per definition key per call. G3's initialization rule now permits
 only supplied setup values, with no context defaults. Its interruption rule
 allows submitted context commands to finish under existing authorization and
-revision checks, with corrections made through later tool calls. G2's remaining
-questions, the remaining G3 questions, and G4–G13 are still unapproved. Detailed
-reasoning and evidence live in the
+revision checks, with corrections made through later tool calls. Read requests
+containing a forbidden section fail as a whole with a permission error. The two
+requested update forms still need precise semantics and final naming. G2's
+remaining questions, the remaining G3 questions, and G4–G13 are still unapproved.
+Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Baseline and scope
@@ -2819,6 +2869,9 @@ reasoning and evidence live in the
   the initialization contract. Capability/profile defaults remain unchanged.
   The interruption follow-up rejects an additional turn-cancellation check for
   submitted context updates while preserving revision and lifecycle checks.
+  The read follow-up rejects silent filtering: a forbidden section causes the
+  entire request to fail without values. It also records the requested object
+  and field update tools without selecting merge/replace semantics or new names.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2878,7 +2931,7 @@ The numbering below matches G1–G13 in the focused review document.
    details, and admission/transfer crash handling.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
-3. **Context initialization and interruption resolved; other details pending:**
+3. **Context initialization, interruption, and read authorization resolved:**
    there are no context defaults and no initialization merge. Only authorized
    call-setup input prefills context. Validate that supplied data, reject missing required
    setup values, and leave omitted optional values unfilled. Both context schema
@@ -2888,8 +2941,11 @@ The numbering below matches G1–G13 in the focused review document.
    schema, and revision checks, but add no live-turn/tool-cancellation guard or
    mutation journal. A delayed conflicting update must not overwrite a newer
    revision or be blindly retried; committed values are not rolled back.
-   Remaining review: reject mixed authorized and unauthorized reads as a whole,
-   and redact write-only validation errors.
+   Mixed authorized/unauthorized reads fail as a whole with a permission error
+   and no values; do not ignore forbidden names. A corrected request can succeed.
+   Object-level and single-field update tools are requested, but merge versus
+   replacement, nested/removal behavior, and final terminology remain open.
+   Other remaining review includes write-only validation-error redaction.
    A schema-valid agent write also does not prove identity verification or a
    completed external action. Consider separating intake from trusted-result
    sections; only authorized platform result bindings may update verified status or
@@ -2973,7 +3029,12 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    empty objects must validate, not act as instructions to populate defaults.
 2. Start a room, save intake through the agent tool, then read it on another
    turn. Transfer to a read-only agent; the value remains available but writes
-   fail. Inspect client events and confirm private tool values are absent.
+   fail. Request both a readable and a forbidden section; expect a permission
+   error with no values, then retry the readable section alone successfully.
+   Confirm success does not add unrequested sections. Inspect client events
+   and confirm private tool values are absent. Once update semantics are
+   approved, verify a multi-field object update needs one tool call and commits
+   atomically; a field update uses the same section grant and revision boundary.
 3. Submit a context update, then interrupt the conversation before authority
    commit while keeping the same room and agent activation. Confirm it can
    finish under normal authorization/revision checks without resuming cancelled
@@ -3318,6 +3379,30 @@ For the approved 2026-09-07 context-update interruption simplification:
   unchanged. All 20 local links/anchors resolve. Route consistency, removal of
   superseded cancellation assertions, terminology, local-path hygiene, and
   `git diff --check` pass. Runtime tests were not run for this docs-only change.
+
+For the approved 2026-09-07 context-read authorization follow-up:
+
+- Made the original read contract and authorization transaction explicit: a
+  forbidden requested section causes a permission error for the whole read,
+  with no context values. This supersedes silent filtering. Agents are informed
+  of their permitted sections and can correct the request; a successful retry
+  returns only the requested, permitted data. Existing section grants remain
+  the permission boundary, not a newly introduced field-level policy.
+- Recorded both requested update forms: one object-level tool call can update
+  several fields, and a field-level convenience handles a single change. The
+  existing mutation-list example already batches changes and remains an internal
+  command candidate. Both forms share atomic section validation and revision
+  checks. Final naming, merge/replacement, and nested/removal behavior are still
+  pending; no runtime implementation or schema-key rename was made.
+- Updated G3's status and future acceptance steps in both documents. Verification
+  scenarios cover a mixed-permission read failing without values, a corrected
+  permitted read, no unrequested data, and the two update forms once their exact
+  semantics are approved. Other G3 and external-operation questions remain open.
+- Verified all 10 JSON examples are unchanged and parse, both complete definition
+  contracts remain consistent, and the seven write-authorization checks are
+  unchanged. All 20 local links/anchors resolve; update-form, route, terminology,
+  local-path, superseded-read-wording, and `git diff --check` checks pass. No
+  runtime or browser tests were run for this documentation-only checkpoint.
 
 ## Verification evidence
 
