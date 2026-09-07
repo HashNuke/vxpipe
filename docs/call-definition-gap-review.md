@@ -13,6 +13,10 @@ Object updates recursively merge objects and preserve omitted nested fields;
 shallow sections are preferred. Explicit null clears nullable fields without
 deleting their keys; physical deletion is deferred. Context root keys name
 sections, direct section keys name fields, and the field tool uses literal names.
+Unpopulated authorized reads return a single null at the requested value level,
+without nested placeholders or stored defaults. Updates populate context
+iteratively: datatype checks remain, but required-field completeness is not
+validated at setup or on updates.
 Final naming remains open for the object/field tools;
 remaining G2/G3 questions and G4–G13 pending review.
 Record creation and actual live-call start have distinct approved timestamps.
@@ -21,7 +25,8 @@ Documentation only; no runtime implementation.
 Review count: **12 open numbered groups** — G2 and G3 partly resolved, G4–G13
 awaiting approval; G1 resolved in documentation. Individual sub-decisions are
 not counted separately here. Object merge versus replacement and preservation of
-omitted nested fields, explicit-null clearing, and direct-field addressing are
+omitted nested fields, explicit-null clearing, direct-field addressing, missing
+reads, and iterative population without required-field checks are
 resolved within G3; its other questions remain open, so the group count has
 not changed.
 
@@ -319,8 +324,9 @@ periods, how failed transports are confirmed disconnected, and detailed
 join/transfer responses and crash fencing. The approved recovery rules already
 preserve the same call and participant; multi-instance selection is not required.
 
-**Telephony initial-context sourcing:** an inbound phone call cannot supply the
-example's required trusted `customer.id` by itself. The approved direct-context
+**Telephony initial-context sourcing:** an inbound phone call cannot establish
+the example's trusted `customer.id` by itself. Context validation does not require
+that field to be present at admission. The approved direct-context
 shape eliminates remapping, not the need for a trustworthy source of values.
 There is no definition-default fallback. Keep authorized initial context,
 trusted ingress metadata, and subsequent agent assertions distinguishable; do
@@ -352,13 +358,38 @@ declared section shape. Reject section-level and nested schema `default`
 declarations. Capability/provider configuration defaults are a separate concern
 and remain unchanged.
 
-Validate supplied values and required setup data before room/provider work.
-Missing required values fail; omitted optional fields/sections remain unfilled,
-not automatically `{}`, `null`, or another value. Callers may explicitly supply
-an empty object where valid. Schemas and permissions do not populate data, and
-later authorized context updates remain supported. Both labnote examples omit
+Validate supplied datatypes and value constraints before room/provider work,
+without requiring missing fields. Omitted fields/sections remain unfilled in
+storage, not automatically `{}`, `null`, or another value. Callers may explicitly
+supply an empty section object and collect its fields later. Schemas and
+permissions do not populate data, and later authorized context updates remain
+supported. Both labnote examples omit
 context defaults; the invocation prefills only `customer.id`, leaving `intake`
 unfilled. There is no default-merge or input-remapping contract left to decide.
+
+**Approved missing reads and incremental population:** an authorized read of a
+declared but unpopulated section returns null in its value slot, retaining the
+normal revision metadata. Null is returned only at the requested value level;
+do not construct null-valued nested fields or store the response as context.
+A partial section is returned as stored, without filling missing children.
+Reads do not mutate state or revisions. Forbidden sections still fail the whole
+request, and unknown sections still receive the existing typed error. No new
+field-read API is introduced.
+
+The first `update_context` populates an unfilled section with its supplied
+object; later updates recursively merge into it. The field form can also
+populate a declared direct field in a new section. For an `address` section
+with string fields, an agent can save `city` first and `postal_code` later.
+Missing fields do not fail validation, including within nested objects. A
+number supplied for either string field still fails, with no partial commit.
+The same section grants, lifecycle, revision, and size checks apply.
+
+This defers required-field completeness checks, not datatype or other
+supplied-value validation. It applies to both initial context and updates;
+there is no new final-completeness gate or configuration toggle. Call-definition
+structure, tool argument envelopes, and external tools' own required inputs
+remain separate contracts. The labnote examples remove their context `required`
+lists while retaining datatype and value constraints.
 
 **Approved interruption rule:** let an already-submitted local context update
 finish, and use another tool call for a correction. The
@@ -396,10 +427,10 @@ omitted fields retain their values at every object depth. Where old and supplied
 values are both objects, recurse rather than replacing the object wholesale.
 For example, changing `intake.topic` preserves an existing `intake.summary`;
 changing a nested `address.city` preserves its `postal_code`. This is a deep
-merge, not just a deep copy. Check the expected revision and validate the complete
-merged result, including required fields retained from the old data, then commit once
-or reject the whole update without changing values or revisions. This changes
-runtime values without introducing defaults or an initialization merge.
+merge, not just a deep copy. Check the expected revision and validate populated
+values in the merged result, including retained values but not missing fields,
+then commit once or reject the whole update without changing values or revisions.
+This changes runtime values without introducing defaults or an initialization merge.
 Prefer simple, shallow context: make `address` its own section with `city` and
 `postal_code`, giving it an explicit schema, grant, and revision boundary.
 This is authoring guidance, not a ban on schema-permitted nesting or a runtime
@@ -423,19 +454,17 @@ No new tool, field-level permission system, or path syntax is introduced.
 null for a schema-nullable field. It stores null while retaining the key, rather
 than skipping or deleting it. For example, clearing `address.apartment` changes
 `"4B"` to null without removing `apartment` or altering the other address fields.
-An omitted field remains unchanged. Nullability must be explicit: optional does
-not imply nullable, and a required nullable field stays present when cleared.
-The complete merged result, write grant, and expected revision still validate;
+An omitted field remains unchanged. Nullability must be explicit: permitting an
+absent field does not imply accepting an explicit null, and cleared keys stay
+present. Populated values, write grant, and expected revision still validate;
 null in a non-nullable field fails the whole update without mutation. No missing
 value is automatically populated with null, and section roots remain objects.
 Separate deletion tools and physical key removal are deferred, not prerequisites
 for clearing a value. No null-means-delete convention is adopted.
 
-The following G3 proposals remain unapproved. Precise read and first-write
-behavior for an unset section also needs its implementation contract without
-introducing default values. Write-only errors must not echo existing values or
-schema-validator data. Bound schema complexity as well as value bytes so
-validation cannot monopolize the room process.
+The following G3 proposals remain unapproved. Write-only errors must not echo
+existing values or schema-validator data. Bound schema complexity as well as
+value bytes so validation cannot monopolize the room process.
 
 Finally, separate **agent assertions** from **verified facts**. For example,
 `intake` may be agent-writable; `verification` and committed booking receipts
@@ -731,9 +760,9 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Race admissions/transfers and re-enter an agent definition | One participant and no duplicate pending preparation per key per call; agent re-entry retains identity with a fresh activation |
 | Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
-| Declare schemas with no context defaults and supply only a required customer ID at setup | Required data and supplied values validate before startup; optional intake stays unfilled; context default declarations fail; capability defaults still work; explicit empty objects validate without filling values |
+| Declare schemas with no context defaults and supply partial initial context | Supplied datatypes/value constraints validate before startup; missing fields do not fail, including in nested objects; intake stays unfilled; context defaults fail; capability defaults still work; explicit empty section objects are accepted without filling values |
 | Prepare private order context using a backend API key, then join from the browser using only a token | Preparation pins/stores context without starting providers; authorized joining activates that call; private preparation data is not returned; agents read but cannot rewrite read-only sections; invalid keys, tenant/participant access, and context fail |
-| Connect a backend WSS client with an API key and send unsigned context as its first message | Invalid authentication fails before upgrade; invalid/missing/oversized context cannot start the room; browser Origin and HTTP CORS policies are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
+| Connect a backend WSS client with an API key and send unsigned context as its first message | Invalid authentication fails before upgrade; a missing message, malformed/oversized context, or wrong datatypes cannot start the room; empty context and partial sections are allowed; browser Origin and HTTP CORS are checked separately; keys/tokens stay out of URLs, room state, events, and logs |
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
 | Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting context |
@@ -741,9 +770,10 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
-| Merge several fields with the object tool, then change one field with the field tool | One call per operation; omitted fields remain, including existing required fields; the complete merged result validates atomically; invalid updates change nothing; the same write grant/revision boundary applies |
-| Update only a nested address city, then exercise a shallow address section | Nested postal code and other omitted siblings remain recursively, including required fields; invalid nested values reject the whole update; shallow and permitted nested shapes work without automatic flattening |
-| Clear an apartment using explicit null through each update form | A nullable field remains present with null; omitted fields stay unchanged; required nullable keys stay present; non-nullable fields reject null atomically even if optional; no deletion tool or automatic null defaults |
+| Read an unpopulated section, then populate it over multiple updates | Read returns one null in the requested value slot, no nested placeholders or state/revision change; first object or field write creates supplied data, later writes add fields; partial reads do not fill missing children; unknown/forbidden sections still fail |
+| Merge several fields with the object tool, then change one field with the field tool | One call per operation; omitted stored fields remain; missing fields need not be supplied; wrong datatypes/invalid populated values reject atomically; the same write grant/revision boundary applies |
+| Update only a nested address city, then exercise a shallow address section | An existing postal code and omitted siblings remain recursively; a missing postal code is neither required nor invented; wrong nested datatypes reject the whole update; shallow and permitted nested shapes work without automatic flattening |
+| Clear an apartment using explicit null through each update form | A nullable field remains present with null; omitted fields stay unchanged; non-nullable fields reject explicit null atomically even though absence is allowed; no deletion tool or stored null defaults |
 | Select a direct field, then attempt a dot/pointer/index-like field name | Only exact declared direct keys are addressed; unmatched names fail, punctuation is never traversal, explicitly declared literal keys remain literal, and nested changes use the object tool |
 | Interrupt after submitting a context update, then correct it with another call | The submitted command can finish under existing checks without reviving speech; correction uses the new revision; a delayed original loses a same-revision race without blind retry; transfer/deactivation and room end still fence pending writes |
 | Book, interrupt after remote commit but before response, then retry | One external booking; durable/observable receipt or explicit unknown outcome; no stale speech or automatic duplicate |
@@ -774,8 +804,12 @@ synthetic identities, destinations, and data; do not operate example endpoints.
 - Do not duplicate the room-context schema with a second call-input schema and
   initialization map. The backend can supply the declared context shape directly.
 - Do not populate context from definition defaults, merge in fallback values,
-  or turn omitted optional values into empty objects or nulls. Only supplied
-  setup data prefills context; later writes still need their existing grants.
+  or store empty objects or nulls for omitted values. Only supplied setup data
+  prefills context; later writes still need their existing grants. Returning
+  null for a missing requested value is a read representation, not a default.
+- Do not demand complete context before accepting setup or an update. Agents
+  collect fields iteratively; retain datatype/supplied-value checks without
+  required-field completeness checks at any object depth.
 - Do not add turn/tool-cancellation tracking or rollback for submitted local
   context updates. Let them finish under normal authorization/revision checks;
   corrections use another tool call, not blind retries of an obsolete patch.
@@ -783,7 +817,8 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   permission error and no values so the agent can correct its request.
 - Do not replace a complete context section with the partial object passed to
   `update_context`. Recursively merge objects, preserve omitted fields at every
-  object depth, and validate the complete result; omission is not deletion.
+  object depth, and validate populated values without demanding missing fields;
+  omission is not deletion.
 - Do not interpret explicit null as key deletion or add a tool solely to clear
   a value. Store null through either update form when its schema allows it;
   optionality alone does not grant nullability.
@@ -889,6 +924,20 @@ section keys as literal field names. It routes deeper partial changes through
 the object-update tool, separates model-facing names from internal pointer
 encoding, and adds future direct-key/path-confusion checks. Other G3 questions
 remain open; no runtime tool or schema-wrapper change was introduced.
+The missing-read and incremental-population decision returns one null at a
+requested absent value, without nested placeholders or a stored default. First
+writes populate a declared section; later writes collect fields iteratively.
+This supersedes earlier required-field completeness checks mentioned in the
+historical checkpoints above, while retaining datatype and supplied-value
+validation. Context-tool argument shapes must also allow partial objects. The
+two definition illustrations remove only their context `required` lists, and
+planned acceptance steps now cover absence, partial/nested collection, and wrong
+datatypes. G3's read/first-write questions are resolved; other G3 questions keep
+the count at 12 open groups. No runtime implementation was changed.
+Verification parsed all 13 JSON examples, confirmed the only example changes
+are the two context `required` removals, and checked both definition contracts,
+unrelated write checks, 20 local links/anchors, routes, review counts, and
+documentation hygiene. `git diff --check` passed; no runtime/browser tests ran.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

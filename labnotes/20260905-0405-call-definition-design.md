@@ -37,6 +37,11 @@ when its schema permits null; omission preserves the existing value. Physical
 field deletion is deferred. Context root keys are section names; direct keys
 inside a section are field names. The field tool uses literal names, with nested
 updates expressed through the object tool. Final tool names remain under review.
+An authorized read of unpopulated context returns one `null` at the requested
+value level, without constructing nested nulls or storing a default. The first
+update populates the section, and later updates add data iteratively. Datatype
+and supplied-value checks remain; required-field completeness is not enforced
+at setup or on updates.
 G2's remaining admission details, the remaining G3 questions, and the other
 suggestions remain pending user review. Approval of documentation does not
 authorize runtime implementation.
@@ -326,8 +331,10 @@ The definition declares named top-level context sections. Each section describes
 an object schema, not initial values or defaults. Only an authorized call-setup
 invocation prefills values, directly in that section structure; no separate
 input schema, input-to-context mapping, or default-merge layer is required.
-Unprovided optional context remains unfilled. Typed facts should not be
-re-extracted from a transcript when an authoritative invocation value or tool
+Unprovided context remains unfilled; fields may be collected over several
+updates. Datatypes still have to match, but missing fields do not fail a
+required-field check. Typed facts should not be re-extracted from a transcript
+when an authoritative invocation value or tool
 result already exists.
 
 The naming hierarchy is explicit: root keys in the context data are section
@@ -364,7 +371,9 @@ An agent never mutates the map directly. Read or write grants cause the engine t
 offer platform-owned context tools constrained to that agent's granted sections.
 The room authority validates the current room incarnation, agent participant,
 agent activation, section permission, expected section revision, patch bounds,
-and resulting section schema before applying an update and emitting its event.
+and the resulting section's populated values against its schema before applying
+an update and emitting its event. Schema checks do not require missing fields
+to be filled first.
 MCP results do not update room context implicitly; an explicit tool-result
 mapping or authorized context update must request it.
 
@@ -429,7 +438,6 @@ room-context portion is:
           "properties": {
             "id": {"type": "string", "minLength": 1}
           },
-          "required": ["id"],
           "additionalProperties": false
         }
       },
@@ -498,11 +506,13 @@ The schema fields and runtime values have distinct jobs:
   `default` declarations rather than using or silently ignoring them. There is
   no merge precedence to specify. This does not remove capability/provider
   configuration defaults elsewhere in the call definition.
-- Validate the supplied initial values before room/provider startup. Required
-  setup values such as `customer.id` must be provided; no dummy value, coercion,
-  or schema default fills a missing field. Optional omitted fields/sections
-  stay unfilled, rather than receiving automatic `{}`, `null`, or other values.
-  An explicitly supplied empty object is allowed only where its schema permits.
+- Validate the datatypes and schema constraints of supplied initial values
+  before room/provider startup, not required-field completeness. Missing
+  `customer.id` or another unfilled field does not fail context validation.
+  No dummy value, coercion, or schema default fills a missing field. Omitted
+  fields/sections stay unfilled in storage, rather than receiving automatic
+  `{}`, `null`, or other values. Explicitly supplied empty section objects are
+  allowed; their fields can be collected later.
   The invocation example prefills `customer.id` only; `intake` has no initial
   value. Later authorized context updates are still supported.
 - Admission initializes context independently of agent write grants. Both
@@ -516,17 +526,23 @@ The schema fields and runtime values have distinct jobs:
 The `schema` objects use a closed Vxpipe-supported subset of JSON Schema-shaped
 keywords. The initial subset should cover object, string, boolean, integer,
 number, explicit nullable field types, arrays as replaceable values, properties,
-required fields, enums, bounded strings/arrays/numbers, and
+enums, bounded strings/arrays/numbers, and
 `additionalProperties: false`. The dated
 Vxpipe schema defines exactly which keywords work; accepting this shape must not
 claim support for arbitrary JSON Schema vocabularies, references, or executable
-formats.
+formats. Required-field presence is not part of context validation: check the
+values that are populated, including their datatypes, without demanding a
+complete object at any nesting depth. Both setup and later updates permit
+partial context. The examples omit `required` declarations; there is no
+separate final-completeness check or new validation mode in this decision.
 
-Nullability is explicit, not inferred from a field being optional. `required`
-governs whether a field must be present; the field's schema separately decides
-whether `null` is an allowed value. A required nullable field can therefore be
-cleared while retaining its key. No field gains an automatic null default, and
-section roots remain objects.
+Nullability is explicit: an absent field is not the same as a populated null.
+The field's datatype still decides whether an explicitly supplied `null` is an
+allowed value. A nullable field can be cleared while retaining its key; a
+non-nullable field rejects an explicit null. An absent section may be represented
+by null in a read response without storing a null section or violating its object
+type. No field gains an automatic null default, and populated section roots
+remain objects.
 
 Each runtime section has independent revision state:
 
@@ -542,8 +558,10 @@ The global revision supports snapshots and event correlation. The section
 revision is the optimistic-concurrency token used by tools. Independent sections
 can change without causing unrelated updates to conflict.
 Declarations and revision metadata do not themselves populate section values.
-The precise read/first-write contract for an unfilled section remains to be
-settled without introducing defaults.
+Reads of unfilled sections return null as described below; the read does not
+populate state or advance a revision. Their existing revision metadata still
+lets an authorized writer submit its first update with the normal concurrency
+check.
 
 ### Platform context tool contracts
 
@@ -552,6 +570,8 @@ and object-level and single-field update tools when it has at least one write
 grant. Authors do not list these platform tools in the agent's general `tools`
 map. The generated tool schemas describe the permitted sections and their data
 shape, with closed section enums derived from that agent's grants.
+Context update argument schemas must allow partial data objects too, rather
+than reintroducing required context fields before the authority receives them.
 `read_room_context` remains the working read name; final terminology and tool
 names are under review alongside the update sketches below.
 
@@ -582,6 +602,44 @@ forbidden names. The agent can correct its request and retry with permitted
 sections only. A successful read returns only the sections requested, not every
 readable section. Empty, unknown, stale, malformed, or oversized requests still
 return typed errors without values. Errors must not disclose hidden values.
+
+#### Missing reads and incremental population — approved G3 decision
+
+After authorization, an unpopulated requested section returns `value: null` in
+its normal section result, alongside revision metadata. Return null only at the
+requested value level: an unset `address` does not become an object containing
+`city: null`, `postal_code: null`, or recursively generated placeholders. If
+`address` already contains only `city`, reading the section returns that partial
+object without adding `postal_code`. The current read tool requests sections;
+this does not introduce a nested-field read API.
+
+This is a read representation of absence, not a stored default, a mutation, or
+permission to read forbidden sections. A forbidden section still fails the
+whole request; an unknown section still receives the existing typed error.
+Reads neither create a value nor change revisions.
+
+The first `update_context` on a declared but unpopulated section creates its
+value from the supplied object. Later updates use the same recursive merge.
+The field-update form can likewise populate its declared direct field in an
+unfilled section. Both keep the normal grants, lifecycle, revision, datatype,
+and size checks. No other fields or nested placeholders are materialized.
+
+For example, an `address` section declares string fields `city` and `postal_code`:
+
+1. With no supplied address, reading it returns null at the section value level.
+2. `update_context("address", {"city": "Newtown"})` stores just the city.
+3. `update_context("address", {"postal_code": "12345"})` adds the postal code
+   while retaining the city.
+4. Supplying a number for either string field fails datatype validation without
+   changing data or revisions, including when other fields in that update match.
+
+Required-field completeness checks are deferred, at setup and at every nesting
+depth of an update. Datatype/schema checks for populated values are not removed.
+This supersedes the earlier requirement to reject missing context fields before
+startup or demand a complete schema-valid object on every write. It does not
+weaken call-definition validation, entry refs, tool argument envelopes, or
+authentication. Context can be incomplete without authorizing an external tool
+to omit that tool's own required arguments.
 
 The requested update surface offers both forms, using these working names:
 
@@ -633,10 +691,11 @@ illustrate the merge; they are not a new request/response envelope:
 ```
 
 The authority checks the expected revision, merges into a copy, and validates
-the complete resulting section, including retained fields, before committing.
-The supplied partial object need not repeat required fields already present in
-the section. Invalid supplied fields, an invalid merged result, a permission
-failure, or a revision conflict leave the whole section and revisions unchanged.
+the populated values in the resulting section, including retained fields,
+before committing. Missing fields are allowed, not merely fields already stored
+but omitted from the update. Invalid supplied fields, an invalid merged result,
+a permission failure, or a revision conflict leave the whole section and
+revisions unchanged.
 This merges existing runtime data, not definition defaults into initial context;
 the supplied-only initialization rule is unchanged.
 
@@ -675,7 +734,7 @@ For such a nullable field, the result is (illustrative values, not a wire envelo
 
 During deep merge, an explicitly supplied null is an assigned value, not a
 request to recurse into the old value, skip the update, or delete the field.
-The complete result must still validate: clearing a non-nullable field rejects
+Populated values must still validate: clearing a non-nullable field rejects
 the entire update without changing values or revisions. The existing permission
 and expected-revision checks apply to clears too. Unfilled context is not
 automatically materialized as null, and a section root cannot be cleared to null
@@ -714,8 +773,8 @@ index. An empty path may replace the complete section object. This is deliberate
 Patch. An internal whole-section replacement must not turn `update_context`
 into replacement of the section by its partial input: the merged candidate
 must preserve omitted fields at every object depth. The authority applies all
-changes to a copy, validates the complete result, then commits all of them or
-none of them.
+changes to a copy, checks populated values without required-field completeness,
+then commits all of them or none of them.
 
 A successful result always returns the section name, new section revision, and
 new global revision. It includes the resulting value only when the same agent
@@ -1644,7 +1703,6 @@ candidate until the constructor and compiler tests make every field precise:
           "properties": {
             "id": {"type": "string", "minLength": 1}
           },
-          "required": ["id"],
           "additionalProperties": false
         }
       },
@@ -1803,8 +1861,9 @@ section and preserve omitted fields. Replacing the section with the submitted
 object would lose previously collected data or require the agent to resend it
 on every update. The same rule applies to partial nested objects: recursively
 merge them rather than losing omitted children. Validate and commit the complete
-merged result atomically. Explicit null assignment clears a nullable field while
-retaining its key; physical removal is deferred.
+merged result atomically without requiring missing fields. Explicit null
+assignment clears a nullable field while retaining its key; physical removal
+is deferred.
 
 ### Treat null as deletion or require a separate tool just to clear a value
 
@@ -1812,6 +1871,15 @@ Rejected for the initial context tools. Use explicit null assignment through
 either update form, retain the field's key, and validate nullability under its
 schema. Omission means preserve, not clear; optional does not imply nullable.
 Do not add a field-deletion tool for this decision.
+
+### Require complete context before accepting setup or an update
+
+Rejected for now. Data collection is iterative: saving a known city must not
+wait for an unknown postal code. Keep datatype checks and other supplied-value
+constraints, section grants, revision checks, and bounds, but do not enforce
+required-field presence at any object depth. Reads return one null for a
+requested unpopulated value rather than manufacturing a nested default object.
+This decision adds neither a final-completeness gate nor a validation toggle.
 
 ### Interpret field names as nested paths
 
@@ -1975,8 +2043,9 @@ boundaries, with path-specific errors:
   than `read` or `write`;
 - a transfer context projection containing a section the destination cannot
   read;
-- initial context containing undeclared sections/fields, invalid values, or
-  required values missing from the complete initialized context at admission;
+- initial context containing undeclared sections/fields, non-object section
+  roots, invalid populated values, or exceeded size limits; missing fields are
+  permitted and do not cause required-field validation failures;
 - policies outside bounded ranges;
 - incompatible required capabilities; and
 - any private runtime term or literal secret at the public boundary.
@@ -2040,7 +2109,7 @@ CallDefinition + CallInvocation
 
 `ResolvedCallPlan` is immutable. `RoomContext` is mutable and belongs to the room
 incarnation. A focused pure module owns supplied-value initialization, projection,
-pointer mutation, size checks, schema validation, and revision changes;
+pointer mutation, size checks, populated-value schema checks, and revision changes;
 `RoomAuthority` owns the module's state and decides whether an operation is
 authorized at this moment.
 
@@ -2082,10 +2151,12 @@ the authority verifies:
 2. that the named agent participant is still admitted and its activation is the
    current active activation;
 3. that the resolved plan grants that agent `write` on the named section;
-4. that the section exists and `expected_revision` matches;
+4. that the section is declared and `expected_revision` matches, even if its
+   value is not populated yet;
 5. operation count, pointer shape, and encoded byte limits;
 6. that applying every change to a copy succeeds; and
-7. that the complete candidate section validates against its compiled schema.
+7. that the candidate is an object and its populated values match the compiled
+   schema's datatypes and value constraints, without requiring missing fields.
 
 Only after all checks pass does it replace the section, increment that section's
 revision and the global revision, and emit the ordered update event. Any failure
@@ -2166,9 +2237,10 @@ permissions; stale source-agent tool calls fail their activation check.
    defaults, direct initial context, agent permissions, and direct transfer refs.
    Implement typed constructors and path-specific errors without starting processes.
 2. **Pure context state:** add failing tests for initialization, projection,
-   bounded pointer changes, atomic schema rejection, independent section
-   revisions, and write-only redaction. Implement the pure `RoomContext` state
-   module.
+   absent-section null reads without mutation, iterative population, bounded
+   pointer changes, atomic datatype rejection without required-field checks,
+   independent section revisions, and write-only redaction. Implement the pure
+   `RoomContext` state module.
 3. **Room ownership:** add failing room tests proving creation pins a resolved
    plan and initialized context; a correct update commits once; wrong
    incarnation, stale activation, missing grant, revision conflict, invalid
@@ -2205,12 +2277,18 @@ each red and green step. The focused cases must demonstrate:
 
 - initial context initializes only schema-declared sections and fields;
 - context initialization uses only supplied values, rejects default declarations,
-  and leaves omitted optional context unfilled;
+  and leaves omitted context unfilled without required-field checks;
+- setup accepts partial or explicitly empty section objects while still rejecting
+  populated values of the wrong datatype and other invalid supplied values;
 - admission can initialize a section that agents can read but none can write;
 - an agent reads only granted sections and receives section revisions;
 - a read containing a forbidden section returns a permission error and no
   values, even when other requested sections are readable; a corrected request
   for permitted sections succeeds without adding unrequested sections;
+- an authorized read of an unfilled section returns null at that section's
+  value level, with no nested placeholders, stored value, or revision change;
+- reading a partially populated section returns only its stored fields, and
+  the first write populates an unfilled section under its existing revision;
 - an agent can update multiple fields through one object-update tool call, or
   one field through the field-update tool, without removing omitted section fields;
 - root keys select sections and field names select direct schema-declared keys;
@@ -2218,17 +2296,20 @@ each red and green step. The focused cases must demonstrate:
 - names containing dots, slashes, or index-like punctuation never navigate;
   when explicitly declared as literal fields, they update only that exact key;
 - nested partial changes use the object tool and preserve omitted siblings;
-- an object update preserves an omitted existing required field, validates the
-  complete merged result, and rejects an invalid multi-field update atomically;
-- a partial nested-object update preserves omitted sibling values and required
-  nested fields at every object depth; nested validation failure changes nothing;
+- an object update preserves omitted existing fields, allows still-missing
+  fields, and rejects a wrong-datatype multi-field update atomically;
+- repeated partial updates collect fields iteratively, both for a new section
+  and a new nested object, without a required-field completeness check;
+- a partial nested-object update preserves omitted sibling values at every
+  object depth; a nested datatype failure changes nothing;
 - shallow sections and schema-permitted nested objects both work without
   automatic flattening or an implicit ban on nesting;
 - both update forms clear a nullable field by storing null while retaining its
   key, including inside an object merge; omitted fields stay unchanged;
 - null supplied to a non-nullable field rejects the entire update atomically;
-  optional does not imply nullable, and required nullable keys stay present;
-- no clear operation deletes a key or generates null values for unfilled context;
+  permitting absence does not imply accepting an explicit null;
+- no clear operation deletes a key or generates stored nulls for unfilled
+  context; a null read response is not a clear operation;
 - a write-only agent receives no old or resulting section value;
 - an unknown section, unauthorized section, stale activation, wrong incarnation,
   bad pointer, revision conflict, invalid resulting schema, or size violation
@@ -3007,8 +3088,12 @@ allows submitted context commands to finish under existing authorization and
 revision checks, with corrections made through later tool calls. Read requests
 containing a forbidden section fail as a whole with a permission error. The two
 update forms are retained, with object updates recursively merging supplied
-objects and preserving omitted fields. Explicit null assignment clears nullable
-fields without removing keys; physical deletion is deferred. Root keys are
+objects and preserving omitted fields. Missing authorized reads return one null
+at the requested value level without storing placeholders. First writes populate
+sections; subsequent writes collect fields iteratively. Datatypes still match,
+but required-field presence is not validated at setup or on updates.
+Explicit null assignment clears nullable fields without removing keys;
+physical deletion is deferred. Root keys are
 section names and direct section keys are literal field names; deeper updates
 use the object tool. Final naming, G2's remaining questions, the other G3
 questions, and G4–G13 remain unapproved.
@@ -3021,7 +3106,8 @@ There are **12 open review groups** out of the original 13: G2 and G3 are partly
 resolved, and G4–G13 still need approval. G1 is resolved in documentation.
 This counts the numbered groups, not individual edge cases or implementation
 tasks. Section-level merging, recursive preservation inside nested objects,
-explicit-null clearing, and root-section/direct-field addressing are resolved
+explicit-null clearing, root-section/direct-field addressing, missing reads,
+and iterative population without required-field checks are resolved
 within G3, but its remaining questions keep the group open.
 The count therefore remains 12; it is not reduced for each resolved sub-decision.
 
@@ -3057,6 +3143,9 @@ The count therefore remains 12; it is not reduced for each resolved sub-decision
   removing their keys; physical field deletion is deferred.
   The addressing follow-up fixes root keys as section names and direct section
   keys as literal field names; the object tool handles deeper partial updates.
+  The incremental-population follow-up returns a single null for a missing read
+  value and allows first writes to populate it. It supersedes required-field
+  completeness checks, while retaining datatype and supplied-value validation.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -3118,9 +3207,13 @@ The numbering below matches G1–G13 in the focused review document.
    customer identity; the backend authorizes the supplied business context.
 3. **Context initialization, interruption, reads, and object merging resolved:**
    there are no context defaults and no initialization merge. Only authorized
-   call-setup input prefills context. Validate that supplied data, reject missing required
-   setup values, and leave omitted optional values unfilled. Both context schema
-   examples now omit defaults; capability/profile configuration is unchanged.
+   call-setup input prefills context. Validate supplied datatypes and value
+   constraints, not required-field completeness, and leave omitted values
+   unfilled. An authorized read returns null at a missing requested value's
+   level, without generating nested placeholders or storing a default. The
+   first write populates the section, and later writes collect fields iteratively.
+   Both context schema examples now omit defaults and required-field lists;
+   capability/profile configuration is unchanged.
    Submitted local context updates continue despite conversational interruption;
    corrections use another tool call. Keep room/activation, permission, deadline,
    schema, and revision checks, but add no live-turn/tool-cancellation guard or
@@ -3129,9 +3222,9 @@ The numbering below matches G1–G13 in the focused review document.
    Mixed authorized/unauthorized reads fail as a whole with a permission error
    and no values; do not ignore forbidden names. A corrected request can succeed.
    Object-level updates deep-merge supplied objects into existing section data,
-   preserving omitted fields recursively and validating the complete merged
-   result. Prefer simple, shallow sections, such as a dedicated `address`,
-   without banning schema-permitted nesting. The single-field tool remains
+   preserving omitted fields recursively and validating populated values without
+   demanding missing fields. Prefer simple, shallow sections, such as a dedicated
+   `address`, without banning schema-permitted nesting. The single-field tool remains
    available. Explicit null clears schema-nullable fields while retaining their
    keys; omission preserves existing values. Physical deletion is deferred.
    Addressing is resolved: root section names and direct literal field names,
@@ -3212,33 +3305,39 @@ The numbering below matches G1–G13 in the focused review document.
 These are future verification scenarios, not capabilities available in the
 playground today. Use deterministic fakes first and synthetic data throughout.
 
-1. Compile one definition whose required context value comes directly from
-   `initial_context`, with no mapping or defaults. Missing required setup values
-   and invalid supplied values must fail before a room or provider starts.
+1. Compile one definition whose initial context comes directly from
+   `initial_context`, with no mapping or defaults. Missing fields do not prevent
+   setup; wrong datatypes and other invalid populated values must fail before
+   a room or provider starts.
    Reject section-level and nested context defaults; retain ordinary capability
    defaults. Supply only `customer.id` and confirm no `intake` value is invented.
-   With no required setup data, omission prefills no values. Explicitly supplied
-   empty objects must validate, not act as instructions to populate defaults.
+   Omission prefills no values. Explicitly supplied empty section objects are
+   allowed, not instructions to populate defaults. Repeat with missing fields
+   inside a supplied nested object; no required-field check demands them.
 2. Start a room, save intake through the agent tool, then read it on another
    turn. Transfer to a read-only agent; the value remains available but writes
    fail. Request both a readable and a forbidden section; expect a permission
    error with no values, then retry the readable section alone successfully.
    Confirm success does not add unrequested sections. Inspect client events
-   and confirm private tool values are absent. Verify a multi-field object update
+   and confirm private tool values are absent. Before writing an unfilled section,
+   read it: expect one null in its value slot, not nested nulls, with no stored
+   value or revision change. Write only one field, read back that partial object,
+   then add another field in a later update. Repeat for the field tool's first
+   write and for a newly populated nested object. Verify a multi-field object update
    needs one tool call and commits atomically; a field update uses the same
    section grant and revision boundary. Update only `intake.topic` and confirm
-   the existing `intake.summary` remains. Test a writable section with an existing
-   required field omitted from the update: the merged result still validates.
-   A bad field or invalid merged result must reject the whole update without
-   changing values or revisions. Repeat with a partial nested address: changing
-   its city must retain the postal code, including when that omitted field is
-   required. Verify preservation across deeper objects and atomic rejection of
-   invalid nested values. Also exercise a shallow `address` section without
+   the existing `intake.summary` remains. Missing fields must not block an update;
+   a field of the wrong datatype or other invalid populated value must reject it
+   atomically. A bad field or invalid merged result must reject the whole update
+   without changing values or revisions. Repeat with a partial nested address: changing
+   its city must retain the postal code if one is already stored, and succeed
+   without inventing one if it is not. Verify preservation across deeper objects
+   and atomic rejection of invalid nested values. Also exercise a shallow `address` section without
    automatic flattening. Clear a nullable apartment using each update form and
    confirm its key remains present with null while other fields stay unchanged.
-   Check nullable required fields retain their keys, and non-nullable fields
-   reject null even when optional. Include an invalid clear in a multi-field
-   update and verify no partial commit. An omitted field must not be cleared;
+   Check nullable fields retain their keys, and non-nullable fields reject an
+   explicit null even though absence is permitted. Include an invalid clear in
+   a multi-field update and verify no partial commit. An omitted field must not be cleared;
    no separate delete tool or automatic null population is introduced.
    Verify direct-field addressing with an `address` section and nested updates
    with a separate object-shaped fixture. A field argument such as `address.city`
@@ -3288,11 +3387,14 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     only the scoped join token reaches the frontend. Joining activates that call
     without returning private preparation/context data. Two read-only agents
     can read the order but cannot rewrite it. Reject bad keys, wrong-tenant or
-    participant access, schema-invalid values, and context policy overrides.
+    participant access, wrong datatypes/invalid populated values, and context
+    policy overrides; missing context fields alone must not fail preparation.
 13. Authenticate a direct backend WSS connection using the key in its handshake
     header, then send unsigned context in its first application message. Missing
-    or invalid keys fail before upgrade; missing/invalid/oversized initialization
-    cannot start room/providers. Verify browser Origin rejection and HTTP CORS
+    or invalid keys fail before upgrade; a missing initialization message or
+    malformed/oversized initialization cannot start room/providers. An empty
+    context or a partial section in a valid message is allowed. Verify browser
+    Origin rejection and HTTP CORS
     policies separately; lack of CORS grants must never bypass authentication.
     Preserve the browser WebRTC admission/signaling path. Keys/tokens stay out of
     URLs, ordinary management responses, room state, events, errors, and logs;
@@ -3365,6 +3467,11 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     lifecycle/projection tests, not tests run for this documentation checkpoint.
 
 ### Review checkpoint verification
+
+These entries are chronological evidence, not competing current contracts.
+The later incremental-population decision supersedes earlier required-field
+completeness checks and closes the missing-read/first-write questions. Earlier
+checkpoint test descriptions retain what was verified or planned at that time.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -3706,6 +3813,35 @@ For the approved 2026-09-07 section/field addressing decision:
   local links/anchors resolve. Addressing examples, removal of superseded open
   questions, review counts, route consistency, terminology, local-path hygiene,
   and `git diff --check` pass. Runtime/browser tests were not run for this
+  documentation-only checkpoint.
+
+For the approved 2026-09-07 missing-read and incremental-population decision:
+
+- Updated this original labnote and the focused review: a missing authorized
+  section read returns null at the requested value level, without nested
+  placeholders, a stored default, or a revision change. Reads of partial objects
+  do not manufacture omitted fields. Unknown sections and forbidden reads keep
+  their existing error rules.
+- The first write populates a declared section; subsequent updates collect data
+  iteratively. The initial request was clarified to retain datatype validation
+  while deferring required-field completeness, not to remove schema validation.
+  Setup, nested updates, generated context-tool arguments, and authority checks
+  now consistently allow missing fields while checking populated values.
+- Removed context `required` lists from the two illustrative definitions.
+  Datatypes, value constraints, nullability, section grants, literal field
+  addressing, deep merge, revision checks, and lifecycle fencing are retained.
+  An absent section's null read result is not a stored null or a datatype error.
+- Updated future test steps for missing reads without mutation, first writes,
+  multiple collection rounds, nested partial objects, and atomic rejection of
+  wrong datatypes. No final-completeness gate, validation toggle, new read tool,
+  schema release, or runtime implementation was added. Other G3 questions remain
+  open; the count stays at 12 numbered review groups.
+- Verified all 13 JSON examples parse; their only edits remove the two context
+  `required` lists. Both definition examples retain their datatypes, value
+  constraints, entry refs, permissions, tools, and transfers; merge/null examples
+  are unchanged. All 20 local links/anchors resolve, unrelated write checks and
+  admission routes are preserved, and review-count/terminology/path hygiene and
+  `git diff --check` pass. No runtime or browser tests were run for this
   documentation-only checkpoint.
 
 ## Verification evidence
