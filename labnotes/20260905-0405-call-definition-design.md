@@ -19,9 +19,10 @@ runtime behavior.
 The [design gap review](#design-gap-review--pending-approval) records questions
 and possible solutions. G1's unified agent `tools` map and G2's tenant-scoped web
 admission routes, direct initial context, API-key authentication with one-way
-hash storage, single-use tokens with existing-call recovery, prepared token-join
-or direct-backend connection, explicit entry participants/startup, and one
-participant per definition key per call are approved and documented below.
+hash storage, single-use tokens with existing-call recovery and no automatic
+call-record expiry, prepared token-join or direct-backend connection, explicit
+entry participants/startup, and one participant per definition key per call are
+approved and documented below.
 G2's remaining admission details and the other suggestions remain pending user
 review. Approval of documentation does not authorize runtime implementation.
 
@@ -1292,13 +1293,17 @@ not another long-lived integration credential.
    tool-result, and speech disclosure policies
    must still protect sensitive context during the call.
 
-Prepared-call storage and live room startup are separate stages. Issuing a token
-does not start providers or dial the receiver; unused preparations can expire
-without a live room. The definition and values are pinned at preparation, not
-reselected from a newer deployment at join. Token claim and activation must
-coordinate idempotently without holding a database transaction across room or
-provider startup. The single-use and backend-mediated recovery contract below
-is approved; exact expiry windows and crash-reconciliation mechanics remain open.
+Prepared-call storage and live room startup are separate stages. A prepared call
+is just a database record with its pinned definition and initial context;
+issuing a token does not start the call process tree, connect providers, or dial
+the receiver. The token expires, but the unstarted record has no separate
+automatic admission deadline. An authorized backend can request a fresh token
+for that same eligible record. The definition and values are pinned at
+preparation, not reselected from a newer deployment at join. Token claim and
+activation must coordinate idempotently without holding a database transaction
+across room or provider startup. The single-use and backend-mediated recovery
+contract below is approved; exact token TTL settings and crash-reconciliation
+mechanics remain open.
 This waiting-for-browser lifecycle does not impose a browser token on inbound
 telephony or independently requested outbound dialing.
 
@@ -1368,9 +1373,9 @@ short-lived bearer credential. [Bearer-token security](https://www.rfc-editor.or
 Provider webhook authentication remains a separate adapter concern.
 
 **Still pending:** administrator bootstrap, permission granularity,
-rotation/revocation, token lifetime settings, unused-preparation expiry/retention
-and limits, precise transport messages/timeouts and WebSocket routes, reconnect
-eligibility/deadlines, and detailed retry/crash reconciliation. Single-use claim
+rotation/revocation, token lifetime settings, separate record-retention and
+storage-limit policies, precise transport messages/timeouts and WebSocket routes,
+reconnect eligibility/deadlines, and detailed retry/crash reconciliation. Single-use claim
 and existing-call token issuance are approved below. HMAC algorithm selection,
 payload canonicalization, and signature-envelope fields are no longer
 implementation questions. Partial/default context assembly (G3), telephony
@@ -1419,6 +1424,13 @@ The approved rules are:
 6. A token's expiry only prevents a future claim. Once admission was accepted,
    that token expiring does not hang up the established call. Later reconnect
    still needs a fresh token and whatever reconnect eligibility is approved.
+7. An unstarted call record does not automatically expire because its token
+   expired or because time passed since preparation. Without a valid token the
+   browser cannot join, but the record remains eligible for backend-authorized
+   fresh-token issuance subject to the same authorization/lifecycle checks.
+   Reissuance preserves its pinned definition and initial context; it does not
+   require another call record. Data retention and cleanup are separate policies,
+   not an automatic deletion or invalidation triggered by token expiry.
 
 Gateway owns authentication and token handling; Calls owns the existing-call
 workflow and uses persistence ports for admission/claim state. No live database
@@ -1427,8 +1439,9 @@ WebRTC path and future WebSocket path share these admission rules; issuing a
 token is distinct from negotiating either transport.
 
 This resolves single-use consumption, before/after-acceptance retry behavior,
-and the backend-authorized existing-call token endpoint. It does not yet settle
-token TTL defaults/configuration, unused-preparation expiry and retention,
+and the backend-authorized existing-call token endpoint. Token expiry suffices
+for this admission contract; there is no additional unstarted-call TTL. It does
+not yet settle token TTL defaults/configuration, record retention/cleanup,
 reconnect grace periods, status/error response shapes, repeated token-issuance
 requests or superseding other unused tokens, or the precise pending-admission
 crash reconciler. No runtime endpoint or authentication code is implemented here.
@@ -1618,6 +1631,15 @@ record, context, and potentially provider work. Recovery instead reauthorizes
 through the backend and reconciles the same call/participant before issuing a
 fresh token. Token expiry is not a call-duration limit, and an existing-call
 token must never silently evict an active connection.
+
+### Automatically expire unstarted call records on a separate deadline
+
+Rejected for this admission contract. Before joining, the call is only a stored
+record, not a running room/provider process tree. Expired tokens already fail
+admission; an authorized backend can obtain a fresh token for the same eligible
+record. There is no need to force creation of a new call solely because the
+original token expired or the record is old. Retention/cleanup of stored data
+remains separate from admission and is not specified by this decision.
 
 ### Start with a fully expressive JSON graph
 
@@ -2652,8 +2674,9 @@ agent-scoped tool enablement, immutable resolved plans, room-owned context, and
 live mixing. This checkpoint identifies missing contracts and inconsistencies;
 it does not add runtime functionality. G1 records the approved tool layout and
 G2 records the approved web routes, direct initial context, hash-only API-key
-storage, single-use join tokens with existing-call recovery, prepared-token and
-direct-backend connection flows, explicit initial participants/startup, and one
+storage, single-use join tokens with existing-call recovery and no automatic
+call-record expiry, prepared-token and direct-backend connection flows, explicit
+initial participants/startup, and one
 participant per definition key per call. G2's
 remaining questions and G3–G13 are still unapproved. Detailed reasoning and
 evidence live in the [call-definition gap review](../docs/call-definition-gap-review.md).
@@ -2674,6 +2697,8 @@ evidence live in the [call-definition gap review](../docs/call-definition-gap-re
   keeping recoverable upstream credentials separate.
   The token follow-up approves atomic single-use admission and backend-authorized
   issuance for the existing call record, separate from browser joining.
+  The expiry clarification rejects an additional unstarted-call deadline: only
+  the token expires, while record retention remains a separate concern.
   The other proposed corrections still require review.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
@@ -2721,9 +2746,12 @@ The numbering below matches G1–G13 in the focused review document.
    the backend and the existing-call `join-tokens` route. Reconcile pending
    admission first, preserve the same call/participant, and reject ended calls
    or active-connection takeover. Token expiry does not end an established call.
-   G2 still needs API-key management review, token TTL and preparation expiry/
-   retention/limits, telephony context sourcing, personalization, timezone and
-   dynamic destinations, plus reconnect eligibility/deadlines, issuance retry
+   Unstarted call records have no separate automatic expiry; an expired token
+   prevents joining with that token, not later authorized fresh-token issuance.
+   Record retention/cleanup is separate. G2 still needs API-key management
+   review, token TTL settings, storage/retention policy, telephony context
+   sourcing, personalization, timezone and dynamic destinations, plus reconnect
+   eligibility/deadlines, issuance retry
    details, and admission/transfer crash handling.
    A valid API key authenticates the integrating application, not the speaker's
    customer identity; the backend authorizes the supplied business context.
@@ -2860,7 +2888,7 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     Preserve the browser WebRTC admission/signaling path. Keys/tokens stay out of
     URLs, ordinary management responses, room state, events, errors, and logs;
     only the delegated join token reaches the browser. Add
-    exact TTL, preparation-retention, issuance-retry, rotation/revocation,
+    exact token TTL, record-retention, issuance-retry, rotation/revocation,
     and admin-bootstrap cases after those exact contracts are reviewed. These
     are future checks, not a claim of implemented authentication or storage.
 14. Compile both entry refs as strings resolving to different catalog members.
@@ -2898,11 +2926,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     one claims admission and starts the room. A failure before acceptance can
     retry the unused, unexpired token; a lost response after acceptance cannot
     reuse it. Neither case creates a second call or participant. Advance a fake
-    clock: expiry rejects an unclaimed token but does not end an accepted call.
+    clock: expiry rejects an unclaimed token but does not end an accepted call
+    or expire/delete an unstarted record. The latter still starts no room or
+    provider work as time passes.
 19. Use a synthetic backend API key with the existing-call `join-tokens` route.
-    For an eligible prepared record, issuance starts no room; joining starts it
-    once with its pinned plan/context. For an eligible disconnected participant
-    in a running call, joining preserves the live room, identity, and updated
+    For an eligible prepared record whose original token expired, issuance
+    starts no room; joining with the fresh token starts it once with its pinned
+    plan/context and the same call ID. No new preparation is required solely
+    because the old token expired or the record aged. For an eligible disconnected
+    participant in a running call, joining preserves the live room, identity, and updated
     context. Confirm token requests create no extra call record and accept no
     initial-context or definition replacement. The route grants no browser CORS
     access; the separate browser join still uses the configured browser policy.
@@ -3059,9 +3091,26 @@ For the approved 2026-09-07 join-token recovery follow-up:
   retain their entry/context/tool contracts. All 18 local links/anchors resolve,
   and both documents agree on the three approved HTTP route shapes. Admission
   terminology, local-path hygiene, and `git diff --check` checks passed.
-- Single-use admission and the recovery endpoint are resolved. Next review:
-  expiry of unused prepared calls, distinct from token TTL and data-retention
-  policy. No timeout value or abandoned-call cleanup policy is approved here.
+- At that checkpoint, single-use admission and the recovery endpoint were
+  resolved; unused-call expiry was next. The following clarification rejects
+  the additional admission deadline without choosing a data-retention policy.
+
+For the approved 2026-09-07 token-only expiry clarification:
+
+- Clarified that a prepared call is only its persisted record, pinned definition,
+  and initial context until joining starts the call process tree. There is no
+  separate automatic admission expiry for this unstarted record.
+- Expired tokens cannot join, but do not permanently disable or delete the call
+  record. Authorized fresh-token issuance can reuse the same eligible record,
+  definition, and context. Established calls are not ended by token expiry.
+- Removed unused-call expiry from the pending admission decisions and recorded
+  it as a rejected alternative. Retention/cleanup remains separate housekeeping;
+  no token TTL value, cleanup policy, or runtime behavior was added.
+- Updated future acceptance steps 18–19 for token expiry without record expiry
+  and fresh-token admission to that same record. No runtime tests were run.
+- Verified all 10 JSON examples are unchanged and parse, both complete definition
+  contracts remain consistent, and all 18 local links/anchors resolve. The three
+  route shapes, terminology, local-path hygiene, and `git diff --check` pass.
 
 ## Verification evidence
 

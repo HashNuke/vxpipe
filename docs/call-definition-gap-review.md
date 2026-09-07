@@ -3,9 +3,9 @@
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-07 UTC
 Status: G1 and G2's web routes, initial context, API-key admission with one-way
-hash storage, single-use tokens with existing-call recovery, prepared token-join
-or direct-backend connection, explicit entry participants/startup, and one
-participant per definition key per call approved;
+hash storage, single-use tokens with existing-call recovery and no automatic
+call-record expiry, prepared token-join or direct-backend connection, explicit
+entry participants/startup, and one participant per definition key per call approved;
 remaining G2 questions and G3–G13 pending review.
 Documentation only; no runtime implementation.
 
@@ -257,6 +257,13 @@ token claims, not continuation of an already accepted call. Gateway owns token
 authentication; Calls coordinates the lifecycle through persistence ports.
 See the [approved recovery contract][join-token-recovery].
 
+**Approved token-only expiry:** a prepared call is only a database record with
+its pinned definition and initial context, not a live call process tree. It has
+no separate automatic admission deadline. Token expiry rejects use of that token
+but does not expire or delete the unstarted record; an authorized backend can
+obtain a fresh token for the same eligible record and later joining starts its
+room. Record retention/cleanup is a separate policy, not a token-expiry effect.
+
 The following G2 proposals remain open and must be reviewed separately:
 
 **API-key management lifecycle:** administrator bootstrap, permission
@@ -265,10 +272,11 @@ One-way hash storage is resolved; exact key encoding/hash profile remains an
 implementation detail to specify. HMAC algorithm, canonicalization, and
 signature fields are no longer questions for this contract.
 
-**Prepared-call expiry and remaining token details:** specify TTL settings,
-unused preparation expiry/retention and limits, repeated issuance requests or
-superseding other unused tokens, and detailed crash reconciliation. Single-use
-claim, backend-mediated recovery, and the existing-call token route are resolved.
+**Remaining token details and separate storage policy:** specify token TTL
+settings, repeated issuance requests or superseding other unused tokens, and
+detailed crash reconciliation. Review record retention/cleanup and storage
+limits separately. Single-use claim, backend-mediated recovery, the existing-call
+token route, and the absence of automatic call-record expiry are resolved.
 Exact WebSocket routes, token delivery, initialization limits/timeouts, and errors
 remain unapproved wire details. Deferred browser startup does not impose token
 preparation on an inbound telephony call or an already-authorized outbound dial.
@@ -629,6 +637,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Issue a key once, inspect storage, and verify it after restarting authentication | Only a digest and metadata persist; the original key works without decryption; wrong keys and the digest itself fail as credentials; keys/hashes are redacted; lost keys are replaced, not retrieved |
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
 | Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting context |
+| Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/context remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/revoked/unauthorized access and takeover fail; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes and mixed authorized/unauthorized reads fail without mutation/disclosure |
 | Interrupt while a context update is queued | Ordering determines one commit-before-interrupt or a stale-work rejection; replayed mutation ID cannot write twice |
@@ -672,6 +681,9 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   a call after losing its admission response. Backend-authorized recovery must
   reconcile and reuse the existing call/participant. Token expiry is not an
   automatic hangup of an established call.
+- Do not impose an additional automatic admission expiry on unstarted call
+  records. Token expiry already blocks use of that token; authorized reissuance
+  can reuse the same record. Record retention/cleanup is a separate decision.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
 - Do not move mixing, recording coordination, or room context into persistence.
@@ -706,8 +718,12 @@ The subsequent token-recovery decision approves single-use consumption at
 accepted admission and the backend-only existing-call `join-tokens` route. Both
 documents now distinguish prepared records from live rooms, token issuance from
 browser joining, and token expiry from call duration. Future acceptance cases
-cover races, lost responses, and recovery without duplicate calls or takeover;
-TTL values, unused-preparation policy, and detailed crash handling remain open.
+cover races, lost responses, and recovery without duplicate calls or takeover.
+At that checkpoint, unused-call expiry was still open. The subsequent
+clarification rejects a separate automatic admission deadline for unstarted records: tokens
+expire, records remain, and authorized fresh-token issuance can reuse them.
+Token TTL settings, record-retention policy, and detailed crash handling remain
+open. These are documentation decisions, not implemented runtime behavior.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
