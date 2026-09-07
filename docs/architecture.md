@@ -499,9 +499,12 @@ GenServer state. It includes the resolved room version, current lifecycle,
 participants, connections, capabilities, active agent, current transfers/tools,
 and the last durable room sequence.
 
-Clients resume from a snapshot plus events after a cursor. Media is not replayed
-through the event journal. A reconnect creates a new transport connection and
-connection ID even when it rejoins the same interaction, room, and participant.
+Snapshot/event-cursor synchronization is separate from permission to resume a
+call. Media is not replayed through the event journal. Same-call caller
+reconnection is deferred for the initial slice; after a logical call ends,
+connecting again starts a new call. Any future same-call reconnect would require
+fresh transport identity and explicit admission authorization, not just a cursor
+or a new token.
 
 ## Conversation semantics
 
@@ -647,6 +650,20 @@ The browser cannot extend an issued token by changing its join request. Token
 expiry prevents later admission with that token; it neither deletes the prepared
 call record nor ends an established call. Gateway authentication and persistence
 ports own credentials and token handling; the engine receives neither secret.
+
+An authorized backend may replace an expired token for an eligible unstarted
+call record, preserving its pinned definition and initial variables without
+starting a room at issuance. Whether another token supersedes earlier unused
+tokens remains under review. Same-call caller reconnection is deferred: a fresh
+token is not proof that the same person is returning. Once the logical call ends,
+the next call has a new record and identity. This does not prevent first admission
+of an eligible transfer destination or other not-yet-admitted participant into
+an existing live call. Accepted tokens stay consumed; pending admission must be
+reconciled before any new attempt, and active connections cannot be taken over.
+A temporary transport interruption is not automatically a logical call end;
+the precise failure/end trigger remains unspecified. No rule here ends a
+multiparty call merely because any one participant disconnects.
+
 These are approved contracts, not implemented authentication endpoints or CLI
 commands. Exact request encoding and the admin endpoint/scope matrix are not
 specified by this checkpoint.

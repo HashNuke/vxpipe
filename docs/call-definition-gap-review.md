@@ -68,8 +68,9 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **45 individual decisions** in the numbered backlog below.
-R01–R05 are resolved; the next batch is R06–R10. G1 and G3 are resolved;
+Current review count: **44 individual decisions** in the numbered backlog below.
+R01–R05 are resolved; R07's same-call caller reconnection is deferred. R06 remains
+open only for supersession of earlier unused tokens. G1 and G3 are resolved;
 G2/G4/G5/G7/G8 are partly resolved, while G6 and G9–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
@@ -92,11 +93,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**45 pending decisions (R06–R50).** This is the current approval backlog, not a
-count of G headings, tests, implementation tasks, or every configuration key.
+**44 pending decisions (R06 and R08–R50).** This is the current approval backlog,
+not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R05 are
-resolved below and excluded from the pending count. The next batch is
-**R06–R10**; none of those proposals is approved. Mark rows resolved or deferred
+resolved and R07 is deferred below, all excluded from the pending count. The next
+five pending decisions are **R06 and R08–R11**. Mark rows resolved or deferred
 as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -106,8 +107,8 @@ as decisions are made and update this count; do not renumber the remaining IDs.
 | R03 | G2 | **Resolved:** multiple independently revocable keys are allowed, including overlap during rotation. |
 | R04 | G2 | **Resolved:** revocation blocks further use of that API key, not previously issued join tokens or established connections; tokens are not coupled to API keys for revocation. |
 | R05 | G2 | **Resolved:** tokens default to five minutes from issuance; the authenticated requester may request a longer lifetime, with no additional maximum approved here. |
-| R06 | G2 | When a backend requests another token, do earlier unused tokens remain valid or get superseded? |
-| R07 | G2 | How long may a disconnected participant reconnect, and what evidence makes the old connection eligible for replacement? |
+| R06 | G2 | Replacement issuance for an eligible unstarted call is approved; does issuing another token leave earlier unused tokens valid or supersede them? |
+| R07 | G2 | **Deferred:** same-call caller reconnection is outside the initial slice. After the logical call ends, connecting again starts a new call; temporary transport interruption is not automatically call termination. |
 | R08 | G2 | What is the WebSocket admission contract for routes, token delivery, initialization, and failure responses? |
 | R09 | G2 | What size and deadline limits apply to the direct WebSocket client's initial setup message? |
 | R10 | G2 | Should inbound telephony admission perform a trusted initial-variables lookup, or leave values unfilled for later tools? |
@@ -160,6 +161,7 @@ Not counted as current approval blockers:
 - explicit invocation cancellation and late external-event delivery, already
   deferred, and generic platform confirmation, excluded for now;
 - general voice/LLM-input redaction, deferred by the latest decision;
+- same-call caller reconnection, deferred for the initial slice (R07);
 - separate future DTMF collection integration, OAuth onboarding/refresh, and
   optional post-call summary/evaluation features; and
 - an additional automatic expiry for unstarted records, which is not approved.
@@ -317,17 +319,17 @@ behavior was implemented.
 **Approved participant cardinality:** each definition key binds at most one
 runtime participant per call, for humans and agents alike. Once a staff member
 occupies `human-support-agent`, another person cannot join under that key, share
-its identity, or replace their connection. An authorized reconnect resumes the
-existing participant; permitted agent re-entry retains its participant identity
-and receives a fresh activation. Different staff roles use different definition
+its identity, or replace their connection. Permitted agent re-entry retains its
+participant identity and receives a fresh activation; same-call caller
+reconnection is deferred. Different staff roles use different definition
 keys, and another call gets its own independent participants.
 
 Enforce the binding during admission and transfer preparation, including races
 and repeated requests: neither a second participant nor duplicate pending
 preparation may be created. Direct transfer refs remain unambiguous without an
 instance-selection variable. The count is a fixed contract, not a JSON option.
-Detailed reconnect eligibility, wire responses, and admission/transfer retry
-semantics remain follow-ups; cardinality itself is resolved. See the
+Detailed wire responses and admission/transfer retry semantics remain follow-ups;
+cardinality itself is resolved. See the
 [approved one-participant contract][participant-cardinality].
 
 **Approved initial variables:** the integrating application's backend supplies
@@ -431,8 +433,9 @@ unexpired token may retry before acceptance. Once admission is accepted, it
 stays consumed even if startup fails or the browser loses the response. Only
 one racing attempt may claim it; no transaction spans room/provider startup.
 
-Recovery after acceptance or token expiry goes through the integrating backend,
-which rechecks the user's authorization and uses its API key with `join-tokens`.
+Replacement issuance for an eligible unstarted call goes through the integrating
+backend, which rechecks the user's authorization and uses its API key with
+`join-tokens`. Token expiry alone does not require a new prepared record.
 Vxpipe checks the tenant/call/participant and current eligibility, reconciles an
 in-progress admission first, and rejects ended calls, unauthorized access, and
 active-connection takeover. A revoked API key cannot request a fresh token;
@@ -441,12 +444,25 @@ at token claim; issuance does not guarantee that a later join is still allowed.
 A caller's old token or public call ID alone never authorizes fresh-token issuance.
 
 Issuance preserves the existing call record and pinned definition/variables. For
-an eligible prepared call, subsequent joining activates the room once; an
-eligible reconnect to a running call attaches to the same participant/room and
-preserves current variables rather than reinitializing it. Expiry prevents future
-token claims, not continuation of an already accepted call. Gateway owns token
+an eligible prepared call, subsequent joining activates the room once. The same
+route may authorize first admission of an eligible transfer destination or other
+not-yet-admitted participant into an existing live call, without restarting that
+room or resetting its variables. It does not authorize a disconnected caller to
+resume a running call. Expiry prevents future token claims, not continuation of
+an already accepted call. Gateway owns token
 authentication; Calls coordinates the lifecycle through persistence ports.
 See the [approved recovery contract][join-token-recovery].
+
+**Approved caller-reconnection scope (R07):** same-call caller reconnection is
+deferred. A fresh token authorizes its scoped admission, not proof that the same
+person has returned. Once the logical call ends, connecting again starts a new
+call with a new record/identity; it does not resume or reset the ended call.
+Replacing an expired token before a call ever starts remains supported. This
+does not remove first admission of another eligible participant into a live
+multiparty call. Temporary transport interruption is not automatically a
+call-ending disconnect; the precise failure/end trigger is not yet specified.
+No blanket rule ends the room when any participant disconnects, and no browser
+session-tracking mechanism is added.
 
 **Approved token-only expiry:** a prepared call is only a database record with
 its pinned definition and initial variables, not a live call process tree. It has
@@ -462,7 +478,7 @@ reissuance, consumption, and pending startup are not a start. Failure before the
 call starts leaves `started_at` unset.
 
 Persist the authoritative live-start occurrence timestamp, not the later write
-or delivery time. Reconnects, transfers, duplicate events, and same-call recovery
+or delivery time. Transfers, duplicate events, and same-call recovery
 preserve it. Live duration and `max_duration_ms` exclude the preparation wait;
 a never-started record has no live duration. Creation at 10:00, start at 10:15,
 and end at 10:18 means a three-minute call. Provider billing intervals remain
@@ -486,12 +502,14 @@ Exact WebSocket routes, token delivery, initialization limits/timeouts, and erro
 remain unapproved wire details. Deferred browser startup does not impose token
 preparation on an inbound telephony call or an already-authorized outbound dial.
 
-**Reconnect and retry lifecycle details:** the approved singleton participant
-binding and fresh-token route are not permission to resume an ended/revoked
-session or evict an active connection. Specify reconnect eligibility/grace
-periods, how failed transports are confirmed disconnected, and detailed
-join/transfer responses and crash fencing. The approved recovery rules already
-preserve the same call and participant; multi-instance selection is not required.
+**Admission and transport-failure lifecycle details:** the singleton participant
+binding and fresh-token route are not permission to resume an ended call or evict
+an active connection. Caller reconnection and its grace/session policy are
+deferred rather than current prerequisites. Detailed join/transfer responses,
+crash fencing, and the boundary between temporary transport failure and actual
+call termination remain unspecified. Pending-startup reconciliation must not
+silently admit an already-started caller again. Multi-instance selection is not
+required.
 
 **Telephony initial-variables sourcing:** an inbound phone call cannot establish
 the example's trusted `customer.id` by itself. Variable validation does not require
@@ -1212,7 +1230,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 
 | Future acceptance test | Evidence of success |
 | --- | --- |
-| Two staff members try to join as the same definition; the original member reconnects | Only the original authorized participant is retained; the second person's admission fails without takeover; another definition or call has its own independent participant |
+| Two staff members try to join as the same definition | Only the original authorized participant is retained; the second person's admission fails without takeover; another definition or call has its own independent participant |
 | Race admissions/transfers and re-enter an agent definition | One participant and no duplicate pending preparation per key per call; agent re-entry retains identity with a fresh activation |
 | Compile two distinct entry refs and start a caller/reception/billing/support definition | Missing, non-string, identical, and unknown refs fail; only the initial pair is prepared, not every provider/dial target |
 | Start with a human receiver, then exercise a separate agent-to-agent transfer scenario | No implicit AI receiver is created; transfer changes live control while the initial refs and pinned plan stay unchanged |
@@ -1224,9 +1242,10 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Overlap two keys during rotation, then revoke only one | Further authentication with the revoked key fails, including token issuance; other keys and established connections continue; already-issued unused tokens still pass their independent admission checks |
 | Issue default and explicitly longer-lived tokens using a fake clock | Default expiry is five minutes from issuance; an authenticated fifteen-minute request remains valid after five minutes and expires at fifteen; applies to preparation and existing-call tokens; the browser cannot extend an issued deadline |
 | Race the same join token and lose the response after admission is accepted | Only one claim and room startup; retry before acceptance may use the unused token, but accepted tokens stay consumed; expiry does not end an accepted call |
-| Request a fresh token for an existing prepared call or an eligible disconnected participant | Backend API-key authorization uses the same call record; issuance starts no room; joining activates the prepared call once or reconnects to its existing participant/room without resetting variables |
+| Request a fresh token for an unstarted prepared call, then admit a new transfer destination into a separate live call | Backend API-key authorization preserves each call record; issuance starts no room; joining starts the prepared call once or first-admits the eligible destination without resetting the live room or variables |
+| Disconnect an admitted caller, then attempt same-call joining; separately end a call and create another | Fresh tokens do not authorize caller reconnection in this slice; an ended call cannot resume, and a newly authorized call has a new record/identity; do not infer that temporary transport loss or another participant leaving ended the call |
 | Leave a call unstarted until its token expires, then request a fresh token | Old-token joining fails, but the record and pinned definition/variables remain; authorized reissuance starts no room and later joining activates that same call without creating a replacement record |
-| Create a record well before joining, delay persistence of live start, and later reconnect/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; reconnect/recovery preserve the timestamp; failure before start leaves it unset |
+| Create a record well before joining, delay persistence of live start, and later transfer/end | `started_at` stays unset before actual start and records that occurrence time once; duration and its limit exclude preparation; transfer/recovery preserve the timestamp; failure before start leaves it unset |
 | Recover during pending startup, after call termination, or while a connection is active | Pending admission is reconciled first; ended/unauthorized access and takeover fail; a revoked API key cannot request fresh tokens but does not invalidate issued ones; eligibility is rechecked at claim; no duplicate call or participant |
 | Write/read intake, then transfer to a read-only agent | Same room value is visible; unauthorized writes fail; mixed authorized/unauthorized reads return a permission error and no values; retrying permitted sections succeeds without adding unrequested data |
 | Compile read-only, read+write, and standalone write grants; leave another section ungranted | First two grants succeed; standalone write fails without silently adding read; read-only grants expose reads, read+write grants also expose updates and their resulting values; ungranted sections expose neither values nor revisions in model projections |
@@ -1256,7 +1275,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
 | Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
-| Start agents in each first-message mode, reconnect, and reactivate them | Wait-for-input sends no unsolicited greeting; fixed/generated greeting runs once on first activation after readiness; reconnect/reactivation does not replay it; another participant or call has its own first activation |
+| Start agents in each first-message mode, repeat readiness, and reactivate them | Wait-for-input sends no unsolicited greeting; fixed/generated greeting runs once on first activation after readiness; repeated readiness/reactivation does not replay it; another participant or call has its own first activation; caller reconnect support is not required |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
 | Slow the recording upload or archive consumer | Live mix progresses; recording/archive becomes explicitly incomplete according to policy, not silently complete |
 | Replay admission events and crash between admission stages | One durable call and at most one current fenced room; uncertain dialing is reconciled |
@@ -1322,16 +1341,18 @@ synthetic identities, destinations, and data; do not operate example endpoints.
   also rejected for Vxpipe-issued keys: keep only a one-way hash. Recoverable
   upstream credentials remain a separate concern. Hash storage does not replace
   TLS, scoped-token lifecycle, or credential management.
-- Do not reuse consumed join tokens, silently take over a connection, or recreate
-  a call after losing its admission response. Backend-authorized recovery must
-  reconcile and reuse the existing call/participant. Token expiry is not an
-  automatic hangup of an established call.
+- Do not reuse consumed join tokens, silently take over a connection, or assume
+  a lost admission response means no call started. Backend-authorized recovery
+  must reconcile the existing attempt first. Unstarted-record token replacement
+  is not same-call caller reconnection; the latter is deferred. Token expiry is
+  not an automatic hangup of an established call.
 - Do not impose an additional automatic admission expiry on unstarted call
   records. Token expiry already blocks use of that token; authorized reissuance
   can reuse the same record. Record retention/cleanup is a separate decision.
 - Do not use record creation, token redemption, or event-persistence time as the
   call's start time. Record actual live start once and exclude preparation wait
-  from call duration; reconnects do not start a new call clock.
+  from call duration; transfers/recovery do not restart that clock. A new call
+  after logical termination has its own first-start timestamp.
 - Do not serialize full tool payloads into a universal room event stream and
   attempt to recover privacy only at the final publisher.
 - Do not move mixing, recording coordination, or call variables into persistence.
@@ -1552,10 +1573,24 @@ to five minutes; the authenticated requester may request longer. No token/key
 revocation coupling, extra TTL cap, per-definition key allowlist, scope hierarchy,
 or complete admin API is introduced. Original admission/recovery contracts,
 architecture, backlog statuses, and future acceptance checks are synchronized.
-There are 45 pending individual decisions, R06–R50; R06–R10 is the next batch.
+At that checkpoint there were 45 pending individual decisions, R06–R50;
+R06–R10 was the next batch.
 Verification covers unchanged fenced examples and 15 valid JSON examples,
 unchanged links/URLs, exact resolved/pending IDs and counts, unrelated contracts,
 terminology, local-path hygiene, and whitespace. No runtime or browser tests
+were run for this documentation-only checkpoint.
+
+The subsequent caller-reconnection scope decision defers R07 for the initial
+slice. Replacement tokens remain available for eligible unstarted records;
+logical call termination requires a new call rather than resuming the old one.
+First admission of a transfer destination into a live room remains supported.
+Earlier running-caller reconnect promises in historical checkpoints are
+superseded. R06 still asks whether issuance supersedes unused tokens; temporary
+transport failure is not declared to end a call. Current count: 44 pending
+individual decisions, R06 and R08–R50. Verification checks three-file scope,
+unchanged fenced examples and 15 valid JSON examples, unchanged links/URLs,
+backlog IDs/count, admission boundaries, retained unrelated contracts,
+terminology/local-path hygiene, and whitespace. No runtime or browser tests
 were run for this documentation-only checkpoint.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
