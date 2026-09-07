@@ -55,31 +55,117 @@ Finite retention for completed calls starts at `ended_at`; active calls are not
 expired, and forever has no expiry threshold. Current application/tenant periods
 apply to all calls, past and future, without per-call retention settings. Expiry
 deletes the call record and all associated Vxpipe-managed data, not just payloads.
-Exact configuration syntax, cleanup mechanics, and sensitive-input handling remain
-pending alongside G2/G4 questions and G6–G13. Extra database-commit reconciliation
-is not required for this slice.
+General voice/LLM-input redaction is deferred; deterministic sensitive collection
+such as DTMF need not involve the LLM. G7's three first-message modes and
+first-activation-only greeting are approved. G8's source-agent responsibility
+until committed handoff and failure return to that agent are approved. Other
+configuration, lifecycle, protocol, and persistence questions remain below.
+Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Review count: **11 open numbered groups** — G2/G4/G5 partly resolved, G6–G13
-awaiting approval; G1 and G3 resolved in documentation. Individual sub-decisions are
-not counted separately here. Object merge versus replacement and preservation of
+Current review count: **50 individual decisions** in the numbered backlog below.
+All five items from the latest review batch are resolved. G1 and G3 are resolved;
+G2/G4/G5/G7/G8 are partly resolved, while G6 and G9–G13 still contain proposals.
+The G headings organize the background, not the count. Object merge versus
+replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
 reads, and iterative population without required-variable checks are
 resolved within G3. The read-only/read+write decision removes the write-only error
 question. Naming and agent-mediated MCP result updates are also resolved;
 dedicated variable ownership and submitted-write lifetime are approved, and
 additional schema-complexity caps are not adopted now. G3 is closed in
-documentation, reducing the count from 12 to 11; implementation remains pending.
+documentation; implementation remains pending.
 MCP interruption, timeout-outcome reporting, and no automatic executor retry for
-that timeout resolve only part of G4, so the count stays at 11.
+that timeout resolve part of G4; its remaining decisions are enumerated below.
 Deferring late notifications removes that scenario from the current MCP scope;
 other G4 questions still need review.
 Excluding generic platform confirmation settles that question without closing G4.
 The common background-tool workflow is approved. Explicit cancellation is
 [deferred for later review](issues/explicit-tool-call-cancellation.md), not
 required for this slice; the proposed opt-in policy is not approved. Other G4
-questions remain pending, so the review count stays at 11.
+questions remain pending and are counted individually below.
+
+## Individual decisions awaiting review
+
+**50 pending decisions (R01–R50).** This is the current approval backlog, not a
+count of G headings, tests, implementation tasks, or every configuration key.
+Each row is one independently reviewable policy/contract choice. All five items
+in the preceding batch are resolved. The next batch is **R01–R05**; none of these
+new proposals is approved. Mark rows resolved or deferred as decisions are made
+and update this count; do not renumber the remaining IDs.
+
+| ID | Background | Decision awaiting approval |
+| --- | --- | --- |
+| R01 | G2 | How is authority bootstrapped to issue/manage the first API key without an existing key? |
+| R02 | G2 | Which tenant, operation, and optional definition restrictions can an API key carry? |
+| R03 | G2 | Can a tenant have multiple active API keys for independent integrations and overlap during rotation? |
+| R04 | G2 | Does revoking an API key also invalidate outstanding join tokens or end already-connected calls? |
+| R05 | G2 | What is the default join-token lifetime, and where can it be overridden? |
+| R06 | G2 | When a backend requests another token, do earlier unused tokens remain valid or get superseded? |
+| R07 | G2 | How long may a disconnected participant reconnect, and what evidence makes the old connection eligible for replacement? |
+| R08 | G2 | What is the WebSocket admission contract for routes, token delivery, initialization, and failure responses? |
+| R09 | G2 | What size and deadline limits apply to the direct WebSocket client's initial setup message? |
+| R10 | G2 | Should inbound telephony admission perform a trusted initial-variables lookup, or leave values unfilled for later tools? |
+| R11 | G2 | Which variable bindings may personalize prompts/greetings, and what happens when a referenced value is absent? |
+| R12 | G2 | Where do locale/timezone come from, and which time-dependent values are pinned versus observed at runtime? |
+| R13 | G2 | May dial destinations come from call variables, and what trusted outbound restrictions apply? |
+| R14 | G4 | May the executor retry failures with a definite non-execution outcome, such as rejection before submission? |
+| R15 | G4 | Should trusted tool configuration classify read-only, idempotent-write, and non-idempotent-write operations? |
+| R16 | G4 | Should explicit provider business-idempotency support permit any retry exception beyond the current no-unknown-timeout-retry rule? |
+| R17 | G5 | What public configuration layout expresses call-wide and participant/tool-specific client visibility? |
+| R18 | G5 | What public configuration layout selects stored call data and retained tool arguments/results independently of client visibility? |
+| R19 | G5 | How are finite retention durations and explicit forever encoded in application/tenant settings? |
+| R20 | G5 | How often should expiry cleanup run, and what deletion delay after eligibility is acceptable? |
+| R21 | G5 | How should interrupted database/object-store cleanup resume until the entire call is deleted without late recreation? |
+| R22 | G6 | Which remote MCP protocol revisions and HTTP transport variants will the first adapter support? |
+| R23 | G6 | Which MCP tool-schema features will be accepted, and how will unsupported schemas fail before tool exposure? |
+| R24 | G6 | Which remote result types will be supported, and what reaches the agent for text, structured data, media, and errors? |
+| R25 | G6 | Which server-initiated MCP features, such as sampling or elicitation, are supported versus explicitly rejected? |
+| R26 | G6 | May configured MCP endpoints reach private networks, and what TLS/redirect/egress restrictions apply? |
+| R27 | G7 | What startup-readiness deadline and failure outcome apply when required connections/providers never become ready? |
+| R28 | G7 | What should happen during caller silence: wait, prompt again, or end after a defined interval? |
+| R29 | G7 | Should long-running tools trigger automatic progress speech, and if so at what cadence? |
+| R30 | G7 | What maximum live-call duration is allowed by default, and how is reaching it handled? |
+| R31 | G7 | How should speak-and-end wait for delivery, and what happens if its closing utterance is interrupted? |
+| R32 | G7 | What initial outbound policy handles voicemail, beep evidence, and unknown human/machine classification? |
+| R33 | G8 | Where do remaining transfer defaults and destination requirements live without adding named transfer objects? |
+| R34 | G8 | What evidence makes a destination ready to accept a committed transfer, especially for a human recipient? |
+| R35 | G8 | How long may dialing/transfer preparation wait, and how are late answers or callbacks handled after the attempt ends? |
+| R36 | G8 | What happens if a failed transfer cannot restore a safe usable source without violating capability restrictions? |
+| R37 | G8 | Is private warm consultation in the initial scope, with caller hold and explicitly isolated audio routes? |
+| R38 | G9 | Does an agent-specific capability denial block provider processing, that agent's consumption of routed output, or both? |
+| R39 | G10/G2 | How should repeated call-creation requests use idempotency keys, including reuse with different input? |
+| R40 | G10 | How should admission recover after a crash between the database claim, room startup, and a possibly completed provider dial? |
+| R41 | G11 | What happens when the asynchronous archive cannot keep up: continue with an explicitly incomplete record or stop the call? |
+| R42 | G11 | How are corrected exports versioned so retries deduplicate without overwriting an earlier publication of the same schema? |
+| R43 | G11 | How long should finalization wait for pending usage/artifacts, and when should an incomplete archive be published? |
+| R44 | G12 | How are estimated, cumulative, final, and corrected usage observations combined without double counting? |
+| R45 | G12 | Should shared STT/telephony usage remain call-scoped or be allocated across turns, and on what basis? |
+| R46 | G12 | Which pricing source/version determines recorded cost, and how are unavailable usage or prices represented? |
+| R47 | G13 | Which provider options belong in profiles versus engine policy, and how do unsupported combinations fail? |
+| R48 | G13 | What model-context budget and history truncation/compaction policy apply to long calls? |
+| R49 | G13 | How should a tool result too large for model context be bounded or summarized without misrepresenting it? |
+| R50 | G13 | When may a failed provider be replaced, and how must fallback preserve permissions, tool semantics, and cost attribution? |
+
+Not counted as current approval blockers:
+
+- already approved behavior awaiting implementation, regression tests, migrations,
+  exact hash/key encoding, indexes, adapter internals, or safety checks that follow
+  from an approved contract;
+- explicit invocation cancellation and late external-event delivery, already
+  deferred, and generic platform confirmation, excluded for now;
+- general voice/LLM-input redaction, deferred by the latest decision;
+- separate future DTMF collection integration, OAuth onboarding/refresh, and
+  optional post-call summary/evaluation features; and
+- an additional automatic expiry for unstarted records, which is not approved.
+  Separate administrative housekeeping does not reopen that admission decision.
+
+Discovery bounds/cache isolation, webhook identity normalization, transcript
+input facts, and media-clock/provenance checks remain engineering requirements
+under the relevant contracts. They are not counted once per mechanism or test.
+If implementation exposes a genuinely new policy choice, add it explicitly
+rather than silently inflating or hiding the review backlog.
 
 ## Conclusion and scope
 
@@ -827,19 +913,24 @@ call-owned data remains in either. Pending or late archival/publication work mus
 not recreate the deleted data. No cleanup implementation or schedule is selected
 by this scope decision.
 
-**Still under review:** exact configuration, cleanup of unstarted records,
-deletion scheduling/cross-store mechanics, and broader redaction/sensitive
-user-input handling.
+**Still under review:** exact configuration and deletion scheduling/cross-store
+mechanics. Unstarted-record housekeeping remains separate; no additional automatic
+expiry is approved for those records.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
 different audiences. G5 stays partly resolved. Success now proves the snapshot
 transaction committed, not that complete room restart/recovery is implemented.
 
-Apply retention/redaction before persistence, not just before final export.
-Never put expected verification codes or credentials into prompts, public events,
-or ordinary archives. User-spoken verification input can itself enter STT/model
-history; sensitive collection requires explicit transient/redaction policy or an
-out-of-band verification step. Do not label a code-hidden tool as end-to-end
-secret handling if the input transcript still retains the code.
+**Approved sensitive-input boundary:** defer general redaction of sensitive voice
+audio and input that reaches STT/the LLM. This is later work, not a prerequisite
+for the current slice. A deterministic input path such as DTMF can collect an
+account number without LLM interpretation. Its collection/routing integration is
+not implemented or fully specified here; DTMF does not by itself exclude digits
+or tones from recordings, logs, or tool payloads. No automatic masking is promised.
+
+Existing credential/header exclusions and permission/visibility checks still
+apply before persistence and client delivery, not just final export. Do not put
+expected verification secrets into prompts or ordinary archives. Hiding a tool
+event does not redact sensitive input already in the transcript or audio.
 
 ### G6 — P1: “Remote MCP” needs a tested interoperability profile
 
@@ -875,12 +966,22 @@ separate control-plane feature; document when supplied bearer tokens expire.
 
 ### G7 — P2: Conversation lifecycle needs more than `first_message: generated`
 
-First-message behavior is mentioned but only one mode is illustrated. Define
-silent/wait-for-input, static text, and generated greeting modes, with bounded
-startup, silence, tool-wait, and maximum-call timers. Specify whether greeting
-runs on first activation or reactivation; reconnect must not replay it by
-accident. Silence timers should distinguish waiting for a human from generating,
-playing audio, holding, dialing, or waiting for a tool.
+**Approved first-message behavior:** each agent participant chooses wait-for-input,
+fixed greeting text, or a generated greeting. Apply it on the participant's first
+activation in that call, once its required connections/capabilities are ready.
+Reconnect and later reactivation do not replay the startup greeting. A different
+participant gets its own first activation, and a new call starts afresh.
+For example, an inbound receiver can welcome the caller immediately; an outbound
+receiver can wait for the recipient's hello. A returning participant may converse
+normally without rerunning its startup greeting. Normal output permissions and
+capability denials still apply. Exact JSON encoding is not frozen by these modes;
+finalize the representation with the schema implementation. No implicit fallback
+mode is introduced by this decision.
+
+**Still under review:** bounded startup, silence, tool-wait, and maximum-call
+timers, speak-and-end ordering, and voicemail behavior below. Silence timers
+should distinguish waiting for a human from generating, playing audio, holding,
+dialing, or waiting for a tool. G7 is partly resolved, not fully approved.
 
 Treat speak-and-end as an engine lifecycle: stop accepting new conversational
 work, enqueue an authorized closing utterance, wait for the configured delivery
@@ -900,9 +1001,25 @@ claim full answering-machine or IVR support from generic hangup/transfer tools.
 
 ### G8 — P2: A transfer allowlist is not the complete transfer policy
 
-Keep `transfers: ["specialist", "human-support-agent"]`. The labnote says a
-transfer declares warm/cold behavior, source disposition, and variable projection,
-but gives those settings no home after rejecting named transfer objects.
+**Approved source-agent responsibility:** keep the source agent responsible for
+conversation until the destination is ready and the transfer successfully commits.
+`RoomAuthority` remains the room/transfer authority; this is conversational
+ownership, not a supervisor handoff. Busy, no-answer, or another failed attempt
+returns a typed tool error to the source agent, which can explain it and choose
+its next permitted action. Do not shut it down when transfer is merely requested.
+Successful handoff terminates its entire execution subtree under the existing
+lifecycle. This does not cancel a variable update already submitted to the
+separate variables process or promise rollback of a remote action.
+
+For example, human support does not answer: the caller stays with reception,
+which can offer another allowed destination or continue helping. No failed
+attempt emits `transfer.completed`. Existing capability denials still constrain
+what reception can do; failure is not permission to restart forbidden processing.
+
+Keep `transfers: ["specialist", "human-support-agent"]`. The remaining warm/cold,
+acceptance, and history-projection settings still need a configuration home after
+rejecting named transfer objects. G8 is partly resolved; the richer policies below
+remain proposals, not approval of warm consultation or arbitrary source retention.
 
 Proposed location: a call-level handoff policy with source-agent outgoing
 defaults and destination acceptance requirements. The compiler resolves one
@@ -1105,6 +1222,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Return a booking result from a Vxpipe-unaware remote MCP, then let the agent save it | The result alone changes no variables; a separate agent update to a read+write section commits under normal checks; read-only writes fail; no automatic mapping or platform-only result section is required |
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
+| Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
+| Start agents in each first-message mode, reconnect, and reactivate them | Wait-for-input sends no unsolicited greeting; fixed/generated greeting runs once on first activation after readiness; reconnect/reactivation does not replay it; another participant or call has its own first activation |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
 | Slow the recording upload or archive consumer | Live mix progresses; recording/archive becomes explicitly incomplete according to policy, not silently complete |
 | Replay admission events and crash between admission stages | One durable call and at most one current fenced room; uncertain dialing is reconciled |

@@ -150,9 +150,9 @@ then adopts the committed values/revisions and returns success. `RoomAuthority`
 is not on this path; the storage adapter owns SQL and Ecto, not the call engine.
 
 The variables process lives under the room supervisor, outside agent execution
-subtrees, and survives transfers and human-only periods. Transfer terminates the
-source agent's whole execution subtree, including its capabilities and model/tool
-workers. Requests already sent to the variables process may still commit after
+subtrees, and survives transfers and human-only periods. A committed transfer
+terminates the source agent's whole execution subtree, including its capabilities
+and model/tool workers. Requests already sent to the variables process may still commit after
 source shutdown under normal identity, permission, deadline, size, datatype, and
 revision checks; there is no current-activation check for variable access.
 This never resumes the old agent or its speech. Room shutdown also ends the
@@ -217,6 +217,29 @@ enforceable business authorization belongs to the integrating application/MCP.
 Prompt instructions are not a security guarantee. Vxpipe still enforces tool
 access, trusted identity, and argument checks; no confirmation token, approval
 endpoint, or generic confirmation state machine is introduced.
+
+### First messages and transfer responsibility
+
+Each agent participant chooses its first-message behavior: wait for input, speak
+fixed greeting text, or generate a greeting. Apply that choice on its first
+activation in a call, once required connections/capabilities are ready. Reconnect
+and later reactivation of the same participant do not replay its startup greeting.
+A new call has its own first activation. Greetings use normal authorized output;
+this does not bypass capability denials. Exact encoding remains an implementation
+detail; lifecycle timers still need review.
+
+Until a transfer successfully commits, the source agent retains conversational
+responsibility. `RoomAuthority` still owns the room and the transfer transition;
+the agent does not take over room supervision. Prepare the destination and verify
+readiness before committing the handoff. A failed attempt, such as busy or no
+answer, returns a typed tool error to the source agent, which can explain the
+failure and choose its next permitted action. Do not terminate it just because
+transfer was requested. A successful handoff terminates its execution subtree,
+including capabilities and model/tool workers, under the existing lifecycle.
+Failure handling must respect capability denials; it is not permission to resume
+forbidden processing. Warm consultation, exact acceptance evidence, deadlines,
+and failure of safe restoration remain separate review decisions. These are
+approved designs, not newly implemented transfer or greeting behavior.
 
 ## Architectural boundaries
 
@@ -675,9 +698,18 @@ client events or broader agent tool results.
 Retained initial values form a baseline snapshot with no invented turn/tool call,
 so the pointer also works before the first update.
 These are approved designs, not newly implemented persistence. Exact storage
-configuration and sensitive transcript handling remain under review. A configured
-database failure must not silently fall back to memory-only success; an explicitly
+configuration remains under review; general sensitive-input redaction is deferred.
+A configured database failure must not silently fall back to memory-only success; an explicitly
 database-free deployment has no database-commit guarantee.
+
+General redaction of sensitive spoken audio or input passing through STT/the LLM
+is deferred, not a prerequisite for this slice. A deterministic collection path
+such as DTMF can collect account numbers without asking an LLM to interpret the
+digits. Its input integration and raw-digit routing still need their own design;
+DTMF alone does not guarantee exclusion from recordings, logs, or tool payloads.
+Do not claim automatic masking of spoken or model-visible sensitive input.
+Existing credential/header exclusions, permissions, and client visibility remain
+mandatory; hiding a tool event is not transcript or audio redaction.
 
 Stored call-data retention periods are application configuration with tenant
 overrides. The application default is retain forever. An explicit tenant setting

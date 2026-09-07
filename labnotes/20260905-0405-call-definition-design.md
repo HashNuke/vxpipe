@@ -98,8 +98,12 @@ starts at `ended_at`; active calls are not expired and forever has no threshold.
 Current application/tenant periods apply to all calls, past and future, without
 per-call retention settings. Expiry deletes the entire call and all associated
 Vxpipe-managed data, including the call record itself.
-Exact configuration, cleanup mechanics, sensitive-input handling, G2's remaining
-admission details, the rest of G4, and G6–G13 remain pending user review.
+General voice/LLM-input redaction is deferred; deterministic collection such as
+DTMF need not involve the LLM. First-message modes and first-activation-only
+greetings are approved, as is source-agent responsibility until committed
+handoff and failure return to that agent. All five items from the latest review
+batch are resolved. The focused gap review now lists 50 individual decisions
+still awaiting review, rather than counting its background groups.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -274,6 +278,31 @@ This resolves initial role identification and catalog-versus-startup behavior.
 The subsequent cardinality decision below fixes one participant per definition
 key per call. No runtime startup behavior or schema release was implemented by
 these documentation decisions.
+
+### First-message behavior — approved G7 decision
+
+Each agent participant selects one of three behaviors for its first message:
+
+- wait for input, without an unsolicited startup greeting;
+- speak fixed greeting text; or
+- generate a greeting using its normal permitted model context.
+
+Apply the selection on that participant's first activation in the call, once
+required connections and capabilities are ready. An inbound agent can welcome
+the caller immediately; an outbound agent can wait for the recipient's hello.
+The policy belongs to the agent participant, not a rule inferred from call
+direction. It uses the existing first-message concept; exact JSON encoding is
+not frozen by this decision and no implicit fallback mode is introduced here.
+
+Reconnect and later reactivation of the same participant do not replay its
+startup greeting. Another participant gets its own first activation, and another
+call starts afresh. Returning agents may converse normally; this rule prevents
+automatic greeting replay, not ordinary contextual speech. Greetings use normal
+output and must respect current capability denials.
+
+Startup/silence/tool-wait/max-duration policies, speak-and-end ordering, and
+voicemail behavior remain separate review decisions. These modes are approved
+designs, not behavior newly implemented in the current playground.
 
 ### One participant per definition key — approved G2 decision
 
@@ -497,7 +526,7 @@ activation, command, correlation, and tool-call IDs remain attribution metadata,
 not a current-activation condition for variable access. The model supplies only
 the requested read or mutation, never its identity or permission claims.
 
-Transfer terminates the source agent's whole execution subtree, including its
+A committed transfer terminates the source agent's whole execution subtree, including its
 capabilities and model/tool workers. Once shutdown completes it cannot issue new
 requests. An update already sent to `CallVariables` is not retracted by caller
 termination and may commit afterwards. The variables process needs no activation
@@ -1005,16 +1034,18 @@ resolved capability intent. This does not start every known capability
 indiscriminately: only capabilities enabled by the call and current agent plans
 resume, and any remaining participant or room denial still applies.
 
-A transfer declares only its target and transfer behavior, such as warm versus
-cold handoff, source disposition, variable projection, and presentation. The
-room authority runs it in prepare and commit phases. During prepare, it resolves
+A transfer request names an allowed target. The remaining warm/cold, history
+projection, and presentation policies still need their configuration home; they
+do not become named transfer objects. The room authority runs prepare and commit
+phases. During prepare, it resolves
 the destination and its presence policy outside the active media topology,
 while the source participant and its current capabilities may remain active for
 announcements and data collection. It then computes the proposed post-transfer
 participant set, enforces its denials, and makes the remaining positively
 required capabilities ready. Only then does the room atomically admit or
 activate the destination, change control/routing, apply the source disposition,
-and emit `transfer.completed`.
+and emit `transfer.completed`. For an agent source, successful handoff terminates
+its execution subtree under the approved lifecycle below.
 
 The initial `CallDefinition` therefore has no generic `on_success` field. Host
 code can observe `transfer.completed`, and a later deterministic workflow can
@@ -1044,6 +1075,31 @@ Recording, analytics, and export are separate capabilities. Stopping speech
 recognition and synthesis does not claim to stop those other data paths, so a
 private or regulated segment must name every capability its policy requires the
 room to stop.
+
+### Transfer success and failure — approved G8 baseline
+
+Until the destination is ready and the transfer successfully commits, the source
+agent retains conversational responsibility. The room and its supervisor do not
+change owners: `RoomAuthority` still authorizes and commits the transfer. Do not
+terminate the source merely because its transfer tool was invoked, a destination
+is dialing, or an attempt failed.
+
+If human support is busy or does not answer, return a typed failure to the source
+agent through the existing invocation/result path. The source can explain the
+failure and choose its next permitted action: continue helping, offer a different
+allowed destination, or end the call using its available tools. The caller is not
+abandoned and the platform does not silently choose a different destination.
+Only a successful committed handoff emits `transfer.completed` and terminates
+the source's entire execution subtree, including capabilities and model/tool
+workers. A variable request already submitted to the separate variables process
+may still finish under the existing rules; local shutdown is not remote rollback.
+
+Normal capability denials still apply during preparation and failure handling.
+Keeping the source responsible does not permit forbidden STT/TTS or guarantee
+speech if a safety constraint prevents it. Exact acceptance evidence, deadlines,
+late callback cleanup, and inability to restore a safe usable source remain
+review questions. No warm consultation, concurrent-agent mode, new fallback tool,
+or alternate source-disposition option is approved by this baseline.
 
 ### Keep telephony provider-neutral and pin the resolved definition in the room
 
@@ -1676,8 +1732,27 @@ default. Completed-call finite retention starts at `ended_at`, without expiring
 active calls or assigning an expiry to forever. The current application/tenant
 period applies to past and future calls, not a per-call pinned period. Expiry
 deletes the call record and all associated Vxpipe-managed data. Exact storage
-configuration, cleanup mechanics, and sensitive transcript handling remain G5
-review questions.
+configuration and cleanup mechanics remain G5 review questions. General
+sensitive-input redaction is deferred as described below.
+
+### Sensitive input and deferred redaction — approved G5 boundary
+
+Do not build general redaction of sensitive voice audio or input passing through
+STT/the LLM in the current slice. Redaction for model-visible sensitive input is
+later work, not a prerequisite for the approved call-definition/runtime design.
+This is a scope decision, not a claim that such input is automatically masked.
+
+For example, an account number can be collected through deterministic DTMF input
+and processed outside the LLM instead of asking the agent to interpret the digits.
+The collection/routing integration needs its own design; this decision does not
+add a DTMF collector, tool schema, provider API, or new endpoint. DTMF alone does
+not guarantee confidentiality: raw digits or tones can still reach recording,
+logging, or tool-result paths unless the integration explicitly controls them.
+
+Existing credential/header exclusions, agent grants, storage selection, and
+client visibility remain mandatory. Apply those exclusions before persistence
+and client delivery, not just at final export. Hidden tool events do not redact
+information already present in spoken audio, transcripts, or model context.
 
 ### Initial agent-transfer history policies
 
@@ -2990,8 +3065,8 @@ live but save only metadata. Both are supported without changing tool behavior.
 Retention periods use application configuration with tenant overrides and an
 application retain-forever default. Completed-call finite retention starts at
 `ended_at`, using the current period for both past and future calls. Exact
-configuration syntax, cleanup mechanics, and broader sensitive-input/redaction
-policy remain under review. Expiry deletes the entire call and its associated
+configuration syntax and cleanup mechanics remain under review; general
+sensitive-input redaction is deferred. Expiry deletes the entire call and its associated
 Vxpipe-managed history and artifacts. This decision does not add runtime
 persistence or guarantee complete room recovery.
 
@@ -3614,7 +3689,7 @@ The first multi-agent slice needs protocol-neutral events for:
 Only one agent participant may own generated conversational output for a
 connection/lane at a time. Inactive agent participants must not consume turns or
 emit user-visible output. They also must not advertise or invoke their MCP
-tools. A transfer shuts down the source agent's execution subtree, including its
+tools. A committed transfer shuts down the source agent's execution subtree, including its
 capabilities and model/tool workers, and the destination receives its own tool
 surface. Already-sent variable requests survive source shutdown in the separate
 room-scoped variables process; remote outcomes and reconciliation remain a G4
@@ -3786,38 +3861,33 @@ tenant overrides and application settings, with retain forever as the applicatio
 default. Normal transaction errors return variable-save failure; no extra commit
 reconciliation is required. Completed-call finite retention starts at `ended_at`;
 active calls are not expired, and forever has no expiry threshold. Exact
-configuration, cleanup mechanics, and sensitive-input handling remain under
-review. Current application/tenant periods apply to all calls, past and future,
+configuration and cleanup mechanics remain under review; general voice/LLM-input
+redaction is deferred. Current application/tenant periods apply to all calls, past and future,
 without per-call retention settings. Expiry deletes the entire call and all
 associated Vxpipe-managed data, including its record and latest variable snapshot.
-Other G4 questions, remaining G2 details, and G6–G13 remain unapproved.
+First-message modes and first-activation-only greeting behavior are approved.
+The source agent stays responsible until successful transfer commit and receives
+failed-attempt outcomes. G7/G8 are partly resolved; their remaining questions and
+the other open decisions are listed individually in the focused review document.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Remaining review count — 2026-09-07
 
-There are **11 open review groups** out of the original 13: G2, G4, and G5 are
-partly resolved, and G6–G13 still need approval. G1 and G3 are resolved in
-documentation.
-This counts the numbered groups, not individual edge cases or implementation
-tasks. Section-level merging, recursive preservation inside nested objects,
-explicit-null clearing, root-section/direct-variable addressing, missing reads,
-and iterative population without required-variable checks are resolved
-within G3. The read-only/read+write permission decision also removes the
-write-only error question. Naming and agent-mediated MCP result updates are also
-resolved. The dedicated variables-process ownership and submitted-write lifecycle
-are approved, and additional schema-complexity caps are not adopted now. That
-closes G3 and reduces the count from 12 to 11; implementation is still pending.
-G4's ordinary-interruption rule, unknown-outcome reporting on timeout, and no
-automatic executor retry for that timeout are approved. Its other questions keep
-that group open and the overall count at 11.
-Late confirmations are explicitly deferred as an external-event concern, not an
-additional prerequisite for the current MCP slice.
-Generic platform-level confirmation is also excluded for now. Other G4 questions
-remain, so the review count is unchanged.
-The provider-independent acknowledgement/background-result workflow is approved;
-explicit cancellation is deferred to its issue for later review. Other G4
-questions remain pending and the count stays at 11.
+There are **50 individual decisions awaiting review**, enumerated as R01–R50 in
+the focused gap review. All five items from the latest batch are resolved.
+G1/G3 are closed; G2/G4/G5/G7/G8 are partly resolved. G headings are background
+organization, not the current count. Earlier progress entries retain their
+historical group counts and do not describe the current individual-item total.
+
+Count only an unresolved choice requiring user approval. Do not count already
+approved behavior awaiting implementation, tests, SQL indexes, adapter internals,
+or each JSON key as another product decision. Explicit cancellation, late
+external-event delivery, general redaction, and generic platform confirmation
+remain deferred/excluded rather than current-slice prerequisites. DTMF collection
+integration, OAuth onboarding, and optional post-call summary/evaluation are
+separate future feature designs. There is still no additional automatic expiry
+for unstarted records. The next batch is R01–R05; none is approved yet.
 
 ### Baseline and scope
 
@@ -4000,8 +4070,10 @@ The numbering below matches G1–G13 in the focused review document.
    success. Application retention defaults to retain forever, with tenant settings
    overriding application values. Transaction error means variable-save failure;
    extra commit-status lookup/reconciliation is not required. Exact configuration,
-   cleanup mechanics, broader redaction, and sensitive user-input handling remain
-   proposals for review. Completed-call finite retention starts at `ended_at`;
+   cleanup mechanics remain proposals for review. General voice/LLM-input
+   redaction is deferred; deterministic collection such as DTMF need not involve
+   the LLM, but its recording/logging paths still need explicit protection.
+   Completed-call finite retention starts at `ended_at`;
    active calls are not expired, and forever has no expiry threshold. The current
    application/tenant period applies to past and future calls; no per-call
    retention settings.
@@ -4015,14 +4087,16 @@ The numbering below matches G1–G13 in the focused review document.
    credential-scoped caching, safe egress, and no permission changes from returned
    instructions. Existing HTTP actions require a remote MCP facade or trusted
    host adapter; they are not automatically MCP tools.
-7. **Greeting, silence, voicemail, and ending:** first-message modes, timer
-   phases, reactivation behavior, and speak-then-end ordering are underspecified.
-   Possible resolution: closed runtime policies and typed evidence/deadlines.
-   Reconnect must not accidentally repeat a greeting. An answered leg does not
+7. **Greeting, silence, voicemail, and ending — partly resolved:** agent-selected
+   wait-for-input, fixed greeting, and generated greeting modes are approved for
+   first activation only; reconnect/reactivation do not replay the greeting.
+   Timer phases, speak-then-end, and voicemail still need review. An answered leg does not
    prove a human answered; required beep/classification evidence must actually
    be supported by the adapter. Preserve the no-local-model/no-local-VAD scope.
-8. **Transfer policy and media routing:** transfer refs give an allowlist, but
-   warm/cold behavior, acceptance, failure, and source disposition still need a
+8. **Transfer policy and media routing — partly resolved:** the source agent stays
+   responsible until committed handoff; failed attempts return to it for the next
+   permitted action. Only success terminates its execution subtree. Warm/cold
+   behavior, exact acceptance, and other lifecycle policies still need a
    configuration home. Consider call/source defaults plus target requirements,
    without named transfers. Define busy/no-answer/decline/cancel outcomes and
    compensating cleanup. A failed prepare cannot promise that already-dialed
@@ -4223,9 +4297,14 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    section is needed. Remote business validation remains the service's concern.
 6. Return instructions that request an undeclared tool or destination. The
    engine must reject the operation regardless of the model's choice.
-7. Simulate busy, no-answer, voicemail, declined, accepted, and late transfer
-   callbacks. Check typed outcomes, cleanup, source recovery/failure policy, and
-   that restrictive capability policies are enforced before the bridge opens.
+7. Hold destination preparation behind a test barrier. Verify the source retains
+   conversational responsibility and is not terminated by a transfer request.
+   Return busy/no-answer and verify the source receives a typed failure, can
+   continue or choose another allowed action, and emits no `transfer.completed`.
+   On successful ready/accepted handoff, verify commit then source-subtree
+   termination using monitors. Existing capability denials must remain enforced.
+   Richer voicemail, declined, late-callback, and failed-restoration cases depend
+   on their remaining policy review; do not claim they are resolved here.
 8. Feed distinguishable fake audio into caller and consultation routes. Confirm
    each sink, monitor, and recorder hears only its authorized mix. Slow the upload
    and verify live audio continues while incomplete recording is reported.
@@ -4325,6 +4404,13 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     reconnect, transfer, and same-call recovery preserve the first start time;
     failure before live startup leaves it unset. These are future project-owned
     lifecycle/projection tests, not tests run for this documentation checkpoint.
+22. Start one fake agent for each first-message mode. Before readiness, expect no
+    startup output. After readiness, wait-for-input sends no unsolicited greeting;
+    fixed mode submits its configured text and generated mode starts its normal
+    permitted model output. Reconnect and reactivate the same participant and
+    verify the startup greeting is not repeated. Activate a different participant
+    or start a new call and verify its independent first activation. All output
+    still follows capability denials. These are planned checks, not tests run here.
 
 ### Review checkpoint verification
 
@@ -5179,6 +5265,28 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
   links/URLs, three-file scope, deletion and existing retention contracts,
   unrelated review sections, terminology/local-path hygiene, and whitespace
   checks pass. No runtime or browser tests were run.
+
+### Greeting, transfer failure, and redaction scope — approved 2026-09-07
+
+- Approved per-agent wait-for-input, fixed greeting, or generated greeting on
+  first activation in a call. Reconnect/reactivation do not replay startup speech.
+- Approved source-agent conversational responsibility until successful handoff;
+  failed attempts return a typed outcome for that agent's next permitted action.
+  Room authority remains separate; committed transfer ends the source execution
+  subtree without undoing previously submitted variable commands.
+- Deferred general voice/LLM-input redaction. Deterministic collection such as
+  DTMF can bypass LLM interpretation, but its input and recording/logging paths
+  are not automatically confidential or newly implemented. Existing secret
+  exclusions and permissions remain required.
+- Updated the original contracts, architecture, G5/G7/G8 status, and planned
+  acceptance checks. All five items in the latest batch are now resolved.
+- Replaced the active group count with an auditable backlog of 50 individual
+  decisions (R01–R50); the next five proposals are R01–R05 and are not approved.
+  Deferred features and implementation-only work are tracked separately.
+- Documentation only: no runtime, schema release, UI, or provider integration
+  changed. Verification covers unchanged fenced/JSON examples and links, the
+  approved boundaries, exact backlog IDs/count, unrelated contracts, terminology,
+  local-path hygiene, and whitespace. No runtime or browser tests were run.
 
 ## Verification evidence
 
