@@ -86,19 +86,22 @@ application environment. In development, `APP_HOST` becomes the exact allowed
 HTTPS origin on port 5173. Environment variables are read from
 `config/runtime.exs`, while `config/dev.exs` only enables the listener.
 
-The playground's **Create room** action creates a supervised room, admits one
-human participant, and obtains a five-minute, single-use gateway session. The
-gateway supplies its configured development tenant and actor; the browser never
-asserts either identity. This development principal is not an authentication
-mechanism, and the admission endpoints are disabled by default outside the
-repository's development configuration.
+The playground's **Create room** action asks the gateway to compile its configured
+trusted sample definition into a fresh pinned plan. The engine starts only the web
+caller and receiving agent, while the same response supplies a five-minute,
+single-use gateway session bound to that existing caller. The gateway supplies its
+configured development definition, profiles, tenant, and actor; the browser never
+asserts those values. This development principal is not an authentication mechanism,
+and the admission endpoints are disabled by default outside the repository's
+development configuration.
 
 The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It
 targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and performs
 the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming Opus audio is routed
 through a bounded, protocol-neutral media ingress to Deepgram Flux. Flux turn
 signals become RTVI speaking and replacement-transcription messages; a committed
-turn is sent through the room's bounded Gemini model-inference capability. Its
+turn is sent through the room's participant-owned Jido agent using the pinned Gemini
+model profile. Its
 complete text response is streamed through Flux TTS as 48 kHz linear16, encoded
 to 20 ms Opus packets, and paced onto the negotiated browser audio track. RTVI
 bot speaking boundaries and 2.x bot-output progress follow the gateway's paced

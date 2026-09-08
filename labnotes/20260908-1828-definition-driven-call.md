@@ -455,3 +455,66 @@ its prior application-default STT/TTS behavior.
 Room startup now activates only the entry participants and their selected model/STT/TTS
 capabilities. The trusted sample still needs a complete spoken turn through this path, and
 unsupported enabled later-slice settings need precise pre-provider diagnostics.
+
+## Checkpoint 6: trusted development sample
+
+The development gateway now owns a narrow `TrustedCall` adapter. Endpoint initialization
+validates one configured definition and closed capability/tool registries. Each creation
+request supplies only a browser-generated room ID; the gateway adds the configured principal,
+constructs the invocation, compiles a fresh plan, and calls the engine's trusted plan-start API.
+It then reads the plan's already-started entry caller through a public engine snapshot function
+and issues that exact participant's single-use Small WebRTC session.
+
+This path returns `room`, `participant`, and `session` from `POST /api/rooms`. It does not call
+the legacy join route or create a second human participant. The React creation page accepts the
+atomic response and retains its existing fallback for older configured create-then-join hosts.
+No visual structure or responsive styling changed.
+
+### Red, green, and verification evidence
+
+- Gateway red: `mix test test/vxpipe/gateway/http/endpoint_test.exs` passed the HTTP status but
+  failed its response match because only the legacy room was returned.
+- A review-added trusted request without `room_id` was red with a `FunctionClauseError` because
+  the adapter guard rejected the raw value before typed validation. Removing that guard lets
+  `CallInvocation` return `invalid_call_invocation`, which the development HTTP boundary maps
+  to 400.
+- Gateway green: the focused file passed `10 tests, 0 failures`.
+- Frontend red: `npm test -- --run src/App.test.tsx` failed to find the console because the page
+  attempted a second fetch after the atomic response.
+- Frontend green: `npm test` passed `2 tests`; `npm run build` completed TypeScript checking and
+  the Vite production build.
+- `MIX_ENV=dev mix run --no-start` with explicit dummy credential fixtures successfully
+  initialized the configured gateway endpoint and validated the trusted definition. The first
+  probe without those fixtures stopped at the existing required-secret guard before definition
+  initialization, as expected.
+- A live `bin/dev --http` process loaded the ignored development credentials. A filtered local
+  creation request returned the configured tenant, a human `part_` entry identity, a `sess_`
+  identity and `smallwebrtc` transport. No credential value was printed.
+- Rendered Chromium checks at 1440x900 and 390x844 confirmed the owned creation page remained
+  intact. Axe reported zero WCAG A/AA violations there. A mocked atomic response caused exactly
+  one room request and displayed the responsive Pipecat console. The dependency-rendered console
+  still reports four unnamed mobile tab buttons and two low-contrast states; those upstream
+  component findings remain standing rather than being hidden by generated-package patches.
+- The first complete umbrella run hit the existing 100 ms TTS provider-failure monitor
+  assertion after the expected unavailability event had already arrived. This was a bounded test
+  scheduling window, not a runtime failure. The monitor assertion now allows one second, matching
+  the suite's lifecycle-testing convention, and the focused file passed 20 consecutive randomized
+  runs.
+- Final checkpoint gates passed `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix deps.unlock --check-unused`, call engine `96 tests,
+  0 failures (1 excluded)`, gateway `39 tests, 0 failures (3 excluded)`, sample `2 tests`, and
+  the production sample build.
+
+### Manual spoken/tool verification
+
+1. Put valid development provider keys in the ignored repository `.env` and run `bin/dev`.
+2. Open the HTTPS sample URL printed by the process and choose **Create room**.
+3. Confirm the Pipecat console appears, then choose **Connect** and wait for `botReady`.
+4. Type a short message and confirm one assistant text response and one spoken response.
+5. Speak a short message and confirm one final caller transcript plus one text/spoken response.
+6. Ask for the current UTC time and confirm one `get_current_time` tool lifecycle followed by
+   the final answer.
+
+The remaining milestone implementation is explicit unsupported-feature/startup diagnostics,
+then removal of duplicated preset-only development configuration once those sample checks are
+complete.

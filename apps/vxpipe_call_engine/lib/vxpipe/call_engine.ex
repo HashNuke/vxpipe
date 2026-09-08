@@ -30,6 +30,13 @@ defmodule Vxpipe.CallEngine do
     end
   end
 
+  @spec participant_snapshot(String.t(), String.t(), String.t()) ::
+          {:ok, Vxpipe.CallEngine.Participant.Snapshot.t()} | {:error, Error.t()}
+  def participant_snapshot(tenant_id, room_id, participant_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(participant_id) do
+    RoomSupervisor.participant_snapshot(tenant_id, room_id, participant_id)
+  end
+
   @spec join_participant(JoinParticipant.t()) ::
           {:ok, Vxpipe.CallEngine.Participant.Snapshot.t()} | {:error, Error.t()}
   def join_participant(%JoinParticipant{} = command) do

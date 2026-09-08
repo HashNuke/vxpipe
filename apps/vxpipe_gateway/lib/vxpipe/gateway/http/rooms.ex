@@ -9,7 +9,7 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
   alias Vxpipe.CallEngine.Participant.Snapshot, as: ParticipantSnapshot
   alias Vxpipe.CallEngine.Room.Snapshot
   alias Vxpipe.Gateway.Session.Snapshot, as: SessionSnapshot
-  alias Vxpipe.Gateway.SessionSupervisor
+  alias Vxpipe.Gateway.{SessionSupervisor, TrustedCall}
 
   @create_scope "rooms:create"
   @join_scope "rooms:join"
@@ -20,12 +20,14 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
   def init(options) do
     if Keyword.get(options, :enabled, false) do
       principal = Keyword.fetch!(options, :principal)
+      trusted_call = init_trusted_call(Keyword.get(options, :trusted_call))
 
       %{
         enabled: true,
         tenant_id: Keyword.fetch!(principal, :tenant_id),
         actor_id: Keyword.fetch!(principal, :actor_id),
         agent: Keyword.get(options, :agent),
+        trusted_call: trusted_call,
         scopes: Keyword.get(principal, :scopes, []),
         session_ttl_ms: Keyword.get(options, :session_ttl_ms, @default_session_ttl_ms)
       }
@@ -69,6 +71,14 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
   end
 
   defp create_authorized(conn, principal) do
+    if principal.trusted_call == nil do
+      create_preset_room(conn, principal)
+    else
+      create_trusted_call(conn, principal)
+    end
+  end
+
+  defp create_preset_room(conn, principal) do
     deadline = DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)
 
     with {:ok, command} <-
@@ -86,6 +96,23 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
     end
   end
 
+  defp create_trusted_call(conn, principal) do
+    room_id = Map.get(conn.body_params, "room_id")
+
+    with {:ok, snapshot, participant} <-
+           TrustedCall.start(principal.trusted_call, principal_options(principal), room_id),
+         {:ok, session} <- issue_session(participant, principal) do
+      send_json(conn, 201, %{
+        "room" => Snapshot.to_public(snapshot),
+        "participant" => ParticipantSnapshot.to_public(participant),
+        "session" => session_public(session)
+      })
+    else
+      {:error, %Error{} = error} -> send_error(conn, status(error), error)
+      {:error, :session_start_failed} -> send_session_start_error(conn)
+    end
+  end
+
   defp create_session_authorized(conn, principal, room_id) do
     deadline = DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)
 
@@ -98,17 +125,7 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
              deadline: deadline
            ),
          {:ok, participant} <- CallEngine.join_participant(command),
-         {:ok, session} <-
-           SessionSupervisor.issue(
-             [
-               tenant_id: participant.tenant_id,
-               actor_id: principal.actor_id,
-               room_id: participant.room_id,
-               incarnation_id: participant.incarnation_id,
-               participant_id: participant.participant_id
-             ],
-             principal.session_ttl_ms
-           ) do
+         {:ok, session} <- issue_session(participant, principal) do
       send_json(conn, 201, %{
         "participant" => ParticipantSnapshot.to_public(participant),
         "session" => session_public(session)
@@ -116,6 +133,32 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
     else
       {:error, %Error{} = error} -> send_error(conn, status(error), error)
       {:error, :session_start_failed} -> send_session_start_error(conn)
+    end
+  end
+
+  defp issue_session(participant, principal) do
+    SessionSupervisor.issue(
+      [
+        tenant_id: participant.tenant_id,
+        actor_id: principal.actor_id,
+        room_id: participant.room_id,
+        incarnation_id: participant.incarnation_id,
+        participant_id: participant.participant_id
+      ],
+      principal.session_ttl_ms
+    )
+  end
+
+  defp principal_options(principal) do
+    [tenant_id: principal.tenant_id, actor_id: principal.actor_id]
+  end
+
+  defp init_trusted_call(nil), do: nil
+
+  defp init_trusted_call(options) do
+    case TrustedCall.new(options) do
+      {:ok, trusted_call} -> trusted_call
+      {:error, _reason} -> raise ArgumentError, "invalid trusted call configuration"
     end
   end
 
@@ -154,5 +197,6 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
   defp status(%Error{code: :participant_already_exists}), do: 409
   defp status(%Error{code: :room_not_found}), do: 404
   defp status(%Error{code: :invalid_command}), do: 400
+  defp status(%Error{code: :invalid_call_invocation}), do: 400
   defp status(%Error{}), do: 503
 end

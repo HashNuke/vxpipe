@@ -191,7 +191,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
     )
 
     assert_receive {:vxpipe_tts_unavailable, ^capability, :provider_failed}
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 1_000
   end
 
   defp start_capability(options) do

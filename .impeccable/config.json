@@ -1,3 +1,33 @@
 {
-  "buildPath": "comp"
+  "buildPath": "comp",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font-size",
+        "value": "3rem",
+        "createdAt": "2026-09-08T21:32:38.932Z",
+        "reason": "The committed create-room surface intentionally uses this display scale; the current contract integration preserves its visual design."
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.2rem",
+        "createdAt": "2026-09-08T21:32:38.983Z",
+        "reason": "The committed create-room surface intentionally uses this responsive lead size; the current contract integration preserves its visual design."
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "14px",
+        "createdAt": "2026-09-08T21:32:39.031Z",
+        "reason": "The committed create-room action intentionally uses this radius; the current contract integration preserves its visual design."
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.95rem",
+        "createdAt": "2026-09-08T21:32:39.102Z",
+        "reason": "The committed create-room error treatment intentionally uses this size; the current contract integration preserves its visual design."
+      }
+    ]
+  }
 }

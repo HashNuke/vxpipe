@@ -58,11 +58,6 @@ test("enters the uncluttered Pipecat page after creating a room", async () => {
           created_by_actor_id: "actor-samples",
           lifecycle: "open",
         },
-      }),
-    })
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
         participant: {
           participant_id: "part_demo",
           role: "human",
@@ -100,7 +95,5 @@ test("enters the uncluttered Pipecat page after creating a room", async () => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ room_id: "room_00000000-0000-4000-8000-000000000001" }),
   });
-  expect(fetchMock).toHaveBeenCalledWith("/api/rooms/room_demo/sessions", {
-    method: "POST",
-  });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
 });

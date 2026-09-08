@@ -97,6 +97,55 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
            } = JSON.decode!(conn.resp_body)
   end
 
+  test "starts a trusted definition call and issues its entry caller session" do
+    room_id = "room-definition-#{System.unique_integer([:positive, :monotonic])}"
+
+    conn =
+      :post
+      |> conn("/api/rooms", JSON.encode!(%{"room_id" => room_id}))
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(trusted_endpoint_options())
+
+    assert conn.status == 201
+
+    assert %{
+             "room" => %{
+               "tenant_id" => "tenant-development",
+               "room_id" => ^room_id,
+               "incarnation_id" => incarnation_id
+             },
+             "participant" => %{
+               "participant_id" => participant_id,
+               "role" => "human",
+               "room_id" => ^room_id,
+               "state" => "joined"
+             },
+             "session" => %{
+               "session_id" => session_id,
+               "transport" => %{
+                 "endpoint" => "/api/rtvi/offer",
+                 "request_data" => %{"session_id" => session_id},
+                 "type" => "smallwebrtc"
+               }
+             }
+           } = JSON.decode!(conn.resp_body)
+
+    assert "rinc_" <> _ = incarnation_id
+    assert "part_" <> _ = participant_id
+    assert "sess_" <> _ = session_id
+  end
+
+  test "rejects a trusted definition call without a valid room ID" do
+    conn =
+      :post
+      |> conn("/api/rooms", JSON.encode!(%{}))
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(trusted_endpoint_options())
+
+    assert conn.status == 400
+    assert %{"error" => %{"code" => "invalid_call_invocation"}} = JSON.decode!(conn.resp_body)
+  end
+
   test "rejects room creation without a valid client room ID" do
     conn =
       :post
@@ -167,5 +216,57 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
     assert request_session_id == session_id
     assert {:ok, expires_at, 0} = DateTime.from_iso8601(expires_at)
     assert DateTime.diff(expires_at, DateTime.utc_now(), :second) >= 240
+  end
+
+  defp trusted_call_options do
+    [
+      resource_id: "sample-call",
+      revision: 1,
+      definition: %{
+        schema_version: "20260906.02",
+        entry_caller: "caller",
+        entry_receiver: "receiver",
+        defaults: %{capabilities: %{}},
+        call_variables: %{sections: %{}},
+        participants: %{
+          "caller" => %{
+            type: "human",
+            connection: %{service: "web", mode: "receive", admission: "start_call"}
+          },
+          "receiver" => %{
+            type: "agent",
+            prompt: "Answer briefly.",
+            first_message: %{mode: "wait_for_input"},
+            capabilities: %{model_inference: "sample-model"},
+            tools: %{},
+            transfers: []
+          }
+        },
+        limits: %{max_duration_ms: 60_000}
+      },
+      capability_profiles: %{
+        "sample-model" => %{
+          kind: :model_inference,
+          provider: :req_llm,
+          options: %{model: "test:scripted"}
+        }
+      },
+      host_tools: %{}
+    ]
+  end
+
+  defp trusted_endpoint_options do
+    Endpoint.init(
+      cors: [],
+      room_creation: [
+        enabled: true,
+        principal: [
+          tenant_id: "tenant-development",
+          actor_id: "actor-samples",
+          scopes: ["rooms:create", "rooms:join"]
+        ],
+        trusted_call: trusted_call_options()
+      ]
+    )
   end
 end

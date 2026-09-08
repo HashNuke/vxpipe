@@ -10,12 +10,13 @@ client, and uses the Small WebRTC transport. The default offer URL is
 `/api/rtvi/offer`.
 
 The **Create room** control calls `POST /api/rooms` through the same-origin proxy
-with a browser-generated room ID, then calls the returned room's session
-endpoint. The gateway admits one participant and returns a five-minute,
-single-use Small WebRTC session. Only then does the creation screen give the
-whole viewport to the responsive Pipecat console. The development tenant and
-actor are injected by gateway configuration; they are not supplied or
-authenticated by the browser.
+with a browser-generated room ID. The development gateway compiles its trusted
+sample definition into a fresh pinned plan, starts only the web caller and receiving
+agent, and returns the caller's five-minute, single-use Small WebRTC session in the
+same response. Only then does the creation screen give the whole viewport to the
+responsive Pipecat console. The definition, capability profiles, development tenant,
+and actor are injected by server configuration; they are not supplied or authenticated
+by the browser.
 
 The Pipecat **Connect** control sends its offer to the returned endpoint along
 with the request data from the session response. The current gateway completes

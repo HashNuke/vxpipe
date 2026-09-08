@@ -2072,8 +2072,17 @@ policy before participant admission. It retains those typed provider runtimes fo
 starts TTS with the receiver and starts the pinned STT when the caller connection attaches.
 Existing preset startup remains intact. This subset does not yet provide the room-owned Call
 Variables process/tools; the remaining milestone work adds explicit unsupported-feature
-diagnostics and the trusted sample fixture. Exact evidence is tracked in the milestone and
-its implementation labnote.
+diagnostics. Exact evidence is tracked in the milestone and its implementation labnote.
+
+The repository development gateway is the first trusted host for this path. Its startup
+configuration validates one definition plus closed capability/tool registries. For each
+browser request, it creates a trusted invocation, compiles a fresh plan, starts the plan,
+reads the already-started entry caller through the engine API, and issues a gateway session
+bound to that participant. `POST /api/rooms` returns the room, participant, and session
+together; the browser neither supplies the definition/profiles nor admits a second human.
+The creation page accepts that atomic response and enters the unchanged responsive Pipecat
+console. The older preset create-then-join routes remain available as a development/embedding
+compatibility path and are not the production admission design.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

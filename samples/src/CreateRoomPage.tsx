@@ -128,6 +128,16 @@ export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
         }
 
         createdRoom = payload.room;
+
+        if (isSessionResponse(payload)) {
+          onCreated({
+            room: createdRoom,
+            participant: payload.participant,
+            session: payload.session,
+          });
+          return;
+        }
+
         setRoom(createdRoom);
       }
 

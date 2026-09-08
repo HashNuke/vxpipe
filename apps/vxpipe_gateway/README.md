@@ -59,11 +59,13 @@ The application reads this setting once during startup and passes the HTTP
 options into its supervision tree. Embedded callers can instead supervise
 `Vxpipe.Gateway.HTTP.Supervisor` directly with the same HTTP options.
 
-The repository's development configuration enables a deterministic text agent,
-room creation, and participant admission with a fixed development principal so
-the browser can exercise the complete path without claiming to implement
-authentication. It issues an opaque, five-minute, single-use session for the
-offer request.
+The repository's development configuration supplies a trusted typed call definition,
+closed capability/tool registries, and a fixed development principal so the browser
+can exercise the complete path without claiming to implement authentication. The
+gateway compiles a fresh pinned plan for each development room, starts its existing
+entry caller and receiver, and includes an opaque five-minute, single-use session for
+that caller in the creation response. The older preset create-then-admit path remains
+available to embedded development configurations.
 Production and embedding configurations must leave this disabled until a real
 authenticated principal is attached at the gateway boundary.
 

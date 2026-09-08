@@ -1,8 +1,9 @@
 # Definition-driven one-agent call
 
 Status: implementation in progress. Typed definition/compiler, participant-owned Jido
-routing, and plan-selected speech startup checkpoints completed on 2026-09-08; the trusted
-sample and unsupported-feature diagnostics remain. Specification review: approved,
+routing, plan-selected speech startup, and trusted sample wiring checkpoints completed on
+2026-09-08; unsupported-feature diagnostics and final spoken-sample evidence remain.
+Specification review: approved,
 including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
 Sources: [Canonical representation and minimal definition](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-definition-gap-review.md).
@@ -65,7 +66,7 @@ cannot change that live call.
   agent, with overlapping asks rejected, automatic tool retries disabled, and tool
   concurrency chosen explicitly.
 - [x] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
-- [ ] Wire one trusted sample/embedded fixture to the new path without redesigning the responsive console.
+- [x] Wire one trusted sample/embedded fixture to the new path without redesigning the responsive console.
 - [ ] Specify supported-feature diagnostics for later milestone features; reject enabled unsupported privacy/connection/tool settings before starting providers.
 - [ ] Refactor duplicated preset configuration only after the definition-driven sample tests pass.
 
@@ -270,6 +271,37 @@ Checkpoint 5 umbrella gates pass: formatting, warnings-as-errors, call engine `9
 dependencies. This completes the compiled-plan room-startup checklist item. End-to-end audio
 turn completion through the trusted definition sample and explicit startup diagnostics remain
 for the next checkpoints.
+
+Implementation evidence, checkpoint 6 (2026-09-08): the development gateway now validates
+one trusted call definition and closed capability/tool registries during endpoint setup. Each
+creation request builds a trusted invocation, compiles a fresh immutable plan, starts its entry
+caller/receiver, and issues a single-use gateway session for the already-started caller. The
+room, participant and session return atomically to the sample, so the browser does not supply
+definition/profile identity or create an extra participant. Legacy configured preset and
+create-then-join behavior remains available outside this selected development path.
+
+Red: the gateway endpoint case received only a legacy room response, and the revised frontend
+case failed because it attempted a second session request after receiving the new atomic
+fixture response. A review-added missing-room case then reproduced a function-clause crash;
+the trusted adapter now delegates arbitrary input to the typed invocation validator and maps
+that error to HTTP 400. Green: the focused gateway file passes 10 tests, the sample passes 2
+tests, and its production TypeScript/Vite build succeeds. A development-config probe validated the
+trusted definition with dummy secret fixtures; a live `bin/dev --http` request using the local
+ignored development environment returned the expected room, human entry participant and
+Small WebRTC session without exposing credentials.
+
+Rendered browser verification used Chromium at 1440x900 and 390x844. The owned creation page
+retained its layout, had zero WCAG A/AA axe violations, and one mocked `POST /api/rooms`
+transitioned directly to the responsive console with no second session request. Upstream Voice
+UI Kit output still reports unnamed mobile tabs and two low-contrast component states; no
+generated dependency code was patched in this checkpoint.
+
+The first complete umbrella run exposed a pre-existing 100 ms monitor-delivery race in the TTS
+provider-failure test after the expected unavailability event had already arrived. The assertion
+remains bounded but now allows one second for the linked process's `:DOWN` message. The focused
+file then passed 20 consecutive randomized runs. Final checkpoint gates pass: formatting,
+warnings-as-errors, dependency-use validation, call engine `96 tests, 0 failures (1 excluded)`,
+gateway `39 tests, 0 failures (3 excluded)`, sample `2 tests`, and the production sample build.
 
 ## Specification review
 

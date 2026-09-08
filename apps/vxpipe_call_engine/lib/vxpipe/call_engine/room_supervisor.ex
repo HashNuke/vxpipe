@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   alias Vxpipe.CallEngine.{
     Error,
     Id,
+    ParticipantAuthority,
     RoomAuthority,
     RoomCapabilitySupervisor,
     RoomIncarnationSupervisor,
@@ -41,6 +42,31 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       [{room_authority, _value}] -> RoomAuthority.join_participant(room_authority, command)
       [] -> {:error, room_not_found(command.room_id)}
     end
+  end
+
+  def participant_snapshot(tenant_id, room_id, participant_id) do
+    key = {:participant, tenant_id, room_id, participant_id}
+
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, key) do
+      [{participant_authority, _value}] ->
+        {:ok, ParticipantAuthority.snapshot(participant_authority)}
+
+      [] ->
+        {:error,
+         Error.new(
+           :participant_not_found,
+           "The participant does not exist.",
+           details: %{"participant_id" => participant_id}
+         )}
+    end
+  catch
+    :exit, _reason ->
+      {:error,
+       Error.new(
+         :participant_not_found,
+         "The participant does not exist.",
+         details: %{"participant_id" => participant_id}
+       )}
   end
 
   def attach_connection(%AttachConnection{} = command, speech_to_text_options, output_sink) do
