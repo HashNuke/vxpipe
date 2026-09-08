@@ -82,7 +82,7 @@ slow response or missing measurement. The existing voice console still works unc
 
 - [x] Red-test project-owned gateway mounting/startup and single-listener configuration
   before adding the console integration.
-- [ ] Add the approved console shell using the existing gateway dependency; verify
+- [x] Add the approved console shell using the existing gateway dependency; verify
   explicit startup/mounting and adjust gateway configuration only where needed, without
   moving protocol ownership into Phoenix or rewriting the gateway.
 - [ ] Select/document the dashboard mechanism and trusted operator-access boundary;
@@ -156,6 +156,18 @@ while the standalone HTTP supervisor is absent and the named session/WebRTC runt
 active. Gateway and umbrella gates pass with call engine `102 tests, 0 failures (1 excluded)`
 and gateway `43 tests, 0 failures (3 excluded)`. Phoenix and dashboard dependencies are not
 introduced by this checkpoint; the milestone remains incomplete.
+
+Implementation evidence, checkpoint 2 (2026-09-08): added the minimal
+`vxpipe_console` umbrella application on Phoenix 1.8.13 with `Vxpipe.Console` modules and a
+direct dependency on the reusable gateway. The Console application prepares the gateway mount
+once at runtime and passes it into `Vxpipe.Console.Endpoint`; the endpoint invokes that Plug
+before its own router. Development disables only the gateway listener and enables the Console
+endpoint. `ConnTest` proves the Console root page and gateway health/API namespace share the
+endpoint, while live `bin/dev` evidence shows one BEAM listener on `127.0.0.1:4000` and identifies
+it as `Vxpipe.Console.Endpoint`. The session and WebRTC supervisors remain active. The initial
+shell rendered without browser errors at desktop and 390x844 mobile; sample asset ownership and
+the diagnostics UI remain pending. Final gates pass with call engine `102 tests, 0 failures
+(1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console `2 tests, 0 failures`.
 
 ## Specification review
 

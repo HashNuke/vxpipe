@@ -40,6 +40,12 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     ]
   ]
 
+config :vxpipe_console, Vxpipe.Console.Endpoint,
+  adapter: Bandit.PhoenixAdapter,
+  http: [ip: {127, 0, 0, 1}, port: 4000],
+  server: false,
+  url: [host: "localhost"]
+
 # Sample configuration:
 #
 #     config :logger, :default_handler,

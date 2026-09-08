@@ -30,7 +30,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
 
 config :vxpipe_gateway, Vxpipe.Gateway.Application,
   http: [
-    enabled: true,
+    enabled: false,
     room_creation: [
       enabled: true,
       principal: [
@@ -96,3 +96,8 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
       ]
     ]
   ]
+
+config :vxpipe_console, Vxpipe.Console.Endpoint,
+  debug_errors: true,
+  secret_key_base: String.duplicate("development-only-", 4),
+  server: true

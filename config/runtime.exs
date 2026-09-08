@@ -70,9 +70,22 @@ if config_env() == :dev do
     |> System.get_env("4000")
     |> String.to_integer()
 
+  console_host = if app_host in [nil, ""], do: "localhost", else: app_host
+
+  console_url =
+    if System.get_env("VXPIPE_DEV_TLS") == "caddy" and app_host not in [nil, ""] do
+      [scheme: "https", host: app_host, port: 5173]
+    else
+      [scheme: "http", host: console_host, port: port]
+    end
+
   config :vxpipe_gateway, Vxpipe.Gateway.Application,
     http: [
       port: port,
       cors: [allowed_origins: allowed_origins]
     ]
+
+  config :vxpipe_console, Vxpipe.Console.Endpoint,
+    http: [ip: {127, 0, 0, 1}, port: port],
+    url: console_url
 end

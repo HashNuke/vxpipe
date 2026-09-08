@@ -1,7 +1,7 @@
 # Reusable gateway and Phoenix console
 
-Status: implementation in progress (2026-09-08). The reusable gateway mount contract is
-implemented; the Phoenix console and asset/dashboard integration remain pending.
+Status: implementation in progress (2026-09-08). The reusable gateway mount and Phoenix
+console shell are implemented; asset/dashboard integration remains pending.
 
 ## Decision
 
@@ -112,4 +112,14 @@ supports an explicit host path prefix, preserves configured CORS behavior, and h
 claimed responses while allowing unrelated host pages to continue. Tests run with the
 standalone HTTP supervisor disabled and verify that the gateway's session and WebRTC
 connection supervisors remain alive. Console/Phoenix integration and live transport
-interoperability are still unverified.
+interoperability were still unverified at that checkpoint.
+
+Implementation checkpoint 2 added the `vxpipe_console` umbrella application using Phoenix
+1.8.13 and the `Vxpipe.Console` namespace. Its application prepares the gateway mount from
+runtime application settings and passes it to `Vxpipe.Console.Endpoint`; the endpoint invokes
+the mounted gateway before its own router. Development now disables the gateway listener and
+enables the Console listener. Focused and live checks show the Console root and gateway health
+route on the same port, one BEAM listener on port 4000, no gateway HTTP supervisor, and the
+gateway session/connection runtime still active. The gateway has no Phoenix dependency. React
+asset ownership, dashboard dependencies, protected diagnostics, and full call transport through
+the shared endpoint remain pending.
