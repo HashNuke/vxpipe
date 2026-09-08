@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-25 individual decisions still awaiting review, rather than counting its
+20 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -135,6 +135,10 @@ including trusted full-visibility sample policy replacement with no overrides.
 R22 selects `2026-07-28` Streamable HTTP; R23 requires validated outgoing MCP
 arguments. R24 result/document inspection and R25 server-requested interactions
 are deferred to separate issues while observed response storage remains mandatory.
+R26 adopts SDK-aligned endpoint security at Vxpipe's outbound boundary. R27/R28
+set configurable 30-second readiness and 15-second idle-notification defaults;
+R29 leaves tool speech to instructions and defers wait music. R30 pins a 30-minute
+default live-call limit with definition, tenant, then application precedence.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -395,9 +399,45 @@ call starts afresh. Returning agents may converse normally; this rule prevents
 automatic greeting replay, not ordinary contextual speech. Greetings use normal
 output and must respect current capability denials.
 
-Startup/silence/tool-wait/max-duration policies, speak-and-end ordering, and
-voicemail behavior remain separate review decisions. These modes are approved
-designs, not behavior newly implemented in the current playground.
+Speak-and-end ordering and voicemail behavior remain separate review decisions.
+These modes and the timing policies below are approved designs, not behavior
+newly implemented in the current playground.
+
+### Startup, idle, tool waiting, and duration — approved R27–R30
+
+Required provider/connection readiness has a configurable 30-second deadline
+beginning with the actual admission/startup attempt after joining. Preparation
+of a database record and token issuance/expiry do not run this clock. A definitive
+terminal startup failure fails early; expiry aborts startup, releases resources,
+and reports a clear failure. Deliberate `opening_audio` playback is not itself
+failed readiness and is not truncated by a new 30-second audio rule. Preserve
+the media-input gate and `started_at` at actual live start; pre-live failure must
+not invent a start timestamp.
+
+An agent genuinely waiting for caller input receives a configurable 15-second
+idle notification. Its instructions determine whether to nudge, wait, or invoke
+a permitted end-call tool; there is no automatic silence-based hangup default.
+Opening playback, agent output, holding, dialing, and tool-wait do not count as
+caller silence. Use conversation/media evidence appropriately without introducing
+local VAD/models, repeated announcements, or an autonomous nudge cadence.
+Human-only portions do not depend on an agent that no longer exists.
+
+Long tools trigger no automatic periodic progress speech. The same agent's
+instructions coordinate kickoff/result speech and regular conversation through
+one voice while background work continues. Music for startup or long-tool waits
+is [deferred](../docs/issues/wait-music.md); no wait-music option, playback feature,
+or transfer-consultation behavior is approved now.
+
+The whole live call defaults to 30 minutes (`1800000` ms), using
+`limits.max_duration_ms`. Resolve an explicit call-definition value first, then
+tenant settings, then application settings, then the platform default. Pin the
+effective value in the resolved call plan; this differs from retention's current
+policy for all calls. Later configuration edits do not change a live call's
+limit. Measure from actual `started_at`, excluding prepared wait and never
+resetting for transfers/recovery. The limit also covers human-only portions.
+On expiry, the engine ends with a clear duration-limit reason. This adds no
+creation-time override, unlimited mode, extra warning/grace policy, or closing-
+speech guarantee; R31 still owns the unresolved closing-delivery contract.
 
 ### One participant per definition key — approved G2 decision
 
@@ -1625,6 +1665,22 @@ value. Missing the date, choosing a value outside its enum, or supplying an
 invalid nested object fails before the remote request. The agent may correct its
 arguments in a separate invocation; the executor does not silently retry or
 relax the schema. This does not add required-variable checks to Call Variables.
+
+**Approved R26 endpoint security:** use trusted application/tenant integration
+endpoints only, never model-selected routing URLs. Require verified HTTPS;
+configured private CAs are acceptable, insecure TLS and implicit loopback HTTP
+are not. Public-address defaults block private, link-local/cloud metadata,
+CGNAT, multicast, and unspecified targets, with address-at-connect checks against
+DNS rebinding. Private destinations require explicit host-application network
+authorization that tenants cannot bypass, not a blanket opt-out from safeguards.
+Do not follow automatic redirects or forward credentials across them; configure
+the intended endpoint. Custom clients/proxies must preserve the same protections.
+
+These safeguards adopt the [SDK security guidance](https://go.sdk.modelcontextprotocol.io/protocol/#server-side-request-forgery)
+at Vxpipe's outbound boundary. The source's defaults concern OAuth discovery
+helpers; they are not a guarantee that every MCP transport request is protected.
+No Go dependency, per-call credentials, generic artifact fetching, or gateway/
+inbound/CORS policy change is introduced.
 
 #### Received results and deferred server interactions — R24/R25
 
@@ -4286,10 +4342,10 @@ the other open decisions are listed individually in the focused review document.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
-### Remaining review count — 2026-09-07
+### Remaining review count — 2026-09-08
 
-There are **25 individual decisions awaiting review**, enumerated as R26–R50
-in the focused gap review. R01–R06, R08, R10–R15, and R17–R23 are resolved;
+There are **20 individual decisions awaiting review**, enumerated as R31–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R30 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4306,7 +4362,7 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R26–R30.
+for unstarted records. The next five pending decisions are R31–R35.
 
 ### Baseline and scope
 
@@ -4543,13 +4599,20 @@ The numbering below matches G1–G13 in the focused review document.
    weakening schemas or automatically fetching refs. R24 result/document inspection
    and R25 server-requested interactions are deferred, not automatic fetching,
    server authority, or retry exceptions. Store received responses and let agents
-   choose authorized next steps. Discovery, egress, and credential lifecycle remain
+   choose authorized next steps. R26 adopts outbound SDK-aligned address/TLS
+   safeguards, explicit host authorization for private destinations, and no
+   automatic redirects. Discovery and credential lifecycle remain
    pending. Existing HTTP actions still need a remote MCP facade or trusted host
    adapter; they are not automatically MCP tools.
 7. **Greeting, silence, voicemail, and ending — partly resolved:** agent-selected
    wait-for-input, fixed greeting, and generated greeting modes are approved for
    first activation only; reconnect/reactivation do not replay the greeting.
-   Timer phases, speak-then-end, and voicemail still need review. An answered leg does not
+   Readiness defaults to a configurable 30 seconds from post-join startup;
+   genuine agent input-wait defaults to a configurable 15-second idle notification.
+   Long tools have no automatic progress cadence, and wait music is deferred.
+   The whole-call limit defaults to 30 minutes, pinned with definition/tenant/
+   application precedence and measured from actual start, including human-only
+   portions. Speak-then-end and voicemail still need review. An answered leg does not
    prove a human answered; required beep/classification evidence must actually
    be supported by the adapter. Preserve the no-local-model/no-local-VAD scope.
 8. **Transfer policy and media routing — partly resolved:** the source agent stays
@@ -4981,6 +5044,32 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     produce a clear missing-capability outcome without extra model authority or
     automatic continuation/resubmission. Detailed inspection and server-interaction
     tests await those deferred designs; these are planned checks, not runtime results.
+28. Use synthetic trusted MCP endpoint configurations and controlled DNS/address
+    resolution. Verify certificate validation (including a configured private CA),
+    default non-public/metadata restrictions, and address-at-connect rebinding
+    checks. Private destinations require host permission; tenant input cannot
+    grant itself that permission. Redirect responses must cause no redirected
+    request or credential forwarding. Custom network clients cannot bypass the
+    boundary; no Go SDK protection is assumed for Vxpipe's transport.
+29. Prepare a record and wait before joining: the readiness timer has not begun.
+    Join with controlled required connections/providers, fail one definitively,
+    and separately hold readiness beyond the configured 30-second deadline.
+    Expect early failure or timeout cleanup respectively, with clear outcomes
+    and no fabricated pre-live start. Play configured opening audio longer than
+    that interval with ready providers: playback alone must not count as failed
+    readiness or lose its input gate. These checks introduce no wait music.
+30. Put an agent into genuine caller-input wait and verify the configurable
+    15-second notification; instructions choose the next permitted action.
+    Contrast output/opening playback, holding/dialing, and tool-wait, which do
+    not trigger caller-silence logic. A long tool produces no automatic progress
+    speech; ordinary background conversation retains one coordinated voice.
+    Human-only portions do not require agent idle handling.
+31. Resolve whole-call duration from definition, tenant, application, and absent
+    settings: expect that precedence and a `1800000` ms platform default. Change
+    settings after admission and keep the pinned limit. Delay joining, then
+    transfer/recover into a human-only portion: only actual live time counts,
+    the clock never restarts, and expiry ends with a clear duration-limit reason.
+    Do not assert an unapproved warning, grace interval, or closing utterance.
 
 ### Review checkpoint verification
 
@@ -5024,6 +5113,9 @@ recording; this is not permission to generate missing history or bypass denials.
 R22/R23's later remote-profile and input-validation decisions supersede earlier
 unselected protocol/schema proposals. R24/R25 move detailed result inspection and
 server-driven interactions to deferred issues, not implicit implementation work.
+The 2026-09-08 R26–R30 decisions supersede earlier unselected egress and startup/
+silence/tool-progress/duration proposals. Wait music remains a deferred issue;
+closing delivery and voicemail are not resolved by those timer defaults.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6210,6 +6302,34 @@ storage/client projection boundary and credential exclusions still apply.
   five-file scope, 18 unchanged valid JSON examples/fences, existing and new
   links/anchors, statuses/count, prior contracts, terminology/path hygiene, and
   whitespace. Documentation only; no dependencies, runtime, or browser tests.
+
+### Endpoint security and conversation timing — approved R26–R30, 2026-09-08
+
+- Adopted SDK-aligned endpoint/address protections at Vxpipe's own outbound
+  boundary, not a Go dependency or claim its OAuth-helper defaults protect all
+  MCP traffic. Verified HTTPS, controlled host-authorized private access, connect-
+  time checks, and no automatic redirects/credential forwarding are required.
+- R27 defaults required startup readiness to configurable 30 seconds from the
+  actual post-join attempt; terminal failures fail early and expiry releases
+  resources. Deliberate opening playback is separate, preserving its gate and
+  actual-start timestamps rather than truncating the file.
+- R28 defaults genuine agent input-wait to a configurable 15-second notification,
+  with instructions selecting nudge/wait/permitted hangup. Excluded non-idle phases,
+  automatic silence hangup, and invented repeated announcements/local VAD/models.
+- R29 keeps kickoff/result speech instruction-driven with one agent/voice, no
+  periodic tool-progress speech. Added the deferred wait-music issue for startup
+  and long-tool waits without media/configuration implementation.
+- R30 sets the 30-minute platform duration default using `limits.max_duration_ms`;
+  definition overrides tenant, then application. Pin the resolved value and clock
+  from actual `started_at`, across transfers/recovery and human-only portions.
+  End with a clear duration-limit reason; no new creation override, unlimited
+  mode, warning/grace, or closing-speech guarantee. Retention stays current-policy.
+- R26–R30 resolved: 20 individual decisions remain, R31–R50; next five R31–R35
+  are unapproved. Updated canonical sections and planned checks 28–31.
+- Verified exact four-file scope, 18 unchanged JSON examples/fences, links and
+  anchors including the new issue, statuses/count, timers/security and prior
+  contracts, terminology/path hygiene, and whitespace. Documentation only;
+  no dependencies, runtime, or browser tests.
 
 ## Verification evidence
 

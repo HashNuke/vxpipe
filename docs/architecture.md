@@ -182,6 +182,20 @@ request metadata/lifecycle, not legacy initialization/session assumptions.
 Other revisions and legacy HTTP+SSE require explicit tested compatibility;
 incompatible endpoints fail clearly. [MCP transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
 
+MCP routing uses only trusted application/tenant integration endpoints, never a
+model-supplied URL. Require verified HTTPS; a configured private CA is acceptable,
+but insecure TLS or an implicit loopback-HTTP exception is not. Default outbound
+address checks reject non-public targets, including link-local/cloud metadata,
+CGNAT, multicast, and unspecified addresses, and recheck the actual address at
+connection time against DNS rebinding. A private destination requires explicit
+host-application network authorization that a tenant cannot bypass; this is a
+controlled exception, not disabling address protections globally. No automatic
+redirects initially: configure the intended endpoint and never forward credentials
+across redirects. Vxpipe adopts the SDK's published safeguards at its own outbound
+boundary; the cited defaults concern OAuth discovery helpers, not all MCP traffic.
+No Go dependency, artifact fetcher, per-call credentials, or inbound/CORS change.
+[SDK security guidance](https://go.sdk.modelcontextprotocol.io/protocol/#server-side-request-forgery).
+
 Validate actual outgoing tool arguments against the selected/discovered pinned
 `inputSchema` before remote submission using a proper JSON Schema validator,
 baseline 2020-12. Enforce required/type/enum/nested constraints, unlike incremental
@@ -304,7 +318,39 @@ connections/capabilities are ready. Reconnect
 and later reactivation of the same participant do not replay its startup greeting.
 A new call has its own first activation. Greetings use normal authorized output;
 this does not bypass capability denials. Exact encoding remains an implementation
-detail; lifecycle timers still need review.
+detail; the approved startup/idle/duration boundaries follow below.
+
+Required provider/connection startup readiness has a configurable 30-second
+deadline, starting with the actual post-join admission/startup attempt, not
+prepared-record creation or token issuance. A definitive terminal failure fails
+early; expiry aborts startup, releases resources, and reports a clear failure.
+Deliberate `opening_audio` playback is not itself a readiness failure or subject
+to a new 30-second truncation rule. Preserve its media-input gate and actual
+`started_at` semantics; a failed pre-live startup never fabricates a start time.
+
+When an agent genuinely waits for caller input, a configurable 15-second idle
+notification lets its instructions decide whether to nudge, wait, or use a
+permitted end-call tool. No automatic silence hangup or repeated-announcement
+cadence is added. Opening playback, agent output, holding, dialing, and tool-wait
+are not caller silence. Use actual conversation/media evidence without new local
+VAD/models; human-only calls must not depend on a nonexistent agent.
+
+Long tools do not cause automatic periodic progress speech. Agent instructions
+control kickoff/results through the same agent and one coordinated voice while
+the approved background-tool conversation can continue. Possible music during
+startup or tool waiting is [deferred](issues/wait-music.md); no playback option is
+introduced.
+
+The whole live call defaults to a 30-minute limit (`1800000` ms). Resolve
+`limits.max_duration_ms` from an explicit call-definition value, otherwise tenant
+settings, otherwise application settings, otherwise that platform default. Pin
+the effective limit in the resolved call plan; unlike retention, later settings
+changes do not change an active call's limit. Measure from actual `started_at`,
+excluding prepared wait and never resetting on transfer/recovery. It also applies
+to human-only portions. At the limit, the engine ends with a clear duration-limit
+reason. No creation-time override, unlimited mode, warning/grace policy, or closing-
+speech guarantee is added; closing delivery remains R31. These are design contracts,
+not runtime changes.
 
 Until a transfer successfully commits, the source agent retains conversational
 responsibility. `RoomAuthority` still owns the room and the transfer transition;
