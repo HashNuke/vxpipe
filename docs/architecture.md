@@ -183,6 +183,27 @@ request metadata/lifecycle, not legacy initialization/session assumptions.
 Other revisions and legacy HTTP+SSE require explicit tested compatibility;
 incompatible endpoints fail clearly. [MCP transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
 
+Keep required MCP protocol support in a separate internal Mix library/umbrella
+child, `vxpipe_mcp`. It owns the selected wire profile, Streamable HTTP handling,
+protocol errors, deadlines and bounded response decoding; it has no dependency on
+Calls, Repo, gateway, room state, or tenant selection. The domain integration
+boundary supplies a resolved endpoint, private credentials, authorized network
+policy and deadlines, and retains agent grants, tool bindings and call history.
+Prefer a suitable SDK behind this boundary; implement only missing support needed
+for the approved profile, not a full SDK or public MCP server.
+
+The [official specification](https://modelcontextprotocol.io/specification/2026-07-28)
+is authoritative. Validate the client using pinned compatible versions of the
+[official conformance suite](https://github.com/modelcontextprotocol/conformance)
+and its [client integration harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md),
+which starts scenario servers and passes their URL to the test client. Record
+applicable passes, failures and unsupported/skipped cases, not blanket certification.
+The [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything)
+adds client interoperability examples, not complete conformance proof; verify its
+actual revision and remote transport match. Any loopback-HTTP allowance belongs
+only to an isolated test runner, never production endpoint policy. See the
+[client-library milestone](milestones/mcp-client-library.md).
+
 MCP routing uses only trusted application/tenant integration endpoints, never a
 model-supplied URL. Require verified HTTPS; a configured private CA is acceptable,
 but insecure TLS or an implicit loopback-HTTP exception is not. Default outbound
@@ -202,8 +223,8 @@ Validate actual outgoing tool arguments against the selected/discovered pinned
 baseline 2020-12. Enforce required/type/enum/nested constraints, unlike incremental
 Call Variables. Unsupported dialect/features or model representation reject the
 enabled binding before exposure; no weakened constraints, unvalidated calls, or
-automatic external `$ref` fetching. No library, extra caps, or complete output
-schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+automatic external `$ref` fetching. No JSON Schema validator library, extra caps,
+or complete output schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
 
 Store received MCP responses, including structured content and attachment/resource
 descriptors, preserving reported success/error and unknown outcomes. The agent
@@ -1462,12 +1483,13 @@ Caddy. Production ingress remains deployment-specific.
 
 ## Deterministic testing facilities
 
-Vxpipe includes deterministic Morse/tone STT and TTS adapters in the library.
-They provide reproducible audio without external providers and support exact
-assertions for routing, transcription phases, interruption, playout, tool calls,
-and teardown.
+Vxpipe plans deterministic Morse/tone STT and TTS adapters in the library; they
+are not implemented yet. These encode/decode controlled tones, not ordinary
+speech or a local speech model. The [Morse audio milestone](milestones/morse-code-audio-providers.md)
+specifies reproducible provider-free audio for exact routing, transcription-phase,
+interruption, playout, tool-call and teardown assertions.
 
-These adapters are used for:
+The planned adapters support:
 
 - protocol conformance tests;
 - multi-participant routing tests;

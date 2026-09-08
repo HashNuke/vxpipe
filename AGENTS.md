@@ -40,6 +40,26 @@ or routine mechanical edits.
   request that only runs an existing command or script.
 - Commit labnotes with the implementation or research work they document.
 
+### Implementation milestones
+
+- Implementation specifications and progress checklists live in
+  `docs/milestones/`. Start with [the milestones index](docs/milestones/index.md),
+  whose Markdown checklist gives the intended implementation order.
+- Milestone filenames and titles are descriptive and unnumbered. Only the index
+  owns implementation order; reordering or inserting a milestone must not require
+  renaming files or changing their identities.
+- Each milestone describes a runnable vertical slice, its prerequisites,
+  approved contracts, implementation tasks, and automated/manual acceptance checks.
+  Read its linked design sources and prerequisite milestones before implementation.
+- Use Markdown task lists (`- [ ]` and `- [x]`) to track actual implementation and
+  verification. A written or reviewed specification is not an implemented milestone;
+  leave the index entry unchecked until the milestone's acceptance gates pass.
+- Keep the milestone checklist, evidence, and index synchronized with implementation
+  commits. Record blockers or approved scope changes rather than checking off partial
+  work. Deferred issues do not become requirements merely by being linked.
+- Review each new or materially changed milestone for missing contracts and dependency
+  order. Record that design review separately from implementation progress.
+
 ### Git and commit hygiene
 
 - Inspect `git status --short` and the relevant diffs before and after changes.
@@ -158,6 +178,13 @@ For documentation-only changes, verify the changed documentation and use
 proportionate checks when it changes generated configuration.
 
 ## Documentation references
+
+### Model Context Protocol
+
+- [Approved protocol profile](https://modelcontextprotocol.io/specification/2026-07-28)
+- [Official client/server conformance framework](https://github.com/modelcontextprotocol/conformance)
+- [Conformance integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
+- [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything)
 
 ### Pipecat
 

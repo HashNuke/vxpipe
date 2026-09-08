@@ -1147,13 +1147,27 @@ HTTP+SSE are not implicitly compatible; fail clearly unless explicitly implement
 and tested. Pin the selected profile in the resolved binding.
 [Transport specification][mcp-http].
 
+**Approved implementation boundary:** isolate required protocol support in the
+internal `vxpipe_mcp` Mix library/umbrella child. It owns wire transport, errors and
+bounds, not Calls/Repo/gateway/room state or tenant selection. The integration owner
+supplies resolved endpoint/private credentials/network policy/deadlines and retains
+agent grants/history. Prefer suitable SDK support; fill only needed profile gaps,
+without a public server or full-SDK scope expansion.
+Use the [official specification](https://modelcontextprotocol.io/specification/2026-07-28)
+and pinned [client conformance harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
+for validation. Report failures separately from unsupported/skipped cases.
+The [Everything server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything)
+is an additional reference, not certification; verify matching revision/remote
+transport. Loopback HTTP is only an isolated test-runner accommodation, never a
+production HTTPS/private-network exemption.
+
 **Approved R23:** validate actual outgoing arguments against the selected/discovered
 pinned `inputSchema` before submission, using a proper JSON Schema validator with
 2020-12 baseline. Enforce required/type/enum/nested constraints; incremental Call
 Variables rules are not MCP input rules. Unsupported dialect/features or model
 representation reject enabled bindings before exposure, without constraint
-weakening or automatic external `$ref` fetching. No library, new caps, or full
-output normalization design is chosen. [Schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+weakening or automatic external `$ref` fetching. No JSON Schema validator library,
+new caps, or full output normalization design is chosen. [Schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
 
 **Deferred R24:** store received responses, including structured content and
 attachment/resource descriptors, preserving success/error/unknown observations.

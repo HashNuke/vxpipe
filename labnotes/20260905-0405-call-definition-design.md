@@ -1853,6 +1853,27 @@ must never cross tenant/integration/credential boundaries.
 
 #### Initial remote protocol and input validation — approved R22/R23
 
+Keep required protocol work in `vxpipe_mcp`, a separate internal Mix library/
+umbrella child. Its responsibility is the selected MCP wire profile, Streamable
+HTTP, protocol errors, deadlines and bounded decoding. It does not select tenants,
+read Calls/Repo/gateway/room state, grant tools, or own call history. The domain
+integration boundary passes resolved endpoint/private credentials/network policy/
+deadlines and retains those application responsibilities. Prefer a suitable SDK
+behind the library; implement only unsupported pieces needed for the approved
+profile, not a full SDK or a public MCP server. This is a planned boundary, not
+an implemented adapter or newly selected SDK dependency.
+
+Use the [official specification](https://modelcontextprotocol.io/specification/2026-07-28)
+as the source of truth and pin matching versions of the
+[official conformance suite](https://github.com/modelcontextprotocol/conformance).
+Its [client harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
+starts scenario servers and launches the client with the server URL. Record
+applicable passing/failing and unsupported/skipped scenarios explicitly. The
+[Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything)
+is additional interoperability evidence only; verify its revision and remote
+transport rather than assuming it proves complete conformance. A harness-only
+loopback-HTTP allowance is isolated from production HTTPS/private-network rules.
+
 Target `2026-07-28` Streamable HTTP with JSON and request-scoped SSE responses,
 using its request metadata/lifecycle rather than legacy initialize/session rules.
 Other revisions and legacy HTTP+SSE need explicit tested compatibility; otherwise
@@ -7387,6 +7408,53 @@ including its former PostgreSQL-before-variable-success requirement.
   Documentation only; no runtime, dependencies, new issue, or new labnote.
 
 ## Verification evidence
+
+### Internal MCP client boundary — approved 2026-09-08
+
+- Added the separate `vxpipe_mcp` protocol-library boundary and official
+  specification/conformance/reference-server validation sources. Domain grants,
+  tenant resolution, private credential selection and call history remain outside
+  the library; only required unsupported protocol pieces are implementation work.
+- Rechecked the upstream client-harness direction and reference-server purpose.
+  Revision/tool pinning and honest coverage remain implementation gates; no
+  conformance tests, runtime implementation or dependency installation occurred.
+- Corrected the architecture's deterministic Morse/tone adapters from implemented
+  wording to planned work and linked their milestone. These are controlled audio
+  fixtures, not ordinary-speech recognition.
+
+### Implementation milestone planning — completed 2026-09-08
+
+- Began by documenting the milestone layout/progress rules in AGENTS.md. The
+  ordered implementation checklist lives in docs/milestones/index.md; milestone
+  filenames and titles are descriptive and unnumbered so that the index alone
+  owns ordering. This follows the subsequent naming clarification.
+- Created 21 runnable vertical-slice specifications with Markdown implementation
+  and verification task lists, manual steps, prerequisites and scope boundaries.
+  Each draft was sent to an independent review agent for source fidelity, gaps,
+  acceptance checks and order; all reviews and material follow-up reviews passed.
+- Early reviews added explicit tool-alias/entry override checks, variable deadline
+  and private binding checks, stale background-result/saturation cases, and the
+  distinction between reusable definition metadata and per-call resolved plans.
+- Later reviews tightened transfer privacy, live-policy barriers, actual audio
+  delivery evidence, usage delta/finality arithmetic, failure isolation and
+  publication/retention boundaries. The index records the per-file review evidence.
+- Added the requested optional Morse-code audio provider slice early in the index
+  and the isolated MCP client/conformance slice before room-tool integration. Neither
+  changes existing runtime providers or implements a general speech model/full SDK.
+  The Morse reference page was available; PDF text extraction was unavailable,
+  so normative alphabet/timing validation remains an explicit implementation gate.
+- Verified all 21 index entries and unnumbered files, 322 unchecked milestone task
+  boxes, relative files/heading anchors, and backward-only dependencies. All 50
+  decision IDs are covered without promoting four deferred items or the superseded
+  direct-start decision into requirements. Final cross-index review also passed.
+- All 43 existing fenced examples across the three design sources remain unchanged
+  from the approved baseline, and their 19 JSON examples parse. Diff, restricted
+  terminology and local-path checks passed. Existing historical research is retained.
+- Planning-only checkpoint: no runtime/dependency/configuration implementation,
+  browser verification, provider/conformance execution or umbrella tests. Actual
+  implementation checkboxes and common gates remain unchecked for the next agent.
+
+### Earlier research evidence
 
 - Reviewed existing Vxpipe architecture, product intent, current create-room
   command, and prior runtime-extraction research.
