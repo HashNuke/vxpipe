@@ -30,6 +30,8 @@ defmodule Vxpipe.CallEngine.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:jido_action, "~> 2.3.2"},
+      {:jido_ai, "~> 2.3.0"},
       {:jsv, "~> 0.22"},
       {:req_llm, "~> 1.22"},
       {:websockex, "~> 0.5.1"}

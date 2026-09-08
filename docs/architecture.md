@@ -2013,11 +2013,21 @@ and zero revisions. Omitted sections stay unpopulated while explicit empty objec
 stay populated. Neither rejected values nor private capability options enter public
 errors. Later-milestone transfers remain rejected instead of being silently ignored.
 
-These checkpoints do not start rooms from a plan, provide the room-owned Call
-Variables process/tools, or add Jido. Existing preset startup remains intact while
-the remaining milestone work adds the supervised Jido activation, runtime plan
-startup, and the trusted sample fixture. Exact evidence is tracked in the milestone
-and its implementation labnote.
+The next runtime checkpoint adds Jido AI 2.3 and Jido Action 2.3 as direct engine
+dependencies, an application-owned Jido supervision instance, and the finite
+`Vxpipe.CallEngine.Agent` module. A synchronous readiness configuration boundary
+sets the resolved prompt and exact supported Action modules on a running AgentServer;
+automatic Action retries are zero. Static host Actions enter the existing bounded
+Vxpipe executor through a per-activation `Tool.Dispatcher` GenServer, which serializes
+actual handler execution even though the released Jido runtime does not expose its
+parallel-tool limit through the Agent macro. A deterministic test proves two successive
+Action rounds and a final answer through Jido's delegated ReAct worker.
+
+That foundation is not yet connected to room turns. These checkpoints do not start
+rooms from a plan or provide the room-owned Call Variables process/tools. Existing
+preset startup remains intact while the remaining milestone work adds the coordinator,
+participant-owned activation supervision, runtime plan startup, and trusted sample
+fixture. Exact evidence is tracked in the milestone and its implementation labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

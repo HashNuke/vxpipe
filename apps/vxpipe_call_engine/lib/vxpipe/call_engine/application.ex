@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Application do
       {Registry, keys: :unique, name: Vxpipe.CallEngine.RoomRegistry},
       {Task.Supervisor, name: Vxpipe.CallEngine.AudioOutputTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ModelInferenceTaskSupervisor},
+      Vxpipe.CallEngine.Jido,
       Vxpipe.CallEngine.RoomSupervisor
     ]
 

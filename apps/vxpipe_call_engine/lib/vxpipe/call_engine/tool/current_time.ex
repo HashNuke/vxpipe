@@ -1,9 +1,15 @@
 defmodule Vxpipe.CallEngine.Tool.CurrentTime do
   @moduledoc false
 
+  use Jido.Action,
+    name: "get_current_time",
+    description: "Get the current date and time in UTC.",
+    schema: []
+
   @behaviour Vxpipe.CallEngine.Tool
 
   alias Vxpipe.CallEngine.Tool.{Context, Definition}
+  alias Vxpipe.CallEngine.Tool.Dispatcher
 
   @impl true
   def definition do
@@ -28,4 +34,14 @@ defmodule Vxpipe.CallEngine.Tool.CurrentTime do
   end
 
   def execute(_arguments, %Context{}), do: {:error, :invalid_arguments}
+
+  @impl Jido.Action
+  def run(arguments, context) when is_map(arguments) and is_map(context) do
+    with dispatcher when not is_nil(dispatcher) <- Map.get(context, :vxpipe_tool_dispatcher),
+         %Context{} = tool_context <- Map.get(context, :vxpipe_tool_context) do
+      Dispatcher.execute(dispatcher, name(), arguments, tool_context)
+    else
+      _invalid -> {:error, :tool_failed}
+    end
+  end
 end

@@ -62,6 +62,11 @@ released closed subset and do not enforce `required` completeness. It is not wir
 to room startup yet; existing preset behavior remains available while the milestone
 proceeds through later checkpoints.
 
+The runtime foundation now includes an application-owned Jido instance, a finite
+Jido AI agent module, synchronous prompt/Action configuration before readiness, and
+a serialized Vxpipe host-Action dispatcher. It is covered by a deterministic
+two-Action-round ReAct test but is not yet the room's active inference path.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

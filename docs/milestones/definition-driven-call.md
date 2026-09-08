@@ -143,6 +143,25 @@ fixed that defect. Green: the focused file passed 7 tests, and the original comp
 passed 7 tests. Full umbrella evidence is recorded in the implementation labnote. Runtime
 Call Variables ownership and tools remain milestone 4 work; milestone 1 remains incomplete.
 
+Implementation evidence, checkpoint 3a (2026-09-08): added compatible direct
+`jido_ai` 2.3 and `jido_action` 2.3 dependencies, an application-owned Jido instance,
+the finite Vxpipe Agent module, and a synchronous AgentServer configuration barrier.
+Resolved prompts and supported static Actions are set through public Jido APIs before
+the activation can be declared ready. Automatic Action retries are zero. Static Actions
+delegate actual host execution to a per-activation Vxpipe dispatcher GenServer, making
+handler execution serial even though the current Jido Agent configuration surface does
+not propagate a tool-concurrency option.
+
+Red: `mix test test/vxpipe/call_engine/agent_test.exs` first failed to compile because
+`Jido.AI.Test` was unavailable. The first runtime attempt then exposed a missing
+application-owned Jido supervisor, and the next exposed that struct-level tool setup is
+reinitialized at AgentServer startup. Starting the Jido instance and moving setup to
+synchronous public AgentServer calls resolved those integration boundaries. Green: the
+focused file passed 2 tests, including two successive host-Action rounds and one final
+answer through Jido's real delegated ReAct worker. Coordinator stream, timeout,
+interruption, and activation teardown contracts remain unchecked, so neither runtime
+implementation task nor the milestone is complete.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

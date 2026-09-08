@@ -148,4 +148,64 @@ The milestone records the constructor/compiler test and minimal compiler checkli
 items as complete. The ordered milestone index remains unchecked because the
 runnable definition-driven call has not been delivered. Runtime variable ownership
 and tools remain milestone 4 rather than being claimed by this compiler checkpoint.
-Final staged-diff and worktree review remain before commit and push.
+The checkpoint was committed and pushed as `6568bf4`.
+
+## Checkpoint 3a: Jido agent and static Action foundation
+
+The engine now directly depends on Jido AI 2.3.0 and Jido Action 2.3.2. It starts
+an application-owned `Vxpipe.CallEngine.Jido` instance so delegated ReAct workers
+have the registry, agent supervisor, task supervisor, and runtime store required by
+Jido's public AgentServer path.
+
+The finite `Vxpipe.CallEngine.Agent` has no compile-time tool catalog. An
+`AgentFactory` validates exact-name modules, then synchronously sets the resolved
+system prompt and registers only selected static Actions on the running AgentServer.
+This happens before the future activation owner reports readiness. The Agent uses
+the reject-overlap policy and zero automatic Action retries.
+
+Static Action handlers enter the existing Vxpipe `Tool.Executor` through a
+per-activation `Tool.Dispatcher` GenServer. Jido 2.3.0's Agent option builder does
+not propagate `tool_concurrency` into the delegated ReAct runtime, whose default is
+four. The dispatcher therefore makes the application-owned handler boundary serial
+without modifying dependency internals. `get_current_time` now implements both the
+existing Vxpipe Tool contract and Jido Action while retaining its strict argument
+check and bounded-result execution path.
+
+### Red and integration evidence
+
+The new focused test initially failed to compile because `Jido.AI.Test` was absent.
+After adding dependencies, the real AgentServer failed its delegated request because
+no Jido instance supervisor was running. Starting the application-owned instance
+advanced the request and exposed another concrete boundary: direct mutation of a
+prebuilt agent's strategy config is overwritten when AgentServer initializes it.
+Moving prompt/tool setup to Jido's synchronous public AgentServer calls fixed that
+readiness race.
+
+The first two-round script intentionally called the same argument-free clock Action
+twice. Jido's duplicate-tool-call guard correctly prevented that fixture, so the test
+now uses a strict deterministic test Action with different arguments in successive
+rounds. This tests the loop rather than disabling the dependency's safety guard.
+
+Focused green evidence:
+
+- `mix test test/vxpipe/call_engine/agent_test.exs`
+- Result: `2 tests, 0 failures`.
+
+Relevant regression evidence:
+
+- `mix test test/vxpipe/call_engine/agent_test.exs test/vxpipe/call_engine/tool/executor_test.exs test/vxpipe/call_engine/call_definition/compiler_test.exs`
+- Result: `12 tests, 0 failures`.
+
+Umbrella gates after formatting:
+
+- `mix format --check-formatted` passed.
+- `mix compile --warnings-as-errors` passed for both umbrella children.
+- `mix test` passed: call engine `82 tests, 0 failures (1 excluded)` and gateway
+  `37 tests, 0 failures (3 excluded)`. Expected failure-path and shutdown logs did
+  not produce test failures.
+- `mix deps.unlock --check-unused` passed with no output.
+
+This checkpoint does not route room turns through Jido and does not yet prove stream
+projection, request timeout, interruption, participant-owned restart, or teardown.
+Those remain the next red-green checkpoint before either Jido implementation task is
+marked complete.
