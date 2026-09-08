@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
   alias Vxpipe.Gateway.HTTP.Endpoint
 
   @allowed_origin "https://client.example.test"
+  @request_stop_event [:vxpipe, :gateway, :http, :request, :stop]
   @endpoint_options Endpoint.init(
                       cors: [
                         allowed_origins: [@allowed_origin],
@@ -37,6 +38,46 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
                                       ]
                                     ]
                                   )
+
+  test "reports bounded request outcomes without request data" do
+    attach_request_events()
+    sentinel = "must-not-enter-metrics"
+
+    health_conn =
+      :get
+      |> conn("/healthz?probe=#{sentinel}")
+      |> Endpoint.call(@endpoint_options)
+
+    assert health_conn.status == 200
+
+    assert_request_event(:health_check, :ok, 200, sentinel)
+
+    missing_conn =
+      :get
+      |> conn("/not-a-route/#{sentinel}")
+      |> Endpoint.call(@endpoint_options)
+
+    assert missing_conn.status == 404
+
+    assert_request_event(:unknown, :client_error, 404, sentinel)
+  end
+
+  test "reports a bounded exception outcome and reraises" do
+    attach_request_events()
+
+    assert_raise Plug.Parsers.ParseError, fn ->
+      :post
+      |> conn("/api/rooms", "{invalid-json")
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@endpoint_options)
+    end
+
+    assert_receive {:telemetry_event, @request_stop_event, measurements,
+                    %{operation: :room_create, outcome: :exception, status: nil}}
+
+    assert is_integer(measurements.duration)
+    assert measurements.duration >= 0
+  end
 
   test "answers health checks" do
     conn =
@@ -268,5 +309,34 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
         trusted_call: trusted_call_options()
       ]
     )
+  end
+
+  def handle_request_event(event, measurements, metadata, test_pid) do
+    send(test_pid, {:telemetry_event, event, measurements, metadata})
+  end
+
+  defp attach_request_events do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        @request_stop_event,
+        &__MODULE__.handle_request_event/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+  end
+
+  defp assert_request_event(operation, outcome, status, sentinel) do
+    assert_receive {:telemetry_event, @request_stop_event, measurements,
+                    %{operation: ^operation, outcome: ^outcome, status: ^status} = metadata}
+
+    assert is_integer(measurements.duration)
+    assert measurements.duration >= 0
+    assert Map.keys(measurements) == [:duration]
+    assert metadata |> Map.keys() |> Enum.sort() == [:operation, :outcome, :status]
+    refute inspect({measurements, metadata}) =~ sentinel
   end
 end

@@ -1514,6 +1514,18 @@ per-call history, not unbounded metric labels. General metrics exclude conversat
 payloads and credentials. RTVI metric messages are a compatibility projection and
 are not the canonical telemetry schema.
 
+The implemented framework-independent event contract currently includes:
+
+| Event | Measurements | Bounded metadata | Boundary |
+| --- | --- | --- | --- |
+| `[:vxpipe, :gateway, :http, :request, :stop]` | `duration` in Erlang `:native` units | `operation`, `outcome`, and integer `status` or `nil` after an exception | Entire reusable gateway Plug call, including CORS and parsing; exceptions are emitted as `:exception` before being reraised |
+
+Gateway operations are closed categories (`:cors_preflight`, `:health_check`,
+`:room_create`, `:session_create`, `:rtvi_offer`, `:rtvi_candidates`, or `:unknown`).
+Outcomes are `:ok`, `:client_error`, `:server_error`, `:exception`, or `:unknown`.
+The event does not carry the request path, query, headers, body, or correlation IDs.
+Engine and sampled-VM events will join this table as their owning milestone checkpoint lands.
+
 ### Observability delivery
 
 Two planned vertical slices make these goals runnable:

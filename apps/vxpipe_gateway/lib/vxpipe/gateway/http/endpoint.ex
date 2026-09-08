@@ -4,6 +4,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
   @behaviour Plug
 
   alias Vxpipe.Gateway.HTTP.{Cors, Router}
+  alias Vxpipe.Gateway.Telemetry, as: GatewayTelemetry
 
   @impl true
   def init(options) do
@@ -26,14 +27,16 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
 
   @impl true
   def call(conn, %{cors: cors_options, parsers: parser_options, router: router_options}) do
-    conn = Cors.call(conn, cors_options)
+    GatewayTelemetry.observe_request(conn, fn ->
+      conn = Cors.call(conn, cors_options)
 
-    if conn.halted do
-      conn
-    else
-      conn
-      |> Plug.Parsers.call(parser_options)
-      |> Router.call(router_options)
-    end
+      if conn.halted do
+        conn
+      else
+        conn
+        |> Plug.Parsers.call(parser_options)
+        |> Router.call(router_options)
+      end
+    end)
   end
 end

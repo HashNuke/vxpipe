@@ -137,3 +137,23 @@ and unused-lock checks all passed: call engine `102 tests, 0 failures (1 exclude
 restart, agent-browser loaded the HTTPS diagnostics landing page and followed it to LiveDashboard
 at desktop and 390x844 mobile viewports with no page or console errors. Runtime logs confirmed
 that the tailnet request upgraded `/diagnostics/live` to a Phoenix LiveView WebSocket.
+
+## Checkpoint 4: gateway request telemetry
+
+The first framework-independent metric boundary is the reusable gateway Plug rather than the
+Phoenix endpoint. `Vxpipe.Gateway.Telemetry` emits
+`[:vxpipe, :gateway, :http, :request, :stop]` after every returned gateway response and before
+reraising an exception. Its sole measurement is elapsed monotonic time in Erlang `:native` units.
+Metadata is limited to a closed operation atom, a closed outcome atom, and the response status
+when one exists. Raw paths, query strings, headers, bodies, and correlation IDs are excluded.
+
+The red focused run selected the two new endpoint tests and failed both because no Vxpipe event
+was emitted. The initial implementation then stopped at compilation because a literal atom list
+is not accepted as an Elixir return typespec; using `nonempty_list(atom())` fixed that declaration.
+The repeated focused run passed `2 tests, 0 failures (10 excluded)`. It covered a successful
+health request, a path/query sentinel collapsed to `:unknown`, and invalid JSON reported as the
+safe `:exception` outcome before the original parser exception was reraised. The gateway now
+declares its direct `:telemetry` dependency rather than relying on a transitive package.
+Umbrella format, warnings-as-errors compile, default tests, and unused-lock checks passed with
+call engine `102 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
+and Console `4 tests, 0 failures`.

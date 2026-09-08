@@ -36,6 +36,7 @@ defmodule Vxpipe.Gateway.MixProject do
       {:ex_webrtc, "~> 0.17.0"},
       {:membrane_opus_plugin, "~> 0.21.0"},
       {:plug, "~> 1.20"},
+      {:telemetry, "~> 1.3"},
       {:vxpipe_call_engine, in_umbrella: true}
     ]
   end
