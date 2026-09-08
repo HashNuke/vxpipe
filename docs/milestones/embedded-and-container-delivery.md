@@ -1,7 +1,7 @@
 # Embedded and JSON-configured container delivery
 
 Status: not implemented. Specification review: approved (2026-09-08).
-Prerequisites: [Call retention](call-retention.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md), and their prerequisites; complete the earlier index entries before release acceptance.
+Prerequisites: [Call retention](call-retention.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries before release acceptance.
 Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical definition boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 
 ## Runnable outcome
@@ -33,6 +33,10 @@ The same approved call flow runs embedded in an Elixir host and in a built Docke
 - [ ] Equivalent OTP and JSON inputs produce equivalent plans/policies without ambient Mix.env behavior in a consuming app.
 - [ ] Missing invalid config/secrets fail safely before unauthorized startup; image/build/logs contain no credentials and public strings cannot choose modules/atoms.
 - [ ] Embedded engine runs without Ecto/gateway/sample; full container does not claim durable admission when PG is unavailable.
+- [ ] Embedded hosts can consume engine telemetry without dashboard dependencies.
+  Container diagnostic/inspection routes are disabled unless explicitly configured and
+  authorized; browser caller tokens never grant operator or cross-tenant access. Missing
+  collectors cannot fail established calls, and the image contains no Vite dev server.
 - [ ] Readiness/liveness and post-admission archive outage differ; storage failure does not kill established calls.
 - [ ] Shutdown rejects new calls, drains permitted work within documented bounds and reports incomplete outcomes without a lossless promise or automatic call replay.
 - [ ] Complete final cross-slice regression using definition, private variables, remote tool, human transfer, permitted recording, usage/publication and retention.
@@ -64,4 +68,7 @@ has been reviewed.
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Approved initial draft; embedded/container ownership, typed config, secrets, admission, health/shutdown and media acceptance correct.
+The later observability planning update received local review for the added inspection
+prerequisite and opt-in diagnostic/embedded reporter acceptance check. It does not imply
+the original review agent approved those subsequent edits.
 This is specification evidence only; implementation and runtime verification remain unchecked.

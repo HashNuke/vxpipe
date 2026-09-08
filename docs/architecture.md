@@ -1459,9 +1459,45 @@ Telemetry includes:
 - per-room mailbox and bounded-queue pressure; and
 - scheduler, reductions, memory, and process restart information.
 
-Every metric carries a unit, aggregation, source, model/provider, and relevant
-room/turn/utterance correlation. RTVI metric messages are a compatibility
-projection and are not the canonical telemetry schema.
+Every metric defines its unit, aggregation and observed source/model/provider.
+Relevant room/turn/utterance correlation belongs in restricted event context or
+per-call history, not unbounded metric labels. General metrics exclude conversational
+payloads and credentials. RTVI metric messages are a compatibility projection and
+are not the canonical telemetry schema.
+
+### Observability delivery
+
+Two planned vertical slices make these goals runnable:
+
+- [Observable sample call](milestones/observable-sample-call.md) follows the
+  definition-driven call. A developer runs the existing sample and sees live timing,
+  safe provider failures and VM health on a separate dashboard, without waiting for
+  persistence or expanding the voice console.
+- [Call inspection and debugging](milestones/call-inspection-and-debugging.md) follows
+  asynchronous history. An authorized operator inspects a live or ended call's
+  participant/turn/tool timeline, permitted variable snapshots and observed timings,
+  distinguishing live state from archive lag, unavailable facts and known gaps.
+
+The owning engine/gateway boundaries emit framework-independent Telemetry events.
+Project-owned handlers perform bounded local work because Telemetry invokes handlers
+in the emitting process; downstream reporting/inspection must not introduce SQL,
+network waits or unbounded queues into media/model callbacks. Embedded hosts can
+consume engine events without a gateway/UI dependency. Measurement boundaries must
+distinguish provider output, gateway egress and actual remote playback; missing data
+is not zero. [Telemetry execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4).
+
+The gateway presents authorized projections, not direct Repo queries or unrestricted
+room state. Tenant call inspection is separate from platform-wide VM introspection;
+caller tokens and public call IDs grant neither operator access nor extra visibility.
+Existing source-interval privacy and credential exclusions apply, and debugging never
+starts STT, recording or audio monitoring implicitly. Silent listening remains in the
+live-mixing milestone. Later slices extend these views with their implemented facts.
+
+Phoenix and LiveDashboard remain a candidate mechanism, not an approved migration.
+If adopted separately, preserve the existing gateway application and protocol handlers,
+React sample, application-option ownership and engine/persistence dependency direction.
+Both operator interfaces are explicitly enabled/protected; the browser authentication
+boundary must be selected before exposing them beyond trusted development.
 
 ## Configuration and container boundary
 
