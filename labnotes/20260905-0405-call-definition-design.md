@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-10 individual decisions still awaiting review, rather than counting its
+8 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -154,6 +154,10 @@ participant `while_present` maps with intersected routes and false-wins storage.
 R39 offers no API creation-idempotency feature; separate requests may create
 separate records. R40 only recovers bookkeeping for existing work, never repeats
 a crashed call or speculatively redials an uncertain one.
+R44 retains usage observations and derives effective amounts without double
+counting deltas, cumulative reports, estimates, finals, or corrections. R45 permits
+call/participant/service-interval/turn attribution where honest and optional later
+billing lookup by actual provider IDs. Pricing policy remains R46.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -3618,8 +3622,9 @@ The minimum relational shapes are:
   provenance;
 - `provider_operations`: one row per external STT, model, TTS, MCP, or telephony
   operation, including actual provider/model and request lifecycle;
-- `usage_records`: normalized billable units and cost observations linked to a
-  provider operation and, when meaningful, a turn;
+- `usage_records`: normalized observations linked to the call and provider-operation
+  attempt/component, with participant/service-interval and turn links when honest;
+  effective amounts are derived without duplicating charges across those views;
 - variable snapshot history: immutable full Call Variables snapshots with
   call/room-incarnation identity, originating turn/tool invocation, source
   participant, revisions, and commit timestamp for database-backed calls;
@@ -3676,7 +3681,8 @@ storage-switch matrix. Available history does not grant wider client visibility
 or agent access. Credential/header exclusions remain unchanged. General turn/tool/
 usage archival stays asynchronous; variable snapshots retain their transaction-
 confirmed tool-success boundary. Missing usage/prices stay unavailable, not zero
-or invented observations; detailed accounting choices remain R44–R46.
+or invented observations. R44/R45 settle observation accounting and attribution;
+pricing-source/version/fallback choices remain R46.
 
 ### Tool-history storage is independent of client visibility — approved G5 decision
 
@@ -3900,7 +3906,7 @@ Unstarted-record housekeeping remains separate. No automatic cleanup is
 implemented here. This decision does not alter
 the requirement to commit a variable snapshot before update-tool success.
 
-### Usage and cost belong to provider operations, with optional turn links
+### Usage observations and call, participant, and turn attribution — approved R44/R45
 
 A turn can incur multiple independent charges. One agent turn may require
 several model requests because of tool rounds, several TTS requests because text
@@ -3910,16 +3916,25 @@ single cost column on `call_turns` is insufficient.
 
 Always store available usage/model/cost observations; there is no separate usage
 storage toggle. Unavailable units or prices remain unavailable, not invented or
-zero. The detailed accounting choices in R44–R46 remain under review.
+zero. Pricing-source/version/fallback policy remains R46; these decisions do not
+select a rate catalog or manufacture a price when provider billing is unavailable.
 
-Store one immutable usage record per billable provider operation. Link it to a
-turn when attribution is honest, but allow a nullable turn link and retain call,
-participant, activation, capability, provider-operation, and call-leg
-correlation. Call and turn totals are derived projections over those records.
+Every observation belongs to the call. Add participant, activation, service-active
+interval, call-leg, and turn correlations only where supported by the work/evidence.
+Participant attribution does not require turn attribution. STT and TTS may run over
+several service-active intervals for one participant, using actual observed starts/
+stops rather than assuming continuous participant membership or inventing billable
+duration. LLM requests can link to their agent/turn; TTS turn links depend on provider
+support. Shared/unattributable work stays call-scoped, not equally divided across
+turns. A canonical billable fact may carry call/participant/turn refs without becoming
+three charges; each aggregate counts each effective service-operation attempt once.
 
-A normalized usage record should carry:
+Preserve actual provider request/operation IDs when available, with provider and
+configured-integration/tenant namespace. Absent provider IDs remain absent; do not
+label a local correlation ID as a provider-issued ID. Known usage units can coexist
+with unknown monetary cost. The normalized evidence can carry:
 
-- provider operation ID and optional provider request ID;
+- local operation/attempt identity and available actual provider request/operation IDs;
 - capability (`speech_to_text`, `model_inference`, `text_to_speech`, `mcp`, or
   telephony);
 - configured provider and actual provider/model/voice identifiers used after
@@ -3927,18 +3942,56 @@ A normalized usage record should carry:
 - measured units as typed values, such as input/output/cached/reasoning tokens,
   characters, synthesized audio duration, transcribed audio duration, connection
   duration, or request count;
-- cost amount as an exact decimal representation, currency, component breakdown,
-  and whether it is provider-reported, library-estimated, locally estimated, or
-  later reconciled;
-- pricing catalog/version or provider billing reference used for an estimate;
+- observation/sequence/delivery identity when available, incremental versus cumulative
+  semantics, and independent estimate/final/correction status with provenance;
+- an available cost amount as exact decimal, currency, and component breakdown;
+  preserve its observed source without selecting R46's pricing/fallback policy;
+- an available provider billing reference or existing estimate-source metadata,
+  not an assumed pricing catalog or rate;
 - started/completed timestamps and success/failure/cancellation status; and
 - call, room/incarnation, participant, activation, turn, utterance, and tool-call
   correlations that actually apply.
 
-Never use floating-point arithmetic as the billing record and never manufacture
-zero usage when a provider omits metadata. Preserve raw normalized units, the
-price/version used, and the estimate source so a later billing reconciliation
-can replace or annotate an estimate without rewriting the original observation.
+Retain observations and derive one effective usage amount per provider-operation
+attempt/component. This supersedes the earlier one-immutable-row-per-operation
+proposal. Incremental deltas and cumulative totals have different arithmetic;
+estimate/final/correction status is a separate dimension, not an update mode.
+Finality does not turn a delta into a total. Final evidence replaces estimates;
+late stale estimates cannot override a known final. Explicit provider corrections
+can lower or raise the effective amount. Do not blindly sum reports, use arrival
+order as authority, or choose `max()` as the correction rule.
+
+| Observed reports for one attempt/component | Effective usage |
+| --- | --- |
+| Incremental deltas 100 and 60 | 160 |
+| Two distinct incremental deltas of 50 | 100; equal values are not proof of duplication |
+| Cumulative 100 then 160 | 160, not 260 |
+| Cumulative 1000, 1600, then final total 1700 | 1700, not 4300 |
+| Final total 1700, explicit corrected total 1650, then stale estimate 1800 | 1650; correction can decrease usage and stale estimates do not win |
+
+Deduplicate only where observation/sequence/delivery identity proves repeated
+delivery. Keep units, currency, components, and provenance distinct. Do not add
+a total to its included token subcategories, or coalesce distinct attempts that
+each performed billable work. Failed/interrupted operations still retain observed
+usage and must survive stale conversational-output filtering. Missing usage is
+unknown, not zero. Never use floating-point amounts as billing records. Preserve
+original observations when later evidence changes the effective amount; the
+no-automatic-MCP-retry and cancellation contracts are unchanged.
+
+A configured provider integration may include both its streaming service and an
+optional asynchronous billing capability that looks up cost using persisted
+provider IDs where the provider API supports that lookup. The lookup runs outside
+the media hot path and `RoomAuthority`, can outlive the call room, and must not
+block a live call or reset `ended_at`/retention. Not all providers expose request-
+level billing; this does not guarantee later cost resolution. Existing tenant
+integration authentication/isolation applies without per-call credentials.
+Billing schema, API/credential details, dependencies, and provider implementations
+are not chosen here. No fallback price/catalog calculation is adopted under R46.
+
+Ordinary usage archival remains asynchronous, not a new transaction acknowledgement
+gate like variable snapshots. R41–R43 still own archive overflow, export revision,
+and finalization policy. All permitted-data/media restrictions and whole-call
+retention remain; optional billing cannot recreate data already purged.
 
 The current model provider boundary returns only text/tool calls/errors, so it
 cannot carry usage. The current ReqLLM adapter classifies the final response and
@@ -3947,8 +4000,9 @@ cost data for buffered and streaming responses. A usage slice should introduce
 a typed provider result plus a protocol-neutral `ProviderUsageRecorded` event
 for every model request, including intermediate tool rounds. STT and TTS adapter
 contracts need equivalent typed usage/finalization signals based on the unit the
-provider actually bills; measured audio duration or characters may be marked as
-estimates when no provider usage is available.
+provider actually reports. Measured service duration/characters remain evidence
+with their source, not an invented billed amount or monetary fallback. The concrete
+pricing/estimate policy still needs R46 review; this is not runtime implementation.
 
 ### Mix live; record participant tracks and the live mix
 
@@ -4312,13 +4366,14 @@ nor make asynchronous events lossless. Do not execute Ecto queries inside
    and latest lookup without replaying history. Prove public events and room
    snapshots still contain no variable value. Finalization uses committed snapshots,
    not an assumption that unconfirmed attempts were persisted.
-6. **Model usage:** change the model provider contract to preserve each response's
-   usage, emit one usage event per provider request/tool round, and persist exact
-   units/provider/model/cost provenance. Derive turn and call totals without
-   storing floats.
-7. **STT/TTS/telephony usage:** add provider-specific finalization observations
-   according to their actual billing units, retaining estimates and reconciled
-   values as separate facts.
+6. **Model usage:** change the provider contract to preserve observations from
+   each request/tool round, including partial/final/corrected reports. Derive
+   effective attempt/component usage and honest turn/participant/call views
+   without duplicate charges, invented cost, or floating-point billing records.
+7. **STT/TTS/telephony usage:** retain honest participant/service-interval or
+   call-scoped evidence and real provider IDs, with turn links only when supported.
+   Exercise optional asynchronous supported billing lookup outside the room and
+   preserve unavailable cost; do not choose R46 pricing fallback or R41–R43 guarantees.
 8. **Live mixing and recording:** add a bounded room mixer with two fake
    participant inputs, mix-minus outputs, and a full silent-monitor output. Then
    attach the recording capability to one participant track and the live full
@@ -4581,8 +4636,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-08
 
-There are **10 individual decisions awaiting review**, enumerated as R41–R50
-in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R40 are resolved;
+There are **8 individual decisions awaiting review**, enumerated as R41–R43 and R46–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, R26–R40, and R44/R45 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4604,7 +4659,8 @@ separate future feature designs. There is still no additional automatic expiry
 for unstarted records. R32's machine-disconnect policy is resolved; leaving
 voicemail moves to a deferred issue. R37's bounded private briefing is approved;
 its media representation and commit boundary are resolved by R38.
-The next five are R41–R45.
+R44/R45's accounting/attribution choices are resolved; pricing remains R46.
+The next five are R41–R43 and R46–R47.
 
 ### Baseline and scope
 
@@ -4902,11 +4958,15 @@ The numbering below matches G1–G13 in the focused review document.
     job key, so late corrections can produce another immutable export. Retain
     engine-side live mixing/recording with external upload workers; upload is not
     a live monitoring feed. Distinguish sent from device-confirmed audio.
-12. **Usage settlement:** one operation may have several billable
-    attempts and usage observations. Consider observation identity and effective
-    component totals rather than summing estimates, cumulative updates, and
-    reconciliation. Keep canceled-operation costs and avoid double-counting
-    provider token subcategories or allocations across turns.
+12. **Usage settlement — R44/R45 resolved, R46 pending:** preserve observations and
+    effective attempt/component usage. Distinguish delta/cumulative mode from
+    estimate/final/correction status, deduplicate only proven repeat identities,
+    retain failed/interrupted usage, and avoid included-subcategory double counting.
+    Every fact belongs to the call; participant/service-interval/turn links are
+    optional and evidence-based, with no forced turn allocation or duplicate charge.
+    Keep real namespaced provider IDs for optional later supported billing lookup
+    outside the room. Missing units/cost stay unknown; pricing-source/version/
+    fallback remains R46, not a chosen rate catalog.
 13. **Provider profiles and long-call budgets:** specify supported profile
     options, adapter compatibility, token-aware model-context/history budgets, and
     fallback behavior without arbitrary executable provider configuration.
@@ -5122,7 +5182,8 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    bookkeeping only; never repeat a crashed call or redial an uncertain leg.
 10. Send typed input, interrupt generated output, end the call, and deliver late
     usage/artifact updates. Verify honest transcript provenance, no double-counted
-    costs, explicit missing data, and a new revision for a corrected archive.
+    costs, and explicit missing data. Corrected-export revision and finalization
+    assertions await R42/R43; usage settlement alone does not approve them.
 11. Exercise the approved web route shapes with synthetic tenant keys, participant
     keys, and call IDs. Preparation stores a call in the selected tenant; joining
     requires that tenant's call and an authorized participant from its pinned
@@ -5392,6 +5453,24 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     Failed enforcement exposes no bridge, and queued/late output or later replay
     cannot bypass the barrier. Variables and commit-confirmed snapshots are unchanged.
     These are planned checks, not new runtime behavior or a generic redaction test.
+40. Feed distinct incremental deltas 100 and 60, cumulative totals 100 and 160,
+    and cumulative 1000/1600/final1700 for separate attempt/components. Expect
+    effective 160, 160, and 1700 respectively. Deliver a duplicate observation
+    identity and ensure it is not added again; two distinct deltas of 50 must both
+    count. Final evidence supersedes estimates, stale estimates cannot override it,
+    and an explicit correction can lower as well as raise usage. Do not infer
+    update mode from finality, use arrival-order/max rules, sum included subcategories,
+    or coalesce distinct billable attempts. Failed/interrupted work keeps observed
+    usage even after output is stale; unknown units/cost are not zero.
+41. Retain call-wide usage, two separated STT/TTS service-active intervals for one
+    participant, LLM turn work, and TTS with/without provider-supported turn evidence.
+    Verify honest optional links without invented billed duration or allocation,
+    and no triple charge from call/participant/turn views. Keep actual provider IDs
+    namespaced by provider/integration/tenant; absent IDs are not local IDs in disguise.
+    With a fake optional billing adapter, fetch available cost after room end without
+    blocking media or resetting `ended_at`/retention. Unsupported billing or missing
+    cost stays unavailable; later jobs cannot recreate purged data. Leave R46 pricing
+    and R41–R43 archive/finalization choices unimplemented. These are planned checks.
 
 ### Review checkpoint verification
 
@@ -5454,6 +5533,12 @@ The subsequent R38 approval supplies that replacement: `media_policy`, participa
 `while_present`, complete route allowlists, room-wide storage booleans, and the
 preparation/commit privacy barrier. Earlier under-redesign wording is historical,
 not a remaining schema question.
+The later R44/R45 approval supersedes the one-immutable-usage-row-per-operation
+proposal and requires no forced turn allocation. Retain observations, derive
+effective attempt/component amounts, and attribute honestly to call/participant/
+service interval/turn.
+Optional supported billing lookup does not choose R46 prices or R41–R43 archival
+guarantees; earlier references to those accounting choices as pending are historical.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6765,6 +6850,31 @@ storage/client projection boundary and credential exclusions still apply.
   JSON syntax and policy semantics, links/anchors, exact status/count, unchanged
   remaining review rows, prior contracts, terminology/path hygiene, and whitespace.
   Documentation only; no runtime or browser tests.
+
+### Usage evidence and honest attribution — approved R44/R45, 2026-09-08
+
+- Every usage observation belongs to the call, with participant/activation/service-
+  interval/turn links where supported. STT/TTS may have several observed service
+  intervals per participant; no invented billable duration, forced turn allocation,
+  or duplicate charge from multiple aggregate views. TTS turn links are provider-dependent.
+- Preserve actual provider IDs with provider/integration/tenant namespace, distinct
+  from local correlation. Optional supported billing lookup is asynchronous and
+  outside room/media work, may outlive the room, and never resets `ended_at` or
+  promises a cost when lookup is unavailable. Integration auth/isolation is unchanged.
+- Retain observations and derive effective attempt/component usage: delta/cumulative
+  mode is distinct from estimate/final/correction status. Proven repeated identities
+  deduplicate; equal values do not. Finals supersede estimates, explicit corrections
+  may decrease, and stale estimates cannot win by arrival order. Preserve failed/
+  interrupted usage and distinct components/units/currencies without fabricated zero.
+- Replaced the old single immutable usage-row contract and updated planned checks
+  40–41 plus the earlier usage steps. Pricing-source/version/fallback remains R46;
+  R41–R43 archive guarantees are not implied. Ordinary usage archival stays async,
+  variables retain transaction-confirmed snapshots, and privacy/retention still apply.
+- R44/R45 resolved: 8 individual decisions remain, R41–R43 and R46–R50; next five
+  R41–R43 and R46–R47. Verified exact three-file scope, unchanged JSON examples and
+  links/anchors, accounting arithmetic, unchanged remaining review rows, prior
+  contracts, count/status, terminology/path hygiene, and whitespace. Documentation
+  only; no runtime or browser tests.
 
 ## Verification evidence
 

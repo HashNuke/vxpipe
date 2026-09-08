@@ -1079,8 +1079,9 @@ typed-text provenance and provider-final speech facts, and distinguish generated
 agent text from confirmed delivered/spoken text, including interruptions. Do not
 start STT or any prohibited processing just to produce an archive; absent or
 prohibited transcription yields no invented transcript. Missing usage or prices
-remain unavailable, never fabricated or recorded as zero; detailed accounting
-contracts remain under review.
+remain unavailable, never fabricated or recorded as zero. Usage attribution and
+observation settlement follow R44/R45 below; pricing-source/version/fallback policy
+remains R46, and archival guarantees remain separate.
 
 Store available call audio only when recording is integrated, explicitly enabled,
 and permitted by the effective `record_audio` policy. Recording
@@ -1090,6 +1091,47 @@ storage-toggle matrix. Available ordinary turn/tool/
 usage data still follows asynchronous archival; this policy adds no general SQL
 acknowledgement gate. Credential/header exclusions and visibility/agent grants
 remain unchanged.
+
+Usage belongs to the call, with participant/activation/service-interval links
+when known and a turn link only when attribution is honest. Participant attribution
+does not require a turn: STT/TTS may span several service-active intervals and
+turns for one participant. Preserve observed service starts/stops rather than
+assuming one continuous membership interval or inventing billable duration. LLM
+requests can link to their agent/turn; a TTS turn link depends on provider evidence.
+Shared/unattributable work remains call-scoped, without equal allocation across
+turns. One canonical billable fact may carry these references; they do not create
+separate call, participant, and turn charges.
+
+Keep tokens, duration, characters, and other provider units separately from price.
+Usage can be known while monetary cost is unavailable. Preserve actual provider
+request/operation IDs when supplied, namespaced by provider, configured integration,
+and tenant. A missing provider ID stays absent; local correlation is not a provider
+request ID.
+
+Retain usage observations and derive one effective amount per provider-operation
+attempt/component. Distinguish incremental deltas from cumulative totals separately
+from estimate/final/correction status. Deltas 100 + 60 mean 160; cumulative reports
+100 then 160 mean 160, not 260. Cumulative 1000, 1600, then final 1700 mean 1700,
+not 4300. Final evidence supersedes estimates, and a stale estimate cannot override
+a known final. Explicit corrections may lower or raise the amount; neither arrival
+order nor `max()` decides settlement. Finality does not turn a delta into a total.
+Deduplicate only when observation/sequence/delivery identity proves repetition;
+equal numeric values alone are not duplicates. Keep distinct units, currencies,
+components, and provenance, count each effective operation attempt once, and avoid
+adding a total to its included subcategories. Do not coalesce separate billable
+attempts. Failed/interrupted work still contributes observed usage; missing usage
+is unknown, not zero. This does not authorize automatic MCP retries.
+
+A provider integration may optionally include asynchronous billing lookup alongside
+its streaming service, using persisted provider IDs where a billing API supports
+them. It runs outside the media hot path and `RoomAuthority` and can outlive the
+room; it neither blocks the live call nor resets `ended_at` or retention. Not every
+provider offers request-level billing, and eventual cost resolution is not promised.
+Use existing tenant integration authentication/isolation, not per-call credentials.
+No billing API/schema/dependency/provider implementation or fallback rate is chosen.
+R46 pricing policy and R41–R43 archive/finalization policies remain pending. Usage
+archival remains asynchronous, distinct from commit-confirmed variable snapshots,
+and all existing media/privacy and whole-call retention boundaries still apply.
 
 In a database-backed call, save a full post-update Call Variables
 snapshot for each committed update, linked to the originating turn and tool
