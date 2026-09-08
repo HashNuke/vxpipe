@@ -50,14 +50,16 @@ Per-tool overrides are also approved: target the participant definition key plus
 its local configured tool key, with the call-wide default as fallback. Independent
 tool-history storage always saves observed metadata, arguments/request payloads,
 and responses/results/errors, with existing credential/header exclusions. Available
-transcripts/turn details, committed variables, and observed usage/model/cost data
+transcripts/turn details, locally accepted variables, and observed usage/model/cost data
 are stored when permitted. R38 separates live transcript sharing from transcript/
 audio retention, superseding blanket media storage without policy; audio still
 requires enabled/permitted recording, not automatic processing for archival purposes. Variable
 history now uses turn/tool-linked full post-update snapshots, the existing saved
 tool arguments rather than a separate changeset, and a latest-snapshot pointer
-on the call record. Database-backed variable updates return success only after
-that snapshot/pointer transaction commits. Retention periods resolve from tenant
+on the call record. R41 now returns variable-update success after local acceptance
+and asynchronous archival handoff, not database commit. The PostgreSQL subscriber
+projects snapshots/latest pointers without blocking live reads/updates. Retention
+periods resolve from tenant
 override, then application setting; the application default is retain forever.
 Finite retention for completed calls starts at `ended_at`; active calls are not
 expired, and forever has no expiry threshold. Current application/tenant periods
@@ -76,8 +78,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **6 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17–R23, R26–R40, and R42–R45 are resolved; R07's same-call caller
+Current review count: **5 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, R17–R23, and R26–R45 are resolved; R07's same-call caller
 reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -86,7 +88,8 @@ instructions with permitted variable/date tools; no template or timezone hierarc
 is added. R13 allows protected backend-initialized routing variables while
 transfers remain participant-ref-only. G1, G3, and G7's current-slice decisions
 are resolved; G2/G4/G5/G6/G8 retain follow-up context, G10's current scope is resolved,
-G9's media-policy structure is resolved, and G11–G13 still contain proposals.
+G9's media-policy structure and G11's storage/publication choices are resolved;
+G12/G13 retain the five pending decisions.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -108,11 +111,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**6 pending decisions (R41 and R46–R50).** This is the current approval backlog,
+**5 pending decisions (R46–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17–R23, R26–R40, and R42–R45 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R41 and R46–R49**. Mark rows resolved or
+R10–R15, R17–R23, and R26–R45 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R46–R50**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -134,7 +137,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R15 | G4 | **Resolved:** skip the trusted read-only/idempotent-write/side-effect classification layer for now. |
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
 | R17 | G5 | **Resolved:** `tool_visibility` is `hidden`, `metadata`, or `full`; optional `tool_visibility_overrides` maps participant definition key to local tool binding key to level. Binding overrides win; omission hides events; trusted creation may replace the definition policy pair. |
-| R18 | G5 | **Resolved:** qualified by R38 to store permitted available transcripts, turn details, usage/model/cost observations, committed variable snapshots, and complete observed tool history. Approved room-wide transcript/audio storage booleans are distinct from live sharing; recording must be enabled/permitted, without new usage/tool/variable toggles or invented data. |
+| R18 | G5 | **Resolved:** qualified by R38 to store permitted available transcripts, turn details, usage/model/cost observations, full variable snapshots, and complete observed tool history. R41 archives locally accepted updates asynchronously. Room-wide transcript/audio storage booleans are distinct from live sharing; recording must be enabled/permitted, without new category toggles or invented data. |
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
@@ -157,7 +160,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R38 | G9 | **Resolved:** normal media_policy and participant while_present use complete audio/transcript source-to-recipient allowlists and independent room-wide record_audio/save_transcripts. Omission inherits, empty maps allow none, present restrictions intersect and storage false wins; enforce before main-media commit, with isolated pre-acceptance briefing. |
 | R39 | G10/G2 | **Resolved:** no API creation idempotency key or deduplication cache; repeated authorized creation may create separate prepared records for later authorized deletion. Same-call token/admission and telephony webhook deduplication remain separate and intact. |
 | R40 | G10 | **Resolved:** short admission claim, no transaction spanning startup; identify existing room/leg to finish bookkeeping, never repeat a crashed call or speculatively redial an uncertain one. Record failed/unknown appropriately and clean up known resources; no general recovery framework. |
-| R41 | G11 | **Partly agreed:** ordinary-history persistence is synchronous first, later refactored to independent PostgreSQL/S3 subscribers/jobs with post-incident repair deferred. Exact write acknowledgements/failure behavior and PostgreSQL recording-byte versus metadata scope remain pending; no continue/drop default is approved. |
+| R41 | G11 | **Resolved:** required PostgreSQL admission writes remain; live calls use asynchronous room-scoped storage subscribers. EctoStorage archives permitted history/variable snapshots and metadata; S3Storage streams permitted recording bytes. Variable success follows local acceptance/handoff, not SQL commit. Storage failures do not fail/stop rooms or undo updates; bounded handoffs are not durable/no-loss guarantees, and privacy applies before queueing and at sinks. |
 | R42 | G11 | **Resolved:** immutable publication revisions use their persisted UTC record timestamp for details-YYYYMMDDHHMMSSmmm.json under the call-owned prefix. Same snapshot retry reuses its identity/file; changed contents create a new revision without a schema_version change merely for values. Keep a latest-publication pointer, detect filename collisions, and never treat timestamps as unique identity or overwrite earlier revisions. |
 | R43 | G11 | **Resolved:** finalize outside the room with a configurable 60-second post-end reporting window; publish early when expected work settles, otherwise publish permitted available data with honest pending/missing components. Later facts may refresh publication under R42; no call extension, work cancellation, or false completion during outages. |
 | R44 | G12 | **Resolved:** retain observations and derive effective usage per operation attempt/component; distinguish deltas from cumulative totals and estimate/final/correction status. Identity-proven duplicates do not add again; final supersedes estimates, explicit corrections may decrease/increase, and failed/interrupted usage is retained without invented zero. |
@@ -736,10 +739,11 @@ Model/tool workers call it directly for reads, updates, and turn projections;
 `RoomAuthority` is neither a request intermediary nor a per-operation permission
 check. The variables process serializes its own validation and commits. Trusted
 identity comes from the engine binding, not model-supplied arguments.
-For database-backed updates, it waits for its snapshot-persistence port to confirm
-the snapshot/latest-pointer transaction before adopting the values/revisions and
-returning tool success. Storage errors cannot become memory-only success. The
-adapter owns SQL; neither routing nor acknowledgement requires `RoomAuthority`.
+Updates adopt validated in-memory values/revisions and return success after local
+acceptance and asynchronous archival handoff. Reads use memory, not PostgreSQL.
+R41 supersedes the earlier database-commit success gate: local acceptance does not
+prove persistence, and later storage errors do not roll back accepted values.
+The adapter owns SQL; neither routing nor acknowledgement requires `RoomAuthority`.
 
 Keep it under the room supervisor, outside each agent's execution subtree. No
 activation mirror, deactivation acknowledgement, or live-agent query is needed
@@ -958,14 +962,14 @@ observed outcomes: unknown timeouts remain unknown, not fabricated remote result
 For example, a booking invocation hidden from the browser can still have its
 arguments/result saved for an authorized operational review. A sample call can
 show that result live and saves the same complete observed tool history. General
-tool/event persistence now follows R41's synchronous-first direction, superseding
-the blanket async-first proposal. The capture policy does not itself resolve the
-remaining acknowledgement/failure boundary.
+tool/event persistence follows R41's asynchronous storage subscribers, superseding
+the synchronous-first checkpoint. Database archival failure does not fail/stop
+the room or undo accepted variable updates; local handoff is not proof of durability.
 No runtime persistence is added by this documentation decision.
 
 **Approved available call data (R18, qualified by R38):** always save permitted
 available transcripts, turn details, and observed usage/model/cost information,
-alongside committed variables
+alongside locally accepted variables
 and complete tool history. R38 qualifies the earlier no separate storage toggle
 per category rule for explicit transcript/audio retention, independent from live
 sharing. The approved room-wide booleans govern automatic storage paths without
@@ -978,8 +982,7 @@ STT or other prohibited processing for archival completeness; missing or forbidd
 transcription does not justify inventing a transcript. Missing usage/prices remain
 unavailable, not zero or invented estimates; R44/R45 resolve usage accounting and
 attribution while R46 pricing policy remains pending. General history persistence
-is synchronous first under R41; its exact coordination/acknowledgement/failure
-policy remains under review.
+is asynchronous under R41, outside the live room's database dependencies.
 
 Call audio is stored only through an explicitly enabled and permitted recording
 capability. Presence-driven privacy policy and the `opening_audio` media-input gate still
@@ -996,36 +999,33 @@ or control over independent client/provider copies. Tool-history privacy and
 credential/header exclusions remain intact.
 
 **Approved variable history and latest-state lookup:** in a database-backed call,
-each committed update saves a full post-update snapshot linked to its
-originating turn and tool invocation, source participant, revisions, and commit
+each locally accepted update emits a full post-update snapshot linked to its
+originating turn and tool invocation, source participant, revisions, and acceptance
 timestamp. The saved update tool call and arguments already describe the requested
 change; no separate changeset or duplicate argument payload is needed. Argument
 storage follows the always-stored complete tool-history contract, not an opt-in.
 Several updates in one turn remain distinguishable by invocation and revision;
 rejected updates do not create successful state snapshots.
 
-`CallVariables` computes the full candidate state after validation and serializes
-updates through confirmed persistence. It must not fetch a later live snapshot
-and label it as an earlier update. A configured snapshot-persistence port commits
-the history snapshot and conditional `calls.latest_variables_snapshot_id` advance
-in one same-call transaction, with revision/incarnation checks and idempotent
-snapshot identity. A stale new update must fail the transaction, not insert its
-snapshot and report success after skipping pointer advancement. A repeated
-already-committed operation must not roll back newer memory or the latest pointer.
-Only after commit confirmation does the owner adopt the new values/revisions,
-emit the event, and return success. Validation failures retain their existing
-errors; a transaction error returns variable-save failure. Both leave current
-in-memory values/revisions unchanged and emit no update-success event. Normal
-transaction success/error handling is sufficient for this slice; the proposed extra commit-status lookup or
-reconciliation workflow is not required.
+`CallVariables` validates and serializes locally, adopts the new values/revisions,
+and returns success after local acceptance and asynchronous archival handoff. Emit
+the exact resulting full snapshot, never a later live snapshot labelled as an
+earlier update. Validation failures retain typed errors and leave memory unchanged.
+Reads use current memory; neither reads nor successful updates wait for SQL.
 
-Latest persisted values need one indexed lookup or simple join, not history
-aggregation or a second mutable variables store. The GenServer is the runtime
-owner of committed values. Its update tools now wait for database commit, while
-`RoomAuthority` and media do not. Other history writes follow R41's synchronous-first
-direction with their remaining acknowledgement/failure contract still pending.
-This supersedes the earlier asynchronous snapshot-success proposal, not the
-dedicated variables-process ownership or existing read/write permissions.
+`EctoStorage` asynchronously inserts history and conditionally advances
+`calls.latest_variables_snapshot_id` in one same-call PostgreSQL transaction.
+Use snapshot identity, revisions, and incarnation checks to deduplicate deliveries
+and prevent out-of-order pointer regression or cross-call references. Older valid
+history may be stored without becoming latest. A failed transaction rolls back
+that persistence attempt, not the locally accepted update or its tool success.
+No live commit-status lookup/reconciliation is added.
+
+Latest persisted values need one indexed lookup/simple join, but may lag the
+in-memory owner. Async handoff is not durable storage; process/host failure before
+durable persistence may lose accepted values/history. R41 explicitly supersedes
+the earlier PostgreSQL-commit-before-success rule and synchronous-first checkpoint,
+not variable ownership, authorization, datatype checks, or revision serialization.
 Snapshots do not expand client visibility or the updating agent's read grants.
 Retained initial values have a baseline snapshot and pointer without fabricating
 a conversational turn or tool invocation.
@@ -1112,8 +1112,8 @@ This background cleanup retry policy does not change the tool/MCP no-retry rule.
 Unstarted-record housekeeping remains separate; no additional automatic
 expiry is approved for those records.
 Model, authorized operator, call-ledger consumer, telemetry, and browser remain
-different audiences. G5 stays partly resolved. Success now proves the snapshot
-transaction committed, not that complete room restart/recovery is implemented.
+different audiences. Local variable success proves acceptance/handoff, not a
+database commit or complete room restart/recovery.
 
 **Approved sensitive-input boundary:** defer general redaction of sensitive voice
 audio and input that reaches STT/the LLM. This is later work, not a prerequisite
@@ -1448,23 +1448,33 @@ resources without a speculative second dial or remote rollback claim. Recover
 records about existing work, never repeat the phone call. No sweeping durable
 recovery or cross-node exactly-once framework is added.
 
-### G11 — P2: Publication revisions and finalization wait resolved; persistence failure policy pending
+### G11 — P2: Asynchronous storage, publication revisions, and finalization resolved
 
-R41 now approves synchronous-first ordinary-history persistence, with a later
-refactor moving unnecessary blocking writes to independent storage subscribers/
-jobs. Required PostgreSQL writes remain blocking, including variable snapshots
-before tool success. This supersedes the earlier async-first archive proposal.
-Exact write coordination, acknowledgement criteria, and behavior when one or both
-stores fail remain pending; neither continue/drop nor stop-call is approved here.
-No SQL/disk/S3-per-frame work moves inside `RoomAuthority` or live mixing. Recording
-and bounded artifact writers keep their separate media responsibility.
+R41 is resolved with asynchronous room-scoped storage services/capabilities.
+Required setup/admission writes still depend on PostgreSQL; the existing call
+record ID anchors runtime events. Live room activity does not wait for synchronous
+PostgreSQL writes. Engine supervision owns subscriber/writer lifecycle, while
+SQL/object-store adapters stay within their umbrella boundaries, outside the
+authority and media hot path. `EctoStorage` consumes permitted call-start/lifecycle,
+transcript, turn, tool, usage/cost, variable snapshots, and artifact metadata.
+`S3Storage` subscribes to permitted recording streams and writes audio bytes to S3;
+PostgreSQL stores history/metadata/references, not a duplicate of recording bytes.
 
-The goal is independent PostgreSQL and S3 copies of available permitted call
-details/transcripts and recording artifacts. Separate attempts/data feeds are
-needed: an S3 export relying solely on PostgreSQL records cannot protect those
-facts from a PostgreSQL outage. Outcomes are separate, not an atomic cross-store
-transaction. PostgreSQL audio bytes versus metadata/references remains undecided;
-artifact metadata alone cannot reconstruct missing recording bytes.
+Subscribers persist or publish to a future queue; SQS is an example, not a chosen
+dependency. Storage failures do not themselves fail/stop the room, undo accepted
+variables, or backpressure media/`RoomAuthority`. `CallVariables` succeeds after
+local acceptance plus asynchronous handoff, not PostgreSQL commit. All handoffs
+and buffers must be bounded and loss/incompleteness honest. In-memory handoff is
+not durable persistence; process/host loss before durable handoff may lose accepted
+values/history. Retries/queues help only if the fact survives. No exact overflow
+policy, durable spool, unlimited mailbox, exactly-once, or no-loss guarantee is added.
+
+Filter denied audio/transcripts at the source/subscription boundary before handing
+payloads to a subscriber or queue, then enforce again at the sink. Preserve source-
+interval permission/provenance for delayed writes; do not queue forbidden data
+first and filter later. Storage buffers/logs/exports cannot retain denied payloads.
+Live transcript routes remain separate from save_transcripts. Post-call draining
+may outlive the room under R43, without retaining prohibited or purged data.
 
 Oban/SQS are future candidates, not dependencies selected now. Oban's jobs use its
 configured SQL database; a PostgreSQL-backed queue still needs PostgreSQL for
@@ -1473,15 +1483,16 @@ enqueueing and is not an independent outage path.
 
 S3-to-PostgreSQL import and PostgreSQL-to-S3 export repair are deferred post-incident
 operational work, not an implemented automatic reconciliation framework or full
-database backup. Only surviving persisted data can be recovered. A successful S3
-write never upgrades a failed variable candidate into a committed update; its
-PostgreSQL snapshot/latest-pointer transaction still gates success. Every sink
-and later repair must honor source-interval privacy and whole-call retention.
+database backup. Only surviving persisted data can be recovered. S3 recording
+alone is not an independent live JSON/history copy; a PostgreSQL-dependent final
+export cannot recover never-persisted facts, and metadata cannot recreate lost
+audio bytes. Every sink and later repair must honor source-interval privacy and
+whole-call retention.
 Unproduced/prohibited data, expired data, and accidental loss are distinct; no
 repair may reconstruct forbidden intervals or purged calls. R38 still separates
 transcript/audio retention from live sharing, without optional tool/usage history.
 
-For the later subscriber design, retain bounded queues, separate private/public
+For the subscriber design, retain bounded queues, separate private/public
 projections, and observable lag/failure; a slow browser must not stall the ledger.
 Missing sequence ranges or incomplete watermarks remain candidate representations,
 not a selected failure policy. An in-memory acceptance alone cannot establish
@@ -1522,9 +1533,9 @@ The window limits reporting wait only. It does not extend the call, reset
 `ended_at` or retention, cancel uploads/provider work, or stop permitted asynchronous
 cost retrieval. Background work can outlive the room. If the database/object store
 cannot publish, retain/retry appropriate publication state; never claim published
-or complete merely because time expired. R41's overflow/durability choice stays
-pending. Later facts may trigger refreshed publication or a new revision under
-R42. Known call-owned jobs/references must honor retention
+or complete merely because time expired. R41's bounded asynchronous handoff is
+not a lossless guarantee. Later facts may trigger refreshed publication or a new
+revision under R42. Known call-owned jobs/references must honor retention
 deletion and source-interval privacy, so late work cannot recreate purged data or
 capture/copy denied intervals. No new configuration schema or runtime work is added.
 
@@ -1575,11 +1586,10 @@ usage despite stale conversational output. Preserve original observations as the
 effective amount changes; automatic MCP retry policy is unchanged.
 
 R46 pricing-source/version/fallback remains pending: absent billing support does
-not approve catalog math or invented prices. R41 archive persistence/failure policy
-remains pending; R42's revision identity and R43's reporting window do not settle it.
-General usage persistence follows R41's synchronous-first direction; optional
-provider billing lookup can still run asynchronously. Variable snapshots retain
-their commit-confirmed boundary. Mandatory usage
+not approve catalog math or invented prices. R41–R43 storage/publication contracts
+are resolved without promising lossless archival. General usage persistence and
+optional provider billing lookup run asynchronously. Variable snapshots follow
+local acceptance with asynchronous PostgreSQL projection. Mandatory usage
 storage still respects media/privacy exclusions and whole-call retention; later
 billing cannot recreate purged call data.
 
@@ -1672,8 +1682,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Save permitted available facts with honest provenance/usage; explicit transcript/audio retention is independent from live sharing under R38, not inferred recognition shutdown, and tool/variable/usage requirements stay intact; audio requires enabled/permitted recording and the opening input gate |
 | Exercise the selected remote revision with JSON/SSE and invalid tool arguments | Both response forms follow 2026-07-28 metadata/lifecycle; incompatible revisions fail clearly; a proper validator blocks missing required, wrong type/enum, and invalid nested inputs before submission; unsupported schemas reject enabled bindings before exposure without network ref fetching |
 | Receive structured data, a document descriptor, or input_required for an unsupported interaction | Preserve observed response/outcome without auto-fetching or claiming inspection; unauthorized tools remain unavailable; advertise no unimplemented sampling/elicitation capability, report its absence clearly, and do not auto-continue or resubmit |
-| Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
-| Fail a snapshot transaction, retry persisted delivery, or submit a stale write | Transaction error returns variable-save failure with unchanged current memory and no success event; a rolled-back transaction changes neither durable snapshot nor pointer; no duplicate snapshot, cross-call pointer, or stale regression; no extra commit-status lookup is required, and snapshots never leak through public events or tool results |
+| Update variables twice while holding PostgreSQL persistence behind a barrier | Both tools succeed after local acceptance/handoff and reads see current memory; each event carries its exact full snapshot and original turn/tool/revisions; durable pointer may lag until asynchronous persistence, without a changeset |
+| Fail a snapshot transaction, duplicate delivery, and deliver older revisions later | Storage failure does not undo memory/tool success or fail the room; snapshot/pointer writes remain one PostgreSQL transaction, duplicate history and cross-call/regressing pointers are prevented, older valid history need not become latest, and snapshots remain private |
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration neither starts processing/recording nor changes client visibility; cleanup follows the approved periodic external-first whole-call contract |
 | Create a record before its call starts, then end it with finite retention | Expiry is computed from ended_at plus the current application/tenant period, not created_at or storage-write time; active calls are not expired, later archive writes do not reset the clock, forever has no expiry, and missing ended_at does not fall back to creation time |
 | Change retention after calls already exist | The current setting applies to past and future calls without per-call policy copies; shortening 90 days to seven makes a 14-day-old completed call eligible, increasing the period or choosing forever changes eligibility only for remaining data, and an explicit tenant override still wins over application changes |
@@ -1699,7 +1709,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Resolve duration at each scope, then transfer/recover into human-only conversation | Definition wins over tenant/application/default 1800000, the resolved limit stays pinned despite later settings changes, actual started_at anchors the deadline without preparation wait/reset, and expiry ends with a clear reason without unapproved closing grace |
 | Configure fixed text opening audio and reuse/change its resolved voice binding | Render/cache with the initial agent's resolved TTS/voice; capability warmup need not wait but ordinary conversation and participant media do; changed text/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no implicit agent/voice is chosen when unavailable |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
-| Slow a recording upload or history store | Keep SQL/disk/S3 work outside live mixing and do not falsely claim complete persistence; the remaining R41 acknowledgement/failure policy must be approved before asserting continue/drop or call termination |
+| Slow a recording upload or history store | Keep SQL/disk/S3 work outside live mixing; storage failure itself does not fail/stop the room or undo accepted variables, unavailable sinks do not backpressure media/authority, and bounded storage reports incompleteness rather than claiming durability |
 | Repeat authorized API creation, then separately replay provider events or same-call token claims | Creation may produce separate prepared records without an idempotency header/cache; same-call/provider identities still prevent double startup, and no deletion endpoint/UI is implied |
 | Fail transfer source restoration and trigger retry/supervisor paths | Exactly one bounded permitted-capability restoration attempt; no budget reset, end if no usable conversation or retain valid working humans, and detailed cause stays internal even with full sample visibility |
 | Brief an outbound human privately before acceptance | Caller cannot hear briefing/optional notice; share only permitted minimum-necessary information, then require destination-bound acceptance and room commit; no implicit full transcript or general concurrent-agent consultation |
@@ -1711,9 +1721,10 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Deliver deltas, cumulative samples, finals, stale estimates, and explicit corrections | Apply declared report semantics per attempt/component: 100+60 deltas are 160, cumulative 1000/1600/final1700 is 1700, final beats stale estimates, and a correction can decrease; repeated identity deduplicates but equal independent deltas both count |
 | Attribute a call-wide operation, a participant's separated STT/TTS intervals, and supported turn work | Every fact retains call linkage, optional participant/interval/turn refs reflect evidence without forced allocation, each effective attempt counts once, and failed/interrupted usage survives output filtering without invented units/cost/provider IDs |
 | End calls with settled work, pending uploads/billing, and deliberately unavailable media | Outside-room finalization publishes early when expected work settles or at the configurable 60-second deadline with permitted available facts and honest pending/missing markers; no fabricated zero or false incomplete capture for prohibited/unconfigured/not-produced media |
-| Expire the reporting window, then complete late work or make publication storage unavailable | Call end/retention stay unchanged, allowed uploads/billing continue, later facts can refresh publication, and outages retain/retry publication state without false success; purged data and denied source intervals cannot reappear, while R41 failure policy remains pending |
+| Expire the reporting window, then complete late work or make publication storage unavailable | Call end/retention stay unchanged, allowed uploads/billing continue, later facts can refresh publication, and outages retain/retry publication state without false success; purged data and denied source intervals cannot reappear, with no lossless handoff guarantee |
 | Retry a publication, revise its values, and simulate a timestamp collision | Same immutable snapshot reuses its stored UTC timestamp/identity/file despite later wall-clock time; a value correction uses a new record/object without changing schema_version solely for data, earlier revisions survive, the latest pointer tracks publication, and a collision cannot clobber another revision; retention removes every call-owned revision |
-| Review first persistence wiring and simulate independent store failures | Ordinary-history persistence is synchronous first without per-frame I/O in the room/mixer; PostgreSQL/S3 outcomes are distinct, an export dependent only on PostgreSQL is not an independent backup, and S3 success cannot acknowledge an uncommitted variable snapshot; do not assert unapproved failure policy or audio-byte scope |
+| Review storage wiring and delay/fail subscribers | Admission still writes PostgreSQL; live history/variables go asynchronously to EctoStorage while S3Storage receives permitted recording bytes. Local updates/reads proceed during database failure, pointer projection may lag, and no independent history backup or no-loss guarantee is implied |
+| Deny recording/transcript storage while live transcript routes remain permitted | Source/subscription filtering prevents forbidden payloads entering subscribers/queues/logs/buffers; delayed sink writes honor source-interval provenance, live transcript permission is separate, and neither post-call draining nor repair recreates denied/purged data |
 
 Late booking webhook/external-event delivery is deliberately not an acceptance
 requirement for the current MCP slice. Add such scenarios only when the deferred
@@ -2227,22 +2238,34 @@ their persisted UTC record timestamps, including three millisecond digits. Retri
 reuse the same snapshot/identity/file; changed contents get a new revision, not a
 value-driven schema version or an overwrite. Keep a latest-publication pointer
 and collision protection rather than treating time as unique identity. All revisions
-obey call retention and source-interval privacy. Current backlog: 6 individual
+obey call retention and source-interval privacy. At that checkpoint: 6 individual
 decisions, R41 and R46–R50; next five R41 and R46–R49. Verified exact three-file
 scope, unchanged JSON examples/links, timestamp formatting, unchanged pending rows,
 prior contracts, and terminology/path/whitespace hygiene. Documentation only;
 R41's separate storage direction was not decided by that publication checkpoint.
 
-The subsequent R41 direction is synchronous-first ordinary-history persistence,
+The intermediate R41 direction was synchronous-first ordinary-history persistence,
 then a subscriber/job refactor for writes that need not block. Independent
 PostgreSQL/S3 copies and deferred post-incident repair are the goal, not an
 implemented dual-store transaction or backup guarantee. SQL-backed jobs retain
 their SQL dependency. Acknowledgement/failure behavior and PostgreSQL recording
 payload scope remain pending; variables still require PostgreSQL commit before
 success, and every copy/repair obeys privacy/retention. Six individual decisions
-remain: R41 and R46–R50; next five R41 and R46–R49. Verified canonical async-first
+remained at that checkpoint: R41 and R46–R50; next five R41 and R46–R49. Verified canonical async-first
 supersession, untouched other review rows/JSON examples, links, dependency absence,
 prior contracts, and diff hygiene. Documentation only; no new dependency or issue.
+
+The final R41 decision supersedes both that synchronous-first direction and the
+earlier PostgreSQL-commit-before-variable-success contract. Required admission
+writes stay; live room history and variable snapshots use asynchronous storage
+subscribers, with local variable acceptance/handoff defining success. EctoStorage
+owns PostgreSQL history/metadata projection; S3Storage receives permitted recording
+bytes. Storage failure does not fail/stop the room or roll back accepted values.
+Filter source-interval privacy before subscriber/queue handoff and at sinks. Bounded
+in-memory handoff is not durable/no-loss storage; post-incident repair remains
+deferred. Five individual decisions remain, R46–R50. Verified canonical contracts,
+planned acceptance checks, JSON/text examples, links, status/counts, unchanged
+remaining rows, privacy/retention, and diff hygiene. Documentation only.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
