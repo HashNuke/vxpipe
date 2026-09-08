@@ -1,7 +1,7 @@
 # Call definition design
 
 Research date: 2026-09-05 UTC
-Last updated: 2026-09-07 UTC
+Last updated: 2026-09-08 UTC
 
 ## Goal
 
@@ -16,11 +16,11 @@ needs a node-and-edge model.
 This is a research checkpoint. It does not commit a public schema or change
 runtime behavior.
 
-The [design gap review](#design-gap-review--pending-approval) records questions
-and possible solutions. G1's unified agent `tools` map and G2's tenant-scoped web
-admission routes, direct initial variables, API-key authentication with one-way
+The [design gap review](#design-gap-review--numbered-review-complete) records the
+completed R01–R50 review, decisions, and deferred scope. G1's unified agent `tools`
+map and G2's tenant-scoped web admission routes, direct initial variables, API-key authentication with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
-call-record expiry, prepared token-join or direct-backend connection, explicit
+call-record expiry, common preparation/token/join for all API clients, explicit
 entry participants/startup, and one participant per definition key per call are
 approved and documented below. Record creation and actual live-call start also
 have distinct timestamps; preparation is not call duration.
@@ -109,9 +109,10 @@ DTMF need not involve the LLM. First-message modes and first-activation-only
 greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
-for eligible unstarted records remain supported. The focused gap review now lists
-4 individual decisions still awaiting review, rather than counting its
-background groups. R06 is resolved: another token does not supersede unused ones.
+for eligible unstarted records remain supported. The focused gap review now has
+0 individual decisions awaiting review in R01–R50; deferred issues and engineering
+particulars are separate from that count. R06 is resolved: another token does not
+supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
 call-level `opening_audio` allows capability warmup but gates participant audio
@@ -160,9 +161,12 @@ counting deltas, cumulative reports, estimates, finals, or corrections. R45 perm
 call/participant/service-interval/turn attribution where honest and optional later
 billing lookup by actual provider IDs. R46's initial pricing policy is resolved:
 provider-reported costs where available, otherwise unknown price with observed
-usage/IDs and no local rate catalog. R48 selects compaction but leaves its mechanics
-open; R49 distinguishes an approved too-large model projection from a required
-MCP receive-size cap whose exact limit/handling remain open. R47/R50 are unchanged.
+usage/IDs and no local rate catalog. R47 assigns provider options to configured
+services/profiles and conversation policy to the engine. R48 checks input before
+inference, compacting at 75% of usable input budget toward below 50% while protecting
+current work and privacy; no summarizer model is selected. R49 sets a configurable
+1 MiB decoded/decompressed response limit, separate from model projection. R50
+permits supported provider-native LLM fallback through ReqLLM, not a Vxpipe chain.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -695,8 +699,8 @@ There is no automatic mapping layer or platform-only result section required
 for this flow. The external service remains responsible for its booking and
 verification rules; a copied result in our variables is not the service's source
 of truth. Submitted MCP calls survive ordinary conversational interruption as
-approved below; other external-operation retry/cancellation questions remain
-under G4 review.
+approved below; external-operation retries are disabled initially and explicit
+cancellation remains deferred under G4's settled scope.
 
 One `CallVariables` GenServer per room incarnation is the sole runtime owner of
 mutable values and revisions. It holds the compiled variable schemas and
@@ -1970,8 +1974,8 @@ A transfer away from an agent participant changes the effective tool surface
 and shuts down its execution subtree, including capabilities and model/tool
 workers. After shutdown, that source cannot issue new tool requests. Already-sent
 local variable requests can still finish in the room's `CallVariables` process;
-source termination does not cancel or roll them back. Remote side effects and
-uncertain outcomes remain under G4 review, not an automatic rollback guarantee.
+source termination does not cancel or roll them back. Remote side effects use
+G4's honest unknown-outcome/no-automatic-retry contract, not an automatic rollback guarantee.
 An agent-participant destination receives only its own bindings; a human
 destination receives no model tool surface. Tool results and events retain
 participant and activation identity so late source output cannot revive the old
@@ -2279,6 +2283,66 @@ arguments, tool credentials, or generated-but-unplayed assistant text. Add
 summary generation only after it has its own deadline, failure, provenance, and
 fallback semantics.
 
+### Provider profiles, context compaction, and response limits — approved R47–R50
+
+R47 keeps provider-supported settings in reusable configured services/profiles.
+Conversation, interruption, and call-duration policy remain engine-owned. Reject
+known unsupported options/combinations during definition validation, never silently
+drop them. Failures discoverable only from the provider follow normal startup/runtime
+handling. No extra configuration layer, arbitrary provider payload, executable
+timing policy, or local model is introduced.
+
+R48 applies before each inference, including tool-round continuation. Measure total
+accumulated input: fixed prompt/instructions, tool definitions, and current
+conversation/tool history. Compare against the usable input budget after reserving
+output capacity. The defaults compact older completed conversation at 75% of that
+budget and target below 50%. Instructions, tool definitions, recent/current messages,
+unresolved tool interactions, and valid tool-call/result pairing are protected.
+These are design targets, not proof everything fits. If protected content is too
+large, do not silently remove it or send input beyond the model limit.
+
+The compactor sees only the agent-authorized live conversation, not unrestricted
+room history or archives. Its summary is derived data, not a system instruction,
+tool result, or authorization to execute tools. It does not change `CallVariables`,
+permissions, or the full permitted archive. Derived transcript summaries inherit
+source-interval storage restrictions; summarizing cannot save denied transcripts
+under another label. When compaction works on a snapshot, preserve messages and
+unresolved invocations arriving afterward when incorporating the result. The
+summarizer model/provider, execution selection, and config encoding are not chosen;
+this approval adds no new model recipient or hidden local summarizer. Separate
+transfer-history summaries above are not automatically enabled by context compaction.
+
+R49 sets a configurable hard maximum acceptable MCP response size: default 1 MiB
+(1,048,576 bytes) of decoded/decompressed response data. Enforce incrementally
+during receipt, with cumulative streaming equivalents, not an independent cap on
+each chunk that permits an unlimited total or a check after full buffering. On
+excess, stop receiving/processing and report bounded observed too-large/outcome
+details. This does not prove a remote side effect failed and does not authorize
+automatic retries. A body rejected before full receipt cannot be described as a
+fully received/archived response.
+
+The receive-size cap is distinct from the model token/projection budget. Fully
+accepted permitted responses go to asynchronous history. If one cannot fit the
+model context, return an explicit model-projection-too-large/omission outcome,
+not remote-action failure, chopped JSON, or automatic result summarization or
+inspection. Retain the full accepted response through the permitted archive path;
+handoff is not durable confirmation. Concrete parser/transport and configuration
+hierarchy remain implementation particulars, not a new approval backlog. The
+deferred general result/document-inspection scope is unchanged.
+
+R50 allows explicitly configured provider-native/router LLM fallback only where
+ReqLLM supports the provider options. Vxpipe adds no fallback schema, direct-provider
+chain/coordinator, or new STT/TTS fallback feature. Existing tool/permission/privacy
+and usage constraints remain; save actual observed provider/model evidence without
+inventing hidden upstream attempts or IDs. This is not MCP executor retry or a
+promise to replay already-emitted speech/tool actions after a stream failure.
+Known unsupported fallback settings fail under R47's validation rule. Inspection
+of ReqLLM 1.22.0 found remote routing/fallback options, not a generic direct-provider
+fallback chain; integration still needs focused runtime verification.
+
+These decisions close R47–R50 and the numbered review, not implementation or every
+engineering detail. In particular no summarizer model/execution choice is approved.
+
 ### Runtime overrides
 
 Avoid arbitrary deep-merge overrides. `CallInvocation.initial_variables` may
@@ -2422,7 +2486,8 @@ Repo responsibility. The room holds the resulting pinned plan for runtime work.
 The routing decision is supplemented by the approved initial-variables and
 authentication contract below and the approved two-entry startup contract above.
 Personalization is handled through agent instructions and permitted variable
-reads, while the remaining security/lifecycle details still need G2 review.
+reads. G2's initial security/admission choices are resolved; transport wire details
+and deferred same-call caller reconnection are separate from the completed review.
 No endpoint or ID generator was implemented here.
 
 ### Initial variables and API-key admission — approved G2 decisions
@@ -3292,8 +3357,8 @@ newer update from B.
 
 Completion does not revive a cancelled model response or resume stale audio.
 A missing acknowledgement does not undo a committed write. No separate mutation
-ID deduplication/journal subsystem is approved by this decision, and the policy
-for other external MCP/host side effects remains under G4 review. Late business
+ID deduplication/journal subsystem is approved by this decision. External MCP/host
+side effects follow G4's unknown-outcome/no-automatic-retry contract. Late business
 notifications are deferred to the future external-event mechanism, not handled
 as new variable writes in this slice. No extra call-definition fields are needed.
 
@@ -4673,24 +4738,26 @@ database work: storage must not make unvalidated JSON authoritative. After that
 contract is green, the first persistence vertical slice introduces
 database-neutral admission in `vxpipe_calls`, the Ecto/PostgreSQL adapter in
 `vxpipe_persistence`, immutable definition revisions and deployments, an indexed
-inbound route, and one idempotently created call row that pins the resolved plan.
+inbound route, and a call row that pins the resolved plan. R39 allows repeated
+authorized creation to produce separate prepared records, without a creation
+idempotency key/cache; same-call admission exclusion remains a separate contract.
 Do not combine transcript, usage, recording, or final publication into that
 admission slice; add them incrementally through the ordered event and artifact
 boundaries described above.
 
-## Design gap review — pending approval
+## Design gap review — numbered review complete
 
 The existing participant-first structure still fits the intended scenarios.
 Keep `entry_caller` and `entry_receiver`, direct participant-ref transfer lists,
 agent-scoped tool enablement, immutable resolved plans, room-owned variables, and
-live mixing. This checkpoint identifies missing contracts and inconsistencies;
-it does not add runtime functionality. G1 records the approved tool layout and
+live mixing. This review records the approved contracts and explicitly deferred
+scope; it does not add runtime functionality. G1 records the approved tool layout and
 G2 records the approved web routes, direct initial variables, hash-only API-key
 storage, OTP/CLI bootstrap, tenant-bound `admin`/`calls` scopes, independently
 revocable multiple keys, and no revocation coupling to already-issued tokens.
 Token lifetime defaults to five minutes; authenticated requests may ask for
 longer. It also approves single-use tokens with existing-call recovery and no
-automatic call-record expiry, prepared-token and direct-backend connection flows,
+automatic call-record expiry, common preparation/token/join for all API clients,
 explicit initial participants/startup, and one
 participant per definition key per call. G3's initialization rule now permits
 only supplied setup values, with no variable defaults. Its interruption rule
@@ -4747,23 +4814,23 @@ without per-call retention settings. Expiry deletes the entire call and all
 associated Vxpipe-managed data, including its record and latest variable snapshot.
 First-message modes and first-activation-only greeting behavior are approved.
 The source agent stays responsible until successful transfer commit and receives
-failed-attempt outcomes. G7's current-slice decisions are resolved; deferred
-voicemail delivery and G8's remaining questions are distinct from approved work.
-Open decisions are listed individually in the focused review document.
+failed-attempt outcomes. G7/G8's initial-scope decisions are resolved; deferred
+voicemail delivery and broader consultation features remain separate from approved work.
+The completed numbered decision register is in the focused review document.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Remaining review count — 2026-09-08
 
-There are **4 individual decisions awaiting review**, enumerated as R47–R50
-in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R46 are resolved;
+There are **0 individual decisions awaiting review** in R01–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R50 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
 stay with application/agent instructions; R13 uses protected initial routing
 variables without expanding the model's transfer arguments.
-G1/G3, G7/G9's current-slice decisions, and G10's initial scope are closed;
-G2/G4/G5/G6/G8 retain follow-up context without reopening R38's approved structure.
+G1–G13 retain approved contracts and deferred follow-up context, not additional
+pending groups or a reopening of R38's approved structure.
 G headings are background
 organization, not the current count. Earlier progress entries retain their
 historical group counts and do not describe the current individual-item total.
@@ -4780,14 +4847,17 @@ voicemail moves to a deferred issue. R37's bounded private briefing is approved;
 its media representation and commit boundary are resolved by R38.
 R44–R46's accounting/attribution and initial pricing choices are resolved:
 provider-reported costs where available, otherwise unknown price plus observed usage/IDs.
-There is no local pricing catalog. R48's compaction direction and R49's
-oversized-result boundaries are partly agreed; mechanics/limits remain pending, each once.
+There is no local pricing catalog. R47–R50 now resolve provider-profile ownership,
+compaction budget/conditions, the 1 MiB receive cap and separate model projection,
+and supported provider-native LLM fallback. Summarizer execution/model selection
+and concrete encoding/adapter details remain unselected, not silently authorized.
 R42's immutable timestamp-named publications and R43's outside-room reporting
 window are resolved. R41 now resolves asynchronous room storage, local variable
 success, PostgreSQL history/metadata, and S3 recording bytes. Its final decision
 supersedes synchronous-first history and database-commit-before-update-success.
 Bounded handoff is not durable/no-loss storage; incident repair remains deferred.
-The four remaining decisions are R47–R50.
+There is no next numbered review batch. Review completion does not mean runtime
+is implemented, deferred issues are approved, or every engineering detail is chosen.
 
 ### Baseline and scope
 
@@ -4835,7 +4905,7 @@ The four remaining decisions are R47–R50.
 - No engine, gateway, dependencies, application configuration, or tests changed.
   No new umbrella application, provider call, or database was introduced.
 
-### Gaps and options to review
+### Reviewed gaps and selected scope
 
 The numbering below matches G1–G13 in the focused review document.
 
@@ -4898,9 +4968,11 @@ The numbering below matches G1–G13 in the focused review document.
    transfer destination into a live call remains supported. Call duration excludes
    preparation wait.
    Record cleanup is separate from admission/token expiry. Retention periods now
-   have an application retain-forever default with tenant overrides. G2 still needs
-   temporary transport failure versus call-end triggers, issuance retry
-   details, and admission/transfer crash handling. R10 already uses initial
+   have an application retain-forever default with tenant overrides. Exact
+   temporary transport failure versus call-end triggers and wire response details
+   remain transport design work, not an additional G2 review batch. R06 and
+   R39/R40 settle issuance independence and admission/crash bookkeeping without
+   call repetition. R10 already uses initial
    variables supplied by an authorized creator/backend/trusted ingress, leaving
    unknown values unfilled without a new automatic resolver. There is no blanket
    participant-disconnect hangup rule.
@@ -4980,7 +5052,7 @@ The numbering below matches G1–G13 in the focused review document.
    while the application/MCP owns enforceable business authorization. Prompts
    are not a security guarantee; Vxpipe's tool-access checks remain. A start event
    is not proof of successful completion.
-5. **Private tool data and archive projections — partly resolved:** resolve
+5. **Private tool data and archive projections — design resolved:** resolve
    client tool visibility from the definition and any authorized call-creation
    selection, and pin it with the call. Support no tool events, metadata only,
    or full arguments/results; sample calls explicitly select full visibility.
@@ -5020,7 +5092,7 @@ The numbering below matches G1–G13 in the focused review document.
    succeeds, while errors/unknown outcomes preserve rows/references for retry.
    No new progress journal or permanent tombstone; late writers still require
    coordination. Exact interval/default is unspecified, not an hourly policy.
-6. **Remote integration compatibility — partly resolved:** R22 selects
+6. **Remote integration compatibility — initial scope resolved:** R22 selects
    `2026-07-28` Streamable HTTP with JSON/request-scoped SSE and its metadata/
    lifecycle; incompatible revisions need explicit compatibility work. R23 uses
    proper JSON Schema validation of outgoing arguments before submission, without
@@ -5029,8 +5101,9 @@ The numbering below matches G1–G13 in the focused review document.
    server authority, or retry exceptions. Store received responses and let agents
    choose authorized next steps. R26 adopts outbound SDK-aligned address/TLS
    safeguards, explicit host authorization for private destinations, and no
-   automatic redirects. Discovery and credential lifecycle remain
-   pending. Existing HTTP actions still need a remote MCP facade or trusted host
+   automatic redirects. Discovery and configured credential lifecycle still require
+   implementation; deferred OAuth onboarding is not a current numbered blocker.
+   Existing HTTP actions still need a remote MCP facade or trusted host
    adapter; they are not automatically MCP tools.
 7. **Greeting, silence, voicemail, and ending — current slice resolved:** agent-selected
    wait-for-input, fixed greeting, and generated greeting modes are approved for
@@ -5047,7 +5120,7 @@ The numbering below matches G1–G13 in the focused review document.
    requires explicit acceptance within the existing total deadline; absent detection
    is not classification evidence. Leaving messages is deferred. Preserve provider
    uncertainty and the no-local-model/no-local-VAD scope.
-8. **Transfer policy and media routing — partly resolved:** the source agent stays
+8. **Transfer policy and media routing — initial scope resolved:** the source agent stays
    responsible until committed handoff; failed attempts return to it for the next
    permitted action. Only success terminates its execution subtree. R33 chooses
    call-level `transfer_policy`, source allowed-ref lists, and destination
@@ -5110,20 +5183,23 @@ The numbering below matches G1–G13 in the focused review document.
     price plus observed TTS input-text characters/generated-audio duration and
     STT audio duration/recognized-text characters when permitted. Preserve units/
     provenance without inventing billable characters, IDs, or a local rate catalog.
-13. **Provider profiles and long-call budgets — R47–R50 pending:** R48 selects
-    compaction, not oldest-turn eviction alone; timing, trigger, model-context
-    budget, and summary mechanism remain open. R49 preserves the full permitted
-    received response in asynchronous history and reports model-projection-too-large
-    when it cannot fit. Do not claim the remote action failed, automatically repeat
-    it, chop JSON, or add a result summarizer. Separately, a hard maximum acceptable MCP
-    response size is required at transport/ingestion, including bounded streaming
-    handling. Its value, units/scope, configuration, compression accounting, and
-    limit-error behavior are not yet chosen. A body rejected before full receipt
-    cannot be described as fully archived; archival handoff is not durable confirmation.
-    This does not approve attachment fetching or resolve deferred general document/
-    result inspection. Provider profile/compatibility (R47) and fallback (R50)
-    remain unapproved; a proposed fallback cannot weaken permissions or repeat
-    an uncertain external action.
+13. **Provider profiles and long-call budgets — R47–R50 resolved:** provider options
+    belong to configured services/profiles, conversation policy to the engine;
+    known unsupported combinations fail definition validation. Before each inference,
+    compare total input with usable budget after output reserve; compact older
+    completed conversation at 75%, targeting below 50% while protecting instructions,
+    tools, recent/current messages, unresolved interactions/pairing, variables, and
+    privacy. The summarizer execution/model choice remains unselected, not a hidden
+    new recipient. R49 caps cumulative decoded/decompressed MCP receipt at a
+    configurable default 1 MiB (1,048,576 bytes), incrementally, not after full buffering.
+    Stop excess receipt/processing and report honest bounded outcomes, not remote
+    failure, automatic retry, or complete archival. Fully accepted permitted responses
+    are archived; a model-too-large response gets explicit projection omission,
+    not chopped JSON or automatic summarization/inspection. R50 allows supported
+    explicit provider-native LLM fallback through ReqLLM, not a Vxpipe chain/schema
+    or new STT/TTS feature; preserve permissions and actual observed attribution
+    without replay guarantees or invented upstream attempts. Detailed encoding/
+    parser choices and deferred inspection features remain separate from this review.
 
 ### Planned acceptance steps, after approval and implementation
 
@@ -5372,7 +5448,8 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     URLs, ordinary management responses, room state, events, errors, and logs;
     only the delegated join token reaches the browser. Token lifetime, key
     bootstrap/scopes, and rotation/revocation now have approved checks below;
-    exact issuance-retry and wire cases await their remaining review. These
+    R06/R39/R40 settle issuance independence and no-repeat bookkeeping; exact wire
+    encoding/response cases remain transport implementation details. These
     are future checks, not a claim of implemented authentication or storage.
 14. Compile both entry refs as strings resolving to different catalog members.
     Reject missing refs, inline objects in entry fields, unknown refs, and a
@@ -5679,19 +5756,42 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     Allow draining/finalization outside the room, but never recreate purged data.
     Model a process/host loss before durable handoff without claiming unpersisted
     variables/history survived. Post-incident repair remains deferred, not a runtime test feature.
-46. Receive a full permitted MCP response that exceeds the model-context budget.
-    Preserve it through the asynchronous archive path and return an explicit
-    model-projection-too-large result, not remote-action failure, automatic
-    repetition, chopped JSON, or a silent summary. Archival handoff is not proof
-    of durability. Distinguish this from the required hard ingestion-size limit,
-    including bounded streamed receipt; a rejected incomplete body is not a fully
-    archived response. Exact limit/error-boundary cases await R49's remaining
-    decisions, and compaction timing/algorithm tests await R48. These checks do
-    not select numeric limits, a summary model, or a new attachment reader.
+46. Accept decoded/decompressed MCP response data at the 1,048,576-byte default
+    and stop excess receipt/processing incrementally. Compressed and multi-chunk
+    streaming input obey the cumulative limit, not a reset per chunk or a check
+    after full buffering. Report bounded observed too-large/outcome details, with
+    no inferred remote-action failure, automatic repetition, or fully archived
+    body after incomplete receipt. Separately, preserve a fully accepted permitted
+    response through asynchronous history even when it exceeds model input budget;
+    return model-projection-too-large/omission, not chopped JSON or automatic
+    summarization/inspection. Handoff is not proof of durable archival.
+47. Validate known supported/unsupported service profiles and engine policy
+    separately; unsupported options/combinations fail without silent dropping.
+    Provider-discovered failures use normal startup/runtime handling. Exercise an
+    explicit supported provider-native LLM routing/fallback option through ReqLLM
+    with controlled responses; preserve tool/permission/privacy boundaries and
+    observed provider/model/usage attribution. No generic direct-provider chain,
+    STT/TTS fallback, hidden upstream ID fabrication, or replay of emitted speech/
+    tool actions is implied. Real provider interoperability belongs in its own lane.
+48. Before each inference, measure fixed instructions/tool definitions/current
+    history against input capacity after output reserve. Exercise input below and
+    at 75% with a controlled fake compactor, targeting below 50% while preserving
+    protected instructions/tools/recent messages/unresolved tool pairing. Exercise
+    protected content too large to fit without silently removing it or exceeding
+    the model limit. Add messages/tool completions during snapshot-based compaction;
+    retain that intervening work. Summary text is not authority or tool execution,
+    cannot mutate variables/grants/full permitted history, cannot read unauthorized
+    archive data, and cannot retain denied transcript intervals under a summary
+    label. These checks select no production summarizer model/provider or new
+    configuration encoding, and are not runtime tests executed by this doc update.
 
 ### Review checkpoint verification
 
 These entries are chronological evidence, not competing current contracts.
+The final R47–R50 approval below closes the numbered review. Earlier pending counts,
+partial compaction/size proposals, and rejected direct-provider fallback suggestions
+remain historical, not current implementation requirements. Summarizer model/
+execution selection and deferred features are not approved merely by closing the register.
 The later incremental-population decision supersedes earlier required-variable
 completeness checks and closes the missing-read/first-write questions. Earlier
 checkpoint test descriptions retain what was verified or planned at that time.
@@ -7231,20 +7331,60 @@ including its former PostgreSQL-before-variable-success requirement.
   provenance, avoid repeated interim/cumulative text counting, and do not equate
   measured characters with provider-billable units. No precise counting standard,
   new configuration, prohibited recognition, or forbidden text retention is added.
-- R48 approves compaction as a direction, not oldest-turn eviction alone; its
-  timing, trigger, budget, and mechanism remain pending. R49 approves full permitted
+- At that checkpoint R48 approved compaction as a direction, not oldest-turn eviction alone;
+  timing, trigger, budget, and mechanism remained pending. R49 approved full permitted
   received response history plus an explicit oversized model projection, not an
   action failure, automatic repetition, chopped JSON, or silent summarization.
   A separate hard MCP ingestion response-size limit is required, including bounded
   streaming; its value/units/scope/error handling remain pending. A body rejected
   before full receipt cannot be called fully archived, and handoff is not durability.
 - Updated canonical sections, current count, and planned checks 41/46. Four
-  individual decisions remain, R47–R50; R48/R49 are partial and count once each.
+  individual decisions remained then, R47–R50; R48/R49 were partial and counted once each.
   R47/R50 are unchanged; no provider-fallback approval follows from a research question.
 - Verified exact three-file scope, unchanged JSON examples/links, usage arithmetic,
   prior accounting/privacy/storage contracts, status/counts, unchanged unapproved
   rows, and terminology/path/whitespace hygiene. Documentation only; no runtime,
   dependency, new issue, or new labnote.
+
+### Final provider and model-context review — approved R47–R50, 2026-09-08
+
+- R47 assigns provider-supported options to reusable configured services/profiles
+  and conversation/interruption/duration policy to the engine. Reject known
+  unsupported combinations at definition validation; provider-discovered failures
+  follow normal startup/runtime handling, without another config layer.
+- R48 checks accumulated fixed prompt/tools/current history before each inference
+  against usable input after output reserve. Compact older completed conversation
+  at 75%, target below 50%, preserve protected/current/unresolved work and pairing,
+  and never claim guaranteed fit or remove protected input silently. Snapshot work
+  preserves intervening messages/invocations. Summaries use authorized live context,
+  remain derived data, and cannot mutate variables/grants or evade source-interval
+  transcript storage restrictions. Summarizer model/execution selection is not approved.
+- R49 sets the configurable 1 MiB (1,048,576 decoded/decompressed bytes) response
+  default, incrementally enforced across streaming input. Excess stops receipt/
+  processing with bounded honest outcome details, not remote failure or retry.
+  Fully accepted permitted responses remain in history; model projection omission
+  is distinct, with no chopped JSON, automatic result summarizer, or incomplete-body
+  full-archive claim. Config/parser particulars remain to be selected.
+- R50 permits explicit provider-native/router LLM fallback where ReqLLM supports
+  it, with no new Vxpipe fallback schema/chain/coordinator or STT/TTS fallback.
+  Inspected installed ReqLLM 1.22.0 routing options (`openrouter_models`,
+  `openrouter_route`, and provider routing fallback settings), its one-model
+  generation boundary, and the existing adapter's `generation_options` forwarding.
+  This is not proof of generic direct-provider fallback or runtime interoperability.
+  Preserve actual observed attribution and all grants/privacy; no hidden upstream
+  attempt fabrication, MCP retry, or emitted speech/action replay guarantee.
+- R01–R50 now has zero individual decisions awaiting review: 45 resolved, four
+  deferred (R07/R16/R24/R25), and R09 superseded. Deferred issues and summarizer/
+  encoding choices are not new numbered blockers or implicitly approved features.
+- Aligned stale active R08 direct-start, R39 idempotent-creation, and R40/R50
+  recovery/fallback summaries with prior approvals; historical evidence and safe
+  isolated-worker recovery remain. Updated planned checks 46–48 and current
+  conclusions, retained G4's compatibility anchor, and intentionally updated this
+  document's completed-review self-link.
+- Verified exact three-file scope, unchanged fenced/JSON examples, local links and
+  anchors, all 50 stable statuses with zero pending, compaction/size arithmetic,
+  prior privacy/storage/retention/usage contracts, and terminology/path/diff hygiene.
+  Documentation only; no runtime, dependencies, new issue, or new labnote.
 
 ## Verification evidence
 

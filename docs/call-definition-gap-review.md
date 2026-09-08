@@ -4,7 +4,7 @@ Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-08 UTC
 Status: G1 and G2's web routes, initial variables, API-key admission with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
-call-record expiry, prepared token-join or direct-backend connection, explicit
+call-record expiry, common preparation/token/join for all API clients, explicit
 entry participants/startup, and one participant per definition key per call approved;
 R01–R05 now approve OTP/CLI key bootstrap, tenant-bound `admin`/`calls` scopes,
 multiple independently revocable keys, key revocation without invalidating
@@ -73,24 +73,24 @@ call-level `opening_audio` plays a supplied file or cached fixed-text TTS before
 normal conversation. Room/participant capabilities may warm up during playback,
 but participant audio is withheld until it completes. All API clients now use
 preparation followed by token joining, without a separate direct-start path.
-Other configuration, lifecycle, protocol, and persistence questions remain below.
+The numbered design review is complete; deferred features and implementation
+particulars remain distinct from the approved contracts below.
 Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **4 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17–R23, and R26–R46 are resolved; R07's same-call caller
+Current review count: **0 individual decisions awaiting review** in R01–R50.
+R01–R06, R08, R10–R15, R17–R23, and R26–R50 are resolved; R07's same-call caller
 reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
 Personalization and business-time interpretation belong to agent/application
 instructions with permitted variable/date tools; no template or timezone hierarchy
 is added. R13 allows protected backend-initialized routing variables while
-transfers remain participant-ref-only. G1, G3, and G7's current-slice decisions
-are resolved; G2/G4/G5/G6/G8 retain follow-up context, G10's current scope is resolved,
-G9's media-policy structure and G11's storage/publication choices are resolved;
-G12's initial usage/pricing scope is resolved; G13 retains four pending decisions,
-including partially agreed compaction and oversized-result boundaries.
+transfers remain participant-ref-only. G1–G13 retain the decisions, evidence, and
+deferred follow-up context, not additional current approval blockers. G13 now
+resolves provider-profile ownership, model-context compaction conditions, bounded
+MCP ingestion/projection, and supported provider-native LLM fallback.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -100,25 +100,23 @@ question. Naming and agent-mediated MCP result updates are also resolved;
 dedicated variable ownership and submitted-write lifetime are approved, and
 additional schema-complexity caps are not adopted now. G3 is closed in
 documentation; implementation remains pending.
-MCP interruption, timeout-outcome reporting, and no automatic executor retry for
-that timeout resolve part of G4; its remaining decisions are enumerated below.
-Deferring late notifications removes that scenario from the current MCP scope;
-other G4 questions still need review.
-Excluding generic platform confirmation settles that question without closing G4.
+MCP interruption, timeout-outcome reporting, no automatic executor retry, and
+exclusion of generic platform confirmation settle G4's initial-scope choices.
+Late notifications remain deferred rather than current MCP prerequisites.
 The common background-tool workflow is approved. Explicit cancellation is
 [deferred for later review](issues/explicit-tool-call-cancellation.md), not
-required for this slice; the proposed opt-in policy is not approved. Other G4
-questions remain pending and are counted individually below.
+required for this slice; the proposed opt-in policy is not approved. These deferred
+issues do not become new pending rows when the numbered review closes.
 
-## Individual decisions awaiting review
+## Individual decision register — review complete
 
-**4 pending decisions (R47–R50).** This is the current approval backlog,
+**0 pending decisions in R01–R50.** This is the completed approval register,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17–R23, and R26–R46 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
-all excluded from the count. The remaining decisions are **R47–R50**; partially
-agreed R48/R49 each count once. Mark rows resolved or
-deferred as decisions are made and update this count; do not renumber the remaining IDs.
+R10–R15, R17–R23, and R26–R50 are resolved; R07/R16/R24/R25 are deferred and R09 is
+superseded, all excluded from the count. Preserve these stable IDs. There is no
+next review batch in this register. Completion does not mean runtime is implemented
+or every engineering choice is selected, including the compaction execution model.
 
 | ID | Background | Decision / review status |
 | --- | --- | --- |
@@ -168,10 +166,10 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R44 | G12 | **Resolved:** retain observations and derive effective usage per operation attempt/component; distinguish deltas from cumulative totals and estimate/final/correction status. Identity-proven duplicates do not add again; final supersedes estimates, explicit corrections may decrease/increase, and failed/interrupted usage is retained without invented zero. |
 | R45 | G12 | **Resolved:** always call-scoped with honest optional participant/service-interval/turn attribution, no forced allocation or duplicate charges. Keep usage separate from unavailable cost and preserve real namespaced provider IDs for optional asynchronous supported billing lookup outside the live call. |
 | R46 | G12 | **Resolved:** retain provider-reported estimate/final cost when available, otherwise unknown price with actual provider IDs and observed usage. TTS input-text characters/generated-audio duration and STT audio duration/recognized-text characters are retained when observed and permitted, with exact units/provenance and no invented IDs, billable units, or local pricing catalog. |
-| R47 | G13 | Which provider options belong in profiles versus engine policy, and how do unsupported combinations fail? |
-| R48 | G13 | **Partly agreed:** use model-context compaction, not oldest-turn eviction alone; when/how to compact and the model-context budget remain pending, without a chosen summary model, trigger, or threshold. |
-| R49 | G13 | **Partly agreed:** archive full permitted received responses and report model-projection-too-large without remote-failure claims, automatic repetition, chopped JSON, or silent summaries. A separate hard MCP receive-size cap is required; value/units/scope and limit handling remain pending, and an incompletely received body cannot be called fully archived. |
-| R50 | G13 | When may a failed provider be replaced, and how must fallback preserve permissions, tool semantics, and cost attribution? |
+| R47 | G13 | **Resolved:** provider-supported settings belong to reusable configured services/profiles; conversation/interruption/duration policy stays engine-owned. Reject known unsupported combinations during definition validation, with provider-discovered failures handled normally at startup/runtime; no new config layer or arbitrary executable/provider payload. |
+| R48 | G13 | **Resolved:** before each inference compare total input with usable input budget after output reserve; compact older completed conversation at 75%, targeting below 50%. Preserve protected instructions/tools/recent messages/unresolved interactions and pairing, grants, source-interval privacy, variables, and full permitted history. Targets do not guarantee fit; summarizer execution/model and config encoding are not selected. |
+| R49 | G13 | **Resolved:** configurable decoded/decompressed MCP response limit defaults to 1 MiB (1,048,576 bytes), enforced incrementally and cumulatively for streaming. Stop excess receipt/processing with honest bounded outcome details, no automatic retry or full-body archive claim. Archive accepted permitted responses; model-too-large yields explicit projection omission, not remote failure, chopped JSON, or automatic result summarization. |
+| R50 | G13 | **Resolved:** allow explicitly configured provider-native/router LLM fallback only where ReqLLM supports it; no Vxpipe fallback schema/chain/coordinator or new STT/TTS fallback. Preserve permissions/tool/privacy constraints and observed attribution without inventing upstream attempts or replaying emitted speech/actions. |
 
 Not counted as current approval blockers:
 
@@ -200,8 +198,10 @@ rather than silently inflating or hiding the review backlog.
 Keep the participant-first definition, `entry_caller` and `entry_receiver`,
 direct `transfers` ref lists, agent-scoped tool enablement, room-owned variables,
 and immutable resolved plan. The scenarios below do not require nodes, edges,
-named transfers, or a general expression language. The missing pieces are mostly enforceable runtime
-contracts around those primitives, not a different top-level JSON structure.
+named transfers, or a general expression language. R01–R50's numbered review is
+complete; the remaining work is implementing the approved contracts and separately
+addressing deferred features/engineering choices, not silently adding another
+approval batch or claiming a deployed public schema.
 
 This reviews the [call-definition labnote][design] and
 [runtime architecture][architecture] at Vxpipe commit
@@ -281,7 +281,7 @@ supported-variable/keyword matrix. Partial illustrations are not complete execut
 definitions, and the broad representative JSON is not a commitment to implement
 every variable in the first slice. No new dated schema release is published here.
 
-### G2 — Partly resolved: admission, authentication, and entry roles approved
+### G2 — Resolved for the initial scope: admission, authentication, and entry roles
 
 At baseline, `transport.type: web` did not map an incoming connection to a
 participant definition. The original `entrypoint` identified only the initial
@@ -523,7 +523,7 @@ a never-started record has no live duration. Creation at 10:00, start at 10:15,
 and end at 10:18 means a three-minute call. Provider billing intervals remain
 separate. See the [approved timing contract][call-start-timing].
 
-Remaining G2 review and resolved follow-up clarifications:
+Resolved G2 follow-ups and transport implementation particulars:
 
 **Token details and separate storage policy:** R40 recovers bookkeeping about
 existing admission work, not a new call after runtime failure. No creation
@@ -665,7 +665,8 @@ the same revision, the delayed original conflicts; do not blindly replay it with
 a newer revision. Committed values stay committed, even if the turn is cancelled
 or its acknowledgement is lost. Completion cannot revive cancelled model speech.
 The earlier live-turn check and mutation-ID deduplication/journal proposal are
-withdrawn for this decision. External tool outcomes remain a separate G4 review.
+withdrawn for this decision. External tool outcomes follow G4's approved unknown/
+no-automatic-retry contract; explicit cancellation and later reconciliation remain deferred.
 
 **Approved read authorization:** inform the agent of its permitted sections, but
 still validate every request at the dedicated variables process. If any requested
@@ -686,7 +687,7 @@ This withdraws revision-only writable views and the special write-only error
 proposal. Ordinary authorization and variables privacy still apply to errors,
 other sections, public events, and other participants.
 
-**Approved object merge, further details pending:** offer both
+**Approved object merge; wire encoding is implementation work:** offer both
 `update_variables(section_name, data)` for multiple variables in one call and
 `update_variable(section_name, variable_name, value)` for a single-variable
 change. These names are approved; the sketches are not complete wire schemas. Both share
@@ -779,10 +780,12 @@ automatic result-to-variable mappings are withdrawn, not prerequisites for MCP.
 Read-only initial values remain supported; recording tool results requires
 read+write permission on the chosen section. Booking/verification rules remain
 the external service's responsibility. A copied result is not that service's
-source of truth; G4 still owns other remote retry/cancellation and uncertain-outcome
-questions beyond the approved conversational-interruption rule below.
+source of truth. G4's initial contract preserves unknown outcomes without automatic
+executor retry; explicit cancellation and later reconciliation remain deferred.
 
-### G4 — P1, partly resolved: Tool cancellation does not roll back an external action
+<a id="g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action"></a>
+
+### G4 — P1, initial scope resolved: Tool cancellation does not roll back an external action
 
 **Approved conversational-interruption rule:** the user interrupting speech does
 not establish that they intended to cancel a tool call. Let an already-submitted
@@ -893,7 +896,7 @@ remains deferred rather than a current-slice prerequisite.
 Do not announce successful sending or booking from a request-start event.
 Progress speech is separate from result speech, with only one owner of each utterance.
 
-### G5 — P1, partly resolved: Private variables would leak through the existing tool event path
+### G5 — P1, design resolved: Private tool data, visibility, and storage projections
 
 This is a concrete integration hazard, not just an omitted future feature.
 `RoomAuthority.emit_tool_call_started/4` puts arguments in an event;
@@ -1130,7 +1133,7 @@ apply before persistence and client delivery, not just final export. Do not put
 expected verification secrets into prompts or ordinary archives. Hiding a tool
 event does not redact sensitive input already in the transcript or audio.
 
-### G6 — P1: “Remote MCP” needs a tested interoperability profile
+### G6 — P1, initial profile resolved: Remote MCP interoperability
 
 The configured-versus-enabled distinction is already strong. It does not mean
 the example HTTP webhooks, native SMS, or code tools are MCP endpoints. Keep
@@ -1190,7 +1193,7 @@ fetcher, per-call credentials, or gateway/inbound/CORS change is introduced.
 Bound responses as before. OAuth onboarding/refresh remains separate; document
 supplied bearer-token expiry.
 
-### G7 — P2: Conversation lifecycle needs more than `first_message: generated`
+### G7 — P2, initial scope resolved: Conversation lifecycle
 
 **Approved optional `opening_audio`:** play an audio-file URL (WAV or another
 supported format) or audio rendered from fixed configured text to `entry_caller`
@@ -1305,7 +1308,7 @@ beep inference, and automatic speech are not introduced. Leaving voicemail is
 [deferred](issues/voicemail-message-delivery.md); that future issue does not
 reinstate the rejected platform speak-then-end workflow.
 
-### G8 — P2: A transfer allowlist is not the complete transfer policy
+### G8 — P2, initial scope resolved: Transfer policy and private briefing
 
 **Approved source-agent responsibility:** keep the source agent responsible for
 conversation until the destination is ready and the transfer successfully commits.
@@ -1423,7 +1426,7 @@ recording/archive enforce it without frontend-only muting or per-packet database
 lookups. Fail closed before commit; no queued/late output, reactivation, or delayed
 replay bypass. Existing transfer deadline/restoration rules and Variables remain.
 
-### G10 — P2: Durable admission has crash windows and admission-key ambiguity
+### G10 — P2, design resolved: Admission claims and crash bookkeeping
 
 The [persistence plan][persistence] already separates short database transactions
 from room/provider work. R39/R40 now resolve this scope without creation-request
@@ -1607,7 +1610,7 @@ local acceptance with asynchronous PostgreSQL projection. Mandatory usage
 storage still respects media/privacy exclusions and whole-call retention; later
 billing cannot recreate purged call data.
 
-### G13 — P2: Provider tuning and long-call limits need an explicit profile contract
+### G13 — P2, R47–R50 resolved: Provider profiles and model-context boundaries
 
 The examples configure different languages, endpointing, pronunciation/numeral
 options, voice formatting, and interruption thresholds. Our provider-profile
@@ -1615,42 +1618,62 @@ references are a good home for those choices, but references alone do not define
 which options exist or how incompatibilities fail. [Scheduling][scheduling],
 [voicemail][voicemail].
 
-Separate supported provider options from engine-owned turn/interruption policy.
-Compile required evidence/features against adapter capabilities; do not silently
-ignore unsupported options or import executable timing expressions. Keep hosted
-provider endpointing and the existing no-local-VAD/no-local-model scope.
+R47 puts provider-supported options in reusable configured services/profiles;
+conversation, interruption, and call-duration policy belong to the engine. Reject
+known unsupported options/combinations during definition validation instead of
+silently dropping them. Provider-discovered failures follow normal startup/runtime
+handling. No new configuration layer, arbitrary provider payload, or executable
+timing policy is added; hosted endpointing and the no-local-VAD/no-local-model scope remain.
 
-R48 selects compaction for long-call model context, not oldest-turn eviction alone.
-When/how it runs and the model-context budget remain pending; no summary model,
-trigger, threshold, or algorithm is approved. The current turn-count history bound
-does not bound a large prompt or tool response in model tokens.
+R48 checks accumulated input before each inference: fixed prompt/instructions,
+tool definitions, and current conversation/tool history against the usable input
+budget after reserving output. At 75% of that budget, compact older completed
+conversation, targeting below 50%. Preserve instructions/tools, recent/current
+messages, unresolved tool interactions, and valid call/result pairing. These are
+defaults/design targets, not a guarantee that protected input fits; do not silently
+remove protected content or exceed the model limit if compaction cannot make room.
 
-R49 approves preserving a fully received, permitted MCP response in the asynchronous
-archive while returning an explicit model-projection-too-large result if it cannot
-fit the model-context budget. That is not a remote-action failure, permission to
-repeat the action automatically, chopped JSON, or a new result summarizer. The projection
-does not replace the received response in history. A separate hard maximum
-acceptable MCP response size is also required at transport/ingestion, with bounded
-resource use for streamed responses as well. The numeric limit, units/scope,
-configuration, compression accounting, and limit-error handling remain pending.
-A response rejected before full receipt is not fully archived, and asynchronous
-handoff is not a guarantee of durable storage. This does not approve automatic
-attachment fetching or settle the deferred general result/document-inspection design.
+Use only the agent-authorized live conversation, not unrestricted room/archive
+data. A summary is derived data, not system authority or a tool result; summarization
+executes no tools and does not update `CallVariables`, grants, or the full permitted
+archive. Derived transcript summaries retain source-interval storage restrictions,
+not a way to save denied transcripts under another name. Snapshot-based work must
+preserve intervening messages and unresolved invocations when incorporating its
+result. The summarizer model/execution choice and config encoding are not selected;
+no new model recipient is approved. The current turn-count bound is not this future
+token-aware compaction behavior.
 
-R47's profile boundary and R50's provider fallback remain unapproved. Proposed
-fallback must preserve authorization, tool schema,
-privacy restrictions, and actual-provider usage attribution; it cannot repeat
-an uncertain external action. These are profile/runtime checkpoints, not a
-reason to add provider-native payloads to each participant definition.
+R49 sets a configurable hard maximum acceptable MCP response size: default 1 MiB
+(1,048,576 bytes) of decoded/decompressed response data. Enforce it incrementally
+during receipt, cumulatively across streaming equivalents, never as an independent
+per-chunk cap or a count after full buffering. Stop receiving/processing on excess;
+report bounded observed too-large/outcome details without claiming an external
+side effect failed, automatically retrying, or claiming a complete body was archived.
+
+The receive cap and model token budget are separate. Fully accepted permitted
+responses go to the asynchronous archive. If an accepted response cannot fit model
+context, return explicit model-projection-too-large/omission, not remote-action
+failure, chopped JSON, or automatic result summarization/inspection. Handoff is
+not durable confirmation. Parser/transport and config hierarchy remain implementation
+particulars; general result/document inspection remains deferred.
+
+R50 allows explicitly configured provider-native/router LLM fallback only where
+ReqLLM supports the provider options. No Vxpipe fallback schema, direct-provider
+chain/coordinator, or new STT/TTS fallback is added. Preserve tool authorization,
+privacy, and observed usage/model/provider attribution without inventing hidden
+upstream IDs/attempts. No MCP retry or replay guarantee for already-emitted speech/
+tool actions follows from a streaming failure. The inspected ReqLLM 1.22.0 provider
+options include remote routing/fallback; they are not a generic direct-provider
+fallback chain. Runtime integration still requires focused verification.
 
 ## Possible checkpoint order and acceptance scenarios
 
-This sequence is an option for review, not an approved implementation plan. Do
-not add the suggested variables or functionality before the user reviews the gaps.
+This is a possible implementation order for the approved design, not authorization
+to change runtime or implement deferred features. The numbered review is complete.
 
 1. **Compiler and one-agent variables:** implement the approved G1 layout only
-   when runtime work is authorized; resolve remaining G2 questions, the
-   private-event part of G5, and denial semantics in G9. Use one canonical fixture with two variables
+   when runtime work is authorized; enforce G2 admission, G5 private projections,
+   and R38 media/storage policy. Use one canonical fixture with two variables
    sections and an engine-owned variable tool. Prove the existing text/audio path
    works through a typed plan. Do not start with telephony or Ecto.
 2. **Safe remote action:** add one tenant-configured remote MCP integration,
@@ -1766,13 +1789,28 @@ characters/generated-audio duration and STT audio duration/recognized-text chara
 without a reported price. Keep measurement units/provenance, missing evidence, and
 provider estimate/final status honest; do not add repeated interim/cumulative text
 counts, invent billable characters, store denied text for counting, or enable
-prohibited STT. R49's approved projection check uses a fully received permitted
-result that exceeds the model budget: preserve the received response through the
-archive path and report projection-too-large without misreporting remote failure,
-automatic repetition, chopped JSON, or silent summarization. Final receive-limit
-boundary/error tests and compaction timing tests await R49/R48's remaining decisions;
-streamed ingestion must be bounded, and a rejected incomplete body is not a complete
-archive. No numeric limit or compaction policy is selected by these planned checks.
+prohibited STT.
+
+R47–R50 planned checks exercise known unsupported profiles at validation and
+provider-discovered failure at startup/runtime. Before each inference, count fixed
+prompt/tools/current history against usable input after output reserve; exercise
+the 75% compaction trigger and below-50% target, including protected content that
+cannot fit. Preserve current/unresolved tool pairing and messages arriving during
+snapshot work; summary content cannot execute tools, mutate variables/grants, read
+unauthorized archive data, or retain denied transcripts. Use a controlled fake
+compactor without choosing a production summarizer model.
+
+For R49, check accepted decoded response data at the 1,048,576-byte default and
+reject excess incrementally; compressed and multi-chunk streams must respect the
+cumulative decoded limit without first buffering the complete body. Preserve honest
+bounded outcome details, no automatic retry, and no complete-archive claim for a
+rejected body. Separately, a fully accepted result too large for model input is
+archived when permitted and yields explicit projection omission, not remote failure,
+chopped JSON, or automatic summarization. Supported explicit provider-native LLM
+fallback must retain grants/privacy and observed provider/model attribution; no
+Vxpipe chain, STT/TTS fallback, invented upstream attempts, or emitted-action replay
+is implied. Verify adapter interoperability separately, not by claiming a generic
+fallback from one-model local generation APIs.
 
 These are planned red-green tests, not tests run during this review. Before each
 implementation checkpoint, write and run the smallest failing project-owned
@@ -2315,13 +2353,36 @@ TTS input-text characters/generated-audio duration and STT audio duration/
 recognized-text characters retain units/provenance when observed and permitted; measured
 characters are not invented billable units. No local pricing catalog or forbidden
 text capture is added. Earlier pending-R46 notes are historical, not current blockers.
-R48 selects compaction but leaves timing/mechanics open. R49 approves honest
+At that checkpoint R48 selected compaction but left timing/mechanics open. R49 approved honest
 oversized model projection and requires a separate bounded MCP receive-size limit,
 with its value/scope/error handling still open. Incomplete receipt is not full
-archival. Four individual decisions remain, R47–R50; R48/R49 each count once and
+archival. Four individual decisions remained, R47–R50; R48/R49 each counted once and
 R47/R50's rows are unchanged. Verified canonical contracts, planned checks, JSON
 examples, links, status/counts, prior approvals, and terminology/path/diff hygiene.
 Documentation only; no runtime, dependency, new issue, or new labnote.
+
+The final R47–R50 approval closes the numbered review: zero decisions await review,
+with R07/R16/R24/R25 still deferred and R09 superseded. Provider settings belong
+to reusable services/profiles, engine policy stays engine-owned, and known unsupported
+combinations fail validation. Compaction checks total input before each inference,
+triggers at 75% of usable input after output reserve, and targets below 50%, without
+removing protected content or bypassing permissions. The summarizer model/execution
+choice remains unselected. MCP receipt defaults to a configurable 1 MiB of cumulative
+decoded/decompressed data, enforced incrementally and separately from model
+projection; too-large receipt does not prove remote failure or full archival.
+LLM fallback is limited to explicit provider-native/router options supported by
+ReqLLM, not a new Vxpipe chain or STT/TTS feature. Local ReqLLM 1.22.0 and the current
+adapter were inspected to distinguish remote routing options from one-model
+generation. No integration test or runtime implementation is claimed.
+
+Consistency cleanup also aligns active R08 startup, R39 duplicate creation, and
+R40 no-repeat crash/recovery summaries with their existing approvals, while
+preserving safe isolated-worker recovery and historical checkpoints. Retained the
+old G4 anchor for issue links. Verified exact three-file scope, unchanged fenced
+examples, local references/anchors, the intentional completed-review self-link,
+50 stable statuses with zero pending, arithmetic/defaults, privacy/storage/retention,
+and terminology/path/staged-diff hygiene. Deferred issues and engineering choices
+are not silently approved by review completion.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

@@ -275,23 +275,58 @@ Prompt instructions are not a security guarantee. Vxpipe still enforces tool
 access, trusted identity, and argument checks; no confirmation token, approval
 endpoint, or generic confirmation state machine is introduced.
 
-R48 selects model-context compaction for long calls; its trigger, budget, summary
-mechanism, and timing remain under review. Evicting oldest turns alone is not the
-selected direction. This is not an implemented compaction engine or approval of
-a particular summary model or threshold.
+R47 keeps provider-supported settings in reusable configured services/profiles;
+conversation, interruption, and call-duration policy remain engine-owned. Reject
+known unsupported options/combinations during definition validation rather than
+silently dropping them. Failures discoverable only from the provider use normal
+startup/runtime failure handling. No new configuration layer, arbitrary provider
+payload, or executable policy is introduced.
 
-R49 separates two boundaries. A fully received, permitted MCP response belongs
-in the asynchronous archive even when it cannot fit the model-context budget.
-Return an explicit model-projection-too-large result without claiming the remote
-action failed, repeating it automatically, chopping JSON, or adding a result
-summarizer. The model projection does not replace the full permitted received
-response in history. Separately, MCP ingestion must enforce a hard maximum
-acceptable response size with bounded resource handling, including streamed
-responses. Its value, units/scope, configuration, compression accounting, and
-limit-error handling remain under review. A body rejected before full receipt
-cannot be described as fully received or fully archived; archival handoff itself
-is not durable confirmation. This does not approve automatic attachment fetching
-or resolve the deferred general result/document-inspection design.
+R48 checks the total accumulated input before each inference, including fixed
+instructions, tool definitions, and current conversation/tool history. Compare
+that input with the usable input budget after reserving output capacity. The
+defaults compact older completed conversation at 75% of that budget, targeting
+below 50%. Preserve instructions, tool definitions, recent/current messages,
+unresolved tool interactions, and valid tool-call/result pairing. These are design
+targets, not a promise that protected content fits: do not silently remove it or
+exceed the model limit when compaction cannot make room.
+
+Compaction consumes only that agent's authorized live conversation, never an
+unrestricted room archive. A summary is derived data, not system authority, a tool
+result, or permission to execute tools. It does not modify `CallVariables`, grants,
+or the full permitted archive. Source-interval restrictions also apply to derived
+transcript summaries; denied transcript storage cannot be bypassed by saving a
+summary. If work uses a snapshot, preserve intervening messages and unresolved
+invocations when incorporating its result. The summarizer model/execution choice
+and configuration encoding are not selected; no new model recipient is authorized.
+This resolves the budget/conditions policy, not an implemented compaction engine.
+
+R49 requires a configurable hard maximum acceptable MCP response size, default
+1 MiB (1,048,576 bytes) of decoded/decompressed response data. Enforce it
+incrementally while receiving, including cumulative streaming equivalents, not
+per chunk with unlimited total acceptance or after buffering the full body.
+On excess, stop receiving/processing and report bounded observed too-large/outcome
+details without declaring an external side effect failed or automatically retrying.
+A body rejected before full receipt cannot be described as fully archived.
+
+This ingestion cap is separate from the token/model-context projection budget.
+Fully accepted permitted responses belong in the asynchronous archive. If one
+cannot fit the model budget, return an explicit model-projection-too-large outcome
+without replacing the archive with chopped JSON, repeating the remote action,
+or adding automatic result summarization/inspection. Archival handoff is not
+durable confirmation. Concrete parser/transport and configuration hierarchy are
+implementation details; the deferred general result/document-inspection design
+is unchanged.
+
+R50 permits explicitly configured LLM provider-native/router fallback only where
+ReqLLM supports the provider options. It does not add a Vxpipe fallback schema,
+direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
+permission, privacy, and usage constraints, recording actual observed provider/
+model attribution without inventing hidden upstream attempts or IDs. This does
+not authorize MCP retries or promise replay of already-emitted speech/tool actions
+after a stream failure. Unsupported fallback settings follow R47 validation.
+The numbered R01–R50 review is complete; deferred issues and engineering choices
+remain separate from runtime implementation.
 
 ### First messages and transfer responsibility
 
@@ -880,14 +915,16 @@ dynamic supervisor and monitored by the room authority.
 
 The room authority must never restart alone beside surviving workers. An
 authority or static room-infrastructure failure terminates the complete room
-incarnation. Recovery, when configured, creates a new incarnation from the
-immutable resolved plan and a durable checkpoint. Commands carrying an old
-incarnation ID are rejected.
+incarnation. R40 permits bookkeeping recovery about an existing room/leg, not
+automatically creating a fresh call incarnation, redialing, or resuming a crashed
+call. Commands carrying an old incarnation ID are rejected.
 
 Recoverable provider or participant failures do not automatically destroy the
-room. The worker is restarted only when its adapter declares restart safe;
-otherwise it enters a failed state and the configured fallback or terminal
-policy runs.
+room. Isolated worker restart requires adapter-declared safety and the applicable
+approved failure policy/budget; it cannot repeat an uncertain external operation
+or reset R36's single restoration attempt. Otherwise report failure through normal
+handling. R50 allows supported provider-native LLM fallback, not a generic engine
+fallback chain or restart of a terminated call.
 
 ### Scheduling and backpressure
 
@@ -1267,8 +1304,8 @@ These are approved designs, not newly implemented persistence. This explicitly
 supersedes database-commit-before-variable-success and synchronous-first history.
 Admission still requires its configured database writes; asynchronous runtime
 archival is not removal of that dependency or a durable database-free fallback.
-General sensitive-input redaction and the remaining profile/model-context/fallback
-questions stay separate.
+General sensitive-input redaction remains deferred; R47–R50's approved profile,
+model-context, and provider-native fallback contracts are above.
 
 General redaction of sensitive spoken audio or input passing through STT/the LLM
 is deferred, not a prerequisite for this slice. A deterministic collection path
@@ -1346,7 +1383,7 @@ Telemetry includes:
 - LLM time to first token;
 - TTS time to first audio;
 - transport playback delay and end-to-end response latency;
-- tool, transfer, and fallback lifecycles;
+- tool and transfer lifecycles, and observed supported provider-native LLM fallback;
 - provider availability and error categories;
 - tokens, characters, audio duration, and cost attribution;
 - per-room mailbox and bounded-queue pressure; and
@@ -1391,7 +1428,7 @@ A resolved room plan pins:
 - agent and workflow versions;
 - provider adapters and capability snapshots;
 - transport, codec, and media policies;
-- turn, interruption, tool, and fallback policies;
+- turn, interruption, and tool policies, plus supported configured LLM routing options;
 - artifact capture and event policies; and
 - secret reference generations without storing secret values.
 
@@ -1706,7 +1743,9 @@ The engine does not expose provider token boundaries. It emits sentence-sized
 segments and closes the logical assistant turn only after model generation and
 all scheduled speech playout complete. Conversation history is volatile and
 bounded by completed turn count, not tokens. Tools, token-aware compaction, durable history,
-prompt-profile resolution, and provider fallback remain later checkpoints.
+prompt-profile resolution, and verification of supported provider-native LLM
+fallback remain later checkpoints. R47–R50 approve design contracts above, not
+these runtime features or a Vxpipe fallback coordinator.
 Provider-driven spoken barge-in is implemented by the later checkpoint below.
 The detailed decision and verification evidence are in
 [`model-inference-turn.md`](model-inference-turn.md).
