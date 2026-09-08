@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-16 individual decisions still awaiting review, rather than counting its
+15 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -141,7 +141,9 @@ R29 leaves tool speech to instructions and defers wait music. R30 pins a 30-minu
 default live-call limit with definition, tenant, then application precedence.
 R31 leaves closing speech/hangup timing with agent instructions. R33–R35 define
 call-level transfer defaults, destination acceptance, and a total attempt deadline.
-R32 uses provider detection; the action after machine/unknown remains pending.
+R32 disconnects the attempted destination on configured provider machine detection;
+unknown still requires explicit transfer acceptance within the existing deadline.
+Leaving voicemail is deferred, not automatic speech or an entire-room hangup.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -402,8 +404,8 @@ call starts afresh. Returning agents may converse normally; this rule prevents
 automatic greeting replay, not ordinary contextual speech. Greetings use normal
 output and must respect current capability denials.
 
-Voicemail outcome/action policy remains a separate review decision. Closing
-wording and when to invoke existing hangup belong to agent instructions (R31).
+Voicemail-message delivery is deferred. Closing wording and when to invoke
+existing hangup belong to agent instructions (R31).
 There is no platform speak-then-end/closing-message API, mandatory playback-drain
 deadline, or automatic pending-hangup cancellation on speech interruption.
 Normal/immediate hangup and the hard-duration limit are unchanged; instructions
@@ -447,18 +449,29 @@ On expiry, the engine ends with a clear duration-limit reason. This adds no
 creation-time override, unlimited mode, extra warning/grace policy, or closing-
 speech guarantee. R31 keeps that conversational decision with agent instructions.
 
-### Provider answering-machine detection — partly resolved R32
+### Provider answering-machine detection — resolved R32
 
-Use provider-supplied answering-machine/voicemail detection when supported.
+Use provider-supplied answering-machine/voicemail detection when supported and
+configured for use; it is not mandatory on every call.
 Both [Telnyx](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
 and [Twilio](https://www.twilio.com/docs/voice/answering-machine-detection) provide
 that facility. Preserve provider provenance and unknown results; do not infer
 human acceptance from STT/LLM output or add a local beep classifier. A provider's
 human/machine classification is not explicit transfer acceptance.
 
-The action after machine or unknown classification remains pending, including
-whether to end or leave a message. No provider mode/tuning, automatic end-leg,
-or voicemail-message delivery feature is selected by approving the detection source.
+When that detection reports a machine, disconnect the attempted outbound
+destination leg. For a transfer, return a typed failure to the source and retain
+the original caller/source conversation under normal permissions; do not hang up
+the whole room. For an initial outbound call to its only remote human, end that
+attempted leg/call without voicemail speech.
+
+Unknown, disabled, or unavailable detection is neither machine nor human proof.
+An unknown transfer continues awaiting explicit recipient acceptance within the
+existing total 30-second attempt deadline, without resetting or extending it.
+Classification is not an accuracy guarantee or a replacement for acceptance.
+No local classifier, beep inference, provider tuning, or automatic message is added.
+Leaving voicemail is [deferred for later review](../docs/issues/voicemail-message-delivery.md),
+without reintroducing the rejected platform closing-speech workflow.
 
 ### One participant per definition key — approved G2 decision
 
@@ -4392,21 +4405,23 @@ without per-call retention settings. Expiry deletes the entire call and all
 associated Vxpipe-managed data, including its record and latest variable snapshot.
 First-message modes and first-activation-only greeting behavior are approved.
 The source agent stays responsible until successful transfer commit and receives
-failed-attempt outcomes. G7/G8 are partly resolved; their remaining questions and
-the other open decisions are listed individually in the focused review document.
+failed-attempt outcomes. G7's current-slice decisions are resolved; deferred
+voicemail delivery and G8's remaining questions are distinct from approved work.
+Open decisions are listed individually in the focused review document.
 Detailed reasoning and evidence live in the
 [call-definition gap review](../docs/call-definition-gap-review.md).
 
 ### Remaining review count — 2026-09-08
 
-There are **16 individual decisions awaiting review**, enumerated as R32 and R36–R50
-in the focused gap review. R01–R06, R08, R10–R15, R17–R23, R26–R31, and R33–R35 are resolved;
+There are **15 individual decisions awaiting review**, enumerated as R36–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R35 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
 stay with application/agent instructions; R13 uses protected initial routing
 variables without expanding the model's transfer arguments.
-G1/G3 are closed; G2/G4/G5/G6/G7/G8 are partly resolved. G headings are background
+G1/G3 and G7's current-slice decisions are closed; G2/G4/G5/G6/G8 are partly resolved.
+G headings are background
 organization, not the current count. Earlier progress entries retain their
 historical group counts and do not describe the current individual-item total.
 
@@ -4417,8 +4432,8 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. R32's detection source is resolved, but its outcome/action
-policy remains one pending decision. The next five are R32 and R36–R39.
+for unstarted records. R32's machine-disconnect policy is resolved; leaving
+voicemail moves to a deferred issue. The next five are R36–R40.
 
 ### Baseline and scope
 
@@ -4660,7 +4675,7 @@ The numbering below matches G1–G13 in the focused review document.
    automatic redirects. Discovery and credential lifecycle remain
    pending. Existing HTTP actions still need a remote MCP facade or trusted host
    adapter; they are not automatically MCP tools.
-7. **Greeting, silence, voicemail, and ending — partly resolved:** agent-selected
+7. **Greeting, silence, voicemail, and ending — current slice resolved:** agent-selected
    wait-for-input, fixed greeting, and generated greeting modes are approved for
    first activation only; reconnect/reactivation do not replay the greeting.
    Readiness defaults to a configurable 30 seconds from post-join startup;
@@ -4670,9 +4685,11 @@ The numbering below matches G1–G13 in the focused review document.
    application precedence and measured from actual start, including human-only
    portions. R31 leaves closing wording and hangup timing with instructions,
    without a new platform drain/closing API or playback guarantee. R32 uses
-   provider AMD when supported; machine/unknown action remains pending. An answered leg does not
-   prove a human answered; required beep/classification evidence must actually
-   be supported by the adapter. Preserve the no-local-model/no-local-VAD scope.
+   configured provider AMD when supported: machine disconnects that attempted
+   destination leg, retaining a transfer's original caller/source. Unknown still
+   requires explicit acceptance within the existing total deadline; absent detection
+   is not classification evidence. Leaving messages is deferred. Preserve provider
+   uncertainty and the no-local-model/no-local-VAD scope.
 8. **Transfer policy and media routing — partly resolved:** the source agent stays
    responsible until committed handoff; failed attempts return to it for the next
    permitted action. Only success terminates its execution subtree. R33 chooses
@@ -4912,8 +4929,8 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    continue or choose another allowed action, and emits no `transfer.completed`.
    On successful ready/accepted handoff, verify commit then source-subtree
    termination using monitors. Existing capability denials must remain enforced.
-   Voicemail outcome/action and failed-restoration cases depend
-   on their remaining policy review; do not claim they are resolved here.
+   Machine detection follows R32 below; richer voicemail delivery is deferred.
+   Failed-restoration cases still depend on their remaining policy review.
 8. Feed distinguishable fake audio into caller and consultation routes. Confirm
    each sink, monitor, and recorder hears only its authorized mix. Slow the upload
    and verify live audio continues while incomplete recording is reported.
@@ -5148,11 +5165,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     and preserve source responsibility when permitted. A late answer/acceptance
     must not commit; clean only the mapped leg without auto-redial or a fabricated
     remote-outcome guarantee. Keep startup and whole-call clocks independent.
-35. Feed provider AMD classifications and unknown results through a controlled
-    adapter. Preserve provenance/uncertainty and require independent human transfer
-    acceptance; do not substitute LLM/STT guesses or a local beep classifier.
-    Machine/unknown follow-up actions await R32's remaining review, not an assumed
-    end-leg or leave-message behavior. These are planned checks, not runtime tests.
+35. Feed configured provider AMD machine and unknown results through a controlled
+    adapter. A machine result disconnects only the attempted destination leg,
+    returning typed failure while a transfer's original caller/source remain under
+    normal permissions. Separately verify termination of an initial outbound-only
+    attempt without message speech. Unknown keeps waiting for explicit acceptance
+    within the same total deadline; disabled/unavailable detection invents no
+    classification. Preserve provenance/uncertainty, no LLM/STT/local substitute,
+    and no inferred acceptance or voicemail delivery. These are planned checks,
+    not runtime tests.
 
 ### Review checkpoint verification
 
@@ -5203,6 +5224,9 @@ The later R31 decision places closing speech/hangup timing in agent instructions
 superseding the platform closing/drain workflow proposal. R33–R35 select transfer
 configuration, acceptance, and total deadline; R32 settles detection source only,
 not the action after machine/unknown classification.
+The subsequent R32 decision supersedes that remaining action question: configured
+machine detection disconnects the attempted destination leg; unknown retains the
+existing explicit-acceptance deadline. Voicemail-message delivery is deferred.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6443,6 +6467,24 @@ storage/client projection boundary and credential exclusions still apply.
   next five R32 and R36–R39. Updated canonical contracts and planned checks 32–35.
 - Verified exact three-file scope, 18 unchanged JSON examples/fences, links and
   anchors, statuses/count, transfer/closing/privacy and prior contracts,
+  terminology/path hygiene, and whitespace. Documentation only; no runtime tests.
+
+### Machine-detected destination handling — 2026-09-08
+
+- Resolved R32: configured provider detection reporting machine disconnects the
+  attempted outbound destination leg. Transfer failure returns to the source,
+  preserving original caller/source conversation when permitted, not ending the
+  room. Initial outbound-only attempts terminate without voicemail speech.
+- Unknown, disabled, and unavailable detection remain uncertain, not machine/human
+  proof. Unknown transfers await explicit acceptance within the same total attempt
+  deadline; no clock reset, automatic speech, local classifier, or accuracy promise.
+- Created the deferred voicemail-message-delivery issue for future provider evidence,
+  source/policy, correct-leg privacy, delivery outcomes/deadlines, and compatibility
+  questions. It does not reinstate a platform closing-speech workflow.
+- Updated canonical behavior and planned acceptance step 35. There are now 15
+  individually pending decisions, R36–R50; next five R36–R40 remain unapproved.
+- Verified exact four-file scope, 18 unchanged JSON examples/fences, old/new links
+  and anchors, leg/outcome/deadline boundaries, prior contracts, statuses/count,
   terminology/path hygiene, and whitespace. Documentation only; no runtime tests.
 
 ## Verification evidence

@@ -75,16 +75,16 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **16 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17–R23, R26–R31, and R33–R35 are resolved; R07's same-call caller
+Current review count: **15 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, R17–R23, and R26–R35 are resolved; R07's same-call caller
 reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
 Personalization and business-time interpretation belong to agent/application
 instructions with permitted variable/date tools; no template or timezone hierarchy
 is added. R13 allows protected backend-initialized routing variables while
-transfers remain participant-ref-only. G1 and G3 are resolved;
-G2/G4/G5/G6/G7/G8 are partly resolved, while G9–G13 still contain proposals.
+transfers remain participant-ref-only. G1, G3, and G7's current-slice decisions
+are resolved; G2/G4/G5/G6/G8 are partly resolved, while G9–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -106,11 +106,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**16 pending decisions (R32 and R36–R50).** This is the current approval backlog,
+**15 pending decisions (R36–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17–R23, R26–R31, and R33–R35 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R32 and R36–R39**. Mark rows resolved or
+R10–R15, R17–R23, and R26–R35 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R36–R40**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -146,7 +146,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R29 | G7 | **Resolved:** no automatic periodic long-tool progress speech; instructions own kickoff/results and ordinary background conversation. Startup/tool wait music is deferred in its own issue. |
 | R30 | G7 | **Resolved:** limits.max_duration_ms defaults to 1800000; definition overrides tenant, then application, then platform default. Pin it per call, measure from actual started_at without transfer/recovery reset, and end with a clear duration-limit reason. |
 | R31 | G7 | **Resolved:** agent instructions own closing wording and when to invoke existing hangup; no platform speak-then-end API, drain deadline, or automatic pending-hangup cancellation on interruption. No prompt-based playback guarantee. |
-| R32 | G7 | Detection source resolved: use provider AMD when supported, preserving provenance/unknown. Which action should follow machine or unknown classification, including whether to end or leave a message, remains pending. |
+| R32 | G7 | **Resolved:** when configured provider AMD reports machine, disconnect that outbound destination leg, preserving a transfer's caller/source; unknown still needs explicit acceptance within the existing deadline. Detection is optional, uncertainty remains honest, and voicemail-message delivery is deferred to its issue. |
 | R33 | G8 | **Resolved:** call-level transfer_policy holds shared defaults; source transfers remains allowed participant refs and destination-specific connection/acceptance requirements stay with the destination; no named/source-default/per-pair machinery. |
 | R34 | G8 | **Resolved:** agent conversation/capabilities ready; human usable media plus explicit acceptance through pending-leg press-1 DTMF or authenticated web control message bound to destination and pending attempt; no stale/source/model acceptance or implicit admission. |
 | R35 | G8 | **Resolved:** configurable 30-second total transfer attempt from accepted preparation, including dialing/acceptance; terminal failures end early, timeout/failure stops destination and returns typed outcome to source, late callbacks cannot commit, exact-leg cleanup without auto-redial. |
@@ -218,7 +218,7 @@ integration examples, not proof that every advertised behavior is enforced.
 | --- | --- | --- |
 | Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. A timeout without a definitive remote result reports unknown. Conversational confirmation belongs in agent instructions; enforceable business authorization belongs to the application/MCP, with no generic platform confirmation now. Business-time interpretation belongs to application/agent instructions with date tooling; automatic retry/idempotency enhancements and late recovery notifications are deferred. The external scheduling system remains the booking authority. |
 | Intent routing: [assistant][intent], [request overrides][intent-request], [instruction handler][instructions] | One agent retrieves instructions through a tool; alternatively several specialized agent definitions transfer by ref | Personalization uses agent instructions and permitted variable reads. Retain trusted ingress metadata, provenance of retrieved instructions, and closed participant destinations. Runtime text must not grant tools or introduce arbitrary telephone destinations. |
-| Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Provider detection supplies classification evidence, including unknown; the action after machine/unknown remains pending. Closing wording and choosing hangup belong to agent instructions, without a platform speak-then-end or guaranteed-playout workflow. |
+| Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Configured provider detection reporting machine ends the attempted destination leg; transfer source/caller remain, unknown still requires explicit acceptance within the existing deadline, and leaving a message is deferred. Closing wording and choosing hangup belong to agent instructions, without a platform speak-then-end or guaranteed-playout workflow. |
 | SMS verification: [assistant][sms], [code tool][code], [SMS tool][sms-tool] | Agent-scoped remote tools, typed verification variables, provider-neutral external action | Requires an external verification service or trusted host implementation. That service owns verification, expiry, attempt limits, recipient binding, and replay protection; the agent can record its returned outcome in permitted call variables. Storing an outcome does not override the service's rules. Do not run JSON-provided JavaScript. |
 
 Two distinctions matter when using these sources:
@@ -1250,26 +1250,34 @@ tool belong to agent instructions. Reject the proposed platform speak-and-end
 lifecycle/API, mandatory playback-drain deadline, and automatic cancellation of
 a pending hangup on speech interruption. Normal/immediate hangup and hard-duration
 control remain unchanged. Instructions do not prove completed playout; no
-playout-aware hangup guarantee is added. G7 remains partly resolved because the
-voicemail outcome/action policy still needs review, not because closing requires
-another platform workflow.
+playout-aware hangup guarantee is added. G7's current-slice decisions are resolved;
+future voicemail delivery and wait music remain deferred, not requirements for
+another platform closing workflow.
 
 The [voicemail example][voicemail] waits for input and delegates to a native
 tool. Vapi's [tool documentation][voicemail-docs] distinguishes assistant-chosen
 voicemail from automatic detection and ends the call after the configured
-behavior. For our adapter contract, answer classification and beep evidence need
-source/confidence, timeouts, and an unknown outcome. An answered leg is not proof
-of a human, and STT text alone does not establish a beep. Reject policies that
-require unavailable evidence. Start with a safe narrow outbound policy; do not
-claim full answering-machine or IVR support from generic hangup/transfer tools.
+behavior. That background does not approve message delivery for this slice.
+An answered leg is not proof of a human, and STT text alone does not establish a
+beep. Preserve observed provider evidence without inventing confidence or claiming
+full answering-machine/IVR support from generic hangup/transfer tools.
 
-**Partly resolved R32:** use provider-supplied detection when available, preserving
-provider provenance and unknown outcomes. [Telnyx AMD](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
+**Resolved R32:** use provider-supplied detection when available and configured
+for use, preserving provider provenance and unknown outcomes. Detection is not
+mandatory for every call. [Telnyx AMD](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
 and [Twilio AMD](https://www.twilio.com/docs/voice/answering-machine-detection)
 provide that source; no local beep classifier or LLM-inferred human proof is added.
-Provider modes/tuning and actions after machine/unknown classification are not
-selected here: neither automatic end-leg nor leaving a voicemail is approved.
-AMD classification is not explicit acceptance by a human transfer recipient.
+If that detection reports machine, disconnect the attempted outbound destination
+leg. A transfer returns a typed failure to the source while preserving the original
+caller/source conversation when permitted, not hanging up the room. If it is an
+initial outbound call to its only remote human, end that attempted leg/call without
+voicemail speech. Unknown, disabled, or unavailable detection is neither machine
+nor human proof. An unknown transfer keeps awaiting explicit acceptance within
+the existing total 30-second deadline; it never resets or extends the clock.
+AMD is not guaranteed accurate or explicit recipient acceptance. Provider tuning,
+beep inference, and automatic speech are not introduced. Leaving voicemail is
+[deferred](issues/voicemail-message-delivery.md); that future issue does not
+reinstate the rejected platform speak-then-end workflow.
 
 ### G8 — P2: A transfer allowlist is not the complete transfer policy
 
@@ -1316,8 +1324,8 @@ Late answer/acceptance cannot commit an expired attempt. Clean up the exact mapp
 leg and do not automatically redial. Startup readiness (R27) and hard call duration
 (R30) remain separate; no remote certainty or durable recovery framework is added.
 
-Richer voicemail, caller-departure, warm consultation, history projection, and
-failed-restoration behavior remain proposals. Preparation has external side
+Voicemail-message delivery is deferred. Caller-departure, warm consultation,
+history projection, and failed-restoration behavior remain proposals. Preparation has external side
 effects: it cannot promise that nothing changed if a leg was dialed or an STT
 session stopped. Use compensating cleanup, bounded source re-preparation, and a
 safe degraded/terminal outcome if restoration fails. Never resume forbidden
@@ -1527,7 +1535,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Dial a participant using a literal number or protected creation-time routing variable | Exactly one number source is accepted; the trusted initialized value resolves without agent read permission; any agent write grant to its section rejects the definition; missing/null/invalid values fail before dialing and retain source responsibility |
 | Ask transfer to use arbitrary dial data or bypass its participant allowlist | Number/provider/URL/variable-ref arguments and unlisted destinations fail; executor rechecks the source allowlist; permitted role selection uses only its pinned connection source, with no new expression or outbound policy matrix |
-| Receive provider AMD evidence, busy, no answer, or a human decline | Preserve classification provenance/unknown separately from acceptance; definitive transfer failures return typed outcomes without false `transfer.completed`; machine/unknown action policy awaits R32 |
+| Receive configured provider AMD evidence, busy, no answer, or a human decline | Machine disconnects only the attempted destination leg and returns a typed transfer failure with source/caller retained; initial outbound-only attempts end appropriately; unknown/disabled/unavailable is not machine/human proof, explicit acceptance still governs transfer within its unchanged deadline, and no voicemail message or false `transfer.completed` appears |
 | Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
 | Configure shared transfer policy and prepare agent, phone, and web destinations | Source allowlists remain participant refs; agent conversation/capability readiness and human usable-media plus explicit acceptance are required; phone press-1 and web messages are tied to the destination and current pending attempt, not inferred from speech or connection alone |
 | Send stale, duplicate, source-authored, or mismatched transfer acceptance | Server-side participant/connection/attempt checks prevent unauthorized or repeated commits and premature conversational media disclosure; the web client owns its acceptance UI, not a newly mandated core-protocol widget |
@@ -1986,11 +1994,22 @@ Human transfer acceptance uses pending-leg DTMF or authenticated web control,
 bound to the destination and attempt; agent destinations require readiness.
 A configurable 30-second total attempt deadline includes preparation/dialing/
 acceptance, with typed failure and exact late-leg cleanup. Provider AMD is the
-approved detection source, but machine/unknown action remains R32. Current backlog:
+approved detection source, but machine/unknown action then remained R32. At that checkpoint:
 16 individual decisions, R32 and R36–R50; next five R32 and R36–R39. Verified exact
 three-file scope, 18 unchanged JSON examples/fences, preserved links and local
 anchors, statuses/count, transfer/closing/privacy and prior contracts, terminology/
 path hygiene, and whitespace. Documentation only; no runtime or browser tests.
+
+The R32 follow-up disconnects an attempted outbound destination leg when configured
+provider detection reports machine, without ending an existing transfer's caller/
+source conversation. Unknown awaits explicit transfer acceptance within the same
+deadline; disabled/unavailable detection does not fabricate classification. Added
+the deferred voicemail-message-delivery issue without a message feature, provider
+tuning, or a new platform closing workflow. Current backlog: 15 individual decisions,
+R36–R50; next five R36–R40. Verified exact four-file scope, 18 unchanged JSON examples/
+fences, existing/new links and anchors, outcome/leg/deadline boundaries, prior
+contracts, statuses/count, terminology/path hygiene, and whitespace. Documentation
+only; no runtime or browser tests.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

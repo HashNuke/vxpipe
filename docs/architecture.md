@@ -359,13 +359,25 @@ interruption is introduced. Normal/immediate hangup and the hard duration limit
 remain unchanged. Instructions alone do not guarantee that audio finished playing;
 this does not add playout-aware hangup.
 
-Use provider-supplied answering-machine/voicemail detection when supported.
+Use provider-supplied answering-machine/voicemail detection when supported and
+configured for use; detection is not mandatory on every call.
 Preserve its provenance and unknown outcomes, not a local beep classifier or
 LLM-inferred proof of a human. Both [Telnyx](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
 and [Twilio](https://www.twilio.com/docs/voice/answering-machine-detection) document
-provider detection. The action after machine/unknown classification remains R32;
-no automatic end-leg or leave-message policy is selected. Detection is not
-explicit recipient acceptance of a transfer.
+provider detection. When that detection reports a machine, disconnect the
+attempted outbound destination leg. For a transfer, return its typed failure to
+the source and preserve the original caller/source conversation under normal
+permissions; do not end the entire room. For an initial outbound call whose only
+remote human is that destination, terminate the attempted leg/call rather than
+inventing voicemail speech.
+
+Unknown, disabled, or unavailable detection is neither machine nor human proof.
+An unknown transfer keeps waiting for explicit recipient acceptance within the
+existing total 30-second attempt deadline, without extending it. Classification
+is not an accuracy guarantee or a substitute for acceptance. No local classifier,
+beep inference, provider tuning, or automatic message delivery is added. Leaving
+voicemail is [deferred for later review](issues/voicemail-message-delivery.md),
+without reintroducing a platform closing-speech workflow.
 
 Until a transfer successfully commits, the source agent retains conversational
 responsibility. `RoomAuthority` still owns the room and the transfer transition;
