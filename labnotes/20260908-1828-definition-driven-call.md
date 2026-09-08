@@ -559,3 +559,33 @@ not widen the released schema.
 - Final gates passed `mix format --check-formatted`, `mix compile --warnings-as-errors`,
   `mix deps.unlock --check-unused`, call engine `99 tests, 0 failures (1 excluded)`, and gateway
   `39 tests, 0 failures (3 excluded)`.
+
+## Checkpoint 8: remove development preset duplication
+
+Once the trusted sample and its definition-driven tests were green, the old development
+model-inference preset was redundant. It repeated the prompt, Gemini model, host tool, and
+execution limits alongside the definition/profile registry. The application STT/TTS settings
+also repeated the profile-owned model, encoding, and sample rate.
+
+`config/dev.exs` now leaves legacy model inference at the reusable base default (`enabled:
+false`). The trusted definition/profile registry is the single development owner of prompt,
+model, tools, voice, STT model, and public media options. Application settings retain the
+Deepgram provider modules, private provider options populated at runtime, transport modules,
+media-ingress bounds, TTS request bound, and the separate shared agent-runtime bounds.
+
+This is configuration-only and therefore did not require an initial red test. A `MIX_ENV=dev`
+probe with explicit fixture environment values verified all of the following without printing a
+credential:
+
+- legacy model inference remained disabled;
+- the runtime injected the Deepgram fixture only into private STT/TTS provider options;
+- the configured trusted definition and registries initialized successfully.
+
+The development runtime continues to require the Gemini environment value for the Jido/ReqLLM
+sample and the Deepgram value for speech. Embedded users retain the legacy `CreateRoom` contract
+and can explicitly supply its complete application configuration; repository development no
+longer configures that duplicate path by default.
+
+Final gates passed `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+`mix deps.unlock --check-unused`, call engine `99 tests, 0 failures (1 excluded)`, and gateway
+`39 tests, 0 failures (3 excluded)`.

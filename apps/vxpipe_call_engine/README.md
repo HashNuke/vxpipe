@@ -58,9 +58,8 @@ from JSON-safe definition and invocation maps. The compiler validates a closed
 one-human/one-agent web subset and pins capability profiles, host-tool bindings,
 typed Call Variables schemas/grants/partial initial values, runtime participant
 identities, and call limits into a `ResolvedCallPlan`. Variable schemas use the
-released closed subset and do not enforce `required` completeness. It is not wired
-to room startup yet; existing preset behavior remains available while the milestone
-proceeds through later checkpoints.
+released closed subset and do not enforce `required` completeness. Plan startup now
+rejects valid-but-deferred features before it creates a room or provider process.
 
 The runtime foundation now includes an application-owned Jido instance, a finite
 Jido AI agent module, synchronous prompt/Action configuration before readiness, and
@@ -76,10 +75,11 @@ running after its retry budget is exhausted. A participant supervisor now owns e
 participant authority and, for an agent, that activation unit; either deliberate participant
 shutdown or an exhausted activation ends the whole participant subtree without restarting
 the room. Trusted hosts can now call `Vxpipe.CallEngine.start_call/2` with a compiled plan;
-the initial text-only subset starts only the entry caller and receiver, routes ordinary
+the initial subset starts only the entry caller and receiver, routes ordinary
 turns and host Actions through the receiver's owned coordinator, and follows coordinator
-restarts through a stable activation reference. Plan-selected speech capabilities and the
-sample adapter remain in progress.
+restarts through a stable activation reference. Plan-selected speech combines public profile
+options with application-owned secrets, transports, and bounds before startup. The repository
+sample exercises this path; legacy `CreateRoom` presets remain available to embedded hosts.
 
 ## Installation
 

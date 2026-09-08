@@ -2,8 +2,8 @@
 
 Status: implementation in progress. Typed definition/compiler, participant-owned Jido
 routing, plan-selected speech startup, and trusted sample wiring checkpoints completed on
-2026-09-08. Unsupported-feature startup diagnostics are also complete; preset cleanup and
-final spoken-sample evidence remain.
+2026-09-08. All implementation checklist checkpoints are complete; acceptance and final
+spoken-sample evidence remain.
 Specification review: approved,
 including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
@@ -69,7 +69,7 @@ cannot change that live call.
 - [x] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
 - [x] Wire one trusted sample/embedded fixture to the new path without redesigning the responsive console.
 - [x] Specify supported-feature diagnostics for later milestone features; reject enabled unsupported privacy/connection/tool settings before starting providers.
-- [ ] Refactor duplicated preset configuration only after the definition-driven sample tests pass.
+- [x] Refactor duplicated preset configuration only after the definition-driven sample tests pass.
 
 ## Acceptance and failure checks
 
@@ -320,6 +320,23 @@ registry entry exists; focused compiler and end-to-end definition tests pass `13
 0 failures`. Duplicate room identity is still checked first, preserving the existing conflict
 contract without weakening the process-start boundary. The error contains only a stable code,
 message, path, and fixed reason rather than definition values or private provider configuration.
+Final checkpoint gates pass formatting, warnings-as-errors, dependency-use validation, call
+engine `99 tests, 0 failures (1 excluded)`, and gateway `39 tests, 0 failures (3 excluded)`.
+
+Implementation evidence, checkpoint 8 (2026-09-08): after the definition-driven gateway and
+sample tests were green, repository development configuration stopped duplicating the old
+model-inference preset. The trusted definition/profile registry is now the only development
+owner of the prompt, model, host-tool selection, STT model/media format, and TTS voice/media
+format. Application configuration retains private Deepgram credentials, transport modules,
+media/queue bounds, and agent-runtime bounds. The reusable legacy model-inference setting falls
+back to its disabled base value; embedded hosts can still configure and use the legacy
+`CreateRoom` path explicitly.
+
+This was a configuration-only refactor, so no red behavior test was required. A `MIX_ENV=dev`
+probe with explicit non-secret fixture values verified that legacy inference remains disabled,
+both speech runtimes receive only the runtime credential before plan merging, and the trusted
+gateway definition initializes. The existing runtime guard still requires both development
+provider environment variables without printing or persisting them.
 Final checkpoint gates pass formatting, warnings-as-errors, dependency-use validation, call
 engine `99 tests, 0 failures (1 excluded)`, and gateway `39 tests, 0 failures (3 excluded)`.
 

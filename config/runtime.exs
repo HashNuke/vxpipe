@@ -45,10 +45,11 @@ if config_env() == :dev do
   speech_to_text = inject_deepgram_api_key.(speech_to_text)
   text_to_speech = inject_deepgram_api_key.(text_to_speech)
 
+  gemini_api_key =
+    fetch_required_env.("GEMINI_API_KEY", "the trusted development sample")
+
   model_inference =
     if Keyword.fetch!(model_inference, :enabled) do
-      gemini_api_key = fetch_required_env.("GEMINI_API_KEY", "Gemini model inference")
-
       Keyword.update!(model_inference, :provider_options, fn provider_options ->
         Keyword.put(provider_options, :api_key, gemini_api_key)
       end)

@@ -2095,6 +2095,14 @@ The creation page accepts that atomic response and enters the unchanged responsi
 console. The older preset create-then-join routes remain available as a development/embedding
 compatibility path and are not the production admission design.
 
+The repository's development configuration no longer duplicates the trusted definition as a
+legacy model-inference preset. The definition/profile registry owns the system prompt, model,
+voice, STT model, tool surface, and public provider media options. Call-engine application
+settings own only runtime/provider integration concerns needed by this slice: private
+credentials, transport modules, ingress/queue bounds, and agent execution bounds. The default
+sample still checks required development credentials at runtime, while the reusable base keeps
+legacy preset model inference disabled unless an embedding host configures it explicitly.
+
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe
    public projections.
