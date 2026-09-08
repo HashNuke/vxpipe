@@ -209,3 +209,65 @@ This checkpoint does not route room turns through Jido and does not yet prove st
 projection, request timeout, interruption, participant-owned restart, or teardown.
 Those remain the next red-green checkpoint before either Jido implementation task is
 marked complete.
+
+## Checkpoint 3b: Jido request coordinator
+
+The engine now has a narrow `AgentRuntime` behavior, a production Jido adapter, and an
+`AgentCoordinator` GenServer. The coordinator remains Vxpipe's authority for one-active-
+turn admission, the bounded pending queue, response byte limits, sentence pacing, Vxpipe
+identity correlation, timeout, interruption, and capability-facing tool/text events.
+Jido remains the only ReAct loop and retains its own conversation context.
+
+Each request receives a fresh `areq_` identity and private refs for the Vxpipe command and
+request. The coordinator adds the trusted `Tool.Context` and per-activation dispatcher at
+the request boundary. Jido runtime events are accepted only for the currently active
+request; late events after timeout or interruption are ignored. Completed Vxpipe turn
+identities are retained in a bounded correlation list. On interruption, selected request
+IDs are removed synchronously from Jido context with the public context-modification signal
+before the call returns.
+
+### Red, green, and refactor evidence
+
+The initial focused command was:
+
+- `mix test test/vxpipe/call_engine/agent_coordinator_test.exs`
+
+It ran three tests and failed all three because `Vxpipe.CallEngine.AgentCoordinator` did
+not exist. After the minimal coordinator and runtime boundary were added, configuration
+validation initially rejected the unloaded test adapter; explicitly ensuring the adapter
+module is loaded fixed that boundary. The timeout test then demonstrated that queued turns
+receive their own deadline, so its deliberately short fixture deadline was widened without
+adding sleeps.
+
+Refactoring changed cancellation to return the cancelled command explicitly and added a
+regression case for an oversized final result. That case proves failing one response cannot
+accidentally complete the next queued request. Invalid tool envelopes also cancel/fail the
+correlated request and advance the queue instead of wedging it. The production cancellation
+adapter uses a synchronous AgentServer signal so a replacement request cannot overtake the
+cancel command in the agent mailbox.
+
+Focused result: `5 tests, 0 failures`. The suite includes a real AgentServer and scripted
+Jido provider round that calls the host Action once, projects its lifecycle, returns final
+text, and then removes that completed exchange from Jido context. The remainder use a
+controllable runtime adapter to prove exact timeout, queue, stale-event and interruption
+races. The Jido-containing coordinator test module runs synchronously with other ExUnit
+modules because parallel Jido script runs produced an incomplete two-round event stream in
+the pre-existing Agent test during a full-suite run; isolation restored deterministic
+coverage.
+
+The complete call-engine rerun passed `87 tests, 0 failures (1 excluded)`. One prior run
+hit an existing 100 ms TTS shutdown assertion even though the transport-close event had
+arrived; that exact focused test passed immediately and the complete rerun was green without
+changing production or unrelated test code.
+
+Umbrella gate evidence:
+
+- `mix format --check-formatted` passed.
+- `mix compile --warnings-as-errors` passed.
+- `mix test` passed: call engine `87 tests, 0 failures (1 excluded)` and gateway
+  `37 tests, 0 failures (3 excluded)`.
+- `mix deps.unlock --check-unused` passed with no output.
+
+This checkpoint still does not place the AgentServer/coordinator/dispatcher under a single
+participant activation supervisor, replace room use of the old inference capability, or
+start a room from a resolved plan. Those lifecycle and routing steps remain next.

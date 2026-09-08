@@ -1,7 +1,7 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; implementation has not started. The earlier behavior
-contracts have completed focused review. The 2026-09-08 released-package investigation
+Status: 23 milestone specifications; milestone 1 implementation is in progress. The earlier
+behavior contracts have completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal

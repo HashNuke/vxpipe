@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Id do
 
   @prefixes %{
     activation: "act",
+    agent_request: "areq",
     call: "call",
     command: "cmd",
     event: "evt",
@@ -14,6 +15,7 @@ defmodule Vxpipe.CallEngine.Id do
 
   @type kind ::
           :activation
+          | :agent_request
           | :call
           | :command
           | :event

@@ -144,9 +144,16 @@ client projections. The participant supervisor starts, gates readiness for, and 
 the Jido child. Standalone ReAct is useful for focused adapter tests, not a parallel
 production loop.
 
-The engine-owned coordinator maps Jido request handles/events to call, participant, turn,
-streaming-output, visibility and usage contracts and permits only one external or internal
-request in flight. Submitted long-running actions return a correlated running
+The engine-owned `AgentCoordinator` now maps Jido request handles/events to the existing
+capability stream, tool, terminal, timeout and interruption contracts and permits only one
+external or internal request in flight. It supplies private Vxpipe command/request refs and
+the authorized tool context at the request boundary, bounds pending requests and output,
+ignores stale events after cancellation, and removes explicitly interrupted completed turns
+from Jido's context through its public context-replacement signal. Jido still owns the ReAct
+loop; the coordinator neither invokes providers nor executes a replacement model/tool loop.
+Room activation wiring and lifecycle supervision remain in progress.
+
+Submitted long-running actions return a correlated running
 acknowledgement and continue under Vxpipe-owned supervision. Their later results enter a
 bounded Vxpipe mailbox. Once the Jido agent is idle, the coordinator supplies the result in
 an engine-origin continuation request that is never projected as caller speech. Do not use
@@ -2013,7 +2020,7 @@ and zero revisions. Omitted sections stay unpopulated while explicit empty objec
 stay populated. Neither rejected values nor private capability options enter public
 errors. Later-milestone transfers remain rejected instead of being silently ignored.
 
-The next runtime checkpoint adds Jido AI 2.3 and Jido Action 2.3 as direct engine
+The first runtime checkpoint added Jido AI 2.3 and Jido Action 2.3 as direct engine
 dependencies, an application-owned Jido supervision instance, and the finite
 `Vxpipe.CallEngine.Agent` module. A synchronous readiness configuration boundary
 sets the resolved prompt and exact supported Action modules on a running AgentServer;
@@ -2023,11 +2030,20 @@ actual handler execution even though the released Jido runtime does not expose i
 parallel-tool limit through the Agent macro. A deterministic test proves two successive
 Action rounds and a final answer through Jido's delegated ReAct worker.
 
-That foundation is not yet connected to room turns. These checkpoints do not start
-rooms from a plan or provide the room-owned Call Variables process/tools. Existing
-preset startup remains intact while the remaining milestone work adds the coordinator,
-participant-owned activation supervision, runtime plan startup, and trusted sample
-fixture. Exact evidence is tracked in the milestone and its implementation labnote.
+The next checkpoint added `AgentCoordinator` and a narrow `AgentRuntime` adapter. It
+correlates Vxpipe command identities with Jido request IDs, streams complete sentence
+segments through the existing capability messages, projects Action lifecycle events,
+bounds the pending queue and response bytes, cancels timed-out/interrupted requests, and
+rejects stale terminal events. Explicitly selected completed Vxpipe turns are removed from
+Jido context synchronously before interruption returns. A deterministic runtime double
+proves queue/failure races, while a real Jido AgentServer test proves one host Action and
+final response use Jido's delegated ReAct loop.
+
+That foundation is not yet connected to room turns. These checkpoints do not start rooms
+from a plan or provide the room-owned Call Variables process/tools. Existing preset startup
+remains intact while the remaining milestone work adds participant-owned activation
+supervision, runtime plan startup, and the trusted sample fixture. Exact evidence is tracked
+in the milestone and its implementation labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

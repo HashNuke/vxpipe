@@ -1,7 +1,7 @@
 # Definition-driven one-agent call
 
-Status: implementation in progress. Typed definition/compiler checkpoints completed
-on 2026-09-08; runtime startup and Jido integration remain. Specification review:
+Status: implementation in progress. Typed definition/compiler and Jido coordinator
+checkpoints completed on 2026-09-08; activation/room wiring remains. Specification review:
 approved, including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
 Sources: [Canonical representation and minimal definition](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-definition-gap-review.md).
@@ -161,6 +161,26 @@ focused file passed 2 tests, including two successive host-Action rounds and one
 answer through Jido's real delegated ReAct worker. Coordinator stream, timeout,
 interruption, and activation teardown contracts remain unchecked, so neither runtime
 implementation task nor the milestone is complete.
+
+Implementation evidence, checkpoint 3b (2026-09-08): added the engine-owned
+`AgentCoordinator` and a narrow `AgentRuntime` boundary. The coordinator accepts one active
+request, bounds pending turns and response bytes, attaches private Vxpipe command/request
+refs and authorized tool context, translates Jido sentence/tool/terminal events onto the
+existing capability messages, and ignores stale events after cancellation. Timeout and
+interruption cancel the correlated Jido request; interruption also synchronously removes
+selected completed requests from Jido conversation context. The production adapter uses
+Jido AgentServer request, cancel and context-replacement APIs rather than implementing an
+engine-side provider/tool loop.
+
+Red: the focused coordinator suite failed all three initial cases because
+`Vxpipe.CallEngine.AgentCoordinator` did not exist. Green/refactor: the suite now passes
+five tests, including bounded timeout/queue behavior, an oversized terminal-response race,
+interruption/context discard, stream/tool projection, and one real Jido host-Action round.
+The complete engine suite passes 87 tests with one network integration test excluded.
+Umbrella gates pass: formatting, warnings-as-errors, call engine `87 tests, 0 failures
+(1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused dependencies.
+Participant-owned startup/teardown and room routing remain unchecked, so the corresponding
+runtime checklist items and the milestone stay incomplete.
 
 ## Specification review
 
