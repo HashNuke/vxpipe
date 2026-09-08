@@ -1,6 +1,7 @@
 # Reusable gateway and Phoenix console
 
-Status: approved design (2026-09-08); not implemented.
+Status: implementation in progress (2026-09-08). The reusable gateway mount contract is
+implemented; the Phoenix console and asset/dashboard integration remain pending.
 
 ## Decision
 
@@ -100,7 +101,15 @@ or implementation-completion claim.
 Source inspection found an existing Plug HTTP endpoint, an optionally enabled
 standalone HTTP supervisor and no Phoenix dependency in the gateway. That is a
 starting point, not evidence that arbitrary host mounting is already supported.
-The current sample is a separate React/Vite project. Documentation consistency and
-relative links are checked at this checkpoint; runtime mounting, browser rendering,
-transport interoperability and release packaging remain unverified until the
-implementation milestones run their acceptance checks.
+The current sample is a separate React/Vite project. At the design checkpoint,
+documentation consistency and relative links were checked while runtime mounting,
+browser rendering, transport interoperability and release packaging were still
+unverified.
+
+Implementation checkpoint 1 added and red-tested `Vxpipe.Gateway.HTTP.Mount` as the
+supported composable boundary. It claims only `/healthz` and `/api` at a root mount,
+supports an explicit host path prefix, preserves configured CORS behavior, and halts
+claimed responses while allowing unrelated host pages to continue. Tests run with the
+standalone HTTP supervisor disabled and verify that the gateway's session and WebRTC
+connection supervisors remain alive. Console/Phoenix integration and live transport
+interoperability are still unverified.

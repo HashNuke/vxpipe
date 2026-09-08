@@ -1,8 +1,9 @@
 # Observable sample call
 
-Status: not implemented. Scope requested by the user; specification reviewed locally
-on 2026-09-08. A separate Phoenix shell, `vxpipe_console` / `Vxpipe.Console`, is approved;
-the reusable gateway remains independent of Phoenix and UI dependencies.
+Status: implementation in progress. The reusable gateway mounting and single-listener
+configuration checkpoint completed on 2026-09-08. A separate Phoenix shell,
+`vxpipe_console` / `Vxpipe.Console`, is approved; the reusable gateway remains independent
+of Phoenix and UI dependencies.
 Prerequisites: [Definition-driven call](definition-driven-call.md).
 Sources: [Security and observability](../architecture.md#security-and-observability);
 [Gateway/console boundary](../gateway-console-boundary.md);
@@ -79,7 +80,7 @@ slow response or missing measurement. The existing voice console still works unc
 
 ## Implementation checklist
 
-- [ ] Red-test project-owned gateway mounting/startup and single-listener configuration
+- [x] Red-test project-owned gateway mounting/startup and single-listener configuration
   before adding the console integration.
 - [ ] Add the approved console shell using the existing gateway dependency; verify
   explicit startup/mounting and adjust gateway configuration only where needed, without
@@ -147,7 +148,14 @@ LiveView or introducing a production operator-login product.
 - [ ] Update this milestone, index entry, architecture/user docs and implementation labnote
   with actual focused-test, integration and rendered-browser evidence.
 
-Implementation evidence: none yet. Specification review does not complete the milestone.
+Implementation evidence, checkpoint 1 (2026-09-08): added the public
+`Vxpipe.Gateway.HTTP.Mount` Plug. It mounts gateway health/API routes at root or beneath an
+explicit host prefix, preserves the gateway's CORS/parser/router behavior, halts claimed
+responses, and leaves non-gateway host pages untouched. Focused tests demonstrate the mount
+while the standalone HTTP supervisor is absent and the named session/WebRTC runtime remains
+active. Gateway and umbrella gates pass with call engine `102 tests, 0 failures (1 excluded)`
+and gateway `43 tests, 0 failures (3 excluded)`. Phoenix and dashboard dependencies are not
+introduced by this checkpoint; the milestone remains incomplete.
 
 ## Specification review
 

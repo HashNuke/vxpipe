@@ -56,8 +56,40 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
 ```
 
 The application reads this setting once during startup and passes the HTTP
-options into its supervision tree. Embedded callers can instead supervise
-`Vxpipe.Gateway.HTTP.Supervisor` directly with the same HTTP options.
+options into its supervision tree. Set `http[:enabled]` to `false` when a host
+application owns the listener. The gateway application still supervises its
+session registry, session supervisor, WebRTC registry, and connection supervisor.
+
+A host Plug pipeline can mount the gateway routes in-process with
+`Vxpipe.Gateway.HTTP.Mount`:
+
+```elixir
+plug Vxpipe.Gateway.HTTP.Mount,
+  path_prefix: "/",
+  room_creation: [enabled: false],
+  webrtc: [
+    ice_servers: [],
+    candidate_gathering_timeout_ms: 1_000,
+    maximum_audio_packets: 500
+  ],
+  cors: [
+    allowed_origins: ["https://client.example.test"],
+    allowed_methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    allowed_headers: ["content-type", "authorization"],
+    allow_credentials: false
+  ]
+```
+
+At the root mount, the Plug claims `/healthz` and the `/api` namespace and
+passes every other request to the host pipeline. A `path_prefix` such as
+`/voice` exposes the same gateway routes at `/voice/healthz` and `/voice/api/*`.
+Claimed responses are halted so a downstream host router cannot send a second
+response. The host must start the `vxpipe_gateway` application once; mounting
+routes alone does not start its session or connection runtime.
+
+Alternatively, an embedded caller can supervise
+`Vxpipe.Gateway.HTTP.Supervisor` directly with the standalone HTTP options.
+Do not run that listener when a host endpoint mounts the Plug on the same port.
 
 The repository's development configuration supplies a trusted typed call definition,
 closed capability/tool registries, and a fixed development principal so the browser
