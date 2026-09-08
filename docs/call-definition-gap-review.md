@@ -76,8 +76,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **7 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17–R23, R26–R40, and R43–R45 are resolved; R07's same-call caller
+Current review count: **6 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, R17–R23, R26–R40, and R42–R45 are resolved; R07's same-call caller
 reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -108,11 +108,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**7 pending decisions (R41, R42, and R46–R50).** This is the current approval backlog,
+**6 pending decisions (R41 and R46–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17–R23, R26–R40, and R43–R45 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R41, R42, and R46–R48**. Mark rows resolved or
+R10–R15, R17–R23, R26–R40, and R42–R45 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R41 and R46–R49**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -158,8 +158,8 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R39 | G10/G2 | **Resolved:** no API creation idempotency key or deduplication cache; repeated authorized creation may create separate prepared records for later authorized deletion. Same-call token/admission and telephony webhook deduplication remain separate and intact. |
 | R40 | G10 | **Resolved:** short admission claim, no transaction spanning startup; identify existing room/leg to finish bookkeeping, never repeat a crashed call or speculatively redial an uncertain one. Record failed/unknown appropriately and clean up known resources; no general recovery framework. |
 | R41 | G11 | What happens when the asynchronous archive cannot keep up: continue with an explicitly incomplete record or stop the call? |
-| R42 | G11 | How are corrected exports versioned so retries deduplicate without overwriting an earlier publication of the same schema? |
-| R43 | G11 | **Resolved:** finalize outside the room with a configurable 60-second post-end reporting window; publish early when expected work settles, otherwise publish permitted available data with honest pending/missing components. Later facts may refresh publication; no call extension, work cancellation, false completion during outages, or choice of R42's exact revision/retry contract. |
+| R42 | G11 | **Resolved:** immutable publication revisions use their persisted UTC record timestamp for details-YYYYMMDDHHMMSSmmm.json under the call-owned prefix. Same snapshot retry reuses its identity/file; changed contents create a new revision without a schema_version change merely for values. Keep a latest-publication pointer, detect filename collisions, and never treat timestamps as unique identity or overwrite earlier revisions. |
+| R43 | G11 | **Resolved:** finalize outside the room with a configurable 60-second post-end reporting window; publish early when expected work settles, otherwise publish permitted available data with honest pending/missing components. Later facts may refresh publication under R42; no call extension, work cancellation, or false completion during outages. |
 | R44 | G12 | **Resolved:** retain observations and derive effective usage per operation attempt/component; distinguish deltas from cumulative totals and estimate/final/correction status. Identity-proven duplicates do not add again; final supersedes estimates, explicit corrections may decrease/increase, and failed/interrupted usage is retained without invented zero. |
 | R45 | G12 | **Resolved:** always call-scoped with honest optional participant/service-interval/turn attribution, no forced allocation or duplicate charges. Keep usage separate from unavailable cost and preserve real namespaced provider IDs for optional asynchronous supported billing lookup outside the live call. |
 | R46 | G12 | Which pricing source/version determines recorded cost, and how are unavailable usage or prices represented? |
@@ -1446,7 +1446,7 @@ resources without a speculative second dial or remote rollback claim. Recover
 records about existing work, never repeat the phone call. No sweeping durable
 recovery or cross-node exactly-once framework is added.
 
-### G11 — P2: Finalization wait resolved; archive overflow and publication identity pending
+### G11 — P2: Publication revisions and finalization wait resolved; persistence failure policy pending
 
 The async archive is correctly described as potentially lossy on node failure.
 Specify per-consumer bounded queue/overflow behavior and independent private
@@ -1466,10 +1466,22 @@ the event stream can rebuild the human text transcript. [Room authority][authori
 
 Call end, operation settlement, artifact finalization, and archive publication
 are different states. The proposed `(call_id, archive_schema_version)` job key
-cannot distinguish a corrected export using the same schema. R42 still reviews
-exact publication identity, schema/version, object naming, and retry semantics;
-revision/source-watermark/immutable-object mechanisms remain proposals, not an
-approved key or latest-pointer design.
+cannot distinguish a corrected export using the same schema. R42 instead gives
+each immutable publication revision its own record, identity, and persisted UTC
+timestamp. Use `details-YYYYMMDDHHMMSSmmm.json` under the call-owned object prefix,
+with three millisecond digits: `2026-09-08T12:34:56.789Z` on that record produces
+`details-20260908123456789.json`. It is not call `created_at` or the current time
+when a worker retries. Retry the same snapshot using its persisted identity,
+contents, and filename; changed contents require a new publication record/timestamp
+and object. Value-only changes leave `schema_version` unchanged. Keep a
+latest-publication pointer without overwriting earlier revision objects.
+
+Millisecond timestamps are not uniqueness or global monotonic-clock guarantees.
+Creation must detect/handle filename collisions within that call's prefix so
+different publications cannot clobber one key. Preserve internal revision identity/
+correlation; do not deduplicate solely by time or invent timestamps to claim
+uniqueness. The collision mechanism is implementation work. All revisions and
+their records remain call-owned and subject to whole-call retention deletion.
 
 R43 is approved: finalization runs outside the room with a configurable 60-second
 waiting window after call end. Publish earlier if all expected work is settled;
@@ -1483,8 +1495,8 @@ The window limits reporting wait only. It does not extend the call, reset
 cost retrieval. Background work can outlive the room. If the database/object store
 cannot publish, retain/retry appropriate publication state; never claim published
 or complete merely because time expired. R41's overflow/durability choice stays
-pending. Later facts may trigger refreshed publication or a new revision without
-choosing R42's mechanism. Known call-owned jobs/references must honor retention
+pending. Later facts may trigger refreshed publication or a new revision under
+R42. Known call-owned jobs/references must honor retention
 deletion and source-interval privacy, so late work cannot recreate purged data or
 capture/copy denied intervals. No new configuration schema or runtime work is added.
 
@@ -1535,8 +1547,8 @@ usage despite stale conversational output. Preserve original observations as the
 effective amount changes; automatic MCP retry policy is unchanged.
 
 R46 pricing-source/version/fallback remains pending: absent billing support does
-not approve catalog math or invented prices. R41/R42 archive overflow/publication
-identity remain pending; R43's reporting window does not imply their guarantees.
+not approve catalog math or invented prices. R41 archive persistence/failure policy
+remains pending; R42's revision identity and R43's reporting window do not settle it.
 General usage archival stays asynchronous while variable snapshots retain their
 commit-confirmed boundary. Mandatory usage
 storage still respects media/privacy exclusions and whole-call retention; later
@@ -1666,11 +1678,12 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Allow live transcripts but disable storage, then remove all permitted recognition consumers | Live transcripts may use STT without storage; automatic transcript/log/export/model-debug copies and audio tracks/mixes/derivatives honor their source-interval restrictions; with no permitted live/storage consumer those STT flows stop, without auto-enabling unconfigured capabilities or deleting prior permitted history |
 | Complete private briefing and acceptance while policy enforcement is held behind a barrier | Destination has only its authorized preparation lane; caller hears no briefing; apply while_present before main media and source termination, with failure closed and no queued/late/replayed output bypass |
 | Crash between short admission claim, startup, and bookkeeping | Existing room/leg can finish bookkeeping without duplicate startup; crashed runtime never automatically repeats/redials/reconnects, and uncertain dial is failed/unknown with known-resource cleanup rather than speculative retry |
-| Reconcile supported provider billing after call end | Persisted namespaced provider IDs allow an optional lookup outside media/room work; missing billing support/cost remains unavailable, ended_at/retention do not reset, and effective totals avoid duplicate charges; corrected-export policy still awaits R42 |
+| Reconcile supported provider billing after call end | Persisted namespaced provider IDs allow an optional lookup outside media/room work; missing billing support/cost remains unavailable, ended_at/retention do not reset, and effective totals avoid duplicate charges; changed publication contents use a new R42 revision |
 | Deliver deltas, cumulative samples, finals, stale estimates, and explicit corrections | Apply declared report semantics per attempt/component: 100+60 deltas are 160, cumulative 1000/1600/final1700 is 1700, final beats stale estimates, and a correction can decrease; repeated identity deduplicates but equal independent deltas both count |
 | Attribute a call-wide operation, a participant's separated STT/TTS intervals, and supported turn work | Every fact retains call linkage, optional participant/interval/turn refs reflect evidence without forced allocation, each effective attempt counts once, and failed/interrupted usage survives output filtering without invented units/cost/provider IDs |
 | End calls with settled work, pending uploads/billing, and deliberately unavailable media | Outside-room finalization publishes early when expected work settles or at the configurable 60-second deadline with permitted available facts and honest pending/missing markers; no fabricated zero or false incomplete capture for prohibited/unconfigured/not-produced media |
-| Expire the reporting window, then complete late work or make publication storage unavailable | Call end/retention stay unchanged, allowed uploads/billing continue, later facts can refresh publication, and outages retain/retry publication state without false success; purged data and denied source intervals cannot reappear, while R41/R42 mechanisms remain pending |
+| Expire the reporting window, then complete late work or make publication storage unavailable | Call end/retention stay unchanged, allowed uploads/billing continue, later facts can refresh publication, and outages retain/retry publication state without false success; purged data and denied source intervals cannot reappear, while R41 failure policy remains pending |
+| Retry a publication, revise its values, and simulate a timestamp collision | Same immutable snapshot reuses its stored UTC timestamp/identity/file despite later wall-clock time; a value correction uses a new record/object without changing schema_version solely for data, earlier revisions survive, the latest pointer tracks publication, and a collision cannot clobber another revision; retention removes every call-owned revision |
 
 Late booking webhook/external-event delivery is deliberately not an acceptance
 requirement for the current MCP slice. Add such scenarios only when the deferred
@@ -2172,12 +2185,23 @@ window: publish early when expected work settles, or publish permitted available
 facts with honest pending/missing components when it expires. This is reporting
 wait, not a live-call extension, cancellation, or false-publication guarantee during
 outages. Later facts can refresh publication while retention/privacy remain binding.
-R41 overflow, R42 exact publication identity/retry design, and R46 pricing stay
-pending. Current backlog: 7 individual decisions, R41, R42, and R46–R50; next five
+R41 overflow, R42 exact publication identity/retry design, and R46 pricing stayed
+pending at that checkpoint. Its backlog was 7 individual decisions, R41, R42, and R46–R50; next five
 R41, R42, and R46–R48. Verified three-file scope, unchanged JSON examples/links,
 new planned finalization checks, accounting/prior contracts, exact status/count,
 unchanged remaining rows, and terminology/path/whitespace hygiene. Documentation
 only; no runtime tests or new issue.
+
+The R42 follow-up approves immutable publication revisions with filenames from
+their persisted UTC record timestamps, including three millisecond digits. Retries
+reuse the same snapshot/identity/file; changed contents get a new revision, not a
+value-driven schema version or an overwrite. Keep a latest-publication pointer
+and collision protection rather than treating time as unique identity. All revisions
+obey call retention and source-interval privacy. Current backlog: 6 individual
+decisions, R41 and R46–R50; next five R41 and R46–R49. Verified exact three-file
+scope, unchanged JSON examples/links, timestamp formatting, unchanged pending rows,
+prior contracts, and terminology/path/whitespace hygiene. Documentation only;
+R41's separate storage direction is not decided by this publication checkpoint.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

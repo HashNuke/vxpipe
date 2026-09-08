@@ -1129,7 +1129,7 @@ room; it neither blocks the live call nor resets `ended_at` or retention. Not ev
 provider offers request-level billing, and eventual cost resolution is not promised.
 Use existing tenant integration authentication/isolation, not per-call credentials.
 No billing API/schema/dependency/provider implementation or fallback rate is chosen.
-R46 pricing policy and R41/R42 archive overflow/publication identity remain pending.
+R46 pricing policy and R41 archive persistence/failure policy remain pending.
 Usage archival remains asynchronous, distinct from commit-confirmed variable snapshots,
 and all existing media/privacy and whole-call retention boundaries still apply.
 
@@ -1147,12 +1147,26 @@ outage may prevent publication: retain/retry appropriate publication state witho
 falsely marking it published or complete. R41's archive overflow policy is still
 pending; the reporting deadline alone provides no durability guarantee.
 
-Later facts can trigger refreshed publication or a new revision. R42 still owns
-the exact publication identity, schema/version, object naming, and retry contract;
-no particular revision key or latest-pointer scheme is chosen here. Known call-owned
+Later facts can trigger refreshed publication or a new revision. R42 uses an
+immutable publication revision record with its own identity and persisted UTC
+timestamp. Under the call-owned object prefix, format its filename as
+`details-YYYYMMDDHHMMSSmmm.json`, including three millisecond digits: a record
+timestamp of `2026-09-08T12:34:56.789Z` gives `details-20260908123456789.json`.
+This is the publication record's timestamp, not call `created_at` or retry time.
+Retrying that same snapshot reuses its persisted identity, contents, and filename;
+changed contents require a new publication record/timestamp and object, not an
+overwrite. Value changes alone do not change `schema_version`.
+
+Maintain a latest-publication pointer without replacing earlier revision objects.
+Millisecond timestamps do not prove uniqueness or globally monotonic ordering:
+creation must detect/handle filename collisions within the call-owned prefix so
+distinct publications cannot clobber each other. Keep internal revision identity/
+correlation; timestamp alone is not a deduplication key. The collision-handling
+mechanism is an implementation detail, not permission to invent a record timestamp.
+All publication revisions are call-owned and deleted with the call. Known call-owned
 jobs and references must respect retention deletion and source-interval privacy:
-late work cannot recreate purged data or capture/copy a denied interval. This R43
-decision adds no runtime implementation or new configuration key/hierarchy.
+late work cannot recreate purged data or capture/copy a denied interval. These
+R42/R43 decisions add no runtime implementation or new configuration key/hierarchy.
 
 In a database-backed call, save a full post-update Call Variables
 snapshot for each committed update, linked to the originating turn and tool
