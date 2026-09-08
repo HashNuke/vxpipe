@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-15 individual decisions still awaiting review, rather than counting its
+11 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -126,8 +126,9 @@ database data, with definitive missing objects accepted and failed work retried
 from retained records/references. The exact sweep interval is not selected.
 R19 chooses application/tenant `call_retention` as `"forever"` or an explicit
 seconds-duration object, without changing retention behavior or adding per-call policy.
-R18 always stores complete observed tool history and available transcripts, turn
-details, usage/model/cost data, and committed variables without per-category
+R18 always stores complete observed tool history and permitted available transcripts, turn
+details, usage/model/cost data, and committed variables. R38 qualifies media
+retention independently from live sharing, without introducing usage/tool/variable
 storage toggles. Audio requires explicitly enabled and permitted recording;
 archival needs do not start STT or bypass capability permissions.
 R17 defines `tool_visibility` and participant/local-tool `tool_visibility_overrides`,
@@ -144,6 +145,14 @@ call-level transfer defaults, destination acceptance, and a total attempt deadli
 R32 disconnects the attempted destination on configured provider machine detection;
 unknown still requires explicit transfer acceptance within the existing deadline.
 Leaving voicemail is deferred, not automatic speech or an entire-room hangup.
+R36 allows exactly one bounded source-restoration attempt after failed transfer,
+with detailed failure causes internal-only. R37 includes isolated pre-acceptance
+human-destination briefing. R38 supersedes capability denial as primary privacy
+control with presence-driven media publishing/subscription, live transcript sharing,
+and separate transcript/audio retention; its definition shape remains pending.
+R39 offers no API creation-idempotency feature; separate requests may create
+separate records. R40 only recovers bookkeeping for existing work, never repeats
+a crashed call or speculatively redials an uncertain one.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -402,7 +411,7 @@ Reconnect and later reactivation of the same participant do not replay its
 startup greeting. Another participant gets its own first activation, and another
 call starts afresh. Returning agents may converse normally; this rule prevents
 automatic greeting replay, not ordinary contextual speech. Greetings use normal
-output and must respect current capability denials.
+output and must respect current privacy permissions.
 
 Voicemail-message delivery is deferred. Closing wording and when to invoke
 existing hangup belong to agent instructions (R31).
@@ -1136,6 +1145,21 @@ separate top-level runtime identity models.
 
 ### Participant presence constrains the capability topology
 
+**R38 supersession — current direction, schema still under design:** explicit
+media publishing/subscription, independent live transcript sharing, and transcript/
+audio retention activated by participant presence replace capability denial as
+the primary privacy control. No replacement JSON keys/selectors are approved yet.
+Permission to receive live audio/transcripts is not permission to retain them;
+not saving a transcript does not itself stop recognition or permitted live sharing.
+Call Variables and their permissions/transaction boundary remain unchanged.
+
+The denial-specific paragraphs and selector example below preserve the earlier
+candidate for history, not current schema/validation requirements. Transfer/media
+invariants resume after that historical candidate; they must be expressed through
+the replacement R38 policy rather than assuming denial of STT/TTS solves privacy.
+
+#### Superseded capability-denial candidate
+
 Capability denials belong to participant and room policy, not to each transfer
 path. A participant carries an immutable, resolved `presence_policy` that
 applies while it is admitted to the room's media topology. The policy comes from
@@ -1205,17 +1229,19 @@ resolved capability intent. This does not start every known capability
 indiscriminately: only capabilities enabled by the call and current agent plans
 resume, and any remaining participant or room denial still applies.
 
+#### Retained transfer and media enforcement invariants
+
 A transfer request names an allowed target from the source participant's
 `transfers` list. Shared defaults belong to call-level `transfer_policy`, while
 destination-specific connection/acceptance requirements stay with the destination.
-Warm/cold and history projection remain separate decisions, not named transfer
-objects or source/per-pair default machinery. The room authority runs prepare and commit
-phases. During prepare, it resolves
-the destination and its presence policy outside the active media topology,
-while the source participant and its current capabilities may remain active for
-announcements and data collection. It then computes the proposed post-transfer
-participant set, enforces its denials, and makes the remaining positively
-required capabilities ready. Only then does the room atomically admit or
+The private destination briefing is in initial scope under R37; broader concurrent
+consultation/history choices are not implied. There are no named transfer objects
+or source/per-pair defaults. The room authority runs prepare and commit phases,
+keeping destination briefing isolated from caller conversation before acceptance.
+It resolves destination requirements and the proposed media/transcript policy,
+enforces authorized routes/capture, and makes permitted required capabilities
+ready. R38 still owns the exact policy representation and transition integration.
+Only then does the room atomically admit or
 activate the destination, change control/routing, apply the source disposition,
 and emit `transfer.completed`. For an agent source, successful handoff terminates
 its execution subtree under the approved lifecycle below.
@@ -1225,29 +1251,18 @@ code can observe `transfer.completed`, and a later deterministic workflow can
 model an explicit next action if a real use case requires one. Neither is part
 of the transfer's safety-critical commit transaction.
 
-When a denial is a privacy boundary, enforcing it is a commit barrier rather
-than best-effort cleanup. The room makes the capability ineligible to start or
-receive new frames, immediately cancels queued/in-flight work, and waits for a
-bounded stop acknowledgement before completing or unhiding the human-only
-bridge. Failed or timed-out enforcement follows the transfer's failure policy
-without changing control or routing. Graceful draining is inappropriate because
-it could publish buffered transcription or speech after the boundary.
+Enforcing privacy is a commit barrier, not best-effort cleanup. Unauthorized media,
+derived transcript data, and capture must not pass through queued/in-flight work,
+late output, or reactivation. A later policy change cannot retrospectively replay
+or transcribe a restricted interval. Failed enforcement follows the transfer's
+failure policy without exposing the proposed bridge. The source remains responsible
+until commit, and acceptance alone cannot disclose full room media.
 
-Generation and activation checks reject late transcription, inference, or
-speech output from capabilities that belonged to the earlier state. Stopping
-speech-to-text or text-to-speech means closing the provider work and preventing
-new input, not merely hiding client events.
-
-This allows a call to begin with an agent participant, admit a human participant
-during a warm transfer, detach the source agent participant after the bridge
-succeeds, and continue with two human participants. When the restrictive
-participant later leaves, reconciliation may restart capabilities required by
-the remaining topology without a reverse transfer having to enumerate them.
-
-Recording, analytics, and export are separate capabilities. Stopping speech
-recognition and synthesis does not claim to stop those other data paths, so a
-private or regulated segment must name every capability its policy requires the
-room to stop.
+Recording, live transcript sharing, and transcript/audio retention are independent
+permissions under redesign, not consequences inferred merely from a provider's
+process being present or stopped. Preserve the opening-audio media-input gate and
+actual-start clocks. The new schema must express these boundaries before runtime
+implementation; the historical denial selectors above do not freeze its shape.
 
 ### Transfer success and failure — approved G8 baseline
 
@@ -1267,11 +1282,31 @@ the source's entire execution subtree, including capabilities and model/tool
 workers. A variable request already submitted to the separate variables process
 may still finish under the existing rules; local shutdown is not remote rollback.
 
-Normal capability denials still apply during preparation and failure handling.
-Keeping the source responsible does not permit forbidden STT/TTS or guarantee
-speech if a safety constraint prevents it. Inability to restore a safe usable
-source remains a review question. No warm consultation, concurrent-agent mode,
-new fallback tool, or alternate source-disposition option is approved by this baseline.
+Current privacy permissions still apply during preparation and failure handling.
+Keeping the source responsible does not permit forbidden processing or guarantee
+speech if a safety constraint prevents it.
+
+**Approved R36 restoration:** exactly one bounded attempt may restore permitted
+source capabilities after a failed transfer. Supervisor/application restart or
+retry loops must not reset that one-attempt budget. If it fails and no usable
+conversation remains, end the call. An already working, valid human conversation
+can continue. The detailed failure reason is stored internally, never communicated
+to the end user through speech, client events, or tool-debug UI; agent/public
+outcomes are generic without cause/provider details, even for samples/full tool
+visibility. Existing permissions and whole-call duration continue to apply.
+This restores capabilities within a still-live call, not a crashed call runtime.
+
+**Approved R37 private briefing:** caller speaks with intake, then an outbound
+human support destination privately hears who is calling and the purpose, plus an
+optional recording notice, before press-1 acceptance and bridge. Caller audio must
+not include that destination briefing. Web follows the analogous client-owned,
+authenticated acceptance flow. Share only permitted minimum-necessary variables/
+history, not the entire transcript by implication. Source TTS uses the agent voice
+when applicable and permitted; no new voice selection/configuration format is fixed.
+Source responsibility continues until commit, and acceptance alone does not admit
+full room media. This is not a universal compliance claim or general concurrent-agent
+consultation. R38 owns remaining policy representation/transition integration;
+do not count the approved initial-scope choice as pending again under R37.
 
 **Approved R33 configuration boundary:** `transfer_policy` is call-level shared
 defaults. Source `transfers: [allowed participant refs]` remains a simple list;
@@ -1967,8 +2002,9 @@ is approved now. Skip the trusted read-only/idempotent-write/side-effect
 classification layer (R15). Automatic retries and business-idempotency exceptions
 (R16) are deferred to the
 [retry/idempotency issue](../docs/issues/automatic-tool-retries-and-idempotency.md),
-not required to implement this baseline. Call-creation idempotency (R39), admission
-crash recovery (R40), and ordinary database transaction semantics remain separate;
+not required to implement this baseline. Call-creation idempotency (R39) is not
+offered; admission recovery (R40) finishes bookkeeping for existing work without
+repeating a crashed call. Ordinary database transaction semantics remain separate;
 explicit cancellation is deferred to the cancellation issue. External late-result
 handling is deferred below, not a prerequisite for this slice. No new wire
 envelope or retry configuration is added.
@@ -2090,6 +2126,9 @@ or TTS. Full visibility does not expand an agent's variable/tool grants, authori
 access to another call, or expose the entire variables store or private snapshot.
 Existing credential/header exclusions remain in force; it does not authorize
 exposing integration credentials or raw transport requests.
+R36's detailed failed-transfer restoration reason also remains internal-only,
+including for samples/full tool visibility. Generic agent/public failure may be
+shown without the cause; tool-debug UI and speech must not reveal the detail.
 
 This supersedes the earlier mandatory metadata-only client default and separate
 sample-debug session grant. It is an approved design boundary, not current
@@ -2102,7 +2141,8 @@ default. Completed-call finite retention starts at `ended_at`, without expiring
 active calls or assigning an expiry to forever. The current application/tenant
 period applies to past and future calls, not a per-call pinned period. Expiry
 deletes the call record and all associated Vxpipe-managed data. Available history
-is always stored without category toggles; cleanup uses periodic external-first
+is stored when permitted; R38's explicit transcript/audio retention is separate
+from live sharing, with its schema still under design. Cleanup uses periodic external-first
 deletion under the retention contract below. General
 sensitive-input redaction is deferred as described below.
 
@@ -2175,8 +2215,11 @@ changes participant connections and call legs. A later warm-transfer workflow
 may create a temporary consultation room, but that should not force multi-room
 orchestration into the initial definition.
 
-The participant definition may carry its trusted presence policy next to its
-provider-neutral connection intent. For example:
+**Superseded R38 candidate:** the following presence-policy example and explanation
+preserve the earlier capability-denial proposal, not the current approved privacy
+schema. Connection intent remains valid; explicit media publishing/subscription,
+live transcript sharing, and transcript/audio retention are being redesigned.
+No replacement keys are selected by retaining this example.
 
 ```json
 {
@@ -2351,8 +2394,8 @@ preparation, not reselected from a newer deployment at join. Token claim and
 activation must coordinate idempotently without holding a database transaction
 across room or provider startup. The single-use and backend-mediated recovery
 contract below is approved. Tokens default to five minutes, with longer lifetimes
-accepted from the authenticated requester; crash-reconciliation mechanics remain
-open.
+accepted from the authenticated requester. R40's recovery only finishes records
+about existing work, never repeats a crashed call or redials an uncertain attempt.
 This API-client lifecycle does not turn provider webhooks into browser clients;
 telephony adapters retain their authenticated ingress and common call-admission
 responsibilities. There is no separate direct API-client start path.
@@ -2446,9 +2489,9 @@ token instead expires after five minutes. Neither expiry ends an established
 call nor deletes its prepared record. Exact request field and duration encoding
 are implementation details, not new approval items.
 
-**Still pending:** separate storage cleanup, temporary transport failure versus
-call-end triggers, and detailed retry/crash reconciliation. Single-use claim and existing-call token
-issuance are approved below. HMAC algorithm selection,
+**Still pending:** temporary transport failure versus call-end triggers and exact
+transport response encoding. Periodic storage cleanup, single-use claim, existing-call
+token issuance, and R40's no-repeat bookkeeping boundary are approved. HMAC algorithm selection,
 payload canonicalization, and signature-envelope fields are no longer
 implementation questions. Variable-default assembly is eliminated: only supplied
 setup values prefill variables. G3's variable ownership is settled below;
@@ -2548,9 +2591,10 @@ requires a newly authorized call; a new token for the old call cannot restore it
 This resolves single-use consumption, before/after-acceptance retry behavior,
 and the backend-authorized existing-call token endpoint. Token expiry suffices
 for this admission contract; there is no additional unstarted-call TTL. It does
-not yet settle record cleanup, transport failure/end triggers, status/error
-response shapes, issuance idempotency, or the precise pending-admission
-crash reconciler. No runtime endpoint or authentication code is implemented here.
+not yet settle transport failure/end triggers or status/error response shapes.
+R39 offers no API creation idempotency; R40 only completes existing-work bookkeeping
+without repeating calls. Cleanup uses the approved periodic retention contract.
+No runtime endpoint or authentication code is implemented here.
 
 ### Agent instructions own personalization and business time — approved R11/R12
 
@@ -2819,7 +2863,8 @@ when preparing a call, then either joins with its token or passes only the token
 to its browser. The common admission flow removes signature generation,
 canonicalization, and signed-envelope verification from the integration contract.
 It does not remove HTTPS/WSS, tenant authorization, replay/claim protection for
-join tokens, or request idempotency. API keys remain outside browser bundles,
+join tokens, or same-call admission exclusion. R39 does not offer API creation
+idempotency. API keys remain outside browser bundles,
 call definitions, call variables, and logs; sensitive variables stay server-side
 in the prepared-call flow.
 
@@ -2926,16 +2971,9 @@ boundaries, with path-specific errors:
   compiler-generated platform tool;
 - a human connection intent with an unknown service, mode, admission behavior,
   literal credential, or invalid destination;
-- a participant presence policy with an unknown activation condition, selector,
-  or denied capability kind;
-- a capability denial whose `participants` value is not a non-empty selector
-  list, contains a selector type other than `all` or `agent`, or combines
-  `type: all` with another selector;
-- a `type: agent` selector with a missing or unknown definition-local agent ref;
-- `active_agent` policy activation owned by a human participant, or an
-  unauthorized room-wide or cross-participant selector;
-- an activation or proposed participant topology whose positive capability
-  intent includes a capability denied by an applicable policy;
+- unauthorized media/transcript routes or retention under the applicable policy;
+  R38's exact representation/selector validation remains pending, superseding
+  the historical capability-denial validation rules;
 - duplicate tool names within one source agent;
 - tool or integration references not present in closed registries;
 - duplicate agent-local tool aliases within one agent;
@@ -3384,10 +3422,25 @@ verify provider request and identify configured integration
 ```
 
 Do not hold a database transaction open while starting OTP processes or making a
-provider API call. Use unique admission/idempotency keys, short database
+provider API call. Use trusted provider admission identities, short database
 transactions, and explicit `admitting`, `running`, `failed`, and terminal call
 states. Repeated delivery of the same provider webhook must return or advance
 the same call rather than starting a second room.
+
+R39 does not offer API creation idempotency: no `Idempotency-Key`, duplicate-
+suppression key, or response cache. Repeated authorized creation may create
+separate prepared records for the application/user to delete later through an
+authorized mechanism. This does not add a deletion endpoint or UI. Single-use
+token claims, same-call admission exclusion, and provider webhook/leg deduplication
+remain intact; they are not deduplication of separate creation requests.
+
+R40 uses the short admission claim without holding a transaction across startup.
+If the original room/leg still exists, identify it and finish bookkeeping without
+starting another. If the actual runtime crashes or terminates, do not automatically
+restart the call, redial, or reconnect the caller. Record uncertain provider dial
+outcomes as failed/unknown as appropriate and clean up known resources, never make
+a speculative second dial or promise remote rollback. Recover records about
+existing work, not the phone call; no general durable recovery framework is added.
 
 An outbound call follows the same admission path except that an authenticated
 API invocation selects an allowed deployment or exact revision and the resolved
@@ -3399,11 +3452,13 @@ deployment change never mutates that row or its active room.
 
 Introduce a `call_id` generated at admission and carry it through engine
 commands, domain events, provider operations, variable updates, artifacts, and
-publisher jobs. The call ID survives room-incarnation recovery. `room_id`
+publisher jobs. The call ID remains stable for bookkeeping about its existing
+runtime and legs; R40 does not automatically recreate a crashed room. `room_id`
 identifies the live collaboration/media scope, and `incarnation_id` rejects stale
 work for one execution of that room. The initial implementation may enforce one
 room per call, but the identifiers must not be conflated because a call can have
-multiple telephony legs and a recovered room receives another incarnation.
+multiple telephony legs. Any separately designed future room recovery would need
+another incarnation, not an implicit restart or redial in this slice.
 
 The relational `calls` row should contain durable identity and summary state,
 not every detail as one mutable JSON document. It records tenant/application,
@@ -3487,12 +3542,17 @@ from retained events where the retention policy permits it. Do not put audio,
 large transcripts, or a continually rewritten all-call JSON blob on the `calls`
 row.
 
-Always save available transcripts, turn details, and observed usage/model/cost
+Always save permitted available transcripts, turn details, and observed usage/model/cost
 information with the call, alongside complete observed tool history and committed
-variable snapshots. No separate storage toggle per category. This does not start
+variable snapshots. R38 qualifies the earlier no separate storage toggle per category
+rule for transcript/audio retention independent of live sharing. It adds no new
+usage/tool/variable toggle matrix, and the exact media policy schema remains pending.
+Not saving transcripts does not itself stop recognition or permitted live sharing.
+Conversely, live receipt is not archival permission. This does not start
 STT, TTS, or prohibited processing merely to produce archival data. A text-only
 call retains its submitted text without STT; if speech recognition is absent or
-prohibited, do not fabricate a speech transcript. Keep source facts distinct:
+prohibited, do not fabricate a speech transcript. When retention permits the data,
+keep these source facts distinct:
 
 - committed human text input stores the submitted text and `text` provenance;
 - human audio stores the provider-final committed transcript and provider/model
@@ -3634,7 +3694,7 @@ not call-definition, call-creation, or participant options, and are not copied
 onto each call. No human-readable duration parser or null/magic sentinel is added.
 
 Forever means Vxpipe applies no age-based expiration to retained data. It does
-not start STT or recording, bypass capability denials, retain excluded credentials,
+not start STT or recording, bypass privacy permissions, retain excluded credentials,
 expose stored payloads to clients, keep room processes or live buffers forever,
 or promise backup/recovery. Capability permissions, privacy, and
 client visibility remain separate from how long permitted stored data is kept.
@@ -3978,8 +4038,8 @@ the domain structs passed through the call engine.
 
 `vxpipe_calls` owns the application workflow that needs persistence. It uses
 small repository ports synchronously from an admission task before a room starts.
-For immediate live admission, such as a verified telephony call or validated
-direct-backend connection:
+For live admission, such as a verified telephony call or a token claim following
+authenticated API preparation:
 
 ```text
 Gateway webhook/API handler
@@ -3987,14 +4047,15 @@ Gateway webhook/API handler
        -> InboundRouteRepository.resolve(route_key)
        -> CallDefinitionRepository.fetch_revision(revision_id)
        -> CallEngine compile/resolve functions
-       -> CallRepository.begin_admission(call, idempotency_key)
+       -> CallRepository.begin_admission(call, admission_identity)
        -> CallEngine.create_room(resolved_plan)
        -> CallRepository.mark_running(call_id, room/incarnation)
   <- admitted call/session result
 ```
 
-The running-state write records the actual live-start occurrence timestamp,
-not the earlier record creation/admission-request time or the database write
+The admission identity above belongs to same-call/provider admission, not an API
+creation idempotency header. The running-state write records the actual live-start
+occurrence timestamp, not the earlier record creation/admission-request time or the database write
 time. It preserves the call's first `started_at` when retried or reconciled.
 
 Browser preparation splits this workflow at the durable boundary: resolve and
@@ -4005,10 +4066,11 @@ It does not create another call row or resolve a newer deployment. Calls owns
 both phases; the persistence adapter stores preparation and claim state through
 ports. Accepted admission consumes the join token atomically; recovery resolves
 the same call through the backend-authenticated workflow. Pending admission must
-be reconciled before another attempt, not recreated. Replacement issuance for
-an eligible unstarted record is not caller reconnection to a running call. Detailed
-crash/fencing mechanics remain a G2/G10 follow-up, with no database transaction
-held across engine or provider startup.
+be checked for existing work, not recreated. Replacement issuance for an eligible
+unstarted record is not caller reconnection to a running call. R40 permits finishing
+bookkeeping for an existing room/leg, never restarting a crashed call or redialing
+an uncertain attempt. Internal claim mechanics add no general recovery framework
+or database transaction held across engine/provider startup.
 
 In a managed deployment, `vxpipe_persistence` implements those repository ports
 with Ecto. In a standalone JSON-configured deployment, static/in-memory modules
@@ -4116,26 +4178,27 @@ for this slice. Transaction atomicity covers the snapshot and pointer together;
 it does not guarantee reply delivery. A lost reply does not undo a committed
 snapshot. This limitation does not add another current implementation prerequisite.
 
-Full room recovery remains a separate contract for restoring the pinned plan,
-variables, participants, capabilities, and lifecycle safely. Committed variable
-snapshots do not by themselves implement that recovery, nor make all asynchronous
-events lossless. Do not execute Ecto queries inside `RoomAuthority` or hold a
-database transaction across room/provider work.
+Full room recovery is not implemented or automatically invoked by this slice;
+R40 expressly does not repeat a call after runtime failure. A future recovery
+design would need its own approval. Committed snapshots neither restart a room
+nor make asynchronous events lossless. Do not execute Ecto queries inside
+`RoomAuthority` or hold a database transaction across room/provider work.
 
 ### Persistence red-green checkpoints
 
 1. **Database-neutral admission ports:** in `vxpipe_calls`, test route resolution,
    immutable revision selection, plan compilation, call ID creation, and
-   idempotent admission using in-memory fakes. Prove no provider request or room
+   same-call admission exclusion using in-memory fakes. Prove no provider request or room
    process runs inside a repository transaction.
 2. **Ecto adapter:** create `vxpipe_persistence` with Repo and migrations for
    definitions, immutable revisions, deployments, materialized inbound routes,
-   calls, and admission idempotency. Use PostgreSQL integration tests for route
+   calls, and same-call/provider admission identity. Use PostgreSQL integration tests for route
    uniqueness, revision pinning, transactions, and retry behavior; keep them in
    the tagged integration lane.
 3. **Gateway admission slice:** make one normalized web or fake-telephony inbound
-   request resolve a stored route, create one durable call, and start one room
-   with the pinned plan. Replaying the request must return the same call. The
+   request resolve a stored route and start the admitted room with its pinned plan.
+   Replayed provider events/token claims cannot start that call twice; separate
+   authorized API creation requests may create separate prepared records. The
    static JSON admission implementation must continue to work without Repo.
 4. **Ordered call ledger:** add the engine event sink and persist call lifecycle,
    participant, activation, and final turn events idempotently. Build
@@ -4203,9 +4266,9 @@ The first multi-agent slice needs protocol-neutral events for:
 - agent participant activated and deactivated;
 - participant transfer requested, accepted, completed, rejected, failed, and
   cancelled, including source and destination participant IDs and kinds;
-- participant capability denial applied or removed, including policy-owner and
-  matched participant IDs, and capability reconciliation requested, enforced,
-  acknowledged, timed out, or failed;
+- presence-driven media/transcript policy transition and enforcement outcomes,
+  with authorized participant/route attribution; exact schema awaits R38 rather
+  than implementing the superseded denial selectors;
 - transfer packet created and delivered, with values redacted by visibility;
 - call-variable section initialized, updated, or rejected, including section
   revision and trusted source-agent attribution, without a live-activation gate;
@@ -4217,6 +4280,10 @@ The first multi-agent slice needs protocol-neutral events for:
 - tool invocation lifecycle;
 - routing changed; and
 - call ended with a typed reason.
+
+These are internal facts projected by audience. R36's detailed restoration failure
+reason stays private even for full sample tool visibility; public ends/failures
+and agent-facing results carry only generic outcomes without that detail.
 
 Only one agent participant may own generated conversational output for a
 connection/lane at a time. Inactive agent participants must not consume turns or
@@ -4247,9 +4314,10 @@ does not reject or undo a variable request already submitted by that agent.
 4. **Participant and transfer data:** test human and agent participant
    definitions, connection intent, missing and duplicate transfer refs,
    absent/empty transfers producing no tool, non-empty transfers producing one
-   closed destination choice set, participant kinds, presence-policy denial
-   selectors, transfer cycles, unreachable-participant linting, and path-specific
-   errors.
+   closed destination choice set, participant kinds, transfer cycles,
+   unreachable-participant linting, and path-specific errors. Presence/media
+   validation must use R38's eventual approved schema, not the superseded
+   capability-denial selectors.
 5. **Active-agent-participant reducer:** test activation, agent-to-agent and
    agent-to-human participant transfer, `active_agent_participant_id: nil`,
    terminal state, stale activation, and transfer-budget behavior using
@@ -4257,14 +4325,12 @@ does not reject or undo a variable request already submitted by that agent.
    active agent participant and activation ID.
 6. **Behavior-preserving agent:** prove a one-agent resolved plan produces
    the same text/audio turn behavior as the current preset path.
-7. **Human-only transfer:** prove a human destination's capability denials are
-   inherited without appearing on the transfer possibility. The source agent
-   remains usable during prepare; admission then makes denied capabilities
-   reject new frames and cancel queued work, waits for stop acknowledgement, and
-   detaches the source only when the room can safely continue with human
-   participants and no active agent participant. Detaching the restrictive
-   participant reconciles the remaining topology back to its normal enabled
-   capabilities without a transfer-specific restart list.
+7. **Human-only transfer:** after R38's policy structure is approved, prove
+   private briefing before acceptance and enforce permitted publication,
+   subscriptions, live transcript sharing, and retention at the bridge boundary.
+   The source remains until commit; no queued or later replay may bypass a
+   restricted interval. This does not implement the historical denial schema
+   or require per-transfer capability shutdown lists.
 8. **JSON and gateway boundary:** round-trip definition/invocation data, reject
    unknown keys, dynamic atom creation, arbitrary runtime overrides, credentials,
    and tenant overrides.
@@ -4324,9 +4390,10 @@ generic nodes or edges. The room directly owns the pinned plan, participant
 routing, and the optional active agent participant, and a running room may have
 no agent participant. Platform tools include at least `hangup`, `transfer`, and
 the permission-constrained call variable read and update operations. A participant
-transfer does not enumerate capability changes; the room reconciles the
-proposed topology by filtering its normal capability intent through each
-participant's presence-policy denials before commit. Do not start with Lua,
+transfer does not enumerate capability shutdowns; R38 is redesigning presence-driven
+publishing/subscription, live transcript sharing, and separate transcript/audio
+retention. Enforce authorized routes/capture before commit without treating the
+historical denial schema as final. Do not start with Lua,
 arbitrary executable hooks, natural-language condition evaluation, or a broad
 workflow interpreter.
 
@@ -4396,8 +4463,9 @@ tenant overrides and application settings, with retain forever as the applicatio
 default. Normal transaction errors return variable-save failure; no extra commit
 reconciliation is required. Completed-call finite retention starts at `ended_at`;
 active calls are not expired, and forever has no expiry threshold. Available
-transcripts/turns and usage/model/cost facts are always stored; audio requires
-enabled, permitted recording. No per-category toggles or invented missing data;
+transcripts/turns and usage/model/cost facts are stored when permitted; audio requires
+enabled, permitted recording. R38 separates transcript/audio retention from live
+sharing without changing mandatory tools/variables/usage or inventing missing data;
 periodic external-first cleanup is approved.
 General voice/LLM-input
 redaction is deferred. Current application/tenant periods apply to all calls, past and future,
@@ -4413,14 +4481,15 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-08
 
-There are **15 individual decisions awaiting review**, enumerated as R36–R50
-in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R35 are resolved;
+There are **11 individual decisions awaiting review**, enumerated as R38 and R41–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, R26–R37, and R39/R40 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
 stay with application/agent instructions; R13 uses protected initial routing
 variables without expanding the model's transfer arguments.
-G1/G3 and G7's current-slice decisions are closed; G2/G4/G5/G6/G8 are partly resolved.
+G1/G3, G7's current-slice decisions, and G10's initial scope are closed;
+G2/G4/G5/G6/G8 retain follow-up context and R38 owns the media-policy redesign.
 G headings are background
 organization, not the current count. Earlier progress entries retain their
 historical group counts and do not describe the current individual-item total.
@@ -4433,7 +4502,9 @@ remain deferred/excluded rather than current-slice prerequisites. DTMF collectio
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
 for unstarted records. R32's machine-disconnect policy is resolved; leaving
-voicemail moves to a deferred issue. The next five are R36–R40.
+voicemail moves to a deferred issue. R37's bounded private briefing is approved;
+its media representation belongs to R38, not a second pending scope question.
+The next five are R38 and R41–R44.
 
 ### Baseline and scope
 
@@ -4647,7 +4718,8 @@ The numbering below matches G1–G13 in the focused review document.
    forever overrides finite application retention. Transaction error means
    variable-save failure; extra commit-status lookup/reconciliation is not
    required. Available transcripts, turn details, and usage/model/cost facts are
-   always stored without category toggles; audio needs enabled, permitted recording.
+   stored when permitted; audio needs enabled, permitted recording. R38's explicit
+   transcript/audio retention is independent from live sharing, with its shape pending.
    This does not start forbidden processing or invent missing data. General voice/LLM-input
    redaction is deferred; deterministic collection such as DTMF need not involve
    the LLM, but its recording/logging paths still need explicit protection.
@@ -4697,21 +4769,25 @@ The numbering below matches G1–G13 in the focused review document.
    connection/acceptance requirements without source/per-pair defaults. R34 needs
    agent readiness or human usable media plus current-attempt-bound explicit
    DTMF/web acceptance. R35 has one configurable 30-second attempt deadline and
-   exact-leg late-callback cleanup, without auto-redial. Warm/cold, history, and
-   failed-restoration policies remain separate. A failed prepare cannot promise that already-dialed
-   legs or stopped providers never changed. Private consultation needs explicit
-   authorized audio routes and hold behavior, not only global mix-minus.
-9. **Denials on routed capabilities:** denying STT to an agent is ambiguous
-   when STT runs on a human participant and routes transcripts to that agent.
-   Resolve whether a policy denies processing, consumption, or both; compile
-   ownership and consumer routes together. Room-wide denial must stop the
-   applicable provider work. Later reconciliation must not replay or transcribe
-   the denied interval. Monitor and recording grants remain independent.
-10. **Admission crash recovery:** distinguish webhook delivery IDs from stable
-    call/leg admission identity. Transfer legs attach to a pending transfer, not
-    a fresh definition lookup. Consider claimed/fenced admission transitions,
-    request-digest conflicts, and reconciliation between durable creation, room
-    startup, dialing, and running status. Do not retry an uncertain dial blindly.
+   exact-leg late-callback cleanup, without auto-redial. R36 allows one bounded
+   permitted-source restoration attempt, then ends if no usable conversation
+   remains; failure detail is internal even for samples. R37 includes private
+   destination briefing/optional notice before explicit acceptance/bridge, sharing
+   only permitted minimum-necessary information and excluding the caller. This is
+   not general concurrent-agent consultation; R38 owns representation/routing.
+9. **Presence-driven media/transcript policy — under redesign:** R38 supersedes
+   primary capability denials with explicit publishing/subscription, independent
+   live transcript sharing, and transcript/audio retention. Exact simple schema
+   and ordering remain pending; do not infer recognition shutdown merely from no
+   transcript storage. Preserve no unauthorized routes/capture, queued-output or
+   reactivation bypass, or delayed replay. Variables remain unchanged.
+10. **Admission crash recovery — resolved scope:** distinguish webhook delivery
+    IDs from stable call/leg admission identity. Transfer legs attach to their
+    pending transfer, not a fresh lookup. R39 adds no API creation idempotency;
+    separate requests may create separate prepared records. R40's short claim
+    and bookkeeping may identify an existing room/leg, never restart a crashed
+    call. Mark uncertain dial outcomes failed/unknown as appropriate and clean
+    known resources without speculative redial or remote rollback promises.
 11. **Archive completeness and finalization:** specify bounded per-consumer
     overflow behavior and explicit incomplete state. Current typed-input events
     lack the submitted text needed to reconstruct a transcript. Call end,
@@ -4928,14 +5004,16 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    Return busy/no-answer and verify the source receives a typed failure, can
    continue or choose another allowed action, and emits no `transfer.completed`.
    On successful ready/accepted handoff, verify commit then source-subtree
-   termination using monitors. Existing capability denials must remain enforced.
+   termination using monitors. Applicable privacy boundaries must remain enforced.
    Machine detection follows R32 below; richer voicemail delivery is deferred.
-   Failed-restoration cases still depend on their remaining policy review.
+   Exercise the single restoration attempt described below, not a restart loop.
 8. Feed distinguishable fake audio into caller and consultation routes. Confirm
    each sink, monitor, and recorder hears only its authorized mix. Slow the upload
    and verify live audio continues while incomplete recording is reported.
-9. Replay inbound lifecycle events and crash admission between each external
-   boundary. Confirm one call and a fenced current room; reconcile uncertain legs.
+9. Replay provider lifecycle events or same-call token claims and preserve one
+   admitted call/runtime. Separate authorized API creation may create separate
+   prepared records. After an admission crash, identify existing work for
+   bookkeeping only; never repeat a crashed call or redial an uncertain leg.
 10. Send typed input, interrupt generated output, end the call, and deliver late
     usage/artifact updates. Verify honest transcript provenance, no double-counted
     costs, explicit missing data, and a new revision for a corrected archive.
@@ -5047,11 +5125,11 @@ playground today. Use deterministic fakes first and synthetic data throughout.
 20. Attempt backend recovery with a wrong tenant/participant/key, ended call,
     revoked API key, or active connection; reject without takeover. Already-issued
     tokens do not inherit API-key revocation. Lose the join response
-    while admission is still pending and confirm recovery reconciles that same
-    attempt before allowing another. If state changes after fresh-token issuance,
+    while admission is still pending and confirm bookkeeping identifies that same
+    existing work, never repeats a crashed call. If state changes after fresh-token issuance,
     joining rechecks eligibility and cannot admit a second connection. Exact
-    status responses, timing, and crash-recovery tests await those detailed
-    contracts; these steps describe future behavior, not tests run here.
+    status responses and transport-failure timing remain implementation/design
+    details; R40's bounded recovery checks below apply. These are planned tests.
 21. Use a fake clock to create a record at 10:00, then issue/expire/reissue tokens
     and leave startup pending: `created_at` stays 10:00 and `started_at` remains
     unset. Actually start the call at 10:15, delay persistence, and confirm its
@@ -5068,7 +5146,7 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     and verify the startup greeting is not repeated, without requiring same-call
     caller reconnect support. Activate a different participant
     or start a new call and verify its independent first activation. All output
-    still follows capability denials. These are planned checks, not tests run here.
+    still follows current privacy permissions. These are planned checks, not tests run here.
 23. Start with `opening_audio` omitted and verify normal startup without an
     announcement delay. Configure a synthetic WAV/file source and hold playback
     completion behind a fake transport acknowledgement. Allow all room/participant
@@ -5174,6 +5252,28 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     classification. Preserve provenance/uncertainty, no LLM/STT/local substitute,
     and no inferred acceptance or voicemail delivery. These are planned checks,
     not runtime tests.
+36. Fail a transfer and require source restoration. Allow exactly one bounded
+    permitted-capability attempt; supervisor/application retries cannot reset it.
+    Fail that attempt: end when no usable conversation remains, or preserve an
+    already valid working human conversation. Save the detailed cause internally,
+    then inspect speech, client events, and samples/full tool-debug output: only
+    generic outcomes may appear, never provider/cause detail.
+37. Brief an outbound human support recipient with minimum-necessary permitted
+    caller/purpose information and optional notice before acceptance. The caller
+    cannot hear it. Verify destination-bound phone/web acceptance and room commit
+    before full media bridging, with source responsibility retained. Do not claim
+    general concurrent-agent consultation or a finalized R38 schema.
+38. Repeat an authorized API creation request: separate prepared records are
+    permitted, with no creation idempotency header/cache. Separately race token
+    claims and replay provider events for one call: those identities still exclude
+    duplicate startup. Test short admission claims with existing work, actual runtime
+    failure, and unknown dial outcomes: finish bookkeeping only for existing work,
+    never repeat/redial/reconnect automatically, and clean up known resources.
+39. After R38's simple policy structure is approved, verify live media/transcript
+    receipt separately from transcript/audio retention, presence transitions,
+    private-briefing isolation, and no queued-output or delayed-replay bypass.
+    Do not infer recognition shutdown solely from forbidden transcript storage.
+    Variable authorization and commit-confirmed snapshots remain unchanged.
 
 ### Review checkpoint verification
 
@@ -5227,6 +5327,11 @@ not the action after machine/unknown classification.
 The subsequent R32 decision supersedes that remaining action question: configured
 machine detection disconnects the attempted destination leg; unknown retains the
 existing explicit-acceptance deadline. Voicemail-message delivery is deferred.
+The later R36–R40 decisions supersede repeated source-restoration, API creation
+idempotency, and automatic crashed-call recovery proposals. R37's private briefing
+is in initial scope. R38 supersedes capability denials as primary privacy control
+and blanket transcript retention irrespective of policy; old denial examples and
+checks are historical pending the replacement media/transcript schema.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6486,6 +6591,33 @@ storage/client projection boundary and credential exclusions still apply.
 - Verified exact four-file scope, 18 unchanged JSON examples/fences, old/new links
   and anchors, leg/outcome/deadline boundaries, prior contracts, statuses/count,
   terminology/path hygiene, and whitespace. Documentation only; no runtime tests.
+
+### Private briefing and bounded recovery — 2026-09-08
+
+- Resolved R36 with exactly one bounded permitted-source restoration attempt,
+  no reset through supervisor/application retries, and call end if no usable
+  conversation remains. A valid working human conversation may continue. Detailed
+  cause remains internal, not speech/events/debug UI, including full samples.
+- Resolved R37's initial scope: private destination briefing/optional notice before
+  acceptance/bridge, minimum-necessary permitted information, source retained until
+  commit. No general concurrent-agent consultation or compliance guarantee.
+- R38's approved direction replaces primary capability denial with presence-driven
+  media publishing/subscription, independent live transcript sharing, and transcript/
+  audio retention. Marked denial examples as historical and revised canonical
+  invariants; no replacement schema selected. R18 stores permitted available data,
+  not forbidden transcripts/audio; tools/usage and variable snapshots stay intact.
+- Resolved R39 without API creation idempotency: repeated requests may create
+  separate prepared records. Same-call token/admission and provider webhook
+  identities still prevent duplicate startup; no deletion endpoint/UI implemented.
+- Resolved R40 as bookkeeping recovery only for existing work. Never automatically
+  repeat/redial/reconnect a crashed call; uncertain dialing gets an appropriate
+  failed/unknown record and known-resource cleanup, not a speculative second dial.
+- Updated planned checks 36–39 and the earlier relevant scenarios. There are 11
+  individually pending decisions, R38 and R41–R50; next five R38 and R41–R44.
+- Verified exact three-file scope, valid unchanged JSON examples, the deliberate
+  admission-identity text-example correction, preserved links/anchors, prior
+  contracts and approved supersessions, count/status, terminology/path hygiene,
+  and whitespace. Documentation only; no runtime or browser tests.
 
 ## Verification evidence
 

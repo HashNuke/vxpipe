@@ -51,8 +51,9 @@ its local configured tool key, with the call-wide default as fallback. Independe
 tool-history storage always saves observed metadata, arguments/request payloads,
 and responses/results/errors, with existing credential/header exclusions. Available
 transcripts/turn details, committed variables, and observed usage/model/cost data
-are always stored without per-category toggles; audio requires enabled and
-permitted recording, not automatic processing for archival purposes. Variable
+are stored when permitted. R38 separates live transcript sharing from transcript/
+audio retention, superseding blanket media storage without policy; audio still
+requires enabled/permitted recording, not automatic processing for archival purposes. Variable
 history now uses turn/tool-linked full post-update snapshots, the existing saved
 tool arguments rather than a separate changeset, and a latest-snapshot pointer
 on the call record. Database-backed variable updates return success only after
@@ -75,8 +76,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **15 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17–R23, and R26–R35 are resolved; R07's same-call caller
+Current review count: **11 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, R17–R23, R26–R37, and R39/R40 are resolved; R07's same-call caller
 reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -84,7 +85,8 @@ Personalization and business-time interpretation belong to agent/application
 instructions with permitted variable/date tools; no template or timezone hierarchy
 is added. R13 allows protected backend-initialized routing variables while
 transfers remain participant-ref-only. G1, G3, and G7's current-slice decisions
-are resolved; G2/G4/G5/G6/G8 are partly resolved, while G9–G13 still contain proposals.
+are resolved; G2/G4/G5/G6/G8 retain follow-up context, G10's current scope is resolved,
+and G9/G11–G13 still contain proposals.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -106,11 +108,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**15 pending decisions (R36–R50).** This is the current approval backlog,
+**11 pending decisions (R38 and R41–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17–R23, and R26–R35 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R36–R40**. Mark rows resolved or
+R10–R15, R17–R23, R26–R37, and R39/R40 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R38 and R41–R44**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -132,7 +134,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R15 | G4 | **Resolved:** skip the trusted read-only/idempotent-write/side-effect classification layer for now. |
 | R16 | G4 | **Deferred:** automatic retry/business-idempotency exceptions belong to the dedicated issue, not the initial executor; call-creation idempotency and admission recovery remain separate. |
 | R17 | G5 | **Resolved:** `tool_visibility` is `hidden`, `metadata`, or `full`; optional `tool_visibility_overrides` maps participant definition key to local tool binding key to level. Binding overrides win; omission hides events; trusted creation may replace the definition policy pair. |
-| R18 | G5 | **Resolved:** always store available transcripts, turn details, usage/model/cost observations, committed variable snapshots, and complete observed tool history; no per-category storage toggles. Store audio only when recording is explicitly enabled and permitted; do not start prohibited processing or invent missing data for archival completeness. |
+| R18 | G5 | **Resolved:** qualified by R38 to store permitted available transcripts, turn details, usage/model/cost observations, committed variable snapshots, and complete observed tool history. Explicit transcript/audio retention is distinct from live sharing; recording must be enabled/permitted. R38's structure remains pending, without new usage/tool/variable toggles or invented data. |
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
@@ -150,11 +152,11 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R33 | G8 | **Resolved:** call-level transfer_policy holds shared defaults; source transfers remains allowed participant refs and destination-specific connection/acceptance requirements stay with the destination; no named/source-default/per-pair machinery. |
 | R34 | G8 | **Resolved:** agent conversation/capabilities ready; human usable media plus explicit acceptance through pending-leg press-1 DTMF or authenticated web control message bound to destination and pending attempt; no stale/source/model acceptance or implicit admission. |
 | R35 | G8 | **Resolved:** configurable 30-second total transfer attempt from accepted preparation, including dialing/acceptance; terminal failures end early, timeout/failure stops destination and returns typed outcome to source, late callbacks cannot commit, exact-leg cleanup without auto-redial. |
-| R36 | G8 | What happens if a failed transfer cannot restore a safe usable source without violating capability restrictions? |
-| R37 | G8 | Is private warm consultation in the initial scope, with caller hold and explicitly isolated audio routes? |
-| R38 | G9 | Does an agent-specific capability denial block provider processing, that agent's consumption of routed output, or both? |
-| R39 | G10/G2 | How should repeated call-creation requests use idempotency keys, including reuse with different input? |
-| R40 | G10 | How should admission recover after a crash between the database claim, room startup, and a possibly completed provider dial? |
+| R36 | G8 | **Resolved:** exactly one bounded permitted-source restoration attempt, never reset by restart/retry loops; if it fails with no usable conversation, end the call, while a valid working human conversation may continue. Detailed cause stays internal, including against sample full visibility; public/agent outcomes are generic. |
+| R37 | G8 | **Resolved:** initial scope includes private human-destination briefing and optional notice before explicit acceptance/bridge, isolated from the caller and using only permitted minimum-necessary information. General concurrent-agent consultation is not approved; R38 owns remaining representation/routing design. |
+| R38 | G9 | Define simple presence-driven media publishing/subscription, independent live transcript sharing, and transcript/audio retention policy. This replaces capability denial as primary privacy control; exact schema/ordering is pending, including the approved private briefing. |
+| R39 | G10/G2 | **Resolved:** no API creation idempotency key or deduplication cache; repeated authorized creation may create separate prepared records for later authorized deletion. Same-call token/admission and telephony webhook deduplication remain separate and intact. |
+| R40 | G10 | **Resolved:** short admission claim, no transaction spanning startup; identify existing room/leg to finish bookkeeping, never repeat a crashed call or speculatively redial an uncertain one. Record failed/unknown appropriately and clean up known resources; no general recovery framework. |
 | R41 | G11 | What happens when the asynchronous archive cannot keep up: continue with an explicitly incomplete record or stop the call? |
 | R42 | G11 | How are corrected exports versioned so retries deduplicate without overwriting an earlier publication of the same schema? |
 | R43 | G11 | How long should finalization wait for pending usage/artifacts, and when should an incomplete archive be published? |
@@ -518,9 +520,10 @@ separate. See the [approved timing contract][call-start-timing].
 
 Remaining G2 review and resolved follow-up clarifications:
 
-**Remaining token details and separate storage policy:** detailed crash
-reconciliation and issuance idempotency still need their implementation/remaining
-contract. Additional issuance does not supersede unused tokens (R06 resolved).
+**Token details and separate storage policy:** R40 recovers bookkeeping about
+existing admission work, not a new call after runtime failure. No creation
+idempotency feature is offered (R39). Additional issuance does not supersede unused
+tokens (R06 resolved); no token deduplication/cache feature is added.
 Retention periods now have an application default
 of retain forever with tenant overrides; finite-expiry cleanup uses the approved
 periodic external-first contract below. Single-use claim, backend-mediated recovery,
@@ -542,7 +545,7 @@ direct API-client start endpoint.
 binding and fresh-token route are not permission to resume an ended call or evict
 an active connection. Caller reconnection and its grace/session policy are
 deferred rather than current prerequisites. Detailed join/transfer responses,
-crash fencing, and the boundary between temporary transport failure and actual
+internal claim mechanics, and the boundary between temporary transport failure and actual
 call termination remain unspecified. Pending-startup reconciliation must not
 silently admit an already-started caller again. Multi-instance selection is not
 required.
@@ -832,8 +835,9 @@ execution or prevent the agent from requesting a duplicate action.
 R15 skips the trusted read-only/idempotent-write/side-effect classification layer.
 R16's automatic retry/business-idempotency exceptions are deferred to the
 [retry/idempotency issue](issues/automatic-tool-retries-and-idempotency.md), not
-current executor prerequisites. Call-creation idempotency (R39), admission crash
-recovery (R40), and normal database transaction handling are separate and unchanged.
+current executor prerequisites. Call-creation idempotency (R39) is not offered;
+R40 only recovers bookkeeping about existing work, never repeats a crashed call.
+Those are separate from tool retries and ordinary database transaction handling.
 Late business notifications and mechanisms to reconcile them are deferred below.
 The existing local timeout remains in effect; no new wire format or operation-worker
 architecture is approved here.
@@ -935,8 +939,9 @@ policy pair so restrictive definition overrides are not accidentally inherited;
 merely changing the default to full would not override a hidden binding.
 No frontend-specific exception or additional debug-session grant is
 required. A browser flag, route, or visual concealment cannot change that policy.
-Existing credential/header exclusions still apply; visibility grants neither
-tool execution nor additional agent variable or cross-call access. The current
+Existing credential/header exclusions still apply. The detailed failed-transfer
+restoration cause is internal even for samples/full visibility. Visibility grants
+neither tool execution nor additional agent variable or cross-call access. The current
 gateway has not implemented this distinction.
 
 **Approved independent tool-history storage:** always store all observed tool
@@ -957,9 +962,14 @@ tool/event archival stays asynchronous; this capture policy does not add a SQL
 acknowledgement gate to every tool or resolve archival failure handling.
 No runtime persistence is added by this documentation decision.
 
-**Approved available call data (R18):** always save available transcripts, turn
-details, and observed usage/model/cost information, alongside committed variables
-and complete tool history. No separate storage toggle per category. Preserve
+**Approved available call data (R18, qualified by R38):** always save permitted
+available transcripts, turn details, and observed usage/model/cost information,
+alongside committed variables
+and complete tool history. R38 qualifies the earlier no separate storage toggle
+per category rule for explicit transcript/audio retention, independent from live
+sharing. Exact policy structure remains pending, without a new usage/tool/variable
+toggle matrix. Not saving transcripts does not itself stop permitted recognition.
+Preserve
 typed-text provenance, provider-final speech facts, and generated versus confirmed
 delivered/spoken agent text, including interrupted/truncated state. Do not start
 STT or other prohibited processing for archival completeness; missing or forbidden
@@ -969,7 +979,7 @@ details. General archival remains asynchronous without a new SQL acknowledgement
 gate for every ordinary turn/tool.
 
 Call audio is stored only through an explicitly enabled and permitted recording
-capability. Participant/room denials and the `opening_audio` media-input gate still
+capability. Presence-driven privacy policy and the `opening_audio` media-input gate still
 apply. Do not auto-start recording for history, or add a redundant storage matrix.
 Credential/header exclusions and privacy, client visibility, and agent grants
 remain unchanged. This resolves R18, not the remaining archival failure contracts.
@@ -1213,7 +1223,8 @@ participant gets its own first activation, and a new call starts afresh.
 For example, an inbound receiver can welcome the caller immediately; an outbound
 receiver can wait for the recipient's hello. A returning participant may converse
 normally without rerunning its startup greeting. Normal output permissions and
-capability denials still apply. Exact JSON encoding is not frozen by these modes;
+current privacy permissions still apply. Exact JSON encoding is not frozen by
+these modes;
 finalize the representation with the schema implementation. No implicit fallback
 mode is introduced by this decision.
 
@@ -1293,7 +1304,7 @@ separate variables process or promise rollback of a remote action.
 
 For example, human support does not answer: the caller stays with reception,
 which can offer another allowed destination or continue helping. No failed
-attempt emits `transfer.completed`. Existing capability denials still constrain
+attempt emits `transfer.completed`. Current privacy permissions still constrain
 what reception can do; failure is not permission to restart forbidden processing.
 
 **Approved R33 location:** call-level `transfer_policy` holds shared defaults.
@@ -1324,65 +1335,82 @@ Late answer/acceptance cannot commit an expired attempt. Clean up the exact mapp
 leg and do not automatically redial. Startup readiness (R27) and hard call duration
 (R30) remain separate; no remote certainty or durable recovery framework is added.
 
-Voicemail-message delivery is deferred. Caller-departure, warm consultation,
-history projection, and failed-restoration behavior remain proposals. Preparation has external side
-effects: it cannot promise that nothing changed if a leg was dialed or an STT
-session stopped. Use compensating cleanup, bounded source re-preparation, and a
-safe degraded/terminal outcome if restoration fails. Never resume forbidden
-processing just to restore the earlier user experience.
+**Approved R36 restoration:** make exactly one bounded attempt to restore the
+source's permitted capabilities after transfer failure. Supervisor/application
+retry or restart loops must not reset that budget. If restoration fails and no
+usable conversation remains, end the call; a valid, already working human
+conversation may continue. Never resume forbidden processing. Retain the detailed
+cause internally, not in agent speech, client events, or tool-debug UI, even with
+samples/full visibility. Agent/public outcomes are generic without provider/cause
+details. This restores capabilities within a still-live call, not a crashed runtime.
+Whole-call limits still apply; cleanup is not a promise that dialing or
+other external effects never occurred.
 
-Live mix-minus alone is insufficient for a private consultation. Define an
-authorized source-to-sink routing matrix: caller hears hold audio, operator and
-consulting agent hear each other, caller cannot hear consultation, and monitor
-and recording taps follow explicit grants. A full monitor mix is not permission
-to hear every restricted lane. If concurrent consultation is needed, define a
-second lane's agent ownership or defer it; the current single active-agent rule
-does not magically support concurrent agents. This extends routing policy, not
-the public definition into a workflow graph.
+**Approved R37 initial scope:** private human-destination briefing before acceptance
+and bridge. The intake agent collects information from the caller; outbound support
+privately hears who is calling and the purpose, plus an optional recording notice,
+then presses 1 to accept. The caller cannot hear the destination briefing. Web
+acceptance remains client-owned and authenticated. Share only permitted,
+minimum-necessary variables/history, not the entire transcript by implication.
+Source TTS may use the agent's voice where applicable and permitted; no new voice
+selection/schema is fixed. Source responsibility continues until commit, and
+acceptance alone cannot disclose full room media. This is not a universal compliance
+guarantee or general concurrent-agent consultation. R38 owns the pending policy
+representation and media/transition integration; do not count it again under R37.
+
+Voicemail-message delivery and wait music remain deferred. The briefing does not
+approve hold music or a second simultaneously conversational agent. Caller-departure
+and broader consultation/history behavior still need their applicable design.
 
 The repository transfer tools demonstrate basic destination transfer, not warm
 consultation. The additional [first-party warm-transfer guide][warm-transfer]
 describes hold, operator acceptance, cancel, and fallback; that is separate
 evidence for the richer scenario, not a claim about the example JSON.
 
-### G9 — P1: Capability denials must cover routed dependencies
+### G9 — P1: Presence-driven media and transcript policy — under redesign
 
-An agent-scoped denial of `speech_to_text` is ambiguous when the actual STT
-instance belongs to the human input participant and feeds that agent. Stopping
-only capabilities physically owned by the matched agent would not stop its
-consumption of transcripts. See the [capability ownership terminology][terms]
-and [presence policy][presence].
+R38 replaces capability denial as the primary privacy model with explicit media
+publishing/subscription, independent live transcript sharing, and transcript/audio
+retention policy activated by participant presence. Earlier denial examples and
+selector rules are superseded candidates, not the final structure. See the
+[capability ownership terminology][terms] and [presence policy][presence].
 
-Proposal: compile both capability-instance ownership and authorized consumers.
-An agent-specific denial must block that agent's recognition input/derived
-transcript route, not just an instance named on the agent. Unaffected agents may
-continue only if room/participant policy permits the shared upstream processing.
-`type: all` STT denial stops recognition input/provider work for the whole
-applicable topology. Before commit, invalidate queued derived output as well as
-media subscriptions; reconciling later must not transcribe the denied interval
-from a recording. Keep recording and monitoring permissions independent.
-
-This is a semantic choice the compiler must settle before accepting denials;
-otherwise identical JSON can mean different privacy guarantees depending on
-where an adapter happens to be attached.
+The direction is approved; exact simple definition keys, selectors, and transition
+ordering remain pending. Do not freeze a replacement JSON proposal yet. Retain
+enforcement invariants: no unauthorized media, derived transcript, or capture;
+no queued-output or reactivation bypass; no later replay of restricted intervals.
+Do not infer that disabling transcript storage disables provider recognition or
+authorized live sharing. Conversely live receipt does not imply archival permission.
+The approved private briefing must remain isolated before acceptance/bridge and
+source responsibility continues until commit. Call Variables stay unchanged.
 
 ### G10 — P2: Durable admission has crash windows and admission-key ambiguity
 
 The [persistence plan][persistence] already separates short database transactions
-from room/provider work. Add reconciliation to the gap between
-`begin_admission`, room creation, provider dialing, and `mark_running`.
+from room/provider work. R39/R40 now resolve this scope without creation-request
+deduplication or a general call-recovery framework.
+
+**Approved R39:** no API `Idempotency-Key`, duplicate-suppression key, or cached
+deduplication response. Repeated authorized creation requests may create separate
+prepared records; the application/user can later delete unwanted records through
+an authorized mechanism. This does not implement a deletion endpoint or UI.
 
 Distinguish webhook-delivery deduplication from call admission deduplication:
 multiple lifecycle events for one provider leg are not multiple new calls.
 Namespace keys by trusted tenant/integration and normalized leg identity. A
 transfer-created leg must attach through the pending transfer/participant ID,
-not re-enter number-to-definition admission. Reusing a client idempotency key
-with a different normalized request must conflict.
+not re-enter number-to-definition admission. Single-use token claims and same-call
+admission exclusion still prevent duplicate startup of that same call; these are
+not deduplication of separate API creation requests.
 
-Use a claimed admission state with fencing/CAS transitions and a reconciler that
-can find an already-started room before retrying. Test crashes after every
-boundary. Do not retry an uncertain outbound dial as though no leg exists.
-One room registry is not a durable cross-node exactly-once guarantee.
+**Approved R40:** use a short database admission claim, never a transaction spanning
+OTP/provider startup. If the original room/leg still exists, identify it and finish
+bookkeeping without starting another. If the actual call runtime crashes/terminates,
+do not automatically restart the call, redial, or reconnect the caller. An unclear
+provider dial outcome is recorded as failed/unknown as appropriate; clean up known
+resources without a speculative second dial or remote rollback claim. Recover
+records about existing work, never repeat the phone call. No sweeping durable
+recovery or cross-node exactly-once framework is added.
 
 ### G11 — P2: Archive completeness and publication identity are underspecified
 
@@ -1392,8 +1420,9 @@ versus public projections. A slow browser must not stall the ledger, and a slow
 ledger must not silently turn an archive into a complete record. Record missing
 sequence ranges or an incomplete watermark. Distinguish data never produced
 because a capability was absent/prohibited, completed-call retention deletion,
-and accidental loss of required available history; there is no optional transcript/
-tool/usage storage selection. Required-audit mode needs the
+and accidental loss of required permitted history. R38 permits explicit transcript/
+audio retention restrictions independent from live sharing; tool/usage history is
+not made optional. Required-audit mode needs the
 explicit durable acknowledgement protocol, not a larger mailbox.
 
 There is also an immediate source gap: the engine's text-input start/completion
@@ -1469,7 +1498,7 @@ not add the suggested variables or functionality before the user reviews the gap
    result projection before making real mutating calls.
 3. **Transfers and lifecycle:** prove an agent-to-agent transfer first, then one
    fake outbound human transfer with busy/no-answer/accept outcomes and enforced
-   presence denials. Add G7–G9 and live routing/mixing before claiming human-only
+   presence-driven privacy policy. Add G7–G9 and live routing/mixing before claiming human-only
    bridging or consultation.
 4. **Durable admission and archive:** retain the previously proposed Calls,
    persistence, and artifact boundaries; add G10–G12 incrementally. No Repo/S3
@@ -1519,7 +1548,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Give two agents the same local tool key and configure different visibility overrides | Resolve each invocation by participant definition key plus local tool key; apply only that binding's override, otherwise the call-wide default; sharing a remote operation does not share visibility, and execution permissions remain unchanged |
 | Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
-| Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Always save available text/turn/tool/variable/usage facts without category toggles; preserve typed provenance and generated-versus-delivered text; missing usage/prices remain unavailable, no STT is started or transcript invented, and audio is stored only by explicitly enabled recording subject to denials and the opening input gate |
+| Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Save permitted available facts with honest provenance/usage; explicit transcript/audio retention is independent from live sharing under R38, not inferred recognition shutdown, and tool/variable/usage requirements stay intact; audio requires enabled/permitted recording and the opening input gate |
 | Exercise the selected remote revision with JSON/SSE and invalid tool arguments | Both response forms follow 2026-07-28 metadata/lifecycle; incompatible revisions fail clearly; a proper validator blocks missing required, wrong type/enum, and invalid nested inputs before submission; unsupported schemas reject enabled bindings before exposure without network ref fetching |
 | Receive structured data, a document descriptor, or input_required for an unsupported interaction | Preserve observed response/outcome without auto-fetching or claiming inspection; unauthorized tools remain unavailable; advertise no unimplemented sampling/elicitation capability, report its absence clearly, and do not auto-continue or resubmit |
 | Update variables twice in one turn, holding database commit behind a test barrier | No tool success or published candidate state before confirmed commit; each completed update retains its exact full snapshot and original turn/invocation/revision; reuse tool arguments without a changeset; latest lookup follows the call pointer |
@@ -1536,7 +1565,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Dial a participant using a literal number or protected creation-time routing variable | Exactly one number source is accepted; the trusted initialized value resolves without agent read permission; any agent write grant to its section rejects the definition; missing/null/invalid values fail before dialing and retain source responsibility |
 | Ask transfer to use arbitrary dial data or bypass its participant allowlist | Number/provider/URL/variable-ref arguments and unlisted destinations fail; executor rechecks the source allowlist; permitted role selection uses only its pinned connection source, with no new expression or outbound policy matrix |
 | Receive configured provider AMD evidence, busy, no answer, or a human decline | Machine disconnects only the attempted destination leg and returns a typed transfer failure with source/caller retained; initial outbound-only attempts end appropriately; unknown/disabled/unavailable is not machine/human proof, explicit acceptance still governs transfer within its unchanged deadline, and no voicemail message or false `transfer.completed` appears |
-| Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
+| Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; privacy boundaries and submitted-variable lifetimes remain intact |
 | Configure shared transfer policy and prepare agent, phone, and web destinations | Source allowlists remain participant refs; agent conversation/capability readiness and human usable-media plus explicit acceptance are required; phone press-1 and web messages are tied to the destination and current pending attempt, not inferred from speech or connection alone |
 | Send stale, duplicate, source-authored, or mismatched transfer acceptance | Server-side participant/connection/attempt checks prevent unauthorized or repeated commits and premature conversational media disclosure; the web client owns its acceptance UI, not a newly mandated core-protocol widget |
 | Advance through transfer preparation, dialing, acceptance, and late callbacks | One configurable 30-second total deadline starts at accepted preparation without phase resets; definitive failure ends early, expiry stops the attempt and returns a typed outcome to the permitted source, and late callbacks clean up only their mapped leg without commit or auto-redial |
@@ -1550,7 +1579,10 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Configure fixed text opening audio and reuse/change its resolved voice binding | Render/cache with the initial agent's resolved TTS/voice; capability warmup need not wait but ordinary conversation and participant media do; changed text/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no implicit agent/voice is chosen when unavailable |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
 | Slow the recording upload or archive consumer | Live mix progresses; recording/archive becomes explicitly incomplete according to policy, not silently complete |
-| Replay admission events and crash between admission stages | One durable call and at most one current fenced room; uncertain dialing is reconciled |
+| Repeat authorized API creation, then separately replay provider events or same-call token claims | Creation may produce separate prepared records without an idempotency header/cache; same-call/provider identities still prevent double startup, and no deletion endpoint/UI is implied |
+| Fail transfer source restoration and trigger retry/supervisor paths | Exactly one bounded permitted-capability restoration attempt; no budget reset, end if no usable conversation or retain valid working humans, and detailed cause stays internal even with full sample visibility |
+| Brief an outbound human privately before acceptance | Caller cannot hear briefing/optional notice; share only permitted minimum-necessary information, then require destination-bound acceptance and room commit; no implicit full transcript or general concurrent-agent consultation |
+| Crash between short admission claim, startup, and bookkeeping | Existing room/leg can finish bookkeeping without duplicate startup; crashed runtime never automatically repeats/redials/reconnects, and uncertain dial is failed/unknown with known-resource cleanup rather than speculative retry |
 | Reconcile late usage after call end | Corrected archive has a new publication revision; totals do not double-count observations |
 
 Late booking webhook/external-event delivery is deliberately not an acceptance
@@ -2005,11 +2037,25 @@ provider detection reports machine, without ending an existing transfer's caller
 source conversation. Unknown awaits explicit transfer acceptance within the same
 deadline; disabled/unavailable detection does not fabricate classification. Added
 the deferred voicemail-message-delivery issue without a message feature, provider
-tuning, or a new platform closing workflow. Current backlog: 15 individual decisions,
+tuning, or a new platform closing workflow. At that checkpoint: 15 individual decisions,
 R36–R50; next five R36–R40. Verified exact four-file scope, 18 unchanged JSON examples/
 fences, existing/new links and anchors, outcome/leg/deadline boundaries, prior
 contracts, statuses/count, terminology/path hygiene, and whitespace. Documentation
 only; no runtime or browser tests.
+
+The R36–R40 follow-up resolves R36/R37/R39/R40. Source restoration gets exactly one
+bounded attempt, with detailed failure cause internal-only even for full samples.
+Private destination briefing/optional notice before acceptance is in initial scope,
+not general concurrent-agent consultation. API creation has no idempotency feature;
+admission only completes records for existing work, never repeats a crashed call.
+R38 replaces the primary denial model with presence-driven publishing/subscription,
+live transcript sharing, and independent transcript/audio retention; its exact
+schema remains pending. Historical denial examples are marked superseded, and
+R18 now stores permitted available media facts without changing variable/tool
+contracts. Current backlog: 11 individual decisions, R38 and R41–R50; next five
+R38 and R41–R44. Verified exact three-file scope, unchanged valid JSON examples,
+the deliberate admission-identity text-example correction, links/anchors, counts,
+privacy/retry/admission boundaries, and diff hygiene. Documentation only.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

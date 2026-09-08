@@ -233,8 +233,9 @@ a separate invocation, not an internal retry or an exactly-once guarantee. Do no
 add a trusted read-only/idempotent-write/side-effect classification layer now.
 Automatic retries and business-idempotency exceptions are
 [deferred for later review](issues/automatic-tool-retries-and-idempotency.md).
-This scope does not settle call-creation idempotency or admission crash recovery,
-and does not change ordinary database transaction handling. Explicit per-invocation cancellation is
+Tool retries are separate from call-creation idempotency (not offered initially)
+and admission bookkeeping recovery (never repeat a crashed call). Ordinary
+database transaction handling is unchanged. Explicit per-invocation cancellation is
 [deferred for later review](issues/explicit-tool-call-cancellation.md), not
 required for the current slice; its opt-in policy is not approved.
 This is planned behavior, not the current model-task cancellation behavior
@@ -317,8 +318,8 @@ activation in a call, after any configured startup notice and once required
 connections/capabilities are ready. Reconnect
 and later reactivation of the same participant do not replay its startup greeting.
 A new call has its own first activation. Greetings use normal authorized output;
-this does not bypass capability denials. Exact encoding remains an implementation
-detail; the approved startup/idle/duration boundaries follow below.
+this does not bypass current privacy permissions. Exact encoding remains an
+implementation detail; the approved startup/idle/duration boundaries follow below.
 
 Required provider/connection startup readiness has a configurable 30-second
 deadline, starting with the actual post-join admission/startup attempt, not
@@ -387,10 +388,28 @@ answer, returns a typed tool error to the source agent, which can explain the
 failure and choose its next permitted action. Do not terminate it just because
 transfer was requested. A successful handoff terminates its execution subtree,
 including capabilities and model/tool workers, under the existing lifecycle.
-Failure handling must respect capability denials; it is not permission to resume
-forbidden processing. Warm consultation and failure of safe restoration remain
-separate review decisions. These are approved designs, not newly implemented
-transfer or greeting behavior.
+Failure handling respects current permissions; it is not permission to resume
+forbidden processing. After a failed transfer, allow exactly one bounded attempt
+to restore the source's permitted capabilities. Supervisor/application retries
+must not reset this one-attempt budget. If it fails and no usable conversation
+remains, terminate the call; an already working, permitted human conversation can
+continue. Preserve the detailed failure reason internally, not in agent speech,
+client events, or tool-debug UI. Agent/public outcomes may be generic failures or
+ends without provider/cause details, even when samples select full tool visibility.
+Existing privacy constraints and whole-call duration still apply.
+This restores capabilities within a still-live call, not a crashed call runtime.
+
+The initial transfer scope includes a private destination briefing: caller and
+intake agent converse, then an outbound human support recipient privately hears
+who is calling and the purpose, plus an optional recording notice, before press-1
+acceptance and bridging. The caller must not hear that briefing. The web equivalent
+uses client-owned interaction and authenticated acceptance. Share only permitted,
+minimum-necessary variables/history, not an implicit full transcript. Use the
+agent voice for source TTS when applicable and permitted, without choosing a new
+voice/configuration format. Source responsibility continues until commit, and
+acceptance alone does not expose full room media. This approves the bounded
+briefing flow, not general simultaneous-agent consultation or a compliance claim;
+its routing/representation remains part of R38. These are designs, not runtime changes.
 
 Shared transfer defaults live in call-level `transfer_policy`; source participants
 keep `transfers: [allowed participant refs]`, and destination-specific connection/
@@ -418,6 +437,25 @@ a typed outcome, and let the source continue when permitted. Late answer/accepta
 cannot commit an expired attempt; clean up its exact mapped leg without automatic
 redial. This is separate from startup readiness and whole-call duration and adds
 no remote-outcome certainty or durable recovery framework.
+
+### Presence-driven media and transcript policy — R38 under redesign
+
+Explicit media publishing/subscription, live transcript sharing, and transcript/
+audio retention are separate policy concerns activated by participant presence.
+This direction supersedes capability denial as the primary privacy model. Earlier
+`presence_policy`/`capability_denials` examples in the design note are historical
+candidates, not the final schema. No replacement selector, JSON name, or merge/
+ordering rule is approved yet.
+
+Preserve enforceable routing/capture boundaries: unauthorized audio or transcript
+data cannot reach recipients or storage, queued output cannot bypass a policy
+transition, and later reactivation cannot replay a restricted interval. Not saving
+transcripts does not itself require stopping provider recognition or permitted
+live transcript sharing. Conversely, permission to hear live audio/transcripts
+does not grant permission to retain them. The private briefing must be isolated
+before acceptance/bridge; source responsibility remains until commit. R38 still
+needs its simple definition structure and exact transition integration. Call
+Variables, their permissions, and database-confirmed snapshots are unchanged.
 
 Dial destinations may be literal participant `connection.number` values or come
 from a declared creation-time variable, using the candidate alternative
@@ -869,6 +907,14 @@ admission-resolver feature is required. Unknown values remain unfilled and can
 be populated later by the usual permitted variable tools. Caller number alone
 must not silently become verified customer identity.
 
+Call creation does not offer an `Idempotency-Key` header, duplicate-suppression
+key, or cached deduplication response. Repeated authorized creation requests may
+create separate prepared records. The integrating application/user may later
+delete unwanted records through an authorized mechanism; no deletion endpoint or
+UI is implemented here. This is distinct from single-use token claims, same-call
+admission exclusion, and telephony webhook/leg deduplication, which still prevent
+starting the same admitted call twice.
+
 Join tokens expire five minutes after issuance by default. The authenticated
 backend requesting a token may request a longer lifetime, including when
 requesting one for an existing call. No additional maximum is approved here.
@@ -891,6 +937,15 @@ reconciled before any new attempt, and active connections cannot be taken over.
 A temporary transport interruption is not automatically a logical call end;
 the precise failure/end trigger remains unspecified. No rule here ends a
 multiparty call merely because any one participant disconnects.
+
+Admission uses a short database claim, never a transaction spanning OTP/provider
+startup. If the original room/leg still exists, identify that existing work and
+finish its bookkeeping without starting another. If the actual call runtime
+crashes or terminates, do not automatically restart the call, redial, or reconnect
+the caller. An uncertain provider dial is recorded as failed/unknown as appropriate;
+clean up known resources without a speculative second dial or remote rollback
+promise. Recovery here means records about existing work, not repeating the call
+or adding a general durable recovery/exactly-once framework.
 
 These are approved contracts, not implemented authentication endpoints or CLI
 commands. Exact request encoding and the admin endpoint/scope matrix are not
@@ -951,6 +1006,8 @@ filter events before sending them to the browser. Keep private execution payload
 separate from these projections. Visibility does not grant tool execution,
 additional agent variable permissions, or access to another call. Existing
 credential/header exclusions still apply even to full tool visibility.
+The detailed failed-transfer restoration reason is also internal-only: full
+visibility, including samples, cannot expose it through debug tool payloads.
 
 This is an approved visibility contract, not current gateway behavior. The
 current tool-event path still sends arguments/results without this audience
@@ -970,9 +1027,13 @@ without fabricating a remote response. Storing data does not grant client access
 General tool/event archival remains asynchronous; this capture policy does not
 make every tool completion wait for SQL or implement archival failure handling.
 
-Always save available transcripts, turn details, and observed usage/model/cost
-information with the call, alongside the complete tool history and committed
-variable snapshots. There is no separate storage toggle per category. Preserve
+Always save permitted available transcripts, turn details, and observed usage/
+model/cost information with the call, alongside the complete tool history and
+committed variable snapshots. R38 qualifies the earlier no-separate-storage-toggle-
+per-category rule: explicit transcript/audio retention policy is distinct from live sharing.
+Its schema is not yet selected; do not disable recognition merely because transcript
+storage is forbidden. This is not a new set of usage/tool/variable storage toggles.
+Preserve
 typed-text provenance and provider-final speech facts, and distinguish generated
 agent text from confirmed delivered/spoken text, including interruptions. Do not
 start STT or any prohibited processing just to produce an archive; absent or
@@ -981,9 +1042,10 @@ remain unavailable, never fabricated or recorded as zero; detailed accounting
 contracts remain under review.
 
 Store available call audio only when recording is integrated, explicitly enabled,
-and permitted. Recording remains a room capability subject to participant/room
-denials and the `opening_audio` media-input gate, not an automatically enabled
-archival feature or another storage-toggle matrix. Available ordinary turn/tool/
+and permitted by the explicit media retention policy under design. Recording
+remains a room capability subject to privacy policy and the `opening_audio`
+media-input gate, not an automatically enabled archival feature or another
+storage-toggle matrix. Available ordinary turn/tool/
 usage data still follows asynchronous archival; this policy adds no general SQL
 acknowledgement gate. Credential/header exclusions and visibility/agent grants
 remain unchanged.
