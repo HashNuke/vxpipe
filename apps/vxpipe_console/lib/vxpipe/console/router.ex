@@ -10,8 +10,8 @@ defmodule Vxpipe.Console.Router do
     plug :put_secure_browser_headers
   end
 
-  pipeline :operator do
-    plug Vxpipe.Console.OperatorAccess
+  pipeline :diagnostics do
+    plug Vxpipe.Console.DiagnosticsEnabled
   end
 
   scope "/" do
@@ -21,7 +21,7 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/diagnostics" do
-    pipe_through [:operator, :browser]
+    pipe_through [:diagnostics, :browser]
 
     get "/", Vxpipe.Console.DiagnosticsController, :index
 

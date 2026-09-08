@@ -46,8 +46,8 @@ Goreman runs the `vxpipe_call_engine` and `vxpipe_gateway` applications in one
 BEAM instance, serves the Vite playground on loopback port 5174, and runs Caddy
 as the tailnet-only HTTPS ingress at `https://<machine-fqdn>:5173/`. The machine
 FQDN and Tailscale IPv4 address are discovered automatically. Caddy sends
-`/api/*` and `/healthz` to the gateway on loopback port 4000 and all other
-requests to Vite.
+`/api/*`, `/healthz`, and `/diagnostics*` to the Console endpoint on loopback
+port 4000 and all other requests to Vite.
 
 Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
 Mix manifests, or runtime configuration ask Goreman to restart only the

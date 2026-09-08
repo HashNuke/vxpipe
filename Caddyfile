@@ -7,7 +7,7 @@
 https://{$APP_HOST}:5173 {
 	bind {$VXPIPE_TAILSCALE_IP}
 
-	@gateway path /api/* /healthz
+	@gateway path /api/* /healthz /diagnostics /diagnostics/*
 
 	handle @gateway {
 		reverse_proxy 127.0.0.1:4000

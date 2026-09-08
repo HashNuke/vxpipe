@@ -50,10 +50,10 @@ slow response or missing measurement. The existing voice console still works unc
   health as current. Detach/clean up project handlers on collector shutdown so restart
   does not double-count observations. Test our integration, not Telemetry internals.
 - Enable diagnostics explicitly through namespaced application options. The early
-  slice uses a restricted, trusted development setup with synthetic data, not public
-  admission. A tailnet URL or a caller's join token is not operator authorization.
-  Default exposure is off unless configured; outside that trusted setup require a
-  documented operator-auth boundary before enabling routes or subscriptions.
+  slice uses a trusted development setup with synthetic data, not public admission.
+  Default exposure is off unless configured. This slice adds no page authentication:
+  deployments decide whether to expose the enabled Console, and later access-control
+  work must not repurpose API keys or caller join tokens as a Console login.
 - Introduce the separate Phoenix application `vxpipe_console`, using the
   `Vxpipe.Console` namespace, to own the endpoint, dashboard and sample frontend assets.
   Keep `vxpipe_gateway` as reusable Plug/protocol handling and connection supervision,
@@ -112,8 +112,9 @@ slow response or missing measurement. The existing voice console still works unc
   The optional standalone listener also preserves existing protocol/CORS behavior.
 - [ ] Console pages and gateway call routes share the Phoenix HTTP listener without
   an internal HTTP hop; disabling the gateway listener does not stop its connection runtime.
-- [ ] Disabled or unauthorized diagnostic requests/subscriptions fail closed; ordinary
-  callers cannot access operator routes. VM-wide inspection is not granted by tenant scope.
+- [ ] Disabled diagnostic requests/subscriptions fail closed. When enabled, diagnostics
+  require no additional authentication; API keys and join tokens retain only their API
+  and admission meanings.
 - [ ] Existing room creation, RTVI joining, text/audio, CORS and interruption checks remain
   green. Opening diagnostics neither creates a participant nor captures extra audio/text.
 
@@ -171,23 +172,28 @@ the diagnostics UI remain pending. Final gates pass with call engine `102 tests,
 
 Implementation evidence, checkpoint 3 (2026-09-08): selected Phoenix LiveDashboard 0.9.1
 for VM/runtime inspection and reserved the separate `/diagnostics` page for Vxpipe call-path
-measurements. Both routes use a project-owned fail-closed operator plug. Diagnostics are off by
-default; repository development enables only direct IPv4/IPv6 loopback access and Caddy does not
-route the namespace. This is explicitly not production proxy authentication. Focused tests prove
-disabled and non-loopback requests return 404 while an enabled loopback operator can load both
-surfaces. Chromium rendered LiveDashboard at desktop and 390x844 mobile without browser errors;
-the HTTPS Caddy path continued to serve the voice playground, not diagnostics. Call telemetry and
-the finished Vxpipe dashboard remain pending. Final gates pass with call engine `102 tests,
-0 failures (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console `4 tests,
-0 failures`.
+measurements. Diagnostics are off by default. The initial implementation used a development-only
+loopback exposure check; the subsequent access correction below supersedes that behavior.
+Chromium rendered LiveDashboard at desktop and 390x844 mobile without browser errors. Call
+telemetry and the finished Vxpipe dashboard remain pending. Final gates passed with call engine
+`102 tests, 0 failures (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console
+`4 tests, 0 failures`.
+
+Implementation evidence, access correction (2026-09-08): enabled Console diagnostics add no
+authentication layer. The project-owned Plug now owns only the enabled/disabled setting, and an
+enabled request behaves the same for loopback and non-loopback peers. Caddy routes
+`/diagnostics` and `/diagnostics/*` to the Console endpoint, including the LiveView socket path;
+API-key authentication and join-token validation remain confined to their API/admission
+contracts. This correction supersedes the checkpoint-3 loopback restriction.
 
 ## Specification review
 
 Local design review on 2026-09-08 checked the early prerequisite, observable browser
 outcome, framework-independent emitters, synchronous-handler constraints, bounded metric
-cardinality, operator-only access and preservation of existing protocols. The subsequent
-approved gateway/console split was reviewed for dependency direction, mountable and
+cardinality, explicit diagnostics enablement and preservation of existing protocols. The
+subsequent approved gateway/console split was reviewed for dependency direction, mountable and
 standalone gateway acceptance, React asset ownership and the unchanged prerequisite.
 It supersedes the earlier pending Phoenix choice and in-place gateway conversion proposal;
-persistence/inspection remain in their later slices and operator authentication remains
-explicit. This records design review only, not implementation or UI verification.
+persistence/inspection remain in their later slices. The access correction records the later
+decision not to add Console/LiveDashboard authentication in this slice. This records design
+review only, not implementation or UI verification.

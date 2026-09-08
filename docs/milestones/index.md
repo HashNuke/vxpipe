@@ -144,8 +144,9 @@ is an alternative embedding mode. React/Vite remains the sample implementation;
 moving asset ownership does not mean rewriting the sample in LiveView.
 Engine/gateway instrumentation is independent of its reporter/UI, and inspection uses
 authorized live projections and Calls history rather than console/gateway Repo access.
-LiveDashboard remains a dashboard candidate; the operator-auth implementation must still
-be selected before external exposure. Phoenix application ownership is no longer pending.
+LiveDashboard remains the selected VM dashboard; this slice adds no Console-page authentication,
+and deployment exposure remains an application concern. Phoenix application ownership is no
+longer pending.
 Keep general metrics payload-free and bounded, call inspection tenant-scoped, and full
 VM introspection restricted to platform operators. Inspection adds no recording or replay.
 

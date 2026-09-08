@@ -121,14 +121,13 @@ the mounted gateway before its own router. Development now disables the gateway 
 enables the Console listener. Focused and live checks show the Console root and gateway health
 route on the same port, one BEAM listener on port 4000, no gateway HTTP supervisor, and the
 gateway session/connection runtime still active. The gateway has no Phoenix dependency. React
-asset ownership, dashboard dependencies, protected diagnostics, and full call transport through
+asset ownership, dashboard dependencies, diagnostics, and full call transport through
 the shared endpoint remain pending.
 
 Implementation checkpoint 3 selected Phoenix LiveDashboard for platform VM/runtime inspection
 and a separate Vxpipe page for call-path measurements. These dependencies live only in Console.
-Both routes fail closed through a project-owned access plug. They are disabled by default;
-repository development permits only direct loopback clients and deliberately omits diagnostics
-from Caddy routing. That local restriction is not production authentication or trusted-proxy
-handling, so external exposure remains prohibited until operator auth covers HTTP and LiveView.
-Rendered desktop/mobile checks verify the LiveDashboard surface; Vxpipe telemetry and final sample
-asset integration remain pending.
+The subsequent access correction keeps diagnostics disabled by default but adds no Console-page
+authentication when enabled. The project-owned Plug now checks only the enabled setting, and
+Caddy routes `/diagnostics*` to the shared Console endpoint for repository development. API keys
+and join tokens retain only their API/admission meanings. Rendered desktop/mobile checks verify
+the LiveDashboard surface; Vxpipe telemetry and final sample asset integration remain pending.

@@ -48,9 +48,7 @@ config :vxpipe_console, Vxpipe.Console.Endpoint,
   server: false,
   url: [host: "localhost"]
 
-config :vxpipe_console, :diagnostics,
-  enabled: false,
-  access: :disabled
+config :vxpipe_console, :diagnostics, enabled: false
 
 # Sample configuration:
 #

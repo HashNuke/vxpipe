@@ -1547,15 +1547,13 @@ Phoenix is approved for the separate `vxpipe_console` application, not a gateway
 migration. Preserve the existing gateway protocol handlers, React sample,
 application-option ownership and engine/persistence dependency direction.
 Phoenix LiveDashboard is selected for platform VM/runtime inspection; a separate
-Vxpipe diagnostics page owns bounded call-path measurements. Both operator interfaces
-are explicitly enabled/protected. The initial repository-development boundary is
-direct loopback access only, with diagnostics disabled by default and omitted from
-the Caddy tailnet routes. This restriction is not proxy-aware production authentication:
-never expose it through a proxy or non-loopback listener. A production operator-auth
-boundary must protect both HTTP routes and LiveView subscriptions before external
-enablement. Call tokens, tenant identity, public call IDs and tailnet reachability grant
-no access. The Console shell and local LiveDashboard route are implemented; call-path
-instrumentation and the Vxpipe measurement page remain in progress.
+Vxpipe diagnostics page owns bounded call-path measurements. Diagnostics are disabled
+by default and explicitly enabled through Console application settings. When enabled,
+this slice adds no page authentication; deployment exposure is an application concern.
+API keys and caller join tokens keep their API/admission meanings and are not Console
+login credentials. Repository development routes the diagnostics namespace through
+Caddy to the shared Console endpoint. The Console shell and LiveDashboard route are
+implemented; call-path instrumentation and the Vxpipe measurement page remain in progress.
 
 ## Configuration and container boundary
 
@@ -1607,9 +1605,9 @@ secret-safe, and exportable without a local interactive login.
 ### Development ingress
 
 The repository development stack uses Caddy as its single tailnet HTTPS ingress.
-Caddy binds to the discovered Tailscale address, routes `/api/*` to the gateway
-over loopback, exposes the gateway health check at `/healthz`, and routes
-remaining paths to the Vite samples application over loopback. This supplies one
+Caddy binds to the discovered Tailscale address, routes `/api/*`, `/healthz`, and
+`/diagnostics*` to the shared Console endpoint over loopback, and routes remaining
+paths to the Vite samples application over loopback. This supplies one
 stable secure browser origin and leaves room for additional development
 applications without making Caddy part of the product protocol model.
 

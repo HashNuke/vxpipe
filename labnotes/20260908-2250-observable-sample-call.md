@@ -115,3 +115,25 @@ both routes and subscriptions.
   `mix compile --warnings-as-errors`, `mix deps.unlock --check-unused`, call engine
   `102 tests, 0 failures (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console
   `4 tests, 0 failures`.
+
+## Access correction: enabled diagnostics without additional authentication
+
+The later approved web-access decision supersedes checkpoint 3's loopback-only restriction.
+API-key authentication belongs to API endpoints, and join tokens belong to call admission;
+neither becomes an extra login for Console pages or LiveDashboard. Diagnostics remain disabled
+by default through namespaced application configuration. When enabled, the same routes accept
+loopback and non-loopback peers, and the deployment controls exposure of the Console endpoint.
+
+The red focused Console test changed the expected non-loopback result from 404 to the diagnostics
+page. It failed because the old access Plug still required the removed `:access` setting. The
+implementation replaces that Plug with an enabled-setting-only gate and routes `/diagnostics`
+plus `/diagnostics/*` through Caddy to the Console endpoint. This also covers the configured
+LiveView socket under `/diagnostics/live`.
+
+The corrected focused test passed `4 tests, 0 failures`. Caddy validation accepted the
+updated route configuration. The umbrella format, warnings-as-errors compile, default tests,
+and unused-lock checks all passed: call engine `102 tests, 0 failures (1 excluded)`, gateway
+`43 tests, 0 failures (3 excluded)`, and Console `4 tests, 0 failures`. After a clean dev-stack
+restart, agent-browser loaded the HTTPS diagnostics landing page and followed it to LiveDashboard
+at desktop and 390x844 mobile viewports with no page or console errors. Runtime logs confirmed
+that the tailnet request upgraded `/diagnostics/live` to a Phoenix LiveView WebSocket.

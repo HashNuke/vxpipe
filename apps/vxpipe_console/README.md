@@ -12,22 +12,19 @@ gateway runtime starts without its standalone Bandit listener. The Console
 endpoint is then the only listener.
 
 The current root page is the initial shell. The observable-sample milestone
-will move the existing React/Vite sample assets here and add the separate,
-protected diagnostics surface. This application does not own Ecto or call
+will move the existing React/Vite sample assets here and add the separate
+diagnostics surface. This application does not own Ecto or call
 protocol implementations.
 
 ## Development diagnostics
 
 The Console uses Phoenix LiveDashboard for platform VM/runtime inspection and
-reserves `/diagnostics` for Vxpipe's bounded operational measurements. Both
-routes pass through `Vxpipe.Console.OperatorAccess`. Diagnostics are disabled by
-default. Repository development enables them only for a client whose direct
-socket address is IPv4 or IPv6 loopback, while Caddy deliberately does not route
-the diagnostics namespace.
+reserves `/diagnostics` for Vxpipe's bounded operational measurements. Diagnostics
+are disabled by default and may be enabled with the namespaced Console application
+setting. Repository development enables the namespace, and Caddy routes it to the
+same Console endpoint as the gateway API while the voice sample remains on Vite.
 
-Loopback access is a local-development restriction, not production operator
-authentication and not a trusted-proxy policy. Do not expose these routes through
-a reverse proxy or non-loopback listener. A call token, tenant identity, public
-call ID, or tailnet reachability grants no diagnostics access. External
-deployment remains disabled until a production operator-auth mechanism is
-configured and enforced at both HTTP and LiveView subscription boundaries.
+This milestone deliberately adds no diagnostics authentication. Deployments must
+control whether and where the opt-in Console endpoint is exposed. API-key and join-token
+validation belong to their web API/admission contracts; neither credential is an
+additional login mechanism for Console pages or LiveDashboard.
