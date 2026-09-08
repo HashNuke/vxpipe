@@ -57,7 +57,7 @@ cannot change that live call.
 
 - [x] Write failing constructor/compiler tests for entry refs, schema version, participant identity, unsupported fields/options, secret-safe errors, and plan pinning.
 - [x] Implement the minimal typed compiler and JSON/Elixir parity for the supported one-agent subset.
-- [ ] Red-test the per-activation Jido AgentServer/coordinator against the existing stream,
+- [x] Red-test the per-activation Jido AgentServer/coordinator against the existing stream,
   tool, timeout, teardown and interruption contracts; add compatible Jido AI/Jido Action
   dependencies and lockfile.
 - [ ] Route ordinary agent inference and one small host action through the supervised Jido
@@ -167,10 +167,11 @@ Implementation evidence, checkpoint 3b (2026-09-08): added the engine-owned
 request, bounds pending turns and response bytes, attaches private Vxpipe command/request
 refs and authorized tool context, translates Jido sentence/tool/terminal events onto the
 existing capability messages, and ignores stale events after cancellation. Timeout and
-interruption cancel the correlated Jido request; interruption also synchronously removes
-selected completed requests from Jido conversation context. The production adapter uses
-Jido AgentServer request, cancel and context-replacement APIs rather than implementing an
-engine-side provider/tool loop.
+interruption cancel the correlated Jido request. Interrupted completed request IDs are
+excluded from every later model projection by an engine-owned request transformer; the
+adapter additionally requests physical context replacement without relying on its possibly
+deferred application. The production adapter uses Jido AgentServer request, cancel and
+context APIs rather than implementing an engine-side provider/tool loop.
 
 Red: the focused coordinator suite failed all three initial cases because
 `Vxpipe.CallEngine.AgentCoordinator` did not exist. Green/refactor: the suite now passes
@@ -181,6 +182,31 @@ Umbrella gates pass: formatting, warnings-as-errors, call engine `87 tests, 0 fa
 (1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused dependencies.
 Participant-owned startup/teardown and room routing remain unchecked, so the corresponding
 runtime checklist items and the milestone stay incomplete.
+
+Implementation evidence, checkpoint 3c (2026-09-08): added a named, temporary
+`AgentActivationSupervisor` that starts the serialized host dispatcher, Jido AgentServer,
+and coordinator under a one-for-all policy. Coordinator initialization is the synchronous
+prompt/Action configuration barrier, so successful supervisor startup means the activation
+is ready. One abnormal child failure restarts and reconfigures the entire set; a second
+failure within the five-second window terminates the activation and all children. Failed
+initial configuration also cleans up previously started siblings and their registrations.
+
+Red: the focused activation suite failed both initial cases because the supervisor did not
+exist. The first implementation then failed readiness because coordinator validation only
+accepted a dispatcher PID, not the named `GenServer.server()` reference used by supervision;
+validating the resolved registered processes fixed that boundary. Green: the focused suite
+passes two lifecycle cases. A repeated coordinator run then exposed out-of-order Jido tool
+events and deferred context modification. The coordinator now buffers early tool results,
+waits for observed tool lifecycles before terminal completion, deduplicates event IDs, and
+uses a separately red-tested projection filter for interrupted request IDs. Twenty repeated
+coordinator runs passed after that correction; the combined Agent/Coordinator/Activation/
+Transformer tests pass eleven tests. This completes the runtime-contract red-test checklist
+item. The subtree is not yet owned by a participant or used by room traffic, so runtime
+routing and milestone completion remain unchecked.
+
+Checkpoint 3c umbrella gates pass: formatting, warnings-as-errors, call engine `91 tests,
+0 failures (1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused
+dependencies.
 
 ## Specification review
 

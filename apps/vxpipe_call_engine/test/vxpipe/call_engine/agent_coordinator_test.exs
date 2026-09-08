@@ -22,6 +22,9 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     assert_receive {:test_agent_request, ^coordinator, request_id, "check a value", options}
     assert Keyword.fetch!(options, :stream_to) == {:pid, coordinator}
 
+    assert Keyword.fetch!(options, :request_transformer) ==
+             Vxpipe.CallEngine.AgentRequestTransformer
+
     assert Keyword.fetch!(options, :extra_refs) == %{
              vxpipe_command_id: command.id,
              vxpipe_request_id: request_id
@@ -138,6 +141,51 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^queued}
   end
 
+  test "reorders runtime events before projecting a tool lifecycle" do
+    coordinator = start_coordinator()
+    command = command("out-of-order", "check order")
+
+    assert :ok = AgentCoordinator.respond(coordinator, command)
+    assert_receive {:test_agent_request, ^coordinator, request_id, _, _}
+
+    emit(
+      coordinator,
+      request_id,
+      :tool_completed,
+      %{
+        tool_call_id: "tool-ordered",
+        tool_name: "test_agent_tool",
+        result: {:ok, %{"value" => "ordered"}, []}
+      },
+      seq: 2,
+      tool_call_id: "tool-ordered",
+      tool_name: "test_agent_tool"
+    )
+
+    refute_receive {:vxpipe_capability_tool_completed, ^coordinator, ^command, _, _}
+    refute_receive {:vxpipe_capability_failed, ^coordinator, ^command, _reason}
+
+    emit(
+      coordinator,
+      request_id,
+      :tool_started,
+      %{
+        tool_call_id: "tool-ordered",
+        tool_name: "test_agent_tool",
+        arguments: %{"value" => "ordered"}
+      },
+      seq: 1,
+      tool_call_id: "tool-ordered",
+      tool_name: "test_agent_tool"
+    )
+
+    assert_receive {:vxpipe_capability_tool_started, ^coordinator, ^command,
+                    %Call{id: "tool-ordered"} = call}
+
+    assert_receive {:vxpipe_capability_tool_completed, ^coordinator, ^command, ^call,
+                    %{"value" => "ordered"}}
+  end
+
   test "cancels current and queued turns, discards selected completed context, then accepts replacement work" do
     coordinator = start_coordinator()
     completed = command("completed", "old topic")
@@ -167,7 +215,14 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     replacement = command("replacement", "new topic")
     assert :ok = AgentCoordinator.respond(coordinator, replacement)
-    assert_receive {:test_agent_request, ^coordinator, replacement_request, "new topic", _}
+
+    assert_receive {:test_agent_request, ^coordinator, replacement_request, "new topic",
+                    replacement_options}
+
+    assert replacement_options
+           |> Keyword.fetch!(:tool_context)
+           |> Map.fetch!(:vxpipe_discarded_agent_request_ids) == [completed_request]
+
     emit(coordinator, replacement_request, :request_completed, %{result: "new answer"})
 
     assert_receive {:vxpipe_capability_text, ^coordinator, ^replacement, "new answer"}
@@ -237,11 +292,6 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     completed_identity = {command.connection_id, command.correlation_id, command.id}
     assert {:ok, []} = AgentCoordinator.interrupt(coordinator, [completed_identity])
-
-    assert {:ok, state} = Jido.AgentServer.state(agent_server)
-    context = Jido.AI.get_strategy_context(state.agent)
-    refute Enum.any?(context.entries, &(&1.content == "check it"))
-    refute Enum.any?(context.entries, &(&1.content == "The host action completed."))
   end
 
   defp start_coordinator(overrides \\ []) do
@@ -290,9 +340,11 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
   end
 
   defp emit(coordinator, request_id, kind, data, options \\ []) do
+    seq = Keyword.get_lazy(options, :seq, fn -> next_event_sequence(request_id) end)
+
     event =
       Event.new(%{
-        seq: System.unique_integer([:positive]),
+        seq: seq,
         run_id: request_id,
         request_id: request_id,
         iteration: 1,
@@ -304,5 +356,12 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
       })
 
     send(coordinator, {:jido_ai_request_event, event})
+  end
+
+  defp next_event_sequence(request_id) do
+    key = {__MODULE__, :event_sequence, request_id}
+    sequence = Process.get(key, 0) + 1
+    Process.put(key, sequence)
+    sequence
   end
 end

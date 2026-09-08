@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   use GenServer
 
   alias Jido.AI.Runtime.Event
+  alias Vxpipe.CallEngine.AgentRequestTransformer
   alias Vxpipe.CallEngine.Capability.SentenceAccumulator
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Id
@@ -12,7 +13,10 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   @call_timeout 5_000
   @default_maximum_completed_requests 32
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) do
+    genserver_options = Keyword.take(options, [:name])
+    GenServer.start_link(__MODULE__, options, genserver_options)
+  end
 
   def child_spec(options) do
     %{
@@ -46,6 +50,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       agent_server: Keyword.fetch!(options, :agent_server),
       completed: [],
       current: nil,
+      discarded_request_ids: [],
       maximum_completed_requests:
         Keyword.get(options, :maximum_completed_requests, @default_maximum_completed_requests),
       maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
@@ -57,10 +62,11 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       tool_dispatcher: Keyword.fetch!(options, :tool_dispatcher)
     }
 
-    if valid_configuration?(state) do
+    with true <- valid_configuration?(state),
+         :ok <- configure_agent(options, state) do
       {:ok, state}
     else
-      {:stop, :invalid_configuration}
+      _invalid -> {:stop, :invalid_configuration}
     end
   end
 
@@ -84,15 +90,22 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
     interrupted = interrupted_commands(state)
     {state, _cancelled_command} = cancel_current(state, :interrupted)
     request_ids = completed_request_ids(state.completed, completed_turn_ids)
+    _ = state.agent_runtime.discard_requests(state.agent_server, request_ids)
+    completed = reject_completed(state.completed, completed_turn_ids)
 
-    case state.agent_runtime.discard_requests(state.agent_server, request_ids) do
-      :ok ->
-        completed = reject_completed(state.completed, completed_turn_ids)
-        {:reply, {:ok, interrupted}, %{state | completed: completed, pending: :queue.new()}}
+    discarded_request_ids =
+      (request_ids ++ state.discarded_request_ids)
+      |> Enum.uniq()
+      |> Enum.take(state.maximum_completed_requests)
 
-      {:error, _reason} ->
-        {:reply, {:error, :unavailable}, %{state | pending: :queue.new()}}
-    end
+    state = %{
+      state
+      | completed: completed,
+        discarded_request_ids: discarded_request_ids,
+        pending: :queue.new()
+    }
+
+    {:reply, {:ok, interrupted}, state}
   end
 
   @impl true
@@ -115,14 +128,24 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
   def handle_info(_message, state), do: {:noreply, state}
 
-  defp handle_runtime_event(%Event{kind: :llm_delta, data: data}, state) do
+  defp handle_runtime_event(event, state) do
+    if MapSet.member?(state.current.seen_event_ids, event.id) do
+      state
+    else
+      seen_event_ids = MapSet.put(state.current.seen_event_ids, event.id)
+      current = %{state.current | seen_event_ids: seen_event_ids}
+      project_runtime_event(event, %{state | current: current})
+    end
+  end
+
+  defp project_runtime_event(%Event{kind: :llm_delta, data: data}, state) do
     case {Map.get(data, :chunk_type), Map.get(data, :delta)} do
       {:content, delta} when is_binary(delta) -> push_text(delta, state)
       _other -> state
     end
   end
 
-  defp handle_runtime_event(%Event{kind: :tool_started} = event, state) do
+  defp project_runtime_event(%Event{kind: :tool_started} = event, state) do
     data = event.data
     call_id = event.tool_call_id || Map.get(data, :tool_call_id)
     name = event.tool_name || Map.get(data, :tool_name)
@@ -136,51 +159,117 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         {:vxpipe_capability_tool_started, self(), state.current.command, call}
       )
 
-      current = %{state.current | tool_calls: Map.put(state.current.tool_calls, call_id, call)}
-      %{state | current: current}
+      {pending_result, pending_tool_results} =
+        Map.pop(state.current.pending_tool_results, call_id)
+
+      current = %{
+        state.current
+        | pending_tool_results: pending_tool_results,
+          tool_calls: Map.put(state.current.tool_calls, call_id, call)
+      }
+
+      state = %{state | current: current}
+
+      case pending_result do
+        nil -> state
+        result -> complete_tool(call_id, result, state)
+      end
     else
       cancel_fail_and_advance(:invalid_response, state)
     end
   end
 
-  defp handle_runtime_event(%Event{kind: :tool_completed} = event, state) do
+  defp project_runtime_event(%Event{kind: :tool_completed} = event, state) do
     call_id = event.tool_call_id || Map.get(event.data, :tool_call_id)
 
+    if is_binary(call_id) do
+      complete_tool(call_id, Map.get(event.data, :result), state)
+    else
+      cancel_fail_and_advance(:invalid_response, state)
+    end
+  end
+
+  defp project_runtime_event(%Event{kind: :request_completed, data: data}, state) do
+    current = %{state.current | terminal_data: data}
+    maybe_complete_terminal(%{state | current: current})
+  end
+
+  defp project_runtime_event(%Event{kind: :request_failed}, state) do
+    state
+    |> fail_current(:provider_unavailable)
+    |> start_next()
+  end
+
+  defp project_runtime_event(%Event{kind: :request_cancelled}, state) do
+    state
+    |> fail_current(:provider_unavailable)
+    |> start_next()
+  end
+
+  defp project_runtime_event(_event, state), do: state
+
+  defp complete_tool(call_id, result, state) do
     case Map.pop(state.current.tool_calls, call_id) do
       {%Call{} = call, remaining} ->
         current = %{state.current | tool_calls: remaining}
         state = %{state | current: current}
-        emit_tool_result(call, Map.get(event.data, :result), state)
+
+        state
+        |> emit_tool_result(call, result)
+        |> maybe_complete_terminal()
 
       {nil, _remaining} ->
-        cancel_fail_and_advance(:invalid_response, state)
+        pending_tool_results = Map.put(state.current.pending_tool_results, call_id, result)
+        current = %{state.current | pending_tool_results: pending_tool_results}
+        %{state | current: current}
     end
   end
 
-  defp handle_runtime_event(%Event{kind: :request_completed, data: data}, state) do
-    request_id = state.current.request_id
-    state = maybe_push_final_result(Map.get(data, :result), state)
+  defp maybe_complete_terminal(%{current: nil} = state), do: state
 
-    if current_request?(state, request_id) do
-      complete_current(state)
+  defp maybe_complete_terminal(state) do
+    if state.current.terminal_data != nil and map_size(state.current.tool_calls) == 0 and
+         map_size(state.current.pending_tool_results) == 0 do
+      data = state.current.terminal_data
+      request_id = state.current.request_id
+      state = maybe_push_final_result(Map.get(data, :result), state)
+
+      if current_request?(state, request_id) do
+        complete_current(state)
+      else
+        state
+      end
     else
       state
     end
   end
 
-  defp handle_runtime_event(%Event{kind: :request_failed}, state) do
+  defp emit_tool_result(state, call, {:ok, result, _effects}) do
+    send(
+      state.owner,
+      {:vxpipe_capability_tool_completed, self(), state.current.command, call, result}
+    )
+
     state
-    |> fail_current(:provider_unavailable)
-    |> start_next()
   end
 
-  defp handle_runtime_event(%Event{kind: :request_cancelled}, state) do
+  defp emit_tool_result(state, call, {:ok, result}) do
+    send(
+      state.owner,
+      {:vxpipe_capability_tool_completed, self(), state.current.command, call, result}
+    )
+
     state
-    |> fail_current(:provider_unavailable)
-    |> start_next()
   end
 
-  defp handle_runtime_event(_event, state), do: state
+  defp emit_tool_result(state, call, _result) do
+    send(
+      state.owner,
+      {:vxpipe_capability_tool_failed, self(), state.current.command, call, :tool_failed}
+    )
+
+    state
+  end
 
   defp start_request(command, state) do
     request_id = Id.generate(:agent_request)
@@ -198,7 +287,10 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         current = %{
           accumulator: SentenceAccumulator.new(state.maximum_output_bytes),
           command: command,
+          pending_tool_results: %{},
           request_id: request_id,
+          seen_event_ids: MapSet.new(),
+          terminal_data: nil,
           timer: timer,
           tool_calls: %{}
         }
@@ -226,6 +318,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
     state.request_options
     |> Keyword.put(:request_id, request_id)
+    |> Keyword.put(:request_transformer, AgentRequestTransformer)
     |> Keyword.put(:stream_to, {:pid, self()})
     |> Keyword.put(:extra_refs, %{
       vxpipe_command_id: command.id,
@@ -234,6 +327,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
     |> Keyword.put(
       :tool_context,
       Map.merge(existing_tool_context, %{
+        vxpipe_discarded_agent_request_ids: state.discarded_request_ids,
         vxpipe_tool_context: tool_context,
         vxpipe_tool_dispatcher: state.tool_dispatcher
       })
@@ -285,33 +379,6 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         |> fail_current(reason)
         |> start_next()
     end
-  end
-
-  defp emit_tool_result(call, {:ok, result, _effects}, state) do
-    send(
-      state.owner,
-      {:vxpipe_capability_tool_completed, self(), state.current.command, call, result}
-    )
-
-    state
-  end
-
-  defp emit_tool_result(call, {:ok, result}, state) do
-    send(
-      state.owner,
-      {:vxpipe_capability_tool_completed, self(), state.current.command, call, result}
-    )
-
-    state
-  end
-
-  defp emit_tool_result(call, _result, state) do
-    send(
-      state.owner,
-      {:vxpipe_capability_tool_failed, self(), state.current.command, call, :tool_failed}
-    )
-
-    state
   end
 
   defp fail_current(reason, state) do
@@ -394,12 +461,32 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       function_exported?(state.agent_runtime, :cancel, 3) and
       function_exported?(state.agent_runtime, :discard_requests, 2) and
       is_pid(state.owner) and
-      is_pid(state.tool_dispatcher) and
+      valid_server?(state.agent_server) and
+      valid_server?(state.tool_dispatcher) and
       is_integer(state.maximum_completed_requests) and state.maximum_completed_requests > 0 and
       is_integer(state.maximum_output_bytes) and state.maximum_output_bytes > 0 and
       is_integer(state.maximum_pending_requests) and state.maximum_pending_requests >= 0 and
       is_list(state.request_options) and
       is_map(Keyword.get(state.request_options, :tool_context, %{})) and
       is_integer(state.request_timeout_ms) and state.request_timeout_ms > 0
+  end
+
+  defp valid_server?(server) do
+    is_pid(GenServer.whereis(server))
+  rescue
+    _exception -> false
+  end
+
+  defp configure_agent(options, state) do
+    case Keyword.fetch(options, :agent_configuration) do
+      :error ->
+        :ok
+
+      {:ok, configuration} when is_list(configuration) ->
+        Vxpipe.CallEngine.AgentFactory.configure(state.agent_server, configuration)
+
+      {:ok, _invalid} ->
+        {:error, :invalid_configuration}
+    end
   end
 end

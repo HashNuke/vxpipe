@@ -149,9 +149,21 @@ capability stream, tool, terminal, timeout and interruption contracts and permit
 external or internal request in flight. It supplies private Vxpipe command/request refs and
 the authorized tool context at the request boundary, bounds pending requests and output,
 ignores stale events after cancellation, and removes explicitly interrupted completed turns
-from Jido's context through its public context-replacement signal. Jido still owns the ReAct
-loop; the coordinator neither invokes providers nor executes a replacement model/tool loop.
-Room activation wiring and lifecycle supervision remain in progress.
+from later model projections through an engine-owned request transformer. It also requests
+physical cleanup through Jido's public context-replacement signal, but does not mistake
+signal acceptance for immediate application: Jido may defer it behind worker lifecycle
+work. The projection filter is the behavioral guarantee. Jido still owns the ReAct loop;
+the coordinator neither invokes providers nor executes a replacement model/tool loop.
+Participant attachment and room routing remain in progress.
+
+The implemented `AgentActivationSupervisor` groups the selected Action dispatcher,
+AgentServer and coordinator under a one-for-all policy. The coordinator synchronously
+configures the running AgentServer before the activation supervisor can finish starting.
+One abnormal child failure restarts the whole configured set once; another within the
+restart window terminates the activation and its children. The activation supervisor is
+temporary to its future participant owner, so deliberate participant shutdown does not
+resurrect the agent. Attaching this subtree to the participant lifecycle remains the next
+runtime step.
 
 Submitted long-running actions return a correlated running
 acknowledgement and continue under Vxpipe-owned supervision. Their later results enter a
@@ -2034,16 +2046,23 @@ The next checkpoint added `AgentCoordinator` and a narrow `AgentRuntime` adapter
 correlates Vxpipe command identities with Jido request IDs, streams complete sentence
 segments through the existing capability messages, projects Action lifecycle events,
 bounds the pending queue and response bytes, cancels timed-out/interrupted requests, and
-rejects stale terminal events. Explicitly selected completed Vxpipe turns are removed from
-Jido context synchronously before interruption returns. A deterministic runtime double
-proves queue/failure races, while a real Jido AgentServer test proves one host Action and
-final response use Jido's delegated ReAct loop.
+rejects stale terminal events. Tool completion that overtakes its start event is buffered
+until the call identity/arguments arrive, and terminal completion waits for observed tool
+lifecycles to settle. Explicitly selected completed Vxpipe turns are excluded from every
+later model projection; physical Jido-context replacement is also requested but may be
+deferred by Jido. A deterministic runtime double proves queue/failure/order races, while a
+real Jido AgentServer test proves one host Action and final response use Jido's delegated
+ReAct loop.
 
 That foundation is not yet connected to room turns. These checkpoints do not start rooms
 from a plan or provide the room-owned Call Variables process/tools. Existing preset startup
-remains intact while the remaining milestone work adds participant-owned activation
-supervision, runtime plan startup, and the trusted sample fixture. Exact evidence is tracked
-in the milestone and its implementation labnote.
+remains intact. `AgentActivationSupervisor` now starts the dispatcher, AgentServer and
+coordinator in order, uses coordinator initialization as the synchronous configuration
+barrier, restarts the entire set once after an abnormal child failure, and tears down after
+the retry budget is exhausted without leaving registered children. The remaining milestone
+work attaches that subtree to its participant, adds runtime plan startup, and wires the
+trusted sample fixture. Exact evidence is tracked in the milestone and its implementation
+labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

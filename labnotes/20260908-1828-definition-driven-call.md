@@ -223,8 +223,9 @@ request. The coordinator adds the trusted `Tool.Context` and per-activation disp
 the request boundary. Jido runtime events are accepted only for the currently active
 request; late events after timeout or interruption are ignored. Completed Vxpipe turn
 identities are retained in a bounded correlation list. On interruption, selected request
-IDs are removed synchronously from Jido context with the public context-modification signal
-before the call returns.
+IDs are retained as exclusions for every later model projection. A physical cleanup request
+also uses Jido's public context-modification signal, but its acceptance is not treated as an
+immediate cleanup guarantee because Jido may defer application behind worker lifecycle work.
 
 ### Red, green, and refactor evidence
 
@@ -246,9 +247,9 @@ correlated request and advance the queue instead of wedging it. The production c
 adapter uses a synchronous AgentServer signal so a replacement request cannot overtake the
 cancel command in the agent mailbox.
 
-Focused result: `5 tests, 0 failures`. The suite includes a real AgentServer and scripted
+Focused result at that stage: `5 tests, 0 failures`. The suite includes a real AgentServer and scripted
 Jido provider round that calls the host Action once, projects its lifecycle, returns final
-text, and then removes that completed exchange from Jido context. The remainder use a
+text, and requests cleanup of that completed exchange from Jido context. The remainder use a
 controllable runtime adapter to prove exact timeout, queue, stale-event and interruption
 races. The Jido-containing coordinator test module runs synchronously with other ExUnit
 modules because parallel Jido script runs produced an incomplete two-round event stream in
@@ -271,3 +272,69 @@ Umbrella gate evidence:
 This checkpoint still does not place the AgentServer/coordinator/dispatcher under a single
 participant activation supervisor, replace room use of the old inference capability, or
 start a room from a resolved plan. Those lifecycle and routing steps remain next.
+
+## Checkpoint 3c: supervised activation lifecycle
+
+`AgentActivationSupervisor` now groups the per-activation dispatcher, Jido AgentServer,
+and coordinator with explicit registry names. The child order lets coordinator `init/1`
+synchronously configure the already-running AgentServer with the pinned prompt and finite
+Action list. Supervisor startup is therefore the readiness acknowledgement; there is no
+separate timing guess or piecemeal post-start mutation.
+
+The supervisor uses one-for-all with one restart allowed in five seconds. A first abnormal
+AgentServer failure ends and replaces all three children, including another synchronous
+configuration barrier. A second failure in that interval ends the temporary activation
+supervisor. Normal shutdown by its future participant owner will not be restarted by the
+room's dynamic supervisor. The test monitors every child, confirms each replacement PID and
+the reapplied prompt/tool surface, then confirms the exhausted activation leaves no live
+child. The separate failed-startup case confirms its partially started children leave no
+registered names.
+
+### Red and green evidence
+
+- Red command: `mix test test/vxpipe/call_engine/agent_activation_supervisor_test.exs`.
+- Red result: `2 tests, 2 failures`; the requested supervisor module and APIs did not exist.
+- The first implementation run retained one failure because the coordinator accepted only
+  a dispatcher PID while the supervisor correctly supplied an explicitly named `via`
+  reference. Resolving and validating both registered servers fixed startup without
+  weakening readiness.
+- Focused result: `2 tests, 0 failures`.
+- Relevant runtime result: `mix test test/vxpipe/call_engine/agent_activation_supervisor_test.exs test/vxpipe/call_engine/agent_coordinator_test.exs test/vxpipe/call_engine/agent_test.exs`
+  initially passed `9 tests, 0 failures`.
+
+### Runtime-order follow-up
+
+A 20-run repeat check of the coordinator uncovered two dependency-order boundaries that a
+single green run did not show. A Jido `tool_completed` event can reach the stream sink before
+its lower-sequence `tool_started` event. Strict immediate projection incorrectly failed the
+turn. The coordinator now deduplicates event IDs, buffers an early result by tool-call ID,
+emits start before completion when the start arrives, and delays terminal completion while
+an observed tool lifecycle is unsettled. A focused out-of-order test was red before this
+change and green afterward.
+
+The same repeat check showed that acceptance of Jido's public context-modification signal
+does not guarantee the operation has already survived all worker-lifecycle updates. A
+bounded retry still sometimes returned unavailable and was the wrong abstraction. A new
+engine-owned Jido request transformer now removes entries carrying interrupted request refs
+from each actual LLM projection. Its focused test first failed because the module was absent,
+then passed. Physical context replacement remains a cleanup request; projection filtering
+owns correctness.
+
+Post-correction evidence:
+
+- `mix test test/vxpipe/call_engine/agent_coordinator_test.exs --repeat-until-failure 20 --max-failures 1`
+  completed all 20 runs: `6 tests, 0 failures` per run.
+- `mix test test/vxpipe/call_engine/agent_activation_supervisor_test.exs test/vxpipe/call_engine/agent_request_transformer_test.exs test/vxpipe/call_engine/agent_coordinator_test.exs test/vxpipe/call_engine/agent_test.exs`
+  passed `11 tests, 0 failures`.
+
+Checkpoint 3c umbrella gates:
+
+- `mix format --check-formatted` passed.
+- `mix compile --warnings-as-errors` passed.
+- `mix test` passed: call engine `91 tests, 0 failures (1 excluded)` and gateway
+  `37 tests, 0 failures (3 excluded)`.
+- `mix deps.unlock --check-unused` passed with no output.
+
+This checkpoint completes the milestone's stream/tool/timeout/interruption/teardown
+red-test task across checkpoints 3a-3c. It does not yet make the activation a child of a
+participant, route room turns through its coordinator, or compile its options from a plan.

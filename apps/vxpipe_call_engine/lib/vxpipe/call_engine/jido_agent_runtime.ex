@@ -45,11 +45,16 @@ defmodule Vxpipe.CallEngine.JidoAgentRuntime do
 
     with {:ok, state} <- Jido.AgentServer.state(agent_server),
          %Context{} = context <- Jido.AI.get_strategy_context(state.agent),
-         replacement <- discard_entries(context, discarded),
-         signal <- context_replacement_signal(replacement),
-         {:ok, _agent} <- Jido.AgentServer.call(agent_server, signal) do
-      :ok
+         true <- contains_discarded_request?(context, discarded) do
+      replacement = discard_entries(context, discarded)
+      signal = context_replacement_signal(replacement)
+
+      case Jido.AgentServer.call(agent_server, signal) do
+        {:ok, _agent} -> :ok
+        {:error, _reason} = error -> error
+      end
     else
+      false -> :ok
       nil -> :ok
       {:error, _reason} = error -> error
       _other -> {:error, :unavailable}
@@ -76,6 +81,12 @@ defmodule Vxpipe.CallEngine.JidoAgentRuntime do
   end
 
   defp discarded_request?(_refs, _discarded), do: false
+
+  defp contains_discarded_request?(context, discarded) do
+    Enum.any?(context.entries, fn entry ->
+      discarded_request?(entry.refs, discarded)
+    end)
+  end
 
   defp context_replacement_signal(context) do
     Jido.Signal.new!(

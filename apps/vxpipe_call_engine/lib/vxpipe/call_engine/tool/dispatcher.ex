@@ -7,7 +7,10 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
 
   @call_timeout 15_000
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) do
+    genserver_options = Keyword.take(options, [:name])
+    GenServer.start_link(__MODULE__, options, genserver_options)
+  end
 
   def child_spec(options) do
     %{

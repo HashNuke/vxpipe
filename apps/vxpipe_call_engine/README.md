@@ -66,10 +66,14 @@ The runtime foundation now includes an application-owned Jido instance, a finite
 Jido AI agent module, synchronous prompt/Action configuration before readiness, and
 a serialized Vxpipe host-Action dispatcher. An engine-owned coordinator now admits
 one request at a time, bounds queued turns and output, translates Jido stream/tool/
-terminal events onto the existing capability contract, and synchronously removes
-selected interrupted turns from Jido context. Deterministic tests cover both a
-controllable runtime boundary and a real Jido Action round. This runtime is not yet
-the room's active inference path.
+terminal events onto the existing capability contract, and excludes selected
+interrupted turns from later model projections while requesting physical Jido-context
+cleanup. Deterministic tests cover both a controllable runtime boundary and a real Jido
+Action round. An activation supervisor
+starts the dispatcher, AgentServer, and coordinator as one configured readiness unit,
+restarts that set together once after an abnormal child failure, and leaves no child
+running after its retry budget is exhausted. This runtime is not yet the room's active
+inference path.
 
 ## Installation
 
