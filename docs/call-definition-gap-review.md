@@ -141,7 +141,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
-| R22 | G6 | **Resolved:** revised by Anubis selection to use anubis_mcp through the thin vxpipe_mcp wrapper; initial profile is 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Earlier 2026 profile and custom protocol work are superseded; other compatibility needs explicit tested support. |
+| R22 | G6 | **Resolved:** use Jido MCP through the thin `vxpipe_mcp` policy wrapper; Vxpipe does not directly depend on Jido MCP's transitive client runtime. The initial profile is 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Earlier 2026 profile and custom/direct-client work are superseded; other compatibility needs explicit tested support. |
 | R23 | G6 | **Resolved:** use a proper JSON Schema validator, baseline 2020-12, on actual outgoing arguments against pinned inputSchema before submission; reject unsupported enabled bindings before exposure, never weaken constraints or automatically fetch external refs. |
 | R24 | G6 | **Deferred:** store received responses and descriptors with observed outcomes; the agent chooses authorized next steps. Detailed result projection and document/media inspection belong to the dedicated issue, not automatic fetching or a text/JSON-only policy. |
 | R25 | G6 | **Deferred:** server-requested sampling/elicitation and related interactions belong to the dedicated issue; advertise no unimplemented capabilities, report missing capability clearly, and add no continuation/retry exception. |
@@ -169,7 +169,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R47 | G13 | **Resolved:** provider-supported settings belong to reusable configured services/profiles; conversation/interruption/duration policy stays engine-owned. Reject known unsupported combinations during definition validation, with provider-discovered failures handled normally at startup/runtime; no new config layer or arbitrary executable/provider payload. |
 | R48 | G13 | **Resolved:** before each inference compare total input with usable input budget after output reserve; compact older completed conversation at 75%, targeting below 50%. Preserve protected instructions/tools/recent messages/unresolved interactions and pairing, grants, source-interval privacy, variables, and full permitted history. Targets do not guarantee fit; summarizer execution/model and config encoding are not selected. |
 | R49 | G13 | **Resolved:** configurable decoded/decompressed MCP response limit defaults to 1 MiB (1,048,576 bytes), enforced incrementally and cumulatively for streaming. Stop excess receipt/processing with honest bounded outcome details, no automatic retry or full-body archive claim. Archive accepted permitted responses; model-too-large yields explicit projection omission, not remote failure, chopped JSON, or automatic result summarization. |
-| R50 | G13 | **Resolved:** allow explicitly configured provider-native/router LLM fallback only where ReqLLM supports it; no Vxpipe fallback schema/chain/coordinator or new STT/TTS fallback. Preserve permissions/tool/privacy constraints and observed attribution without inventing upstream attempts or replaying emitted speech/actions. |
+| R50 | G13 | **Resolved:** allow explicitly configured provider-native/router LLM fallback only where the selected Jido AI/ReqLLM provider surface supports it; no Vxpipe fallback schema/chain/coordinator or new STT/TTS fallback. Preserve permissions/tool/privacy constraints and observed attribution without inventing upstream attempts or replaying emitted speech/actions. |
 
 Not counted as current approval blockers:
 
@@ -1140,8 +1140,8 @@ the example HTTP webhooks, native SMS, or code tools are MCP endpoints. Keep
 those behind a remote MCP facade or an explicitly registered host tool; do not
 add arbitrary HTTP/JavaScript execution to the call-definition JSON.
 
-**Approved R22, revised by SDK selection:** use `anubis_mcp`, evaluated at 2.0.0,
-for its supported `2025-11-25` Streamable HTTP profile, accepting JSON and SSE.
+**Approved R22, revised by integration selection:** use `jido_mcp` for the
+`2025-11-25` Streamable HTTP profile, accepting JSON and SSE.
 Follow `initialize`/`notifications/initialized`, negotiated version headers and
 optional integration/credential-scoped session IDs. Other profiles/legacy HTTP+SSE
 are not implicitly enabled; pin the supported profile and fail incompatibility
@@ -1149,19 +1149,21 @@ clearly. This supersedes the earlier 2026 protocol selection.
 [Transport specification][mcp-http].
 
 **Approved implementation boundary:** `vxpipe_mcp` is a thin internal wrapper
-around [Anubis](https://anubis-mcp.hexdocs.pm/readme.html), not a new JSON-RPC,
-HTTP/SSE parser or client implementation. The SDK owns protocol mechanics; the
-wrapper configures/supervises it and normalizes integration outcomes without
+around [Jido MCP](https://hexdocs.pm/jido_mcp/readme.html), not a new JSON-RPC,
+HTTP/SSE parser or client implementation. Jido MCP owns its public client/protocol
+integration and its choice of transitive implementation; Vxpipe does not directly
+depend on or call that transitive client. The wrapper configures/supervises Jido MCP
+and normalizes integration outcomes without
 Calls/Repo/gateway/room state or tenant selection. The domain owner supplies
 resolved endpoint/private credentials/network policy/deadlines and retains grants/
-history. Missing required SDK hooks block compatibility, not authorize custom
-protocol work. SDK selection proves none of the security/size/deadline/conformance
+history. Missing required Jido MCP hooks block compatibility, not authorize a
+direct-client fallback or custom protocol work. Integration selection proves none
+of the security/size/deadline/conformance
 gates; validate them explicitly. Stream/session recovery must not resubmit
 `tools/call`: preserve the invocation's absolute deadline and cumulative decoded/
-decompressed byte budget across SSE GET resumption, progress and SDK reconnects,
+decompressed byte budget across stream resumption, progress and reconnects,
 not fresh limits per HTTP response. Test initialization both with and without a
-server-issued session ID. [Package metadata](https://hex.pm/packages/anubis_mcp) records
-LGPL-3.0; packaging verification remains implementation work, not a runtime change.
+server-issued session ID.
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 and [lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
 and pinned [client conformance harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
@@ -1684,12 +1686,12 @@ not durable confirmation. Parser/transport and config hierarchy remain implement
 particulars; general result/document inspection remains deferred.
 
 R50 allows explicitly configured provider-native/router LLM fallback only where
-ReqLLM supports the provider options. No Vxpipe fallback schema, direct-provider
+the selected Jido AI/ReqLLM provider surface supports the provider options. No Vxpipe fallback schema, direct-provider
 chain/coordinator, or new STT/TTS fallback is added. Preserve tool authorization,
 privacy, and observed usage/model/provider attribution without inventing hidden
 upstream IDs/attempts. No MCP retry or replay guarantee for already-emitted speech/
-tool actions follows from a streaming failure. The inspected ReqLLM 1.22.0 provider
-options include remote routing/fallback; they are not a generic direct-provider
+tool actions follows from a streaming failure. Jido AI delegates provider access to
+ReqLLM; supported remote routing/fallback options are not a generic direct-provider
 fallback chain. Runtime integration still requires focused verification.
 
 ## Possible checkpoint order and acceptance scenarios
@@ -1758,7 +1760,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
 | Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Save permitted available facts with honest provenance/usage; explicit transcript/audio retention is independent from live sharing under R38, not inferred recognition shutdown, and tool/variable/usage requirements stay intact; audio requires enabled/permitted recording and the opening input gate |
-| Exercise Anubis against the selected remote revision with JSON/SSE and invalid tool arguments | 2025-11-25 initialization succeeds with/without optional scoped session IDs; negotiated headers precede tool use, incompatible profiles fail clearly; SDK reconnect/progress/SSE GET resumption cannot replay tools/call or reset its absolute deadline/cumulative decoded-byte budget; a proper validator blocks required/type/enum/nested violations before submission and rejects unsupported bindings without network ref fetching |
+| Exercise Jido MCP against the selected remote revision with JSON/SSE and invalid tool arguments | 2025-11-25 initialization succeeds with/without optional scoped session IDs; negotiated headers precede tool use, incompatible profiles fail clearly; reconnect/progress/stream resumption cannot replay tools/call or reset its absolute deadline/cumulative decoded-byte budget; a proper validator blocks required/type/enum/nested violations before submission and rejects unsupported bindings without network ref fetching |
 | Receive structured data, a document descriptor, or an unsupported sampling/elicitation request | Preserve observed response/outcome without auto-fetching or claiming inspection; unauthorized tools remain unavailable; advertise no unimplemented sampling/elicitation capability, report its absence clearly, and do not silently invoke models/participants or resubmit tools/call |
 | Update variables twice while holding PostgreSQL persistence behind a barrier | Both tools succeed after local acceptance/handoff and reads see current memory; each event carries its exact full snapshot and original turn/tool/revisions; durable pointer may lag until asynchronous persistence, without a changeset |
 | Fail a snapshot transaction, duplicate delivery, and deliver older revisions later | Storage failure does not undo memory/tool success or fail the room; snapshot/pointer writes remain one PostgreSQL transaction, duplicate history and cross-call/regressing pointers are prevented, older valid history need not become latest, and snapshots remain private |
@@ -2396,10 +2398,9 @@ removing protected content or bypassing permissions. The summarizer model/execut
 choice remains unselected. MCP receipt defaults to a configurable 1 MiB of cumulative
 decoded/decompressed data, enforced incrementally and separately from model
 projection; too-large receipt does not prove remote failure or full archival.
-LLM fallback is limited to explicit provider-native/router options supported by
-ReqLLM, not a new Vxpipe chain or STT/TTS feature. Local ReqLLM 1.22.0 and the current
-adapter were inspected to distinguish remote routing options from one-model
-generation. No integration test or runtime implementation is claimed.
+LLM fallback is limited to explicit provider-native/router options supported through
+the Jido AI/ReqLLM provider surface, not a new Vxpipe chain or STT/TTS feature. No
+integration test or runtime implementation is claimed.
 
 Consistency cleanup also aligns active R08 startup, R39 duplicate creation, and
 R40 no-repeat crash/recovery summaries with their existing approvals, while

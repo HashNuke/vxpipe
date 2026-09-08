@@ -135,9 +135,11 @@ storage toggles. Audio requires explicitly enabled and permitted recording;
 archival needs do not start STT or bypass capability permissions.
 R17 defines `tool_visibility` and participant/local-tool `tool_visibility_overrides`,
 including trusted full-visibility sample policy replacement with no overrides.
-R22 now selects Anubis (`anubis_mcp`, evaluated at 2.0.0) with `2025-11-25`
-Streamable HTTP through a thin internal wrapper, superseding the earlier protocol
-selection and custom protocol work. R23 requires validated outgoing MCP arguments.
+R22 now selects Jido MCP through a thin internal policy wrapper, with `2025-11-25`
+Streamable HTTP as the tested Vxpipe profile. Jido MCP owns its transitive client
+implementation; Vxpipe neither selects nor calls that dependency directly. This
+supersedes the earlier direct-client and custom protocol work. R23 requires validated
+outgoing MCP arguments.
 R24 result/document inspection and R25 server-requested interactions
 are deferred to separate issues while observed response storage remains mandatory.
 R26 adopts SDK-aligned endpoint security at Vxpipe's outbound boundary. R27/R28
@@ -216,8 +218,8 @@ The earlier remote-MCP research reviewed the official MCP `2026-07-28` tool,
 Streamable HTTP, and schema specifications. That revision is stateless at the
 HTTP protocol layer, permits the tool list to vary with request authorization,
 and returns structured or unstructured content from `tools/call`. Those details
-informed the earlier proposal, not the current wire implementation. The later
-Anubis selection supersedes that protocol target with `2025-11-25`; preserve this
+informed the earlier proposal, not the current wire implementation. The later Jido
+MCP selection supersedes that protocol target with `2025-11-25`; preserve this
 research as historical evidence. Credential isolation remains, and detailed result
 projection/inspection stays deferred as described in R24.
 
@@ -1857,23 +1859,23 @@ must never cross tenant/integration/credential boundaries.
 
 #### Initial remote protocol and input validation — approved R22/R23
 
-Select [Anubis MCP](https://anubis-mcp.hexdocs.pm/readme.html) as the client; the
-evaluated package baseline is `anubis_mcp` 2.0.0. Keep `vxpipe_mcp` as a thin
-internal Mix library/umbrella-child wrapper for SDK configuration, supervision and
-safe result normalization. Anubis owns JSON-RPC, HTTP/SSE and parsing; do not build
-a replacement protocol client or fill SDK gaps with custom protocol code. Report
+Select [Jido MCP](https://hexdocs.pm/jido_mcp/readme.html) as the integration
+surface. Keep `vxpipe_mcp` as a thin internal Mix library/umbrella-child wrapper for
+Jido MCP configuration, supervision, Vxpipe policy and safe result normalization.
+Jido MCP owns its public client/protocol integration and its transitive implementation
+choices; Vxpipe neither depends on nor calls a transitive client directly. Do not build
+a replacement protocol client or fill Jido MCP gaps with custom protocol code. Report
 missing required hooks as compatibility blockers. No public MCP server is in scope.
 The wrapper does not select tenants, read Calls/Repo/gateway/room state, grant
 tools, or own call history. Its domain owner supplies resolved endpoint/private
 credentials/network policy/deadlines and retains those responsibilities.
 
-SDK adoption alone proves neither network safeguards, decoded response caps,
-timeout behavior nor conformance. Verify the configured Anubis boundary against
+Integration adoption alone proves neither network safeguards, decoded response caps,
+timeout behavior nor conformance. Verify the configured Jido MCP boundary against
 the existing gates. Transport/session recovery is not permission to repeat
 `tools/call`. Retain one absolute invocation deadline and cumulative decoded/
-decompressed byte budget across SSE GET resumption, progress and SDK reconnects;
-do not reset either per HTTP response. [Package metadata](https://hex.pm/packages/anubis_mcp)
-records LGPL-3.0; release/container packaging checks remain implementation work.
+decompressed byte budget across stream resumption, progress and reconnects;
+do not reset either per HTTP response.
 No dependency or runtime implementation is added by this decision.
 
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
@@ -1887,7 +1889,8 @@ is additional interoperability evidence only; verify its revision and remote
 transport rather than assuming it proves complete conformance. A harness-only
 loopback-HTTP allowance is isolated from production HTTPS/private-network rules.
 
-Target Anubis's supported `2025-11-25` Streamable HTTP profile with JSON and SSE.
+Target Vxpipe's tested `2025-11-25` Streamable HTTP profile through Jido MCP with
+JSON and SSE.
 Use `initialize`, then `notifications/initialized`, and the negotiated
 `MCP-Protocol-Version` on subsequent requests. Optional server-issued
 `MCP-Session-Id` values stay scoped to the resolved integration/credential boundary.
@@ -5131,7 +5134,7 @@ The numbering below matches G1–G13 in the focused review document.
    No new progress journal or permanent tombstone; late writers still require
    coordination. Exact interval/default is unspecified, not an hourly policy.
 6. **Remote integration compatibility — initial scope resolved:** R22 selects
-   Anubis with `2025-11-25` Streamable HTTP JSON/SSE, initialization/negotiation
+   Jido MCP with `2025-11-25` Streamable HTTP JSON/SSE, initialization/negotiation
    and optional scoped sessions. The internal wrapper does not implement custom
    protocol support; incompatibility is reported rather than silently bypassed.
    SDK recovery cannot repeat a tool invocation. R23 uses
@@ -5627,7 +5630,7 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     and not inventing defaults. A permitted participant-ref transfer resolves its
     pinned source even after a definition revision changes. These are future
     checks, not an implemented resolver, general policy matrix, or timing guard.
-27. Run the Anubis wrapper against a controlled `2025-11-25` remote endpoint
+27. Run the Jido MCP wrapper against a controlled `2025-11-25` remote endpoint
     returning JSON and SSE in separate cases. Verify initialization, negotiated
     version headers, initialization with/without server-issued session IDs, scoped
     session isolation and incompatible-profile errors. Exercise SSE GET resumption,
@@ -7086,7 +7089,7 @@ storage/client projection boundary and credential exclusions still apply.
 
 ### Remote MCP profile and deferred interactions — R22–R25, 2026-09-07
 
-Historical checkpoint: the later Anubis decision supersedes this wire profile and
+Historical checkpoint: the later Jido MCP decision supersedes this wire profile and
 its input-request mechanism with `2025-11-25`. The retained R23–R25 validation,
 privacy and deferral boundaries are unchanged.
 
@@ -7436,7 +7439,11 @@ including its former PostgreSQL-before-variable-success requirement.
 
 ## Verification evidence
 
-### Anubis client selection — approved 2026-09-08
+### Direct Anubis client selection — superseded 2026-09-08
+
+This checkpoint records the earlier direct-client choice. The later Jido MCP
+selection replaces it; Vxpipe now integrates only with Jido MCP's public surface and
+treats its transitive client choice as an internal Jido implementation detail.
 
 - Selected `anubis_mcp` (evaluated published version 2.0.0) and its supported
   `2025-11-25` Streamable HTTP profile. The separate `vxpipe_mcp` boundary is a
@@ -7449,19 +7456,20 @@ including its former PostgreSQL-before-variable-success requirement.
   behavior and pinned conformance evidence must still be verified during
   implementation. SDK selection neither waives those gates nor permits tool replay.
 - Documentation only: no runtime/dependency installation or conformance run.
-- Updated the existing MCP milestone, its live-call integration prerequisite,
+- Historically updated the existing MCP milestone, its live-call integration prerequisite,
   reference links and deferred interaction issue rather than adding a milestone.
   There are still 21 ordered, unnumbered milestone files; implementation boxes
   remain unchecked. The release checklist retains the dependency packaging check.
-- Independent follow-up review approved the Anubis boundary and added explicit
+- Independent follow-up review approved that historical boundary and added explicit
   deadline/decoded-byte continuity across SSE resumption plus initialization with
   and without session IDs. Checked milestone links/dependencies, unchanged source
   fences and JSON, stable review statuses, diff hygiene and documentation-only scope.
 
 ### Internal MCP client boundary — approved 2026-09-08
 
-Historical boundary checkpoint: the later Anubis selection retains the internal
-library identity but supersedes permission to implement missing protocol pieces.
+Historical boundary checkpoint: the later Jido MCP selection retains the internal
+library identity and supersedes direct transitive-client integration or permission to
+implement missing protocol pieces.
 
 - Added the separate `vxpipe_mcp` protocol-library boundary and official
   specification/conformance/reference-server validation sources. Domain grants,
@@ -7622,7 +7630,7 @@ library identity but supersedes permission to implement missing protocol pieces.
   later object-store-owning `vxpipe_artifacts` boundary; the call engine and
   gateway keep direct Repo access out of their responsibilities.
 - Historical research reviewed the official MCP `2026-07-28` tool specification,
-  Streamable HTTP transport and generated schema; the later Anubis decision
+  Streamable HTTP transport and generated schema; the later Jido MCP decision
   supersedes this implementation target:
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx>
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/transports/streamable-http.mdx>

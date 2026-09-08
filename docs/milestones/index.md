@@ -1,9 +1,12 @@
 # Call-definition implementation milestones
 
-Status: 21 specifications independently reviewed, including the Anubis follow-up; implementation has not started.
+Status: 21 milestone specifications; implementation has not started. The earlier behavior
+contracts were independently reviewed; the user-approved Jido mechanism update awaits
+focused follow-up review in the affected specifications.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
-MCP-library additions documented during planning on 2026-09-08. Anubis subsequently
-replaces custom-client work within the existing MCP milestone; the count/order do not change.
+MCP-library additions and Jido runtime selection documented during planning on 2026-09-08.
+Jido AI replaces custom agent-loop work and Jido MCP replaces direct client-library work
+inside existing milestones; the count and order do not change.
 
 ## How to use this index
 
@@ -21,14 +24,14 @@ progress without claiming the entire milestone is complete.
 
 ## Ordered implementation checklist
 
-1. [ ] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run the existing text/audio conversation from it.
+1. [ ] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through Jido AI.
 2. [ ] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
 3. [ ] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.
 4. [ ] [Conversation during background tools](background-tool-conversation.md) — Keep conversation responsive while a submitted tool finishes.
 5. [ ] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
 6. [ ] [Prepared calls and single-use joining](prepared-call-admission.md) — Prepare in PostgreSQL, then start exactly one live call when its caller joins.
 7. [ ] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
-8. [ ] [Anubis MCP integration and conformance](mcp-client-library.md) — Verify the selected Anubis client through a thin adapter and version-pinned reference/conformance server.
+8. [ ] [Jido MCP integration and conformance](mcp-client-library.md) — Verify Jido MCP through a thin policy adapter, Jido Action exposure, and version-pinned reference/conformance server.
 9. [ ] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
 10. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
 11. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
@@ -85,13 +88,20 @@ option to make a demo pass. A later slice expands support without changing the f
 contracts. Trusted embedded/development fixtures are not public production admission.
 
 The engine owns room/participant/capability lifecycles and protocol-neutral contracts.
+Use Jido AI's standalone ReAct runtime for ordinary agent model/tool iteration and Jido
+Action for the agent-visible tool contract. ReqLLM remains Jido AI's provider layer rather
+than Vxpipe's custom orchestration surface. Vxpipe still owns identities, authorization,
+stream/TTS projection, interruption, submitted background workers and room lifecycle; do
+not introduce Jido AgentServer as a competing lifecycle authority in the initial plan.
 Introduce `vxpipe_calls` for application workflows, `vxpipe_persistence` for Ecto/Repo,
 and `vxpipe_artifacts` for object storage only in their owning milestones. The gateway
 authenticates/translates; it does not gain direct Repo or provider orchestration ownership.
 The separate `vxpipe_mcp` internal library is a thin adapter around the selected
-`anubis_mcp` client, not a custom protocol/client codebase. Anubis owns MCP protocol
-and transport; the wrapper configures supervision, policy enforcement and result
-mapping without room, tenant-selection, Repo or gateway dependencies. Its standalone
+`jido_mcp` integration, not a custom protocol/client codebase. Jido MCP owns its protocol,
+client pooling and transport integration through its public API; which transitive library it
+uses is not a Vxpipe architecture decision. The wrapper configures supervision, policy
+enforcement and result mapping without room, tenant-selection, Repo or gateway dependencies.
+Vxpipe does not depend on or call Jido MCP's transitive client library directly. Its standalone
 integration/conformance checkpoint precedes live-call integration and targets
 MCP `2025-11-25`, replacing the earlier `2026-07-28` profile. No custom-client fallback.
 Preserve dependency direction in child `mix.exs` files.
@@ -115,14 +125,14 @@ provider-fallback chain.
 
 This is a coverage map, not another approval or implementation checklist.
 
-- **Definition-driven one-agent call**: G1/G2; R10, R47.
+- **Definition-driven one-agent call**: G1/G2; R10, R47; selected Jido AI/Jido Action agent loop.
 - **Local Morse-code audio providers**: optional local verification capabilities requested during planning.
 - **Call Variables and private tool projections**: G3/G5; R17, R18.
 - **Conversation during background tools**: G4; R14–R16, R29.
 - **Tenant definitions and API-key administration**: G2/G10; R01–R04, R39.
 - **Prepared calls and single-use joining**: G2/G10; R05–R10, R39, R40.
 - **Asynchronous call history and variable snapshots**: G5/G11; R18, R41.
-- **Anubis MCP integration and conformance**: selected SDK, thin integration boundary and reference validation; R22, R23, R26, R49.
+- **Jido MCP integration and conformance**: selected Jido integration surface, thin policy boundary, Jido Action exposure and reference validation; R22, R23, R26, R49.
 - **Remote MCP tools in a live call**: G4/G6; R14–R16, R22–R26, R49.
 - **Opening audio and call lifecycle**: G7; R11, R12, R27–R31.
 - **Allowlisted agent-to-agent transfers**: G8; R13, R33, R35, R36.
@@ -146,15 +156,15 @@ are complete; review approval is separate from the unchecked implementation boxe
 
 | Milestone | Review status | Evidence |
 | --- | --- | --- |
-| [Definition-driven one-agent call](definition-driven-call.md#specification-review) | Approved | milestone_review_a; Added reserved/generated tool alias collision checks and invocation entry/tenant non-override. Re-review approved; first position correct. |
+| [Definition-driven one-agent call](definition-driven-call.md#specification-review) | Follow-up pending | Original behavior approved by milestone_review_a; later Jido AI/Jido Action mechanism is user-approved and awaits focused independent review. |
 | [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Approved | milestone_review_a; real audio, independent fixtures, bounded streaming and explicit transport limits. |
-| [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Approved | milestone_review_b; Added deadlines/bounds, private binding isolation, projection/result refresh, conflict race, and room-shutdown caveat; re-review approved. |
-| [Conversation during background tools](background-tool-conversation.md#specification-review) | Approved | milestone_review_c; Added provider-independent acknowledgement/result rules and mixed-output, stale-worker, unsent-work, saturation checks; re-review approved. |
+| [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Follow-up pending | Original behavior approved by milestone_review_b; Jido Action mechanism is user-approved and awaits focused independent review. |
+| [Conversation during background tools](background-tool-conversation.md#specification-review) | Follow-up pending | Original behavior approved by milestone_review_c; Jido ReAct/Action mechanism is user-approved and awaits focused independent review. |
 | [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Approved | milestone_review_a; Separated reusable revision metadata from per-call plan/credential resolution; excluded credentials and leases from revisions/routes; focused re-review approved. |
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
-| [Anubis MCP integration and conformance](mcp-client-library.md#specification-review) | Approved | milestone_review_a; original discovery bounds and subsequent Anubis/profile follow-up approved, including resumed-stream budgets and optional-session initialization checks. |
-| [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Approved | milestone_review_a; Added catalog/schema pinning, unresolved binding failure, revoked authorization and private lease redaction/lifetime tests; re-review approved. Subsequent internal-library prerequisite and scoped domain boundary also re-reviewed and approved. |
+| [Jido MCP integration and conformance](mcp-client-library.md#specification-review) | Follow-up pending | Original behavior/profile approved by milestone_review_a; Jido MCP dependency and Jido Action integration are user-approved and await focused independent review. |
+| [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Follow-up pending | Original live-call behavior and policy boundary approved by milestone_review_a; later Jido MCP mechanism is user-approved and awaits focused independent review. |
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
 | [Allowlisted agent-to-agent transfers](agent-transfers.md#specification-review) | Approved | milestone_review_c; Specified history modes, precommit destination silence/source continuity, empty-list and total-deadline races; re-review approved. |
 | [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md#specification-review) | Approved | milestone_review_a; Distinguished omitted policy fields from denied omitted route sources and added fail-closed policy-apply admission/bridge checks; re-review approved. |
@@ -173,21 +183,24 @@ are complete; review approval is separate from the unchecked implementation boxe
 Verified on 2026-09-08:
 
 - All 21 milestone files have specifications, prerequisites, implementation task lists,
-  acceptance/failure checks, manual verification steps and independent review evidence.
+  acceptance/failure checks and manual verification steps. Earlier behavior contracts have
+  independent review evidence; the five Jido-updated specifications are marked for focused
+  follow-up review rather than presenting the new mechanism as already reviewed.
 - The 21 index entries match the files exactly; filenames/titles have no ordering numbers.
   All explicit prerequisites occur earlier in the index; no dependency cycles were found.
-- All 324 milestone implementation/verification boxes remain unchecked, along with the
-  index and common gates. No runtime work is claimed by specification approval.
+- All milestone implementation/verification boxes remain unchecked, along with the index
+  and common gates. No runtime work is claimed by specification approval or dependency
+  selection.
 - Relative file/heading links, decision coverage and Markdown task-list structure pass
   focused checks. All 50 decision IDs are accounted for: 45 resolved, four deferred and
   one superseded. Deferred features have not become implementation prerequisites.
 - The three design sources retain all 43 existing fenced examples unchanged from the
   baseline; their 19 JSON examples still parse. Diff/terminology/path checks pass.
-- A final independent cross-index audit by milestone_review_c found no remaining
-  coverage or dependency findings, including both planning additions.
-- The later Anubis selection passed milestone_review_a's focused milestone and
-  cross-document review. Count, filenames and order remain unchanged; protocol handling
-  is delegated to Anubis, with current references and the supported profile aligned.
+- The pre-Jido cross-index audit by milestone_review_c found no remaining coverage or
+  dependency findings in that baseline. The Jido follow-up review remains explicitly open.
+- The Jido selection changes implementation mechanisms, not the approved MCP product
+  profile, count, filenames or order. Jido MCP owns its internal client implementation;
+  Vxpipe validates only the effective public integration and its own policy boundary.
 
 This checkpoint changes documentation only. No runtime, browser, provider, official
 conformance, or umbrella test execution is claimed; those remain implementation gates.

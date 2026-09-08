@@ -1,6 +1,7 @@
 # Conversation during background tools
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: not implemented. Specification review: approved baseline (2026-09-08);
+Jido ReAct/Action follow-up review pending.
 Prerequisites: [Variables and tool projections](call-variables-and-tool-visibility.md).
 Sources: [Background tools](../../labnotes/20260905-0405-call-definition-design.md#provider-independent-background-tools--approved-g4-decision); [timeouts](../../labnotes/20260905-0405-call-definition-design.md#mcp-timeouts-with-unconfirmed-outcomes--approved-g4-decision).
 
@@ -10,8 +11,13 @@ A deterministic slow host tool starts during a call. The agent acknowledges it, 
 
 ## Specification
 
-- Move submitted invocation execution out of the model-turn task into bounded, independently supervised workers owned by that agent's subtree. Tool submission/access checks remain engine-owned.
-- A successfully started invocation gets one correlated running acknowledgement as its ordinary tool response. Preserve accompanying assistant text in buffered and streaming adapter results without double delivery.
+- Move submitted invocation execution out of the Jido ReAct run into bounded,
+  independently supervised workers owned by that agent's subtree. Tool submission/access
+  checks remain engine-owned.
+- A submitted Jido Action validates its input and asks the engine to authorize and start
+  that worker, then returns immediately. A successfully started invocation gets one correlated running
+  acknowledgement as its ordinary tool response. Preserve accompanying assistant text in
+  buffered and streaming adapter results without double delivery.
 - Completion becomes a distinct invocation-linked update to the latest conversation, not a second ordinary result or old-turn replay. One agent coordinates output; no competing speaker or periodic automatic progress announcements.
 - Speech/text interruption stops stale conversational output and unsent work, not an already-submitted invocation. Agent transfer/room shutdown terminates owned local workers; that is not remote rollback. A request already submitted to CallVariables can finish independently.
 - Submitted timeout without definitive outcome reports unknown; pre-submission failure stays definite. No automatic executor retry for any failure, no tool read/write classification, durable worker, or explicit cancellation feature.
@@ -20,12 +26,16 @@ A deterministic slow host tool starts during a call. The agent acknowledges it, 
 Use this application-level workflow for every model provider, never a separate native-async
 branch. A running acknowledgement is not business success. Completion remains untrusted tool
 data: it neither updates Call Variables automatically nor authorizes interrupted unsent work.
+Jido's ordinary ReAct loop may wait for completing actions; it must not wait for the lifetime
+of a submitted action. ReAct cancellation stops the current conversational request, not the
+already accepted Vxpipe worker.
 
 ## Implementation checklist
 
 - [ ] Write red tests around a controllable slow tool, interruption, worker startup failure, timeout, and result ordering.
 - [ ] Split model-turn cancellation from submitted invocation lifetime and supervisor ownership.
-- [ ] Preserve mixed text/tool model results and encode running acknowledgements plus later updates across supported adapters.
+- [ ] Preserve mixed text/tool model results and encode Jido Action running acknowledgements
+  plus later updates through the engine-owned Jido event adapter.
 - [ ] Integrate latest-conversation completion scheduling and private lifecycle facts for later archival.
 - [ ] Add tagged provider interoperability coverage; local context encoding alone is not evidence of provider acceptance.
 
@@ -71,4 +81,5 @@ has been reviewed.
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added provider-independent acknowledgement/result rules and mixed-output, stale-worker, unsent-work, saturation checks; re-review approved.
+The later Jido ReAct/Action mechanism selection awaits focused independent review.
 This is specification evidence only; implementation and runtime verification remain unchecked.

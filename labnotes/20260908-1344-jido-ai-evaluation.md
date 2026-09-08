@@ -8,7 +8,9 @@ Evaluate whether Jido AI, Jido Action, and Jido MCP can replace custom pieces th
 Vxpipe planned to build directly around ReqLLM. The focus is the agent model/tool
 loop and remote MCP integration, not room media or transport concerns.
 
-No dependency or architecture change was made during this research checkpoint.
+No runtime dependency was added during this research checkpoint. A subsequent
+planning update selected the Jido-based boundaries described below and updated the
+durable architecture and milestone specifications; implementation is still pending.
 
 ## Finding
 
@@ -21,9 +23,9 @@ The strongest fit is a hybrid:
    ordinary LLM/tool loop.
 3. Represent platform-owned agent tools with Jido Action while their handlers
    still call Vxpipe-owned processes and enforce Vxpipe permissions.
-4. Evaluate the released Jido MCP package as the remote MCP adapter because it
-   already builds on Anubis MCP, but do not adopt it until the protocol, tenancy,
-   identity, and resource-lifetime gaps below pass a focused spike.
+4. Use Jido MCP as the remote MCP integration surface behind a thin Vxpipe policy
+   boundary. Treat Jido MCP's transitive client/transport dependencies as its internal
+   implementation detail rather than a Vxpipe architecture choice.
 5. Keep long-running tool work under Vxpipe supervision. A Jido action can submit
    such work and return immediately; the remote operation must not occupy the
    ordinary ReAct loop for its full duration.
@@ -58,7 +60,8 @@ The stable package lines reviewed were:
 - Jido AI 2.3.0, which depends on Jido 2.3, Jido Action 2.3, and ReqLLM 1.x.
 - Jido Action 2.3.2, which provides action metadata, schemas, validation,
   execution, timeouts, cancellation, retries, and telemetry.
-- Jido MCP 1.1.1, whose released version depends on Anubis MCP 1.10.
+- Jido MCP 1.1.1, which provides pooled remote-client and Jido Action/Jido AI
+  integration surfaces.
 
 Vxpipe currently uses ReqLLM 1.22.0. That version is within Jido AI 2.3.0's
 declared ReqLLM range, but dependency resolution and behavior still need to be
@@ -123,8 +126,7 @@ Vxpipe room and participant supervision
             -> Jido Actions
                  -> Vxpipe variable and transfer APIs
                  -> Vxpipe remote-MCP boundary
-                      -> Jido MCP if its spike passes
-                      -> Anubis MCP directly otherwise
+                      -> Jido MCP
 ```
 
 The Vxpipe adapter would translate between Jido events and engine events. It must
@@ -200,15 +202,16 @@ This preserves prior decisions:
 - the source system remains authoritative when a timeout leaves an outcome
   unknown.
 
-## Jido MCP assessment
+## Jido MCP decision
 
 The released Jido MCP package is directly relevant rather than merely a generic
-action wrapper. It uses Anubis MCP, pools remote clients, discovers remote tools,
-can call them directly, and can generate Jido Action proxies for use by Jido AI.
+action wrapper. It pools remote clients, discovers remote tools, can call them
+directly, and can generate Jido Action proxies for use by Jido AI.
 That could replace custom connection pooling, discovery-to-tool conversion, and
 some invocation plumbing in the planned MCP adapter.
 
-It is not yet safe to assume that it replaces the full Vxpipe MCP boundary.
+Jido MCP is the selected integration surface. It does not replace the thin Vxpipe
+policy boundary.
 
 ### Gaps to prove or resolve
 
@@ -237,13 +240,10 @@ It is not yet safe to assume that it replaces the full Vxpipe MCP boundary.
    ownership.
 9. **Lifecycle cleanup:** endpoint generations and proxy artifacts need bounded
    lifetimes when tenants reconfigure integrations.
-10. **Upstream direction:** the current source branch has moved its transport
-    integration away from Anubis while the stable release still uses Anubis.
-    Vxpipe should evaluate a pinned release, not assume unreleased source behavior
-    or a frictionless upgrade path.
-
-Until these checks pass, `vxpipe_mcp` should remain a small policy-owning boundary
-even if its implementation delegates most protocol mechanics to Jido MCP.
+Jido MCP's choice of internal protocol/transport library is not one of these product
+gates. Vxpipe tests the behavior of the pinned public Jido MCP surface and does not
+depend directly on its transitive client runtime. `vxpipe_mcp` remains a small
+policy-owning boundary while delegating protocol mechanics to Jido MCP.
 
 ## Alternatives considered
 
@@ -317,17 +317,42 @@ Adopt Jido AI for the agent loop if the spike proves that:
 - replacing the current inner loop removes more custom machinery than the
   adapter introduces.
 
-Adopt Jido MCP behind the Vxpipe MCP boundary only if the separate MCP checks pass.
-Failure of the MCP spike does not block adoption of Jido AI and Jido Action for
-the rest of the agent loop.
+Use Jido MCP behind the Vxpipe MCP boundary and require the separate MCP checks before
+claiming that milestone complete. A failed gate is a concrete Jido MCP integration
+blocker to resolve; it is not permission to add a direct transitive-client fallback.
+That blocker would not prevent using Jido AI and Jido Action for the rest of the
+agent loop.
 
 ## Decision status
 
-Recommended for a focused implementation spike, not yet selected as an
-architecture dependency. No milestone ordering or durable architecture document
-was changed by this research alone.
+Selected for the milestone plan: Jido AI standalone ReAct for the ordinary agent
+loop, Jido Action for agent-visible tools, and Jido MCP behind the thin Vxpipe MCP
+policy boundary. The milestone count and order remain unchanged. No runtime
+dependency or implementation has been added yet, and the affected milestone
+specifications require focused follow-up review.
 
 ## Verification evidence
+
+### Milestone-plan update
+
+- Kept the existing 21 milestone files and ordering rather than adding a horizontal
+  dependency-adoption milestone.
+- Added the Jido AI standalone ReAct and Jido Action migration to the
+  definition-driven one-agent vertical slice.
+- Made Call Variables tools Jido Actions while retaining the room-owned variables
+  process as their authority.
+- Kept submitted long-running actions in independently supervised Vxpipe workers;
+  Jido receives a running acknowledgement and remains available for conversation.
+- Replaced the direct MCP-client milestone with Jido MCP integration/conformance and
+  updated live remote-tool integration to use Jido MCP through `vxpipe_mcp`.
+- Removed direct transitive MCP-client selection from durable architecture, milestone,
+  issue, decision-register and documentation-reference surfaces. Jido MCP's internal
+  dependency choice is not a Vxpipe planning concern.
+- Marked the five materially changed specifications for focused follow-up review; no
+  implementation checkbox was marked complete.
+- Verified changed Markdown relative links, milestone index/file count, whitespace and
+  prohibited-term hygiene for this labnote. No runtime dependency, test, browser run or
+  conformance result is claimed by this documentation checkpoint.
 
 Local inspection:
 

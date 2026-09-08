@@ -133,6 +133,16 @@ transcript is a view of what participants said. **Model context** means everythi
 supplied to the LLM: instructions, selected history, and permitted call variables.
 Neither history nor model context is the mutable variable store.
 
+The planned agent-loop implementation uses Jido AI's standalone ReAct runtime for
+ordinary model/tool iteration and Jido Action for agent-visible tools. Jido AI uses
+ReqLLM for provider access; Vxpipe does not maintain a parallel provider loop. An
+engine-owned adapter maps Jido events to call, participant, turn, streaming-output,
+interruption, visibility and usage contracts. Jido does not own room lifecycle or
+authoritative Call Variables, and the initial design does not add Jido AgentServer as
+a second participant-process authority. Submitted long-running actions return a
+correlated running acknowledgement and continue under Vxpipe-owned supervision so the
+normal ReAct run does not block subsequent conversation.
+
 The planned definition uses `call_variables.sections`, invocation values use
 `initial_variables`, and per-agent section grants use `variable_permissions`.
 The tools are `read_variables(sections)`, `update_variables(section_name, data)`,
@@ -177,33 +187,35 @@ observation. This does not introduce call-level locale/timezone fields, a defaul
 hierarchy, or a frozen new tool name/schema. It changes neither authoritative
 call timestamps nor the trusted destination-resolution boundary described below.
 
-The selected remote MCP client is [Anubis MCP](https://anubis-mcp.hexdocs.pm/readme.html),
-with `anubis_mcp` 2.0.0 the evaluated package baseline. Target its supported
-`2025-11-25` Streamable HTTP profile with JSON and SSE responses. Initialization
-uses `initialize` followed by `notifications/initialized`; subsequent requests
-carry the negotiated `MCP-Protocol-Version`. Handle optional `MCP-Session-Id`
-values only within their resolved integration/credential boundary. This replaces
-the earlier 2026 profile, not a compatibility claim for other versions or legacy
-HTTP+SSE. [Lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle),
+The selected remote MCP integration surface is
+[Jido MCP](https://hexdocs.pm/jido_mcp/readme.html). Vxpipe depends on `jido_mcp`
+directly and does not depend on the protocol/transport library that Jido MCP uses
+internally. That transitive implementation may change without changing this
+architecture. Target MCP `2025-11-25` Streamable HTTP with JSON and SSE responses.
+Initialization uses `initialize` followed by `notifications/initialized`; subsequent
+requests carry the negotiated `MCP-Protocol-Version`. Handle optional
+`MCP-Session-Id` values only within their resolved integration/credential boundary.
+This replaces the earlier 2026 profile, not a compatibility claim for other versions
+or legacy HTTP+SSE. [Lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle),
 [transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
-Keep `vxpipe_mcp` as a thin internal Mix library/umbrella-child wrapper around
-Anubis, not a custom JSON-RPC/HTTP/SSE client or parser. It owns SDK configuration,
-supervision and safe integration results, with no Calls/Repo/gateway/room or tenant-
-selection dependency. The domain owner supplies resolved endpoint, private
-credentials, authorized network policy and deadlines, retaining agent grants,
-bindings and call history. Missing required SDK hooks are a compatibility blocker
-to report, not permission to implement replacement protocol support. No public
-MCP server is in scope. SDK selection does not prove security, response limits,
-timeouts or conformance: test the configured path before enabling it. Stream/session
-recovery must never silently resubmit `tools/call` or bypass invocation deadlines.
-The same invocation retains one absolute deadline and cumulative decoded/
-decompressed response budget across SSE GET resumption, progress and SDK reconnects;
+Keep `vxpipe_mcp` as a thin internal Mix library/umbrella-child policy wrapper around
+Jido MCP, not a custom JSON-RPC/HTTP/SSE client or parser. Use Jido MCP's public
+discovery/invocation API and Jido Action/Jido AI integration rather than private or
+transitive client APIs. The wrapper owns configured supervision and Vxpipe-facing
+policy/result mapping, with no Calls/Repo/gateway/room or tenant-selection dependency.
+The domain owner supplies resolved endpoint, private credentials, authorized network
+policy and deadlines, retaining agent grants, bindings and call history. Missing
+required Jido MCP hooks are a compatibility blocker to report, not permission to add
+a direct transitive-client fallback or replacement protocol support. No public MCP
+server is in scope. Dependency selection does not prove security, response limits,
+timeouts or conformance: test the effective public Jido MCP path before enabling it.
+Stream/session recovery must never silently resubmit `tools/call` or bypass invocation
+deadlines. The same invocation retains one absolute deadline and cumulative decoded/
+decompressed response budget across stream resumption, progress and reconnects;
 neither resets for a new HTTP response. Verify initialization with and without a
-server-issued session ID.
-The [package metadata](https://hex.pm/packages/anubis_mcp) lists LGPL-3.0; verify
-release/container packaging obligations during implementation. No dependency or
-runtime adapter has been installed by this design decision.
+server-issued session ID. No dependency or runtime adapter has been installed by this
+design decision.
 
 The [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 is authoritative. Validate the client using pinned compatible versions of the
@@ -355,7 +367,7 @@ implementation details; the deferred general result/document-inspection design
 is unchanged.
 
 R50 permits explicitly configured LLM provider-native/router fallback only where
-ReqLLM supports the provider options. It does not add a Vxpipe fallback schema,
+the selected Jido AI/ReqLLM provider surface supports the provider options. It does not add a Vxpipe fallback schema,
 direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
 permission, privacy, and usage constraints, recording actual observed provider/
 model attribution without inventing hidden upstream attempts or IDs. This does

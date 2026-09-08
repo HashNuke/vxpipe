@@ -1,7 +1,9 @@
 # Call Variables and private tool projections
 
-Status: not implemented. Specification review: approved (2026-09-08).
-Prerequisites: [Definition-driven call](definition-driven-call.md).
+Status: not implemented. Specification review: approved baseline (2026-09-08);
+Jido Action follow-up review pending.
+Prerequisites: [Definition-driven call](definition-driven-call.md), including its Jido-backed
+agent loop and action boundary.
 Sources: [Call Variables](../../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned); [authorization](../../labnotes/20260905-0405-call-definition-design.md#authorization-transaction); [client visibility](../../labnotes/20260905-0405-call-definition-design.md#tool-event-visibility-and-sample-debugging--approved-g5-decision).
 
 ## Runnable outcome
@@ -12,7 +14,7 @@ During the definition-driven call, the agent reads a prefilled read-only order s
 
 - `CallVariables` is one room-scoped GenServer outside agent subtrees. It owns compiled schemas, grants, values, section/global revisions; no second mutable map in RoomAuthority. Direct bounded calls authorize trusted tenant/room/incarnation/participant, section grant, revision, datatype, and existing value-size limits without an authority round trip or current-activation/liveness check.
 - Declare `call_variables.sections`; initialize only from authorized `initial_variables`. Root keys are sections; direct keys are variables. No defaults, required-variable completeness checks at any depth, extra schema-complexity caps, write-only grants, dot paths, or automatic MCP-result mapping.
-- Derive `read_variables(sections)` from read grants and `update_variables(section,data)`/`update_variable(section,variable,value)` from read+write grants; authors do not separately list these generated bindings. Complete their revision/envelope schema from the approved sketches.
+- Derive `read_variables(sections)` from read grants and `update_variables(section,data)`/`update_variable(section,variable,value)` from read+write grants as Jido Actions; authors do not separately list these generated bindings. Their handlers call the room-owned variables process rather than storing authoritative values in Jido state. Complete their revision/envelope schema from the approved sketches.
 - Reads return only requested sections with revisions; any forbidden section fails the whole read without values. An authorized unpopulated section returns one `value: null`, without populating nested placeholders.
 - Object updates recursively merge and preserve omitted nested values; arrays replace. Direct-variable updates address literal schema keys. Explicit null assigns/clears only where nullable, retaining the key. Validate the entire candidate atomically; errors leave values/revisions unchanged.
 - Accept updates locally and hand off their exact full snapshot with turn/tool attribution to a bounded private archival port. A no-persistence host sink is explicit until the asynchronous-history slice; do not claim durability or wait for SQL. Already-submitted requests can finish after caller/agent termination.
@@ -80,4 +82,5 @@ has been reviewed.
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added deadlines/bounds, private binding isolation, projection/result refresh, conflict race, and room-shutdown caveat; re-review approved.
+The later Jido Action mechanism selection awaits focused independent review.
 This is specification evidence only; implementation and runtime verification remain unchecked.

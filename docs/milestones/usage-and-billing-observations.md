@@ -14,7 +14,10 @@ An operator inspects each call's model requests, speech-service intervals, tool/
 - Every observation is call-scoped. Add participant/activation/service-active interval/leg/turn only where evidence supports it. STT/TTS can span multiple intervals; do not equate participant presence with billing duration or divide shared costs evenly across turns. One fact with multiple dimensions is charged once per aggregate.
 - Save real provider operation/request/session IDs with integration/tenant namespace, never substitute local IDs as provider IDs. For TTS observe input-text characters and generated audio duration; for STT audio duration and recognized-text characters when available/permitted. Document measurement units; do not duplicate interim/cumulative text or retain denied text merely to count it.
 - Retain observations and derive effective attempt/component amounts: deltas add, cumulative totals replace, final supersedes estimates, explicit corrections may decrease/increase, stale estimates cannot replace finals. Deduplicate proven delivery identities, not equal values; keep included subcategories separate from aggregate totals.
-- Monetary values are exact decimal with currency/source/status; unavailable price/usage is not zero. Keep provider-reported price separate from library/catalog-derived estimates; inspect ReqLLM provenance rather than relabeling its best-effort cost as a provider bill. No new local pricing catalog.
+- Monetary values are exact decimal with currency/source/status; unavailable price/usage is
+  not zero. Keep provider-reported price separate from library/catalog-derived estimates;
+  inspect Jido AI/ReqLLM provenance rather than relabeling best-effort cost as a provider
+  bill. No new local pricing catalog.
 - Optional configured billing lookup can enrich by real provider ID only where an API supports it. Run outside live room via existing tenant credentials, preserve original observations, never reset ended_at/retention or recreate purged data. A fake adapter proves workflow; actual supported billing integrations need their own verified API evidence.
 
 Delta/cumulative mode is independent from estimate/final/correction status; finality does
