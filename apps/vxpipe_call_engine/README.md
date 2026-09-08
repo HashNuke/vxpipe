@@ -72,8 +72,10 @@ cleanup. Deterministic tests cover both a controllable runtime boundary and a re
 Action round. An activation supervisor
 starts the dispatcher, AgentServer, and coordinator as one configured readiness unit,
 restarts that set together once after an abnormal child failure, and leaves no child
-running after its retry budget is exhausted. This runtime is not yet the room's active
-inference path.
+running after its retry budget is exhausted. A participant supervisor now owns each
+participant authority and, for an agent, that activation unit; either deliberate participant
+shutdown or an exhausted activation ends the whole participant subtree without restarting
+the room. This runtime is not yet the room's active inference path.
 
 ## Installation
 

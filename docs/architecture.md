@@ -162,8 +162,12 @@ configures the running AgentServer before the activation supervisor can finish s
 One abnormal child failure restarts the whole configured set once; another within the
 restart window terminates the activation and its children. The activation supervisor is
 temporary to its future participant owner, so deliberate participant shutdown does not
-resurrect the agent. Attaching this subtree to the participant lifecycle remains the next
-runtime step.
+resurrect the agent. The implemented `ParticipantSupervisor` is that owner: it groups the
+participant authority with the optional activation, treats either as significant, and ends
+the whole participant subtree when one terminates. The room-level dynamic supervisor owns
+these participant supervisors rather than bare authorities, so an exhausted agent retry
+budget removes the participant without restarting the room. Routing room turns through the
+owned coordinator remains in progress.
 
 Submitted long-running actions return a correlated running
 acknowledgement and continue under Vxpipe-owned supervision. Their later results enter a
@@ -2059,10 +2063,12 @@ from a plan or provide the room-owned Call Variables process/tools. Existing pre
 remains intact. `AgentActivationSupervisor` now starts the dispatcher, AgentServer and
 coordinator in order, uses coordinator initialization as the synchronous configuration
 barrier, restarts the entire set once after an abnormal child failure, and tears down after
-the retry budget is exhausted without leaving registered children. The remaining milestone
-work attaches that subtree to its participant, adds runtime plan startup, and wires the
-trusted sample fixture. Exact evidence is tracked in the milestone and its implementation
-labnote.
+the retry budget is exhausted without leaving registered children. A participant supervisor
+now owns that activation together with its participant authority; ending either ends only
+that participant subtree, while the room-level participant supervisor remains available.
+The remaining milestone work routes room turns through the owned coordinator, adds runtime
+plan startup, and wires the trusted sample fixture. Exact evidence is tracked in the
+milestone and its implementation labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

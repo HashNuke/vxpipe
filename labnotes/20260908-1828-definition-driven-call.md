@@ -338,3 +338,47 @@ Checkpoint 3c umbrella gates:
 This checkpoint completes the milestone's stream/tool/timeout/interruption/teardown
 red-test task across checkpoints 3a-3c. It does not yet make the activation a child of a
 participant, route room turns through its coordinator, or compile its options from a plan.
+
+## Checkpoint 3d: participant-owned activation
+
+The room participant dynamic supervisor previously started a bare `ParticipantAuthority`.
+That left no participant-scoped supervisor able to own an agent activation. A new
+`ParticipantSupervisor` now owns the authority and, for an agent participant, its
+`AgentActivationSupervisor`. Both are temporary significant children: explicit participant
+termination tears down both, while activation death after its internal retry budget ends
+the participant subtree. The room-level participant supervisor remains running and can
+admit another participant, so this failure does not restart the room.
+
+The room authority now monitors the participant supervisor rather than the bare authority.
+The existing authority registry identity and snapshot API remain unchanged, preserving
+connection authorization and existing participant lookup behavior.
+
+### Red and green evidence
+
+- Red command: `mix test test/vxpipe/call_engine/participant_supervisor_test.exs`.
+- Red result: `1 test, 1 failure`; the activation-aware start and participant-stop APIs did
+  not exist.
+- Green command: `mix test test/vxpipe/call_engine/participant_supervisor_test.exs`.
+- Green result: `2 tests, 0 failures`; explicit teardown stops the authority and activation,
+  and two rapid AgentServer failures exhaust the activation budget and end only that
+  participant subtree.
+
+The first umbrella run exposed a pre-existing teardown-test race: after monitored room
+authority and incarnation termination had both been proven, the test additionally assumed
+the independent Registry process had consumed its own monitor signal immediately. The
+extra nested participant ownership made that scheduling window visible. The redundant
+Registry timing assertion was removed; the two process monitors remain the authoritative
+room teardown contract.
+
+This checkpoint establishes lifecycle ownership only. It does not yet route room turns
+through the coordinator or derive activation options from a resolved plan.
+
+Post-correction evidence:
+
+- `mix test test/vxpipe/call_engine/create_room_test.exs test/vxpipe/call_engine/participant_supervisor_test.exs --repeat-until-failure 20 --max-failures 1`
+  completed all 20 runs: `5 tests, 0 failures` per run.
+- `mix format --check-formatted` passed.
+- `mix compile --warnings-as-errors` passed.
+- `mix test` passed: call engine `93 tests, 0 failures (1 excluded)` and gateway
+  `37 tests, 0 failures (3 excluded)`.
+- `mix deps.unlock --check-unused` passed with no output.

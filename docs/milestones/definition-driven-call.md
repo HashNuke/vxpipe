@@ -208,6 +208,23 @@ Checkpoint 3c umbrella gates pass: formatting, warnings-as-errors, call engine `
 0 failures (1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused
 dependencies.
 
+Implementation evidence, checkpoint 3d (2026-09-08): introduced a participant-level
+supervisor between the room's participant dynamic supervisor and each participant
+authority. An agent participant owns its configured activation as a sibling of its
+authority; both children are temporary and significant. Deliberately ending the participant
+therefore tears down its authority and complete activation, while exhausting the
+activation's internal one-restart budget ends that participant subtree without ending or
+restarting the room-level participant supervisor. Human participants use the same ownership
+boundary without an activation child. Room turn routing and plan-driven startup remain
+unchecked.
+
+Red: the focused ownership test failed because the room participant supervisor had no
+activation-aware start contract or participant stop operation. Green: the focused file
+passes two tests covering explicit teardown and exhausted activation retries, and the
+combined room-teardown/participant-ownership files passed twenty repeated runs. Umbrella
+gates pass: formatting, warnings-as-errors, call engine `93 tests, 0 failures (1 excluded)`,
+gateway `37 tests, 0 failures (3 excluded)`, and no unused dependencies.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

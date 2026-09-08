@@ -1289,8 +1289,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp start_participant(command, state) do
     case RoomParticipantSupervisor.start_participant(state.snapshot.incarnation_id, command) do
-      {:ok, participant_authority, participant} ->
-        monitor = Process.monitor(participant_authority)
+      {:ok, participant_supervisor, participant} ->
+        monitor = Process.monitor(participant_supervisor)
 
         state = %{
           state

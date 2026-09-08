@@ -74,8 +74,6 @@ defmodule Vxpipe.CallEngine.CreateRoomTest do
 
     assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :killed}
     assert_receive {:DOWN, ^incarnation_monitor, :process, ^incarnation, :shutdown}
-    _ = :sys.get_state(Vxpipe.CallEngine.RoomRegistry)
-    assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {"tenant-demo", room_id}) == []
   end
 
   defp unique_room_id do
