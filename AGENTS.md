@@ -193,6 +193,8 @@ proportionate checks when it changes generated configuration.
 ### Jido
 
 - [Jido AI documentation](https://hexdocs.pm/jido_ai/)
+- [Jido AI Agent](https://hexdocs.pm/jido_ai/Jido.AI.Agent.html)
+- [Jido request lifecycle and concurrency](https://hexdocs.pm/jido_ai/request_lifecycle_and_concurrency.html)
 - [Standalone ReAct runtime](https://hexdocs.pm/jido_ai/standalone_react_runtime.html)
 - [Jido Action documentation](https://hexdocs.pm/jido_action/)
 

@@ -1,8 +1,9 @@
 # Call-definition implementation milestones
 
 Status: 21 milestone specifications; implementation has not started. The earlier behavior
-contracts were independently reviewed; the user-approved Jido mechanism update awaits
-focused follow-up review in the affected specifications.
+contracts and the five Jido-updated specifications have completed focused review. The Jido
+MCP milestones retain one explicit implementation blocker for safe dynamic tenant-tool
+exposure.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and Jido runtime selection documented during planning on 2026-09-08.
 Jido AI replaces custom agent-loop work and Jido MCP replaces direct client-library work
@@ -88,11 +89,13 @@ option to make a demo pass. A later slice expands support without changing the f
 contracts. Trusted embedded/development fixtures are not public production admission.
 
 The engine owns room/participant/capability lifecycles and protocol-neutral contracts.
-Use Jido AI's standalone ReAct runtime for ordinary agent model/tool iteration and Jido
-Action for the agent-visible tool contract. ReqLLM remains Jido AI's provider layer rather
-than Vxpipe's custom orchestration surface. Vxpipe still owns identities, authorization,
-stream/TTS projection, interruption, submitted background workers and room lifecycle; do
-not introduce Jido AgentServer as a competing lifecycle authority in the initial plan.
+Use one `Jido.AI.Agent`/AgentServer as the supervised inference child of each active agent
+participant, replacing the current custom model/tool-loop process rather than becoming a
+competing participant authority. Jido owns that agent's ReAct requests, conversation
+projection and registered Jido Actions; ReqLLM remains its provider layer. Vxpipe still owns
+identities, turn serialization, authorization, stream/TTS projection, interruption,
+submitted background workers, transfers, variables and room lifecycle. Standalone ReAct is
+limited to focused adapter tests, not a parallel production loop.
 Introduce `vxpipe_calls` for application workflows, `vxpipe_persistence` for Ecto/Repo,
 and `vxpipe_artifacts` for object storage only in their owning milestones. The gateway
 authenticates/translates; it does not gain direct Repo or provider orchestration ownership.
@@ -104,6 +107,11 @@ enforcement and result mapping without room, tenant-selection, Repo or gateway d
 Vxpipe does not depend on or call Jido MCP's transitive client library directly. Its standalone
 integration/conformance checkpoint precedes live-call integration and targets
 MCP `2025-11-25`, replacing the earlier `2026-07-28` profile. No custom-client fallback.
+The reviewed Jido MCP proxy-sync path is not yet suitable for externally configured tenant
+catalogs because it requires atom endpoint IDs and generates Action modules from discovered
+definitions. The MCP milestones remain unimplemented until a public Jido mechanism preserves
+per-binding names/schemas without external atom/module growth; private proxy APIs and a
+generic model-visible endpoint/tool dispatcher are not workarounds.
 Preserve dependency direction in child `mix.exs` files.
 
 Runtime variables acknowledge local acceptance and asynchronous archival handoff, never
@@ -125,7 +133,7 @@ provider-fallback chain.
 
 This is a coverage map, not another approval or implementation checklist.
 
-- **Definition-driven one-agent call**: G1/G2; R10, R47; selected Jido AI/Jido Action agent loop.
+- **Definition-driven one-agent call**: G1/G2; R10, R47; supervised per-activation Jido AI/Jido Action agent loop.
 - **Local Morse-code audio providers**: optional local verification capabilities requested during planning.
 - **Call Variables and private tool projections**: G3/G5; R17, R18.
 - **Conversation during background tools**: G4; R14–R16, R29.
@@ -156,15 +164,15 @@ are complete; review approval is separate from the unchecked implementation boxe
 
 | Milestone | Review status | Evidence |
 | --- | --- | --- |
-| [Definition-driven one-agent call](definition-driven-call.md#specification-review) | Follow-up pending | Original behavior approved by milestone_review_a; later Jido AI/Jido Action mechanism is user-approved and awaits focused independent review. |
+| [Definition-driven one-agent call](definition-driven-call.md#specification-review) | Approved | Original behavior approved by milestone_review_a; focused Jido review corrected standalone ReAct to one supervised per-activation AgentServer and added readiness/teardown gates. |
 | [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Approved | milestone_review_a; real audio, independent fixtures, bounded streaming and explicit transport limits. |
-| [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Follow-up pending | Original behavior approved by milestone_review_b; Jido Action mechanism is user-approved and awaits focused independent review. |
-| [Conversation during background tools](background-tool-conversation.md#specification-review) | Follow-up pending | Original behavior approved by milestone_review_c; Jido ReAct/Action mechanism is user-approved and awaits focused independent review. |
+| [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Approved | Original behavior approved by milestone_review_b; focused Jido review added finite Action-module, strict-envelope and private-context gates. |
+| [Conversation during background tools](background-tool-conversation.md#specification-review) | Approved | Original behavior approved by milestone_review_c; focused Jido review added the retained in-memory Vxpipe mailbox/internal-continuation boundary instead of best-effort Jido injection. |
 | [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Approved | milestone_review_a; Separated reusable revision metadata from per-call plan/credential resolution; excluded credentials and leases from revisions/routes; focused re-review approved. |
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
-| [Jido MCP integration and conformance](mcp-client-library.md#specification-review) | Follow-up pending | Original behavior/profile approved by milestone_review_a; Jido MCP dependency and Jido Action integration are user-approved and await focused independent review. |
-| [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Follow-up pending | Original live-call behavior and policy boundary approved by milestone_review_a; later Jido MCP mechanism is user-approved and awaits focused independent review. |
+| [Jido MCP integration and conformance](mcp-client-library.md#specification-review) | Approved; implementation blocked | Focused Jido review approved the public boundary but found unsafe externally driven atom/module growth in current dynamic proxy sync; safe per-binding exposure must be resolved first. |
+| [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Approved; implementation blocked | Live-call behavior remains approved and explicitly inherits the prerequisite's Jido dynamic tenant-tool gate. |
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
 | [Allowlisted agent-to-agent transfers](agent-transfers.md#specification-review) | Approved | milestone_review_c; Specified history modes, precommit destination silence/source continuity, empty-list and total-deadline races; re-review approved. |
 | [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md#specification-review) | Approved | milestone_review_a; Distinguished omitted policy fields from denied omitted route sources and added fail-closed policy-apply admission/bridge checks; re-review approved. |
@@ -184,8 +192,8 @@ Verified on 2026-09-08:
 
 - All 21 milestone files have specifications, prerequisites, implementation task lists,
   acceptance/failure checks and manual verification steps. Earlier behavior contracts have
-  independent review evidence; the five Jido-updated specifications are marked for focused
-  follow-up review rather than presenting the new mechanism as already reviewed.
+  independent review evidence; focused follow-up review is complete for all five Jido-updated
+  specifications. Review approval does not erase the explicit MCP implementation blocker.
 - The 21 index entries match the files exactly; filenames/titles have no ordering numbers.
   All explicit prerequisites occur earlier in the index; no dependency cycles were found.
 - All milestone implementation/verification boxes remain unchecked, along with the index
@@ -197,10 +205,12 @@ Verified on 2026-09-08:
 - The three design sources retain all 43 existing fenced examples unchanged from the
   baseline; their 19 JSON examples still parse. Diff/terminology/path checks pass.
 - The pre-Jido cross-index audit by milestone_review_c found no remaining coverage or
-  dependency findings in that baseline. The Jido follow-up review remains explicitly open.
+  dependency findings in that baseline. The focused Jido source/API review corrected the
+  production runtime boundary, late-completion handoff and dynamic-tool assumptions.
 - The Jido selection changes implementation mechanisms, not the approved MCP product
   profile, count, filenames or order. Jido MCP owns its internal client implementation;
-  Vxpipe validates only the effective public integration and its own policy boundary.
+  Vxpipe validates only the effective public integration and its own policy boundary. The
+  current public proxy mechanism does not satisfy the tenant-catalog identity/lifetime gate.
 
 This checkpoint changes documentation only. No runtime, browser, provider, official
 conformance, or umbrella test execution is claimed; those remain implementation gates.

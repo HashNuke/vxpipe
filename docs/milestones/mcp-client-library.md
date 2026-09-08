@@ -1,7 +1,9 @@
 # Jido MCP integration and conformance
 
-Status: not implemented. Specification review: approved baseline (2026-09-08);
-Jido MCP follow-up review pending.
+Status: not implemented. Specification review: approved, including the Jido MCP
+follow-up (2026-09-08). Implementation blocker: the reviewed public dynamic-tool sync
+requires trusted atom endpoint IDs and creates runtime Action modules from discovered
+tool definitions; that cannot safely represent tenant-configured catalogs yet.
 Prerequisites: [Definition-driven call](definition-driven-call.md), including its
 Jido AI/Jido Action runtime boundary. No room, database, telephony or live model provider
 is required for this standalone checkpoint.
@@ -22,8 +24,9 @@ dependency boundary without starting a voice room, database, or live model provi
   lifecycle through its public API. Its choice of transitive protocol/transport library is
   an internal Jido detail and may change without changing Vxpipe architecture.
 - Use Jido MCP's public discovery/invocation API and its supported Jido Action/Jido AI tool
-  integration. Do not call or configure a transitive MCP client library directly from
-  Vxpipe, depend on private Jido modules, or maintain a second client path.
+  integration with the per-activation Jido AgentServer. Do not call or configure a
+  transitive MCP client library directly from Vxpipe, depend on private Jido modules, or
+  maintain a second client path.
 - Target MCP `2025-11-25` Streamable HTTP with JSON and SSE responses, replacing the earlier
   `2026-07-28` target. Pin a compatible Jido MCP release at implementation and record its
   exact version/lockfile. Exercise `initialize`/`notifications/initialized`, the negotiated
@@ -38,9 +41,18 @@ dependency boundary without starting a voice room, database, or live model provi
   resolution, enabled-tool grants, call/agent lifetimes, catalog scope and history. The
   library cannot consult tenant records or infer permissions from server descriptions.
 - Keep endpoint/tool identifiers bounded and safe for externally configured tenant data.
-  Jido MCP integration must not create an unbounded set of atoms or modules. If its dynamic
-  action-sync API requires trusted static identifiers, add a bounded Vxpipe catalog strategy
-  through public Jido APIs or treat the mismatch as an implementation blocker.
+  Jido MCP integration must not create atoms or Action modules from an unbounded sequence of
+  tenant endpoint IDs, local aliases, remote tool names, descriptions, or schema revisions.
+  The currently reviewed public sync path requires a trusted atom endpoint ID and generates
+  proxy modules whose names vary with discovered tool definitions. Purging module code does
+  not garbage-collect its atom. Therefore resolve this through a supported public Jido
+  MCP/Jido AI data-backed or otherwise lifetime-bounded tool surface before implementation;
+  do not call its private proxy generator.
+- Do not substitute the generic `Jido.MCP.Actions.CallTool` as the model-visible product
+  contract. Its model-supplied endpoint/tool selector and generic arguments map do not
+  preserve the call plan's local aliases and pinned per-tool input schemas. A future public
+  Jido integration must expose each authorized local binding with its exact schema while
+  keeping endpoint selection private.
 - Enforce verified HTTPS, address-at-connect/rebinding checks and no redirect credential
   forwarding at the effective outbound boundary. Apply decoded/decompressed byte limits
   during receipt; preserve definite non-submission versus unknown submitted outcomes. Jido
@@ -69,6 +81,9 @@ dependency boundary without starting a voice room, database, or live model provi
 
 - [ ] Verify and pin a Jido MCP release against the selected profile and project-owned
   security, identity, size-limit, timeout and no-resubmission requirements.
+- [ ] Resolve the dynamic tenant-tool blocker through a public Jido API that preserves local
+  binding names and pinned schemas without externally driven atom/module growth; record the
+  exact supported mechanism before adding the dependency.
 - [ ] Red-test the smallest `vxpipe_mcp` contract, then add Jido MCP to the owning internal
   library with its lockfile; do not depend directly on Jido MCP's transitive client runtime.
 - [ ] Wire configured Jido MCP supervision/readiness, discovery and validated invocation,
@@ -100,7 +115,9 @@ dependency boundary without starting a voice room, database, or live model provi
   addresses and credential forwarding obey production policy.
 - [ ] Test-only loopback settings cannot be selected through production integration config.
 - [ ] Repeatedly register and retire bounded test catalogs; externally supplied identifiers
-  do not cause unbounded atom/module growth or cross-tenant tool resolution.
+  do not cause atom/module growth proportional to tenant/catalog churn or cross-tenant tool
+  resolution. Measure BEAM atom/module counts across many unique endpoint, tool and schema
+  revisions rather than checking only live proxy cleanup.
 - [ ] Initialization completes before discovery with and without a server-issued session ID;
   sessions/credentials do not cross integration generations and reconnect never repeats an
   uncertain invocation.
@@ -127,7 +144,8 @@ implementation, public MCP server feature, local/stdio product integration, full
 multi-version promise, OAuth onboarding, generic resources/prompts UI, server-requested
 sampling/elicitation, auto-fetching documents, or remote cancellation framework. Room
 authorization, background conversation and archival integration follow in the remote-MCP
-milestone.
+milestone. A generic model-visible endpoint/tool dispatcher or use of Jido MCP private proxy
+modules is not an acceptable workaround for the compatibility blocker.
 
 ## Completion and evidence
 
@@ -143,7 +161,10 @@ has been reviewed.
 
 The earlier client-library and `2025-11-25` behavior contracts were independently reviewed
 by milestone_review_a on 2026-09-08, including discovery bounds, resumed-stream budgets and
-optional-session initialization. The subsequent Jido MCP dependency and Jido AI integration
-selection is user-approved but awaits an independent follow-up review. The filename, index
-position and standalone outcome are retained. This is specification evidence only;
+optional-session initialization. The 2026-09-08 Jido follow-up inspected the current public
+discovery, invocation, Agent sync, proxy-generation and cleanup paths. It approved the
+AgentServer integration boundary but found externally driven atom/module growth in the
+dynamic proxy path and rejected the generic call action as a schema/authority workaround.
+The corrected specification is approved with that explicit implementation blocker. The
+filename, index position and standalone outcome are retained. This is specification evidence only;
 implementation and runtime verification remain unchecked.

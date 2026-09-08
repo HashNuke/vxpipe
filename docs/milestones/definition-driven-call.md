@@ -1,7 +1,7 @@
 # Definition-driven one-agent call
 
-Status: not implemented. Specification review: approved baseline (2026-09-08);
-Jido integration follow-up review pending.
+Status: not implemented. Specification review: approved, including the Jido
+integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
 Sources: [Canonical representation and minimal definition](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-definition-gap-review.md).
 
@@ -18,11 +18,24 @@ cannot change that live call.
 - Use the date-based `YYYYMMDD.NN` schema-version contract. Keep resource ID/revision distinct from schema version. Choose/document the first implemented schema release during implementation; the labnote's representative JSON is a candidate, not a released schema.
 - Require different existing string refs `entry_caller` and `entry_receiver` into `participants`; participant kind is human or agent. Initially run the web-caller/agent-receiver path. Do not activate the entire catalog. Keep definition key, runtime participant ID, connection ID, and fresh activation ID distinct.
 - Resolve prompts, capability defaults/overrides, and supported provider options once before live startup. Provider configuration stays separate from engine interruption/duration policy. Pin the resulting immutable plan; live orchestration must not consult mutable definitions.
-- Replace the current custom ReqLLM model/tool iteration with Jido AI's standalone ReAct
-  runtime behind an engine-owned agent-loop adapter. Jido AI owns ordinary model/tool
-  iteration and uses ReqLLM for provider access; Vxpipe continues to own request/turn/
-  participant identity, output pacing, interruption, authorization and room lifecycle.
-  Do not introduce Jido AgentServer as a second room/participant lifecycle owner.
+- Replace the current custom ReqLLM model/tool iteration process with one
+  `Jido.AI.Agent`/AgentServer per active agent-participant activation. Start it through the
+  participant subtree's owning supervisor and terminate it with that activation. Jido owns
+  only the agent's conversation context, serialized ReAct request lifecycle, registered
+  actions, and its internal request tasks; it is not a room, participant, media, transfer,
+  variables, persistence, or client-protocol authority. This replaces one coherent Vxpipe
+  capability layer rather than adding a second participant lifecycle.
+- Define a finite application-owned Jido agent module and configure each activation from
+  the pinned plan before declaring it ready: initialize the selected model and context,
+  set the resolved system prompt, register the supported action modules, and pass private
+  execution context only at the request/action boundary. Use Jido's public APIs; do not
+  generate modules from definition input or mutate a ready agent piecemeal.
+- An engine-owned coordinator serializes external and internal turns and maps Jido request
+  handles/events into Vxpipe request/turn/participant identities, output pacing,
+  interruption, visibility, and usage. Configure Jido request policy to reject overlapping
+  asks and configure automatic tool retries to zero; the coordinator, not Jido concurrency,
+  owns the voice turn queue. Standalone ReAct may be used in isolated adapter tests, but it
+  is not a separate production loop beside the per-activation AgentServer.
 - Constructors return path-specific errors. Closed registries map public strings to allowed implementations; no external atom/module/function creation, executable expressions, or credentials in the public plan or public errors.
 - Generate each agent's enabled tool surface from one local-key `tools` map. Express
   supported registered platform/host bindings as Jido Actions while their handlers retain
@@ -37,10 +50,12 @@ cannot change that live call.
 
 - [ ] Write failing constructor/compiler tests for entry refs, schema version, participant identity, unsupported fields/options, secret-safe errors, and plan pinning.
 - [ ] Implement the minimal typed compiler and JSON/Elixir parity for the supported one-agent subset.
-- [ ] Red-test the Jido event adapter against the existing stream, tool, timeout and
-  interruption contracts; add compatible Jido AI/Jido Action dependencies and lockfile.
-- [ ] Route ordinary agent inference and one small host action through standalone ReAct,
-  with automatic tool retries disabled and concurrency chosen explicitly.
+- [ ] Red-test the per-activation Jido AgentServer/coordinator against the existing stream,
+  tool, timeout, teardown and interruption contracts; add compatible Jido AI/Jido Action
+  dependencies and lockfile.
+- [ ] Route ordinary agent inference and one small host action through the supervised Jido
+  agent, with overlapping asks rejected, automatic tool retries disabled, and tool
+  concurrency chosen explicitly.
 - [ ] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
 - [ ] Wire one trusted sample/embedded fixture to the new path without redesigning the responsive console.
 - [ ] Specify supported-feature diagnostics for later milestone features; reject enabled unsupported privacy/connection/tool settings before starting providers.
@@ -57,7 +72,11 @@ cannot change that live call.
 - [ ] One host action completes through Jido Action and the ReAct continuation without
   duplicate tool/text events; invalid input fails before the action handler runs.
 - [ ] Jido stream cancellation maps to the existing interrupted turn without ending the
-  participant or granting Jido authority over room lifecycle. Configured tool retries are zero.
+  participant or granting Jido authority over room lifecycle. Configured tool retries are
+  zero, and a stale event from a terminated activation cannot reach its replacement.
+- [ ] Kill the Jido process: its participant supervisor applies the declared restart policy
+  without restarting the room. Commit a transfer or end the participant: the Jido process
+  and its request-task subtree terminate without orphaned work or speech.
 - [ ] Existing text, speech recognition, streamed model/TTS output, and barge-in regression tests stay green.
 
 ## Manual verification
@@ -71,8 +90,8 @@ cannot change that live call.
 ## Scope boundaries
 
 No Ecto, public production admission, remote MCP, multi-party mixing, transfers, recording,
-Jido AgentServer adoption, or new provider integration. This slice does not implement
-submitted background actions; those remain in their own milestone. Reject rather than
+or new provider integration. This slice does not implement submitted background actions;
+those remain in their own milestone. Reject rather than
 pretend to support enabled runtime features. Tenant identity here is supplied by the trusted
 host; client-supplied tenant strings do not establish authority.
 
@@ -91,5 +110,9 @@ has been reviewed.
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added reserved/generated tool alias collision checks and invocation entry/tenant non-override. Re-review approved; first position correct.
-The later Jido mechanism selection has not received an independent follow-up review.
+The 2026-09-08 Jido follow-up found that public Jido MCP tool synchronization targets a
+running `Jido.AI.Agent`, while standalone ReAct has no equivalent public synchronization
+surface. The specification now uses one supervised AgentServer as the replaceable
+per-agent inference layer, with explicit readiness, request serialization and teardown
+boundaries. Focused source review approved this corrected mechanism.
 This is specification evidence only; implementation and runtime verification remain unchecked.

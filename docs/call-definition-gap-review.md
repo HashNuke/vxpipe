@@ -141,7 +141,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
-| R22 | G6 | **Resolved:** use Jido MCP through the thin `vxpipe_mcp` policy wrapper; Vxpipe does not directly depend on Jido MCP's transitive client runtime. The initial profile is 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Earlier 2026 profile and custom/direct-client work are superseded; other compatibility needs explicit tested support. |
+| R22 | G6 | **Resolved, with implementation gate:** use Jido MCP through the thin `vxpipe_mcp` policy wrapper; Vxpipe does not directly depend on Jido MCP's transitive client runtime. The initial profile is 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Earlier 2026 profile and custom/direct-client work are superseded. Before tenant catalogs ship, a public Jido integration must expose pinned local bindings without externally driven atom/module growth; the current proxy path is insufficient. |
 | R23 | G6 | **Resolved:** use a proper JSON Schema validator, baseline 2020-12, on actual outgoing arguments against pinned inputSchema before submission; reject unsupported enabled bindings before exposure, never weaken constraints or automatically fetch external refs. |
 | R24 | G6 | **Deferred:** store received responses and descriptors with observed outcomes; the agent chooses authorized next steps. Detailed result projection and document/media inspection belong to the dedicated issue, not automatic fetching or a text/JSON-only policy. |
 | R25 | G6 | **Deferred:** server-requested sampling/elicitation and related interactions belong to the dedicated issue; advertise no unimplemented capabilities, report missing capability clearly, and add no continuation/retry exception. |
@@ -1164,6 +1164,15 @@ gates; validate them explicitly. Stream/session recovery must not resubmit
 decompressed byte budget across stream resumption, progress and reconnects,
 not fresh limits per HTTP response. Test initialization both with and without a
 server-issued session ID.
+
+**Focused Jido integration review:** the reviewed public tool-sync action targets a
+running Jido AI agent, requires a trusted atom endpoint ID, and creates Action modules
+whose names vary with discovered tool definitions. Purging those modules cannot reclaim
+their atoms. This does not satisfy dynamically configured tenant catalog lifetimes. Require
+a supported public Jido data-backed or otherwise lifetime-bounded per-binding tool surface
+before implementation. Do not invoke the private proxy generator, and do not replace the
+local binding contract with the generic model-visible endpoint/tool selector Action. The
+gate blocks MCP milestones without blocking Jido AI platform tools.
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 and [lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
 and pinned [client conformance harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)

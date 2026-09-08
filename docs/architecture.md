@@ -133,15 +133,25 @@ transcript is a view of what participants said. **Model context** means everythi
 supplied to the LLM: instructions, selected history, and permitted call variables.
 Neither history nor model context is the mutable variable store.
 
-The planned agent-loop implementation uses Jido AI's standalone ReAct runtime for
-ordinary model/tool iteration and Jido Action for agent-visible tools. Jido AI uses
-ReqLLM for provider access; Vxpipe does not maintain a parallel provider loop. An
-engine-owned adapter maps Jido events to call, participant, turn, streaming-output,
-interruption, visibility and usage contracts. Jido does not own room lifecycle or
-authoritative Call Variables, and the initial design does not add Jido AgentServer as
-a second participant-process authority. Submitted long-running actions return a
-correlated running acknowledgement and continue under Vxpipe-owned supervision so the
-normal ReAct run does not block subsequent conversation.
+The planned agent-loop implementation places one `Jido.AI.Agent`/AgentServer under each
+active agent participant's Vxpipe-owned supervision subtree. It replaces the current
+custom model/tool-loop capability process; it does not become a second room or participant
+authority. Jido owns that activation's conversation projection, ordinary ReAct request
+lifecycle, registered Jido Actions, and internal request tasks, using ReqLLM for provider
+access. Vxpipe owns participant/activation identity, serialized voice turns, output pacing,
+interruption, authorization, transfers, authoritative Call Variables, persistence and
+client projections. The participant supervisor starts, gates readiness for, and terminates
+the Jido child. Standalone ReAct is useful for focused adapter tests, not a parallel
+production loop.
+
+The engine-owned coordinator maps Jido request handles/events to call, participant, turn,
+streaming-output, visibility and usage contracts and permits only one external or internal
+request in flight. Submitted long-running actions return a correlated running
+acknowledgement and continue under Vxpipe-owned supervision. Their later results enter a
+bounded Vxpipe mailbox. Once the Jido agent is idle, the coordinator supplies the result in
+an engine-origin continuation request that is never projected as caller speech. Do not use
+Jido `inject`/`steer` as the delivery guarantee: those controls apply only to an active run
+and queued input can be dropped when that run terminates.
 
 The planned definition uses `call_variables.sections`, invocation values use
 `initial_variables`, and per-agent section grants use `variable_permissions`.
@@ -216,6 +226,16 @@ decompressed response budget across stream resumption, progress and reconnects;
 neither resets for a new HTTP response. Verify initialization with and without a
 server-issued session ID. No dependency or runtime adapter has been installed by this
 design decision.
+
+The currently reviewed public Jido MCP synchronization path is not suitable for dynamic
+tenant catalogs yet: it requires a trusted atom endpoint ID and creates Action modules whose
+names vary with discovered endpoint/tool/schema definitions. Removing module code does not
+remove its atom. Before MCP implementation, require a supported public Jido mechanism that
+exposes each enabled local binding and pinned schema without atom/module growth driven by
+tenant reconfiguration. Do not call the private proxy generator or expose the generic
+endpoint/tool selector action to the model; neither preserves this architecture's safety and
+per-binding authority contract. This blocks the MCP milestones, not the earlier Jido agent,
+platform-tool, or Call Variables work.
 
 The [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 is authoritative. Validate the client using pinned compatible versions of the

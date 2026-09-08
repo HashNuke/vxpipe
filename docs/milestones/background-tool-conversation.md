@@ -1,7 +1,7 @@
 # Conversation during background tools
 
-Status: not implemented. Specification review: approved baseline (2026-09-08);
-Jido ReAct/Action follow-up review pending.
+Status: not implemented. Specification review: approved, including the Jido
+ReAct/Action follow-up (2026-09-08).
 Prerequisites: [Variables and tool projections](call-variables-and-tool-visibility.md).
 Sources: [Background tools](../../labnotes/20260905-0405-call-definition-design.md#provider-independent-background-tools--approved-g4-decision); [timeouts](../../labnotes/20260905-0405-call-definition-design.md#mcp-timeouts-with-unconfirmed-outcomes--approved-g4-decision).
 
@@ -18,7 +18,15 @@ A deterministic slow host tool starts during a call. The agent acknowledges it, 
   that worker, then returns immediately. A successfully started invocation gets one correlated running
   acknowledgement as its ordinary tool response. Preserve accompanying assistant text in
   buffered and streaming adapter results without double delivery.
-- Completion becomes a distinct invocation-linked update to the latest conversation, not a second ordinary result or old-turn replay. One agent coordinates output; no competing speaker or periodic automatic progress announcements.
+- Completion becomes a distinct invocation-linked engine observation, not a second ordinary
+  result or old-turn replay. The per-agent coordinator retains it in a bounded in-memory
+  mailbox until the matching live activation can consume it. If a Jido request is active,
+  wait for its terminal event; when idle, submit one serialized internal continuation
+  request with engine-origin provenance. Never rely on Jido `inject`/`steer` for delivery:
+  those controls reject an idle agent and may drop queued input when an active run ends.
+  The internal request is model context, not caller speech, and must not be projected as a
+  user message or public transcript event. One agent coordinates output; no competing
+  speaker or periodic automatic progress announcements.
 - Speech/text interruption stops stale conversational output and unsent work, not an already-submitted invocation. Agent transfer/room shutdown terminates owned local workers; that is not remote rollback. A request already submitted to CallVariables can finish independently.
 - Submitted timeout without definitive outcome reports unknown; pre-submission failure stays definite. No automatic executor retry for any failure, no tool read/write classification, durable worker, or explicit cancellation feature.
 - Bound worker counts, queueing, deadlines, and result handoff; acknowledge only accepted work. Preserve invocation/turn/participant attribution and the existing visibility/private-event separation.
@@ -29,6 +37,10 @@ data: it neither updates Call Variables automatically nor authorizes interrupted
 Jido's ordinary ReAct loop may wait for completing actions; it must not wait for the lifetime
 of a submitted action. ReAct cancellation stops the current conversational request, not the
 already accepted Vxpipe worker.
+The coordinator keeps exactly one ordinary or internal Jido request in flight. User input,
+interruptions, and completion observations race through that queue with explicit activation
+and request identities; an AgentServer busy rejection is handled as a coordinator invariant
+failure, never by silently dropping or concurrently resubmitting an observation.
 
 ## Implementation checklist
 
@@ -36,7 +48,8 @@ already accepted Vxpipe worker.
 - [ ] Split model-turn cancellation from submitted invocation lifetime and supervisor ownership.
 - [ ] Preserve mixed text/tool model results and encode Jido Action running acknowledgements
   plus later updates through the engine-owned Jido event adapter.
-- [ ] Integrate latest-conversation completion scheduling and private lifecycle facts for later archival.
+- [ ] Integrate the bounded completion mailbox, terminal-event scheduling, engine-origin
+  continuation requests, and private lifecycle facts for later archival.
 - [ ] Add tagged provider interoperability coverage; local context encoding alone is not evidence of provider acceptance.
 
 ## Acceptance and failure checks
@@ -46,6 +59,9 @@ already accepted Vxpipe worker.
 - [ ] Time out after submission: outcome unknown, no resubmission; keep a known definitive result if already received.
 - [ ] Kill agent subtree: local worker stops, room variables remain; no cancellation/rollback claim for remote work.
 - [ ] Multiple completions/out-of-order messages preserve identities and never produce duplicate ordinary tool results or competing TTS streams.
+- [ ] Deliver a completion while the Jido agent is idle and while a request is terminating:
+  each is consumed once; no best-effort injection loss, fake public user message, or busy
+  retry loop occurs.
 
 Additional acceptance gates:
 
@@ -81,5 +97,8 @@ has been reviewed.
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added provider-independent acknowledgement/result rules and mixed-output, stale-worker, unsent-work, saturation checks; re-review approved.
-The later Jido ReAct/Action mechanism selection awaits focused independent review.
+The 2026-09-08 Jido follow-up found that normal ReAct awaits completing actions and that
+`inject`/`steer` is best-effort only for an active request. The corrected specification uses
+a Vxpipe-owned bounded completion mailbox plus serialized, engine-origin continuation
+requests. Focused source review approved this mechanism and its no-public-user-event gate.
 This is specification evidence only; implementation and runtime verification remain unchecked.

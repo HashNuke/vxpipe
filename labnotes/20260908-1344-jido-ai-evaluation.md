@@ -19,8 +19,10 @@ The strongest fit is a hybrid:
 1. Keep Vxpipe as the authority for calls, rooms, participants, media,
    authorization, transfers, variables, persistence policy, and client event
    projection.
-2. Evaluate Jido AI's standalone ReAct runtime as the implementation of an agent's
-   ordinary LLM/tool loop.
+2. Use one supervised `Jido.AI.Agent`/AgentServer as the implementation of each
+   active agent participant's ordinary LLM/tool loop. It replaces the current
+   inference capability process and remains subordinate to Vxpipe's participant
+   lifecycle.
 3. Represent platform-owned agent tools with Jido Action while their handlers
    still call Vxpipe-owned processes and enforce Vxpipe permissions.
 4. Use Jido MCP as the remote MCP integration surface behind a thin Vxpipe policy
@@ -67,7 +69,7 @@ Vxpipe currently uses ReqLLM 1.22.0. That version is within Jido AI 2.3.0's
 declared ReqLLM range, but dependency resolution and behavior still need to be
 verified in the umbrella.
 
-### Standalone ReAct runtime
+### ReAct runtime and AgentServer
 
 Jido AI explicitly presents its standalone ReAct runtime for applications that
 already own their orchestration. It supplies:
@@ -85,11 +87,13 @@ This overlaps substantially with the inner loop in
 `Vxpipe.CallEngine.Capability.ModelInference`. It does not overlap with WebRTC,
 audio routing, STT, TTS, room supervision, or client protocol handling.
 
-Jido's full AgentServer is not the first integration target. It owns an agent
-process lifecycle, signal routing, command tasks, directives, queues, and state.
-Nesting it inside Vxpipe's existing room and participant supervision would create
-two lifecycle models. It may be worth considering later only if it cleanly
-replaces the current per-agent inference process instead of wrapping it.
+The initial recommendation was standalone ReAct. Follow-up review changed that
+choice because Jido MCP's public dynamic tool-sync API targets a running
+`Jido.AI.Agent`, not a standalone ReAct run. A per-activation AgentServer is a clean
+fit only when it replaces the current per-agent inference process. Vxpipe's
+participant supervisor owns its start, readiness and termination; Jido owns the
+contained conversation/request/tool runtime. It never becomes the participant or
+room authority. Standalone ReAct remains useful for isolated adapter tests.
 
 ### Jido Action
 
@@ -112,16 +116,15 @@ Project policy must override several library defaults:
 The sibling Callx implementation is useful local evidence: it already expresses
 several small host operations as Jido Actions while retaining a custom
 voice-facing LLM adapter. It also retains a custom ReqLLM loop for dynamically
-discovered room tools. The newer standalone ReAct and Jido MCP packages may now
-remove more of that custom loop, but the Vxpipe-specific authority boundaries
-remain necessary.
+discovered room tools. The selected AgentServer-backed ReAct runtime removes more
+of that custom loop, but the Vxpipe-specific authority boundaries remain necessary.
 
 ## Proposed runtime boundary
 
 ```text
 Vxpipe room and participant supervision
   -> Vxpipe agent-loop adapter
-       -> Jido AI standalone ReAct runtime
+       -> one Jido.AI.Agent/AgentServer per active agent participant
             -> ReqLLM provider access
             -> Jido Actions
                  -> Vxpipe variable and transfer APIs
@@ -144,17 +147,17 @@ remain responsible for:
 
 | Planned concern | Jido fit | Vxpipe ownership that remains |
 | --- | --- | --- |
-| Repeated LLM/tool calls | Strong: standalone ReAct already implements the loop | Model profile selection, call pinning, event projection |
+| Repeated LLM/tool calls | Strong: the AgentServer-backed ReAct strategy implements the loop | Model profile selection, call pinning, turn serialization, event projection |
 | Streaming model output | Strong: the runtime emits a normalized event stream | Sentence/audio pacing and interruption |
 | Static platform tools | Strong: Jido Action describes and executes them | Authorization and calls to room-owned processes |
-| Dynamic remote MCP tools | Promising through Jido MCP proxies | Tenant catalog, credentials, pinning, network policy |
+| Dynamic remote MCP tools | Blocked with the reviewed proxy sync because external catalogs drive atom/module creation | Tenant catalog, credentials, pinning, network policy and a safe public Jido tool surface |
 | Tool timeout and cancellation | Useful primitives exist | Per-tool semantics and distinction between speech interruption and operation cancellation |
 | Tool retry | Mechanism exists | Configure zero automatic retries by policy |
 | Long-running background tools | Partial: a normal ReAct run waits for tool results | Submission, supervision, late completion, and continued conversation |
 | Thread/context projection | Useful mechanics | Variable state, access rules, persistence, and prompt projection |
 | Compaction | Supports replacing projected context with provenance | Trigger thresholds, summarizer, failure behavior, and archival history |
 | Usage telemetry | Strong normalized events | Attribution to calls, participants, turns, and storage records |
-| Agent process lifecycle | Available in AgentServer | Avoid initially because Vxpipe already owns it |
+| Agent process lifecycle | Useful as the replaceable inference child | Vxpipe participant supervision remains its owner |
 | Room/media lifecycle | No fit | Entirely Vxpipe-owned |
 
 ## Long-running tools and continued conversation
@@ -192,6 +195,16 @@ participant, operation, and room-incarnation identities. Vxpipe decides whether
 that completion becomes model context, a client-visible event, or only a stored
 event.
 
+Follow-up review found that Jido's `inject` and `steer` APIs are not a delivery
+mechanism for this update. They reject an idle agent, and input queued during an
+active request is explicitly best-effort and can be dropped if the run finishes
+first. Vxpipe therefore keeps accepted completions in a bounded per-agent mailbox.
+After the current request terminates, the Vxpipe coordinator starts one serialized
+engine-origin continuation request. Its provenance prevents the adapter from
+presenting it as caller speech or a public transcript event. A Jido busy rejection
+at that point is an invariant failure to retain/report, not a reason to drop the
+completion or spin in a retry loop.
+
 This preserves prior decisions:
 
 - interrupting generated speech does not imply cancellation of an external
@@ -218,9 +231,11 @@ policy boundary.
 1. **Protocol revision:** released documentation names the 2025-03-26 and
    2025-06-18 Streamable HTTP revisions. Vxpipe currently plans to pin MCP
    2025-11-25. Exact compatibility must be demonstrated, not inferred.
-2. **Endpoint identity:** the released action path converts an endpoint identifier
-   to an atom, and proxy modules are dynamically generated. Tenant-supplied or
-   otherwise unbounded names must never create atoms or modules indefinitely.
+2. **Endpoint and tool identity:** the current public direct client accepts bounded
+   string endpoint IDs, but Jido AI proxy sync requires a trusted atom endpoint ID.
+   It generates an Action module whose atom name is derived from endpoint and tool
+   definition data. Unsyncing can purge module code but cannot garbage-collect the
+   atom. Tenant endpoint/tool/schema churn therefore remains unsafe.
 3. **Tenancy:** Vxpipe needs application- and tenant-configured endpoints with
    generation-pinned credentials. A global pool entry must not accidentally
    share authorization or discovery results across tenants.
@@ -239,11 +254,20 @@ policy boundary.
    side-effecting MCP call. Call, connect, idle, and overall deadlines need clear
    ownership.
 9. **Lifecycle cleanup:** endpoint generations and proxy artifacts need bounded
-   lifetimes when tenants reconfigure integrations.
+   lifetimes when tenants reconfigure integrations. The reviewed public sync path
+   does not satisfy that lifetime bound for externally configured catalogs.
 Jido MCP's choice of internal protocol/transport library is not one of these product
 gates. Vxpipe tests the behavior of the pinned public Jido MCP surface and does not
 depend directly on its transitive client runtime. `vxpipe_mcp` remains a small
 policy-owning boundary while delegating protocol mechanics to Jido MCP.
+
+The generic public `Jido.MCP.Actions.CallTool` does not solve the proxy issue for
+Vxpipe's agent-visible contract. It exposes endpoint/tool selection and a generic
+arguments map to the model, whereas the call plan requires fixed local aliases,
+private endpoint selection, and an exact pinned input schema per enabled binding.
+Using the private proxy generator is also rejected. MCP implementation is blocked
+until a supported public Jido MCP/Jido AI mechanism provides those semantics without
+external atom/module growth. This does not block Jido AI for platform tools.
 
 ## Alternatives considered
 
@@ -257,15 +281,22 @@ tool semantics.
 
 ### Adopt Jido AgentServer as the whole agent participant
 
-This offers the most Jido functionality, but initially duplicates Vxpipe's OTP
-lifecycle, state, queueing, and supervision decisions. It also makes failures and
-ownership harder to reason about. This is not recommended for the first
-integration.
+Rejected. Jido must not own media, presence, transfers, Call Variables, protocol
+projection, or participant identity. The selected narrower use starts one
+AgentServer as the participant subtree's inference child only.
 
-### Use standalone ReAct plus Jido Action
+### Use standalone ReAct plus Jido Action in production
 
-This uses the reusable inner-loop machinery while keeping the established Vxpipe
-process boundaries. It is the recommended first experiment.
+Rejected after follow-up review. It preserves Vxpipe process boundaries but does not
+compose with Jido MCP's public agent tool-sync API. Standalone ReAct remains useful
+for deterministic adapter tests, not as a second production runtime.
+
+### Use a supervised Jido agent as the inference child
+
+Selected. It replaces the existing inference loop process while Vxpipe retains the
+outer participant and room lifecycles. This is the narrowest production boundary
+that uses Jido's public request lifecycle and can compose with its public agent
+integration surfaces.
 
 ### Use Jido MCP without a Vxpipe wrapper
 
@@ -276,8 +307,9 @@ should exist.
 
 ## Focused adoption spike
 
-The first spike should not change the room tree. Add a second implementation of
-the agent-loop boundary and exercise one small vertical slice:
+The first spike replaces the inference child inside the existing participant tree;
+it does not add a second room or participant authority. Exercise one small vertical
+slice:
 
 1. Accept one text input for an active agent.
 2. Stream model output through existing Vxpipe output events.
@@ -288,7 +320,8 @@ the agent-loop boundary and exercise one small vertical slice:
    submitted side effect.
 7. Time out a tool with automatic retries configured to zero.
 8. Submit one background action, accept a second user turn while it runs, and
-   safely project its later completion.
+   safely project its later completion through the Vxpipe mailbox/internal-request
+   path without using best-effort Jido injection.
 
 Then run a separate remote-MCP spike against a controlled server:
 
@@ -325,11 +358,12 @@ agent loop.
 
 ## Decision status
 
-Selected for the milestone plan: Jido AI standalone ReAct for the ordinary agent
-loop, Jido Action for agent-visible tools, and Jido MCP behind the thin Vxpipe MCP
-policy boundary. The milestone count and order remain unchanged. No runtime
-dependency or implementation has been added yet, and the affected milestone
-specifications require focused follow-up review.
+Selected for the milestone plan after follow-up review: one supervised Jido AI
+AgentServer per active agent participant, Jido Action for agent-visible tools, and
+Jido MCP behind the thin Vxpipe MCP policy boundary. The milestone count and order
+remain unchanged. No runtime dependency or implementation has been added yet. The
+five affected specifications have completed focused review; the MCP specifications
+retain the explicit dynamic tenant-tool blocker above.
 
 ## Verification evidence
 
@@ -337,8 +371,9 @@ specifications require focused follow-up review.
 
 - Kept the existing 21 milestone files and ordering rather than adding a horizontal
   dependency-adoption milestone.
-- Added the Jido AI standalone ReAct and Jido Action migration to the
-  definition-driven one-agent vertical slice.
+- Added the Jido AI AgentServer and Jido Action migration to the definition-driven
+  one-agent vertical slice, with AgentServer limited to the supervised inference
+  child role.
 - Made Call Variables tools Jido Actions while retaining the room-owned variables
   process as their authority.
 - Kept submitted long-running actions in independently supervised Vxpipe workers;
@@ -348,7 +383,7 @@ specifications require focused follow-up review.
 - Removed direct transitive MCP-client selection from durable architecture, milestone,
   issue, decision-register and documentation-reference surfaces. Jido MCP's internal
   dependency choice is not a Vxpipe planning concern.
-- Marked the five materially changed specifications for focused follow-up review; no
+- Completed focused review of the five materially changed specifications; no
   implementation checkbox was marked complete.
 - Verified changed Markdown relative links, milestone index/file count, whitespace and
   prohibited-term hygiene for this labnote. No runtime dependency, test, browser run or
@@ -362,6 +397,50 @@ Local inspection:
   usage milestones;
 - inspected the sibling Callx Jido Action and LLM adapter usage;
 - confirmed the locked ReqLLM version is 1.22.0.
+
+### Focused follow-up review
+
+Inspected the upstream default branches at these revisions on 2026-09-08:
+
+- Jido AI `fc5bc1434ddb69493fe8a68443f03bc6a198c5a2`;
+- Jido Action `5d25c655f49a80643f0ccbfe2be90be3bbe68f6e`;
+- Jido MCP `627251e46db19387c6404f1a04e4e4207be74f98`.
+
+Evidence observed:
+
+- `Jido.AI.Agent` provides request handles/event streams, runtime tool registration,
+  request-scoped tools/context, system-prompt updates, and a ReAct-owned task
+  supervisor. Its strategy reads the model from initialized agent state and defaults
+  overlapping requests to rejection.
+- Jido Actions are modules with runtime input validation. Platform actions can be a
+  finite application-owned set; per-call variable grants/schemas remain engine data.
+- Normal ReAct waits for a completing action. `inject`/`steer` is active-run-only,
+  best-effort input, so it cannot acknowledge durable-in-memory late-result delivery.
+- Jido MCP's public sync action targets a running Jido AI agent. Its current proxy
+  generator is private, rejects string endpoint IDs, creates modules derived from
+  discovered definitions, and unsync can purge module code but not atoms.
+- The generic public MCP call Action would expose model-selectable endpoint/tool
+  fields and cannot present each binding's pinned schema.
+
+Required corrections were applied to the agent, Call Variables, background-tool,
+MCP integration and live-MCP specifications, their index, and durable architecture.
+The review marks the specifications complete while keeping implementation checkboxes
+unchecked and making the MCP compatibility blocker explicit.
+
+Follow-up documentation verification:
+
+- `git diff --check` passed.
+- All relative links in the ten changed documentation files resolve locally.
+- The index still maps exactly to 21 descriptive milestone files, with no open
+  follow-up-review markers.
+- The two newly added HexDocs links and the commit-pinned tool-sync/proxy source links
+  returned successful HTTP responses.
+- The labnote terminology check passed.
+- An initial nested-shell URL check expanded its loop variable in the wrong shell and
+  produced an empty-host error; the direct `curl` checks above replaced that invalid
+  result.
+- No runtime, browser, provider, conformance, or umbrella test was run because this
+  checkpoint changes documentation only.
 
 Primary package and project references:
 
@@ -378,4 +457,7 @@ Primary package and project references:
 - [Jido Action schema validation](https://jido-action.hexdocs.pm/schemas-validation.html)
 - [Jido MCP 1.1.1 dependencies](https://hex.pm/packages/jido_mcp/1.1.1/dependencies)
 - [Jido MCP 1.1.1 README](https://hex.pm/packages/jido_mcp/1.1.1/files/README.md)
+- [Reviewed Jido MCP tool-sync source](https://github.com/agentjido/jido_mcp/blob/627251e46db19387c6404f1a04e4e4207be74f98/lib/jido_mcp/jido_ai/actions/sync_tools_to_agent.ex)
+- [Reviewed Jido MCP proxy source](https://github.com/agentjido/jido_mcp/blob/627251e46db19387c6404f1a04e4e4207be74f98/lib/jido_mcp/jido_ai/proxy_generator.ex)
+- [Reviewed Jido MCP generic call Action](https://github.com/agentjido/jido_mcp/blob/627251e46db19387c6404f1a04e4e4207be74f98/lib/jido_mcp/actions/call_tool.ex)
 - [Jido agent runtime](https://jido.run/docs/concepts/agent-runtime)
