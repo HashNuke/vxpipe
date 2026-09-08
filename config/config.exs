@@ -43,8 +43,14 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
 config :vxpipe_console, Vxpipe.Console.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   http: [ip: {127, 0, 0, 1}, port: 4000],
+  live_view: [signing_salt: "vxpipe-console-live"],
+  pubsub_server: Vxpipe.Console.PubSub,
   server: false,
   url: [host: "localhost"]
+
+config :vxpipe_console, :diagnostics,
+  enabled: false,
+  access: :disabled
 
 # Sample configuration:
 #

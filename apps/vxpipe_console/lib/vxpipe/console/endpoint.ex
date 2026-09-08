@@ -1,6 +1,16 @@
 defmodule Vxpipe.Console.Endpoint do
   use Phoenix.Endpoint, otp_app: :vxpipe_console
 
+  @session_options [
+    store: :cookie,
+    key: "_vxpipe_console_key",
+    signing_salt: "vxpipe-console"
+  ]
+
+  socket "/diagnostics/live", Phoenix.LiveView.Socket,
+    websocket: [connect_info: [session: @session_options]]
+
   plug Vxpipe.Console.GatewayMount
+  plug Plug.Session, @session_options
   plug Vxpipe.Console.Router
 end

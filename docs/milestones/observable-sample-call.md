@@ -85,7 +85,7 @@ slow response or missing measurement. The existing voice console still works unc
 - [x] Add the approved console shell using the existing gateway dependency; verify
   explicit startup/mounting and adjust gateway configuration only where needed, without
   moving protocol ownership into Phoenix or rewriting the gateway.
-- [ ] Select/document the dashboard mechanism and trusted operator-access boundary;
+- [x] Select/document the dashboard mechanism and trusted operator-access boundary;
   keep Phoenix/dashboard/frontend dependencies in the console application.
 - [ ] Write red tests for project-owned timing/outcome projection, missing observations,
   safe metadata, bounded dimensions and reporter restart behavior.
@@ -168,6 +168,18 @@ it as `Vxpipe.Console.Endpoint`. The session and WebRTC supervisors remain activ
 shell rendered without browser errors at desktop and 390x844 mobile; sample asset ownership and
 the diagnostics UI remain pending. Final gates pass with call engine `102 tests, 0 failures
 (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console `2 tests, 0 failures`.
+
+Implementation evidence, checkpoint 3 (2026-09-08): selected Phoenix LiveDashboard 0.9.1
+for VM/runtime inspection and reserved the separate `/diagnostics` page for Vxpipe call-path
+measurements. Both routes use a project-owned fail-closed operator plug. Diagnostics are off by
+default; repository development enables only direct IPv4/IPv6 loopback access and Caddy does not
+route the namespace. This is explicitly not production proxy authentication. Focused tests prove
+disabled and non-loopback requests return 404 while an enabled loopback operator can load both
+surfaces. Chromium rendered LiveDashboard at desktop and 390x844 mobile without browser errors;
+the HTTPS Caddy path continued to serve the voice playground, not diagnostics. Call telemetry and
+the finished Vxpipe dashboard remain pending. Final gates pass with call engine `102 tests,
+0 failures (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console `4 tests,
+0 failures`.
 
 ## Specification review
 

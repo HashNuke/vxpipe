@@ -1546,9 +1546,16 @@ live-mixing milestone. Later slices extend these views with their implemented fa
 Phoenix is approved for the separate `vxpipe_console` application, not a gateway
 migration. Preserve the existing gateway protocol handlers, React sample,
 application-option ownership and engine/persistence dependency direction.
-LiveDashboard remains a candidate operational view. Both operator interfaces are
-explicitly enabled/protected; the browser authentication boundary must be selected
-before exposing them beyond trusted development. Implementation remains pending.
+Phoenix LiveDashboard is selected for platform VM/runtime inspection; a separate
+Vxpipe diagnostics page owns bounded call-path measurements. Both operator interfaces
+are explicitly enabled/protected. The initial repository-development boundary is
+direct loopback access only, with diagnostics disabled by default and omitted from
+the Caddy tailnet routes. This restriction is not proxy-aware production authentication:
+never expose it through a proxy or non-loopback listener. A production operator-auth
+boundary must protect both HTTP routes and LiveView subscriptions before external
+enablement. Call tokens, tenant identity, public call IDs and tailnet reachability grant
+no access. The Console shell and local LiveDashboard route are implemented; call-path
+instrumentation and the Vxpipe measurement page remain in progress.
 
 ## Configuration and container boundary
 

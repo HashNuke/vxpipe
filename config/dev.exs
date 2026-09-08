@@ -101,3 +101,7 @@ config :vxpipe_console, Vxpipe.Console.Endpoint,
   debug_errors: true,
   secret_key_base: String.duplicate("development-only-", 4),
   server: true
+
+config :vxpipe_console, :diagnostics,
+  enabled: true,
+  access: :loopback

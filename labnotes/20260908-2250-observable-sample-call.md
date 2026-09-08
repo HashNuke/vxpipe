@@ -76,3 +76,42 @@ listener and enables the Console endpoint on the existing port.
   `mix compile --warnings-as-errors`, `mix deps.unlock --check-unused`, call engine
   `102 tests, 0 failures (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console
   `2 tests, 0 failures`.
+
+## Checkpoint 3: protected diagnostics mechanism
+
+Phoenix LiveDashboard 0.9.1 is the selected platform VM/runtime view. A separate Vxpipe
+`/diagnostics` page will present bounded call-path observations as they are implemented. LiveView,
+LiveDashboard, Phoenix HTML, and PubSub remain direct or transitive Console dependencies; neither
+the gateway nor engine gains a Phoenix dependency.
+
+The first access boundary is deliberately narrow. Diagnostics are disabled in shared configuration.
+Repository development enables them only when the direct connection address is IPv4 or IPv6
+loopback. The Caddy configuration does not forward `/diagnostics` or its LiveView socket, so the
+tailnet HTTPS origin continues to serve the voice playground for that path. This is suitable for
+local development only: loopback checks behind a reverse proxy would identify the proxy rather
+than the operator. External exposure stays prohibited until an operator-auth mechanism protects
+both routes and subscriptions.
+
+### Red, green, and verification evidence
+
+- The first focused run compiled the new dependencies but exceeded the command output window; no
+  test process remained. The repeated red run reached ExUnit and failed because diagnostics
+  configuration/routes did not exist. It also exposed an imprecise `%Plug.Conn{}` update in the
+  test, corrected before implementation.
+- Green focused result: `4 tests, 0 failures`.
+- With default configuration, `/diagnostics` returns a plain 404. With explicit loopback
+  development settings, the Vxpipe landing page and canonical LiveDashboard home load. A
+  documentation-range non-loopback client still receives the same 404.
+- Chromium rendered the LiveDashboard home at 1440x900 and 390x844. It showed current OTP,
+  Elixir, Phoenix, dashboard, run-queue, process, port and memory data with empty browser error
+  output. The initial Vxpipe page is only a routing placeholder and will be replaced by the
+  call-measurement surface in this milestone.
+- A request to the Caddy HTTPS `/diagnostics` path returned the existing voice-playground title,
+  confirming that development routing does not expose the operator surface to the tailnet.
+- Adding dependencies while the file watcher was live caused Goreman to stop when it observed
+  the manifest before `mix deps.get` finished. A fresh `bin/dev` after dependency resolution
+  started normally; no application defect or workaround remains in the runtime.
+- Final checkpoint gates passed `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix deps.unlock --check-unused`, call engine
+  `102 tests, 0 failures (1 excluded)`, gateway `43 tests, 0 failures (3 excluded)`, and Console
+  `4 tests, 0 failures`.

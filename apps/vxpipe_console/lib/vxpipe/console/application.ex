@@ -8,7 +8,12 @@ defmodule Vxpipe.Console.Application do
 
   @impl true
   def start(_type, _args) do
-    Supervisor.start_link([{Endpoint, gateway_mount: gateway_mount()}],
+    children = [
+      {Phoenix.PubSub, name: Vxpipe.Console.PubSub},
+      {Endpoint, gateway_mount: gateway_mount()}
+    ]
+
+    Supervisor.start_link(children,
       strategy: :one_for_one,
       name: Vxpipe.Console.Supervisor
     )
