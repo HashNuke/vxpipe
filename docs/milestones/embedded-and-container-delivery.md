@@ -22,7 +22,7 @@ The same approved call flow runs embedded in an Elixir host and in a built Docke
 
 - [ ] Red-test application-option/JSON normalization parity, missing config/secrets, unsupported version/adapter and embedded isolation.
 - [ ] Implement versioned config loader, release/image entrypoint, explicit migration/bootstrap commands and runtime health/shutdown integration.
-- [ ] Add container build/run instructions with safe mounted config examples and no real secrets.
+- [ ] Add container build/run instructions with safe mounted config examples and no real secrets; verify the pinned Anubis dependency's license notices, corresponding-source availability and library replacement/relinking arrangements before distributing the image.
 - [ ] Smoke-test embedded inline engine and full durable container admission through the same definition fixture.
 - [ ] Exercise configured HTTPS/signaling and actual WebRTC/telephony media paths separately; document deployment-specific prerequisites.
 

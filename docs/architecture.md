@@ -177,22 +177,35 @@ observation. This does not introduce call-level locale/timezone fields, a defaul
 hierarchy, or a frozen new tool name/schema. It changes neither authoritative
 call timestamps nor the trusted destination-resolution boundary described below.
 
-The initial remote MCP adapter targets revision `2026-07-28` Streamable HTTP,
-including `application/json` and request-scoped SSE responses with that revision's
-request metadata/lifecycle, not legacy initialization/session assumptions.
-Other revisions and legacy HTTP+SSE require explicit tested compatibility;
-incompatible endpoints fail clearly. [MCP transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
+The selected remote MCP client is [Anubis MCP](https://anubis-mcp.hexdocs.pm/readme.html),
+with `anubis_mcp` 2.0.0 the evaluated package baseline. Target its supported
+`2025-11-25` Streamable HTTP profile with JSON and SSE responses. Initialization
+uses `initialize` followed by `notifications/initialized`; subsequent requests
+carry the negotiated `MCP-Protocol-Version`. Handle optional `MCP-Session-Id`
+values only within their resolved integration/credential boundary. This replaces
+the earlier 2026 profile, not a compatibility claim for other versions or legacy
+HTTP+SSE. [Lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle),
+[transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
-Keep required MCP protocol support in a separate internal Mix library/umbrella
-child, `vxpipe_mcp`. It owns the selected wire profile, Streamable HTTP handling,
-protocol errors, deadlines and bounded response decoding; it has no dependency on
-Calls, Repo, gateway, room state, or tenant selection. The domain integration
-boundary supplies a resolved endpoint, private credentials, authorized network
-policy and deadlines, and retains agent grants, tool bindings and call history.
-Prefer a suitable SDK behind this boundary; implement only missing support needed
-for the approved profile, not a full SDK or public MCP server.
+Keep `vxpipe_mcp` as a thin internal Mix library/umbrella-child wrapper around
+Anubis, not a custom JSON-RPC/HTTP/SSE client or parser. It owns SDK configuration,
+supervision and safe integration results, with no Calls/Repo/gateway/room or tenant-
+selection dependency. The domain owner supplies resolved endpoint, private
+credentials, authorized network policy and deadlines, retaining agent grants,
+bindings and call history. Missing required SDK hooks are a compatibility blocker
+to report, not permission to implement replacement protocol support. No public
+MCP server is in scope. SDK selection does not prove security, response limits,
+timeouts or conformance: test the configured path before enabling it. Stream/session
+recovery must never silently resubmit `tools/call` or bypass invocation deadlines.
+The same invocation retains one absolute deadline and cumulative decoded/
+decompressed response budget across SSE GET resumption, progress and SDK reconnects;
+neither resets for a new HTTP response. Verify initialization with and without a
+server-issued session ID.
+The [package metadata](https://hex.pm/packages/anubis_mcp) lists LGPL-3.0; verify
+release/container packaging obligations during implementation. No dependency or
+runtime adapter has been installed by this design decision.
 
-The [official specification](https://modelcontextprotocol.io/specification/2026-07-28)
+The [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 is authoritative. Validate the client using pinned compatible versions of the
 [official conformance suite](https://github.com/modelcontextprotocol/conformance)
 and its [client integration harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md),
@@ -224,7 +237,7 @@ baseline 2020-12. Enforce required/type/enum/nested constraints, unlike incremen
 Call Variables. Unsupported dialect/features or model representation reject the
 enabled binding before exposure; no weakened constraints, unvalidated calls, or
 automatic external `$ref` fetching. No JSON Schema validator library, extra caps,
-or complete output schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+or complete output schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2025-11-25/basic#json-schema-usage).
 
 Store received MCP responses, including structured content and attachment/resource
 descriptors, preserving reported success/error and unknown outcomes. The agent
@@ -234,9 +247,11 @@ media reader is added. Detailed projection/inspection is
 [deferred](issues/mcp-result-and-document-inspection.md).
 Server-requested sampling, elicitation, and related interactions are separately
 [deferred](issues/mcp-server-requested-interactions.md): do not advertise
-unimplemented capabilities or acquire authority from their requests. Report
-missing capability clearly; continuation/resubmission is not an approved retry
-exception. These are design contracts, not implemented adapters.
+unimplemented capabilities or acquire authority from their requests. Under the
+selected profile these are server-initiated requests, not the superseded profile's
+input-required continuation flow. Report missing capability clearly without
+invoking models or participants; resubmission is not an approved retry exception.
+These are design contracts, not implemented adapters.
 
 The approved MCP lifecycle also distinguishes speech interruption from tool
 cancellation: an already-submitted read or action continues to its result or

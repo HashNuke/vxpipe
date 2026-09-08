@@ -141,7 +141,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
-| R22 | G6 | **Resolved:** initial remote adapter supports revision 2026-07-28 Streamable HTTP, JSON and request-scoped SSE responses, with revision-specific metadata/lifecycle; other revisions/legacy transports require explicit tested compatibility. |
+| R22 | G6 | **Resolved:** revised by Anubis selection to use anubis_mcp through the thin vxpipe_mcp wrapper; initial profile is 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Earlier 2026 profile and custom protocol work are superseded; other compatibility needs explicit tested support. |
 | R23 | G6 | **Resolved:** use a proper JSON Schema validator, baseline 2020-12, on actual outgoing arguments against pinned inputSchema before submission; reject unsupported enabled bindings before exposure, never weaken constraints or automatically fetch external refs. |
 | R24 | G6 | **Deferred:** store received responses and descriptors with observed outcomes; the agent chooses authorized next steps. Detailed result projection and document/media inspection belong to the dedicated issue, not automatic fetching or a text/JSON-only policy. |
 | R25 | G6 | **Deferred:** server-requested sampling/elicitation and related interactions belong to the dedicated issue; advertise no unimplemented capabilities, report missing capability clearly, and add no continuation/retry exception. |
@@ -1140,20 +1140,30 @@ the example HTTP webhooks, native SMS, or code tools are MCP endpoints. Keep
 those behind a remote MCP facade or an explicitly registered host tool; do not
 add arbitrary HTTP/JavaScript execution to the call-definition JSON.
 
-**Approved R22:** the initial remote profile is `2026-07-28` Streamable HTTP,
-supporting JSON and request-scoped SSE with revision-specific request metadata
-and lifecycle, not old initialize/session rules. Other revisions or legacy
-HTTP+SSE are not implicitly compatible; fail clearly unless explicitly implemented
-and tested. Pin the selected profile in the resolved binding.
+**Approved R22, revised by SDK selection:** use `anubis_mcp`, evaluated at 2.0.0,
+for its supported `2025-11-25` Streamable HTTP profile, accepting JSON and SSE.
+Follow `initialize`/`notifications/initialized`, negotiated version headers and
+optional integration/credential-scoped session IDs. Other profiles/legacy HTTP+SSE
+are not implicitly enabled; pin the supported profile and fail incompatibility
+clearly. This supersedes the earlier 2026 protocol selection.
 [Transport specification][mcp-http].
 
-**Approved implementation boundary:** isolate required protocol support in the
-internal `vxpipe_mcp` Mix library/umbrella child. It owns wire transport, errors and
-bounds, not Calls/Repo/gateway/room state or tenant selection. The integration owner
-supplies resolved endpoint/private credentials/network policy/deadlines and retains
-agent grants/history. Prefer suitable SDK support; fill only needed profile gaps,
-without a public server or full-SDK scope expansion.
-Use the [official specification](https://modelcontextprotocol.io/specification/2026-07-28)
+**Approved implementation boundary:** `vxpipe_mcp` is a thin internal wrapper
+around [Anubis](https://anubis-mcp.hexdocs.pm/readme.html), not a new JSON-RPC,
+HTTP/SSE parser or client implementation. The SDK owns protocol mechanics; the
+wrapper configures/supervises it and normalizes integration outcomes without
+Calls/Repo/gateway/room state or tenant selection. The domain owner supplies
+resolved endpoint/private credentials/network policy/deadlines and retains grants/
+history. Missing required SDK hooks block compatibility, not authorize custom
+protocol work. SDK selection proves none of the security/size/deadline/conformance
+gates; validate them explicitly. Stream/session recovery must not resubmit
+`tools/call`: preserve the invocation's absolute deadline and cumulative decoded/
+decompressed byte budget across SSE GET resumption, progress and SDK reconnects,
+not fresh limits per HTTP response. Test initialization both with and without a
+server-issued session ID. [Package metadata](https://hex.pm/packages/anubis_mcp) records
+LGPL-3.0; packaging verification remains implementation work, not a runtime change.
+Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
+and [lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
 and pinned [client conformance harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
 for validation. Report failures separately from unsupported/skipped cases.
 The [Everything server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything)
@@ -1167,7 +1177,7 @@ pinned `inputSchema` before submission, using a proper JSON Schema validator wit
 Variables rules are not MCP input rules. Unsupported dialect/features or model
 representation reject enabled bindings before exposure, without constraint
 weakening or automatic external `$ref` fetching. No JSON Schema validator library,
-new caps, or full output normalization design is chosen. [Schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+new caps, or full output normalization design is chosen. [Schema rules](https://modelcontextprotocol.io/specification/2025-11-25/basic#json-schema-usage).
 
 **Deferred R24:** store received responses, including structured content and
 attachment/resource descriptors, preserving success/error/unknown observations.
@@ -1181,9 +1191,11 @@ approved text/JSON-only filter or new reader/playback feature.
 **Deferred R25:** [server-requested interactions](issues/mcp-server-requested-interactions.md)
 remain future work. Do not advertise unimplemented sampling/elicitation or gain
 authority from server requests; report missing capability clearly. The selected
-revision's `input_required`/MRTR flow is not the older independent-request model.
-Continuation/resubmission requires its own future design, not an automatic retry
-exception. Ordinary agent dialogue and complete observed response storage remain.
+profile uses server-initiated sampling/elicitation requests; the earlier
+`input_required`/MRTR discussion does not describe this client profile. Do not
+silently answer such requests or resubmit a tool invocation. Future interaction
+support requires its own design, not an automatic retry exception. Ordinary
+agent dialogue and complete observed response storage remain.
 
 Discovery/pagination and credential lifecycle choices remain separate.
 
@@ -1746,8 +1758,8 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
 | Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Save permitted available facts with honest provenance/usage; explicit transcript/audio retention is independent from live sharing under R38, not inferred recognition shutdown, and tool/variable/usage requirements stay intact; audio requires enabled/permitted recording and the opening input gate |
-| Exercise the selected remote revision with JSON/SSE and invalid tool arguments | Both response forms follow 2026-07-28 metadata/lifecycle; incompatible revisions fail clearly; a proper validator blocks missing required, wrong type/enum, and invalid nested inputs before submission; unsupported schemas reject enabled bindings before exposure without network ref fetching |
-| Receive structured data, a document descriptor, or input_required for an unsupported interaction | Preserve observed response/outcome without auto-fetching or claiming inspection; unauthorized tools remain unavailable; advertise no unimplemented sampling/elicitation capability, report its absence clearly, and do not auto-continue or resubmit |
+| Exercise Anubis against the selected remote revision with JSON/SSE and invalid tool arguments | 2025-11-25 initialization succeeds with/without optional scoped session IDs; negotiated headers precede tool use, incompatible profiles fail clearly; SDK reconnect/progress/SSE GET resumption cannot replay tools/call or reset its absolute deadline/cumulative decoded-byte budget; a proper validator blocks required/type/enum/nested violations before submission and rejects unsupported bindings without network ref fetching |
+| Receive structured data, a document descriptor, or an unsupported sampling/elicitation request | Preserve observed response/outcome without auto-fetching or claiming inspection; unauthorized tools remain unavailable; advertise no unimplemented sampling/elicitation capability, report its absence clearly, and do not silently invoke models/participants or resubmit tools/call |
 | Update variables twice while holding PostgreSQL persistence behind a barrier | Both tools succeed after local acceptance/handoff and reads see current memory; each event carries its exact full snapshot and original turn/tool/revisions; durable pointer may lag until asynchronous persistence, without a changeset |
 | Fail a snapshot transaction, duplicate delivery, and deliver older revisions later | Storage failure does not undo memory/tool success or fail the room; snapshot/pointer writes remain one PostgreSQL transaction, duplicate history and cross-call/regressing pointers are prevented, older valid history need not become latest, and snapshots remain private |
 | Omit retention settings, set an application period, then override it for one tenant | Omission resolves to retain forever; tenant omission inherits the application period, an explicit tenant setting wins only for that tenant, and retention duration neither starts processing/recording nor changes client visibility; cleanup follows the approved periodic external-first whole-call contract |
@@ -2431,7 +2443,7 @@ are not silently approved by review completion.
 [sms-tool]: https://github.com/VapiAI/examples/blob/242a4ef9ac720c3ce000e1635f5197768f6e9945/assistants/otp-sms/tools/VAPI_Send_SMS_tool.json
 [voicemail-docs]: https://docs.vapi.ai/tools/voicemail-tool
 [warm-transfer]: https://docs.vapi.ai/calls/assistant-based-warm-transfer
-[mcp-http]: https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/docs/specification/2026-07-28/basic/transports/streamable-http.mdx
+[mcp-http]: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
 [cloak-ecto]: https://cloak-ecto.hexdocs.pm/install.html
 [websocket-handshake]: https://www.rfc-editor.org/rfc/rfc6455.html#section-4.1
 [websocket-origins]: https://www.rfc-editor.org/rfc/rfc6455.html#section-10.2

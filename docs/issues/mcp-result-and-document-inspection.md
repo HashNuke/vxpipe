@@ -50,7 +50,7 @@ from remote errors and unknown timeouts. Runtime implementation remains future.
 
 The protocol supports structured results and heterogeneous content including
 resource links; that does not supply Vxpipe's model projection or inspection
-policy. [MCP tool results](https://modelcontextprotocol.io/specification/2026-07-28/server/tools).
+policy. [MCP tool results](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 Related: [call-definition design](../../labnotes/20260905-0405-call-definition-design.md),
 [architecture](../architecture.md), and

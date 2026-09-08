@@ -10,17 +10,20 @@ authority from a server request. Report missing capabilities clearly without
 silently invoking models, prompting a participant, granting access, or claiming
 the requested interaction completed. Ordinary agent conversation is unchanged.
 
-In revision `2026-07-28`, additional input can arrive as `input_required`/MRTR
-results, not the independent server requests assumed by older transports.
-Sampling and elicitation use that input-request mechanism.
-[MCP elicitation](https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation),
-[MCP sampling](https://modelcontextprotocol.io/specification/2026-07-28/client/sampling).
+The selected Anubis-backed profile is now `2025-11-25`, where sampling and
+elicitation use server-initiated requests and negotiated client capabilities.
+Neither is enabled merely because the SDK offers it. This supersedes this issue's
+earlier `2026-07-28` input-request/MRTR assumption; support for that revision is
+not part of the initial integration.
+[MCP elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation),
+[MCP sampling](https://modelcontextprotocol.io/specification/2025-11-25/client/sampling).
 
-Receiving such a result does not approve an automatic continuation/resubmission
-loop. Keep the observed result, distinguish incomplete interaction from final
-business success, and preserve the executor's no-automatic-retry policy. A future
-MRTR continuation design must explicitly resolve that boundary rather than call
-every resubmission harmless.
+Receiving a request for an unsupported interaction does not approve performing it
+or resubmitting the originating tool call. Keep the observed request/outcome,
+distinguish an incomplete interaction from business success, and preserve the
+executor's no-automatic-retry policy. A future request/response implementation
+must explicitly define lifecycle and authorization rather than acquire them
+implicitly from a remote server.
 
 For example, a remote report tool requests another model generation or asks the
 user for information before it can finish. The initial adapter does not advertise
@@ -35,8 +38,8 @@ conversation is not an implemented MCP elicitation response.
   tool permissions, cost limits, and observability apply?
 - How should elicitation reach the correct participant, present information,
   collect input, and distinguish acceptance, refusal, and cancellation?
-- How should input-required continuation state, request identity, resubmission,
-  deadlines, duplicate side effects, and tool invocation history relate?
+- How should server-request identity, response state, deadlines, duplicate side
+  effects, and the originating tool invocation's history relate?
 - What happens on speech interruption, transfer, shutdown, timeout, or explicit
   cancellation without inventing a rollback guarantee?
 - Which related server-driven features require distinct grants and safe failure
@@ -48,7 +51,7 @@ or new call-definition fields are approved by this issue.
 ## Future verification
 
 Before adding support, use controlled servers to test advertised capabilities,
-authorized and unauthorized input requests, model-cost attribution, continuation
+authorized and unauthorized server requests, model-cost attribution, request/response
 identity, and lifecycle failures. Initially verify that unsupported capabilities
 are not advertised, produce clear missing-capability outcomes, and cause no
 unauthorized model request or participant interaction. No runtime tests here.

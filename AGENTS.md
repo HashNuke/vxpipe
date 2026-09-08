@@ -181,7 +181,11 @@ proportionate checks when it changes generated configuration.
 
 ### Model Context Protocol
 
-- [Approved protocol profile](https://modelcontextprotocol.io/specification/2026-07-28)
+- [Anubis MCP documentation](https://anubis-mcp.hexdocs.pm/readme.html)
+- [Anubis MCP package](https://hex.pm/packages/anubis_mcp)
+- [Approved protocol profile](https://modelcontextprotocol.io/specification/2025-11-25)
+- [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
+- [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 - [Official client/server conformance framework](https://github.com/modelcontextprotocol/conformance)
 - [Conformance integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
 - [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything)

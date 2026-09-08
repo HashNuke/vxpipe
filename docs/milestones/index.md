@@ -1,8 +1,9 @@
 # Call-definition implementation milestones
 
-Status: 21 specifications independently reviewed; implementation has not started.
+Status: 21 specifications independently reviewed, including the Anubis follow-up; implementation has not started.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
-MCP-library additions documented during planning on 2026-09-08.
+MCP-library additions documented during planning on 2026-09-08. Anubis subsequently
+replaces custom-client work within the existing MCP milestone; the count/order do not change.
 
 ## How to use this index
 
@@ -27,7 +28,7 @@ progress without claiming the entire milestone is complete.
 5. [ ] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
 6. [ ] [Prepared calls and single-use joining](prepared-call-admission.md) — Prepare in PostgreSQL, then start exactly one live call when its caller joins.
 7. [ ] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
-8. [ ] [Internal MCP client and conformance](mcp-client-library.md) — Run a standalone remote MCP client against a version-pinned reference/conformance server.
+8. [ ] [Anubis MCP integration and conformance](mcp-client-library.md) — Verify the selected Anubis client through a thin adapter and version-pinned reference/conformance server.
 9. [ ] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
 10. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
 11. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
@@ -87,9 +88,12 @@ The engine owns room/participant/capability lifecycles and protocol-neutral cont
 Introduce `vxpipe_calls` for application workflows, `vxpipe_persistence` for Ecto/Repo,
 and `vxpipe_artifacts` for object storage only in their owning milestones. The gateway
 authenticates/translates; it does not gain direct Repo or provider orchestration ownership.
-The separate `vxpipe_mcp` internal library owns MCP protocol/transport support without
-room, tenant-selection, Repo or gateway dependencies. Its standalone client/conformance
-checkpoint precedes live-call integration; reuse a suitable SDK behind that boundary.
+The separate `vxpipe_mcp` internal library is a thin adapter around the selected
+`anubis_mcp` client, not a custom protocol/client codebase. Anubis owns MCP protocol
+and transport; the wrapper configures supervision, policy enforcement and result
+mapping without room, tenant-selection, Repo or gateway dependencies. Its standalone
+integration/conformance checkpoint precedes live-call integration and targets
+MCP `2025-11-25`, replacing the earlier `2026-07-28` profile. No custom-client fallback.
 Preserve dependency direction in child `mix.exs` files.
 
 Runtime variables acknowledge local acceptance and asynchronous archival handoff, never
@@ -118,7 +122,7 @@ This is a coverage map, not another approval or implementation checklist.
 - **Tenant definitions and API-key administration**: G2/G10; R01–R04, R39.
 - **Prepared calls and single-use joining**: G2/G10; R05–R10, R39, R40.
 - **Asynchronous call history and variable snapshots**: G5/G11; R18, R41.
-- **Internal MCP client and conformance**: remote protocol ownership and reference validation; R22, R23, R26, R49.
+- **Anubis MCP integration and conformance**: selected SDK, thin integration boundary and reference validation; R22, R23, R26, R49.
 - **Remote MCP tools in a live call**: G4/G6; R14–R16, R22–R26, R49.
 - **Opening audio and call lifecycle**: G7; R11, R12, R27–R31.
 - **Allowlisted agent-to-agent transfers**: G8; R13, R33, R35, R36.
@@ -149,7 +153,7 @@ are complete; review approval is separate from the unchecked implementation boxe
 | [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Approved | milestone_review_a; Separated reusable revision metadata from per-call plan/credential resolution; excluded credentials and leases from revisions/routes; focused re-review approved. |
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
-| [Internal MCP client and conformance](mcp-client-library.md#specification-review) | Approved | milestone_review_a; Added whole-discovery pagination budgets and incomplete-catalog checks; focused re-review approved standalone protocol/conformance boundary and order. |
+| [Anubis MCP integration and conformance](mcp-client-library.md#specification-review) | Approved | milestone_review_a; original discovery bounds and subsequent Anubis/profile follow-up approved, including resumed-stream budgets and optional-session initialization checks. |
 | [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Approved | milestone_review_a; Added catalog/schema pinning, unresolved binding failure, revoked authorization and private lease redaction/lifetime tests; re-review approved. Subsequent internal-library prerequisite and scoped domain boundary also re-reviewed and approved. |
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
 | [Allowlisted agent-to-agent transfers](agent-transfers.md#specification-review) | Approved | milestone_review_c; Specified history modes, precommit destination silence/source continuity, empty-list and total-deadline races; re-review approved. |
@@ -172,7 +176,7 @@ Verified on 2026-09-08:
   acceptance/failure checks, manual verification steps and independent review evidence.
 - The 21 index entries match the files exactly; filenames/titles have no ordering numbers.
   All explicit prerequisites occur earlier in the index; no dependency cycles were found.
-- All 322 milestone implementation/verification boxes remain unchecked, along with the
+- All 324 milestone implementation/verification boxes remain unchecked, along with the
   index and common gates. No runtime work is claimed by specification approval.
 - Relative file/heading links, decision coverage and Markdown task-list structure pass
   focused checks. All 50 decision IDs are accounted for: 45 resolved, four deferred and
@@ -181,6 +185,9 @@ Verified on 2026-09-08:
   baseline; their 19 JSON examples still parse. Diff/terminology/path checks pass.
 - A final independent cross-index audit by milestone_review_c found no remaining
   coverage or dependency findings, including both planning additions.
+- The later Anubis selection passed milestone_review_a's focused milestone and
+  cross-document review. Count, filenames and order remain unchanged; protocol handling
+  is delegated to Anubis, with current references and the supported profile aligned.
 
 This checkpoint changes documentation only. No runtime, browser, provider, official
 conformance, or umbrella test execution is claimed; those remain implementation gates.

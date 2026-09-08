@@ -135,8 +135,10 @@ storage toggles. Audio requires explicitly enabled and permitted recording;
 archival needs do not start STT or bypass capability permissions.
 R17 defines `tool_visibility` and participant/local-tool `tool_visibility_overrides`,
 including trusted full-visibility sample policy replacement with no overrides.
-R22 selects `2026-07-28` Streamable HTTP; R23 requires validated outgoing MCP
-arguments. R24 result/document inspection and R25 server-requested interactions
+R22 now selects Anubis (`anubis_mcp`, evaluated at 2.0.0) with `2025-11-25`
+Streamable HTTP through a thin internal wrapper, superseding the earlier protocol
+selection and custom protocol work. R23 requires validated outgoing MCP arguments.
+R24 result/document inspection and R25 server-requested interactions
 are deferred to separate issues while observed response storage remains mandatory.
 R26 adopts SDK-aligned endpoint security at Vxpipe's outbound boundary. R27/R28
 set configurable 30-second readiness and 15-second idle-notification defaults;
@@ -210,12 +212,14 @@ between declarative builders and code-first frameworks.
 The source products are intentionally not named in this labnote. Their product
 models are treated as evidence, not as schemas to copy.
 
-The remote-MCP follow-up also reviewed the official MCP `2026-07-28` tool,
+The earlier remote-MCP research reviewed the official MCP `2026-07-28` tool,
 Streamable HTTP, and schema specifications. That revision is stateless at the
 HTTP protocol layer, permits the tool list to vary with request authorization,
 and returns structured or unstructured content from `tools/call`. Those details
-drive the profile binding, credential precedence, and discovery decisions below;
-detailed result projection/inspection is now deferred as described in R24.
+informed the earlier proposal, not the current wire implementation. The later
+Anubis selection supersedes that protocol target with `2025-11-25`; preserve this
+research as historical evidence. Credential isolation remains, and detailed result
+projection/inspection stays deferred as described in R24.
 
 ## Findings
 
@@ -1853,17 +1857,26 @@ must never cross tenant/integration/credential boundaries.
 
 #### Initial remote protocol and input validation — approved R22/R23
 
-Keep required protocol work in `vxpipe_mcp`, a separate internal Mix library/
-umbrella child. Its responsibility is the selected MCP wire profile, Streamable
-HTTP, protocol errors, deadlines and bounded decoding. It does not select tenants,
-read Calls/Repo/gateway/room state, grant tools, or own call history. The domain
-integration boundary passes resolved endpoint/private credentials/network policy/
-deadlines and retains those application responsibilities. Prefer a suitable SDK
-behind the library; implement only unsupported pieces needed for the approved
-profile, not a full SDK or a public MCP server. This is a planned boundary, not
-an implemented adapter or newly selected SDK dependency.
+Select [Anubis MCP](https://anubis-mcp.hexdocs.pm/readme.html) as the client; the
+evaluated package baseline is `anubis_mcp` 2.0.0. Keep `vxpipe_mcp` as a thin
+internal Mix library/umbrella-child wrapper for SDK configuration, supervision and
+safe result normalization. Anubis owns JSON-RPC, HTTP/SSE and parsing; do not build
+a replacement protocol client or fill SDK gaps with custom protocol code. Report
+missing required hooks as compatibility blockers. No public MCP server is in scope.
+The wrapper does not select tenants, read Calls/Repo/gateway/room state, grant
+tools, or own call history. Its domain owner supplies resolved endpoint/private
+credentials/network policy/deadlines and retains those responsibilities.
 
-Use the [official specification](https://modelcontextprotocol.io/specification/2026-07-28)
+SDK adoption alone proves neither network safeguards, decoded response caps,
+timeout behavior nor conformance. Verify the configured Anubis boundary against
+the existing gates. Transport/session recovery is not permission to repeat
+`tools/call`. Retain one absolute invocation deadline and cumulative decoded/
+decompressed byte budget across SSE GET resumption, progress and SDK reconnects;
+do not reset either per HTTP response. [Package metadata](https://hex.pm/packages/anubis_mcp)
+records LGPL-3.0; release/container packaging checks remain implementation work.
+No dependency or runtime implementation is added by this decision.
+
+Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 as the source of truth and pin matching versions of the
 [official conformance suite](https://github.com/modelcontextprotocol/conformance).
 Its [client harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
@@ -1874,11 +1887,14 @@ is additional interoperability evidence only; verify its revision and remote
 transport rather than assuming it proves complete conformance. A harness-only
 loopback-HTTP allowance is isolated from production HTTPS/private-network rules.
 
-Target `2026-07-28` Streamable HTTP with JSON and request-scoped SSE responses,
-using its request metadata/lifecycle rather than legacy initialize/session rules.
-Other revisions and legacy HTTP+SSE need explicit tested compatibility; otherwise
-incompatible endpoints fail clearly. Pin this profile in the resolved binding.
-[MCP transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
+Target Anubis's supported `2025-11-25` Streamable HTTP profile with JSON and SSE.
+Use `initialize`, then `notifications/initialized`, and the negotiated
+`MCP-Protocol-Version` on subsequent requests. Optional server-issued
+`MCP-Session-Id` values stay scoped to the resolved integration/credential boundary.
+Pin this profile; reject incompatible versions or legacy HTTP+SSE rather than
+silently switching. This replaces the earlier stateless/per-request metadata
+assumption. [Lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle),
+[transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
 Use a proper JSON Schema validator with 2020-12 baseline to check actual outgoing
 arguments against the selected/discovered pinned `inputSchema` before submission.
@@ -1886,7 +1902,7 @@ Enforce required/type/enum/nested constraints, unlike incremental Call Variables
 Unsupported dialect/features or model representation reject enabled bindings
 before exposure. Never weaken constraints, submit unvalidated input, or fetch
 external `$ref`s automatically. No validator library, extra caps, or full output
-schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2026-07-28/basic#json-schema-usage).
+schema design is selected. [MCP schema rules](https://modelcontextprotocol.io/specification/2025-11-25/basic#json-schema-usage).
 
 For example, an enabled scheduling tool requires a date and a permitted slot
 value. Missing the date, choosing a value outside its enum, or supplying an
@@ -1925,10 +1941,11 @@ inspection support are [deferred in the result issue](../docs/issues/mcp-result-
 Server-requested sampling, elicitation, and related interactions are
 [deferred separately](../docs/issues/mcp-server-requested-interactions.md).
 Do not advertise unimplemented capabilities, gain authority from server input,
-or silently perform such requests; report missing capability clearly. In the
-selected revision, input requests use `input_required`/MRTR rather than older
-independent server requests. Continuation/resubmission needs later design and is
-not an approved automatic-retry exception. Ordinary agent conversation remains.
+or silently perform such requests; report missing capability clearly. The selected
+profile uses server-initiated sampling/elicitation requests, not the earlier
+proposal's `input_required`/MRTR mechanism. Future interaction handling needs its
+own design and does not authorize automatic `tools/call` resubmission. Ordinary
+agent conversation remains.
 Existing grants, privacy, credential exclusions, retention, and unknown-outcome
 semantics stay intact. No runtime adapter or new inspection tool is implemented.
 
@@ -5114,8 +5131,10 @@ The numbering below matches G1–G13 in the focused review document.
    No new progress journal or permanent tombstone; late writers still require
    coordination. Exact interval/default is unspecified, not an hourly policy.
 6. **Remote integration compatibility — initial scope resolved:** R22 selects
-   `2026-07-28` Streamable HTTP with JSON/request-scoped SSE and its metadata/
-   lifecycle; incompatible revisions need explicit compatibility work. R23 uses
+   Anubis with `2025-11-25` Streamable HTTP JSON/SSE, initialization/negotiation
+   and optional scoped sessions. The internal wrapper does not implement custom
+   protocol support; incompatibility is reported rather than silently bypassed.
+   SDK recovery cannot repeat a tool invocation. R23 uses
    proper JSON Schema validation of outgoing arguments before submission, without
    weakening schemas or automatically fetching refs. R24 result/document inspection
    and R25 server-requested interactions are deferred, not automatic fetching,
@@ -5608,9 +5627,13 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     and not inventing defaults. A permitted participant-ref transfer resolves its
     pinned source even after a definition revision changes. These are future
     checks, not an implemented resolver, general policy matrix, or timing guard.
-27. Use a controlled `2026-07-28` remote endpoint that returns JSON and request-
-    scoped SSE in separate cases. Verify matching revision metadata/lifecycle
-    and clear rejection of incompatible versions without legacy fallback.
+27. Run the Anubis wrapper against a controlled `2025-11-25` remote endpoint
+    returning JSON and SSE in separate cases. Verify initialization, negotiated
+    version headers, initialization with/without server-issued session IDs, scoped
+    session isolation and incompatible-profile errors. Exercise SSE GET resumption,
+    progress and SDK reconnects without resubmitting `tools/call` or resetting its
+    absolute deadline/cumulative decoded-byte budget. No custom client or legacy
+    fallback is implied.
     Pin a tool input schema, then submit missing required values, invalid types,
     enum values, and nested data: no invalid request reaches the endpoint. Reject
     unsupported enabled schemas before model exposure, never weaken them or
@@ -7063,6 +7086,10 @@ storage/client projection boundary and credential exclusions still apply.
 
 ### Remote MCP profile and deferred interactions — R22–R25, 2026-09-07
 
+Historical checkpoint: the later Anubis decision supersedes this wire profile and
+its input-request mechanism with `2025-11-25`. The retained R23–R25 validation,
+privacy and deferral boundaries are unchanged.
+
 - R22 selects `2026-07-28` Streamable HTTP, JSON/request-scoped SSE, and its
   revision-specific request metadata/lifecycle. Other revisions/legacy transports
   need explicit tested compatibility; no old session assumptions or runtime claim.
@@ -7409,7 +7436,32 @@ including its former PostgreSQL-before-variable-success requirement.
 
 ## Verification evidence
 
+### Anubis client selection — approved 2026-09-08
+
+- Selected `anubis_mcp` (evaluated published version 2.0.0) and its supported
+  `2025-11-25` Streamable HTTP profile. The separate `vxpipe_mcp` boundary is a
+  thin SDK integration wrapper, not permission to build protocol/parser support.
+- Updated current summaries, R22, canonical lifecycle, planned checks and links;
+  earlier 2026 protocol/MRTR research remains explicitly historical. Sampling and
+  elicitation remain unadvertised/deferred server requests, not model authority.
+- Rechecked Anubis's supported-version matrix, package LGPL-3.0 metadata and the
+  official lifecycle/transport. Packaging, exact SDK security/response/deadline
+  behavior and pinned conformance evidence must still be verified during
+  implementation. SDK selection neither waives those gates nor permits tool replay.
+- Documentation only: no runtime/dependency installation or conformance run.
+- Updated the existing MCP milestone, its live-call integration prerequisite,
+  reference links and deferred interaction issue rather than adding a milestone.
+  There are still 21 ordered, unnumbered milestone files; implementation boxes
+  remain unchecked. The release checklist retains the dependency packaging check.
+- Independent follow-up review approved the Anubis boundary and added explicit
+  deadline/decoded-byte continuity across SSE resumption plus initialization with
+  and without session IDs. Checked milestone links/dependencies, unchanged source
+  fences and JSON, stable review statuses, diff hygiene and documentation-only scope.
+
 ### Internal MCP client boundary — approved 2026-09-08
+
+Historical boundary checkpoint: the later Anubis selection retains the internal
+library identity but supersedes permission to implement missing protocol pieces.
 
 - Added the separate `vxpipe_mcp` protocol-library boundary and official
   specification/conformance/reference-server validation sources. Domain grants,
@@ -7569,8 +7621,9 @@ including its former PostgreSQL-before-variable-success requirement.
   application workflows, an Ecto-owning `vxpipe_persistence` adapter, and a
   later object-store-owning `vxpipe_artifacts` boundary; the call engine and
   gateway keep direct Repo access out of their responsibilities.
-- Reviewed the official MCP `2026-07-28` tool specification, Streamable HTTP
-  transport, and generated schema:
+- Historical research reviewed the official MCP `2026-07-28` tool specification,
+  Streamable HTTP transport and generated schema; the later Anubis decision
+  supersedes this implementation target:
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx>
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/transports/streamable-http.mdx>
   - <https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2026-07-28/schema.json>
