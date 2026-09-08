@@ -75,8 +75,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **20 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17–R23, and R26–R30 are resolved; R07's same-call caller
+Current review count: **16 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, R17–R23, R26–R31, and R33–R35 are resolved; R07's same-call caller
 reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -106,11 +106,11 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**20 pending decisions (R31–R50).** This is the current approval backlog,
+**16 pending decisions (R32 and R36–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17–R23, and R26–R30 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R31–R35**. Mark rows resolved or
+R10–R15, R17–R23, R26–R31, and R33–R35 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
+all excluded from the count. The next five pending decisions are **R32 and R36–R39**. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -145,11 +145,11 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R28 | G7 | **Resolved:** configurable 15-second idle notification only while an agent genuinely waits for caller input; instructions choose nudge/wait/permitted hangup, not automatic silence termination or repeated announcements. |
 | R29 | G7 | **Resolved:** no automatic periodic long-tool progress speech; instructions own kickoff/results and ordinary background conversation. Startup/tool wait music is deferred in its own issue. |
 | R30 | G7 | **Resolved:** limits.max_duration_ms defaults to 1800000; definition overrides tenant, then application, then platform default. Pin it per call, measure from actual started_at without transfer/recovery reset, and end with a clear duration-limit reason. |
-| R31 | G7 | How should speak-and-end wait for delivery, and what happens if its closing utterance is interrupted? |
-| R32 | G7 | What initial outbound policy handles voicemail, beep evidence, and unknown human/machine classification? |
-| R33 | G8 | Where do remaining transfer defaults and destination requirements live without adding named transfer objects? |
-| R34 | G8 | What evidence makes a destination ready to accept a committed transfer, especially for a human recipient? |
-| R35 | G8 | How long may dialing/transfer preparation wait, and how are late answers or callbacks handled after the attempt ends? |
+| R31 | G7 | **Resolved:** agent instructions own closing wording and when to invoke existing hangup; no platform speak-then-end API, drain deadline, or automatic pending-hangup cancellation on interruption. No prompt-based playback guarantee. |
+| R32 | G7 | Detection source resolved: use provider AMD when supported, preserving provenance/unknown. Which action should follow machine or unknown classification, including whether to end or leave a message, remains pending. |
+| R33 | G8 | **Resolved:** call-level transfer_policy holds shared defaults; source transfers remains allowed participant refs and destination-specific connection/acceptance requirements stay with the destination; no named/source-default/per-pair machinery. |
+| R34 | G8 | **Resolved:** agent conversation/capabilities ready; human usable media plus explicit acceptance through pending-leg press-1 DTMF or authenticated web control message bound to destination and pending attempt; no stale/source/model acceptance or implicit admission. |
+| R35 | G8 | **Resolved:** configurable 30-second total transfer attempt from accepted preparation, including dialing/acceptance; terminal failures end early, timeout/failure stops destination and returns typed outcome to source, late callbacks cannot commit, exact-leg cleanup without auto-redial. |
 | R36 | G8 | What happens if a failed transfer cannot restore a safe usable source without violating capability restrictions? |
 | R37 | G8 | Is private warm consultation in the initial scope, with caller hold and explicitly isolated audio routes? |
 | R38 | G9 | Does an agent-specific capability denial block provider processing, that agent's consumption of routed output, or both? |
@@ -218,7 +218,7 @@ integration examples, not proof that every advertised behavior is enforced.
 | --- | --- | --- |
 | Scheduling: [assistant][scheduling], [booking tool][booking], [external workflow][workflow] | Agent prompt, scoped variables, enabled calendar tools, transfer to a human, hangup | The supplied tools use function webhooks, not MCP. They need a remote MCP facade or trusted host adapter. The agent records MCP results through Vxpipe variable tools. A timeout without a definitive remote result reports unknown. Conversational confirmation belongs in agent instructions; enforceable business authorization belongs to the application/MCP, with no generic platform confirmation now. Business-time interpretation belongs to application/agent instructions with date tooling; automatic retry/idempotency enhancements and late recovery notifications are deferred. The external scheduling system remains the booking authority. |
 | Intent routing: [assistant][intent], [request overrides][intent-request], [instruction handler][instructions] | One agent retrieves instructions through a tool; alternatively several specialized agent definitions transfer by ref | Personalization uses agent instructions and permitted variable reads. Retain trusted ingress metadata, provenance of retrieved instructions, and closed participant destinations. Runtime text must not grant tools or introduce arbitrary telephone destinations. |
-| Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Waiting for the other party, answer classification, optional beep evidence, delivery deadline, and speak-then-end are runtime behavior, not solved by a prompt alone. |
+| Voicemail: [assistant][voicemail], [native voicemail tool][voicemail-tool] | Outbound human connection intent, agent first-message policy, platform ending tool | Provider detection supplies classification evidence, including unknown; the action after machine/unknown remains pending. Closing wording and choosing hangup belong to agent instructions, without a platform speak-then-end or guaranteed-playout workflow. |
 | SMS verification: [assistant][sms], [code tool][code], [SMS tool][sms-tool] | Agent-scoped remote tools, typed verification variables, provider-neutral external action | Requires an external verification service or trusted host implementation. That service owns verification, expiry, attempt limits, recipient binding, and replay protection; the agent can record its returned outcome in permitted call variables. Storing an outcome does not override the service's rules. Do not run JSON-provided JavaScript. |
 
 Two distinctions matter when using these sources:
@@ -1245,15 +1245,14 @@ prepared wait and preserving the deadline across transfers/recovery and human-on
 portions. The engine ends with a clear duration-limit reason. No creation override,
 unlimited mode, automatic warning/grace interval, or guaranteed closing speech.
 
-Speak-and-end ordering (R31) and voicemail behavior below remain under review.
-G7 is partly resolved; these are not newly implemented timers.
-
-Treat speak-and-end as an engine lifecycle: stop accepting new conversational
-work, enqueue an authorized closing utterance, wait for the configured delivery
-evidence or a deadline, then terminate the intended call/leg with a typed reason.
-Immediate end remains separate. Define how interruption affects the closing
-utterance. A prompt telling a model to wait until speech finishes cannot enforce
-this ordering.
+**Resolved R31:** closing wording and choosing when to invoke the existing hangup
+tool belong to agent instructions. Reject the proposed platform speak-and-end
+lifecycle/API, mandatory playback-drain deadline, and automatic cancellation of
+a pending hangup on speech interruption. Normal/immediate hangup and hard-duration
+control remain unchanged. Instructions do not prove completed playout; no
+playout-aware hangup guarantee is added. G7 remains partly resolved because the
+voicemail outcome/action policy still needs review, not because closing requires
+another platform workflow.
 
 The [voicemail example][voicemail] waits for input and delegates to a native
 tool. Vapi's [tool documentation][voicemail-docs] distinguishes assistant-chosen
@@ -1263,6 +1262,14 @@ source/confidence, timeouts, and an unknown outcome. An answered leg is not proo
 of a human, and STT text alone does not establish a beep. Reject policies that
 require unavailable evidence. Start with a safe narrow outbound policy; do not
 claim full answering-machine or IVR support from generic hangup/transfer tools.
+
+**Partly resolved R32:** use provider-supplied detection when available, preserving
+provider provenance and unknown outcomes. [Telnyx AMD](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
+and [Twilio AMD](https://www.twilio.com/docs/voice/answering-machine-detection)
+provide that source; no local beep classifier or LLM-inferred human proof is added.
+Provider modes/tuning and actions after machine/unknown classification are not
+selected here: neither automatic end-leg nor leaving a voicemail is approved.
+AMD classification is not explicit acceptance by a human transfer recipient.
 
 ### G8 — P2: A transfer allowlist is not the complete transfer policy
 
@@ -1281,21 +1288,36 @@ which can offer another allowed destination or continue helping. No failed
 attempt emits `transfer.completed`. Existing capability denials still constrain
 what reception can do; failure is not permission to restart forbidden processing.
 
-Keep `transfers: ["specialist", "human-support-agent"]`. The remaining warm/cold,
-acceptance, and history-projection settings still need a configuration home after
-rejecting named transfer objects. G8 is partly resolved; the richer policies below
-remain proposals, not approval of warm consultation or arbitrary source retention.
+**Approved R33 location:** call-level `transfer_policy` holds shared defaults.
+Keep source participant `transfers: ["specialist", "human-support-agent"]` as
+allowed refs; destination-specific connection and acceptance requirements stay
+with the destination. No named transfers, graph, source-level defaults, or per-pair
+override machinery initially. Naming this boundary does not freeze other policy
+fields/enums. Warm/cold and history-projection choices remain separate.
 
-Proposed location: a call-level handoff policy with source-agent outgoing
-defaults and destination acceptance requirements. The compiler resolves one
-effective policy per allowed pair; target safety constraints cannot be weakened
-by the source. This preserves the simple list. Defer per-pair authoring until
-a real case needs it. Policy keys are proposals, not accepted schema additions.
+**Approved R34 acceptance:** agents require conversation/required-capability
+readiness. Humans require usable media plus explicit acceptance: phone press-1
+DTMF tied to the pending destination leg, or an authenticated web transfer-accepted
+message. The client owns its web presentation/user interaction; the platform
+accepts the control message without mandating a button UI. Bind acceptance
+server-side to destination participant/connection and current pending attempt.
+Reject source/caller/model assertions, stale acceptances, and duplicate commits.
+No STT/LLM inference substitutes for DTMF or explicit acceptance. This is an
+internal/adapter protocol contract, not an RTVI core standard field. Connection
+alone does not expose full conversational media; source responsibility and target
+presence/capability restrictions remain until room-authoritative commit.
 
-Specify dialing, ringing, answered, media-ready, accepted, committed, failed,
-and canceled states; their deadlines; and cleanup for late provider callbacks.
-Busy, no-answer, declined, voicemail, caller departure, and failure while
-stopping capabilities must each have an outcome. Preparation has external side
+**Approved R35 deadline:** configurable 30 seconds in `transfer_policy` for the
+whole attempt from the accepted preparation request, including preparation,
+dialing, and acceptance rather than separate restarted clocks. Busy/no-answer or
+another definitive failure ends it early. Failure/timeout stops the destination
+attempt and returns a typed outcome; source conversation continues when permitted.
+Late answer/acceptance cannot commit an expired attempt. Clean up the exact mapped
+leg and do not automatically redial. Startup readiness (R27) and hard call duration
+(R30) remain separate; no remote certainty or durable recovery framework is added.
+
+Richer voicemail, caller-departure, warm consultation, history projection, and
+failed-restoration behavior remain proposals. Preparation has external side
 effects: it cannot promise that nothing changed if a leg was dialed or an STT
 session stopped. Use compensating cleanup, bounded source re-preparation, and a
 safe degraded/terminal outcome if restoration fails. Never resume forbidden
@@ -1505,8 +1527,12 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Retrieve instructions asking for an undeclared transfer/tool | Request is rejected by server authority despite model intent |
 | Dial a participant using a literal number or protected creation-time routing variable | Exactly one number source is accepted; the trusted initialized value resolves without agent read permission; any agent write grant to its section rejects the definition; missing/null/invalid values fail before dialing and retain source responsibility |
 | Ask transfer to use arbitrary dial data or bypass its participant allowlist | Number/provider/URL/variable-ref arguments and unlisted destinations fail; executor rechecks the source allowlist; permitted role selection uses only its pinned connection source, with no new expression or outbound policy matrix |
-| Reach voicemail, busy, no answer, or a human who declines | Typed leg/transfer outcome; no false `transfer.completed`; caller has defined fallback |
+| Receive provider AMD evidence, busy, no answer, or a human decline | Preserve classification provenance/unknown separately from acceptance; definitive transfer failures return typed outcomes without false `transfer.completed`; machine/unknown action policy awaits R32 |
 | Hold transfer preparation, then fail it or complete an accepted ready handoff | Source agent remains responsible before commit; failure returns a typed outcome for its next allowed action, while success commits handoff then terminates the source subtree; capability denials and submitted-variable lifetimes remain intact |
+| Configure shared transfer policy and prepare agent, phone, and web destinations | Source allowlists remain participant refs; agent conversation/capability readiness and human usable-media plus explicit acceptance are required; phone press-1 and web messages are tied to the destination and current pending attempt, not inferred from speech or connection alone |
+| Send stale, duplicate, source-authored, or mismatched transfer acceptance | Server-side participant/connection/attempt checks prevent unauthorized or repeated commits and premature conversational media disclosure; the web client owns its acceptance UI, not a newly mandated core-protocol widget |
+| Advance through transfer preparation, dialing, acceptance, and late callbacks | One configurable 30-second total deadline starts at accepted preparation without phase resets; definitive failure ends early, expiry stops the attempt and returns a typed outcome to the permitted source, and late callbacks clean up only their mapped leg without commit or auto-redial |
+| Give an agent closing instructions and let it invoke existing hangup | Wording and tool timing remain agent-owned; no platform closing API, mandatory drain timer, automatic pending-hangup cancellation, or promise that prompt instructions prove completed audio playback |
 | Start agents in each first-message mode, repeat readiness, and reactivate them | Wait-for-input sends no unsolicited greeting; fixed/generated greeting runs once on first activation after readiness; repeated readiness/reactivation does not replay it; another participant or call has its own first activation; caller reconnect support is not required |
 | Start with no notice, then with opening playback whose completion is controlled while capabilities warm up | No notice uses normal startup; all room/participant capabilities may start during playback but receive no user/participant audio until completion; transport receipt/provider readiness/download/enqueue/failure cannot release the media gate; normal greeting waits, started_at is unchanged, and no blocked-audio replay is implicitly authorized |
 | Exercise trusted remote endpoints, changed DNS answers, private targets, and redirects | Verified HTTPS and connect-time address policy hold; tenant settings cannot bypass host private-network authorization; metadata/link-local restrictions remain, redirects are not followed and credentials are not forwarded; no Go SDK enforcement is assumed |
@@ -1947,11 +1973,24 @@ The 2026-09-08 follow-up resolves R26–R30: SDK-aligned safeguards at Vxpipe's
 outbound endpoint boundary, configurable 30-second startup readiness and 15-second
 agent idle notification, no automatic long-tool progress speech, and a pinned
 30-minute default duration with definition/tenant/application precedence. Added
-the deferred wait-music issue without playback implementation. Current backlog:
-20 individual decisions, R31–R50; next five R31–R35 remain unapproved. Verified
+the deferred wait-music issue without playback implementation. At that checkpoint:
+20 individual decisions, R31–R50; next five R31–R35 remained unapproved. Verified
 exact four-file scope, 18 unchanged JSON examples/fences, existing/new links and
 anchors, timer/permission/clock boundaries, prior contracts, statuses/count,
 terminology/path hygiene, and whitespace. Documentation only; no runtime tests.
+
+The later 2026-09-08 follow-up resolves R31 and R33–R35: closing wording/hangup
+timing belong to instructions; call-level `transfer_policy` shares defaults while
+source allowlists and destination requirements retain their existing ownership.
+Human transfer acceptance uses pending-leg DTMF or authenticated web control,
+bound to the destination and attempt; agent destinations require readiness.
+A configurable 30-second total attempt deadline includes preparation/dialing/
+acceptance, with typed failure and exact late-leg cleanup. Provider AMD is the
+approved detection source, but machine/unknown action remains R32. Current backlog:
+16 individual decisions, R32 and R36–R50; next five R32 and R36–R39. Verified exact
+three-file scope, 18 unchanged JSON examples/fences, preserved links and local
+anchors, statuses/count, transfer/closing/privacy and prior contracts, terminology/
+path hygiene, and whitespace. Documentation only; no runtime or browser tests.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

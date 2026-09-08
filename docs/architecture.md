@@ -349,8 +349,23 @@ changes do not change an active call's limit. Measure from actual `started_at`,
 excluding prepared wait and never resetting on transfer/recovery. It also applies
 to human-only portions. At the limit, the engine ends with a clear duration-limit
 reason. No creation-time override, unlimited mode, warning/grace policy, or closing-
-speech guarantee is added; closing delivery remains R31. These are design contracts,
+speech guarantee is added. These are design contracts,
 not runtime changes.
+
+Closing wording and the decision to invoke the existing hangup tool belong to
+agent instructions (R31). No platform speak-then-end/closing-message API,
+mandatory playback-drain deadline, or pending-hangup cancellation on speech
+interruption is introduced. Normal/immediate hangup and the hard duration limit
+remain unchanged. Instructions alone do not guarantee that audio finished playing;
+this does not add playout-aware hangup.
+
+Use provider-supplied answering-machine/voicemail detection when supported.
+Preserve its provenance and unknown outcomes, not a local beep classifier or
+LLM-inferred proof of a human. Both [Telnyx](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
+and [Twilio](https://www.twilio.com/docs/voice/answering-machine-detection) document
+provider detection. The action after machine/unknown classification remains R32;
+no automatic end-leg or leave-message policy is selected. Detection is not
+explicit recipient acceptance of a transfer.
 
 Until a transfer successfully commits, the source agent retains conversational
 responsibility. `RoomAuthority` still owns the room and the transfer transition;
@@ -361,9 +376,36 @@ failure and choose its next permitted action. Do not terminate it just because
 transfer was requested. A successful handoff terminates its execution subtree,
 including capabilities and model/tool workers, under the existing lifecycle.
 Failure handling must respect capability denials; it is not permission to resume
-forbidden processing. Warm consultation, exact acceptance evidence, deadlines,
-and failure of safe restoration remain separate review decisions. These are
-approved designs, not newly implemented transfer or greeting behavior.
+forbidden processing. Warm consultation and failure of safe restoration remain
+separate review decisions. These are approved designs, not newly implemented
+transfer or greeting behavior.
+
+Shared transfer defaults live in call-level `transfer_policy`; source participants
+keep `transfers: [allowed participant refs]`, and destination-specific connection/
+acceptance requirements stay with the destination. No named transfers, graph,
+source-level default machinery, or per-pair overrides initially. Other policy
+fields/enums are not frozen by naming this configuration boundary.
+
+An agent destination must be ready for conversation with its required capabilities.
+A human destination needs usable media and explicit acceptance: deterministic
+press-1 DTMF from its pending phone leg, or an authenticated transfer-accepted
+message from its web connection. The web client owns presentation/user interaction;
+the platform does not prescribe an acceptance button. The gateway/adapter binds
+acceptance to the destination participant/connection and current pending transfer
+attempt, rejecting source/caller/model assertions, stale messages, and duplicate
+commit attempts. This is an internal/adapter control contract, not an RTVI core
+field. Transport connection alone admits no full conversational media or private
+disclosure; source responsibility and target-presence capability rules hold until
+the room commits the transfer.
+
+`transfer_policy` has a configurable 30-second total attempt deadline, starting
+when the preparation request is accepted and covering preparation, dialing, and
+acceptance together, not restarting per phase. Busy/no-answer or another definite
+failure ends it earlier. On failure/timeout, stop the destination attempt, return
+a typed outcome, and let the source continue when permitted. Late answer/acceptance
+cannot commit an expired attempt; clean up its exact mapped leg without automatic
+redial. This is separate from startup readiness and whole-call duration and adds
+no remote-outcome certainty or durable recovery framework.
 
 Dial destinations may be literal participant `connection.number` values or come
 from a declared creation-time variable, using the candidate alternative

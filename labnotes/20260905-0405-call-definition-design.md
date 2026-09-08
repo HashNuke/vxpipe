@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-20 individual decisions still awaiting review, rather than counting its
+16 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -139,6 +139,9 @@ R26 adopts SDK-aligned endpoint security at Vxpipe's outbound boundary. R27/R28
 set configurable 30-second readiness and 15-second idle-notification defaults;
 R29 leaves tool speech to instructions and defers wait music. R30 pins a 30-minute
 default live-call limit with definition, tenant, then application precedence.
+R31 leaves closing speech/hangup timing with agent instructions. R33–R35 define
+call-level transfer defaults, destination acceptance, and a total attempt deadline.
+R32 uses provider detection; the action after machine/unknown remains pending.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -399,7 +402,12 @@ call starts afresh. Returning agents may converse normally; this rule prevents
 automatic greeting replay, not ordinary contextual speech. Greetings use normal
 output and must respect current capability denials.
 
-Speak-and-end ordering and voicemail behavior remain separate review decisions.
+Voicemail outcome/action policy remains a separate review decision. Closing
+wording and when to invoke existing hangup belong to agent instructions (R31).
+There is no platform speak-then-end/closing-message API, mandatory playback-drain
+deadline, or automatic pending-hangup cancellation on speech interruption.
+Normal/immediate hangup and the hard-duration limit are unchanged; instructions
+alone do not guarantee finished audio playback or add playout-aware hangup.
 These modes and the timing policies below are approved designs, not behavior
 newly implemented in the current playground.
 
@@ -437,7 +445,20 @@ limit. Measure from actual `started_at`, excluding prepared wait and never
 resetting for transfers/recovery. The limit also covers human-only portions.
 On expiry, the engine ends with a clear duration-limit reason. This adds no
 creation-time override, unlimited mode, extra warning/grace policy, or closing-
-speech guarantee; R31 still owns the unresolved closing-delivery contract.
+speech guarantee. R31 keeps that conversational decision with agent instructions.
+
+### Provider answering-machine detection — partly resolved R32
+
+Use provider-supplied answering-machine/voicemail detection when supported.
+Both [Telnyx](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
+and [Twilio](https://www.twilio.com/docs/voice/answering-machine-detection) provide
+that facility. Preserve provider provenance and unknown results; do not infer
+human acceptance from STT/LLM output or add a local beep classifier. A provider's
+human/machine classification is not explicit transfer acceptance.
+
+The action after machine or unknown classification remains pending, including
+whether to end or leave a message. No provider mode/tuning, automatic end-leg,
+or voicemail-message delivery feature is selected by approving the detection source.
 
 ### One participant per definition key — approved G2 decision
 
@@ -1171,9 +1192,11 @@ resolved capability intent. This does not start every known capability
 indiscriminately: only capabilities enabled by the call and current agent plans
 resume, and any remaining participant or room denial still applies.
 
-A transfer request names an allowed target. The remaining warm/cold, history
-projection, and presentation policies still need their configuration home; they
-do not become named transfer objects. The room authority runs prepare and commit
+A transfer request names an allowed target from the source participant's
+`transfers` list. Shared defaults belong to call-level `transfer_policy`, while
+destination-specific connection/acceptance requirements stay with the destination.
+Warm/cold and history projection remain separate decisions, not named transfer
+objects or source/per-pair default machinery. The room authority runs prepare and commit
 phases. During prepare, it resolves
 the destination and its presence policy outside the active media topology,
 while the source participant and its current capabilities may remain active for
@@ -1233,10 +1256,42 @@ may still finish under the existing rules; local shutdown is not remote rollback
 
 Normal capability denials still apply during preparation and failure handling.
 Keeping the source responsible does not permit forbidden STT/TTS or guarantee
-speech if a safety constraint prevents it. Exact acceptance evidence, deadlines,
-late callback cleanup, and inability to restore a safe usable source remain
-review questions. No warm consultation, concurrent-agent mode, new fallback tool,
-or alternate source-disposition option is approved by this baseline.
+speech if a safety constraint prevents it. Inability to restore a safe usable
+source remains a review question. No warm consultation, concurrent-agent mode,
+new fallback tool, or alternate source-disposition option is approved by this baseline.
+
+**Approved R33 configuration boundary:** `transfer_policy` is call-level shared
+defaults. Source `transfers: [allowed participant refs]` remains a simple list;
+destination-specific connection and acceptance requirements belong to that
+participant. No named transfers, graph, source-default/per-pair override machinery,
+or extra frozen policy enums/options are added initially.
+
+**Approved R34 readiness/acceptance:** an agent destination needs conversation
+readiness and its required capabilities. A human destination needs usable media
+and explicit acceptance. For a phone leg, use deterministic press-1 DTMF associated
+with that pending destination leg, never inferred STT/LLM agreement. For web,
+the client handles presentation and user interaction and sends an authenticated
+message that the transfer is accepted; the platform does not mandate/build a
+button UI.
+
+Bind acceptance server-side to the destination participant/connection and current
+pending transfer attempt. Caller/source/model assertions cannot accept for that
+destination. Stale or duplicate acceptance cannot commit a transfer twice or
+accept a different attempt. This is a protocol-neutral/internal adapter control
+contract, not a claim about an RTVI core standard field. Merely connecting the
+destination transport does not admit full conversational media or disclose private
+data. Source responsibility and target-presence capability barriers remain until
+the room commits the handoff.
+
+**Approved R35 total deadline:** the call-level `transfer_policy` has a configurable
+30-second total attempt deadline from acceptance of the preparation request.
+Preparation, dialing, and acceptance share that one interval; phases do not each
+restart it. Busy/no-answer or other definitive failure ends the attempt earlier.
+On failure/timeout, stop the destination attempt, return its typed outcome, and
+let the source continue when permitted. A late answer/acceptance cannot commit an
+expired attempt; cleanup targets its exact mapped leg without automatic redial.
+This is separate from startup readiness and the whole-call duration clock and
+does not promise certainty about remote effects or add a durable recovery framework.
 
 ### Keep telephony provider-neutral and pin the resolved definition in the room
 
@@ -4344,8 +4399,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-08
 
-There are **20 individual decisions awaiting review**, enumerated as R31–R50
-in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R30 are resolved;
+There are **16 individual decisions awaiting review**, enumerated as R32 and R36–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, R26–R31, and R33–R35 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4362,7 +4417,8 @@ external-event delivery, general redaction, and generic platform confirmation
 remain deferred/excluded rather than current-slice prerequisites. DTMF collection
 integration, OAuth onboarding, and optional post-call summary/evaluation are
 separate future feature designs. There is still no additional automatic expiry
-for unstarted records. The next five pending decisions are R31–R35.
+for unstarted records. R32's detection source is resolved, but its outcome/action
+policy remains one pending decision. The next five are R32 and R36–R39.
 
 ### Baseline and scope
 
@@ -4612,16 +4668,20 @@ The numbering below matches G1–G13 in the focused review document.
    Long tools have no automatic progress cadence, and wait music is deferred.
    The whole-call limit defaults to 30 minutes, pinned with definition/tenant/
    application precedence and measured from actual start, including human-only
-   portions. Speak-then-end and voicemail still need review. An answered leg does not
+   portions. R31 leaves closing wording and hangup timing with instructions,
+   without a new platform drain/closing API or playback guarantee. R32 uses
+   provider AMD when supported; machine/unknown action remains pending. An answered leg does not
    prove a human answered; required beep/classification evidence must actually
    be supported by the adapter. Preserve the no-local-model/no-local-VAD scope.
 8. **Transfer policy and media routing — partly resolved:** the source agent stays
    responsible until committed handoff; failed attempts return to it for the next
-   permitted action. Only success terminates its execution subtree. Warm/cold
-   behavior, exact acceptance, and other lifecycle policies still need a
-   configuration home. Consider call/source defaults plus target requirements,
-   without named transfers. Define busy/no-answer/decline/cancel outcomes and
-   compensating cleanup. A failed prepare cannot promise that already-dialed
+   permitted action. Only success terminates its execution subtree. R33 chooses
+   call-level `transfer_policy`, source allowed-ref lists, and destination
+   connection/acceptance requirements without source/per-pair defaults. R34 needs
+   agent readiness or human usable media plus current-attempt-bound explicit
+   DTMF/web acceptance. R35 has one configurable 30-second attempt deadline and
+   exact-leg late-callback cleanup, without auto-redial. Warm/cold, history, and
+   failed-restoration policies remain separate. A failed prepare cannot promise that already-dialed
    legs or stopped providers never changed. Private consultation needs explicit
    authorized audio routes and hold behavior, not only global mix-minus.
 9. **Denials on routed capabilities:** denying STT to an agent is ambiguous
@@ -4852,7 +4912,7 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    continue or choose another allowed action, and emits no `transfer.completed`.
    On successful ready/accepted handoff, verify commit then source-subtree
    termination using monitors. Existing capability denials must remain enforced.
-   Richer voicemail, declined, late-callback, and failed-restoration cases depend
+   Voicemail outcome/action and failed-restoration cases depend
    on their remaining policy review; do not claim they are resolved here.
 8. Feed distinguishable fake audio into caller and consultation routes. Confirm
    each sink, monitor, and recorder hears only its authorized mix. Slow the upload
@@ -5070,6 +5130,29 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     transfer/recover into a human-only portion: only actual live time counts,
     the clock never restarts, and expiry ends with a clear duration-limit reason.
     Do not assert an unapproved warning, grace interval, or closing utterance.
+32. Ask an agent to end under its instructions and use the existing permitted
+    hangup tool. Verify no new speak-then-end/closing API, mandatory drain timer,
+    or automatic pending-hangup cancellation on interruption is required. Keep
+    delivered/spoken evidence honest rather than infer complete playback from a prompt.
+33. Configure shared `transfer_policy`, source allowed refs, and destination
+    requirements. Hold an agent destination's required readiness and ensure no
+    commit. For a phone destination, connect media without press-1 acceptance,
+    then provide DTMF on the correct pending leg. For web, submit authenticated
+    acceptance from the destination connection after client-owned interaction.
+    Source/caller/model, wrong-attempt, stale, and duplicate signals cannot
+    authorize or repeat commit. Connection alone exposes no full conversation;
+    target capability barriers and source responsibility still apply.
+34. Hold preparation, dialing, and acceptance across one configurable 30-second
+    total attempt interval; changing phase must not restart it. Return busy/no-answer
+    early or expire the total deadline: stop the destination, return typed failure,
+    and preserve source responsibility when permitted. A late answer/acceptance
+    must not commit; clean only the mapped leg without auto-redial or a fabricated
+    remote-outcome guarantee. Keep startup and whole-call clocks independent.
+35. Feed provider AMD classifications and unknown results through a controlled
+    adapter. Preserve provenance/uncertainty and require independent human transfer
+    acceptance; do not substitute LLM/STT guesses or a local beep classifier.
+    Machine/unknown follow-up actions await R32's remaining review, not an assumed
+    end-leg or leave-message behavior. These are planned checks, not runtime tests.
 
 ### Review checkpoint verification
 
@@ -5116,6 +5199,10 @@ server-driven interactions to deferred issues, not implicit implementation work.
 The 2026-09-08 R26–R30 decisions supersede earlier unselected egress and startup/
 silence/tool-progress/duration proposals. Wait music remains a deferred issue;
 closing delivery and voicemail are not resolved by those timer defaults.
+The later R31 decision places closing speech/hangup timing in agent instructions,
+superseding the platform closing/drain workflow proposal. R33–R35 select transfer
+configuration, acceptance, and total deadline; R32 settles detection source only,
+not the action after machine/unknown classification.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6330,6 +6417,33 @@ storage/client projection boundary and credential exclusions still apply.
   anchors including the new issue, statuses/count, timers/security and prior
   contracts, terminology/path hygiene, and whitespace. Documentation only;
   no dependencies, runtime, or browser tests.
+
+### Transfer acceptance and instruction-owned closing — 2026-09-08
+
+- R31 leaves closing wording and choosing when to call existing hangup with
+  agent instructions. No new closing API, mandatory playback drain, automatic
+  pending-hangup cancellation on speech interruption, or playback guarantee.
+- R33 chooses shared call-level `transfer_policy`, simple source `transfers`
+  lists, and destination connection/acceptance requirements without named/source-
+  default/per-pair machinery or further frozen schema options.
+- R34 requires agent conversation/capability readiness or human usable media plus
+  explicit press-1 DTMF/web acceptance. The web client owns interaction; server
+  checks bind it to the destination connection/participant and pending attempt.
+  Stale/duplicate/source/model assertions cannot commit. Source responsibility
+  and target capability barriers remain; transport connection alone is not admission.
+- R35 sets one configurable 30-second total attempt interval from accepted
+  preparation, including dialing/acceptance. Fail early on definite failure;
+  timeout/failure stops the destination and returns a typed outcome. Late callbacks
+  cannot commit; cleanup is exact-leg, without auto-redial or new recovery claims.
+- R32 uses supported provider AMD with provenance/unknown retained, not local
+  inference or transfer acceptance. Post-detection machine/unknown actions remain
+  pending; rechecked the official provider detection references without selecting
+  modes, tuning, end-leg, or message behavior.
+- R31/R33/R34/R35 resolved: 16 individual decisions remain, R32 and R36–R50;
+  next five R32 and R36–R39. Updated canonical contracts and planned checks 32–35.
+- Verified exact three-file scope, 18 unchanged JSON examples/fences, links and
+  anchors, statuses/count, transfer/closing/privacy and prior contracts,
+  terminology/path hygiene, and whitespace. Documentation only; no runtime tests.
 
 ## Verification evidence
 
