@@ -1,7 +1,7 @@
 # Call-definition gap review
 
 Reviewed: 2026-09-06 UTC
-Last updated: 2026-09-07 UTC
+Last updated: 2026-09-08 UTC
 Status: G1 and G2's web routes, initial variables, API-key admission with one-way
 hash storage, single-use tokens with existing-call recovery and no automatic
 call-record expiry, prepared token-join or direct-backend connection, explicit
@@ -78,8 +78,8 @@ Extra database-commit reconciliation is not required for this slice.
 Record creation and actual live-call start have distinct approved timestamps.
 Documentation only; no runtime implementation.
 
-Current review count: **5 individual decisions** in the numbered backlog below.
-R01–R06, R08, R10–R15, R17–R23, and R26–R45 are resolved; R07's same-call caller
+Current review count: **4 individual decisions** in the numbered backlog below.
+R01–R06, R08, R10–R15, R17–R23, and R26–R46 are resolved; R07's same-call caller
 reconnection, R16's retry exceptions, and R24/R25 are deferred, while R09 is superseded by
 removal of direct WebSocket setup. Additional tokens do
 not supersede earlier unused ones; initial variables already belong to creation.
@@ -89,7 +89,8 @@ is added. R13 allows protected backend-initialized routing variables while
 transfers remain participant-ref-only. G1, G3, and G7's current-slice decisions
 are resolved; G2/G4/G5/G6/G8 retain follow-up context, G10's current scope is resolved,
 G9's media-policy structure and G11's storage/publication choices are resolved;
-G12/G13 retain the five pending decisions.
+G12's initial usage/pricing scope is resolved; G13 retains four pending decisions,
+including partially agreed compaction and oversized-result boundaries.
 The G headings organize the background, not the count. Object merge versus
 replacement and preservation of
 omitted nested variables, explicit-null clearing, direct-variable addressing, missing
@@ -111,11 +112,12 @@ questions remain pending and are counted individually below.
 
 ## Individual decisions awaiting review
 
-**5 pending decisions (R46–R50).** This is the current approval backlog,
+**4 pending decisions (R47–R50).** This is the current approval backlog,
 not a count of G headings, tests, implementation tasks, or every configuration key.
 Each row is one independently reviewable policy/contract choice. R01–R06, R08,
-R10–R15, R17–R23, and R26–R45 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
-all excluded from the count. The next five pending decisions are **R46–R50**. Mark rows resolved or
+R10–R15, R17–R23, and R26–R46 are resolved; R07/R16/R24/R25 are deferred and R09 is superseded,
+all excluded from the count. The remaining decisions are **R47–R50**; partially
+agreed R48/R49 each count once. Mark rows resolved or
 deferred as decisions are made and update this count; do not renumber the remaining IDs.
 
 | ID | Background | Decision / review status |
@@ -165,10 +167,10 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R43 | G11 | **Resolved:** finalize outside the room with a configurable 60-second post-end reporting window; publish early when expected work settles, otherwise publish permitted available data with honest pending/missing components. Later facts may refresh publication under R42; no call extension, work cancellation, or false completion during outages. |
 | R44 | G12 | **Resolved:** retain observations and derive effective usage per operation attempt/component; distinguish deltas from cumulative totals and estimate/final/correction status. Identity-proven duplicates do not add again; final supersedes estimates, explicit corrections may decrease/increase, and failed/interrupted usage is retained without invented zero. |
 | R45 | G12 | **Resolved:** always call-scoped with honest optional participant/service-interval/turn attribution, no forced allocation or duplicate charges. Keep usage separate from unavailable cost and preserve real namespaced provider IDs for optional asynchronous supported billing lookup outside the live call. |
-| R46 | G12 | Which pricing source/version determines recorded cost, and how are unavailable usage or prices represented? |
+| R46 | G12 | **Resolved:** retain provider-reported estimate/final cost when available, otherwise unknown price with actual provider IDs and observed usage. TTS input-text characters/generated-audio duration and STT audio duration/recognized-text characters are retained when observed and permitted, with exact units/provenance and no invented IDs, billable units, or local pricing catalog. |
 | R47 | G13 | Which provider options belong in profiles versus engine policy, and how do unsupported combinations fail? |
-| R48 | G13 | What model-context budget and history truncation/compaction policy apply to long calls? |
-| R49 | G13 | How should a tool result too large for model context be bounded or summarized without misrepresenting it? |
+| R48 | G13 | **Partly agreed:** use model-context compaction, not oldest-turn eviction alone; when/how to compact and the model-context budget remain pending, without a chosen summary model, trigger, or threshold. |
+| R49 | G13 | **Partly agreed:** archive full permitted received responses and report model-projection-too-large without remote-failure claims, automatic repetition, chopped JSON, or silent summaries. A separate hard MCP receive-size cap is required; value/units/scope and limit handling remain pending, and an incompletely received body cannot be called fully archived. |
 | R50 | G13 | When may a failed provider be replaced, and how must fallback preserve permissions, tool semantics, and cost attribution? |
 
 Not counted as current approval blockers:
@@ -981,7 +983,8 @@ delivered/spoken agent text, including interrupted/truncated state. Do not start
 STT or other prohibited processing for archival completeness; missing or forbidden
 transcription does not justify inventing a transcript. Missing usage/prices remain
 unavailable, not zero or invented estimates; R44/R45 resolve usage accounting and
-attribution while R46 pricing policy remains pending. General history persistence
+attribution. R46 uses provider-reported costs when available, otherwise unknown
+price with observed usage/IDs and no local pricing catalog. General history persistence
 is asynchronous under R41, outside the live room's database dependencies.
 
 Call audio is stored only through an explicitly enabled and permitted recording
@@ -1547,7 +1550,7 @@ device-confirmed playback. A sink accepting audio does not prove a listener hear
 it. Post-call summary/evaluation is a separate optional, metered job; it cannot
 overwrite authoritative call variables or invent missing transcript segments.
 
-### G12 — P2: Usage observations and attribution — R44/R45 resolved, R46 pending
+### G12 — P2: Usage observations, attribution, and initial pricing — R44–R46 resolved
 
 Every observation belongs to the call. Attach participant/activation/service-active
 interval and turn references only where honest; participant attribution does not
@@ -1559,15 +1562,27 @@ One fact with call/participant/turn refs is not three charges; count each effect
 provider-operation attempt once in an aggregate.
 
 Preserve tokens, durations, characters, and provider units even without monetary
-cost; missing usage/cost is unknown, not zero. Save actual provider request/operation
-IDs when available with provider/configured-integration/tenant namespace; absent
-IDs stay absent, distinct from local correlation IDs. An integration may offer an
+cost; missing usage/cost is unknown, not zero. Save actual provider request/operation/
+session IDs when available with provider/configured-integration/tenant namespace;
+absent IDs stay absent, distinct from local correlation IDs. An integration may offer an
 optional asynchronous billing capability using those persisted IDs where its API
 supports lookup. It runs outside media/`RoomAuthority`, may outlive the room, and
 does not block the call or reset `ended_at`/retention. Existing integration auth and
 tenant isolation apply; no per-call credentials or guarantee that every provider
 exposes request-level billing/eventually resolves cost. Billing APIs, dependencies,
-schema details, and pricing/fallback policy are not selected.
+and schema details are not selected.
+
+R46's initial pricing policy retains provider-reported estimate/final cost where
+available; otherwise price stays unknown with observed usage and actual IDs.
+No local pricing catalog or invented fallback rate is requested. Save TTS
+input-text character count and generated-audio duration when observed, and STT audio
+duration and recognized-text character count when observed and permitted. Keep
+exact units/provenance; measured character counts are not automatically
+provider-billable characters. Repeated interim/cumulative recognition text is not new
+usage each time it appears. Do not fabricate absent IDs or measurements, retain
+forbidden transcript text to obtain counts, or start prohibited STT for accounting.
+Source-interval privacy applies to the observed data; no precise character-counting
+standard or new configuration is chosen here.
 
 R44 retains observations and derives effective usage per provider-operation attempt/
 component, replacing the one-immutable-row-per-operation proposal. Deltas 100 + 60
@@ -1585,8 +1600,7 @@ distinct billable attempts. Interrupted/failed operations still contribute obser
 usage despite stale conversational output. Preserve original observations as the
 effective amount changes; automatic MCP retry policy is unchanged.
 
-R46 pricing-source/version/fallback remains pending: absent billing support does
-not approve catalog math or invented prices. R41–R43 storage/publication contracts
+R46 is resolved for that initial policy. R41–R43 storage/publication contracts
 are resolved without promising lossless archival. General usage persistence and
 optional provider billing lookup run asynchronously. Variable snapshots follow
 local acceptance with asynchronous PostgreSQL projection. Mandatory usage
@@ -1606,10 +1620,25 @@ Compile required evidence/features against adapter capabilities; do not silently
 ignore unsupported options or import executable timing expressions. Keep hosted
 provider endpointing and the existing no-local-VAD/no-local-model scope.
 
-For long calls, declare token-aware history/tool-result/model-context budgets,
-truncation or compaction policy with provenance, and provider failure/fallback
-outcomes. The current turn-count history bound does not bound a large prompt or
-tool response in model tokens. Fallback must preserve authorization, tool schema,
+R48 selects compaction for long-call model context, not oldest-turn eviction alone.
+When/how it runs and the model-context budget remain pending; no summary model,
+trigger, threshold, or algorithm is approved. The current turn-count history bound
+does not bound a large prompt or tool response in model tokens.
+
+R49 approves preserving a fully received, permitted MCP response in the asynchronous
+archive while returning an explicit model-projection-too-large result if it cannot
+fit the model-context budget. That is not a remote-action failure, permission to
+repeat the action automatically, chopped JSON, or a new result summarizer. The projection
+does not replace the received response in history. A separate hard maximum
+acceptable MCP response size is also required at transport/ingestion, with bounded
+resource use for streamed responses as well. The numeric limit, units/scope,
+configuration, compression accounting, and limit-error handling remain pending.
+A response rejected before full receipt is not fully archived, and asynchronous
+handoff is not a guarantee of durable storage. This does not approve automatic
+attachment fetching or settle the deferred general result/document-inspection design.
+
+R47's profile boundary and R50's provider fallback remain unapproved. Proposed
+fallback must preserve authorization, tool schema,
 privacy restrictions, and actual-provider usage attribution; it cannot repeat
 an uncertain external action. These are profile/runtime checkpoints, not a
 reason to add provider-native payloads to each participant definition.
@@ -1731,6 +1760,19 @@ requirement for the current MCP slice. Add such scenarios only when the deferred
 external-event mechanism is separately designed and authorized.
 Generic confirmation-token and argument-bound-approval tests are likewise not
 requirements for this slice; Vxpipe's existing tool-access checks remain in scope.
+
+R46's planned accounting checks additionally exercise observed TTS input-text
+characters/generated-audio duration and STT audio duration/recognized-text characters
+without a reported price. Keep measurement units/provenance, missing evidence, and
+provider estimate/final status honest; do not add repeated interim/cumulative text
+counts, invent billable characters, store denied text for counting, or enable
+prohibited STT. R49's approved projection check uses a fully received permitted
+result that exceeds the model budget: preserve the received response through the
+archive path and report projection-too-large without misreporting remote failure,
+automatic repetition, chopped JSON, or silent summarization. Final receive-limit
+boundary/error tests and compaction timing tests await R49/R48's remaining decisions;
+streamed ingestion must be bounded, and a rejected incomplete body is not a complete
+archive. No numeric limit or compaction policy is selected by these planned checks.
 
 These are planned red-green tests, not tests run during this review. Before each
 implementation checkpoint, write and run the smallest failing project-owned
@@ -2215,7 +2257,7 @@ participant/service-interval/turn attribution. Preserve actual provider IDs for
 optional asynchronous supported billing lookup, without promising cost availability.
 Incremental/cumulative semantics remain distinct from estimate/final/correction
 status; deduplicate by evidence, never by equal values, and count effective attempt/
-component amounts once. Pricing remains R46; R41–R43 archive policies were unchanged
+component amounts once. Pricing remained R46 at that checkpoint; R41–R43 archive policies were unchanged
 at that checkpoint. Its backlog was 8 individual decisions, R41–R43 and R46–R50;
 next five R41–R43 and R46–R47. Verified three-file scope, unchanged JSON examples/links, accounting example
 arithmetic, prior contracts, exact status/count, unchanged remaining rows, and
@@ -2263,9 +2305,23 @@ owns PostgreSQL history/metadata projection; S3Storage receives permitted record
 bytes. Storage failure does not fail/stop the room or roll back accepted values.
 Filter source-interval privacy before subscriber/queue handoff and at sinks. Bounded
 in-memory handoff is not durable/no-loss storage; post-incident repair remains
-deferred. Five individual decisions remain, R46–R50. Verified canonical contracts,
+deferred. At that checkpoint five individual decisions remained, R46–R50. Verified canonical contracts,
 planned acceptance checks, JSON/text examples, links, status/counts, unchanged
 remaining rows, privacy/retention, and diff hygiene. Documentation only.
+
+The R46 follow-up resolves initial pricing: keep provider-reported estimate/final
+cost when supplied, otherwise unknown price with observed usage and actual IDs.
+TTS input-text characters/generated-audio duration and STT audio duration/
+recognized-text characters retain units/provenance when observed and permitted; measured
+characters are not invented billable units. No local pricing catalog or forbidden
+text capture is added. Earlier pending-R46 notes are historical, not current blockers.
+R48 selects compaction but leaves timing/mechanics open. R49 approves honest
+oversized model projection and requires a separate bounded MCP receive-size limit,
+with its value/scope/error handling still open. Incomplete receipt is not full
+archival. Four individual decisions remain, R47–R50; R48/R49 each count once and
+R47/R50's rows are unchanged. Verified canonical contracts, planned checks, JSON
+examples, links, status/counts, prior approvals, and terminology/path/diff hygiene.
+Documentation only; no runtime, dependency, new issue, or new labnote.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md

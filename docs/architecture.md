@@ -275,6 +275,24 @@ Prompt instructions are not a security guarantee. Vxpipe still enforces tool
 access, trusted identity, and argument checks; no confirmation token, approval
 endpoint, or generic confirmation state machine is introduced.
 
+R48 selects model-context compaction for long calls; its trigger, budget, summary
+mechanism, and timing remain under review. Evicting oldest turns alone is not the
+selected direction. This is not an implemented compaction engine or approval of
+a particular summary model or threshold.
+
+R49 separates two boundaries. A fully received, permitted MCP response belongs
+in the asynchronous archive even when it cannot fit the model-context budget.
+Return an explicit model-projection-too-large result without claiming the remote
+action failed, repeating it automatically, chopping JSON, or adding a result
+summarizer. The model projection does not replace the full permitted received
+response in history. Separately, MCP ingestion must enforce a hard maximum
+acceptable response size with bounded resource handling, including streamed
+responses. Its value, units/scope, configuration, compression accounting, and
+limit-error handling remain under review. A body rejected before full receipt
+cannot be described as fully received or fully archived; archival handoff itself
+is not durable confirmation. This does not approve automatic attachment fetching
+or resolve the deferred general result/document-inspection design.
+
 ### First messages and transfer responsibility
 
 Optional call-level `opening_audio` plays to `entry_caller` before
@@ -1081,8 +1099,10 @@ agent text from confirmed delivered/spoken text, including interruptions. Do not
 start STT or any prohibited processing just to produce an archive; absent or
 prohibited transcription yields no invented transcript. Missing usage or prices
 remain unavailable, never fabricated or recorded as zero. Usage attribution and
-observation settlement follow R44/R45 below; pricing-source/version/fallback policy
-remains R46, and archival guarantees remain separate.
+observation settlement follow R44/R45 below. R46 retains provider-reported
+estimate/final costs when available; otherwise price remains unknown alongside
+observed usage and IDs, without a local pricing catalog. Archival guarantees
+remain separate.
 
 Store available call audio only when recording is integrated, explicitly enabled,
 and permitted by the effective `record_audio` policy. Recording
@@ -1145,9 +1165,21 @@ separate call, participant, and turn charges.
 
 Keep tokens, duration, characters, and other provider units separately from price.
 Usage can be known while monetary cost is unavailable. Preserve actual provider
-request/operation IDs when supplied, namespaced by provider, configured integration,
-and tenant. A missing provider ID stays absent; local correlation is not a provider
-request ID.
+request/operation/session IDs when supplied, namespaced by provider, configured
+integration, and tenant. A missing provider ID stays absent; local correlation
+is not a provider request ID.
+
+R46's initial pricing policy uses available provider-reported estimate/final cost,
+otherwise unknown price plus observed usage and IDs; no local pricing catalog or
+invented fallback rate. For TTS, retain input-text character count and
+generated-audio duration when observed. For STT, retain audio duration and
+recognized-text character count when observed and permitted. Preserve exact units and provenance;
+measured character counts are not automatically provider-billable characters.
+Do not sum repeated interim/cumulative recognition text as new usage. Providers
+need not supply every ID or measurement; absent evidence stays absent. Character
+counts do not require retaining forbidden transcript text or starting prohibited
+STT, and source-interval privacy still applies. A precise character-counting
+standard or new configuration surface is not selected by this decision.
 
 Retain usage observations and derive one effective amount per provider-operation
 attempt/component. Distinguish incremental deltas from cumulative totals separately
@@ -1169,8 +1201,8 @@ them. It runs outside the media hot path and `RoomAuthority` and can outlive the
 room; it neither blocks the live call nor resets `ended_at` or retention. Not every
 provider offers request-level billing, and eventual cost resolution is not promised.
 Use existing tenant integration authentication/isolation, not per-call credentials.
-No billing API/schema/dependency/provider implementation or fallback rate is chosen.
-R46 pricing policy remains pending; R41's asynchronous storage contract is resolved.
+No billing API/schema/dependency/provider implementation is chosen. R46's initial
+pricing policy and R41's asynchronous storage contract are resolved.
 Usage-history writes and optional provider billing lookup run outside the room.
 Locally accepted variable snapshots and all existing media/privacy and whole-call
 retention boundaries still apply.
@@ -1235,7 +1267,8 @@ These are approved designs, not newly implemented persistence. This explicitly
 supersedes database-commit-before-variable-success and synchronous-first history.
 Admission still requires its configured database writes; asynchronous runtime
 archival is not removal of that dependency or a durable database-free fallback.
-General sensitive-input redaction and the remaining pricing/profile questions stay separate.
+General sensitive-input redaction and the remaining profile/model-context/fallback
+questions stay separate.
 
 General redaction of sensitive spoken audio or input passing through STT/the LLM
 is deferred, not a prerequisite for this slice. A deterministic collection path

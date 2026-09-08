@@ -110,7 +110,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-5 individual decisions still awaiting review, rather than counting its
+4 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -158,7 +158,11 @@ a crashed call or speculatively redials an uncertain one.
 R44 retains usage observations and derives effective amounts without double
 counting deltas, cumulative reports, estimates, finals, or corrections. R45 permits
 call/participant/service-interval/turn attribution where honest and optional later
-billing lookup by actual provider IDs. Pricing policy remains R46.
+billing lookup by actual provider IDs. R46's initial pricing policy is resolved:
+provider-reported costs where available, otherwise unknown price with observed
+usage/IDs and no local rate catalog. R48 selects compaction but leaves its mechanics
+open; R49 distinguishes an approved too-large model projection from a required
+MCP receive-size cap whose exact limit/handling remain open. R47/R50 are unchanged.
 Approval of documentation does not authorize runtime implementation.
 
 ## Constraints
@@ -3723,8 +3727,9 @@ storage-switch matrix. Available history does not grant wider client visibility
 or agent access. Credential/header exclusions remain unchanged. General turn/tool/
 usage persistence follows R41's asynchronous subscriber contract; variable tools
 succeed after local acceptance/handoff, not PostgreSQL commit. Missing usage/prices
-stay unavailable, not zero or invented observations. R44/R45 settle observation accounting and attribution;
-pricing-source/version/fallback choices remain R46.
+stay unavailable, not zero or invented observations. R44/R45 settle observation
+accounting and attribution. R46 uses available provider-reported costs, otherwise
+unknown price plus observed usage/IDs without a local pricing catalog.
 
 ### Tool-history storage is independent of client visibility — approved G5 decision
 
@@ -3945,7 +3950,7 @@ Unstarted-record housekeeping remains separate. No automatic cleanup is
 implemented here. R41's local acceptance/asynchronous projection does not alter
 whole-call retention or the prohibition on recreating purged snapshots.
 
-### Usage observations and call, participant, and turn attribution — approved R44/R45
+### Usage observations and call, participant, and turn attribution — approved R44–R46
 
 A turn can incur multiple independent charges. One agent turn may require
 several model requests because of tool rounds, several TTS requests because text
@@ -3955,8 +3960,9 @@ single cost column on `call_turns` is insufficient.
 
 Always store available usage/model/cost observations; there is no separate usage
 storage toggle. Unavailable units or prices remain unavailable, not invented or
-zero. Pricing-source/version/fallback policy remains R46; these decisions do not
-select a rate catalog or manufacture a price when provider billing is unavailable.
+zero. R46's initial pricing policy retains provider-reported estimate/final cost
+where available, otherwise unknown price alongside observed usage and actual IDs.
+No local pricing catalog or invented fallback rate is requested.
 
 Every observation belongs to the call. Add participant, activation, service-active
 interval, call-leg, and turn correlations only where supported by the work/evidence.
@@ -3968,12 +3974,25 @@ support. Shared/unattributable work stays call-scoped, not equally divided acros
 turns. A canonical billable fact may carry call/participant/turn refs without becoming
 three charges; each aggregate counts each effective service-operation attempt once.
 
-Preserve actual provider request/operation IDs when available, with provider and
-configured-integration/tenant namespace. Absent provider IDs remain absent; do not
+Preserve actual provider request/operation/session IDs when available, with provider
+and configured-integration/tenant namespace. Absent provider IDs remain absent; do not
 label a local correlation ID as a provider-issued ID. Known usage units can coexist
-with unknown monetary cost. The normalized evidence can carry:
+with unknown monetary cost.
 
-- local operation/attempt identity and available actual provider request/operation IDs;
+For TTS, save input-text character count and generated-audio duration when
+observed. For STT, save audio duration and recognized-text character count when
+observed and permitted. Retain exact units and provenance: measured character
+counts are not automatically the provider's billable characters. Do not count
+repeated interim/cumulative recognition text as new usage each time it appears;
+the observation/settlement rules below still apply. Providers need not supply
+every ID or measurement, and missing evidence stays absent. Accounting does not
+require retaining forbidden transcript text to obtain counts or starting prohibited
+STT. Source-interval permissions still apply. No precise character-counting
+standard or new configuration is chosen by this approval.
+
+The normalized evidence can carry:
+
+- local operation/attempt identity and available actual provider request/operation/session IDs;
 - capability (`speech_to_text`, `model_inference`, `text_to_speech`, `mcp`, or
   telephony);
 - configured provider and actual provider/model/voice identifiers used after
@@ -3983,8 +4002,8 @@ with unknown monetary cost. The normalized evidence can carry:
   duration, or request count;
 - observation/sequence/delivery identity when available, incremental versus cumulative
   semantics, and independent estimate/final/correction status with provenance;
-- an available cost amount as exact decimal, currency, and component breakdown;
-  preserve its observed source without selecting R46's pricing/fallback policy;
+- an available provider-reported estimate/final cost amount as exact decimal,
+  currency, and component breakdown, preserving its observed source/status;
 - an available provider billing reference or existing estimate-source metadata,
   not an assumed pricing catalog or rate;
 - started/completed timestamps and success/failure/cancellation status; and
@@ -4043,8 +4062,8 @@ a typed provider result plus a protocol-neutral `ProviderUsageRecorded` event
 for every model request, including intermediate tool rounds. STT and TTS adapter
 contracts need equivalent typed usage/finalization signals based on the unit the
 provider actually reports. Measured service duration/characters remain evidence
-with their source, not an invented billed amount or monetary fallback. The concrete
-pricing/estimate policy still needs R46 review; this is not runtime implementation.
+with their source, not an invented billed amount or monetary fallback. R46's initial
+pricing policy is resolved as above; this is not runtime implementation.
 
 ### Mix live; record participant tracks and the live mix
 
@@ -4462,7 +4481,10 @@ nor make queued events lossless. Do not execute Ecto queries inside
 7. **STT/TTS/telephony usage:** retain honest participant/service-interval or
    call-scoped evidence and real provider IDs, with turn links only when supported.
    Exercise optional asynchronous supported billing lookup outside the room and
-   preserve unavailable cost; do not choose R46 pricing fallback or claim lossless archival.
+   retain observed TTS input-text characters/generated-audio duration and STT
+   audio duration/recognized-text characters when permitted, even without price.
+   Preserve units/provenance and unknown costs without an invented catalog rate
+   or a lossless-archival claim.
 8. **Live mixing and recording:** add a bounded room mixer with two fake
    participant inputs, mix-minus outputs, and a full silent-monitor output. Then
    attach the recording capability to one participant track and the live full
@@ -4733,8 +4755,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-08
 
-There are **5 individual decisions awaiting review**, enumerated as R46–R50
-in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R45 are resolved;
+There are **4 individual decisions awaiting review**, enumerated as R47–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, and R26–R46 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4756,13 +4778,16 @@ separate future feature designs. There is still no additional automatic expiry
 for unstarted records. R32's machine-disconnect policy is resolved; leaving
 voicemail moves to a deferred issue. R37's bounded private briefing is approved;
 its media representation and commit boundary are resolved by R38.
-R44/R45's accounting/attribution choices are resolved; pricing remains R46.
+R44–R46's accounting/attribution and initial pricing choices are resolved:
+provider-reported costs where available, otherwise unknown price plus observed usage/IDs.
+There is no local pricing catalog. R48's compaction direction and R49's
+oversized-result boundaries are partly agreed; mechanics/limits remain pending, each once.
 R42's immutable timestamp-named publications and R43's outside-room reporting
 window are resolved. R41 now resolves asynchronous room storage, local variable
 success, PostgreSQL history/metadata, and S3 recording bytes. Its final decision
 supersedes synchronous-first history and database-commit-before-update-success.
 Bounded handoff is not durable/no-loss storage; incident repair remains deferred.
-The next five are R46–R50.
+The four remaining decisions are R47–R50.
 
 ### Baseline and scope
 
@@ -5074,19 +5099,31 @@ The numbering below matches G1–G13 in the focused review document.
     call, cancel late work, reset retention, or claim publication during an outage.
     Retain engine-side live mixing/recording with external upload workers; upload is not
     a live monitoring feed. Distinguish sent from device-confirmed audio.
-12. **Usage settlement — R44/R45 resolved, R46 pending:** preserve observations and
+12. **Usage settlement — R44–R46 resolved:** preserve observations and
     effective attempt/component usage. Distinguish delta/cumulative mode from
     estimate/final/correction status, deduplicate only proven repeat identities,
     retain failed/interrupted usage, and avoid included-subcategory double counting.
     Every fact belongs to the call; participant/service-interval/turn links are
     optional and evidence-based, with no forced turn allocation or duplicate charge.
     Keep real namespaced provider IDs for optional later supported billing lookup
-    outside the room. Missing units/cost stay unknown; pricing-source/version/
-    fallback remains R46, not a chosen rate catalog.
-13. **Provider profiles and long-call budgets:** specify supported profile
-    options, adapter compatibility, token-aware model-context/history budgets, and
-    fallback behavior without arbitrary executable provider configuration.
-    Fallback cannot weaken permissions or repeat an uncertain external action.
+    outside the room. Retain available provider-reported cost, otherwise unknown
+    price plus observed TTS input-text characters/generated-audio duration and
+    STT audio duration/recognized-text characters when permitted. Preserve units/
+    provenance without inventing billable characters, IDs, or a local rate catalog.
+13. **Provider profiles and long-call budgets — R47–R50 pending:** R48 selects
+    compaction, not oldest-turn eviction alone; timing, trigger, model-context
+    budget, and summary mechanism remain open. R49 preserves the full permitted
+    received response in asynchronous history and reports model-projection-too-large
+    when it cannot fit. Do not claim the remote action failed, automatically repeat
+    it, chop JSON, or add a result summarizer. Separately, a hard maximum acceptable MCP
+    response size is required at transport/ingestion, including bounded streaming
+    handling. Its value, units/scope, configuration, compression accounting, and
+    limit-error behavior are not yet chosen. A body rejected before full receipt
+    cannot be described as fully archived; archival handoff is not durable confirmation.
+    This does not approve attachment fetching or resolve deferred general document/
+    result inspection. Provider profile/compatibility (R47) and fallback (R50)
+    remain unapproved; a proposed fallback cannot weaken permissions or repeat
+    an uncertain external action.
 
 ### Planned acceptance steps, after approval and implementation
 
@@ -5590,8 +5627,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     namespaced by provider/integration/tenant; absent IDs are not local IDs in disguise.
     With a fake optional billing adapter, fetch available cost after room end without
     blocking media or resetting `ended_at`/retention. Unsupported billing or missing
-    cost stays unavailable; later jobs cannot recreate purged data. Leave R46 pricing
-    unselected; asynchronous archive handoff does not guarantee losslessness.
+    cost stays unavailable; later jobs cannot recreate purged data. Exercise R46
+    with observed TTS input-text character counts/generated-audio duration and
+    STT audio duration/recognized-text character counts when permitted, without
+    provider price. Retain exact units/provenance, do not multiply interim/cumulative
+    transcript counts, assume measured characters are billable, or invent missing
+    IDs/measurements. Provider-reported estimates/finals keep their status; no local
+    pricing catalog fills gaps. A denied transcript must not be retained merely to
+    count characters, and no prohibited STT is started for accounting. Asynchronous
+    archive handoff does not guarantee losslessness.
     These are planned checks.
 42. End one call with all expected work settled and another with uploads/usage
     pending. Verify outside-room publication happens early for settled work or
@@ -5635,6 +5679,15 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     Allow draining/finalization outside the room, but never recreate purged data.
     Model a process/host loss before durable handoff without claiming unpersisted
     variables/history survived. Post-incident repair remains deferred, not a runtime test feature.
+46. Receive a full permitted MCP response that exceeds the model-context budget.
+    Preserve it through the asynchronous archive path and return an explicit
+    model-projection-too-large result, not remote-action failure, automatic
+    repetition, chopped JSON, or a silent summary. Archival handoff is not proof
+    of durability. Distinguish this from the required hard ingestion-size limit,
+    including bounded streamed receipt; a rejected incomplete body is not a fully
+    archived response. Exact limit/error-boundary cases await R49's remaining
+    decisions, and compaction timing/algorithm tests await R48. These checks do
+    not select numeric limits, a summary model, or a new attachment reader.
 
 ### Review checkpoint verification
 
@@ -7160,11 +7213,38 @@ including its former PostgreSQL-before-variable-success requirement.
   surviving facts. No unlimited buffer, exact overflow/spool policy, queue dependency,
   exactly-once/no-loss guarantee, or automatic repair is added. Audio bytes stay in
   S3; PostgreSQL metadata cannot reconstruct lost audio or guarantee history backup.
-- R41 is resolved: 5 individual decisions remain, R46–R50. Updated canonical
+- At that checkpoint R41 was resolved and 5 individual decisions remained, R46–R50. Updated canonical
   ownership/storage sections, the event-flow text example, current summaries, and
   planned checks. Verified JSON examples, links/anchors, exact count and untouched
   pending rows, superseded-contract consistency, privacy/retention, and diff hygiene.
   Documentation only; no runtime, dependency, or new issue/labnote.
+
+### Observed usage without price and model-context boundaries — 2026-09-08
+
+- R46 is resolved for initial pricing: use available provider-reported estimate/
+  final cost; otherwise retain unknown price plus observed usage and actual
+  namespaced provider request/session IDs. Missing evidence is not fabricated,
+  and no local pricing catalog or fallback rate is introduced. Earlier R46-pending
+  progress entries are historical and superseded by this decision.
+- Record observed TTS input-text character counts/generated-audio duration and
+  STT audio duration/recognized-text character counts when permitted. Keep units/
+  provenance, avoid repeated interim/cumulative text counting, and do not equate
+  measured characters with provider-billable units. No precise counting standard,
+  new configuration, prohibited recognition, or forbidden text retention is added.
+- R48 approves compaction as a direction, not oldest-turn eviction alone; its
+  timing, trigger, budget, and mechanism remain pending. R49 approves full permitted
+  received response history plus an explicit oversized model projection, not an
+  action failure, automatic repetition, chopped JSON, or silent summarization.
+  A separate hard MCP ingestion response-size limit is required, including bounded
+  streaming; its value/units/scope/error handling remain pending. A body rejected
+  before full receipt cannot be called fully archived, and handoff is not durability.
+- Updated canonical sections, current count, and planned checks 41/46. Four
+  individual decisions remain, R47–R50; R48/R49 are partial and count once each.
+  R47/R50 are unchanged; no provider-fallback approval follows from a research question.
+- Verified exact three-file scope, unchanged JSON examples/links, usage arithmetic,
+  prior accounting/privacy/storage contracts, status/counts, unchanged unapproved
+  rows, and terminology/path/whitespace hygiene. Documentation only; no runtime,
+  dependency, new issue, or new labnote.
 
 ## Verification evidence
 
