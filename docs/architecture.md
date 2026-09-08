@@ -409,7 +409,7 @@ agent voice for source TTS when applicable and permitted, without choosing a new
 voice/configuration format. Source responsibility continues until commit, and
 acceptance alone does not expose full room media. This approves the bounded
 briefing flow, not general simultaneous-agent consultation or a compliance claim;
-its routing/representation remains part of R38. These are designs, not runtime changes.
+its routing and commit policy follow R38 below. These are designs, not runtime changes.
 
 Shared transfer defaults live in call-level `transfer_policy`; source participants
 keep `transfers: [allowed participant refs]`, and destination-specific connection/
@@ -438,24 +438,64 @@ cannot commit an expired attempt; clean up its exact mapped leg without automati
 redial. This is separate from startup readiness and whole-call duration and adds
 no remote-outcome certainty or durable recovery framework.
 
-### Presence-driven media and transcript policy — R38 under redesign
+### Presence-driven media and transcript policy — approved R38
 
-Explicit media publishing/subscription, live transcript sharing, and transcript/
-audio retention are separate policy concerns activated by participant presence.
-This direction supersedes capability denial as the primary privacy model. Earlier
-`presence_policy`/`capability_denials` examples in the design note are historical
-candidates, not the final schema. No replacement selector, JSON name, or merge/
-ordering rule is approved yet.
+Normal call-wide permissions live in `media_policy`. Each participant's optional
+`while_present` contributes room-wide restrictions while that participant is
+authoritatively admitted. Both use `audio_routes`, `transcript_routes`,
+`record_audio`, and `save_transcripts`. These replace public STT/TTS capability
+denials; earlier `presence_policy`/`capability_denials` examples are superseded.
+See the [approved definition example](../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology).
 
-Preserve enforceable routing/capture boundaries: unauthorized audio or transcript
-data cannot reach recipients or storage, queued output cannot bypass a policy
-transition, and later reactivation cannot replay a restricted interval. Not saving
-transcripts does not itself require stopping provider recognition or permitted
-live transcript sharing. Conversely, permission to hear live audio/transcripts
-does not grant permission to retain them. The private briefing must be isolated
-before acceptance/bridge; source responsibility remains until commit. R38 still
-needs its simple definition structure and exact transition integration. Call
-Variables, their permissions, and database-confirmed snapshots are unchanged.
+`audio_routes` maps publisher participant-definition keys to recipient-key arrays,
+including humans and agents. An explicit map is the complete allowlist: only
+listed sources may publish room audio, only to their listed recipients. An empty
+recipient list permits no other participant to hear that source. There is no
+implicit self-loop, full-room monitor access, wildcard, role selector, or expression.
+`transcript_routes` separately maps the speech-source participant to recipients
+of its live derived transcript; include self explicitly if wanted.
+
+Omission adds no restriction and inherits the normal policy. An explicit empty
+route map permits no routes. Do not deep-merge a presence map while preserving
+unlisted routes. Intersect publisher permissions and recipient routes from all
+present policies and the normal policy; host/application authorization remains a
+ceiling. Storage false wins over true/omission. Leaving removes only that owner's
+contribution, not surviving restrictions. Mere transport loss does not remove
+authoritative presence or reset work.
+
+`record_audio` and `save_transcripts` are independent room-wide booleans initially,
+not per-source capture overrides. False restricts the current interval: no tracks,
+full mixes, or derivatives through Vxpipe-owned recording paths when audio is
+forbidden; no automatically stored transcripts or copies in archive/log/export
+paths when transcript storage is forbidden. Previously permitted intake history
+is not deleted retroactively; whole-call retention cleanup is unchanged. These
+booleans choose permitted capture/storage, not a new `call_retention` duration.
+Automatic model-debug archives must not copy denied transcripts. Automatic paths honor
+source-interval privacy even when processed later. This is not generic taint
+tracking/redaction of arbitrary externally copied text or control over provider/
+client copies, nor a compliance guarantee. Complete observed tool history still
+follows its privacy and credential/header exclusions.
+
+Policies permit flows; they do not enable unconfigured recording/STT or activate
+every catalog participant. Live transcription sends audio to a provider: no storage
+does not mean no processing. If no permitted live transcript recipient or storage
+consumer needs recognition, stop those STT flows. Configured capabilities remain
+internal implementation details. Call Variables and their commit/permission rules
+are unchanged.
+
+During private transfer preparation, the destination receives only the authorized
+briefing/configured notice through its isolated lane, which the caller cannot
+hear; it is not yet admitted to the main conversation. Acceptance stays bound to
+the pending attempt. At commit, apply `while_present` restrictions before connecting
+main media, then hand off and terminate the source. This is the existing transfer
+phase, not another workflow graph or general concurrent-agent consultation.
+
+`RoomAuthority` authorizes the pinned resolved policy/topology; mixing, media routes,
+transcript projections, recording, and archive boundaries enforce it without
+frontend-only muting or database lookups per packet. Fail closed if the privacy
+barrier cannot apply before commit. New delivery, queued/late old output, later
+reactivation, and retrospective replay must not bypass a restricted interval.
+Source responsibility, total transfer deadline, and restoration rules remain.
 
 Dial destinations may be literal participant `connection.number` values or come
 from a declared creation-time variable, using the candidate alternative
@@ -1031,8 +1071,9 @@ Always save permitted available transcripts, turn details, and observed usage/
 model/cost information with the call, alongside the complete tool history and
 committed variable snapshots. R38 qualifies the earlier no-separate-storage-toggle-
 per-category rule: explicit transcript/audio retention policy is distinct from live sharing.
-Its schema is not yet selected; do not disable recognition merely because transcript
-storage is forbidden. This is not a new set of usage/tool/variable storage toggles.
+The approved room-wide booleans govern automatic persistence paths; do not disable
+recognition merely because transcript storage is forbidden. This is not a new set
+of usage/tool/variable storage toggles.
 Preserve
 typed-text provenance and provider-final speech facts, and distinguish generated
 agent text from confirmed delivered/spoken text, including interruptions. Do not
@@ -1042,7 +1083,7 @@ remain unavailable, never fabricated or recorded as zero; detailed accounting
 contracts remain under review.
 
 Store available call audio only when recording is integrated, explicitly enabled,
-and permitted by the explicit media retention policy under design. Recording
+and permitted by the effective `record_audio` policy. Recording
 remains a room capability subject to privacy policy and the `opening_audio`
 media-input gate, not an automatically enabled archival feature or another
 storage-toggle matrix. Available ordinary turn/tool/
