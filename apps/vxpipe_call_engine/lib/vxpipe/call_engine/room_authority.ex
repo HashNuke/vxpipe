@@ -25,8 +25,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
 
   alias Vxpipe.CallEngine.{
+    AgentActivationSupervisor,
+    AgentCoordinator,
     Error,
     Id,
+    PlanStartup,
+    ResolvedCallPlan,
     RoomCapabilitySupervisor,
     RoomParticipantSupervisor,
     TextToSpeechRequest,
@@ -38,8 +42,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   @call_timeout 5_000
 
   def start_link(options) do
-    command = Keyword.fetch!(options, :command)
-    name = via(command.tenant_id, command.room_id)
+    {tenant_id, room_id} = room_identity(options)
+    name = via(tenant_id, room_id)
     GenServer.start_link(__MODULE__, options, name: name)
   end
 
@@ -91,7 +95,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   @impl true
   def init(options) do
-    command = Keyword.fetch!(options, :command)
+    room_source = room_source(options)
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
 
     state = %{
@@ -102,13 +106,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       participant_monitors: %{},
       participant_ids: MapSet.new(),
       participant_roles: %{},
-      snapshot: build_snapshot(command, incarnation_id),
+      snapshot: build_snapshot(room_source, incarnation_id, options),
       speech_to_text_monitors: %{},
       text_capability: nil,
       text_to_speech_capability: nil
     }
 
-    case start_configured_agent(command, state) do
+    case start_configured_agent(room_source, options, state) do
       {:ok, state} -> {:ok, state}
       {:error, reason} -> {:stop, reason}
     end
@@ -262,7 +266,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         Map.has_key?(state.speech_to_text_monitors, monitor) ->
           remove_unavailable_speech_to_text(monitor, state)
 
-        state.text_capability != nil and state.text_capability.monitor == monitor ->
+        state.text_capability != nil and state.text_capability.monitor != nil and
+            state.text_capability.monitor == monitor ->
           notify_connections(state.connections, :agent_unavailable)
           %{state | text_capability: nil}
 
@@ -278,9 +283,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, state}
   end
 
-  defp start_configured_agent(%CreateRoom{agent: nil}, state), do: {:ok, state}
+  defp start_configured_agent(%CreateRoom{agent: nil}, _options, state), do: {:ok, state}
 
-  defp start_configured_agent(%CreateRoom{} = command, state) do
+  defp start_configured_agent(%CreateRoom{} = command, _options, state) do
     with {:ok, join_command} <-
            JoinParticipant.new(
              tenant_id: command.tenant_id,
@@ -305,6 +310,43 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     else
       _error -> {:error, :agent_start_failed}
     end
+  end
+
+  defp start_configured_agent(%ResolvedCallPlan{} = plan, options, state) do
+    startup_options = [
+      owner: self(),
+      agent_runtime: agent_runtime_settings(),
+      agent_request_options: Keyword.get(options, :agent_request_options, [])
+    ]
+
+    with {:ok, startup} <- PlanStartup.new(plan, startup_options),
+         {:ok, _caller_snapshot, state} <- start_participant(startup.caller_command, state),
+         {:ok, receiver_snapshot, state} <-
+           start_participant(
+             startup.receiver_command,
+             state,
+             agent_activation: startup.agent_activation
+           ) do
+      coordinator_ref =
+        AgentActivationSupervisor.child_ref(startup.receiver.activation_id, :coordinator)
+
+      text_capability = %{
+        module: AgentCoordinator,
+        monitor: nil,
+        participant_id: receiver_snapshot.participant_id,
+        pid: coordinator_ref
+      }
+
+      {:ok, %{state | text_capability: text_capability}}
+    else
+      _error -> {:error, :agent_start_failed}
+    end
+  end
+
+  defp agent_runtime_settings do
+    :vxpipe_call_engine
+    |> Application.fetch_env!(Vxpipe.CallEngine.Application)
+    |> Keyword.fetch!(:agent_runtime)
   end
 
   defp start_text_capability(:deterministic_text, participant_id, state) do
@@ -814,8 +856,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp emit_text_turn(capability, command, text, state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    if active_agent_turn?(command, state) and state.text_capability != nil and
-         state.text_capability.pid == capability and
+    if active_agent_turn?(command, state) and
+         current_text_capability?(capability, state) and
          connection != nil and
          connection.participant_id == command.participant_id do
       occurred_at = DateTime.utc_now(:millisecond)
@@ -880,8 +922,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp emit_agent_turn_failed(capability, command, reason, state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    if active_agent_turn?(command, state) and state.text_capability != nil and
-         state.text_capability.pid == capability and
+    if active_agent_turn?(command, state) and
+         current_text_capability?(capability, state) and
          connection != nil and connection.participant_id == command.participant_id do
       event = %AgentTurnFailed{
         id: Id.generate(:event),
@@ -964,8 +1006,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp authorized_tool_event?(capability, command, state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    active_agent_turn?(command, state) and state.text_capability != nil and
-      state.text_capability.pid == capability and connection != nil and
+    active_agent_turn?(command, state) and current_text_capability?(capability, state) and
+      connection != nil and
       connection.participant_id == command.participant_id
   end
 
@@ -1068,8 +1110,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   defp complete_text_generation(capability, command, state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    if active_agent_turn?(command, state) and state.text_capability != nil and
-         state.text_capability.pid == capability and connection != nil and
+    if active_agent_turn?(command, state) and
+         current_text_capability?(capability, state) and connection != nil and
          connection.participant_id == command.participant_id do
       turn = Map.fetch!(state.agent_turns, turn_key(command))
 
@@ -1149,6 +1191,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp interrupt_text_generation(%{text_capability: %{module: ModelInference}} = state, ids) do
     ModelInference.interrupt(state.text_capability.pid, ids)
+  end
+
+  defp interrupt_text_generation(%{text_capability: %{module: AgentCoordinator}} = state, ids) do
+    AgentCoordinator.interrupt(state.text_capability.pid, ids)
   end
 
   defp interrupt_text_generation(_state, _ids), do: {:ok, []}
@@ -1287,8 +1333,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
-  defp start_participant(command, state) do
-    case RoomParticipantSupervisor.start_participant(state.snapshot.incarnation_id, command) do
+  defp start_participant(command, state, options \\ []) do
+    case RoomParticipantSupervisor.start_participant(
+           state.snapshot.incarnation_id,
+           command,
+           options
+         ) do
       {:ok, participant_supervisor, participant} ->
         monitor = Process.monitor(participant_supervisor)
 
@@ -1321,12 +1371,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     if state.text_capability != nil and
          state.text_capability.participant_id == participant_id do
       notify_connections(state.connections, :agent_unavailable)
-
-      _ =
-        RoomCapabilitySupervisor.stop_capability(
-          state.snapshot.incarnation_id,
-          state.text_capability.pid
-        )
+      stop_text_capability(state)
     end
 
     if state.text_to_speech_capability != nil and
@@ -1504,13 +1549,42 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     module.respond(capability, command)
   end
 
+  defp current_text_capability?(_capability, %{text_capability: nil}), do: false
+
+  defp current_text_capability?(capability, state) do
+    GenServer.whereis(state.text_capability.pid) == capability
+  rescue
+    _exception -> false
+  end
+
+  defp stop_text_capability(%{text_capability: %{module: AgentCoordinator}}), do: :ok
+
+  defp stop_text_capability(state) do
+    RoomCapabilitySupervisor.stop_capability(
+      state.snapshot.incarnation_id,
+      state.text_capability.pid
+    )
+  end
+
   defp failure_reason(reason)
        when reason in [:invalid_response, :provider_timeout, :provider_unavailable],
        do: reason
 
   defp failure_reason(_reason), do: :provider_unavailable
 
-  defp build_snapshot(%CreateRoom{} = command, incarnation_id) do
+  defp room_source(options) do
+    case Keyword.fetch(options, :plan) do
+      {:ok, %ResolvedCallPlan{} = plan} -> plan
+      :error -> Keyword.fetch!(options, :command)
+    end
+  end
+
+  defp room_identity(options) do
+    source = room_source(options)
+    {source.tenant_id, source.room_id}
+  end
+
+  defp build_snapshot(%CreateRoom{} = command, incarnation_id, _options) do
     %Snapshot{
       tenant_id: command.tenant_id,
       room_id: command.room_id,
@@ -1518,6 +1592,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       lifecycle: :open,
       created_by_actor_id: command.actor_id,
       created_by_command_id: command.id
+    }
+  end
+
+  defp build_snapshot(%ResolvedCallPlan{} = plan, incarnation_id, options) do
+    %Snapshot{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: incarnation_id,
+      lifecycle: :open,
+      created_by_actor_id: plan.actor_id,
+      created_by_command_id: Keyword.fetch!(options, :start_command_id)
     }
   end
 

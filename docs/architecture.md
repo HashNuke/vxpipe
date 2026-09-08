@@ -133,7 +133,7 @@ transcript is a view of what participants said. **Model context** means everythi
 supplied to the LLM: instructions, selected history, and permitted call variables.
 Neither history nor model context is the mutable variable store.
 
-The planned agent-loop implementation places one `Jido.AI.Agent`/AgentServer under each
+The agent-loop implementation places one `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current
 custom model/tool-loop capability process; it does not become a second room or participant
 authority. Jido owns that activation's conversation projection, ordinary ReAct request
@@ -154,20 +154,23 @@ physical cleanup through Jido's public context-replacement signal, but does not 
 signal acceptance for immediate application: Jido may defer it behind worker lifecycle
 work. The projection filter is the behavioral guarantee. Jido still owns the ReAct loop;
 the coordinator neither invokes providers nor executes a replacement model/tool loop.
-Participant attachment and room routing remain in progress.
+The definition-driven text subset attaches this coordinator to its participant and routes
+room turns through it; plan-selected speech routing remains in progress.
 
 The implemented `AgentActivationSupervisor` groups the selected Action dispatcher,
 AgentServer and coordinator under a one-for-all policy. The coordinator synchronously
 configures the running AgentServer before the activation supervisor can finish starting.
 One abnormal child failure restarts the whole configured set once; another within the
 restart window terminates the activation and its children. The activation supervisor is
-temporary to its future participant owner, so deliberate participant shutdown does not
+temporary to its participant owner, so deliberate participant shutdown does not
 resurrect the agent. The implemented `ParticipantSupervisor` is that owner: it groups the
 participant authority with the optional activation, treats either as significant, and ends
 the whole participant subtree when one terminates. The room-level dynamic supervisor owns
 these participant supervisors rather than bare authorities, so an exhausted agent retry
 budget removes the participant without restarting the room. Routing room turns through the
-owned coordinator remains in progress.
+owned coordinator is implemented through a stable Registry reference instead of a child
+PID. Requests therefore reach a replacement coordinator after the allowed restart, while
+events from a stale child cannot pass the room's current-capability check.
 
 Submitted long-running actions return a correlated running
 acknowledgement and continue under Vxpipe-owned supervision. Their later results enter a
@@ -2058,17 +2061,16 @@ deferred by Jido. A deterministic runtime double proves queue/failure/order race
 real Jido AgentServer test proves one host Action and final response use Jido's delegated
 ReAct loop.
 
-That foundation is not yet connected to room turns. These checkpoints do not start rooms
-from a plan or provide the room-owned Call Variables process/tools. Existing preset startup
-remains intact. `AgentActivationSupervisor` now starts the dispatcher, AgentServer and
-coordinator in order, uses coordinator initialization as the synchronous configuration
-barrier, restarts the entire set once after an abnormal child failure, and tears down after
-the retry budget is exhausted without leaving registered children. A participant supervisor
-now owns that activation together with its participant authority; ending either ends only
-that participant subtree, while the room-level participant supervisor remains available.
-The remaining milestone work routes room turns through the owned coordinator, adds runtime
-plan startup, and wires the trusted sample fixture. Exact evidence is tracked in the
-milestone and its implementation labnote.
+The trusted `start_call/2` path now starts a room from a compiled immutable plan. A typed
+`PlanStartup` value selects only the entry caller and receiver and combines the receiver's
+pinned prompt, `:req_llm` model and static host Actions with application-owned runtime
+bounds. It starts both participant subtrees and installs the receiver's stable coordinator
+reference as the room text capability. An unused catalog agent starts no participant or
+activation process. Existing preset startup remains intact. This subset does not yet start
+plan-selected speech capabilities or provide the room-owned Call Variables process/tools;
+the remaining milestone work adds those speech boundaries, explicit unsupported-feature
+diagnostics, and the trusted sample fixture. Exact evidence is tracked in the milestone and
+its implementation labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

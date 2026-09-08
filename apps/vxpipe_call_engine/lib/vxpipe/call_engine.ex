@@ -7,7 +7,14 @@ defmodule Vxpipe.CallEngine do
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
+  alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.RoomSupervisor
+
+  @spec start_call(ResolvedCallPlan.t(), keyword()) ::
+          {:ok, Vxpipe.CallEngine.Room.Snapshot.t()} | {:error, Error.t()}
+  def start_call(%ResolvedCallPlan{} = plan, options \\ []) when is_list(options) do
+    RoomSupervisor.start_call(plan, options)
+  end
 
   @spec create_room(CreateRoom.t()) ::
           {:ok, Vxpipe.CallEngine.Room.Snapshot.t()} | {:error, Error.t()}

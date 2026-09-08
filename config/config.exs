@@ -10,6 +10,13 @@
 import Config
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+  agent_runtime: [
+    maximum_completed_requests: 32,
+    maximum_pending_requests: 4,
+    maximum_output_bytes: 65_536,
+    maximum_tool_result_bytes: 16_384,
+    request_timeout_ms: 30_000
+  ],
   model_inference: [enabled: false],
   speech_to_text: [enabled: false],
   text_to_speech: [enabled: false]

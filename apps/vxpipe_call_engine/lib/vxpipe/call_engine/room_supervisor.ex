@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   use DynamicSupervisor
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.ResolvedCallPlan
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -24,6 +25,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {command.tenant_id, command.room_id}) do
       [] -> start_room(command)
       [_room] -> {:error, room_already_exists(command.room_id)}
+    end
+  end
+
+  def start_call(%ResolvedCallPlan{} = plan, options) when is_list(options) do
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
+      [] -> start_planned_room(plan, options)
+      [_room] -> {:error, room_already_exists(plan.room_id)}
     end
   end
 
@@ -139,6 +147,33 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
       {:error, {:shutdown, {:failed_to_start_child, RoomAuthority, {:already_started, _pid}}}} ->
         {:error, room_already_exists(command.room_id)}
+
+      {:error, _reason} ->
+        {:error,
+         Error.new(
+           :room_start_failed,
+           "The room incarnation could not be started.",
+           retryable: true
+         )}
+    end
+  end
+
+  defp start_planned_room(plan, runtime_options) do
+    incarnation_id = Id.generate(:room_incarnation)
+
+    options = [
+      plan: plan,
+      incarnation_id: incarnation_id,
+      start_command_id: Id.generate(:command),
+      agent_request_options: Keyword.get(runtime_options, :agent_request_options, [])
+    ]
+
+    case DynamicSupervisor.start_child(__MODULE__, {RoomIncarnationSupervisor, options}) do
+      {:ok, _supervisor} ->
+        {:ok, RoomAuthority.snapshot(plan.tenant_id, plan.room_id)}
+
+      {:error, {:shutdown, {:failed_to_start_child, RoomAuthority, {:already_started, _pid}}}} ->
+        {:error, room_already_exists(plan.room_id)}
 
       {:error, _reason} ->
         {:error,

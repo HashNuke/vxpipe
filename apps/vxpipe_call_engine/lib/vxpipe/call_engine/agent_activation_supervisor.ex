@@ -33,10 +33,13 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
   @spec whereis_child(String.t(), atom()) :: pid() | nil
   def whereis_child(activation_id, role)
       when is_binary(activation_id) and role in @roles do
-    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, registry_key(activation_id, role)) do
-      [{pid, _value}] -> pid
-      [] -> nil
-    end
+    GenServer.whereis(child_ref(activation_id, role))
+  end
+
+  @spec child_ref(String.t(), atom()) :: GenServer.server()
+  def child_ref(activation_id, role)
+      when is_binary(activation_id) and role in @roles do
+    via(activation_id, role)
   end
 
   @impl true

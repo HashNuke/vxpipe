@@ -75,7 +75,11 @@ restarts that set together once after an abnormal child failure, and leaves no c
 running after its retry budget is exhausted. A participant supervisor now owns each
 participant authority and, for an agent, that activation unit; either deliberate participant
 shutdown or an exhausted activation ends the whole participant subtree without restarting
-the room. This runtime is not yet the room's active inference path.
+the room. Trusted hosts can now call `Vxpipe.CallEngine.start_call/2` with a compiled plan;
+the initial text-only subset starts only the entry caller and receiver, routes ordinary
+turns and host Actions through the receiver's owned coordinator, and follows coordinator
+restarts through a stable activation reference. Plan-selected speech capabilities and the
+sample adapter remain in progress.
 
 ## Installation
 

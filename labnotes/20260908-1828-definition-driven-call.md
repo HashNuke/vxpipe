@@ -382,3 +382,41 @@ Post-correction evidence:
 - `mix test` passed: call engine `93 tests, 0 failures (1 excluded)` and gateway
   `37 tests, 0 failures (3 excluded)`.
 - `mix deps.unlock --check-unused` passed with no output.
+
+## Checkpoint 4: plan-driven Jido room routing
+
+The engine now exposes a trusted `start_call/2` path that accepts only a compiled
+`ResolvedCallPlan`. A pure typed `PlanStartup` step chooses the entry caller and receiver,
+builds their participant commands, resolves the initial supported `:req_llm` model option,
+sorts the receiver's finite static Action surface, and combines it with application-owned
+queue/output/tool-result/request bounds. Only those two participants are started; an unused
+agent in the same compiled catalog has neither an authority nor activation.
+
+The room keeps the coordinator's stable Registry reference as its logical text capability.
+Each request reaches the currently registered coordinator, and inbound capability events
+are accepted only when their sender resolves as that current child. After the activation's
+one allowed one-for-all restart, the room therefore routes the next turn through the new
+coordinator rather than retaining a stale PID. Exhausting that budget still ends the
+participant as established in checkpoint 3d.
+
+### Red, green, and verification evidence
+
+- The first red attempt stopped in fixture validation because explicit `nil` capability
+  keys are invalid authored values; omitting those unset keys corrected the fixture before
+  behavior work began.
+- Corrected red command:
+  `mix test test/vxpipe/call_engine/definition_driven_call_test.exs`.
+- Corrected red result: `1 test, 1 failure`; `Vxpipe.CallEngine.start_call/2` did not exist.
+- Green focused result: `2 tests, 0 failures`.
+- `mix test test/vxpipe/call_engine/definition_driven_call_test.exs --repeat-until-failure 10 --max-failures 1`
+  completed all ten runs with `2 tests, 0 failures` per run.
+- The definition-driven, legacy model-inference, text-turn and spoken-barge-in files passed
+  together: `12 tests, 0 failures`.
+- `mix format --check-formatted` and `mix compile --warnings-as-errors` passed.
+- `mix test` passed: call engine `95 tests, 0 failures (1 excluded)` and gateway
+  `37 tests, 0 failures (3 excluded)`.
+- `mix deps.unlock --check-unused` passed with no output.
+
+This checkpoint supports definition-driven text and one static host Action through Jido.
+It does not yet start plan-selected speech capabilities, reject all later-slice settings,
+or connect the trusted sample.

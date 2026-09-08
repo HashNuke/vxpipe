@@ -60,7 +60,7 @@ cannot change that live call.
 - [x] Red-test the per-activation Jido AgentServer/coordinator against the existing stream,
   tool, timeout, teardown and interruption contracts; add compatible Jido AI/Jido Action
   dependencies and lockfile.
-- [ ] Route ordinary agent inference and one small host action through the supervised Jido
+- [x] Route ordinary agent inference and one small host action through the supervised Jido
   agent, with overlapping asks rejected, automatic tool retries disabled, and tool
   concurrency chosen explicitly.
 - [ ] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
@@ -224,6 +224,29 @@ passes two tests covering explicit teardown and exhausted activation retries, an
 combined room-teardown/participant-ownership files passed twenty repeated runs. Umbrella
 gates pass: formatting, warnings-as-errors, call engine `93 tests, 0 failures (1 excluded)`,
 gateway `37 tests, 0 failures (3 excluded)`, and no unused dependencies.
+
+Implementation evidence, checkpoint 4 (2026-09-08): added a trusted `start_call/2` engine
+path for a compiled plan and a typed `PlanStartup` boundary. It selects only the entry
+caller and receiver, creates their fixed runtime commands, builds the receiver activation
+from its pinned prompt/model/static Actions plus bounded application policy, and starts both
+under their participant supervisors. The room routes normal turns through the activation's
+coordinator reference, projects the existing participant/tool/text/terminal events, and
+accepts events only from the currently registered coordinator. A first AgentServer failure
+therefore restarts the activation without leaving the room bound to a stale child PID.
+
+Red: after correcting an initially invalid test fixture, the vertical test failed because
+`Vxpipe.CallEngine.start_call/2` did not exist. Green: two real Jido cases now prove a host
+Action round from an attached entry caller, non-activation of an unused catalog agent, and
+successful room routing after the activation's allowed restart. Ten repeated focused runs
+passed, and the legacy deterministic/model/speech turn files remained green. Together with
+the earlier request-policy, zero-retry, serial-dispatch and multi-round tests, this completes
+the ordinary Jido routing checklist item. The broader room-startup item remains unchecked:
+plan-selected speech capability behavior and explicit unsupported-feature diagnostics are
+not implemented yet.
+
+Checkpoint 4 umbrella gates pass: formatting, warnings-as-errors, call engine `95 tests,
+0 failures (1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused
+dependencies.
 
 ## Specification review
 
