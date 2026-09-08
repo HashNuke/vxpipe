@@ -69,10 +69,21 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     cases = [
       {%{definition_input() | schema_version: "20260906.01"}, ["schema_version"]},
       {Map.put(definition_input(), :provider_api_key, "do-not-echo-me"), ["provider_api_key"]},
+      {Map.put(definition_input(), :media_policy, %{record_audio: false}), ["media_policy"]},
       {put_in(definition_input(), [:participants, "caller", :prompt], "wrong kind"),
        ["participants", "caller", "prompt"]},
       {put_in(definition_input(), [:participants, "caller", :connection, :service], "sip"),
        ["participants", "caller", "connection", "service"]},
+      {put_in(
+         definition_input(),
+         [:participants, "reception", :tools, "get_current_time", :type],
+         "mcp"
+       ), ["participants", "reception", "tools", "get_current_time", "type"]},
+      {put_in(
+         definition_input(),
+         [:participants, "reception", :while_present],
+         %{record_audio: false}
+       ), ["participants", "reception", "while_present"]},
       {put_in(definition_input(), [:participants, "reception", :transfers], ["caller"]),
        ["participants", "reception", "transfers"]}
     ]

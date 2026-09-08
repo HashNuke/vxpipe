@@ -9,7 +9,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     AgentActivationSupervisor,
     CallDefinition,
     CallInvocation,
-    DefinitionCompiler
+    DefinitionCompiler,
+    Error
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
@@ -188,9 +189,99 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert stt_url =~ "model=flux-general-multi"
   end
 
+  test "rejects enabled later-slice features before registering a room" do
+    cases = [
+      {fn input ->
+         put_in(
+           input,
+           [:participants, "receiver", :first_message],
+           %{mode: "generated"}
+         )
+       end, ["participants", "receiver", "first_message", "mode"]},
+      {fn input ->
+         put_in(input, [:call_variables, :sections], %{
+           "booking" => %{
+             schema: %{
+               "type" => "object",
+               "properties" => %{"status" => %{"type" => "string"}},
+               "additionalProperties" => false
+             }
+           }
+         })
+       end, ["call_variables", "sections"]}
+    ]
+
+    for {transform, expected_path} <- cases do
+      room_id = unique_id("room-unsupported")
+      plan = compile_plan(room_id, definition_transform: transform)
+
+      assert {:error,
+              %Error{
+                code: :unsupported_call_plan,
+                details: %{"path" => ^expected_path}
+              }} = CallEngine.start_call(plan)
+
+      assert Registry.lookup(
+               Vxpipe.CallEngine.RoomRegistry,
+               {plan.tenant_id, room_id}
+             ) == []
+    end
+  end
+
+  test "rejects an unsupported model provider before registering a room" do
+    room_id = unique_id("room-unsupported-provider")
+    plan = compile_plan(room_id, model_provider: :unsupported_model_provider)
+
+    assert {:error,
+            %Error{
+              code: :unsupported_call_plan,
+              details: %{
+                "path" => [
+                  "participants",
+                  "receiver",
+                  "capabilities",
+                  "model_inference"
+                ]
+              }
+            }} = CallEngine.start_call(plan)
+
+    assert Registry.lookup(
+             Vxpipe.CallEngine.RoomRegistry,
+             {plan.tenant_id, room_id}
+           ) == []
+  end
+
+  test "rejects selected speech that the application runtime cannot provide" do
+    room_id = unique_id("room-unsupported-speech")
+    plan = compile_plan(room_id, speech?: true)
+
+    assert {:error,
+            %Error{
+              code: :unsupported_call_plan,
+              details: %{
+                "path" => [
+                  "participants",
+                  "caller",
+                  "capabilities",
+                  "speech_to_text"
+                ]
+              }
+            }} = CallEngine.start_call(plan)
+
+    assert Registry.lookup(
+             Vxpipe.CallEngine.RoomRegistry,
+             {plan.tenant_id, room_id}
+           ) == []
+  end
+
   defp compile_plan(room_id, options \\ []) do
+    transform = Keyword.get(options, :definition_transform, &Function.identity/1)
+
     assert {:ok, definition} =
-             CallDefinition.new(definition_input(options),
+             options
+             |> definition_input()
+             |> transform.()
+             |> CallDefinition.new(
                resource_id: "definition-test",
                revision: 1
              )
@@ -212,7 +303,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       capability_profiles: %{
         "test-model" => %{
           kind: :model_inference,
-          provider: :req_llm,
+          provider: Keyword.get(options, :model_provider, :req_llm),
           options: %{model: "test:scripted"}
         },
         "plan-stt" => %{

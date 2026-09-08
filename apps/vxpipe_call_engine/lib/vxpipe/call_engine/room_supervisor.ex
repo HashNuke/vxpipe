@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     Error,
     Id,
     ParticipantAuthority,
+    PlanStartup,
     RoomAuthority,
     RoomCapabilitySupervisor,
     RoomIncarnationSupervisor,
@@ -32,8 +33,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   def start_call(%ResolvedCallPlan{} = plan, options) when is_list(options) do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
-      [] -> start_planned_room(plan, options)
-      [_room] -> {:error, room_already_exists(plan.room_id)}
+      [] ->
+        with :ok <- PlanStartup.validate(plan, plan_startup_options(options)) do
+          start_planned_room(plan, options)
+        end
+
+      [_room] ->
+        {:error, room_already_exists(plan.room_id)}
     end
   end
 
@@ -245,6 +251,18 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
            retryable: true
          )}
     end
+  end
+
+  defp plan_startup_options(runtime_options) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    [
+      owner: self(),
+      agent_runtime: Keyword.fetch!(settings, :agent_runtime),
+      agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
+      speech_to_text: Keyword.fetch!(settings, :speech_to_text),
+      text_to_speech: Keyword.fetch!(settings, :text_to_speech)
+    ]
   end
 
   defp lookup_room(tenant_id, room_id) do

@@ -2071,8 +2071,19 @@ selected TTS public options with application-owned credentials, transports and q
 policy before participant admission. It retains those typed provider runtimes for the room,
 starts TTS with the receiver and starts the pinned STT when the caller connection attaches.
 Existing preset startup remains intact. This subset does not yet provide the room-owned Call
-Variables process/tools; the remaining milestone work adds explicit unsupported-feature
-diagnostics. Exact evidence is tracked in the milestone and its implementation labnote.
+Variables process/tools, so the preflight below rejects non-empty sections until that later
+slice exists. Exact evidence is tracked in the milestone and its implementation labnote.
+
+The public plan-start boundary now preflights the complete active startup selection before it
+creates the room supervisor child. This check resolves application-owned provider configuration
+without starting provider processes and returns a path-specific `unsupported_call_plan` error.
+The initial runnable subset accepts only a web receive/start-call caller, a
+`wait_for_input` receiver, supported local host tools, the Jido/ReqLLM model path, and compatible
+configured speech profiles. Typed Call Variables remain pinned in plans for their later
+milestone, but a non-empty section set is rejected at startup until its authoritative process
+exists. Generated/fixed greetings are likewise rejected until the opening-audio/lifecycle
+slice implements them. Privacy/media policy, remote-tool, transfer, and other connection modes
+remain closed-schema constructor errors rather than ignored settings.
 
 The repository development gateway is the first trusted host for this path. Its startup
 configuration validates one definition plus closed capability/tool registries. For each

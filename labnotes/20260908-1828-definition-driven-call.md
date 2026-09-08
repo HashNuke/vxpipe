@@ -518,3 +518,44 @@ No visual structure or responsive styling changed.
 The remaining milestone implementation is explicit unsupported-feature/startup diagnostics,
 then removal of duplicated preset-only development configuration once those sample checks are
 complete.
+
+## Checkpoint 7: startup support diagnostics
+
+The definition types intentionally carry some contract fields for later slices. Before this
+checkpoint, a generated/fixed `first_message` could pass construction and compilation but was
+ignored by room startup. Non-empty Call Variables were likewise pinned without an authoritative
+runtime, while an unsupported selected model provider collapsed into generic retryable
+`room_start_failed` after a room child had been attempted.
+
+The public `CallEngine.start_call/2` boundary now asks `PlanStartup` to preflight the active plan
+against the application-owned runtime before calling the room `DynamicSupervisor`. It builds no
+room, participant, Jido, transport, or provider process. Failure returns the secret-safe
+`unsupported_call_plan` code with a definition path and fixed reason. The active subset requires:
+
+- web transport and the web receive/start-call entry caller;
+- a receiving agent in `wait_for_input` mode;
+- no Call Variables sections or participant transfers yet;
+- resolved local host Actions only;
+- the Jido/ReqLLM model path and speech selections compatible with configured runtimes.
+
+Privacy/media policy keys (`media_policy` and `while_present`), alternate connection values,
+remote tool types, tool aliases, and non-empty transfers are still rejected earlier by closed
+constructors. This preflight covers supported schema shapes whose runtime is deferred; it does
+not widen the released schema.
+
+### Red, green, and evidence
+
+- Red: a compiled generated greeting returned `{:ok, room}` while doing nothing with the
+  greeting. A compiled model selection using an unsupported provider returned only
+  `room_start_failed`.
+- Green: both return path-specific `unsupported_call_plan`; a non-empty variables section does
+  the same. Every case verifies the tenant/room registry has no entry after rejection, proving
+  the dynamic room/provider tree was not started.
+- Existing constructor cases now explicitly cover call/participant media policy keys and an MCP
+  tool selection alongside the already-covered non-web connection and transfer cases.
+- Focused compiler plus definition-driven integration files pass `13 tests, 0 failures`.
+  Duplicate room identity is still checked before preflight, preserving the prior
+  `room_already_exists` precedence while keeping validation before dynamic child creation.
+- Final gates passed `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+  `mix deps.unlock --check-unused`, call engine `99 tests, 0 failures (1 excluded)`, and gateway
+  `39 tests, 0 failures (3 excluded)`.

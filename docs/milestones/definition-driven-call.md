@@ -2,7 +2,8 @@
 
 Status: implementation in progress. Typed definition/compiler, participant-owned Jido
 routing, plan-selected speech startup, and trusted sample wiring checkpoints completed on
-2026-09-08; unsupported-feature diagnostics and final spoken-sample evidence remain.
+2026-09-08. Unsupported-feature startup diagnostics are also complete; preset cleanup and
+final spoken-sample evidence remain.
 Specification review: approved,
 including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
@@ -67,7 +68,7 @@ cannot change that live call.
   concurrency chosen explicitly.
 - [x] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
 - [x] Wire one trusted sample/embedded fixture to the new path without redesigning the responsive console.
-- [ ] Specify supported-feature diagnostics for later milestone features; reject enabled unsupported privacy/connection/tool settings before starting providers.
+- [x] Specify supported-feature diagnostics for later milestone features; reject enabled unsupported privacy/connection/tool settings before starting providers.
 - [ ] Refactor duplicated preset configuration only after the definition-driven sample tests pass.
 
 ## Acceptance and failure checks
@@ -302,6 +303,25 @@ remains bounded but now allows one second for the linked process's `:DOWN` messa
 file then passed 20 consecutive randomized runs. Final checkpoint gates pass: formatting,
 warnings-as-errors, dependency-use validation, call engine `96 tests, 0 failures (1 excluded)`,
 gateway `39 tests, 0 failures (3 excluded)`, sample `2 tests`, and the production sample build.
+
+Implementation evidence, checkpoint 7 (2026-09-08): the plan-start boundary now runs a
+process-free startup preflight before asking the room `DynamicSupervisor` to create a child.
+Valid schema fields whose behavior belongs to later slices no longer disappear silently:
+non-empty Call Variables sections and generated/fixed first messages return
+`unsupported_call_plan` with their definition path. A selected model profile whose provider is
+not supported by the current Jido/ReqLLM runtime returns the same safe error at the receiver's
+model capability path. The existing closed constructors continue to reject `media_policy` and
+participant `while_present`, non-web connection service/mode/admission values, remote tool
+types, aliases, and non-empty transfers before compilation.
+
+Red: generated greeting input started a room while ignoring the greeting, and an unsupported
+model provider collapsed to retryable `room_start_failed`. Green: both now fail before a room
+registry entry exists; focused compiler and end-to-end definition tests pass `13 tests,
+0 failures`. Duplicate room identity is still checked first, preserving the existing conflict
+contract without weakening the process-start boundary. The error contains only a stable code,
+message, path, and fixed reason rather than definition values or private provider configuration.
+Final checkpoint gates pass formatting, warnings-as-errors, dependency-use validation, call
+engine `99 tests, 0 failures (1 excluded)`, and gateway `39 tests, 0 failures (3 excluded)`.
 
 ## Specification review
 

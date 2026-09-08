@@ -22,6 +22,7 @@ defmodule Vxpipe.CallEngine.Error do
           | :room_incarnation_changed
           | :room_not_found
           | :room_start_failed
+          | :unsupported_call_plan
 
   @type t :: %__MODULE__{
           code: code(),

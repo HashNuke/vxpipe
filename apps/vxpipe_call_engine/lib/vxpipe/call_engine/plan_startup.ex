@@ -2,9 +2,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
+  alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
   alias Vxpipe.CallEngine.Command.JoinParticipant
 
   alias Vxpipe.CallEngine.{
+    Error,
     Id,
     ResolvedCallPlan,
     SpeechToTextRuntime,
@@ -12,6 +14,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   }
 
   @participant_command_timeout_ms 5_000
+  @error_code :unsupported_call_plan
+  @error_message "The resolved call plan is not supported by this runtime."
 
   @enforce_keys [
     :caller,
@@ -34,10 +38,21 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           text_to_speech: nil | TextToSpeechRuntime.t()
         }
 
-  @spec new(ResolvedCallPlan.t(), keyword()) :: {:ok, t()} | {:error, atom()}
+  @spec validate(ResolvedCallPlan.t(), keyword()) ::
+          :ok | {:error, Error.t()}
+  def validate(%ResolvedCallPlan{} = plan, options) when is_list(options) do
+    case new(plan, options) do
+      {:ok, %__MODULE__{}} -> :ok
+      {:error, %Error{}} = error -> error
+    end
+  end
+
+  @spec new(ResolvedCallPlan.t(), keyword()) :: {:ok, t()} | {:error, Error.t()}
   def new(%ResolvedCallPlan{} = plan, options) when is_list(options) do
-    with {:ok, caller} <- entry_participant(plan, plan.entry_caller, :human),
-         {:ok, receiver} <- entry_participant(plan, plan.entry_receiver, :agent),
+    with {:ok, caller} <- entry_participant(plan, :entry_caller, plan.entry_caller, :human),
+         {:ok, receiver} <-
+           entry_participant(plan, :entry_receiver, plan.entry_receiver, :agent),
+         :ok <- supported_features(plan, caller, receiver),
          {:ok, activation_options} <- agent_activation_options(receiver, options),
          {:ok, speech_to_text} <- speech_to_text_runtime(caller, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(receiver, options),
@@ -56,14 +71,98 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp entry_participant(plan, definition_key, kind) do
+  defp entry_participant(plan, field, definition_key, kind) do
     case Map.fetch(plan.participants, definition_key) do
       {:ok, %ResolvedCallPlan.Participant{kind: ^kind} = participant} ->
         {:ok, participant}
 
       _missing_or_wrong_kind ->
-        {:error, :invalid_entry_participant}
+        unsupported([Atom.to_string(field)], "must resolve to the supported participant type")
     end
+  end
+
+  defp supported_features(plan, caller, receiver) do
+    with :ok <- supported_transport(plan),
+         :ok <- supported_connection(caller),
+         :ok <- supported_first_message(receiver),
+         :ok <- supported_call_variables(plan),
+         :ok <- supported_transfers(plan),
+         :ok <- supported_tools(plan) do
+      :ok
+    end
+  end
+
+  defp supported_transport(%ResolvedCallPlan{transport: :web}), do: :ok
+
+  defp supported_transport(_plan) do
+    unsupported(["transport", "type"], "only web transport is supported")
+  end
+
+  defp supported_connection(%ResolvedCallPlan.Participant{
+         connection: %ConnectionIntent{service: :web, mode: :receive, admission: :start_call}
+       }),
+       do: :ok
+
+  defp supported_connection(caller) do
+    unsupported(
+      ["participants", caller.definition_key, "connection"],
+      "only web receive/start_call connection intent is supported"
+    )
+  end
+
+  defp supported_first_message(%ResolvedCallPlan.Participant{
+         first_message: :wait_for_input,
+         first_message_text: nil
+       }),
+       do: :ok
+
+  defp supported_first_message(receiver) do
+    unsupported(
+      ["participants", receiver.definition_key, "first_message", "mode"],
+      "only wait_for_input is supported"
+    )
+  end
+
+  defp supported_call_variables(%ResolvedCallPlan{call_variables: %{sections: sections}})
+       when map_size(sections) == 0,
+       do: :ok
+
+  defp supported_call_variables(_plan) do
+    unsupported(
+      ["call_variables", "sections"],
+      "Call Variables require the Call Variables runtime"
+    )
+  end
+
+  defp supported_transfers(plan) do
+    case Enum.find(plan.participants, fn {_key, participant} -> participant.transfers != [] end) do
+      nil ->
+        :ok
+
+      {key, _participant} ->
+        unsupported(["participants", key, "transfers"], "participant transfers are not supported")
+    end
+  end
+
+  defp supported_tools(plan) do
+    Enum.reduce_while(plan.participants, :ok, fn {participant_key, participant}, :ok ->
+      case Enum.find(participant.tools, fn {_name, binding} ->
+             not match?(
+               %ResolvedCallPlan.ToolBinding{type: :host, action: action} when is_atom(action),
+               binding
+             )
+           end) do
+        nil ->
+          {:cont, :ok}
+
+        {name, _binding} ->
+          {:halt,
+           unsupported(
+             ["participants", participant_key, "tools", name],
+             "only resolved host tools are supported"
+           )}
+      end
+    end)
   end
 
   defp participant_command(plan, participant) do
@@ -77,8 +176,14 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              DateTime.add(DateTime.utc_now(), @participant_command_timeout_ms, :millisecond),
            id: Id.generate(:command)
          ) do
-      {:ok, command} -> {:ok, command}
-      {:error, _error} -> {:error, :invalid_participant}
+      {:ok, command} ->
+        {:ok, command}
+
+      {:error, _error} ->
+        unsupported(
+          ["participants", participant.definition_key],
+          "cannot be converted to a runtime participant"
+        )
     end
   end
 
@@ -111,10 +216,18 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          request_timeout_ms: Keyword.fetch!(settings, :request_timeout_ms)
        ]}
     else
-      _unsupported -> {:error, :unsupported_agent_configuration}
+      _unsupported ->
+        unsupported(
+          ["participants", receiver.definition_key, "capabilities", "model_inference"],
+          "must select a supported ReqLLM model profile"
+        )
     end
   rescue
-    _exception -> {:error, :unsupported_agent_configuration}
+    _exception ->
+      unsupported(
+        ["participants", receiver.definition_key, "capabilities", "model_inference"],
+        "must select a supported ReqLLM model profile"
+      )
   end
 
   defp speech_to_text_runtime(caller, options) do
@@ -135,11 +248,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              media_ingress: media_ingress
            }}
         else
-          _invalid_runtime -> {:error, :unsupported_speech_to_text_configuration}
+          _invalid_runtime -> unsupported_speech_configuration(caller, :speech_to_text)
         end
 
-      {:error, _reason} = error ->
-        error
+      {:error, _reason} ->
+        unsupported_speech_configuration(caller, :speech_to_text)
     end
   end
 
@@ -161,11 +274,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              maximum_requests: maximum_requests
            }}
         else
-          _invalid_runtime -> {:error, :unsupported_text_to_speech_configuration}
+          _invalid_runtime -> unsupported_speech_configuration(receiver, :text_to_speech)
         end
 
-      {:error, _reason} = error ->
-        error
+      {:error, _reason} ->
+        unsupported_speech_configuration(receiver, :text_to_speech)
     end
   end
 
@@ -190,10 +303,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
            provider.new(Keyword.merge(private_options, selected_options)) do
       {:ok, {provider, provider_config}, settings}
     else
-      _unsupported -> {:error, unsupported_speech_configuration(kind)}
+      _unsupported -> {:error, unsupported_speech_configuration_reason(kind)}
     end
   rescue
-    _exception -> {:error, unsupported_speech_configuration(kind)}
+    _exception -> {:error, unsupported_speech_configuration_reason(kind)}
   end
 
   defp selected_options(options) when is_map(options) do
@@ -204,11 +317,18 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp unsupported_speech_configuration(:speech_to_text),
+  defp unsupported_speech_configuration_reason(:speech_to_text),
     do: :unsupported_speech_to_text_configuration
 
-  defp unsupported_speech_configuration(:text_to_speech),
+  defp unsupported_speech_configuration_reason(:text_to_speech),
     do: :unsupported_text_to_speech_configuration
+
+  defp unsupported_speech_configuration(participant, kind) do
+    unsupported(
+      ["participants", participant.definition_key, "capabilities", Atom.to_string(kind)],
+      "must select a capability profile supported by the configured runtime"
+    )
+  end
 
   defp agent_model(%{model: model} = options)
        when map_size(options) == 1 and is_binary(model),
@@ -222,5 +342,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   defp nonempty_model(model) do
     if String.trim(model) == "", do: {:error, :invalid_model}, else: {:ok, model}
+  end
+
+  defp unsupported(path, reason) do
+    {:error,
+     Error.new(@error_code, @error_message, details: %{"path" => path, "reason" => reason})}
   end
 end
