@@ -420,3 +420,38 @@ participant as established in checkpoint 3d.
 This checkpoint supports definition-driven text and one static host Action through Jido.
 It does not yet start plan-selected speech capabilities, reject all later-slice settings,
 or connect the trusted sample.
+
+## Checkpoint 5: plan-selected speech startup
+
+The definition-driven room now resolves the entry caller's STT selection and entry receiver's
+TTS selection before participant admission. Resolution combines public provider options from
+the immutable plan with application-owned credentials and runtime adapters. Typed runtime
+records retain the constructed provider configuration, transport selection, ingress limits
+and output queue bound for the room; these private/runtime values do not enter the public plan
+or snapshot.
+
+The selected TTS runtime starts with the receiving agent. When the entry caller attaches, the
+room returns that participant's pinned STT runtime to the connection startup path rather than
+rereading a mutable global provider selection. The legacy `CreateRoom` path explicitly retains
+its prior application-default STT/TTS behavior.
+
+### Red, green, and verification evidence
+
+- Red command: `mix test test/vxpipe/call_engine/definition_driven_call_test.exs`.
+- Red result: `3 tests, 1 failure`; no TTS transport-start event arrived because plan speech
+  selections were not connected to room startup.
+- Green focused result: `3 tests, 0 failures`. The case uses deliberately different plan and
+  application model values and proves the transports receive plan-selected STT/TTS models plus
+  the application-owned credential.
+- Ten repeated focused runs completed with `3 tests, 0 failures` per run.
+- The first complete engine run exposed the documented Jido test isolation issue: the direct
+  Agent test still declared `async: true` and lost the second scripted tool event while another
+  Jido test was active. Marking that module synchronous aligned the code with checkpoint 3b's
+  already recorded test-lane decision. The subsequent complete suite passed.
+- Umbrella gates passed: `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, call engine `96 tests, 0 failures (1 excluded)`, gateway
+  `37 tests, 0 failures (3 excluded)`, and `mix deps.unlock --check-unused`.
+
+Room startup now activates only the entry participants and their selected model/STT/TTS
+capabilities. The trusted sample still needs a complete spoken turn through this path, and
+unsupported enabled later-slice settings need precise pre-provider diagnostics.

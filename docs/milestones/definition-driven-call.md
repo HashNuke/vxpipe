@@ -1,8 +1,9 @@
 # Definition-driven one-agent call
 
-Status: implementation in progress. Typed definition/compiler and Jido coordinator
-checkpoints completed on 2026-09-08; activation/room wiring remains. Specification review:
-approved, including the Jido integration follow-up (2026-09-08).
+Status: implementation in progress. Typed definition/compiler, participant-owned Jido
+routing, and plan-selected speech startup checkpoints completed on 2026-09-08; the trusted
+sample and unsupported-feature diagnostics remain. Specification review: approved,
+including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
 Sources: [Canonical representation and minimal definition](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-definition-gap-review.md).
 
@@ -63,7 +64,7 @@ cannot change that live call.
 - [x] Route ordinary agent inference and one small host action through the supervised Jido
   agent, with overlapping asks rejected, automatic tool retries disabled, and tool
   concurrency chosen explicitly.
-- [ ] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
+- [x] Route room startup through the compiled plan and resolve only needed initial participants/capabilities.
 - [ ] Wire one trusted sample/embedded fixture to the new path without redesigning the responsive console.
 - [ ] Specify supported-feature diagnostics for later milestone features; reject enabled unsupported privacy/connection/tool settings before starting providers.
 - [ ] Refactor duplicated preset configuration only after the definition-driven sample tests pass.
@@ -247,6 +248,28 @@ not implemented yet.
 Checkpoint 4 umbrella gates pass: formatting, warnings-as-errors, call engine `95 tests,
 0 failures (1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused
 dependencies.
+
+Implementation evidence, checkpoint 5 (2026-09-08): plan startup now resolves the entry
+caller's selected STT and entry receiver's selected TTS against application-owned runtime
+configuration before admitting either participant. The immutable room runtime contains the
+constructed provider configuration and selected public model/media options, while credentials,
+transport adapters, ingress limits and output queue bounds remain outside the public plan.
+TTS starts with the receiver; STT starts for the caller's connection using the runtime pinned
+when the room began. The legacy `CreateRoom` path retains its application-default behavior.
+
+Red: the new definition-driven speech case timed out waiting for the TTS transport because
+compiled speech selections were ignored. Green: the test proves the plan-selected TTS and
+STT models override different application defaults while both transports receive the
+application-owned credential. Ten repeated focused runs passed. A broader run exposed the
+previously documented scripted-Jido concurrency failure because `AgentTest` was still marked
+async; aligning that module with the existing synchronous Jido test lane made the complete
+gate deterministic without changing runtime behavior.
+
+Checkpoint 5 umbrella gates pass: formatting, warnings-as-errors, call engine `96 tests,
+0 failures (1 excluded)`, gateway `37 tests, 0 failures (3 excluded)`, and no unused
+dependencies. This completes the compiled-plan room-startup checklist item. End-to-end audio
+turn completion through the trusted definition sample and explicit startup diagnostics remain
+for the next checkpoints.
 
 ## Specification review
 

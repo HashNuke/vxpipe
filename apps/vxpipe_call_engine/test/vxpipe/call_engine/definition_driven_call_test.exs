@@ -24,6 +24,13 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   }
 
   alias Vxpipe.CallEngine.Tool.CurrentTime
+  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+
+  alias Vxpipe.CallEngine.{
+    TestAudioOutputSink,
+    TestSpeechToTextTransport,
+    TestTextToSpeechTransport
+  }
 
   test "starts only entry participants and routes an attached caller through Jido" do
     room_id = unique_id("room")
@@ -150,9 +157,43 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 4}}
   end
 
-  defp compile_plan(room_id) do
+  test "pins selected speech options while using application-owned secrets and transports" do
+    configure_speech_runtime()
+    room_id = unique_id("room")
+    plan = compile_plan(room_id, speech?: true)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    script =
+      expect_react do
+        user("Hello")
+        answer("Hello back.")
+      end
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               agent_request_options: Jido.AI.Test.react_opts(script)
+             )
+
+    assert_receive {:test_tts_transport_started, _tts_transport,
+                    %{url: tts_url, headers: [{"Authorization", "Token runtime-secret"}]}}
+
+    assert tts_url =~ "model=flux-plan-voice"
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    attach_caller(plan, room, caller, "conn-speech-plan", sink)
+
+    assert_receive {:test_stt_transport_started, _stt_transport,
+                    %{url: stt_url, headers: [{"Authorization", "Token runtime-secret"}]}}
+
+    assert stt_url =~ "model=flux-general-multi"
+  end
+
+  defp compile_plan(room_id, options \\ []) do
     assert {:ok, definition} =
-             CallDefinition.new(definition_input(), resource_id: "definition-test", revision: 1)
+             CallDefinition.new(definition_input(options),
+               resource_id: "definition-test",
+               revision: 1
+             )
 
     assert {:ok, invocation} =
              CallInvocation.new(
@@ -173,6 +214,16 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
           kind: :model_inference,
           provider: :req_llm,
           options: %{model: "test:scripted"}
+        },
+        "plan-stt" => %{
+          kind: :speech_to_text,
+          provider: Flux,
+          options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
+        },
+        "plan-tts" => %{
+          kind: :text_to_speech,
+          provider: FluxTextToSpeech,
+          options: %{model: "flux-plan-voice", encoding: :linear16, sample_rate: 48_000}
         }
       },
       host_tools: %{"get_current_time" => CurrentTime}
@@ -182,7 +233,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     plan
   end
 
-  defp definition_input do
+  defp definition_input(options) do
+    speech? = Keyword.get(options, :speech?, false)
+
+    caller_capabilities = if speech?, do: %{speech_to_text: "plan-stt"}, else: %{}
+    receiver_capabilities = if speech?, do: %{text_to_speech: "plan-tts"}, else: %{}
+
     %{
       schema_version: "20260906.02",
       entry_caller: "caller",
@@ -192,13 +248,14 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       participants: %{
         "caller" => %{
           type: "human",
-          connection: %{service: "web", mode: "receive", admission: "start_call"}
+          connection: %{service: "web", mode: "receive", admission: "start_call"},
+          capabilities: caller_capabilities
         },
         "receiver" => %{
           type: "agent",
           prompt: "Use the available host action.",
           first_message: %{mode: "wait_for_input"},
-          capabilities: %{model_inference: "test-model"},
+          capabilities: Map.put(receiver_capabilities, :model_inference, "test-model"),
           tools: %{
             "get_current_time" => %{type: "host", tool: "get_current_time"}
           },
@@ -227,7 +284,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     )
   end
 
-  defp attach_caller(plan, room, caller, connection_id) do
+  defp attach_caller(plan, room, caller, connection_id, output_sink \\ nil) do
     assert {:ok, command} =
              AttachConnection.new(
                tenant_id: plan.tenant_id,
@@ -239,7 +296,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(command)
+    assert {:ok, _attachment} = CallEngine.attach_connection(command, output_sink)
   end
 
   defp send_command(plan, room, caller, connection_id, content) do
@@ -266,6 +323,53 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   defp assert_children_stopped(monitors) do
     Enum.each(monitors, fn {_role, {pid, monitor}} ->
       assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}, 1_000
+    end)
+  end
+
+  defp configure_speech_runtime do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    speech_to_text = [
+      enabled: true,
+      provider: Flux,
+      provider_options: [
+        api_key: "runtime-secret",
+        model: "flux-general-en",
+        encoding: :opus,
+        sample_rate: 48_000
+      ],
+      transport: {TestSpeechToTextTransport, [observer: self()]},
+      media_ingress: [
+        maximum_frames: 50,
+        maximum_bytes: 262_144,
+        maximum_age_ms: 2_000,
+        maximum_consecutive_overflows: 5
+      ]
+    ]
+
+    text_to_speech = [
+      enabled: true,
+      provider: FluxTextToSpeech,
+      provider_options: [
+        api_key: "runtime-secret",
+        model: "flux-application-voice",
+        encoding: :linear16,
+        sample_rate: 48_000
+      ],
+      transport: {TestTextToSpeechTransport, [observer: self()]},
+      maximum_requests: 2
+    ]
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      original
+      |> Keyword.put(:speech_to_text, speech_to_text)
+      |> Keyword.put(:text_to_speech, text_to_speech)
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
     end)
   end
 

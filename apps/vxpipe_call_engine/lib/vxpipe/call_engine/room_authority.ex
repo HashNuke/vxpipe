@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ResolvedCallPlan,
     RoomCapabilitySupervisor,
     RoomParticipantSupervisor,
+    TextToSpeechRuntime,
     TextToSpeechRequest,
     TurnInterrupter
   }
@@ -107,6 +108,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       participant_ids: MapSet.new(),
       participant_roles: %{},
       snapshot: build_snapshot(room_source, incarnation_id, options),
+      speech_to_text_runtime: initial_speech_to_text_runtime(room_source),
       speech_to_text_monitors: %{},
       text_capability: nil,
       text_to_speech_capability: nil
@@ -313,10 +315,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   defp start_configured_agent(%ResolvedCallPlan{} = plan, options, state) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
     startup_options = [
       owner: self(),
-      agent_runtime: agent_runtime_settings(),
-      agent_request_options: Keyword.get(options, :agent_request_options, [])
+      agent_runtime: Keyword.fetch!(settings, :agent_runtime),
+      agent_request_options: Keyword.get(options, :agent_request_options, []),
+      speech_to_text: Keyword.fetch!(settings, :speech_to_text),
+      text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
 
     with {:ok, startup} <- PlanStartup.new(plan, startup_options),
@@ -337,16 +343,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         pid: coordinator_ref
       }
 
-      {:ok, %{state | text_capability: text_capability}}
+      state = %{
+        state
+        | speech_to_text_runtime: %{
+            startup.caller.participant_id => startup.speech_to_text
+          },
+          text_capability: text_capability
+      }
+
+      start_selected_text_to_speech(
+        startup.text_to_speech,
+        receiver_snapshot.participant_id,
+        state
+      )
     else
       _error -> {:error, :agent_start_failed}
     end
-  end
-
-  defp agent_runtime_settings do
-    :vxpipe_call_engine
-    |> Application.fetch_env!(Vxpipe.CallEngine.Application)
-    |> Keyword.fetch!(:agent_runtime)
   end
 
   defp start_text_capability(:deterministic_text, participant_id, state) do
@@ -417,6 +429,35 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
+  defp start_selected_text_to_speech(nil, _participant_id, state), do: {:ok, state}
+
+  defp start_selected_text_to_speech(
+         %TextToSpeechRuntime{} = runtime,
+         participant_id,
+         state
+       ) do
+    case RoomCapabilitySupervisor.start_text_to_speech(
+           state.snapshot.incarnation_id,
+           self(),
+           participant_id,
+           runtime.provider,
+           runtime.transport,
+           runtime.maximum_requests
+         ) do
+      {:ok, capability} ->
+        text_to_speech_capability = %{
+          monitor: Process.monitor(capability),
+          participant_id: participant_id,
+          pid: capability
+        }
+
+        {:ok, %{state | text_to_speech_capability: text_to_speech_capability}}
+
+      {:error, _reason} ->
+        {:error, :text_to_speech_start_failed}
+    end
+  end
+
   defp authorize_attachment(command, caller, subscriber, state) do
     cond do
       caller != subscriber ->
@@ -458,7 +499,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         connections: Map.put(state.connections, command.connection_id, connection)
     }
 
-    {:reply, {:ok, role}, state}
+    speech_to_text_runtime =
+      selected_speech_to_text_runtime(command.participant_id, state)
+
+    {:reply, {:ok, role, speech_to_text_runtime}, state}
+  end
+
+  defp selected_speech_to_text_runtime(_participant_id, %{speech_to_text_runtime: :application}),
+    do: :application
+
+  defp selected_speech_to_text_runtime(participant_id, state) do
+    Map.get(state.speech_to_text_runtime, participant_id)
   end
 
   defp authorize_speech_to_text_binding(command, caller, subscriber, state) do
@@ -1578,6 +1629,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       :error -> Keyword.fetch!(options, :command)
     end
   end
+
+  defp initial_speech_to_text_runtime(%CreateRoom{}), do: :application
+  defp initial_speech_to_text_runtime(%ResolvedCallPlan{}), do: %{}
 
   defp room_identity(options) do
     source = room_source(options)

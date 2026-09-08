@@ -11,7 +11,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     Id,
     RoomAuthority,
     RoomCapabilitySupervisor,
-    RoomIncarnationSupervisor
+    RoomIncarnationSupervisor,
+    SpeechToTextRuntime
   }
 
   def start_link(_options) do
@@ -46,11 +47,12 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     case lookup_room(command.tenant_id, command.room_id) do
       {:ok, room_authority} ->
         case RoomAuthority.attach_connection(room_authority, command, self(), output_sink) do
-          {:ok, role} ->
+          {:ok, role, selected_runtime} ->
             start_connection_speech_to_text(
               room_authority,
               command,
               role,
+              selected_runtime,
               speech_to_text_options
             )
 
@@ -63,7 +65,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
-  defp start_connection_speech_to_text(room_authority, command, :human, options) do
+  defp start_connection_speech_to_text(
+         room_authority,
+         command,
+         :human,
+         :application,
+         options
+       ) do
     if Keyword.fetch!(options, :enabled) do
       provider_module = Keyword.fetch!(options, :provider)
 
@@ -92,7 +100,35 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
-  defp start_connection_speech_to_text(room_authority, _command, _role, _options) do
+  defp start_connection_speech_to_text(
+         room_authority,
+         command,
+         :human,
+         %SpeechToTextRuntime{} = runtime,
+         _application_options
+       ) do
+    with {:ok, capability, ingress} <-
+           RoomCapabilitySupervisor.start_speech_to_text(
+             command.incarnation_id,
+             room_authority,
+             command,
+             runtime.provider,
+             runtime.transport,
+             runtime.media_ingress
+           ) do
+      bind_connection_speech_to_text(room_authority, command, capability, ingress)
+    else
+      _error -> attachment_speech_to_text_failed(room_authority, command)
+    end
+  end
+
+  defp start_connection_speech_to_text(
+         room_authority,
+         _command,
+         _role,
+         _selected_runtime,
+         _application_options
+       ) do
     {:ok, room_authority, nil}
   end
 
