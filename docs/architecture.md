@@ -2066,10 +2066,13 @@ The trusted `start_call/2` path now starts a room from a compiled immutable plan
 pinned prompt, `:req_llm` model and static host Actions with application-owned runtime
 bounds. It starts both participant subtrees and installs the receiver's stable coordinator
 reference as the room text capability. An unused catalog agent starts no participant or
-activation process. Existing preset startup remains intact. This subset does not yet start
-plan-selected speech capabilities or provide the room-owned Call Variables process/tools;
-the remaining milestone work adds those speech boundaries, explicit unsupported-feature
-diagnostics, and the trusted sample fixture. Exact evidence is tracked in the milestone and
+activation process. Plan startup also combines the caller's selected STT and receiver's
+selected TTS public options with application-owned credentials, transports and queue/ingress
+policy before participant admission. It retains those typed provider runtimes for the room,
+starts TTS with the receiver and starts the pinned STT when the caller connection attaches.
+Existing preset startup remains intact. This subset does not yet provide the room-owned Call
+Variables process/tools; the remaining milestone work adds explicit unsupported-feature
+diagnostics and the trusted sample fixture. Exact evidence is tracked in the milestone and
 its implementation labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
