@@ -1,9 +1,10 @@
 # Remote MCP tools in a live call
 
-Status: not implemented. Specification review: approved, including the Jido MCP
-follow-up (2026-09-08). Implementation remains blocked by the dynamic tenant-tool exposure
-gate in the Jido MCP integration prerequisite.
-Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its background-tool and tenant admission prerequisites; [Jido MCP integration and conformance](mcp-client-library.md).
+Status: not implemented. Specification updated after the 2026-09-08 released-package
+investigation. This slice owns an explicit implementation blocker: a supported public
+Jido AI runtime-tool interface preserving exact local names/schemas and private execution
+bindings. ExMCP conformance alone does not resolve it.
+Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its background-tool and tenant admission prerequisites; [MCP client integration and conformance](mcp-client-library.md). See the [tool-binding decision](../jido-tool-execution.md).
 Sources: [Configured integrations](../../labnotes/20260905-0405-call-definition-design.md#applicationtenant-mcp-integrations-and-agent-enablement); [remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [R22–R26/R49](../call-definition-gap-review.md).
 
 ## Runnable outcome
@@ -13,22 +14,28 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
 ## Specification
 
 - Application/tenant integrations are configured infrastructure; each agent enables named operations through its unified local-key tools map. Tenant override replaces the whole integration record, not a deep merge. Calls carry no per-call MCP endpoint/credential override. Resolve tenant from trusted principal and pin bindings/catalog/schema/config generations in the call plan.
-- Use the selected Jido MCP integration with MCP `2025-11-25` Streamable HTTP JSON/SSE responses, initialization/capability negotiation and scoped session handling. The earlier `2026-07-28` target is superseded. Do not advertise unsupported sampling/elicitation/tasks or silently negotiate an untested profile.
-- Consume the separately verified thin `vxpipe_mcp` adapter around `jido_mcp` and expose
-  enabled remote tools through the established Jido Action/Jido AI AgentServer boundary.
+- Use the selected ExMCP integration with MCP `2025-11-25` Streamable HTTP JSON/SSE responses, initialization/capability negotiation and scoped session handling. The earlier `2026-07-28` target is superseded. Do not advertise unsupported sampling/elicitation/tasks or silently negotiate an untested profile.
+- Consume the separately verified thin `vxpipe_mcp` adapter around `ex_mcp`. An engine-side
+  tool bridge exposes enabled remote tools to the established Jido AI AgentServer loop.
   The integration owner supplies resolved configuration, private credentials, deadlines,
   pinned schemas and network policy; it owns tenant selection, grants, catalog scoping,
   call/agent lifecycle and result history. Neither gateway nor room processes implement
-  another MCP parser. Jido MCP owns its protocol/client integration and transitive
-  implementation choices; the internal adapter has no dependency on those domain
-  applications and Vxpipe does not call a transitive client library directly.
+  another MCP parser. ExMCP owns its protocol/client integration; the internal adapter has
+  no dependency on Jido or those domain applications. Do not add `jido_mcp` or unreleased
+  Jido Connect to manufacture the missing model-tool interface.
 - Expose each enabled local binding with its pinned remote schema while keeping endpoint,
-  credential and remote-operation selection outside model arguments. Inherit the prerequisite
-  ban on externally driven Action-module/atom growth, private proxy APIs, and a generic
-  model-visible endpoint/tool dispatcher. Do not start this live-call slice until the
-  standalone milestone proves a supported public Jido mechanism for dynamic tenant catalogs.
+  credential and remote-operation selection outside model arguments. No externally driven
+  Action-module/atom growth, private proxy APIs or generic model-visible endpoint/tool
+  dispatcher. First obtain and prove a supported public Jido AI data-tool projection and
+  execution interface. Current request transformers regenerate schemas from Action modules;
+  interceptors do not replace execution. Neither is the required interface today.
+- Keep static Actions and runtime remote bindings in the same Jido-owned loop. Prove two
+  local aliases can share a handler while retaining independent schemas and private grants.
+  This lifts the early static-tool name restriction without changing the definition contract.
+  Do not introduce a second custom ReqLLM loop. Prefer an upstream extension; a maintained
+  fork/private patch requires an explicit decision, not an implementation workaround.
 - Auth variants are none, bearer, or validated custom headers; transport-owned headers cannot be overridden. Secrets stay in the private integration boundary, recoverable through configured secret storage, never tool arguments/plan projections. Authorization-scoped discovery/cache/health/concurrency state must not cross tenant/integration/credential generation.
-- Follow Jido MCP and MCP SDK security guidance at Vxpipe's actual outbound boundary:
+- Follow ExMCP and MCP SDK security guidance at Vxpipe's actual outbound boundary:
   trusted configured endpoints, verified HTTPS, address-at-connect/rebinding defenses, no
   automatic redirects/credential forwarding. Private destinations require explicit host
   permission, not tenant bypass. Revoked/invalid tenant credentials never fall back silently
@@ -40,15 +47,22 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
 ## Implementation checklist
 
 - [ ] Red-test a controlled remote MCP fixture for discovery, valid tool invocation, slow result, schema failure, auth and response-size limits.
-- [ ] Wire the verified Jido MCP adapter through the integration owner; preserve its pinned
+- [ ] Prove the public Jido AI runtime-binding extension in a deterministic mixed-tool run;
+  record the exact supported release/API before claiming dynamic catalog support.
+- [ ] Wire the verified ExMCP adapter through the integration owner; preserve its pinned
   profile/conformance evidence and enforce dependency direction.
-- [ ] Implement private scoped integration resolution/cache/discovery and Jido Action binding
+- [ ] Implement private scoped integration resolution/cache/discovery and data-backed binding
   validation without unbounded external atom/module creation.
 - [ ] Connect tools/call to background workers, complete private history, and safe model/client projections.
 - [ ] Test security at the effective network client, not only a configured URL string; isolate real network interoperability tests.
 
 ## Acceptance and failure checks
 
+- [ ] A deterministic Jido run alternates a static Action and remote tool over successive
+  model rounds, then answers; Jido, not a Vxpipe replacement loop, owns continuation.
+- [ ] Model-visible tools preserve exact local names/pinned schemas, including two aliases
+  sharing one handler. Unknown bindings fail before execution; endpoint selectors and
+  credentials never enter the model schema/arguments or public events.
 - [ ] Tenant/app precedence is whole-record; bad/revoked tenant credentials do not fall back or leak to another endpoint/cache.
 - [ ] Reject unknown/unauthorized tools, argument schema violations, unsafe redirects/private addresses/rebinding, external schema refs and unsupported interactions before unauthorized work.
 - [ ] At/exceed the 1 MiB boundary with compressed and many-chunk bodies; no cap reset per chunk or full-body buffering before checking.
@@ -92,8 +106,8 @@ vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added catalog/schema pinning, unresolved binding failure, revoked authorization and private lease redaction/lifetime tests; re-review approved.
 The subsequent internal-library prerequisite and scoped-input/domain-ownership boundary
 also passed milestone_review_a's focused follow-up review. The supported protocol revision
-and non-resetting invocation bounds remain approved. The 2026-09-08 Jido follow-up approved
-use of the public integration only after its prerequisite proves safe dynamic tenant-tool
-exposure; the current proxy path's atom/module behavior is now an explicit inherited
-implementation blocker rather than an implicit workaround opportunity.
+and non-resetting invocation bounds remain approved. The later released-package probe
+confirmed Jido owns repeated rounds but rejects data-tool descriptors and loses aliases
+in model projection. This slice now owns that public-interface gate; the ExMCP library
+checkpoint is independent. No protocol/security or model-schema requirement was waived.
 This is specification evidence only; implementation and runtime verification remain unchecked.

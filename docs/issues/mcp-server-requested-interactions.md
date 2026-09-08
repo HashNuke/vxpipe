@@ -10,7 +10,7 @@ authority from a server request. Report missing capabilities clearly without
 silently invoking models, prompting a participant, granting access, or claiming
 the requested interaction completed. Ordinary agent conversation is unchanged.
 
-The selected Jido MCP integration profile is `2025-11-25`, where sampling and
+The selected ExMCP integration profile is `2025-11-25`, where sampling and
 elicitation use server-initiated requests and negotiated client capabilities.
 Neither is enabled merely because the SDK offers it. This supersedes this issue's
 earlier `2026-07-28` input-request/MRTR assumption; support for that revision is

@@ -43,6 +43,12 @@ cannot change that live call.
   agent-transfer slice and remote bindings for the remote-MCP slice. Reject alias collisions
   with reserved/compiler-generated names. Unsupported enabled tools/features fail
   explicitly, never disappear silently. Empty transfer possibilities expose no transfer tool.
+- The first supported subset uses finite static Actions whose local tool keys equal their
+  declared Action names. Reject differing aliases before startup until the public binding
+  interface in [the decision](../jido-tool-execution.md) is available. Current Jido AI loses
+  map aliases when constructing model tools; do not silently rename or generate modules.
+  This temporary rollout restriction does not remove aliases from the final definition
+  contract. The live-MCP slice owns the general runtime-binding interface gate.
 - Invocation cannot replace the definition's entry refs or the trusted tenant identity.
 - Reuse current room, gateway, model, STT, TTS, and sample components. Preserve existing runtime speech/interruption behavior. This milestone's trusted startup adapter is not the production API-key/token path built in the prepared-call admission slice.
 
@@ -71,6 +77,9 @@ cannot change that live call.
 - [ ] A forced provider startup failure cleans up the attempted tree without silently switching providers.
 - [ ] One host action completes through Jido Action and the ReAct continuation without
   duplicate tool/text events; invalid input fails before the action handler runs.
+- [ ] A deterministic request completes two successive tool rounds and a final response
+  through Jido's loop, with no engine-owned replacement model/tool loop. Tool names shown
+  to the model match accepted definition keys; unsupported aliases fail before startup.
 - [ ] Jido stream cancellation maps to the existing interrupted turn without ending the
   participant or granting Jido authority over room lifecycle. Configured tool retries are
   zero, and a stale event from a terminated activation cannot reach its replacement.
@@ -114,5 +123,8 @@ The 2026-09-08 Jido follow-up found that public Jido MCP tool synchronization ta
 running `Jido.AI.Agent`, while standalone ReAct has no equivalent public synchronization
 surface. The specification now uses one supervised AgentServer as the replaceable
 per-agent inference layer, with explicit readiness, request serialization and teardown
-boundaries. Focused source review approved this corrected mechanism.
+boundaries. Focused source review approved this corrected mechanism. The later released-
+package probe verified two ReAct rounds and exposed the static Action alias limitation;
+the supported first-slice subset and runtime-binding gate now state that limitation.
+AgentServer remains the lifecycle choice, no longer a dependency on Jido MCP synchronization.
 This is specification evidence only; implementation and runtime verification remain unchecked.

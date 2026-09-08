@@ -23,6 +23,10 @@ During the definition-driven call, the agent reads a prefilled read-only order s
   schemas and grants before calling the room-owned variables process rather than storing
   authoritative values in Jido state. Complete their revision/envelope schema from the
   approved sketches.
+- Generated variable-tool keys match the finite Actions' declared names. Per-call grants
+  and schemas remain data checked by handlers, not generated modules. Inherit the initial
+  slice's unsupported-alias diagnostic until the [runtime-binding interface](../jido-tool-execution.md)
+  is available; ordinary variable tools do not depend on remote MCP integration.
 - Reads return only requested sections with revisions; any forbidden section fails the whole read without values. An authorized unpopulated section returns one `value: null`, without populating nested placeholders.
 - Object updates recursively merge and preserve omitted nested values; arrays replace. Direct-variable updates address literal schema keys. Explicit null assigns/clears only where nullable, retaining the key. Validate the entire candidate atomically; errors leave values/revisions unchanged.
 - Accept updates locally and hand off their exact full snapshot with turn/tool attribution to a bounded private archival port. A no-persistence host sink is explicit until the asynchronous-history slice; do not claim durability or wait for SQL. Already-submitted requests can finish after caller/agent termination.

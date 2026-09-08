@@ -30,6 +30,10 @@ A deterministic slow host tool starts during a call. The agent acknowledges it, 
 - Speech/text interruption stops stale conversational output and unsent work, not an already-submitted invocation. Agent transfer/room shutdown terminates owned local workers; that is not remote rollback. A request already submitted to CallVariables can finish independently.
 - Submitted timeout without definitive outcome reports unknown; pre-submission failure stays definite. No automatic executor retry for any failure, no tool read/write classification, durable worker, or explicit cancellation feature.
 - Bound worker counts, queueing, deadlines, and result handoff; acknowledge only accepted work. Preserve invocation/turn/participant attribution and the existing visibility/private-event separation.
+- Prove this slice with a finite static host Action using its declared name. The later
+  [live-MCP bridge](remote-mcp-tools.md) submits remote bindings through these same workers
+  and completion semantics; it does not move execution into Jido request-transformer or
+  interceptor hooks or require a second model/tool loop.
 
 Use this application-level workflow for every model provider, never a separate native-async
 branch. A running acknowledgement is not business success. Completion remains untrusted tool

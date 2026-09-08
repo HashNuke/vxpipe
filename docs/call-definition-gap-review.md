@@ -141,7 +141,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
-| R22 | G6 | **Resolved, with implementation gate:** use Jido MCP through the thin `vxpipe_mcp` policy wrapper; Vxpipe does not directly depend on Jido MCP's transitive client runtime. The initial profile is 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Earlier 2026 profile and custom/direct-client work are superseded. Before tenant catalogs ship, a public Jido integration must expose pinned local bindings without externally driven atom/module growth; the current proxy path is insufficient. |
+| R22 | G6 | **Resolved, with implementation gate:** use ExMCP directly through the thin `vxpipe_mcp` policy wrapper, independently of Jido's LLM loop. The initial profile remains 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Direct Jido MCP selection is superseded. Standalone protocol conformance can proceed; live tenant tools require a public Jido AI runtime-binding interface preserving exact local names/schemas and private execution without externally driven atom/module growth. |
 | R23 | G6 | **Resolved:** use a proper JSON Schema validator, baseline 2020-12, on actual outgoing arguments against pinned inputSchema before submission; reject unsupported enabled bindings before exposure, never weaken constraints or automatically fetch external refs. |
 | R24 | G6 | **Deferred:** store received responses and descriptors with observed outcomes; the agent chooses authorized next steps. Detailed result projection and document/media inspection belong to the dedicated issue, not automatic fetching or a text/JSON-only policy. |
 | R25 | G6 | **Deferred:** server-requested sampling/elicitation and related interactions belong to the dedicated issue; advertise no unimplemented capabilities, report missing capability clearly, and add no continuation/retry exception. |
@@ -1140,7 +1140,7 @@ the example HTTP webhooks, native SMS, or code tools are MCP endpoints. Keep
 those behind a remote MCP facade or an explicitly registered host tool; do not
 add arbitrary HTTP/JavaScript execution to the call-definition JSON.
 
-**Approved R22, revised by integration selection:** use `jido_mcp` for the
+**Approved R22, revised by integration selection:** use `ex_mcp` directly for the
 `2025-11-25` Streamable HTTP profile, accepting JSON and SSE.
 Follow `initialize`/`notifications/initialized`, negotiated version headers and
 optional integration/credential-scoped session IDs. Other profiles/legacy HTTP+SSE
@@ -1149,15 +1149,14 @@ clearly. This supersedes the earlier 2026 protocol selection.
 [Transport specification][mcp-http].
 
 **Approved implementation boundary:** `vxpipe_mcp` is a thin internal wrapper
-around [Jido MCP](https://hexdocs.pm/jido_mcp/readme.html), not a new JSON-RPC,
-HTTP/SSE parser or client implementation. Jido MCP owns its public client/protocol
-integration and its choice of transitive implementation; Vxpipe does not directly
-depend on or call that transitive client. The wrapper configures/supervises Jido MCP
-and normalizes integration outcomes without
-Calls/Repo/gateway/room state or tenant selection. The domain owner supplies
+around [ExMCP](https://hexdocs.pm/ex_mcp/ExMCP.Client.html), not a new JSON-RPC,
+HTTP/SSE parser or client implementation. ExMCP owns protocol/transport lifecycle
+through public APIs. The wrapper configures/supervises scoped clients and normalizes
+integration outcomes without Jido AI/Action, Calls/Repo/gateway/room state or tenant
+selection. The domain owner supplies
 resolved endpoint/private credentials/network policy/deadlines and retains grants/
-history. Missing required Jido MCP hooks block compatibility, not authorize a
-direct-client fallback or custom protocol work. Integration selection proves none
+history. Missing required ExMCP hooks block compatibility, not authorize a
+second client path or custom protocol work. Integration selection proves none
 of the security/size/deadline/conformance
 gates; validate them explicitly. Stream/session recovery must not resubmit
 `tools/call`: preserve the invocation's absolute deadline and cumulative decoded/
@@ -1165,14 +1164,16 @@ decompressed byte budget across stream resumption, progress and reconnects,
 not fresh limits per HTTP response. Test initialization both with and without a
 server-issued session ID.
 
-**Focused Jido integration review:** the reviewed public tool-sync action targets a
-running Jido AI agent, requires a trusted atom endpoint ID, and creates Action modules
-whose names vary with discovered tool definitions. Purging those modules cannot reclaim
-their atoms. This does not satisfy dynamically configured tenant catalog lifetimes. Require
-a supported public Jido data-backed or otherwise lifetime-bounded per-binding tool surface
-before implementation. Do not invoke the private proxy generator, and do not replace the
-local binding contract with the generic model-visible endpoint/tool selector Action. The
-gate blocks MCP milestones without blocking Jido AI platform tools.
+**Released-package follow-up:** Jido AI owns successive LLM/tool rounds independently
+of the chosen MCP client. It currently accepts Action modules rather than runtime data
+descriptors and loses registry aliases in model projection. Require a supported public
+Jido AI per-binding schema/executor interface before live tenant tools ship; exact names,
+schemas and private selectors are not optional. No generated tenant modules/atoms, private
+proxy APIs, generic model-visible endpoint/tool dispatcher or custom replacement LLM loop.
+Standalone ExMCP conformance is independent. Early static Actions use matching local keys
+and reject unsupported aliases without changing the final definition contract. Direct
+Jido MCP and unreleased Jido Connect are not selected. See the
+[decision and runtime evidence](jido-tool-execution.md).
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 and [lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
 and pinned [client conformance harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
@@ -1769,7 +1770,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Omit visibility, apply the documented override map, then create a full-visibility sample call | Omission hides events; reception lookup_order is metadata and create_booking is full while unlisted bindings inherit hidden; trusted sample creation replaces the policy pair with full and no overrides, a hidden effective override still wins over a full default, and browsers cannot upgrade the pinned policy |
 | Hide client tool events, then select metadata/full client visibility | Every call stores the same complete observed invocation metadata, arguments/request payloads, and responses/results/errors; client projections alone differ; no tool-storage opt-in or metadata-only storage mode exists, credentials/authorization headers remain excluded, and unknown outcomes do not invent remote results |
 | Archive a text-only call, interrupted agent speech, unavailable usage, and calls with/without permitted recording | Save permitted available facts with honest provenance/usage; explicit transcript/audio retention is independent from live sharing under R38, not inferred recognition shutdown, and tool/variable/usage requirements stay intact; audio requires enabled/permitted recording and the opening input gate |
-| Exercise Jido MCP against the selected remote revision with JSON/SSE and invalid tool arguments | 2025-11-25 initialization succeeds with/without optional scoped session IDs; negotiated headers precede tool use, incompatible profiles fail clearly; reconnect/progress/stream resumption cannot replay tools/call or reset its absolute deadline/cumulative decoded-byte budget; a proper validator blocks required/type/enum/nested violations before submission and rejects unsupported bindings without network ref fetching |
+| Exercise ExMCP against the selected remote revision with JSON/SSE and invalid tool arguments | 2025-11-25 initialization succeeds with/without optional scoped session IDs; negotiated headers precede tool use, incompatible profiles fail clearly; reconnect/progress/stream resumption cannot replay tools/call or reset its absolute deadline/cumulative decoded-byte budget; a proper validator blocks required/type/enum/nested violations before submission and rejects unsupported bindings without network ref fetching |
 | Receive structured data, a document descriptor, or an unsupported sampling/elicitation request | Preserve observed response/outcome without auto-fetching or claiming inspection; unauthorized tools remain unavailable; advertise no unimplemented sampling/elicitation capability, report its absence clearly, and do not silently invoke models/participants or resubmit tools/call |
 | Update variables twice while holding PostgreSQL persistence behind a barrier | Both tools succeed after local acceptance/handoff and reads see current memory; each event carries its exact full snapshot and original turn/tool/revisions; durable pointer may lag until asynchronous persistence, without a changeset |
 | Fail a snapshot transaction, duplicate delivery, and deliver older revisions later | Storage failure does not undo memory/tool success or fail the room; snapshot/pointer writes remain one PostgreSQL transaction, duplicate history and cross-call/regressing pointers are prevented, older valid history need not become latest, and snapshots remain private |

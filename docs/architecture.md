@@ -197,11 +197,11 @@ observation. This does not introduce call-level locale/timezone fields, a defaul
 hierarchy, or a frozen new tool name/schema. It changes neither authoritative
 call timestamps nor the trusted destination-resolution boundary described below.
 
-The selected remote MCP integration surface is
-[Jido MCP](https://hexdocs.pm/jido_mcp/readme.html). Vxpipe depends on `jido_mcp`
-directly and does not depend on the protocol/transport library that Jido MCP uses
-internally. That transitive implementation may change without changing this
-architecture. Target MCP `2025-11-25` Streamable HTTP with JSON and SSE responses.
+The selected remote MCP client is [ExMCP](https://hexdocs.pm/ex_mcp/ExMCP.Client.html),
+used directly behind `vxpipe_mcp`. This supersedes direct Jido MCP selection; neither
+`jido_mcp` nor unreleased Jido Connect is required. Jido AI still owns the model/tool
+loop, independently of MCP transport. See the [loop/tool-binding decision](jido-tool-execution.md).
+Target MCP `2025-11-25` Streamable HTTP with JSON and SSE responses.
 Initialization uses `initialize` followed by `notifications/initialized`; subsequent
 requests carry the negotiated `MCP-Protocol-Version`. Handle optional
 `MCP-Session-Id` values only within their resolved integration/credential boundary.
@@ -210,16 +210,16 @@ or legacy HTTP+SSE. [Lifecycle](https://modelcontextprotocol.io/specification/20
 [transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
 
 Keep `vxpipe_mcp` as a thin internal Mix library/umbrella-child policy wrapper around
-Jido MCP, not a custom JSON-RPC/HTTP/SSE client or parser. Use Jido MCP's public
-discovery/invocation API and Jido Action/Jido AI integration rather than private or
-transitive client APIs. The wrapper owns configured supervision and Vxpipe-facing
-policy/result mapping, with no Calls/Repo/gateway/room or tenant-selection dependency.
+ExMCP, not a custom JSON-RPC/HTTP/SSE client or parser. Use ExMCP's public client
+discovery/invocation APIs. The wrapper owns configured supervision, scoped client reuse
+and Vxpipe-facing policy/result mapping, with no Jido AI/Action, Calls/Repo/gateway/room
+or tenant-selection dependency. The engine-side tool bridge owns model exposure.
 The domain owner supplies resolved endpoint, private credentials, authorized network
 policy and deadlines, retaining agent grants, bindings and call history. Missing
-required Jido MCP hooks are a compatibility blocker to report, not permission to add
-a direct transitive-client fallback or replacement protocol support. No public MCP
+required ExMCP hooks are a compatibility blocker to report, not permission to add
+a second client path or replacement protocol support. No public MCP
 server is in scope. Dependency selection does not prove security, response limits,
-timeouts or conformance: test the effective public Jido MCP path before enabling it.
+timeouts or conformance: test the effective public ExMCP path before enabling it.
 Stream/session recovery must never silently resubmit `tools/call` or bypass invocation
 deadlines. The same invocation retains one absolute deadline and cumulative decoded/
 decompressed response budget across stream resumption, progress and reconnects;
@@ -227,15 +227,17 @@ neither resets for a new HTTP response. Verify initialization with and without a
 server-issued session ID. No dependency or runtime adapter has been installed by this
 design decision.
 
-The currently reviewed public Jido MCP synchronization path is not suitable for dynamic
-tenant catalogs yet: it requires a trusted atom endpoint ID and creates Action modules whose
-names vary with discovered endpoint/tool/schema definitions. Removing module code does not
-remove its atom. Before MCP implementation, require a supported public Jido mechanism that
-exposes each enabled local binding and pinned schema without atom/module growth driven by
-tenant reconfiguration. Do not call the private proxy generator or expose the generic
-endpoint/tool selector action to the model; neither preserves this architecture's safety and
-per-binding authority contract. This blocks the MCP milestones, not the earlier Jido agent,
-platform-tool, or Call Variables work.
+Jido AI's current public tool registry expects Action modules and regenerates model
+schemas from them after request transformation. It also loses configured registry aliases
+in model projection. Direct ExMCP does not fix this separate model-tool interface gap.
+Before live-MCP integration ships, require a supported public Jido runtime data-tool
+projection/executor interface that preserves each local name/pinned schema and private
+execution binding without externally driven atom/module creation. Static Actions and
+remote tools must share the Jido-owned loop; do not implement another ReqLLM loop or use
+a generic model-visible endpoint/tool selector. The standalone ExMCP conformance milestone
+can proceed independently. Early platform-tool slices explicitly accept only local keys
+matching their finite Action names until the extension exists; unsupported aliases fail
+before startup. The final call-definition alias contract is unchanged.
 
 The [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 is authoritative. Validate the client using pinned compatible versions of the

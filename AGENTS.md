@@ -181,8 +181,8 @@ proportionate checks when it changes generated configuration.
 
 ### Model Context Protocol
 
-- [Jido MCP documentation](https://hexdocs.pm/jido_mcp/readme.html)
-- [Jido MCP package](https://hex.pm/packages/jido_mcp)
+- [ExMCP client documentation](https://hexdocs.pm/ex_mcp/ExMCP.Client.html)
+- [ExMCP package](https://hex.pm/packages/ex_mcp)
 - [Approved protocol profile](https://modelcontextprotocol.io/specification/2025-11-25)
 - [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
 - [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)

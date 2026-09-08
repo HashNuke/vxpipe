@@ -12,6 +12,11 @@ No runtime dependency was added during this research checkpoint. A subsequent
 planning update selected the Jido-based boundaries described below and updated the
 durable architecture and milestone specifications; implementation is still pending.
 
+Latest follow-up: keep Jido AI's LLM/tool loop, select ExMCP directly behind
+`vxpipe_mcp`, and require a public Jido runtime-tool interface extension before live
+tenant MCP tools ship. The earlier direct Jido MCP and wait-for-Connect recommendations
+below are historical. See [the durable decision](../docs/jido-tool-execution.md).
+
 ## Finding
 
 The strongest fit is a hybrid:
@@ -25,9 +30,9 @@ The strongest fit is a hybrid:
    lifecycle.
 3. Represent platform-owned agent tools with Jido Action while their handlers
    still call Vxpipe-owned processes and enforce Vxpipe permissions.
-4. Use Jido MCP as the remote MCP integration surface behind a thin Vxpipe policy
-   boundary. Treat Jido MCP's transitive client/transport dependencies as its internal
-   implementation detail rather than a Vxpipe architecture choice.
+4. Use ExMCP directly behind the thin `vxpipe_mcp` policy boundary for remote protocol
+   work. Keep the engine-side Jido model-tool bridge separate; dynamic names/schemas
+   require a supported public Jido extension, not a custom LLM loop.
 5. Keep long-running tool work under Vxpipe supervision. A Jido action can submit
    such work and return immediately; the remote operation must not occupy the
    ordinary ReAct loop for its full duration.
@@ -68,6 +73,8 @@ The stable package lines reviewed were:
 Vxpipe currently uses ReqLLM 1.22.0. That version is within Jido AI 2.3.0's
 declared ReqLLM range, but dependency resolution and behavior still need to be
 verified in the umbrella.
+The later isolated probe resolved and ran these stable Jido AI/Action versions with
+ReqLLM 1.22.0 and ExMCP 1.3.0; umbrella integration remains unverified.
 
 ### ReAct runtime and AgentServer
 
@@ -94,6 +101,8 @@ fit only when it replaces the current per-agent inference process. Vxpipe's
 participant supervisor owns its start, readiness and termination; Jido owns the
 contained conversation/request/tool runtime. It never becomes the participant or
 room authority. Standalone ReAct remains useful for isolated adapter tests.
+After selecting ExMCP directly, the AgentServer remains the chosen supervised inference
+boundary, but no longer for compatibility with Jido MCP's synchronization API.
 
 ### Jido Action
 
@@ -126,10 +135,10 @@ Vxpipe room and participant supervision
   -> Vxpipe agent-loop adapter
        -> one Jido.AI.Agent/AgentServer per active agent participant
             -> ReqLLM provider access
-            -> Jido Actions
-                 -> Vxpipe variable and transfer APIs
-                 -> Vxpipe remote-MCP boundary
-                      -> Jido MCP
+            -> static Jido Actions -> Vxpipe variable and transfer APIs
+            -> required public runtime-tool interface (not available yet)
+                 -> Vxpipe private binding/background worker
+                      -> vxpipe_mcp -> ExMCP public client
 ```
 
 The Vxpipe adapter would translate between Jido events and engine events. It must
@@ -150,7 +159,7 @@ remain responsible for:
 | Repeated LLM/tool calls | Strong: the AgentServer-backed ReAct strategy implements the loop | Model profile selection, call pinning, turn serialization, event projection |
 | Streaming model output | Strong: the runtime emits a normalized event stream | Sentence/audio pacing and interruption |
 | Static platform tools | Strong: Jido Action describes and executes them | Authorization and calls to room-owned processes |
-| Dynamic remote MCP tools | Blocked with the reviewed proxy sync because external catalogs drive atom/module creation | Tenant catalog, credentials, pinning, network policy and a safe public Jido tool surface |
+| Dynamic remote MCP tools | Requires a public runtime descriptor/executor interface; current Action-module registry is insufficient | Tenant catalog, credentials, pinning, network policy and private tool binding |
 | Tool timeout and cancellation | Useful primitives exist | Per-tool semantics and distinction between speech interruption and operation cancellation |
 | Tool retry | Mechanism exists | Configure zero automatic retries by policy |
 | Long-running background tools | Partial: a normal ReAct run waits for tool results | Submission, supervision, late completion, and continued conversation |
@@ -215,7 +224,10 @@ This preserves prior decisions:
 - the source system remains authoritative when a timeout leaves an outcome
   unknown.
 
-## Jido MCP decision
+## Earlier Jido MCP decision — superseded
+
+Historical checkpoint: the later released-package investigation selects direct ExMCP
+for the protocol layer. Preserve the observations below, not the old dependency mandate.
 
 The released Jido MCP package is directly relevant rather than merely a generic
 action wrapper. It pools remote clients, discovers remote tools, can call them
@@ -276,8 +288,8 @@ external atom/module growth. This does not block Jido AI for platform tools.
 This preserves complete control and has the smallest dependency change, but it
 leaves Vxpipe maintaining a generic model/tool loop, event normalization, usage
 collection, tool concurrency, and context projection that Jido already provides.
-It remains the fallback if Jido cannot preserve voice interruption and per-call
-tool semantics.
+The current decision is to extend the missing public tool interface while preserving
+Jido's loop, not to rebuild this loop merely because MCP glue is missing.
 
 ### Adopt Jido AgentServer as the whole agent participant
 
@@ -287,9 +299,10 @@ AgentServer as the participant subtree's inference child only.
 
 ### Use standalone ReAct plus Jido Action in production
 
-Rejected after follow-up review. It preserves Vxpipe process boundaries but does not
-compose with Jido MCP's public agent tool-sync API. Standalone ReAct remains useful
-for deterministic adapter tests, not as a second production runtime.
+The earlier rejection relied on Jido MCP's public agent tool-sync API. That dependency
+is now superseded; the retained AgentServer choice provides the per-activation supervised
+request boundary. Standalone ReAct remains useful for deterministic adapter tests,
+not as a second production runtime. Both share the module-backed tool limitation.
 
 ### Use a supervised Jido agent as the inference child
 
@@ -350,24 +363,200 @@ Adopt Jido AI for the agent loop if the spike proves that:
 - replacing the current inner loop removes more custom machinery than the
   adapter introduces.
 
-Use Jido MCP behind the Vxpipe MCP boundary and require the separate MCP checks before
-claiming that milestone complete. A failed gate is a concrete Jido MCP integration
-blocker to resolve; it is not permission to add a direct transitive-client fallback.
+Use ExMCP behind the Vxpipe MCP boundary and require the separate MCP checks before
+claiming that milestone complete. A failed gate is a concrete ExMCP integration
+blocker to resolve; it is not permission to add a second client or custom parser.
 That blocker would not prevent using Jido AI and Jido Action for the rest of the
 agent loop.
 
 ## Decision status
 
-Selected for the milestone plan after follow-up review: one supervised Jido AI
-AgentServer per active agent participant, Jido Action for agent-visible tools, and
-Jido MCP behind the thin Vxpipe MCP policy boundary. The milestone count and order
+Selected for the milestone plan after the released-package follow-up: one supervised Jido AI
+AgentServer per active agent participant, Jido Action for finite static tools, and
+ExMCP behind the thin Vxpipe MCP policy boundary. The milestone count and order
 remain unchanged. No runtime dependency or implementation has been added yet. The
-five affected specifications have completed focused review; the MCP specifications
-retain the explicit dynamic tenant-tool blocker above.
+earlier focused reviews are retained as history. The live-MCP specification owns the
+runtime-tool interface blocker; the protocol-only checkpoint can proceed independently.
+
+## Jido Connect replacement investigation
+
+Follow-up research on 2026-09-08 compared the current Jido Connect default branch
+and its open replacement pull request with Vxpipe's MCP requirements.
+
+### Released/current state
+
+Jido Connect is not currently a usable replacement dependency:
+
+- Default-branch revision `02cb6cbdc3e720922b7c3805e8ecdebb6e60461c`
+  describes repository version `0.8.0`, but the packages are not published on Hex.
+- Its separate `jido_connect_mcp` application still depends on `jido_mcp` and
+  delegates MCP transport, protocol, client registration, discovery, and calls to
+  it. Depending on this version would retain the dependency being evaluated for
+  replacement.
+- The default-branch bridge does add Connect-owned connection policy, credential
+  leases, endpoint-generation fencing, schema fingerprints, normalized errors,
+  and uncertain-write classification. Those are useful higher-level controls, not
+  an independent MCP client implementation.
+
+### Proposed successor state
+
+[Jido Connect issue 69](https://github.com/agentjido/jido_connect/issues/69) and
+[its bridge issue](https://github.com/agentjido/jido_connect/issues/71) define a
+more precise successor:
+
+- ExMCP owns protocol, transport, and client behavior.
+- Core Jido Connect owns only `mcp.tools.list` and `mcp.tool.call` plus its
+  connection, authorization, and safety contracts.
+- The separate unpublished `jido_connect_mcp` application is removed.
+- MCP resources, prompts, server publication, a general endpoint pool, and dynamic
+  Jido AI proxy Actions deliberately do not move to Connect.
+
+Open pull request
+[75](https://github.com/agentjido/jido_connect/pull/75), inspected at head
+`8880808d88918c1774ec147ff31d7fe15d244d34`, implements that proposed shape as
+core `jido_connect` `0.9.0` over ExMCP `~> 1.0`. Its GitHub quality check passed.
+It is nevertheless unmerged, currently conflicts with its base branch, and has no
+published Hex release. Its final commit also moves Connect to a Jido Action v3 beta
+pin, whereas the stable Jido AI line evaluated above uses Jido Action v2; coexistence
+with the selected agent runtime has not been demonstrated.
+
+### What Vxpipe could reuse
+
+The proposed core bridge contains several boundaries that closely match Vxpipe:
+
+- host-owned durable connections and storage-free, short-lived credential leases;
+- tenant/actor ownership metadata, scopes, host policy callbacks, and safe
+  credential inspection;
+- public string endpoint IDs kept separate from supervised ExMCP client references;
+- either host-supervised clients or one connection-generation-scoped client whose
+  lifecycle drains and stops after rotation, revocation, expiry, or removal;
+- connection revision, credential version, and monotonic generation fences;
+- remote schema hashes, live schema re-checks, and rejection when the selected
+  schema has changed;
+- disabled retry for tool calls and explicit `sent_outcome_unknown` classification;
+- normalized and sanitized result/error envelopes;
+- prepare/commit mechanics, expiring secret-free snapshots, confirmation metadata,
+  and host-owned one-use execution claims for sensitive mutations;
+- deterministic catalog metadata, restrictive packs, stable fingerprints, and
+  schema-rich `Catalog.Item` values for statically authored Connect integrations.
+
+These could remove meaningful custom code from endpoint credential lifecycle,
+authorization, schema-drift fencing, and uncertain-write handling.
+
+### What it does not replace for Vxpipe
+
+The proposed bridge does not solve Vxpipe's agent-visible dynamic tool contract:
+
+- It exposes two static Connect operations. Discovered remote tools remain result
+  data from `mcp.tools.list`; the bridge does not create one `Catalog.Item` or one
+  Jido Action per remote tool.
+- Connect explicitly rejects the generic MCP list/call operations from a reviewed
+  catalog pack. Its catalog packs therefore cannot directly represent Vxpipe's
+  per-agent allowlist of arbitrary tenant-discovered remote tools.
+- `mcp.tool.call` still accepts model-sensitive `endpoint_id`, `tool_name`, and a
+  generic `arguments` map. Exposing it directly would violate Vxpipe's local alias,
+  private endpoint selection, and exact per-tool input-schema boundary.
+- The generic operation classifies every remote call as an external write requiring
+  AI confirmation. MCP discovery does not reliably say whether a tool is a read or
+  mutation, so Vxpipe still needs its own enabled-tool policy and execution semantics.
+- The reviewed code compares pinned and live schemas but does not establish
+  Vxpipe's required JSON Schema 2020-12 validation of the actual outgoing arguments.
+- It performs one `tools/list` call rather than Vxpipe's bounded whole-pagination
+  discovery contract.
+- It defaults to MCP `2025-06-18`; compatibility and conformance with Vxpipe's
+  selected `2025-11-25` profile are not demonstrated.
+- It has no demonstrated cumulative decoded/decompressed response-size enforcement,
+  redirect/DNS-rebinding/private-address policy, or the full deadline model required
+  by the MCP milestones.
+- It does not own call-plan pinning, background operation supervision, result
+  projection, client visibility, persistence, room-incarnation checks, or the
+  application/tenant precedence rules.
+
+The safe composition would keep every enabled remote tool as a Vxpipe data
+descriptor with its local alias and exact pinned schema. `Vxpipe.Tool.Executor`
+would resolve that private binding and invoke Jido Connect's static MCP bridge
+internally. The model would never receive the bridge's endpoint or remote tool
+selectors. This avoids externally driven atom/module creation but also means Jido
+Connect is not the missing dynamic Jido AI Action surface.
+
+### Earlier Connect recommendation — superseded by the released-package follow-up
+
+Do not adopt the current default-branch `jido_connect_mcp`, because it still uses
+Jido MCP. Do not pin Vxpipe to the unmerged replacement pull request. Re-evaluate a
+published, stable core Jido Connect release after it lands, then run a focused spike
+against Vxpipe's protocol revision, dynamic data-tool, argument-validation,
+transport-security, response-limit, and Jido AI dependency gates.
+
+If that release passes, use core Jido Connect for the narrow list/call and
+connection-safety layer, use its ExMCP dependency only through Connect's public API,
+and keep Vxpipe's data-backed model tool catalog and call-specific policy boundary.
+If it fails those gates or remains unavailable when implementation begins, use
+ExMCP behind `vxpipe_mcp` directly rather than adopting a maintenance-bound package.
+At this historical checkpoint the milestones had not changed. The subsequent requested
+investigation below selects ExMCP now and updates them coherently; a stable future
+Connect release can be reconsidered without making its release a prerequisite.
+
+## Released-package loop and tool-interface investigation
+
+The user asked whether Jido would still own the LLM loop with a direct MCP client and
+requested appropriate milestone corrections. Reused this research labnote rather than
+opening a second task log.
+
+- Installed Jido AI 2.3.0, Jido Action 2.3.2, ReqLLM 1.22.0 and ExMCP 1.3.0 together
+  in an isolated `Mix.install` probe, outside the umbrella. Dependency resolution,
+  compilation and application startup succeeded under Elixir 1.19.5. No repository
+  dependency or lockfile changed.
+- Ran five deterministic ExUnit compatibility checks: **5 tests, 0 failures**. The
+  positive control scripted two successive model-requested Action calls followed by
+  a final answer, proving Jido performs the repeated loop without Vxpipe orchestration
+  of those rounds. Both instrumented Action executions were observed.
+- Negative controls confirmed runtime descriptors and `ReqLLM.Tool` callback values
+  are rejected by tool selection. A registry alias is lost in model projection, and
+  two aliases of one Action raise duplicate tool names. The dependency version
+  combination is usable; exact dynamic model-tool exposure is not plug-and-play.
+- Inspected released `ToolAdapter`, `ToolSelection`, `Config` and `Runner`, then checked
+  current-main request transformation/interception. The runner normalizes Action-module
+  selection and regenerates `llm_opts[:tools]` after the transformer. The current-main
+  interceptor can change arguments, not select an alternate executor, and is reached
+  only after Action resolution. That newer hook is not in the tested 2.3.0 release.
+- The required extension is a public runtime descriptor/projection and private execution
+  binding interface inside Jido's existing loop. Prefer upstream support. No private
+  monkey-patch, fork, upstream issue/PR or replacement loop was created/authorized.
+- ExMCP 1.3.0 documents public client discovery/invocation and an explicit legacy-only
+  `2025-11-25` transport profile. Its retry/stream-reissue policies and bundled validator
+  still require verification against our no-resubmission and 2020-12 validation rules;
+  a dependency resolution probe is not a transport conformance result.
+- Updated the existing 21-milestone plan without renaming filenames or reordering it.
+  The protocol-only MCP checkpoint no longer depends on Jido or dynamic model exposure.
+  Live MCP owns the public runtime-tool interface gate. Early static-tool slices reject
+  aliases differing from Action names until that interface exists; the final definition
+  alias contract remains intact. Streaming/AgentServer integration is still unimplemented.
+- Synchronized architecture, decision register, original call-definition labnote and
+  dependency documentation links. Existing protocol, security, background-worker,
+  visibility and privacy requirements remain; no implementation checkbox was checked.
+
+The initial probe invocation from a temporary working directory could not find the
+project-selected Elixir runtime. Running through the project shell activated it and
+completed the five checks. Source inspection and failed workarounds are recorded in
+[the focused decision](../docs/jido-tool-execution.md); no credentials or live services
+were used. Repository documentation verification is recorded at completion below.
+
+Completion verification for this follow-up:
+
+- `git diff --check` passed.
+- All 128 relative file links and 39 heading links in the 13 changed/new Markdown
+  documents resolved. The index maps exactly to 21 distinct milestone files.
+- Fenced examples in the architecture, decision register and original call-definition
+  labnote are unchanged from the committed baseline. Research terminology checks passed.
+- Reviewed the dependency-selection and prerequisite diffs: protocol/security gates and
+  background/visibility contracts remain; no milestone implementation box was completed.
+- The isolated compatibility probe passed five checks. No umbrella, browser, live-provider
+  or MCP-conformance tests were run: this is a documentation/research checkpoint, not an
+  application dependency change or a shipped integration.
 
 ## Verification evidence
 
-### Milestone-plan update
+### Earlier milestone-plan update
 
 - Kept the existing 21 milestone files and ordering rather than adding a horizontal
   dependency-adoption milestone.
@@ -442,6 +631,23 @@ Follow-up documentation verification:
 - No runtime, browser, provider, conformance, or umbrella test was run because this
   checkpoint changes documentation only.
 
+### Jido Connect follow-up
+
+- Inspected default-branch Jido Connect revision
+  `02cb6cbdc3e720922b7c3805e8ecdebb6e60461c`, including the core catalog,
+  generated-module, authorization, credential-lease, MCP bridge, endpoint lease,
+  schema compatibility, and runtime paths.
+- Inspected the migration issues and open pull request 75 at
+  `8880808d88918c1774ec147ff31d7fe15d244d34`, including the core ExMCP adapter,
+  connection-scoped client lifecycle, bridge guide, dependency graph, tests, and
+  recorded release checks.
+- Confirmed through the Hex API that `jido_connect` has no published package, and
+  through the GitHub API that pull request 75 remains open with a merge conflict;
+  its recorded quality check succeeded.
+- Compared the proposed bridge with Vxpipe's existing standalone and live MCP
+  milestone gates. No dependency was added and no runtime/conformance claim was
+  made.
+
 Primary package and project references:
 
 - [Jido AI package dependencies](https://hex.pm/packages/jido_ai/2.3.0/dependencies)
@@ -461,3 +667,8 @@ Primary package and project references:
 - [Reviewed Jido MCP proxy source](https://github.com/agentjido/jido_mcp/blob/627251e46db19387c6404f1a04e4e4207be74f98/lib/jido_mcp/jido_ai/proxy_generator.ex)
 - [Reviewed Jido MCP generic call Action](https://github.com/agentjido/jido_mcp/blob/627251e46db19387c6404f1a04e4e4207be74f98/lib/jido_mcp/actions/call_tool.ex)
 - [Jido agent runtime](https://jido.run/docs/concepts/agent-runtime)
+- [Jido Connect repository](https://github.com/agentjido/jido_connect)
+- [Jido Connect migration issue](https://github.com/agentjido/jido_connect/issues/69)
+- [Jido Connect ExMCP bridge issue](https://github.com/agentjido/jido_connect/issues/71)
+- [Jido Connect replacement pull request](https://github.com/agentjido/jido_connect/pull/75)
+- [Jido MCP maintenance issue](https://github.com/agentjido/jido_mcp/issues/52)
