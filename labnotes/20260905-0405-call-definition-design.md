@@ -109,7 +109,7 @@ greetings are approved, as is source-agent responsibility until committed
 handoff and failure return to that agent. R01–R05 from the latest review batch
 are resolved. Same-call caller reconnection (R07) is deferred; replacement tokens
 for eligible unstarted records remain supported. The focused gap review now lists
-8 individual decisions still awaiting review, rather than counting its
+7 individual decisions still awaiting review, rather than counting its
 background groups. R06 is resolved: another token does not supersede unused ones.
 R08 now uses one prepare/token/join flow for all API clients; removing direct
 WebSocket initialization supersedes R09's setup-limit question. Optional
@@ -3989,9 +3989,10 @@ Billing schema, API/credential details, dependencies, and provider implementatio
 are not chosen here. No fallback price/catalog calculation is adopted under R46.
 
 Ordinary usage archival remains asynchronous, not a new transaction acknowledgement
-gate like variable snapshots. R41–R43 still own archive overflow, export revision,
-and finalization policy. All permitted-data/media restrictions and whole-call
-retention remain; optional billing cannot recreate data already purged.
+gate like variable snapshots. R41/R42 archive overflow and exact publication identity
+remain pending; R43 approves the reporting window below, not those mechanisms.
+All permitted-data/media restrictions and whole-call retention remain; optional
+billing cannot recreate data already purged.
 
 The current model provider boundary returns only text/tool calls/errors, so it
 cannot carry usage. The current ReqLLM adapter classifies the final response and
@@ -4100,8 +4101,8 @@ application/tenant retention period, not a participant-specific period.
 
 `CallDetailsPublisher` is a good name for the post-call boundary if its job is
 narrow: after a terminal call state, read persisted call facts and finalized
-artifact manifests, construct a versioned JSON document, store it in object
-storage, and record its checksum/object reference. It should not own the live
+or still-incomplete artifact manifests, construct a versioned JSON document, store
+it in object storage, and record its checksum/object reference. It should not own the live
 transcript, usage counters, variables, or audio buffers.
 
 The versioned call-details JSON can contain:
@@ -4119,12 +4120,30 @@ The versioned call-details JSON can contain:
 - separate-track, recorded live-mix, optional remixed-audio, and other artifact
   references with checksums and completeness state.
 
-Publishing is an idempotent outbox-driven job keyed by call ID and archive schema
-version. It runs outside the room process and retries safely. Required artifacts
-may keep the publication in `pending` or `incomplete`; failure to build the final
-JSON does not erase the underlying call ledger. Prefer immutable versioned
-objects over overwriting one key when late usage reconciliation or artifact
-repair requires a new publication.
+R43 approves finalization outside the call room with a configurable 60-second
+waiting window from call end. Publish earlier when all expected work has settled;
+at the deadline publish the available permitted facts with explicit pending,
+failed, or missing components instead of indefinitely waiting for uploads or usage.
+Unknown cost is not zero. Intentionally prohibited, unconfigured, or not-produced
+media is not accidental loss or incomplete capture; expected work that has not
+succeeded must remain distinguishable.
+
+This window is a reporting wait only. It neither extends the live call nor changes
+`ended_at` or retention, and it does not cancel outstanding uploads, provider work,
+or permitted asynchronous cost lookup. Background work can outlive the room.
+Database/object-store unavailability may prevent publication: retain/retry
+appropriate publication state without falsely claiming published or complete at
+the deadline. Failure to build the JSON does not erase the underlying ledger.
+R41's archive overflow/durability choice remains pending.
+
+Later facts can trigger refreshed publication or a new revision. The earlier
+call-ID/archive-schema job-key proposal is not the settled publication contract:
+R42 still owns exact identity, schema/version, object naming, and retry semantics.
+No revision-key, immutable-object, or latest-pointer mechanism is frozen here.
+Known call-owned jobs and references must honor retention deletion and the source-
+interval privacy boundary; late work cannot recreate purged data or capture/copy
+denied intervals. The 60-second duration is configurable and can be revisited;
+no new configuration key/hierarchy or runtime implementation is selected here.
 
 ### Umbrella application and Ecto boundaries
 
@@ -4373,17 +4392,20 @@ nor make asynchronous events lossless. Do not execute Ecto queries inside
 7. **STT/TTS/telephony usage:** retain honest participant/service-interval or
    call-scoped evidence and real provider IDs, with turn links only when supported.
    Exercise optional asynchronous supported billing lookup outside the room and
-   preserve unavailable cost; do not choose R46 pricing fallback or R41–R43 guarantees.
+   preserve unavailable cost; do not choose R46 pricing fallback or R41/R42 guarantees.
 8. **Live mixing and recording:** add a bounded room mixer with two fake
    participant inputs, mix-minus outputs, and a full silent-monitor output. Then
    attach the recording capability to one participant track and the live full
    mix, proving object-store slowdown cannot block mixer progress. Extend to
    rolling upload, timing manifests, multiple tracks, artifact rows, and explicit
    incomplete status.
-9. **Call-details publication:** on a terminal call, enqueue one idempotent job,
-   assemble versioned JSON from the persisted projections, include artifact
-   checksums/status, upload it, and record publication success. Prove retries do
-   not duplicate call, usage, or artifact records.
+9. **Call-details publication:** finalize outside the room after call end, using
+   the configurable 60-second window with early publication when expected work
+   settles. Include available permitted projections/artifact status and honest
+   pending/missing markers without extending the call or cancelling work. Storage
+   failure cannot become false publication success. Later facts may refresh the
+   publication; exact revision identity/retry mechanics await R42. Keep R41 overflow
+   policy separate and enforce retention/source-interval privacy on late work.
 
 The smallest useful database vertical slice is checkpoints 1 through 3. It
 answers the inbound number-to-definition question and pins a durable call record
@@ -4636,8 +4658,8 @@ Detailed reasoning and evidence live in the
 
 ### Remaining review count — 2026-09-08
 
-There are **8 individual decisions awaiting review**, enumerated as R41–R43 and R46–R50
-in the focused gap review. R01–R06, R08, R10–R15, R17–R23, R26–R40, and R44/R45 are resolved;
+There are **7 individual decisions awaiting review**, enumerated as R41, R42, and R46–R50
+in the focused gap review. R01–R06, R08, R10–R15, R17–R23, R26–R40, and R43–R45 are resolved;
 R07's caller reconnection, R16's retry exceptions, and R24/R25 are deferred; R09's setup limits are
 superseded. All retain their IDs. Additional tokens do not supersede unused ones,
 and initial variables already belong to creation. Personalization/time context
@@ -4660,7 +4682,8 @@ for unstarted records. R32's machine-disconnect policy is resolved; leaving
 voicemail moves to a deferred issue. R37's bounded private briefing is approved;
 its media representation and commit boundary are resolved by R38.
 R44/R45's accounting/attribution choices are resolved; pricing remains R46.
-The next five are R41–R43 and R46–R47.
+R43's outside-room reporting window is resolved; R41 overflow and R42 publication
+identity/retry details remain pending. The next five are R41, R42, and R46–R48.
 
 ### Baseline and scope
 
@@ -4950,13 +4973,17 @@ The numbering below matches G1–G13 in the focused review document.
     and bookkeeping may identify an existing room/leg, never restart a crashed
     call. Mark uncertain dial outcomes failed/unknown as appropriate and clean
     known resources without speculative redial or remote rollback promises.
-11. **Archive completeness and finalization:** specify bounded per-consumer
-    overflow behavior and explicit incomplete state. Current typed-input events
-    lack the submitted text needed to reconstruct a transcript. Call end,
+11. **Archive completeness and finalization — R43 resolved, R41/R42 pending:**
+    overflow behavior and exact publication identity/retry design still need review.
+    Current typed-input events lack the submitted text needed to reconstruct a
+    transcript. Call end,
     operation settlement, artifact completion, and publication are distinct.
-    Consider publication revisions and source watermarks, not only a call/schema
-    job key, so late corrections can produce another immutable export. Retain
-    engine-side live mixing/recording with external upload workers; upload is not
+    Finalize outside the room with a configurable 60-second post-end window;
+    publish early if expected work settles, otherwise available permitted data
+    with honest pending/missing markers. Later facts may refresh publication, but
+    revision/watermark/object mechanisms remain R42 proposals. Do not extend the
+    call, cancel late work, reset retention, or claim publication during an outage.
+    Retain engine-side live mixing/recording with external upload workers; upload is not
     a live monitoring feed. Distinguish sent from device-confirmed audio.
 12. **Usage settlement — R44/R45 resolved, R46 pending:** preserve observations and
     effective attempt/component usage. Distinguish delta/cumulative mode from
@@ -5182,8 +5209,8 @@ playground today. Use deterministic fakes first and synthetic data throughout.
    bookkeeping only; never repeat a crashed call or redial an uncertain leg.
 10. Send typed input, interrupt generated output, end the call, and deliver late
     usage/artifact updates. Verify honest transcript provenance, no double-counted
-    costs, and explicit missing data. Corrected-export revision and finalization
-    assertions await R42/R43; usage settlement alone does not approve them.
+    costs, and explicit missing data. Finalization follows R43's reporting window
+    and planned check 42 below; exact corrected-export/retry mechanics await R42.
 11. Exercise the approved web route shapes with synthetic tenant keys, participant
     keys, and call IDs. Preparation stores a call in the selected tenant; joining
     requires that tenant's call and an authorized participant from its pinned
@@ -5470,7 +5497,21 @@ playground today. Use deterministic fakes first and synthetic data throughout.
     With a fake optional billing adapter, fetch available cost after room end without
     blocking media or resetting `ended_at`/retention. Unsupported billing or missing
     cost stays unavailable; later jobs cannot recreate purged data. Leave R46 pricing
-    and R41–R43 archive/finalization choices unimplemented. These are planned checks.
+    and R41/R42 archive overflow/revision choices unimplemented. These are planned checks.
+42. End one call with all expected work settled and another with uploads/usage
+    pending. Verify outside-room publication happens early for settled work or
+    at the configurable 60-second post-end deadline with available permitted
+    facts and explicit pending/failed/missing components. Unknown cost is not zero;
+    prohibited, unconfigured, or not-produced media is not accidental missing capture.
+    Let the room terminate while allowed background work continues. The reporting
+    wait must not extend the call, reset `ended_at`/retention, or cancel uploads,
+    providers, or permitted cost lookup. Later facts can refresh publication, but
+    R42's exact identity/version/retry design is not asserted before approval.
+    Make the database/object store unavailable: retain/retry appropriate publication
+    state without false published/complete status. After retention cleanup, late
+    jobs cannot recreate call data; source-interval privacy still blocks denied
+    capture/copies. R41's overflow contract remains separate. These are planned
+    implementation checks, not tests run during this documentation checkpoint.
 
 ### Review checkpoint verification
 
@@ -5537,8 +5578,13 @@ The later R44/R45 approval supersedes the one-immutable-usage-row-per-operation
 proposal and requires no forced turn allocation. Retain observations, derive
 effective attempt/component amounts, and attribute honestly to call/participant/
 service interval/turn.
-Optional supported billing lookup does not choose R46 prices or R41–R43 archival
+Optional supported billing lookup does not choose R46 prices or R41/R42 archival
 guarantees; earlier references to those accounting choices as pending are historical.
+The later R43 decision resolves finalization wait: a configurable 60-second
+outside-room reporting window, early publication when expected work settles, and
+honest partial publication otherwise. Earlier indefinite artifact-wait or pending
+R43 wording is historical; R42's exact publication identity/retry design is not
+approved by allowing later refreshed publication.
 
 The original review passed `git diff --check`, syntax parsing of all 10 JSON
 fences in this labnote, and existence/anchor checks for 13 local documentation
@@ -6870,11 +6916,31 @@ storage/client projection boundary and credential exclusions still apply.
   40–41 plus the earlier usage steps. Pricing-source/version/fallback remains R46;
   R41–R43 archive guarantees are not implied. Ordinary usage archival stays async,
   variables retain transaction-confirmed snapshots, and privacy/retention still apply.
-- R44/R45 resolved: 8 individual decisions remain, R41–R43 and R46–R50; next five
-  R41–R43 and R46–R47. Verified exact three-file scope, unchanged JSON examples and
+- At that R44/R45 checkpoint, 8 individual decisions remained, R41–R43 and R46–R50;
+  next five R41–R43 and R46–R47. Verified exact three-file scope, unchanged JSON examples and
   links/anchors, accounting arithmetic, unchanged remaining review rows, prior
   contracts, count/status, terminology/path hygiene, and whitespace. Documentation
   only; no runtime or browser tests.
+
+### Bounded post-call reporting wait — approved R43, 2026-09-08
+
+- Finalize outside the room with a configurable 60-second window from call end,
+  publishing earlier when all expected work has settled. At expiry publish available
+  permitted facts with explicit pending/failed/missing components, not fabricated
+  zero cost or false incomplete capture for prohibited/unconfigured/not-produced media.
+- This reporting wait does not extend the call, move `ended_at`/retention, or
+  cancel uploads/provider work/permitted asynchronous billing. Background work may
+  outlive the room; storage outages retain/retry publication state, never false success.
+- Later facts may refresh publication or produce a new revision. R42's exact
+  identity/schema/version/object naming/retry design remains pending, as do R41
+  overflow and R46 pricing. Known call-owned jobs/references cannot recreate purged
+  data or bypass source-interval privacy. No extra issue or configuration key is added.
+- Updated the canonical publisher contract, current summaries, and planned check
+  42 while preserving accounting evidence and transaction-confirmed variable updates.
+  R43 is resolved: 7 individual decisions remain, R41, R42, and R46–R50; next five
+  R41, R42, and R46–R48. Verified exact three-file scope, unchanged JSON examples and
+  links/anchors, count/status and unapproved rows, prior contracts, terminology/path
+  hygiene, and whitespace. Documentation only; no runtime or browser tests.
 
 ## Verification evidence
 

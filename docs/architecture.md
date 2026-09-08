@@ -1129,9 +1129,30 @@ room; it neither blocks the live call nor resets `ended_at` or retention. Not ev
 provider offers request-level billing, and eventual cost resolution is not promised.
 Use existing tenant integration authentication/isolation, not per-call credentials.
 No billing API/schema/dependency/provider implementation or fallback rate is chosen.
-R46 pricing policy and R41–R43 archive/finalization policies remain pending. Usage
-archival remains asynchronous, distinct from commit-confirmed variable snapshots,
+R46 pricing policy and R41/R42 archive overflow/publication identity remain pending.
+Usage archival remains asynchronous, distinct from commit-confirmed variable snapshots,
 and all existing media/privacy and whole-call retention boundaries still apply.
+
+Post-call finalization runs outside the call room with a configurable 60-second
+waiting window from call end. Publish earlier when all expected work is settled;
+otherwise, at the deadline publish the available permitted data with explicit
+pending, failed, or missing components. Unknown cost is not zero. Media deliberately
+prohibited, unconfigured, or not produced is not accidental loss or incomplete
+capture; distinguish it from expected work that has not succeeded.
+
+This is a reporting wait, not an extension of the call or a deadline that cancels
+uploads, provider work, or permitted asynchronous billing lookup. Background work
+may outlive the room; `ended_at` and retention do not change. A database/object-store
+outage may prevent publication: retain/retry appropriate publication state without
+falsely marking it published or complete. R41's archive overflow policy is still
+pending; the reporting deadline alone provides no durability guarantee.
+
+Later facts can trigger refreshed publication or a new revision. R42 still owns
+the exact publication identity, schema/version, object naming, and retry contract;
+no particular revision key or latest-pointer scheme is chosen here. Known call-owned
+jobs and references must respect retention deletion and source-interval privacy:
+late work cannot recreate purged data or capture/copy a denied interval. This R43
+decision adds no runtime implementation or new configuration key/hierarchy.
 
 In a database-backed call, save a full post-update Call Variables
 snapshot for each committed update, linked to the originating turn and tool
