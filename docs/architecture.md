@@ -1064,8 +1064,9 @@ filtered stream. Integration credentials and authorization headers remain exclud
 before persistence; this is not raw wire credential capture or a new general
 redaction feature. Store observed outcomes only: an unknown timeout stays unknown,
 without fabricating a remote response. Storing data does not grant client access.
-General tool/event archival remains asynchronous; this capture policy does not
-make every tool completion wait for SQL or implement archival failure handling.
+R41 now selects synchronous-first ordinary-history persistence, followed by a
+later subscriber/job refactor. The precise acknowledgement/failure boundary is
+still pending; this capture requirement alone does not choose it.
 
 Always save permitted available transcripts, turn details, and observed usage/
 model/cost information with the call, alongside the complete tool history and
@@ -1087,10 +1088,39 @@ Store available call audio only when recording is integrated, explicitly enabled
 and permitted by the effective `record_audio` policy. Recording
 remains a room capability subject to privacy policy and the `opening_audio`
 media-input gate, not an automatically enabled archival feature or another
-storage-toggle matrix. Available ordinary turn/tool/
-usage data still follows asynchronous archival; this policy adds no general SQL
-acknowledgement gate. Credential/header exclusions and visibility/agent grants
-remain unchanged.
+storage-toggle matrix. Available ordinary turn/tool/usage history follows R41's
+synchronous-first direction below, not the earlier blanket async-first proposal.
+Credential/header exclusions and visibility/agent grants remain unchanged.
+
+R41's approved implementation direction is synchronous-first persistence of
+ordinary call history, later moving writes that do not require blocking semantics
+to independent storage subscribers/jobs. Keep required PostgreSQL writes blocking,
+including the committed variable-snapshot transaction. Exact ordinary-write
+coordination, acknowledgement criteria, and call behavior after one or both stores
+fail remain undecided. This does not put SQL, disk, or per-frame S3 writes inside
+`RoomAuthority` or live mixing; bounded recording/artifact workers remain separate.
+
+The storage goal is independent PostgreSQL and S3 copies of permitted available
+call details/transcripts and recording artifacts, supporting later recovery from
+a surviving copy. Independence requires separately attempted writes/data feeds:
+an S3 export that only reads PostgreSQL after the call is not a PostgreSQL-outage
+backup. The two writes are not one cross-store transaction; their outcomes remain
+separate. Whether PostgreSQL should hold recording bytes or only artifact metadata/
+references is still pending. Metadata alone cannot restore missing audio.
+
+Oban and SQS are possible later choices, not selected dependencies. Oban stores
+jobs in its configured SQL database; with PostgreSQL backing, enqueueing still
+needs PostgreSQL. Deferring a job does not remove that outage dependency.
+[Oban documentation](https://oban.hexdocs.pm/Oban.html).
+
+Post-incident S3-to-PostgreSQL import and PostgreSQL-to-S3 export repair are
+deferred operational work, not an automatic reconciliation/recovery API or full
+database-backup guarantee. Only surviving persisted data is recoverable. An S3
+write cannot turn a failed variable candidate into a committed update: the
+PostgreSQL snapshot/latest-pointer transaction must commit before tool success.
+Every copy and later repair remains subject to source-interval privacy and
+whole-call retention; neither may reconstruct prohibited or purged data. No Ecto,
+Oban, SQS, or storage implementation is added by this decision.
 
 Usage belongs to the call, with participant/activation/service-interval links
 when known and a turn link only when attribution is honest. Participant attribution
@@ -1130,8 +1160,9 @@ provider offers request-level billing, and eventual cost resolution is not promi
 Use existing tenant integration authentication/isolation, not per-call credentials.
 No billing API/schema/dependency/provider implementation or fallback rate is chosen.
 R46 pricing policy and R41 archive persistence/failure policy remain pending.
-Usage archival remains asynchronous, distinct from commit-confirmed variable snapshots,
-and all existing media/privacy and whole-call retention boundaries still apply.
+Usage-history writes follow the synchronous-first direction; asynchronous provider
+billing lookup remains separate. Commit-confirmed variable snapshots and all
+existing media/privacy and whole-call retention boundaries still apply.
 
 Post-call finalization runs outside the call room with a configurable 60-second
 waiting window from call end. Publish earlier when all expected work is settled;
@@ -1189,8 +1220,9 @@ scanning history or keeping another mutable variables copy. The GenServer remain
 the runtime owner; its in-memory state is the committed working copy, not an
 acknowledged update waiting for background persistence. Database latency affects
 the variable-update tool, not `RoomAuthority` or media processing. Ordinary
-tool/turn/usage archival remains asynchronous. Full history snapshots are not
-client events or broader agent tool results.
+tool/turn/usage persistence follows R41's synchronous-first direction without
+settling its outstanding acknowledgement/failure policy. Full history snapshots
+are not client events or broader agent tool results.
 Retained initial values form a baseline snapshot with no invented turn/tool call,
 so the pointer also works before the first update.
 These are approved designs, not newly implemented persistence. General sensitive-

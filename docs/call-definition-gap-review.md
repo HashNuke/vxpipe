@@ -157,7 +157,7 @@ deferred as decisions are made and update this count; do not renumber the remain
 | R38 | G9 | **Resolved:** normal media_policy and participant while_present use complete audio/transcript source-to-recipient allowlists and independent room-wide record_audio/save_transcripts. Omission inherits, empty maps allow none, present restrictions intersect and storage false wins; enforce before main-media commit, with isolated pre-acceptance briefing. |
 | R39 | G10/G2 | **Resolved:** no API creation idempotency key or deduplication cache; repeated authorized creation may create separate prepared records for later authorized deletion. Same-call token/admission and telephony webhook deduplication remain separate and intact. |
 | R40 | G10 | **Resolved:** short admission claim, no transaction spanning startup; identify existing room/leg to finish bookkeeping, never repeat a crashed call or speculatively redial an uncertain one. Record failed/unknown appropriately and clean up known resources; no general recovery framework. |
-| R41 | G11 | What happens when the asynchronous archive cannot keep up: continue with an explicitly incomplete record or stop the call? |
+| R41 | G11 | **Partly agreed:** ordinary-history persistence is synchronous first, later refactored to independent PostgreSQL/S3 subscribers/jobs with post-incident repair deferred. Exact write acknowledgements/failure behavior and PostgreSQL recording-byte versus metadata scope remain pending; no continue/drop default is approved. |
 | R42 | G11 | **Resolved:** immutable publication revisions use their persisted UTC record timestamp for details-YYYYMMDDHHMMSSmmm.json under the call-owned prefix. Same snapshot retry reuses its identity/file; changed contents create a new revision without a schema_version change merely for values. Keep a latest-publication pointer, detect filename collisions, and never treat timestamps as unique identity or overwrite earlier revisions. |
 | R43 | G11 | **Resolved:** finalize outside the room with a configurable 60-second post-end reporting window; publish early when expected work settles, otherwise publish permitted available data with honest pending/missing components. Later facts may refresh publication under R42; no call extension, work cancellation, or false completion during outages. |
 | R44 | G12 | **Resolved:** retain observations and derive effective usage per operation attempt/component; distinguish deltas from cumulative totals and estimate/final/correction status. Identity-proven duplicates do not add again; final supersedes estimates, explicit corrections may decrease/increase, and failed/interrupted usage is retained without invented zero. |
@@ -958,8 +958,9 @@ observed outcomes: unknown timeouts remain unknown, not fabricated remote result
 For example, a booking invocation hidden from the browser can still have its
 arguments/result saved for an authorized operational review. A sample call can
 show that result live and saves the same complete observed tool history. General
-tool/event archival stays asynchronous; this capture policy does not add a SQL
-acknowledgement gate to every tool or resolve archival failure handling.
+tool/event persistence now follows R41's synchronous-first direction, superseding
+the blanket async-first proposal. The capture policy does not itself resolve the
+remaining acknowledgement/failure boundary.
 No runtime persistence is added by this documentation decision.
 
 **Approved available call data (R18, qualified by R38):** always save permitted
@@ -976,9 +977,9 @@ delivered/spoken agent text, including interrupted/truncated state. Do not start
 STT or other prohibited processing for archival completeness; missing or forbidden
 transcription does not justify inventing a transcript. Missing usage/prices remain
 unavailable, not zero or invented estimates; R44/R45 resolve usage accounting and
-attribution while R46 pricing policy remains pending. General archival remains
-asynchronous without a new SQL acknowledgement
-gate for every ordinary turn/tool.
+attribution while R46 pricing policy remains pending. General history persistence
+is synchronous first under R41; its exact coordination/acknowledgement/failure
+policy remains under review.
 
 Call audio is stored only through an explicitly enabled and permitted recording
 capability. Presence-driven privacy policy and the `opening_audio` media-input gate still
@@ -1021,7 +1022,8 @@ reconciliation workflow is not required.
 Latest persisted values need one indexed lookup or simple join, not history
 aggregation or a second mutable variables store. The GenServer is the runtime
 owner of committed values. Its update tools now wait for database commit, while
-`RoomAuthority` and media do not; other archival consumers remain asynchronous.
+`RoomAuthority` and media do not. Other history writes follow R41's synchronous-first
+direction with their remaining acknowledgement/failure contract still pending.
 This supersedes the earlier asynchronous snapshot-success proposal, not the
 dedicated variables-process ownership or existing read/write permissions.
 Snapshots do not expand client visibility or the updating agent's read grants.
@@ -1448,16 +1450,42 @@ recovery or cross-node exactly-once framework is added.
 
 ### G11 — P2: Publication revisions and finalization wait resolved; persistence failure policy pending
 
-The async archive is correctly described as potentially lossy on node failure.
-Specify per-consumer bounded queue/overflow behavior and independent private
-versus public projections. A slow browser must not stall the ledger, and a slow
-ledger must not silently turn an archive into a complete record. Record missing
-sequence ranges or an incomplete watermark. Distinguish data never produced
-because a capability was absent/prohibited, completed-call retention deletion,
-and accidental loss of required permitted history. R38 permits explicit transcript/
-audio retention restrictions independent from live sharing; tool/usage history is
-not made optional. Required-audit mode needs the
-explicit durable acknowledgement protocol, not a larger mailbox.
+R41 now approves synchronous-first ordinary-history persistence, with a later
+refactor moving unnecessary blocking writes to independent storage subscribers/
+jobs. Required PostgreSQL writes remain blocking, including variable snapshots
+before tool success. This supersedes the earlier async-first archive proposal.
+Exact write coordination, acknowledgement criteria, and behavior when one or both
+stores fail remain pending; neither continue/drop nor stop-call is approved here.
+No SQL/disk/S3-per-frame work moves inside `RoomAuthority` or live mixing. Recording
+and bounded artifact writers keep their separate media responsibility.
+
+The goal is independent PostgreSQL and S3 copies of available permitted call
+details/transcripts and recording artifacts. Separate attempts/data feeds are
+needed: an S3 export relying solely on PostgreSQL records cannot protect those
+facts from a PostgreSQL outage. Outcomes are separate, not an atomic cross-store
+transaction. PostgreSQL audio bytes versus metadata/references remains undecided;
+artifact metadata alone cannot reconstruct missing recording bytes.
+
+Oban/SQS are future candidates, not dependencies selected now. Oban's jobs use its
+configured SQL database; a PostgreSQL-backed queue still needs PostgreSQL for
+enqueueing and is not an independent outage path.
+[Oban documentation](https://oban.hexdocs.pm/Oban.html).
+
+S3-to-PostgreSQL import and PostgreSQL-to-S3 export repair are deferred post-incident
+operational work, not an implemented automatic reconciliation framework or full
+database backup. Only surviving persisted data can be recovered. A successful S3
+write never upgrades a failed variable candidate into a committed update; its
+PostgreSQL snapshot/latest-pointer transaction still gates success. Every sink
+and later repair must honor source-interval privacy and whole-call retention.
+Unproduced/prohibited data, expired data, and accidental loss are distinct; no
+repair may reconstruct forbidden intervals or purged calls. R38 still separates
+transcript/audio retention from live sharing, without optional tool/usage history.
+
+For the later subscriber design, retain bounded queues, separate private/public
+projections, and observable lag/failure; a slow browser must not stall the ledger.
+Missing sequence ranges or incomplete watermarks remain candidate representations,
+not a selected failure policy. An in-memory acceptance alone cannot establish
+durability or a required-audit acknowledgement guarantee.
 
 There is also an immediate source gap: the engine's text-input start/completion
 events contain modality and IDs but not submitted text. Add a committed-input
@@ -1549,8 +1577,9 @@ effective amount changes; automatic MCP retry policy is unchanged.
 R46 pricing-source/version/fallback remains pending: absent billing support does
 not approve catalog math or invented prices. R41 archive persistence/failure policy
 remains pending; R42's revision identity and R43's reporting window do not settle it.
-General usage archival stays asynchronous while variable snapshots retain their
-commit-confirmed boundary. Mandatory usage
+General usage persistence follows R41's synchronous-first direction; optional
+provider billing lookup can still run asynchronously. Variable snapshots retain
+their commit-confirmed boundary. Mandatory usage
 storage still respects media/privacy exclusions and whole-call retention; later
 billing cannot recreate purged call data.
 
@@ -1670,7 +1699,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Resolve duration at each scope, then transfer/recover into human-only conversation | Definition wins over tenant/application/default 1800000, the resolved limit stays pinned despite later settings changes, actual started_at anchors the deadline without preparation wait/reset, and expiry ends with a clear reason without unapproved closing grace |
 | Configure fixed text opening audio and reuse/change its resolved voice binding | Render/cache with the initial agent's resolved TTS/voice; capability warmup need not wait but ordinary conversation and participant media do; changed text/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no implicit agent/voice is chosen when unavailable |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
-| Slow the recording upload or archive consumer | Live mix progresses; recording/archive becomes explicitly incomplete according to policy, not silently complete |
+| Slow a recording upload or history store | Keep SQL/disk/S3 work outside live mixing and do not falsely claim complete persistence; the remaining R41 acknowledgement/failure policy must be approved before asserting continue/drop or call termination |
 | Repeat authorized API creation, then separately replay provider events or same-call token claims | Creation may produce separate prepared records without an idempotency header/cache; same-call/provider identities still prevent double startup, and no deletion endpoint/UI is implied |
 | Fail transfer source restoration and trigger retry/supervisor paths | Exactly one bounded permitted-capability restoration attempt; no budget reset, end if no usable conversation or retain valid working humans, and detailed cause stays internal even with full sample visibility |
 | Brief an outbound human privately before acceptance | Caller cannot hear briefing/optional notice; share only permitted minimum-necessary information, then require destination-bound acceptance and room commit; no implicit full transcript or general concurrent-agent consultation |
@@ -1684,6 +1713,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | End calls with settled work, pending uploads/billing, and deliberately unavailable media | Outside-room finalization publishes early when expected work settles or at the configurable 60-second deadline with permitted available facts and honest pending/missing markers; no fabricated zero or false incomplete capture for prohibited/unconfigured/not-produced media |
 | Expire the reporting window, then complete late work or make publication storage unavailable | Call end/retention stay unchanged, allowed uploads/billing continue, later facts can refresh publication, and outages retain/retry publication state without false success; purged data and denied source intervals cannot reappear, while R41 failure policy remains pending |
 | Retry a publication, revise its values, and simulate a timestamp collision | Same immutable snapshot reuses its stored UTC timestamp/identity/file despite later wall-clock time; a value correction uses a new record/object without changing schema_version solely for data, earlier revisions survive, the latest pointer tracks publication, and a collision cannot clobber another revision; retention removes every call-owned revision |
+| Review first persistence wiring and simulate independent store failures | Ordinary-history persistence is synchronous first without per-frame I/O in the room/mixer; PostgreSQL/S3 outcomes are distinct, an export dependent only on PostgreSQL is not an independent backup, and S3 success cannot acknowledge an uncommitted variable snapshot; do not assert unapproved failure policy or audio-byte scope |
 
 Late booking webhook/external-event delivery is deliberately not an acceptance
 requirement for the current MCP slice. Add such scenarios only when the deferred
@@ -2201,7 +2231,18 @@ obey call retention and source-interval privacy. Current backlog: 6 individual
 decisions, R41 and R46–R50; next five R41 and R46–R49. Verified exact three-file
 scope, unchanged JSON examples/links, timestamp formatting, unchanged pending rows,
 prior contracts, and terminology/path/whitespace hygiene. Documentation only;
-R41's separate storage direction is not decided by this publication checkpoint.
+R41's separate storage direction was not decided by that publication checkpoint.
+
+The subsequent R41 direction is synchronous-first ordinary-history persistence,
+then a subscriber/job refactor for writes that need not block. Independent
+PostgreSQL/S3 copies and deferred post-incident repair are the goal, not an
+implemented dual-store transaction or backup guarantee. SQL-backed jobs retain
+their SQL dependency. Acknowledgement/failure behavior and PostgreSQL recording
+payload scope remain pending; variables still require PostgreSQL commit before
+success, and every copy/repair obeys privacy/retention. Six individual decisions
+remain: R41 and R46–R50; next five R41 and R46–R49. Verified canonical async-first
+supersession, untouched other review rows/JSON examples, links, dependency absence,
+prior contracts, and diff hygiene. Documentation only; no new dependency or issue.
 
 [design]: ../labnotes/20260905-0405-call-definition-design.md
 [architecture]: architecture.md
