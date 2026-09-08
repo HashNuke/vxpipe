@@ -1,7 +1,8 @@
 # Definition-driven one-agent call
 
-Status: not implemented. Specification review: approved, including the Jido
-integration follow-up (2026-09-08).
+Status: implementation in progress. Typed definition/compiler checkpoint completed
+on 2026-09-08; runtime startup and Jido integration remain. Specification review:
+approved, including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
 Sources: [Canonical representation and minimal definition](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-definition-gap-review.md).
 
@@ -54,7 +55,7 @@ cannot change that live call.
 
 ## Implementation checklist
 
-- [ ] Write failing constructor/compiler tests for entry refs, schema version, participant identity, unsupported fields/options, secret-safe errors, and plan pinning.
+- [x] Write failing constructor/compiler tests for entry refs, schema version, participant identity, unsupported fields/options, secret-safe errors, and plan pinning.
 - [ ] Implement the minimal typed compiler and JSON/Elixir parity for the supported one-agent subset.
 - [ ] Red-test the per-activation Jido AgentServer/coordinator against the existing stream,
   tool, timeout, teardown and interruption contracts; add compatible Jido AI/Jido Action
@@ -111,8 +112,20 @@ host; client-supplied tenant strings do not establish authority.
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence, checkpoint 1 (2026-09-08): released the first engine-owned
+schema identifier, `20260906.02`, and added typed definition, participant, connection,
+capability selection, invocation and resolved-plan structures. The pure compiler accepts
+equivalent fixed-key Elixir/JSON maps, keeps definition ID/revision and tenant/actor
+identity outside caller-controlled input, resolves profiles/tools only through closed
+trusted registries, assigns fresh runtime identities, and returns path-specific errors
+without rejected values. The initial subset accepts an empty variables object and empty
+transfer lists; typed variables and runtime startup remain before the compiler checklist
+item or milestone can be completed.
+
+Red: `mix test test/vxpipe/call_engine/call_definition/compiler_test.exs` from the
+call-engine child failed while compiling the test because the first typed struct did not
+exist. Green: the same focused command passed 7 tests. Full umbrella gate evidence is
+recorded in the implementation labnote and commit once run. Do not mark this slice complete.
 
 ## Specification review
 

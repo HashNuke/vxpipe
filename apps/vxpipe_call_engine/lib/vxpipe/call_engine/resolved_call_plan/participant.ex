@@ -1,0 +1,37 @@
+defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
+  @moduledoc false
+
+  alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
+  alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, ToolBinding}
+
+  @enforce_keys [
+    :definition_key,
+    :participant_id,
+    :activation_id,
+    :kind,
+    :description,
+    :connection,
+    :prompt,
+    :first_message,
+    :first_message_text,
+    :capabilities,
+    :tools,
+    :transfers
+  ]
+  defstruct @enforce_keys
+
+  @type t :: %__MODULE__{
+          definition_key: String.t(),
+          participant_id: String.t(),
+          activation_id: nil | String.t(),
+          kind: :human | :agent,
+          description: nil | String.t(),
+          connection: nil | ConnectionIntent.t(),
+          prompt: nil | String.t(),
+          first_message: nil | atom(),
+          first_message_text: nil | String.t(),
+          capabilities: Capabilities.t(),
+          tools: %{optional(String.t()) => ToolBinding.t()},
+          transfers: [String.t()]
+        }
+end

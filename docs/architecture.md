@@ -690,8 +690,8 @@ Our console deployment has one Phoenix HTTP listener: gateway is a Plug in that
 endpoint, its standalone listener is disabled, and no internal HTTP hop is needed.
 Other hosts may instead enable the standalone gateway listener without console.
 Mounted paths, transport upgrades and runtime configuration require explicit
-integration verification; this is an approved
-target, not an assertion that every embedding mode already works.
+integration verification; this is an approved target, not an assertion that
+every embedding mode already works.
 
 The console uses public gateway/Calls interfaces. Ecto Repo, schemas and migrations
 remain in `vxpipe_persistence`; `vxpipe_calls` owns database-neutral workflows and
@@ -1987,6 +1987,30 @@ the existing room-wide interruption path:
 
 The implementation and verification evidence are detailed in
 [`spoken-barge-in.md`](spoken-barge-in.md).
+
+### In-progress definition-driven call slice
+
+The first checkpoint of milestone 1 releases the engine-owned call-definition
+schema `20260906.02` and its pure compiler. Resource ID/revision and trusted
+tenant/actor identity are constructor metadata rather than fields accepted from
+definition or invocation documents. Fixed known keys are normalized without
+creating atoms from input; equivalent JSON and Elixir maps produce the same typed
+definition.
+
+The currently implemented subset validates one human web caller, one agent
+receiver, inline prompt/first-message policy, capability-profile refs, exact-name
+host-tool selections, and a bounded call duration. Closed trusted registries
+resolve the selected profiles and handlers into an immutable `ResolvedCallPlan`.
+The plan receives fresh call, room, participant and agent-activation identities,
+and neither rejected values nor private capability options enter public errors or
+the plan. Later-milestone fields, non-empty variables and transfers are rejected
+instead of being silently ignored.
+
+This checkpoint does not start rooms from a plan and does not add Jido. Existing
+preset startup remains intact while the remaining milestone work adds typed Call
+Variables, the supervised Jido activation, runtime plan startup, and the trusted
+sample fixture. Exact evidence is tracked in the milestone and its implementation
+labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

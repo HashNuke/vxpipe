@@ -52,6 +52,14 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
+The first definition-driven checkpoint adds a pure, engine-owned compiler for
+schema `20260906.02`. Trusted hosts supply resource and tenant identity separately
+from JSON-safe definition and invocation maps. The compiler validates a closed
+one-human/one-agent web subset and pins capability profiles, host-tool bindings,
+runtime participant identities, and call limits into a `ResolvedCallPlan`. It is
+not wired to room startup yet; existing preset behavior remains available while
+the milestone proceeds through later checkpoints.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

@@ -9,9 +9,12 @@ defmodule Vxpipe.CallEngine.Error do
   @type code ::
           :agent_not_ready
           | :agent_busy
+          | :call_definition_resolution_failed
           | :connection_already_attached
           | :connection_not_attached
           | :deadline_exceeded
+          | :invalid_call_definition
+          | :invalid_call_invocation
           | :invalid_command
           | :participant_already_exists
           | :participant_not_found
