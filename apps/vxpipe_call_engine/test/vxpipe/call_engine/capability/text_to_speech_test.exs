@@ -8,6 +8,40 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
   alias Vxpipe.CallEngine.TextToSpeechRequest
 
+  @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
+  @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+
+  test "reports provider first audio once without text or audio payloads" do
+    attach_telemetry_events([@tts_first_audio_event, @provider_failure_event])
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability(maximum_requests: 1)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+
+    sentinel = "private-speech-text"
+    assert :ok = TextToSpeech.synthesize(capability, request("turn-timing", sentinel, sink))
+    assert_receive {:test_tts_control, ^transport, _speak}
+    assert_receive {:test_tts_control, ^transport, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"speech-timing"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(transport, <<1, 0, 2, 0>>)
+
+    assert_receive {:telemetry_event, @tts_first_audio_event, %{duration: duration},
+                    %{provider: :deepgram} = metadata}
+
+    assert is_integer(duration)
+    assert duration >= 0
+    assert metadata == %{provider: :deepgram}
+    refute inspect(metadata) =~ sentinel
+    refute_receive {:telemetry_event, @provider_failure_event, _, _}
+
+    TestTextToSpeechTransport.deliver_audio(transport, <<3, 0, 4, 0>>)
+    refute_receive {:telemetry_event, @tts_first_audio_event, _, _}
+  end
+
   test "streams one request and completes it only after output playout" do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     capability = start_capability(maximum_requests: 2)
@@ -169,6 +203,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
   end
 
   test "tolerates warnings but stops on provider errors" do
+    attach_telemetry_events([@provider_failure_event])
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     capability = start_capability(maximum_requests: 1)
     monitor = Process.monitor(capability)
@@ -191,6 +226,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
     )
 
     assert_receive {:vxpipe_tts_unavailable, ^capability, :provider_failed}
+
+    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1}, metadata}
+
+    assert metadata == %{capability: :tts, provider: :deepgram, category: :unavailable}
+
     assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 1_000
   end
 
@@ -244,5 +284,23 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
         "speech_id" => speech_id
       })
     )
+  end
+
+  def handle_telemetry_event(event, measurements, metadata, test_pid) do
+    send(test_pid, {:telemetry_event, event, measurements, metadata})
+  end
+
+  defp attach_telemetry_events(events) do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach_many(
+        handler_id,
+        events,
+        &__MODULE__.handle_telemetry_event/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
   end
 end

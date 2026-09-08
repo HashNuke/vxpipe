@@ -14,6 +14,80 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
   alias Vxpipe.CallEngine.Tool.Call
   alias Vxpipe.CallEngine.Tool.Dispatcher
 
+  @model_first_token_event [:vxpipe, :call_engine, :model, :first_token]
+  @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
+  @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+
+  test "reports first model output once and a payload-free successful outcome" do
+    attach_telemetry_events([
+      @model_first_token_event,
+      @model_request_stop_event,
+      @provider_failure_event
+    ])
+
+    coordinator = start_coordinator(provider: :req_llm)
+    sentinel = "private-model-output"
+    command = command("observed-model-timing", "private-model-input")
+
+    assert :ok = AgentCoordinator.respond(coordinator, command)
+    assert_receive {:test_agent_request, ^coordinator, request_id, _, _options}
+
+    emit(coordinator, request_id, :llm_delta, %{chunk_type: :content, delta: sentinel})
+
+    assert_receive {:telemetry_event, @model_first_token_event, %{duration: duration},
+                    %{provider: :req_llm} = first_metadata}
+
+    assert is_integer(duration)
+    assert duration >= 0
+    assert first_metadata == %{provider: :req_llm}
+    refute inspect(first_metadata) =~ sentinel
+
+    emit(coordinator, request_id, :llm_delta, %{chunk_type: :content, delta: " finished."})
+    emit(coordinator, request_id, :request_completed, %{result: sentinel <> " finished."})
+
+    assert_receive {:telemetry_event, @model_request_stop_event, %{duration: total_duration},
+                    stop_metadata}
+
+    assert is_integer(total_duration)
+    assert total_duration >= duration
+    assert stop_metadata == %{provider: :req_llm, outcome: :ok, first_output: :observed}
+    refute_receive {:telemetry_event, @model_first_token_event, _, _}
+    refute_receive {:telemetry_event, @provider_failure_event, _, _}
+  end
+
+  test "keeps first output missing and reports a safe provider failure" do
+    attach_telemetry_events([
+      @model_first_token_event,
+      @model_request_stop_event,
+      @provider_failure_event
+    ])
+
+    coordinator = start_coordinator(provider: :req_llm)
+    command = command("missing-model-output", "private-model-input")
+
+    assert :ok = AgentCoordinator.respond(coordinator, command)
+    assert_receive {:test_agent_request, ^coordinator, request_id, _, _options}
+
+    emit(coordinator, request_id, :request_failed, %{error: "private-provider-error"})
+
+    assert_receive {:telemetry_event, @model_request_stop_event, %{duration: duration},
+                    stop_metadata}
+
+    assert is_integer(duration)
+    assert duration >= 0
+    assert stop_metadata == %{provider: :req_llm, outcome: :unavailable, first_output: :missing}
+
+    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1}, failure_metadata}
+
+    assert failure_metadata == %{
+             capability: :model,
+             provider: :req_llm,
+             category: :unavailable
+           }
+
+    refute_receive {:telemetry_event, @model_first_token_event, _, _}
+  end
+
   test "projects streamed sentences and one tool lifecycle onto the existing contract" do
     coordinator = start_coordinator(request_options: [model: "google:configured-model"])
     command = command("stream-tool", "check a value")
@@ -386,5 +460,23 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     sequence = Process.get(key, 0) + 1
     Process.put(key, sequence)
     sequence
+  end
+
+  def handle_telemetry_event(event, measurements, metadata, test_pid) do
+    send(test_pid, {:telemetry_event, event, measurements, metadata})
+  end
+
+  defp attach_telemetry_events(events) do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach_many(
+        handler_id,
+        events,
+        &__MODULE__.handle_telemetry_event/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
   end
 end

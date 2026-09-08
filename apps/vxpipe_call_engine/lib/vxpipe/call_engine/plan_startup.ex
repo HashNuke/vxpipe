@@ -206,6 +206,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          activation_id: receiver.activation_id,
          agent_participant_id: receiver.participant_id,
          owner: owner,
+         provider: :req_llm,
          system_prompt: receiver.prompt,
          tools: tools,
          maximum_completed_requests: Keyword.fetch!(settings, :maximum_completed_requests),

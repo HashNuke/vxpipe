@@ -1519,12 +1519,21 @@ The implemented framework-independent event contract currently includes:
 | Event | Measurements | Bounded metadata | Boundary |
 | --- | --- | --- | --- |
 | `[:vxpipe, :gateway, :http, :request, :stop]` | `duration` in Erlang `:native` units | `operation`, `outcome`, and integer `status` or `nil` after an exception | Entire reusable gateway Plug call, including CORS and parsing; exceptions are emitted as `:exception` before being reraised |
+| `[:vxpipe, :call_engine, :model, :first_token]` | `duration` in Erlang `:native` units | `provider` | Request dispatch to first non-empty model output observed by the agent coordinator; emitted once per request and absent when no output arrives |
+| `[:vxpipe, :call_engine, :model, :request, :stop]` | `duration` in Erlang `:native` units | `provider`, `outcome`, and `first_output` | Request dispatch to terminal completion, cancellation, timeout, or failure; `first_output` is `:observed` or `:missing` |
+| `[:vxpipe, :call_engine, :tts, :first_audio]` | `duration` in Erlang `:native` units | `provider` | TTS request dispatch to the first decoded provider audio frame, before output-sink acceptance or remote playout; emitted once and absent without audio |
+| `[:vxpipe, :call_engine, :provider, :failure]` | `count` equal to `1` | `capability`, `provider`, and `category` | Safe failure projection at the owning model or speech boundary; no raw provider reason or response is included |
 
 Gateway operations are closed categories (`:cors_preflight`, `:health_check`,
 `:room_create`, `:session_create`, `:rtvi_offer`, `:rtvi_candidates`, or `:unknown`).
 Outcomes are `:ok`, `:client_error`, `:server_error`, `:exception`, or `:unknown`.
 The event does not carry the request path, query, headers, body, or correlation IDs.
-Engine and sampled-VM events will join this table as their owning milestone checkpoint lands.
+Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`, or `:other`
+set. Model outcomes are `:ok`, `:unavailable`, `:timeout`, `:invalid_response`, or
+`:cancelled`; failure categories are `:unavailable`, `:timeout`, `:invalid_response`,
+`:output_failure`, or `:unknown`. None of these events carries input/output text, audio,
+raw provider errors, model names, or correlation identifiers. Room and sampled-VM events
+will join this table as their owning milestone checkpoint lands.
 
 ### Observability delivery
 

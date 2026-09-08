@@ -34,6 +34,7 @@ defmodule Vxpipe.CallEngine.MixProject do
       {:jido_ai, "~> 2.3.0"},
       {:jsv, "~> 0.22"},
       {:req_llm, "~> 1.22"},
+      {:telemetry, "~> 1.3"},
       {:websockex, "~> 0.5.1"}
     ]
   end

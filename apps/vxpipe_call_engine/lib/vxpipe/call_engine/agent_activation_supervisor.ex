@@ -79,6 +79,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
          agent_server: agent_server,
          agent_runtime: JidoAgentRuntime,
          owner: Keyword.fetch!(options, :owner),
+         provider: Keyword.get(options, :provider, :other),
          tool_dispatcher: tool_dispatcher,
          maximum_completed_requests: Keyword.fetch!(options, :maximum_completed_requests),
          maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),

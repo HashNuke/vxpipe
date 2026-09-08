@@ -157,3 +157,28 @@ declares its direct `:telemetry` dependency rather than relying on a transitive 
 Umbrella format, warnings-as-errors compile, default tests, and unused-lock checks passed with
 call engine `102 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
 and Console `4 tests, 0 failures`.
+
+## Checkpoint 5: model and TTS boundary telemetry
+
+The engine now records model time to first non-empty output, terminal model request outcome,
+TTS time to first decoded provider audio, and safe provider failures. The model terminal event
+also records `first_output` as `:observed` or `:missing`; a failed or cancelled request never
+manufactures a zero first-token observation. The TTS event occurs before output-sink acceptance,
+so it makes no claim about gateway egress or remote browser playout.
+
+Provider identifiers collapse to `:req_llm`, `:deepgram`, or `:other`. Outcomes and failure
+reasons likewise collapse to finite documented atoms. The events contain no prompts, input or
+output text, audio bytes, raw provider errors, model names, participant/call/request IDs, or
+capability handles. The definition-driven startup path now carries the compiled `:req_llm`
+provider category into the supervised agent coordinator; other embedding paths safely normalize
+an omitted or unknown provider to `:other`.
+
+The first red run selected one test accidentally because line selection used pre-format line
+numbers. The corrected four-test selection failed all four intended observations: model first
+output, model failure/missing output, TTS first audio, and TTS provider failure. After adding
+the engine-owned event module and lifecycle fields, the four tests passed. Tightened full-map
+assertions then passed both owning test files with `15 tests, 0 failures`. The call engine now
+declares `:telemetry` directly instead of depending on Jido or another transitive package.
+Umbrella format, warnings-as-errors compile, default tests, and unused-lock checks passed with
+call engine `105 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
+and Console `4 tests, 0 failures`.

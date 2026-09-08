@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
   alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.TextToSpeechRequest
 
   @call_timeout 5_000
@@ -65,6 +66,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
          }}
 
       {:error, _reason} ->
+        Telemetry.provider_failure(:tts, provider_module, :transport_closed)
         {:stop, :transport_start_failed}
     end
   end
@@ -304,6 +306,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   defp handle_signal(%Signal{kind: _other}, state), do: {:noreply, state}
 
   defp start_request(request, state) do
+    started_at = Telemetry.started_at()
     speak = state.provider_module.encode_speak(request.text)
     flush = state.provider_module.encode_flush()
 
@@ -312,7 +315,14 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       {:ok,
        %{
          state
-         | current: %{phase: :awaiting_start, played_ms: 0, request: request, speech_id: nil}
+         | current: %{
+             phase: :awaiting_start,
+             played_ms: 0,
+             request: request,
+             speech_id: nil,
+             started_at: started_at,
+             first_audio_observed?: false
+           }
        }}
     else
       {:error, _reason} -> {:error, state}
@@ -322,6 +332,8 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   defp process_audio(payload, state) do
     case prepare_audio(payload, state) do
       {:push, request, audio} ->
+        state = observe_first_audio(state)
+
         case OutputSink.push(request.output_sink, output_frame(request, audio, state)) do
           :ok -> {:ok, state}
           {:error, _reason} -> {:error, :audio_output_failed, state}
@@ -355,6 +367,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   end
 
   defp start_audio_output(request, audio, transport_reference, state) do
+    state = observe_first_audio(state)
     frame = output_frame(request, audio, state)
 
     task =
@@ -495,11 +508,13 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   end
 
   defp stop_unavailable(reason, state) do
+    Telemetry.provider_failure(:tts, state.provider_module, reason)
     send(state.owner, {:vxpipe_tts_unavailable, self(), reason})
     {:stop, reason, state}
   end
 
   defp stop_unavailable(reason, reply, state) do
+    Telemetry.provider_failure(:tts, state.provider_module, reason)
     send(state.owner, {:vxpipe_tts_unavailable, self(), reason})
     {:stop, reason, reply, state}
   end
@@ -519,4 +534,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       :exit, _reason -> :ok
     end
   end
+
+  defp observe_first_audio(%{current: %{first_audio_observed?: false} = current} = state) do
+    Telemetry.tts_first_audio(current.started_at, state.provider_module)
+    %{state | current: %{current | first_audio_observed?: true}}
+  end
+
+  defp observe_first_audio(state), do: state
 end

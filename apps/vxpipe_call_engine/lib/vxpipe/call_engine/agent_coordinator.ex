@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   alias Vxpipe.CallEngine.Capability.SentenceAccumulator
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Id
+  alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.Tool.{Call, Context}
 
   @call_timeout 5_000
@@ -57,6 +58,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
       owner: Keyword.fetch!(options, :owner),
       pending: :queue.new(),
+      provider: Keyword.get(options, :provider, :other),
       request_options: Keyword.fetch!(options, :request_options),
       request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
       tool_dispatcher: Keyword.fetch!(options, :tool_dispatcher)
@@ -274,6 +276,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   defp start_request(command, state) do
     request_id = Id.generate(:agent_request)
     options = request_options(command, request_id, state)
+    started_at = Telemetry.started_at()
 
     case state.agent_runtime.ask(state.agent_server, command.content, options) do
       {:ok, ^request_id} ->
@@ -288,8 +291,10 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
           accumulator: SentenceAccumulator.new(state.maximum_output_bytes),
           command: command,
           pending_tool_results: %{},
+          first_output_observed?: false,
           request_id: request_id,
           seen_event_ids: MapSet.new(),
+          started_at: started_at,
           terminal_data: nil,
           timer: timer,
           tool_calls: %{}
@@ -298,6 +303,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         {:ok, %{state | current: current}}
 
       _error ->
+        Telemetry.model_request_stop(started_at, state.provider, :provider_unavailable, false)
         {:error, state}
     end
   end
@@ -342,6 +348,8 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   end
 
   defp push_text(text, state) do
+    state = observe_first_output(text, state)
+
     case SentenceAccumulator.push(state.current.accumulator, text) do
       {:ok, accumulator, segments} ->
         Enum.each(segments, &emit_segment(state, &1))
@@ -369,6 +377,13 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
     case SentenceAccumulator.finish(state.current.accumulator) do
       {:ok, pending, _text} ->
+        Telemetry.model_request_stop(
+          state.current.started_at,
+          state.provider,
+          :ok,
+          state.current.first_output_observed?
+        )
+
         Enum.each(pending, &emit_segment(state, &1))
         send(state.owner, {:vxpipe_capability_text_complete, self(), state.current.command})
 
@@ -390,6 +405,14 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
   defp fail_current(state, reason) do
     cancel_timer(state.current.timer)
+
+    Telemetry.model_request_stop(
+      state.current.started_at,
+      state.provider,
+      reason,
+      state.current.first_output_observed?
+    )
+
     emit_failure(state.owner, self(), state.current.command, reason)
     %{state | current: nil}
   end
@@ -405,8 +428,24 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   defp cancel_current(state, reason) do
     cancel_timer(state.current.timer)
     _ = state.agent_runtime.cancel(state.agent_server, state.current.request_id, reason)
+
+    Telemetry.model_request_stop(
+      state.current.started_at,
+      state.provider,
+      reason,
+      state.current.first_output_observed?
+    )
+
     {%{state | current: nil}, state.current.command}
   end
+
+  defp observe_first_output(text, state)
+       when is_binary(text) and byte_size(text) > 0 and not state.current.first_output_observed? do
+    Telemetry.model_first_token(state.current.started_at, state.provider)
+    %{state | current: %{state.current | first_output_observed?: true}}
+  end
+
+  defp observe_first_output(_text, state), do: state
 
   defp start_next(state) do
     case :queue.out(state.pending) do
