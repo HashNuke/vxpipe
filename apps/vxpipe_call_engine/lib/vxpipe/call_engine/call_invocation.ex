@@ -107,17 +107,7 @@ defmodule Vxpipe.CallEngine.CallInvocation do
     end
   end
 
-  defp initial_variables(value, _code, _message) when is_map(value) and map_size(value) == 0,
-    do: {:ok, %{}}
-
-  defp initial_variables(value, code, message) when is_map(value) do
-    DefinitionValidation.invalid(
-      code,
-      message,
-      ["initial_variables"],
-      "must be empty until Call Variables are supported"
-    )
-  end
+  defp initial_variables(value, _code, _message) when is_map(value), do: {:ok, value}
 
   defp initial_variables(_value, code, message) do
     DefinitionValidation.invalid(code, message, ["initial_variables"], "must be an object")

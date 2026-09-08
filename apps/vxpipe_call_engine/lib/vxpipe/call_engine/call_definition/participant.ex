@@ -1,7 +1,13 @@
 defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.{Capabilities, ConnectionIntent, ToolSelection}
+  alias Vxpipe.CallEngine.CallDefinition.{
+    Capabilities,
+    ConnectionIntent,
+    ToolSelection,
+    VariablePermissions
+  }
+
   alias Vxpipe.CallEngine.DefinitionValidation
 
   @all_fields [
@@ -12,10 +18,20 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :first_message,
     :capabilities,
     :tools,
-    :transfers
+    :transfers,
+    :variable_permissions
   ]
   @human_fields [:type, :description, :connection, :capabilities]
-  @agent_fields [:type, :description, :prompt, :first_message, :capabilities, :tools, :transfers]
+  @agent_fields [
+    :type,
+    :description,
+    :prompt,
+    :first_message,
+    :capabilities,
+    :tools,
+    :transfers,
+    :variable_permissions
+  ]
 
   @enforce_keys [
     :definition_key,
@@ -27,7 +43,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :first_message_text,
     :capabilities,
     :tools,
-    :transfers
+    :transfers,
+    :variable_permissions
   ]
   defstruct @enforce_keys
 
@@ -41,7 +58,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
           first_message_text: nil | String.t(),
           capabilities: Capabilities.t(),
           tools: %{optional(String.t()) => ToolSelection.t()},
-          transfers: [String.t()]
+          transfers: [String.t()],
+          variable_permissions: VariablePermissions.t()
         }
 
   def new(definition_key, value) do
@@ -118,7 +136,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
          first_message: nil,
          first_message_text: nil,
          tools: %{},
-         transfers: []
+         transfers: [],
+         variable_permissions: %VariablePermissions{}
        }}
     end
   end
@@ -137,7 +156,12 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
              path
            ),
          {:ok, tools} <- tools(Map.get(input, :tools, %{}), code, message, path),
-         {:ok, transfers} <- transfers(Map.get(input, :transfers, []), code, message, path) do
+         {:ok, transfers} <- transfers(Map.get(input, :transfers, []), code, message, path),
+         {:ok, variable_permissions} <-
+           VariablePermissions.new(
+             Map.get(input, :variable_permissions, %{}),
+             path ++ ["variable_permissions"]
+           ) do
       {:ok,
        %{
          connection: nil,
@@ -145,7 +169,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
          first_message: first_message,
          first_message_text: first_message_text,
          tools: tools,
-         transfers: transfers
+         transfers: transfers,
+         variable_permissions: variable_permissions
        }}
     end
   end

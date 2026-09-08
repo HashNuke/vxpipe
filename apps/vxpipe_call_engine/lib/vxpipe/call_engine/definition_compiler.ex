@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   alias Vxpipe.CallEngine.CallDefinition.{CapabilitySelection, ToolSelection}
 
   alias Vxpipe.CallEngine.{CallInvocation, DefinitionValidation, Id, ResolvedCallPlan}
-  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.ResolvedCallPlan.{CallVariables, ToolBinding, VariableSection}
 
   @code :call_definition_resolution_failed
   @message "The call definition could not be resolved."
@@ -20,6 +20,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     with :ok <- matching_definition(definition, invocation),
          {:ok, capability_profiles} <- registry(registries, :capability_profiles),
          {:ok, host_tools} <- registry(registries, :host_tools),
+         {:ok, call_variables} <-
+           resolve_call_variables(definition.call_variables, invocation.initial_variables),
          {:ok, participants} <-
            resolve_participants(definition, capability_profiles, host_tools) do
       {:ok,
@@ -35,7 +37,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          entry_caller: definition.entry_caller,
          entry_receiver: definition.entry_receiver,
          participants: participants,
-         initial_variables: invocation.initial_variables,
+         call_variables: call_variables,
          max_duration_ms: definition.max_duration_ms
        }}
     end
@@ -98,9 +100,47 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          first_message_text: participant.first_message_text,
          capabilities: capabilities,
          tools: tools,
-         transfers: participant.transfers
+         transfers: participant.transfers,
+         variable_permissions: participant.variable_permissions
        }}
     end
+  end
+
+  defp resolve_call_variables(call_variables, initial_variables) do
+    with :ok <- validate_initial_variables(call_variables.sections, initial_variables) do
+      sections =
+        Map.new(call_variables.sections, fn {name, section} ->
+          {name,
+           %VariableSection{
+             name: name,
+             schema: section.schema,
+             validator: section.validator,
+             value: Map.get(initial_variables, name),
+             revision: 0
+           }}
+        end)
+
+      {:ok, %CallVariables{sections: sections}}
+    end
+  end
+
+  defp validate_initial_variables(sections, initial_variables) do
+    Enum.reduce_while(initial_variables, :ok, fn
+      {name, value}, :ok when is_binary(name) ->
+        case Map.fetch(sections, name) do
+          {:ok, section} ->
+            case JSV.validate(value, section.validator, cast: false) do
+              {:ok, ^value} -> {:cont, :ok}
+              {:error, _error} -> {:halt, invalid(["initial_variables", name], "is invalid")}
+            end
+
+          :error ->
+            {:halt, invalid(["initial_variables", name], "is not a declared section")}
+        end
+
+      {_name, _value}, :ok ->
+        {:halt, invalid(["initial_variables", "<invalid-key>"], "section names must be strings")}
+    end)
   end
 
   defp resolve_capabilities(participant, defaults, profiles) do

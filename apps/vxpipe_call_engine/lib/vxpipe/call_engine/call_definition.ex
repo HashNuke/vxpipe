@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   A validated, versioned definition of reusable call behavior.
   """
 
-  alias Vxpipe.CallEngine.CallDefinition.{Capabilities, Participant}
+  alias Vxpipe.CallEngine.CallDefinition.{CallVariables, Capabilities, Participant}
   alias Vxpipe.CallEngine.DefinitionValidation
 
   @schema_version "20260906.02"
@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :entry_caller,
     :entry_receiver,
     :defaults,
+    :call_variables,
     :participants,
     :limits
   ]
@@ -25,6 +26,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :entry_caller,
     :entry_receiver,
     :default_capabilities,
+    :call_variables,
     :participants,
     :max_duration_ms
   ]
@@ -38,6 +40,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           entry_caller: String.t(),
           entry_receiver: String.t(),
           default_capabilities: Capabilities.t(),
+          call_variables: CallVariables.t(),
           participants: %{String.t() => Participant.t()},
           max_duration_ms: pos_integer()
         }
@@ -70,10 +73,12 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, entry_receiver} <-
            DefinitionValidation.identifier(receiver_input, code, message, ["entry_receiver"]),
          {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
+         {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
            DefinitionValidation.fetch(input, :participants, code, message, []),
          {:ok, participants} <- participants(participants_input, code, message),
          :ok <- validate_entries(entry_caller, entry_receiver, participants, code, message),
+         :ok <- validate_variable_permissions(participants, call_variables, code, message),
          {:ok, max_duration_ms} <- limits(Map.get(input, :limits, %{}), code, message) do
       {:ok,
        %__MODULE__{
@@ -84,6 +89,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          entry_caller: entry_caller,
          entry_receiver: entry_receiver,
          default_capabilities: defaults,
+         call_variables: call_variables,
          participants: participants,
          max_duration_ms: max_duration_ms
        }}
@@ -211,6 +217,39 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, duration} <- duration(input, code, message) do
       {:ok, duration}
     end
+  end
+
+  defp validate_variable_permissions(participants, call_variables, code, message) do
+    Enum.reduce_while(participants, :ok, fn {_key, participant}, :ok ->
+      result =
+        Enum.reduce_while(
+          participant.variable_permissions.grants,
+          :ok,
+          fn {section, _grant}, :ok ->
+            if Map.has_key?(call_variables.sections, section) do
+              {:cont, :ok}
+            else
+              {:halt,
+               DefinitionValidation.invalid(
+                 code,
+                 message,
+                 [
+                   "participants",
+                   participant.definition_key,
+                   "variable_permissions",
+                   section
+                 ],
+                 "must reference a declared Call Variables section"
+               )}
+            end
+          end
+        )
+
+      case result do
+        :ok -> {:cont, :ok}
+        {:error, _error} = error -> {:halt, error}
+      end
+    end)
   end
 
   defp duration(input, code, message) do

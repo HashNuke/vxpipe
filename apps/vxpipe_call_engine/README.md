@@ -56,9 +56,11 @@ The first definition-driven checkpoint adds a pure, engine-owned compiler for
 schema `20260906.02`. Trusted hosts supply resource and tenant identity separately
 from JSON-safe definition and invocation maps. The compiler validates a closed
 one-human/one-agent web subset and pins capability profiles, host-tool bindings,
-runtime participant identities, and call limits into a `ResolvedCallPlan`. It is
-not wired to room startup yet; existing preset behavior remains available while
-the milestone proceeds through later checkpoints.
+typed Call Variables schemas/grants/partial initial values, runtime participant
+identities, and call limits into a `ResolvedCallPlan`. Variable schemas use the
+released closed subset and do not enforce `required` completeness. It is not wired
+to room startup yet; existing preset behavior remains available while the milestone
+proceeds through later checkpoints.
 
 ## Installation
 

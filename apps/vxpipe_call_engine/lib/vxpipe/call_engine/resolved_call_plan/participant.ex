@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
+  alias Vxpipe.CallEngine.CallDefinition.VariablePermissions
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, ToolBinding}
 
   @enforce_keys [
@@ -16,7 +17,8 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
     :first_message_text,
     :capabilities,
     :tools,
-    :transfers
+    :transfers,
+    :variable_permissions
   ]
   defstruct @enforce_keys
 
@@ -32,6 +34,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
           first_message_text: nil | String.t(),
           capabilities: Capabilities.t(),
           tools: %{optional(String.t()) => ToolBinding.t()},
-          transfers: [String.t()]
+          transfers: [String.t()],
+          variable_permissions: VariablePermissions.t()
         }
 end

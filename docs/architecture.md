@@ -1990,7 +1990,7 @@ The implementation and verification evidence are detailed in
 
 ### In-progress definition-driven call slice
 
-The first checkpoint of milestone 1 releases the engine-owned call-definition
+The first two checkpoints of milestone 1 release the engine-owned call-definition
 schema `20260906.02` and its pure compiler. Resource ID/revision and trusted
 tenant/actor identity are constructor metadata rather than fields accepted from
 definition or invocation documents. Fixed known keys are normalized without
@@ -1999,18 +1999,25 @@ definition.
 
 The currently implemented subset validates one human web caller, one agent
 receiver, inline prompt/first-message policy, capability-profile refs, exact-name
-host-tool selections, and a bounded call duration. Closed trusted registries
-resolve the selected profiles and handlers into an immutable `ResolvedCallPlan`.
-The plan receives fresh call, room, participant and agent-activation identities,
-and neither rejected values nor private capability options enter public errors or
-the plan. Later-milestone fields, non-empty variables and transfers are rejected
-instead of being silently ignored.
+host-tool selections, typed Call Variables declarations and permissions, partial
+initial values, and a bounded call duration. A closed JSON Schema-shaped subset
+is compiled with JSV 0.22 without casting or reference resolution. Defaults,
+unsupported keywords, malformed grants, unknown sections/variables and invalid
+populated values fail before room startup. `required` declarations are retained
+as authored metadata but do not demand completeness at any nesting depth.
 
-This checkpoint does not start rooms from a plan and does not add Jido. Existing
-preset startup remains intact while the remaining milestone work adds typed Call
-Variables, the supervised Jido activation, runtime plan startup, and the trusted
-sample fixture. Exact evidence is tracked in the milestone and its implementation
-labnote.
+Closed trusted registries resolve selected profiles and handlers into an immutable
+`ResolvedCallPlan`. The plan receives fresh call, room, participant and
+agent-activation identities, plus declared section schemas, grants, initial values
+and zero revisions. Omitted sections stay unpopulated while explicit empty objects
+stay populated. Neither rejected values nor private capability options enter public
+errors. Later-milestone transfers remain rejected instead of being silently ignored.
+
+These checkpoints do not start rooms from a plan, provide the room-owned Call
+Variables process/tools, or add Jido. Existing preset startup remains intact while
+the remaining milestone work adds the supervised Jido activation, runtime plan
+startup, and the trusted sample fixture. Exact evidence is tracked in the milestone
+and its implementation labnote.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

@@ -1,6 +1,6 @@
 # Definition-driven one-agent call
 
-Status: implementation in progress. Typed definition/compiler checkpoint completed
+Status: implementation in progress. Typed definition/compiler checkpoints completed
 on 2026-09-08; runtime startup and Jido integration remain. Specification review:
 approved, including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
@@ -56,7 +56,7 @@ cannot change that live call.
 ## Implementation checklist
 
 - [x] Write failing constructor/compiler tests for entry refs, schema version, participant identity, unsupported fields/options, secret-safe errors, and plan pinning.
-- [ ] Implement the minimal typed compiler and JSON/Elixir parity for the supported one-agent subset.
+- [x] Implement the minimal typed compiler and JSON/Elixir parity for the supported one-agent subset.
 - [ ] Red-test the per-activation Jido AgentServer/coordinator against the existing stream,
   tool, timeout, teardown and interruption contracts; add compatible Jido AI/Jido Action
   dependencies and lockfile.
@@ -118,14 +118,30 @@ capability selection, invocation and resolved-plan structures. The pure compiler
 equivalent fixed-key Elixir/JSON maps, keeps definition ID/revision and tenant/actor
 identity outside caller-controlled input, resolves profiles/tools only through closed
 trusted registries, assigns fresh runtime identities, and returns path-specific errors
-without rejected values. The initial subset accepts an empty variables object and empty
-transfer lists; typed variables and runtime startup remain before the compiler checklist
-item or milestone can be completed.
+without rejected values. That first checkpoint accepted an empty variables object and
+empty transfer lists.
 
 Red: `mix test test/vxpipe/call_engine/call_definition/compiler_test.exs` from the
 call-engine child failed while compiling the test because the first typed struct did not
 exist. Green: the same focused command passed 7 tests. Full umbrella gate evidence is
-recorded in the implementation labnote and commit once run. Do not mark this slice complete.
+recorded in the implementation labnote and commit. Do not mark this slice complete.
+
+Implementation evidence, checkpoint 2 (2026-09-08): added typed Call Variables section
+schemas, agent read/read+write grants, validated partial invocation values, and immutable
+initial section state to the resolved plan. The released schema uses a closed JSON
+Schema-shaped subset compiled by JSV 0.22 with casting and external references unavailable.
+Variable defaults, unsupported schema keywords, malformed grants, unknown sections or
+variables, and datatype violations fail with value-free paths before room startup.
+Authored `required` lists remain in definition metadata but are removed only from the
+runtime validator, including nested schema nodes, so iterative population does not invent
+or require missing values. Explicit empty sections remain distinct from omitted sections.
+
+Red: the focused Call Variables compiler test first failed to compile because
+`CallDefinition.VariableSection` did not exist. A review-added malformed-`required` case
+then failed because the initial validator relaxation accepted it; the closed schema compiler
+fixed that defect. Green: the focused file passed 7 tests, and the original compiler file
+passed 7 tests. Full umbrella evidence is recorded in the implementation labnote. Runtime
+Call Variables ownership and tools remain milestone 4 work; milestone 1 remains incomplete.
 
 ## Specification review
 
