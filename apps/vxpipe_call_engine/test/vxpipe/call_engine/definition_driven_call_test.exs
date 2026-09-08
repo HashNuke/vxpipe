@@ -29,6 +29,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
+    TestFailingTextToSpeechTransport,
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
   }
@@ -189,6 +190,71 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert stt_url =~ "model=flux-general-multi"
   end
 
+  test "keeps the active agent pinned after source definition and profile maps change" do
+    room_id = unique_id("room-pinned-source")
+    input = definition_input([])
+    profiles = capability_profiles([])
+    plan = compile_plan_from(room_id, input, profiles)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+
+    changed_input =
+      put_in(input, [:participants, "receiver", :prompt], "Use a replacement prompt.")
+
+    changed_profiles =
+      put_in(profiles, ["test-model", :options, :model], "replacement:model")
+
+    assert get_in(changed_input, [:participants, "receiver", :prompt]) ==
+             "Use a replacement prompt."
+
+    assert get_in(changed_profiles, ["test-model", :options, :model]) == "replacement:model"
+    assert room.room_id == room_id
+
+    agent_server =
+      AgentActivationSupervisor.whereis_child(receiver.activation_id, :agent_server)
+
+    assert {:ok, agent_state} = Jido.AgentServer.state(agent_server)
+    agent_config = Jido.AI.get_strategy_config(agent_state.agent)
+
+    assert agent_config.system_prompt == "Use the available host action."
+    assert receiver.capabilities.model_inference.options == %{model: "test:scripted"}
+  end
+
+  test "cleans the attempted room tree when the selected provider transport fails to start" do
+    configure_speech_runtime(
+      text_to_speech_transport: {TestFailingTextToSpeechTransport, [observer: self()]}
+    )
+
+    room_id = unique_id("room-provider-start-failure")
+    plan = compile_plan(room_id, speech?: true)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    assert {:error, %Error{code: :room_start_failed}} = CallEngine.start_call(plan)
+    assert_receive {:test_failing_tts_start_attempted, %{url: attempted_url}}
+    assert attempted_url =~ "model=flux-plan-voice"
+    refute_receive {:test_failing_tts_start_attempted, _second_attempt}
+    refute_receive {:test_tts_transport_started, _transport, _connection}
+
+    assert Registry.lookup(
+             Vxpipe.CallEngine.RoomRegistry,
+             {plan.tenant_id, room_id}
+           ) == []
+
+    assert Registry.lookup(
+             Vxpipe.CallEngine.RoomRegistry,
+             {:participant, plan.tenant_id, room_id, caller.participant_id}
+           ) == []
+
+    assert Registry.lookup(
+             Vxpipe.CallEngine.RoomRegistry,
+             {:participant, plan.tenant_id, room_id, receiver.participant_id}
+           ) == []
+
+    assert AgentActivationSupervisor.whereis_child(receiver.activation_id, :agent_server) == nil
+  end
+
   test "rejects enabled later-slice features before registering a room" do
     cases = [
       {fn input ->
@@ -276,12 +342,15 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   defp compile_plan(room_id, options \\ []) do
     transform = Keyword.get(options, :definition_transform, &Function.identity/1)
+    input = options |> definition_input() |> transform.()
+    profiles = capability_profiles(options)
 
+    compile_plan_from(room_id, input, profiles)
+  end
+
+  defp compile_plan_from(room_id, input, profiles) do
     assert {:ok, definition} =
-             options
-             |> definition_input()
-             |> transform.()
-             |> CallDefinition.new(
+             CallDefinition.new(input,
                resource_id: "definition-test",
                revision: 1
              )
@@ -300,28 +369,32 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              )
 
     registries = %{
-      capability_profiles: %{
-        "test-model" => %{
-          kind: :model_inference,
-          provider: Keyword.get(options, :model_provider, :req_llm),
-          options: %{model: "test:scripted"}
-        },
-        "plan-stt" => %{
-          kind: :speech_to_text,
-          provider: Flux,
-          options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
-        },
-        "plan-tts" => %{
-          kind: :text_to_speech,
-          provider: FluxTextToSpeech,
-          options: %{model: "flux-plan-voice", encoding: :linear16, sample_rate: 48_000}
-        }
-      },
+      capability_profiles: profiles,
       host_tools: %{"get_current_time" => CurrentTime}
     }
 
     assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries)
     plan
+  end
+
+  defp capability_profiles(options) do
+    %{
+      "test-model" => %{
+        kind: :model_inference,
+        provider: Keyword.get(options, :model_provider, :req_llm),
+        options: %{model: "test:scripted"}
+      },
+      "plan-stt" => %{
+        kind: :speech_to_text,
+        provider: Flux,
+        options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
+      },
+      "plan-tts" => %{
+        kind: :text_to_speech,
+        provider: FluxTextToSpeech,
+        options: %{model: "flux-plan-voice", encoding: :linear16, sample_rate: 48_000}
+      }
+    }
   end
 
   defp definition_input(options) do
@@ -417,7 +490,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     end)
   end
 
-  defp configure_speech_runtime do
+  defp configure_speech_runtime(options \\ []) do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     speech_to_text = [
@@ -447,7 +520,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, [observer: self()]},
+      transport:
+        Keyword.get(
+          options,
+          :text_to_speech_transport,
+          {TestTextToSpeechTransport, [observer: self()]}
+        ),
       maximum_requests: 2
     ]
 

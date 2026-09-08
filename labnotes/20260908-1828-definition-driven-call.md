@@ -589,3 +589,60 @@ longer configures that duplicate path by default.
 Final gates passed `mix format --check-formatted`, `mix compile --warnings-as-errors`,
 `mix deps.unlock --check-unused`, call engine `99 tests, 0 failures (1 excluded)`, and gateway
 `39 tests, 0 failures (3 excluded)`.
+
+## Checkpoint 9: acceptance hardening and milestone completion
+
+The final acceptance pass added direct evidence for two contracts that earlier implementation
+tests reached only indirectly. A running room now proves its resolved prompt and model remain
+pinned after the source definition and profile registry are replaced. A forced selected-TTS
+transport failure proves the single attempted provider start is cleaned up with no registered
+room, participant, activation, or silent fallback.
+
+Live acceptance exposed two integration defects that the deterministic runtime had not made
+visible. First, Jido ignores a top-level `model` request option; the coordinator now carries the
+plan-selected model in private runtime context and the request transformer returns it as the
+public per-request override Jido applies. Second, the provider-failure branch piped state into a
+helper whose argument order was reversed, crashing the coordinator. Focused red tests reproduced
+both failures. The corrected coordinator reports the normalized provider failure, remains ready
+for the next request, and continues to preserve the selected model.
+
+Development runtime configuration now supplies `GEMINI_API_KEY` to ReqLLM's Google provider
+configuration. The former legacy model-inference injection had become ineffective when that
+duplicate preset was disabled in checkpoint 8. A fixture-only runtime probe confirmed the
+credential is configured without printing its value.
+
+The HTTPS sample also revealed that `crypto.randomUUID` is unavailable on some non-secure HTTP
+origins used during local diagnosis. A frontend red test captured that browser boundary. Room ID
+creation now feature-detects `randomUUID`, falls back to a standards-shaped UUID generated with
+`crypto.getRandomValues`, and retains a last-resort non-cryptographic ID only when the Web Crypto
+API is entirely unavailable. The room creation and console layout were otherwise unchanged.
+
+### Red, green, and acceptance evidence
+
+- The focused plan-pinning/provider-cleanup additions initially failed because the active Jido
+  server retained its default model and the failing TTS transport left startup behavior
+  unproved. They now pass with explicit source-registry mutation, one failed start attempt, and
+  complete registry cleanup.
+- The coordinator model-propagation test initially found no per-request model in private runtime
+  context; the request-transformer test then found no Jido model override. Both are green after
+  routing the immutable plan selection through the transformer.
+- The coordinator provider-failure test initially crashed with `:provider_unavailable` treated
+  as state. It now receives one normalized failure and successfully accepts a replacement turn.
+- The frontend fallback test initially raised because `randomUUID` was absent. It now produces
+  the deterministic standards-shaped fallback and makes exactly one room-creation request.
+- Focused engine command passed `23 tests, 0 failures` across the compiler,
+  definition-driven-call, coordinator, and request-transformer files.
+- In the rendered HTTPS sample, one typed request displayed the `get_current_time` lifecycle and
+  completed with one text/spoken answer. A provider-watch speech fixture then produced one final
+  caller transcript and an agent answer whose streamed TTS sentences reached `spoken: completed`.
+- Chromium inspection at desktop and 390x844 mobile showed the existing responsive console
+  intact. Browser error output was empty. The hardening pass used feature detection and graceful
+  degradation without changing the established visual hierarchy or layout.
+- Final repository gates passed: `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix deps.unlock --check-unused`, call engine
+  `102 tests, 0 failures (1 excluded)`, gateway `39 tests, 0 failures (3 excluded)`, sample
+  `3 tests, 0 failures`, and the production sample build. The Vite build retained its existing
+  advisory for a bundle larger than 500 kB; it is not a build failure.
+
+Every milestone acceptance/failure item now has direct test or live-browser evidence. Milestone
+1 is complete; the next implementation slice is the observable sample call.

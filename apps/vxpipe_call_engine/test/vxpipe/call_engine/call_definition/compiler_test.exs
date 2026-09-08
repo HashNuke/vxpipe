@@ -81,6 +81,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
        ), ["participants", "reception", "tools", "get_current_time", "type"]},
       {put_in(
          definition_input(),
+         [:participants, "reception", :tools],
+         %{"transfer" => %{type: "host", tool: "get_current_time"}}
+       ), ["participants", "reception", "tools", "transfer"]},
+      {put_in(
+         definition_input(),
          [:participants, "reception", :while_present],
          %{record_audio: false}
        ), ["participants", "reception", "while_present"]},

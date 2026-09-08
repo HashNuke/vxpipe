@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestone 1 implementation is in progress. The earlier
+Status: 23 milestone specifications; milestone 1 is complete and milestone 2 is next. The earlier
 behavior contracts have completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
@@ -32,7 +32,7 @@ progress without claiming the entire milestone is complete.
 
 ## Ordered implementation checklist
 
-1. [ ] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through Jido AI.
+1. [x] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through Jido AI.
 2. [ ] [Observable sample call](observable-sample-call.md) — Run a sample conversation and inspect live timing, provider failures and VM health on a separate dashboard.
 3. [ ] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
 4. [ ] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.

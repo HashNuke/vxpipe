@@ -1,9 +1,8 @@
 # Definition-driven one-agent call
 
-Status: implementation in progress. Typed definition/compiler, participant-owned Jido
-routing, plan-selected speech startup, and trusted sample wiring checkpoints completed on
-2026-09-08. All implementation checklist checkpoints are complete; acceptance and final
-spoken-sample evidence remain.
+Status: complete (2026-09-08). The typed definition/compiler, participant-owned Jido
+routing, plan-selected speech startup, trusted sample, failure cleanup, and complete
+text/speech/tool acceptance path are implemented and verified.
 Specification review: approved,
 including the Jido integration follow-up (2026-09-08).
 Prerequisites: none; start from the existing runnable umbrella.
@@ -73,24 +72,24 @@ cannot change that live call.
 
 ## Acceptance and failure checks
 
-- [ ] Missing/identical/unknown/non-string entry refs fail before room/provider start; unused catalog entries start no processes or dials.
-- [ ] Invocation attempts to replace entry refs or tenant identity fail; authored aliases that collide with reserved/generated tools fail before startup.
-- [ ] Equivalent Elixir and JSON definitions normalize identically; unknown schema versions and unsupported provider combinations fail clearly.
-- [ ] One call has one participant per definition key; no cross-call shared runtime identities.
-- [ ] Change a source definition/profile after start: the active room retains its original resolved configuration.
-- [ ] A forced provider startup failure cleans up the attempted tree without silently switching providers.
-- [ ] One host action completes through Jido Action and the ReAct continuation without
+- [x] Missing/identical/unknown/non-string entry refs fail before room/provider start; unused catalog entries start no processes or dials.
+- [x] Invocation attempts to replace entry refs or tenant identity fail; authored aliases that collide with reserved/generated tools fail before startup.
+- [x] Equivalent Elixir and JSON definitions normalize identically; unknown schema versions and unsupported provider combinations fail clearly.
+- [x] One call has one participant per definition key; no cross-call shared runtime identities.
+- [x] Change a source definition/profile after start: the active room retains its original resolved configuration.
+- [x] A forced provider startup failure cleans up the attempted tree without silently switching providers.
+- [x] One host action completes through Jido Action and the ReAct continuation without
   duplicate tool/text events; invalid input fails before the action handler runs.
-- [ ] A deterministic request completes two successive tool rounds and a final response
+- [x] A deterministic request completes two successive tool rounds and a final response
   through Jido's loop, with no engine-owned replacement model/tool loop. Tool names shown
   to the model match accepted definition keys; unsupported aliases fail before startup.
-- [ ] Jido stream cancellation maps to the existing interrupted turn without ending the
+- [x] Jido stream cancellation maps to the existing interrupted turn without ending the
   participant or granting Jido authority over room lifecycle. Configured tool retries are
   zero, and a stale event from a terminated activation cannot reach its replacement.
-- [ ] Kill the Jido process: its participant supervisor applies the declared restart policy
+- [x] Kill the Jido process: its participant supervisor applies the declared restart policy
   without restarting the room. Commit a transfer or end the participant: the Jido process
   and its request-task subtree terminate without orphaned work or speech.
-- [ ] Existing text, speech recognition, streamed model/TTS output, and barge-in regression tests stay green.
+- [x] Existing text, speech recognition, streamed model/TTS output, and barge-in regression tests stay green.
 
 ## Manual verification
 
@@ -110,9 +109,9 @@ host; client-supplied tenant strings do not establish authority.
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence, checkpoint 1 (2026-09-08): released the first engine-owned

@@ -43,6 +43,29 @@ test("starts on a dedicated room-creation page", () => {
   expect(screen.queryByRole("region", { name: "RTVI console" })).not.toBeInTheDocument();
 });
 
+test("creates a room when randomUUID is unavailable on an HTTP origin", async () => {
+  vi.stubGlobal("crypto", {
+    getRandomValues: vi.fn((bytes: Uint8Array) => {
+      bytes.set(Array.from({ length: 16 }, (_value, index) => index));
+      return bytes;
+    }),
+  });
+
+  const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+  expect(fetchMock).toHaveBeenCalledWith("/api/rooms", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ room_id: "room_00010203-0405-4607-8809-0a0b0c0d0e0f" }),
+  });
+});
+
 test("enters the uncluttered Pipecat page after creating a room", async () => {
   vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
 

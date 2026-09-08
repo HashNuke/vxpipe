@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
   alias Vxpipe.CallEngine.Tool.Dispatcher
 
   test "projects streamed sentences and one tool lifecycle onto the existing contract" do
-    coordinator = start_coordinator()
+    coordinator = start_coordinator(request_options: [model: "google:configured-model"])
     command = command("stream-tool", "check a value")
 
     assert :ok = AgentCoordinator.respond(coordinator, command)
@@ -24,6 +24,10 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     assert Keyword.fetch!(options, :request_transformer) ==
              Vxpipe.CallEngine.AgentRequestTransformer
+
+    assert options
+           |> Keyword.fetch!(:tool_context)
+           |> Map.fetch!(:vxpipe_model) == "google:configured-model"
 
     assert Keyword.fetch!(options, :extra_refs) == %{
              vxpipe_command_id: command.id,
@@ -89,6 +93,25 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     assert_receive {:vxpipe_capability_text, ^coordinator, ^command, "Second sentence!"}
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
     refute_receive {:vxpipe_capability_text, ^coordinator, ^command, _duplicate}
+  end
+
+  test "reports a provider failure and remains available for the next request" do
+    coordinator = start_coordinator()
+    failed = command("failed", "first")
+    replacement = command("replacement-after-failure", "second")
+
+    assert :ok = AgentCoordinator.respond(coordinator, failed)
+    assert_receive {:test_agent_request, ^coordinator, failed_request_id, "first", _options}
+
+    emit(coordinator, failed_request_id, :request_failed, %{error: :provider_failure})
+
+    assert_receive {:vxpipe_capability_failed, ^coordinator, ^failed, :provider_unavailable}
+    _ = :sys.get_state(coordinator)
+
+    assert :ok = AgentCoordinator.respond(coordinator, replacement)
+
+    assert_receive {:test_agent_request, ^coordinator, _replacement_request_id, "second",
+                    _options}
   end
 
   test "times out one request, ignores its stale terminal event, and advances the bounded queue" do

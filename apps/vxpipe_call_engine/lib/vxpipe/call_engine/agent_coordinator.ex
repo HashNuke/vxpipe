@@ -316,7 +316,21 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
     existing_tool_context = Keyword.get(state.request_options, :tool_context, %{})
 
+    tool_context =
+      Map.merge(existing_tool_context, %{
+        vxpipe_discarded_agent_request_ids: state.discarded_request_ids,
+        vxpipe_tool_context: tool_context,
+        vxpipe_tool_dispatcher: state.tool_dispatcher
+      })
+
+    tool_context =
+      case Keyword.fetch(state.request_options, :model) do
+        {:ok, model} -> Map.put(tool_context, :vxpipe_model, model)
+        :error -> tool_context
+      end
+
     state.request_options
+    |> Keyword.delete(:model)
     |> Keyword.put(:request_id, request_id)
     |> Keyword.put(:request_transformer, AgentRequestTransformer)
     |> Keyword.put(:stream_to, {:pid, self()})
@@ -324,14 +338,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       vxpipe_command_id: command.id,
       vxpipe_request_id: request_id
     })
-    |> Keyword.put(
-      :tool_context,
-      Map.merge(existing_tool_context, %{
-        vxpipe_discarded_agent_request_ids: state.discarded_request_ids,
-        vxpipe_tool_context: tool_context,
-        vxpipe_tool_dispatcher: state.tool_dispatcher
-      })
-    )
+    |> Keyword.put(:tool_context, tool_context)
   end
 
   defp push_text(text, state) do
@@ -381,7 +388,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
     end
   end
 
-  defp fail_current(reason, state) do
+  defp fail_current(state, reason) do
     cancel_timer(state.current.timer)
     emit_failure(state.owner, self(), state.current.command, reason)
     %{state | current: nil}

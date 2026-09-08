@@ -4,7 +4,6 @@ if config_env() == :dev do
   call_engine_settings =
     Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
-  model_inference = Keyword.fetch!(call_engine_settings, :model_inference)
   speech_to_text = Keyword.fetch!(call_engine_settings, :speech_to_text)
   text_to_speech = Keyword.fetch!(call_engine_settings, :text_to_speech)
 
@@ -48,17 +47,9 @@ if config_env() == :dev do
   gemini_api_key =
     fetch_required_env.("GEMINI_API_KEY", "the trusted development sample")
 
-  model_inference =
-    if Keyword.fetch!(model_inference, :enabled) do
-      Keyword.update!(model_inference, :provider_options, fn provider_options ->
-        Keyword.put(provider_options, :api_key, gemini_api_key)
-      end)
-    else
-      model_inference
-    end
+  config :req_llm, google_api_key: gemini_api_key
 
   config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
-    model_inference: model_inference,
     speech_to_text: speech_to_text,
     text_to_speech: text_to_speech
 

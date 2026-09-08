@@ -19,7 +19,15 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformer do
         discarded_request?(entry.refs, discarded)
       end)
 
-    {:ok, %{messages: Context.to_messages(%{context | entries: entries})}}
+    overrides = %{messages: Context.to_messages(%{context | entries: entries})}
+
+    overrides =
+      case Map.fetch(runtime_context, :vxpipe_model) do
+        {:ok, model} -> Map.put(overrides, :model, model)
+        :error -> overrides
+      end
+
+    {:ok, overrides}
   end
 
   def transform_request(_request, _state, _config, _runtime_context),

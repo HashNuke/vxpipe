@@ -19,12 +19,15 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformerTest do
 
     request = %{messages: Context.to_messages(context), llm_opts: [], tools: %{}, model: :fast}
 
-    assert {:ok, %{messages: messages}} =
+    assert {:ok, %{messages: messages, model: "google:configured-model"}} =
              AgentRequestTransformer.transform_request(
                request,
                state,
                %{},
-               %{vxpipe_discarded_agent_request_ids: ["old-request"]}
+               %{
+                 vxpipe_discarded_agent_request_ids: ["old-request"],
+                 vxpipe_model: "google:configured-model"
+               }
              )
 
     assert Enum.map(messages, &Map.get(&1, :content)) == ["Stay concise.", "current user"]
