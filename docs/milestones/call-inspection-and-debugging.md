@@ -6,6 +6,7 @@ Prerequisites: [Observable sample call](observable-sample-call.md);
 [Asynchronous history](asynchronous-call-history.md), including its tenant admission,
 Call Variables and background-tool prerequisites.
 Sources: [Security and observability](../architecture.md#security-and-observability);
+[Gateway/console boundary](../gateway-console-boundary.md);
 [History ownership](asynchronous-call-history.md); [Variables and private tool projections](call-variables-and-tool-visibility.md).
 
 ## Runnable outcome
@@ -21,10 +22,14 @@ call ends, the same page remains useful from stored history without a live room 
   dashboard, not controls overlaid on the voice console. Start with a bounded list
   and paginated history; loading, empty, unavailable, denied and ended-call states
   are real outcomes rather than endless spinners or fabricated empty histories.
-- The gateway authenticates/translates requests. Calls owns authorized persisted-history
-  reads through persistence ports; the engine owns explicitly projected live facts.
-  Do not query Repo from the gateway, read arbitrary process state or subscribe browsers
-  directly to unrestricted internal messages. No new source of truth for call history.
+- The Phoenix `vxpipe_console` / `Vxpipe.Console` application owns these pages and their
+  browser access boundary, using Calls public APIs for history and gateway/engine public
+  interfaces for permitted live projections. The reusable gateway authenticates/translates
+  call API/protocol requests; it does not gain Phoenix or dashboard dependencies.
+  Calls owns authorized persisted-history reads through persistence ports; the engine
+  owns explicitly projected live facts. Do not query Repo from the console or gateway,
+  read arbitrary process state or subscribe browsers directly to unrestricted internal
+  messages. No new source of truth for call history.
 - Scope every list, detail and subscription to the trusted operator principal and tenant.
   Reuse established authorization boundaries; neither a public call ID nor a participant
   join token grants inspection. Keep application-wide VM diagnostics separate from
@@ -71,7 +76,8 @@ call ends, the same page remains useful from stored history without a live room 
   correlation, snapshot revisions and live-versus-persisted source labeling.
 - [ ] Add any missing permitted per-call timing facts to the existing asynchronous
   archival projection without changing general metric labels or making writes synchronous.
-- [ ] Implement read-only pages and bounded updates with explicit stale/gap/error states.
+- [ ] Implement console-owned read-only pages and bounded updates through public APIs,
+  with explicit stale/gap/error states and no UI dependency in the reusable gateway.
 - [ ] Exercise delayed storage, failed/unknown tool outcomes and terminated rooms through
   deterministic fixtures; keep hosted-provider/network checks in the integration lane.
 - [ ] Inspect desktop/mobile list/detail views and verify the voice console stays unchanged.
@@ -93,8 +99,9 @@ call ends, the same page remains useful from stored history without a live room 
   state and honest gaps; reconnect never creates a call, executes a tool or replays audio.
 - [ ] Missing, denied, unavailable and purged-call responses are safe; stale cached facts
   cannot recreate deleted history. A closed page releases subscriptions without ending calls.
-- [ ] No gateway-to-Repo dependency, unrestricted process inspection or additional media
-  capture is introduced. General VM visibility is never implied by tenant authorization.
+- [ ] No console/gateway-to-Repo dependency, gateway-to-Phoenix/UI dependency,
+  unrestricted process inspection or additional media capture is introduced. General
+  VM visibility is never implied by tenant authorization.
 
 ## Manual verification
 
@@ -132,4 +139,8 @@ Local design review on 2026-09-08 checked history/admission prerequisites, a use
 live-and-ended call workflow, tenant isolation, independent client visibility, interval
 privacy, read-only ownership, bounded subscribers and honest archive lag. It kept audio
 monitoring in its existing milestone and operator authentication explicit before exposure.
+The subsequent approved console/gateway boundary received a focused specification review:
+the earlier observable-call slice supplies the Phoenix shell, inspection uses public
+Calls/live-projection interfaces, and browser authorization remains separate from API-key
+and caller-token admission. No new prerequisite or tenant administration UI is implied.
 This is specification evidence only; implementation and browser checks remain unchecked.

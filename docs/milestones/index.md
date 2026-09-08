@@ -11,6 +11,9 @@ Jido AI replaces custom agent-loop work; ExMCP supplies the protocol client behi
 That integration change stayed inside existing milestones. The subsequent user-requested
 observability additions introduce an early observable sample call and later call inspection;
 the original milestones retain their filenames and relative order.
+The approved [gateway/console boundary](../gateway-console-boundary.md) keeps the gateway
+reusable and assigns Phoenix/dashboard/sample ownership to `vxpipe_console` /
+`Vxpipe.Console`. It changes these slices' application ownership, not their count or order.
 
 ## How to use this index
 
@@ -126,10 +129,23 @@ endpoint/tool dispatcher or replacement custom LLM loop is an acceptable workaro
 Preserve dependency direction in child `mix.exs` files.
 
 The two observability slices deliver separate operator interfaces without expanding the
-voice console. Engine/gateway instrumentation is independent of its reporter/UI, and
-inspection uses authorized live projections and Calls history rather than gateway Repo
-access. Phoenix/LiveDashboard remains a candidate pending a separate decision; accepting
-the slices does not authorize regeneration/renaming of applications or a framework migration.
+voice console. The early slice introduces the approved Phoenix shell, `vxpipe_console` /
+`Vxpipe.Console`, owning endpoint/dashboard/sample assets. The existing `vxpipe_gateway`
+retains reusable Plug/protocol/connection ownership with no Phoenix/UI dependency; its
+planned supported mounting interface, explicit supervision/configuration and optional
+standalone listener require implementation and verification. Do not regenerate or rename
+the gateway: add the console around its existing interfaces, making only minimal mounting
+or configuration adjustments if required. The console depends on gateway public interfaces
+and, when introduced by its owning prerequisite, Calls public APIs. Its Phoenix endpoint
+mounts/invokes the gateway Plug in-process on one shared HTTP listener/port, disabling
+only the gateway standalone listener while retaining session/connection supervision.
+No internal HTTP proxy hop or second gateway listener is needed; the standalone listener
+is an alternative embedding mode. React/Vite remains the sample implementation;
+moving asset ownership does not mean rewriting the sample in LiveView.
+Engine/gateway instrumentation is independent of its reporter/UI, and inspection uses
+authorized live projections and Calls history rather than console/gateway Repo access.
+LiveDashboard remains a dashboard candidate; the operator-auth implementation must still
+be selected before external exposure. Phoenix application ownership is no longer pending.
 Keep general metrics payload-free and bounded, call inspection tenant-scoped, and full
 VM introspection restricted to platform operators. Inspection adds no recording or replay.
 
@@ -190,14 +206,14 @@ in their own review sections; no independent-agent or implementation verificatio
 | Milestone | Review status | Evidence |
 | --- | --- | --- |
 | [Definition-driven one-agent call](definition-driven-call.md#specification-review) | Reviewed; subset clarified | Prior agent review approved AgentServer readiness/teardown boundaries. Released-package probe verified repeated rounds and exposed alias loss; initial static keys must match Action names until the public binding extension exists. |
-| [Observable sample call](observable-sample-call.md#specification-review) | Scope requested; locally reviewed | Early runnable dashboard/failure scenario, bounded payload-free telemetry, clock provenance, operator-only access and pending Phoenix choice; no runtime/UI evidence yet. |
+| [Observable sample call](observable-sample-call.md#specification-review) | Scope requested; locally reviewed | Early runnable dashboard/failure scenario, bounded payload-free telemetry, clock provenance and operator-only access; approved separate Phoenix console with gateway embedding gates. No runtime/UI evidence yet. |
 | [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Approved | milestone_review_a; real audio, independent fixtures, bounded streaming and explicit transport limits. |
 | [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Approved | Original behavior approved by milestone_review_b; focused Jido review added finite Action-module, strict-envelope and private-context gates. |
 | [Conversation during background tools](background-tool-conversation.md#specification-review) | Approved | Original behavior approved by milestone_review_c; focused Jido review added the retained in-memory Vxpipe mailbox/internal-continuation boundary instead of best-effort Jido injection. |
 | [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Approved | milestone_review_a; Separated reusable revision metadata from per-call plan/credential resolution; excluded credentials and leases from revisions/routes; focused re-review approved. |
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
-| [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | Scope requested; locally reviewed | Authorized live/ended call workflow, tenant isolation, revisions/lag, bounded subscriptions and no audio/privacy bypass; placed after its history/admission prerequisites. |
+| [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | Scope requested; locally reviewed | Authorized live/ended call workflow, tenant isolation, revisions/lag, bounded subscriptions and no audio/privacy bypass; console-owned pages use public Calls/live projections after their prerequisites. |
 | [MCP client integration and conformance](mcp-client-library.md#specification-review) | Revised after investigation | ExMCP replaces direct Jido MCP; protocol/policy gates remain. No Jido dependency or model exposure in this standalone slice; transport conformance is not yet demonstrated. |
 | [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Revised; implementation blocked | Owns the required public Jido AI data-tool projection/executor gate, exact aliases/schemas and mixed-loop proof; ExMCP alone does not resolve it. |
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
@@ -211,7 +227,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Versioned call-details publications](call-details-publications.md#specification-review) | Approved | milestone_review_a; Approved initial draft; clarified lifecycle/direction/route/plan digest in publication contents. |
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
-| [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved | milestone_review_a; Approved initial draft; embedded/container ownership, typed config, secrets, admission, health/shutdown and media acceptance correct. |
+| [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary follow-up reviewed | milestone_review_a approved the initial draft; subsequent local review covers gateway-only embedding, optional listener, console-hosted composition and built React assets without changing order. |
 
 ## Planning verification
 
@@ -249,8 +265,12 @@ The subsequent observability update adds two user-requested slices, bringing the
 index to 23. The early dashboard follows the definition-driven call; per-call inspection
 follows asynchronous history. Existing filenames, relative ordering and call-definition
 contracts are preserved. The new specifications include automated/manual failure checks
-and rendered-browser gates; the framework/authentication implementation choices remain
-explicit. See the [planning log](../../labnotes/20260908-1725-observability-milestone-plan.md).
+and rendered-browser gates. The later approved gateway/console split assigns Phoenix to
+the separate console, retaining gateway reuse; dashboard/authentication implementation
+choices remain explicit. The affected specifications record a focused ownership/dependency
+review; all 23 entries retain their order and unchecked implementation status. See the
+[observability planning log](../../labnotes/20260908-1725-observability-milestone-plan.md)
+and [gateway/console decision](../gateway-console-boundary.md).
 
 This checkpoint changes repository documentation only. No application integration,
 browser, live provider, official conformance or umbrella suite execution is claimed;

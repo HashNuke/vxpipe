@@ -1,9 +1,11 @@
 # Observable sample call
 
 Status: not implemented. Scope requested by the user; specification reviewed locally
-on 2026-09-08. Phoenix adoption remains a separate pending choice, not an approved migration.
+on 2026-09-08. A separate Phoenix shell, `vxpipe_console` / `Vxpipe.Console`, is approved;
+the reusable gateway remains independent of Phoenix and UI dependencies.
 Prerequisites: [Definition-driven call](definition-driven-call.md).
 Sources: [Security and observability](../architecture.md#security-and-observability);
+[Gateway/console boundary](../gateway-console-boundary.md);
 [Telemetry handler execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4);
 [LiveDashboard candidate](https://hexdocs.pm/phoenix_live_dashboard/Phoenix.LiveDashboard.html).
 
@@ -51,17 +53,39 @@ slow response or missing measurement. The existing voice console still works unc
   admission. A tailnet URL or a caller's join token is not operator authorization.
   Default exposure is off unless configured; outside that trusted setup require a
   documented operator-auth boundary before enabling routes or subscriptions.
-- Phoenix plus LiveDashboard is a candidate implementation, not a requirement implied
-  by accepting this milestone. Resolve that choice before implementation. If selected,
-  migrate the existing gateway in place, preserving application names, process owners,
-  RTVI/WebRTC contracts, configured CORS, and Caddy/Vite development behavior. Retain
-  React for the playground. Do not add Repo ownership to the gateway. A full VM/ETS
-  dashboard is platform-operator access, never a tenant-facing call inspection page.
+- Introduce the separate Phoenix application `vxpipe_console`, using the
+  `Vxpipe.Console` namespace, to own the endpoint, dashboard and sample frontend assets.
+  Keep `vxpipe_gateway` as reusable Plug/protocol handling and connection supervision,
+  with no Phoenix or UI dependency. Console depends on gateway public interfaces;
+  neither owns Repo. Preserve existing application names, process owners, RTVI/WebRTC
+  contracts, configured CORS and Caddy/Vite development behavior; do not regenerate
+  the gateway as a Phoenix application. This is additive: include the existing gateway
+  as a dependency and build the shell in the new console app, not a gateway rewrite.
+- The console's Phoenix endpoint mounts/invokes the gateway Plug in-process. It owns
+  the single application HTTP listener/port for console pages and call endpoints;
+  disable the gateway's separate listener but retain its session/connection runtime.
+  There is no internal HTTP reverse-proxy hop. A standalone gateway listener is an
+  alternative for other hosts, not a second listener in the console deployment.
+- Reuse and verify gateway Plug/protocol interfaces with explicit supervision and
+  configuration, plus an optional standalone listener. Make only minimal mounting or
+  configuration adjustments if integration requires them. A consuming Elixir application
+  can use the gateway without the console. This is a planned verified integration
+  contract, not a claim that the existing router is already a supported mounting interface.
+- Move sample asset ownership to the console during implementation without rewriting
+  React or replacing its client/UI dependencies with LiveView. Retain Vite for
+  development/build tooling and serve built assets from the console in a release.
+  Select the operational dashboard implementation, with LiveDashboard a candidate;
+  full VM/ETS inspection is platform-operator access, never tenant call inspection.
 
 ## Implementation checklist
 
+- [ ] Red-test project-owned gateway mounting/startup and single-listener configuration
+  before adding the console integration.
+- [ ] Add the approved console shell using the existing gateway dependency; verify
+  explicit startup/mounting and adjust gateway configuration only where needed, without
+  moving protocol ownership into Phoenix or rewriting the gateway.
 - [ ] Select/document the dashboard mechanism and trusted operator-access boundary;
-  record any separately approved Phoenix migration and its dependency ownership.
+  keep Phoenix/dashboard/frontend dependencies in the console application.
 - [ ] Write red tests for project-owned timing/outcome projection, missing observations,
   safe metadata, bounded dimensions and reporter restart behavior.
 - [ ] Instrument existing request/model/speech boundaries and add sampled VM measurements.
@@ -82,6 +106,11 @@ slow response or missing measurement. The existing voice console still works unc
 - [ ] Stop/restart the collector and disconnect/saturate the dashboard: calls continue,
   retained buffers remain bounded, missing data is visible and measurements are not doubled.
 - [ ] An embedded host receives engine events without gateway/database/UI dependencies.
+- [ ] A consuming host mounts the gateway with documented supervision/configuration
+  while its standalone listener is disabled, without Phoenix/console dependencies.
+  The optional standalone listener also preserves existing protocol/CORS behavior.
+- [ ] Console pages and gateway call routes share the Phoenix HTTP listener without
+  an internal HTTP hop; disabling the gateway listener does not stop its connection runtime.
 - [ ] Disabled or unauthorized diagnostic requests/subscriptions fail closed; ordinary
   callers cannot access operator routes. VM-wide inspection is not granted by tenant scope.
 - [ ] Existing room creation, RTVI joining, text/audio, CORS and interruption checks remain
@@ -98,13 +127,18 @@ slow response or missing measurement. The existing voice console still works unc
    audio, bounded diagnostic state and honest stale/missing status after reconnection.
 5. Disable diagnostics, try an ordinary caller session, and test the embedded reporter.
    Inspect desktop/mobile views without changing the voice console layout.
+6. Run the documented gateway embedding fixture without the console or Phoenix; check
+   joining through its mounted routes, and separately through the standalone listener.
+   In the console deployment, verify both pages and call routes use its one HTTP port
+   and no gateway standalone listener is running.
 
 ## Scope boundaries
 
 No persistent per-call timeline, database prerequisite, hosted metrics backend, alerting
 service, distributed tracing rollout, tenant-wide admin console, raw payload logging,
-silent audio monitoring, packet capture or new client protocol. General Phoenix adoption
-and production operator-login implementation are not silently approved here.
+silent audio monitoring, packet capture or new client protocol. The approved Phoenix
+shell does not authorize replacing gateway internals, rewriting the React sample in
+LiveView or introducing a production operator-login product.
 
 ## Completion and evidence
 
@@ -119,6 +153,9 @@ Implementation evidence: none yet. Specification review does not complete the mi
 
 Local design review on 2026-09-08 checked the early prerequisite, observable browser
 outcome, framework-independent emitters, synchronous-handler constraints, bounded metric
-cardinality, operator-only access and preservation of existing protocols. It separated
-the pending Phoenix choice from the requested outcome and left persistence/inspection
-to their later slice. This records design review only, not implementation or UI verification.
+cardinality, operator-only access and preservation of existing protocols. The subsequent
+approved gateway/console split was reviewed for dependency direction, mountable and
+standalone gateway acceptance, React asset ownership and the unchanged prerequisite.
+It supersedes the earlier pending Phoenix choice and in-place gateway conversion proposal;
+persistence/inspection remain in their later slices and operator authentication remains
+explicit. This records design review only, not implementation or UI verification.

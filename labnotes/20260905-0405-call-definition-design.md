@@ -4359,6 +4359,11 @@ the asynchronous runtime does not remove required configured admission writes.
 The target umbrella split is:
 
 ```text
+vxpipe_console
+  -> owns the Phoenix endpoint, samples and browser dashboards
+  -> includes/mounts the existing gateway; uses public Calls APIs for durable views
+  -> uses the Vxpipe.Console namespace, not Vxpipe.Web
+
 vxpipe_gateway
   -> verifies and normalizes HTTP/provider input
   -> asks the call-admission API to admit or attach a call
@@ -4387,6 +4392,18 @@ vxpipe_artifacts (when the recording slice begins)
      jobs, and archive objects
   -> implements artifact/publisher ports without entering the room hot path
 ```
+
+The [gateway/console boundary](../docs/gateway-console-boundary.md), approved on
+2026-09-08, is additive: do not convert, rename or regenerate the gateway. Hosts
+can consume its reusable Plug/protocol runtime without the console or Phoenix;
+the standalone listener remains an alternative to mounting into a host endpoint.
+Our console mounts the gateway Plug in its Phoenix endpoint, with the gateway's
+standalone listener disabled: one HTTP listener, not a second gateway port or an
+internal HTTP proxy. Gateway session/connection processes still start normally.
+Gateway mounting, process startup and transport configuration need explicit
+implementation verification. Console presentation does not take ownership of
+Ecto or change the existing admission/async archival contracts. No application
+has been created or moved by this design update.
 
 The short responsibility test is:
 

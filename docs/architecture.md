@@ -675,6 +675,29 @@ events. The dependency direction is from gateway to the public call-engine
 contract. The call engine must not depend on RTVI message names, JSON shapes,
 client SDKs, or transport credentials.
 
+### Reusable gateway and console
+
+The approved [gateway/console split](gateway-console-boundary.md) adds a separate
+Phoenix application, `vxpipe_console`, using the `Vxpipe.Console` namespace.
+It includes the existing `vxpipe_gateway` as a dependency; it does not rename,
+regenerate or convert that application. The console owns browser presentation,
+samples assets and dashboard pages. Gateway owns the reusable API/protocol and
+connection runtime, without a dependency on Phoenix or our console.
+
+Both the console and another embedding host should be able to mount the gateway
+HTTP interface into their endpoint and start its required supervised processes.
+Our console deployment has one Phoenix HTTP listener: gateway is a Plug in that
+endpoint, its standalone listener is disabled, and no internal HTTP hop is needed.
+Other hosts may instead enable the standalone gateway listener without console.
+Mounted paths, transport upgrades and runtime configuration require explicit
+integration verification; this is an approved
+target, not an assertion that every embedding mode already works.
+
+The console uses public gateway/Calls interfaces. Ecto Repo, schemas and migrations
+remain in `vxpipe_persistence`; `vxpipe_calls` owns database-neutral workflows and
+repository interfaces. This split changes neither the engine's independent
+embedding contract nor the asynchronous live-storage design.
+
 ## Gateway protocol adapter contract
 
 Every client protocol adapter must implement the same responsibilities:
@@ -1486,18 +1509,20 @@ consume engine events without a gateway/UI dependency. Measurement boundaries mu
 distinguish provider output, gateway egress and actual remote playback; missing data
 is not zero. [Telemetry execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4).
 
-The gateway presents authorized projections, not direct Repo queries or unrestricted
-room state. Tenant call inspection is separate from platform-wide VM introspection;
+The gateway exposes authorized projections and the console presents them through
+public gateway/Calls APIs, not direct Repo queries or unrestricted room state.
+Tenant call inspection is separate from platform-wide VM introspection;
 caller tokens and public call IDs grant neither operator access nor extra visibility.
 Existing source-interval privacy and credential exclusions apply, and debugging never
 starts STT, recording or audio monitoring implicitly. Silent listening remains in the
 live-mixing milestone. Later slices extend these views with their implemented facts.
 
-Phoenix and LiveDashboard remain a candidate mechanism, not an approved migration.
-If adopted separately, preserve the existing gateway application and protocol handlers,
-React sample, application-option ownership and engine/persistence dependency direction.
-Both operator interfaces are explicitly enabled/protected; the browser authentication
-boundary must be selected before exposing them beyond trusted development.
+Phoenix is approved for the separate `vxpipe_console` application, not a gateway
+migration. Preserve the existing gateway protocol handlers, React sample,
+application-option ownership and engine/persistence dependency direction.
+LiveDashboard remains a candidate operational view. Both operator interfaces are
+explicitly enabled/protected; the browser authentication boundary must be selected
+before exposing them beyond trusted development. Implementation remains pending.
 
 ## Configuration and container boundary
 
