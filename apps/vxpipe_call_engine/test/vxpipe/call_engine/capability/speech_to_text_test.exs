@@ -82,7 +82,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     TestSpeechToTextTransport.disconnect(transport, :closed)
 
     assert_receive {:vxpipe_stt_unavailable, ^capability, _, :transport_closed}
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}, 500
   end
 
   test "does not turn malformed provider messages into domain signals" do
@@ -91,7 +91,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     TestSpeechToTextTransport.deliver(transport, ~s({"type":"TurnInfo"}))
 
     assert_receive {:vxpipe_stt_unavailable, ^capability, _, :invalid_provider_message}
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :invalid_provider_message}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :invalid_provider_message}, 500
     refute_receive {:vxpipe_stt_signal, ^capability, _, _}
   end
 
