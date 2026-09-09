@@ -12,12 +12,14 @@ defmodule Vxpipe.Gateway.TrustedCall do
 
   alias Vxpipe.CallEngine.CallDefinition.ToolVisibility
 
-  @enforce_keys [:definition, :registries]
+  @derive {Inspect, except: [:initial_variables]}
+  @enforce_keys [:definition, :registries, :initial_variables]
   defstruct @enforce_keys ++ [tool_visibility_override: nil]
 
   @type t :: %__MODULE__{
           definition: CallDefinition.t(),
           registries: map(),
+          initial_variables: map(),
           tool_visibility_override: nil | ToolVisibility.t()
         }
 
@@ -29,6 +31,8 @@ defmodule Vxpipe.Gateway.TrustedCall do
          capability_profiles when is_map(capability_profiles) <-
            Keyword.get(options, :capability_profiles),
          host_tools when is_map(host_tools) <- Keyword.get(options, :host_tools),
+         initial_variables when is_map(initial_variables) <-
+           Keyword.get(options, :initial_variables, %{}),
          {:ok, definition} <-
            CallDefinition.new(definition_input,
              resource_id: resource_id,
@@ -39,6 +43,7 @@ defmodule Vxpipe.Gateway.TrustedCall do
        %__MODULE__{
          definition: definition,
          registries: %{capability_profiles: capability_profiles, host_tools: host_tools},
+         initial_variables: initial_variables,
          tool_visibility_override: tool_visibility_override
        }}
     else
@@ -58,7 +63,7 @@ defmodule Vxpipe.Gateway.TrustedCall do
 
     invocation_input = %{
       call_definition: %{id: definition.resource_id, revision: definition.revision},
-      initial_variables: %{},
+      initial_variables: trusted_call.initial_variables,
       transport: %{type: "web"}
     }
 

@@ -2169,9 +2169,12 @@ cannot construct a module or select an unregistered transport. This permits diff
 profiles, including in-process Morse providers, without changing legacy room defaults. It retains
 those typed provider runtimes for the room,
 starts TTS with the receiver and starts the pinned STT when the caller connection attaches.
-Existing preset startup remains intact. This subset does not yet provide the room-owned Call
-Variables process/tools, so the preflight below rejects non-empty sections until that later
-slice exists. Exact evidence is tracked in the milestone and its implementation labnote.
+Existing preset startup remains intact. A resolved-plan room now starts its dedicated
+CallVariables owner alongside, rather than inside, RoomAuthority and binds only its active
+agent's permitted generated Actions. The temporary gateway adapter may supply trusted,
+server-configured initial variables to the invocation; the browser room-creation body cannot
+replace them, and adapter inspection excludes the private values. Exact evidence is tracked
+in the milestone and its implementation labnote.
 
 The public plan-start boundary now preflights the complete active startup selection before it
 creates the room supervisor child. This check resolves application-owned provider configuration

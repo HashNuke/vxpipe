@@ -88,3 +88,15 @@ candidate. It returns only grant-safe results and keeps all failure paths non-mu
   green: 9 compiler tests and 16 projection/HTTP tests. The full application suites
   are also green at 150 Call Engine tests (one excluded) and 50 Gateway tests (four
   excluded).
+- Closed the runnable-sample gap by allowing the temporary trusted gateway adapter
+  to supply server-owned `initial_variables`. A focused red test first showed that
+  the adapter ignored its configured values and incorrectly started the call with
+  an empty map; it now passes the configured map into the normal invocation/compiler
+  validation path. Browser-provided initial values remain ignored, and the trusted
+  adapter's inspection excludes the private map.
+- The Console development definition now declares a read-only synthetic `order`
+  section prefilled with `order-demo-1001` plus a read+write `intake` section with
+  summary and urgency variables. Its prompt tells the agent to use the generated
+  tools and to trust successful tool results only. Full visibility remains a
+  server-owned sample selection, so the existing Console can display those calls
+  without new controls.

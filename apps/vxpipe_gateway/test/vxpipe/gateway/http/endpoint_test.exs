@@ -5,7 +5,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
   import Plug.Test
 
   alias Vxpipe.Gateway.HTTP.Endpoint
-  alias Vxpipe.Gateway.Session
+  alias Vxpipe.Gateway.{Session, TrustedCall}
 
   @allowed_origin "https://client.example.test"
   @request_stop_event [:vxpipe, :gateway, :http, :request, :stop]
@@ -210,6 +210,50 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
     assert session.tool_visibility.overrides == %{}
   end
 
+  test "uses trusted initial variables instead of browser input" do
+    room_id = "room-initial-variables-#{System.unique_integer([:positive, :monotonic])}"
+    definition = definition_with_order_variables()
+
+    conn =
+      :post
+      |> conn(
+        "/api/rooms",
+        JSON.encode!(%{
+          "room_id" => room_id,
+          "initial_variables" => %{"order" => %{"id" => "browser-value"}}
+        })
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(
+        trusted_endpoint_options(
+          definition: definition,
+          initial_variables: %{"order" => %{"id" => 123}}
+        )
+      )
+
+    assert conn.status == 503
+
+    assert %{
+             "error" => %{
+               "code" => "call_definition_resolution_failed",
+               "details" => %{"path" => ["initial_variables", "order"]}
+             }
+           } = JSON.decode!(conn.resp_body)
+  end
+
+  test "keeps configured initial variables out of trusted-call inspection" do
+    sentinel = "private-order-sentinel"
+
+    options =
+      trusted_call_options()
+      |> Keyword.put(:definition, definition_with_order_variables())
+      |> Keyword.put(:initial_variables, %{"order" => %{"id" => sentinel}})
+
+    assert {:ok, trusted_call} = TrustedCall.new(options)
+    assert trusted_call.initial_variables == %{"order" => %{"id" => sentinel}}
+    refute inspect(trusted_call) =~ sentinel
+  end
+
   test "rejects a trusted definition call without a valid room ID" do
     conn =
       :post
@@ -332,6 +376,26 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
         "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime
       }
     ]
+  end
+
+  defp definition_with_order_variables do
+    trusted_call_options()
+    |> Keyword.fetch!(:definition)
+    |> Map.put(:call_variables, %{
+      sections: %{
+        "order" => %{
+          schema: %{
+            "type" => "object",
+            "properties" => %{"id" => %{"type" => "string"}},
+            "additionalProperties" => false
+          }
+        }
+      }
+    })
+    |> put_in(
+      [:participants, "receiver", :variable_permissions],
+      %{"order" => ["read"]}
+    )
   end
 
   defp trusted_endpoint_options(trusted_overrides \\ []) do

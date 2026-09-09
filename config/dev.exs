@@ -4,7 +4,10 @@ sample_system_prompt = """
 You are a concise, helpful voice assistant. Respond naturally in plain text.
 Keep replies brief unless the user asks for detail. Do not use Markdown because
 your response will be spoken aloud. Always use get_current_time when asked for
-the current date or time; never guess it.
+the current date or time; never guess it. Use read_variables when asked about the
+sample order. Collect a concise request summary and urgency when the caller gives
+them, then save those values in the intake section with update_variables. Never
+claim a variable update succeeded unless its tool result confirms success.
 """
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
@@ -63,6 +66,9 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
         resource_id: "development-sample",
         revision: 1,
         tool_visibility: "full",
+        initial_variables: %{
+          "order" => %{"id" => "order-demo-1001"}
+        },
         definition: %{
           schema_version: "20260909.01",
           name: "Development sample",
@@ -75,7 +81,32 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               text_to_speech: "deepgram-flux-voice"
             }
           },
-          call_variables: %{sections: %{}},
+          call_variables: %{
+            sections: %{
+              "order" => %{
+                schema: %{
+                  "type" => "object",
+                  "properties" => %{
+                    "id" => %{"type" => "string", "minLength" => 1}
+                  },
+                  "additionalProperties" => false
+                }
+              },
+              "intake" => %{
+                schema: %{
+                  "type" => "object",
+                  "properties" => %{
+                    "summary" => %{"type" => "string"},
+                    "urgency" => %{
+                      "type" => "string",
+                      "enum" => ["low", "normal", "high"]
+                    }
+                  },
+                  "additionalProperties" => false
+                }
+              }
+            }
+          },
           participants: %{
             "caller" => %{
               type: "human",
@@ -90,7 +121,11 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               tools: %{
                 "get_current_time" => %{type: "host", tool: "get_current_time"}
               },
-              transfers: []
+              transfers: [],
+              variable_permissions: %{
+                "order" => ["read"],
+                "intake" => ["read", "write"]
+              }
             }
           },
           limits: %{max_duration_ms: 1_800_000}
