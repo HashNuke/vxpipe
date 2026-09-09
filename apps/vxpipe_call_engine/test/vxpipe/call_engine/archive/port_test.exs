@@ -103,6 +103,53 @@ defmodule Vxpipe.CallEngine.Archive.PortTest do
                    1_000
   end
 
+  test "removes transcript content before handoff when the source policy denies storage" do
+    handoff = open_archive()
+
+    port =
+      Port.new(
+        handoff,
+        %{
+          tenant_id: "tenant-archive",
+          call_id: "call-archive",
+          room_id: "room-archive",
+          incarnation_id: "rinc-archive"
+        },
+        %{"revision" => 8, "save_transcripts" => false}
+      )
+
+    port =
+      Port.emit(port, :accepted_input,
+        id: "evt-private-input",
+        occurred_at: ~U[2026-09-09 12:01:00.000Z],
+        payload: %{"content" => "must-not-enter-the-queue", "modality" => "text"}
+      )
+
+    _port =
+      Port.emit(port, :agent_output_generated,
+        id: "evt-private-output",
+        occurred_at: ~U[2026-09-09 12:01:01.000Z],
+        payload: %{"text" => "also-private", "will_be_spoken" => true}
+      )
+
+    assert_receive {:test_archive_fact,
+                    %Fact{
+                      kind: :accepted_input,
+                      source_policy: %{"revision" => 8, "save_transcripts" => false},
+                      payload: input_payload
+                    }}
+
+    assert input_payload == %{"modality" => "text"}
+
+    assert_receive {:test_archive_fact,
+                    %Fact{
+                      kind: :agent_output_generated,
+                      payload: output_payload
+                    }}
+
+    assert output_payload == %{"will_be_spoken" => true}
+  end
+
   defp open_archive do
     assert {:ok, handoff} =
              Supervisor.open(

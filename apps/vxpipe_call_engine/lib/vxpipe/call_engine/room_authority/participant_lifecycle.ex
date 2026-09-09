@@ -44,8 +44,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
     end
   end
 
-  @spec remove(reference(), State.t()) :: State.t()
-  def remove(monitor, %State{} = state) do
+  @spec remove(reference(), term(), State.t()) :: State.t()
+  def remove(monitor, reason, %State{} = state) do
     {participant_id, participant_monitors} = Map.pop(state.participant_monitors, monitor)
 
     affected_connections =
@@ -70,12 +70,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
         )
     end
 
-    %{
+    state = %{
       state
       | participant_monitors: participant_monitors,
         participant_ids: MapSet.delete(state.participant_ids, participant_id),
         participant_roles: Map.delete(state.participant_roles, participant_id)
     }
+
+    archive_recorder =
+      ArchiveRecorder.participant_left(state.archive_recorder, participant_id, reason)
+
+    %{state | archive_recorder: archive_recorder}
   end
 
   defp admit(command, state) do

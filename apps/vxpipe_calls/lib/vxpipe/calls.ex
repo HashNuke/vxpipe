@@ -48,6 +48,15 @@ defmodule Vxpipe.Calls do
   def archive_variable_snapshot(snapshot, options \\ []),
     do: Archives.store_variable_snapshot(snapshot, options)
 
+  def archive_call_fact(fact, options \\ []),
+    do: Archives.store_call_fact(fact, options)
+
   def fetch_variable_snapshots(principal, call_id, options \\ []),
     do: Archives.fetch_variable_snapshots(principal, call_id, options)
+
+  def fetch_call_facts(principal, call_id, options \\ []),
+    do: Archives.fetch_call_facts(principal, call_id, options)
+
+  def fetch_call_history(principal, call_id, options \\ []),
+    do: Archives.fetch_call_history(principal, call_id, options)
 end

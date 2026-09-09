@@ -199,7 +199,7 @@ The test writer now accepts private facts immediately under a separate observati
 tag while retaining explicit acknowledgement control for variable snapshots. The
 full call-engine suite then passed without changing the production handoff ordering.
 
-## Checkpoint 4: private room facts (started; blocked on checkpoint 3)
+## Checkpoint 4: private room facts (complete)
 
 The first focused contract failed at compilation because `Archive.Fact` and
 `Archive.Port` did not exist. The new port contract then passed and proves a
@@ -214,3 +214,95 @@ events to its attached client. That red test covers configured participant and
 room startup, attachment, exact accepted typed input, tool arguments/result,
 generated output, and turn completion. It also requires the private archive
 sequence to remain contiguous while retaining the separate public event sequence.
+
+After the responsibility split, the client-event publishing boundary was changed
+to project each supported event through `Archive.EventProjection`. The private
+stream now distinguishes room/participant/connection lifecycle, typed accepted
+input, provider-final transcription, generated output, playback start/progress/
+completion, turn success/failure/interruption, and tool start/completion/failure/
+cancellation. Archive-only accepted-input and delivered-output facts fill gaps
+that the public protocol events cannot represent without inventing public events.
+
+Two further focused red cycles found missing departure and interruption facts.
+The participant/connection lifecycle owners now record authoritative departures,
+including explicit detach command attribution or monitored-process reasons. The
+agent-output owner now uses the shared publisher for interruption instead of
+sending only to the client. The resulting definition-driven and agent-output
+tests passed, including final STT, generated-versus-delivered speech, and exact
+interrupter attribution.
+
+Source policy is applied before the queue. For the currently supported base
+policy, `save_transcripts: false` removes `content`/`text` from transcript-bearing
+facts while retaining non-text lifecycle and delivery metadata. The focused test
+first observed both forbidden strings in queued facts, then passed after the
+policy projection was added. This does not implement presence-driven policy or
+audio recording, which belong to the later media-policy and recording milestones.
+
+## Checkpoint 5: durable facts, projections, and closure evidence
+
+The Calls boundary now owns an immutable `CallFact`, repository-neutral fact
+writes/reads, and an authorized `CallHistory` projection. Transcript facts,
+complete tool history, exact variable-snapshot history/latest, and the underlying
+ordered facts remain distinct. A fact without permitted text remains visible in
+the ledger but is absent from the transcript projection. Calls repeats credential
+and authorization-header removal after JSON canonicalization, including archived
+source policy, so delayed/replayed input does not rely only on the engine check.
+
+The fifth migration adds append-only `call_facts` rows with tenant-bound call
+lookup, call/incarnation sequence uniqueness, stable public IDs, participant/
+activation/connection/turn/tool attribution, source-policy provenance, and JSON
+payloads. `ArchiveStore` inserts or idempotently deduplicates each fact in a
+transaction, rejects conflicting IDs/sequences and wrong incarnations, and reads
+in private-sequence order. `EctoStorage` maps engine facts through this Calls-owned
+workflow instead of exposing Ecto to the engine.
+
+The subscriber now writes an internal `archive_stream_closed` fact after every
+retained ordinary item drains. It captures the final accepted/overflow/
+unavailable/discarded/retry evidence and source termination reason. Closure work
+does not consume a public handoff slot or inflate accepted counts, remains bounded
+by the existing final drain deadline, and does not turn a failed closure write
+into a false success. Calls reports:
+
+- `complete` only when a terminal closure is present, reports no loss, and the
+  private sequence has no gaps;
+- `incomplete` when a persisted closure reports loss or sequence gaps; and
+- `unconfirmed` when no durable closure exists, including subscriber/process loss
+  before the final marker was stored.
+
+Missing-sequence examples are capped at 100 while the exact count remains
+available, avoiding an unbounded diagnostic projection. A queue-overflow test
+proved that the marker reports known incomplete history; a clean source exit
+proved complete closure. A database-backed integration stored exact snapshots and
+an accepted-input fact through the bounded subscriber, drained after source exit,
+persisted the closure, and returned a complete authorized history.
+
+Final verification:
+
+- Call Engine: 178 tests, 0 failures, 2 integration exclusions.
+- Calls: 24 tests, 0 failures.
+- Persistence: 22 tests, 0 failures; its 14-test call-store slice also passed
+  independently against a disposable PostgreSQL 18 cluster migrated from an empty
+  database through all five migrations.
+- Gateway: 66 tests, 0 failures, 4 integration exclusions.
+- Console: 25 tests, 0 failures.
+- `mix credo --strict`: 239 source files, 2,330 modules/functions, no issues.
+- `mix format --check-formatted`, `mix compile --warnings-as-errors`, and
+  `mix deps.unlock --check-unused`: passed.
+
+The first full-suite run exposed a 100 ms definition-driven test assertion racing
+behind newly archived startup facts under umbrella load. The test already controlled
+the writer and expected the correct update; only its receive bound was too short.
+Changing that project-owned asynchronous bound to two seconds made the exact test
+pass with the failing seed, and the complete umbrella rerun then passed all 315
+tests. No production timing or queue behavior changed.
+
+The final adapter review added one last red/green boundary check: an invalid room ID
+produced a deterministic Ecto changeset failure but `EctoStorage` initially returned
+`retry`. It now classifies `call_fact_insert_failed` as terminal and discards it once;
+the subscriber's discard/incomplete evidence remains responsible for reporting that
+loss. Database availability and transaction failures are still retryable.
+
+The remaining milestone work is the broad outage/saturation acceptance audit and
+final documentation/index completion. No lossless durability, S3 repair, audio
+storage, presence-policy engine, retention sweep, or public history endpoint is
+claimed by this checkpoint.

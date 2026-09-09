@@ -216,14 +216,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, monitor, :process, _pid, _reason}, state) do
+  def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
     state =
       cond do
         Map.has_key?(state.participant_monitors, monitor) ->
-          ParticipantLifecycle.remove(monitor, state)
+          ParticipantLifecycle.remove(monitor, reason, state)
 
         Map.has_key?(state.connection_monitors, monitor) ->
-          ConnectionLifecycle.remove(monitor, state)
+          ConnectionLifecycle.remove(monitor, reason, state)
 
         Map.has_key?(state.speech_to_text_monitors, monitor) ->
           ConnectionLifecycle.remove_unavailable_speech_to_text(monitor, state)

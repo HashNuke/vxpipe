@@ -1,6 +1,8 @@
 defmodule Vxpipe.Calls.VariableSnapshot do
   @moduledoc "An immutable full Call Variables snapshot accepted for private archival."
 
+  alias Vxpipe.Calls.ArchiveSanitizer
+
   @derive {Inspect, except: [:sections]}
   @attribution_fields [
     :command_id,
@@ -153,7 +155,10 @@ defmodule Vxpipe.Calls.VariableSnapshot do
       |> Keyword.put(:sections, sections)
       |> Keyword.put(
         :source_policy,
-        attributes |> Keyword.fetch!(:source_policy) |> canonical_json()
+        attributes
+        |> Keyword.fetch!(:source_policy)
+        |> canonical_json()
+        |> ArchiveSanitizer.sanitize()
       )
 
     {:ok, canonical}

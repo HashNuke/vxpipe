@@ -19,11 +19,11 @@ An authorized operator inspects a completed call's transcript, tool history and 
 
 ## Implementation checklist
 
-- [ ] Red-test immutable event capture, private projection, async snapshot transactions, duplicate/out-of-order delivery, and storage failures.
-- [ ] Add missing accepted text and lifecycle facts at the owning engine boundaries with bounded subscriber delivery.
-- [ ] Implement EctoStorage through archive ports, exact snapshot histories/latest pointer, and tenant-scoped Calls read projections.
-- [ ] Implement bounded shutdown/draining and honest incomplete/lag indicators; document the selected internal overflow behavior without adding a durable queue dependency.
-- [ ] Carry policy/retention coordination metadata needed by later recording/publication/cleanup without implementing those features early.
+- [x] Red-test immutable event capture, private projection, async snapshot transactions, duplicate/out-of-order delivery, and storage failures.
+- [x] Add missing accepted text and lifecycle facts at the owning engine boundaries with bounded subscriber delivery.
+- [x] Implement EctoStorage through archive ports, exact snapshot histories/latest pointer, and tenant-scoped Calls read projections.
+- [x] Implement bounded shutdown/draining and honest incomplete/lag indicators; document the selected internal overflow behavior without adding a durable queue dependency.
+- [x] Carry policy/retention coordination metadata needed by later recording/publication/cleanup without implementing those features early.
 
 ### RoomAuthority responsibility-split checkpoint
 
@@ -62,12 +62,12 @@ finished. It is a structural gate for this milestone, not deferred cleanup:
 ## Acceptance and failure checks
 
 - [ ] Stop/delay PostgreSQL after admission: room speech, tools and variables continue without SQL waits; resume only retained facts, with no lossless claim.
-- [ ] Reorder/duplicate snapshots: correct history and latest pointer, no cross-call reference or rollback of newer local state.
-- [ ] Hidden tool calls still have permitted private args/results; no secrets or denied transcripts enter queues, logs or archives.
-- [ ] Compare typed input, final STT, generated output and actual delivery/interruption facts; preserve modality/source distinctions.
-- [ ] End room while storage work drains; no ordinary history depends on a live room PID. Simulated process loss is reported as unavailable/incomplete data, not invented history.
+- [x] Reorder/duplicate snapshots: correct history and latest pointer, no cross-call reference or rollback of newer local state.
+- [x] Hidden tool calls still have permitted private args/results; no secrets or denied transcripts enter queues, logs or archives.
+- [x] Compare typed input, final STT, generated output and actual delivery/interruption facts; preserve modality/source distinctions.
+- [x] End room while storage work drains; no ordinary history depends on a live room PID. Simulated process loss is reported as unavailable/incomplete data, not invented history.
 - [ ] Crash EctoStorage and saturate its bounded queue: room/variables continue, no accepted update becomes a database failure, and retained/lost facts are distinguished.
-- [ ] Rejected updates create no successful snapshot; late baseline, wrong call/incarnation, and stale delivery cannot corrupt or regress latest state.
+- [x] Rejected updates create no successful snapshot; late baseline, wrong call/incarnation, and stale delivery cannot corrupt or regress latest state.
 - [ ] Bounded draining never treats the later publication reporting window as cancellation of pending archive/upload work or proof of successful completion after loss.
 
 ## Manual verification
@@ -126,6 +126,32 @@ Console 25 tests (0 failures; 6 integration exclusions). An initial full run hit
 real-Jido coordinator's two-second timeout under load; that exact test passed with the same seed
 and the complete rerun was green. Broader lifecycle/turn/transcript/tool/usage facts and durable
 incomplete projections remain open, so the milestone is not complete.
+
+Implementation checkpoints 3–5 first split the roughly 1,800-line `RoomAuthority`
+into cohesive state, startup, participant, connection, input, output, tool, turn,
+event-publication and archive modules while retaining one GenServer serialization
+boundary. Credo is now a required repository gate, with a focused profile and an
+800-line emergency module ceiling as a regression backstop rather than an SRP
+substitute.
+
+The engine now publishes ordered private facts for the lifecycle, typed and audio
+input, final STT, generated and delivered/interrupted output, and tool transitions
+it actually observes. The base source policy removes transcript content before
+handoff when `save_transcripts` is false. Calls performs a second credential and
+source-policy check, persists append-only facts through the fifth migration, and
+returns tenant/scopes-authorized transcript, tool, variable and underlying fact
+projections.
+
+After ordinary retained facts drain, the bounded subscriber attempts a private
+`archive_stream_closed` marker containing overflow/unavailable/discard/retry and
+source-exit evidence. History is `complete` only with a loss-free terminal marker
+and contiguous private sequence, `incomplete` with a marker plus known loss/gaps,
+and `unconfirmed` without durable closure. Failed marker storage therefore never
+becomes invented completion. Missing-sequence samples are capped while their total
+count remains exact. A database-backed integration exercised the actual subscriber,
+Ecto transaction, closure, and authorized history against an empty, disposable
+PostgreSQL cluster. Presence-driven media policy, recording, retention cleanup and
+public inspection remain later milestones.
 
 ## Specification review
 

@@ -360,7 +360,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
         occurred_at: DateTime.utc_now(:millisecond)
       }
 
-      send(connection.pid, {:vxpipe_event, event})
+      state = EventPublisher.publish(state, connection.pid, event)
       %{state | next_sequence: state.next_sequence + 1}
     else
       state

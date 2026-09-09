@@ -5,7 +5,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, VariableSnapshot}
-  alias Vxpipe.CallEngine.Archive.Handoff
+  alias Vxpipe.CallEngine.Archive.{Fact, Handoff}
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
 
@@ -20,6 +20,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   alias Vxpipe.Persistence.Schema.Admission, as: StoredAdmission
   alias Vxpipe.Persistence.Schema.Call, as: StoredCall
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredJoinToken
+  alias Vxpipe.Persistence.Schema.CallFact, as: StoredCallFact
   alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredVariableSnapshot
 
   @tenant_key "AAAAAAAAAAAAAAAA"
@@ -468,7 +469,66 @@ defmodule Vxpipe.Persistence.CallStoreTest do
              EctoStorage.write(context.options, %{baseline | call_id: Ecto.UUID.generate()})
   end
 
-  test "the bounded subscriber projects retained engine snapshots asynchronously", context do
+  test "EctoStorage deduplicates and orders tenant-scoped private call facts", context do
+    {call, incarnation_id} = running_call(context)
+
+    later =
+      engine_fact(call, incarnation_id, 2, "event-later", :agent_output_generated, %{
+        "text" => "Hello back."
+      })
+
+    earlier =
+      engine_fact(call, incarnation_id, 1, "event-earlier", :accepted_input, %{
+        "content" => "Hello",
+        "modality" => "text"
+      })
+
+    assert :ok = EctoStorage.write(context.options, later)
+    assert :ok = EctoStorage.write(context.options, earlier)
+    assert :ok = EctoStorage.write(context.options, earlier)
+
+    closure =
+      engine_fact(call, incarnation_id, 3, "event-closure", :archive_stream_closed, %{
+        "accepted" => 2,
+        "discarded" => 0,
+        "incomplete" => false,
+        "overflow" => 0,
+        "retries" => 0,
+        "source_reason" => "normal",
+        "unavailable" => 0
+      })
+
+    assert :ok = EctoStorage.write(context.options, closure)
+
+    assert {:ok, [stored_earlier, stored_later, stored_closure]} =
+             Calls.fetch_call_facts(context.principal, call.id, context.options)
+
+    assert stored_earlier.id == earlier.id
+    assert stored_earlier.payload == earlier.payload
+    assert stored_later.id == later.id
+    assert stored_closure.id == closure.id
+    assert Repo.aggregate(StoredCallFact, :count) == 3
+
+    assert {:ok, history} =
+             Calls.fetch_call_history(context.principal, call.id, context.options)
+
+    assert history.archive_status.state == :complete
+    assert history.archive_status.complete?
+
+    conflicting = %{earlier | payload: %{"content" => "different"}}
+    assert {:discard, :call_fact_conflict} = EctoStorage.write(context.options, conflicting)
+
+    wrong_incarnation = %{later | id: "event-wrong", incarnation_id: "rinc-wrong"}
+
+    assert {:discard, :call_incarnation_mismatch} =
+             EctoStorage.write(context.options, wrong_incarnation)
+
+    invalid_room = %{later | id: "event-invalid-room", room_id: "not-a-uuid"}
+    assert {:discard, :call_fact_insert_failed} = EctoStorage.write(context.options, invalid_room)
+  end
+
+  test "the bounded subscriber projects retained facts and snapshots before archive closure",
+       context do
     {call, incarnation_id} = running_call(context)
 
     assert {:ok, handoff} =
@@ -514,11 +574,19 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       occurred_at: DateTime.add(@now, 1, :second)
     }
 
+    accepted_input =
+      engine_fact(call, incarnation_id, 1, "event-async-input", :accepted_input, %{
+        "content" => "Hello asynchronously.",
+        "modality" => "text"
+      })
+
     assert :ok = Handoff.offer(handoff, baseline)
     assert :ok = Handoff.offer(handoff, update)
+    assert :ok = Handoff.offer(handoff, accepted_input)
 
     assert eventually(fn -> Repo.aggregate(StoredVariableSnapshot, :count) == 2 end)
-    assert %{accepted: 2, pending: 0, retries: 0} = Handoff.stats(handoff)
+    assert eventually(fn -> Repo.aggregate(StoredCallFact, :count) == 1 end)
+    assert %{accepted: 3, pending: 0, retries: 0} = Handoff.stats(handoff)
 
     subscriber_monitor = Process.monitor(handoff.subscriber)
     Process.exit(source, :kill)
@@ -529,6 +597,17 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
     assert Enum.map(history.snapshots, & &1.id) == [baseline.id, update.id]
     assert history.latest.id == update.id
+
+    assert {:ok, call_history} =
+             Calls.fetch_call_history(context.principal, call.id, context.options)
+
+    assert Enum.map(call_history.facts, & &1.kind) == [
+             :accepted_input,
+             :archive_stream_closed
+           ]
+
+    assert call_history.archive_status.state == :complete
+    assert call_history.archive_status.complete?
   end
 
   defp prepare(context) do
@@ -599,6 +678,26 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
     assert {:ok, snapshot} = VariableSnapshot.new(attributes)
     snapshot
+  end
+
+  defp engine_fact(call, incarnation_id, sequence, id, kind, payload) do
+    Fact.new!(
+      id: id,
+      kind: kind,
+      sequence: sequence,
+      tenant_id: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: incarnation_id,
+      participant_id: "participant-engine",
+      connection_id: "connection-engine",
+      command_id: "command-engine",
+      correlation_id: "turn-engine",
+      public_sequence: sequence,
+      occurred_at: DateTime.add(@now, sequence, :second),
+      source_policy: %{"revision" => 0},
+      payload: payload
+    )
   end
 
   defp scope(context, call) do

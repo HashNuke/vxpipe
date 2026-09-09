@@ -3,7 +3,7 @@
 Status: Living architecture; room creation, one-participant RTVI connection,
 text-turn, Gemini model-inference, Deepgram Flux audio-input, and Deepgram Flux
 text-to-speech, typed interruption, and provider-driven spoken barge-in slices
-are implemented
+are implemented, along with bounded asynchronous private call history
 
 ## Decision
 
@@ -1334,8 +1334,7 @@ delay, and a five-second post-room drain window. Expiry terminates the outstandi
 abandons retained facts, and increments discard/incomplete evidence. Overflow, unavailable
 offers, retries, pending work, and terminal/expiry discards remain distinct counters. A crashed
 subscriber is temporary and is not silently restarted behind an already-issued handoff; later
-offers report unavailable. These counters are currently available on the internal handoff and
-become durable/read-projected incomplete indicators in a later checkpoint.
+offers report unavailable.
 
 `CallVariables` emits an exact revision-zero baseline before it handles commands, with stable
 call/room/incarnation identity and no invented participant, turn, or tool attribution. Each
@@ -1344,6 +1343,27 @@ command/participant/activation/correlation/tool IDs. `EctoStorage` maps those en
 the Calls-owned archive workflow. Runtime archival is enabled only for the durable,
 database-backed admission path; the legacy trusted room sample does not create archive work
 for a call record that does not exist.
+
+The private-fact checkpoint reuses that handoff for protocol-neutral room,
+participant, connection, turn, final-transcription, generated/delivered/interrupted
+output, and tool facts. `RoomAuthority` remains one serializer but delegates
+participant, connection, input, output, tool, turn and archive behavior to cohesive
+modules. It does not construct Ecto schemas or persistence envelopes.
+
+Calls owns the immutable private-fact contract and authorized history projection;
+persistence owns the append-only `call_facts` schema, ordered/idempotent queries and
+transactions. Calls exposes the underlying ordered ledger, a permitted transcript,
+complete observed tool history, and exact variable snapshots/latest state as separate
+views. The delayed Calls sink repeats credential filtering and source-policy enforcement
+after JSON canonicalization.
+
+Once every retained ordinary item drains, the subscriber attempts an
+`archive_stream_closed` fact with source-exit and overflow/unavailable/discard/retry
+evidence. A terminal loss-free marker plus a contiguous private sequence reports
+`complete`; a marker with known loss or gaps reports `incomplete`; no durable marker
+reports `unconfirmed`. The marker remains subject to the same finite drain deadline,
+so a database failure cannot become a false completion claim. Diagnostic missing-
+sequence samples are bounded while the total missing count remains exact.
 
 Subscribers may persist directly or publish to a future queue, such as SQS;
 no queue dependency is selected. Database/storage failures must not themselves

@@ -78,6 +78,18 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     )
   end
 
+  @spec participant_left(t(), String.t(), term()) :: t()
+  def participant_left(%__MODULE__{} = recorder, participant_id, reason)
+      when is_binary(participant_id) do
+    emit(recorder, :participant_left,
+      id: Id.generate(:event),
+      participant_id: participant_id,
+      activation_id: activation(recorder, participant_id),
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{"reason" => reason}
+    )
+  end
+
   @spec connection_attached(t(), struct(), atom()) :: t()
   def connection_attached(%__MODULE__{} = recorder, command, role) when is_atom(role) do
     emit(recorder, :connection_attached,
@@ -88,6 +100,23 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
       command_id: command.id,
       occurred_at: DateTime.utc_now(:millisecond),
       payload: %{"actor_id" => command.actor_id, "role" => role}
+    )
+  end
+
+  @spec connection_detached(t(), String.t(), map(), keyword()) :: t()
+  def connection_detached(%__MODULE__{} = recorder, connection_id, connection, attributes \\ [])
+      when is_binary(connection_id) and is_map(connection) and is_list(attributes) do
+    emit(recorder, :connection_detached,
+      id: Id.generate(:event),
+      participant_id: connection.participant_id,
+      activation_id: activation(recorder, connection.participant_id),
+      connection_id: connection_id,
+      command_id: Keyword.get(attributes, :command_id),
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{
+        "reason" => Keyword.get(attributes, :reason),
+        "role" => connection.role
+      }
     )
   end
 

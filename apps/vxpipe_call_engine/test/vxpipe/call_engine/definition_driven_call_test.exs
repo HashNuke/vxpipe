@@ -16,7 +16,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     ConnectionAttachment,
     DefinitionCompiler,
     Error,
-    PlanStartup
+    PlanStartup,
+    RoomAuthority
   }
 
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
@@ -314,6 +315,71 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
            } = fact!(facts, :agent_output_delivered)
   end
 
+  test "archives authoritative connection and participant departures" do
+    room_id = unique_id("room-private-departures")
+    plan = compile_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    archive =
+      archive_options(
+        writer: {TestCollectingArchiveWriter, self()},
+        maximum_pending_facts: 32
+      )
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               archive: Keyword.put(archive, :enabled, true)
+             )
+
+    attach_caller(plan, room, caller, "conn-private-departures")
+    _startup_facts = collect_archive_facts_through(:connection_attached)
+
+    assert [{room_authority, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
+
+    assert {:ok, detach} =
+             AttachConnection.new(
+               id: "cmd-detach-private-history",
+               tenant_id: plan.tenant_id,
+               actor_id: plan.actor_id,
+               room_id: room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: caller.participant_id,
+               connection_id: "conn-private-departures",
+               deadline: future_deadline()
+             )
+
+    assert :ok = RoomAuthority.detach_connection(room_authority, detach, self())
+
+    assert_receive {:test_archive_fact,
+                    %Fact{
+                      kind: :connection_detached,
+                      participant_id: participant_id,
+                      connection_id: "conn-private-departures",
+                      command_id: "cmd-detach-private-history"
+                    }}
+
+    assert participant_id == caller.participant_id
+
+    assert [{participant_authority, _value}] =
+             Registry.lookup(
+               Vxpipe.CallEngine.RoomRegistry,
+               {:participant, plan.tenant_id, room_id, caller.participant_id}
+             )
+
+    Process.exit(participant_authority, :kill)
+
+    assert_receive {:test_archive_fact,
+                    %Fact{
+                      kind: :participant_left,
+                      participant_id: participant_id,
+                      activation_id: nil
+                    }},
+                   2_000
+
+    assert participant_id == caller.participant_id
+  end
+
   test "starts only entry participants and routes an attached caller through Jido" do
     room_id = unique_id("room")
     plan = compile_plan(room_id)
@@ -464,7 +530,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                         "order" => %{value: %{"id" => "order-1"}},
                         "intake" => %{value: %{"summary" => "ready"}}
                       }
-                    }}
+                    }},
+                   2_000
 
     assert [{activation, _value}] =
              Registry.lookup(

@@ -27,8 +27,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
           {:reply, :ok | {:error, Error.t()}, State.t()}
   def detach(command, caller, subscriber, %State{} = state) do
     case authorize_detachment(command, caller, subscriber, state) do
-      :ok -> {:reply, :ok, remove_by_id(command.connection_id, state)}
-      {:error, error} -> {:reply, {:error, error}, state}
+      :ok ->
+        state = remove_by_id(command.connection_id, state, command_id: command.id)
+        {:reply, :ok, state}
+
+      {:error, error} ->
+        {:reply, {:error, error}, state}
     end
   end
 
@@ -52,11 +56,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     end
   end
 
-  @spec remove(reference(), State.t()) :: State.t()
-  def remove(monitor, %State{} = state) do
+  @spec remove(reference(), term(), State.t()) :: State.t()
+  def remove(monitor, reason, %State{} = state) do
     {connection_id, connection_monitors} = Map.pop(state.connection_monitors, monitor)
     state = %{state | connection_monitors: connection_monitors}
-    remove_by_id(connection_id, state)
+    remove_by_id(connection_id, state, reason: reason)
   end
 
   @spec speech_to_text_unavailable(pid(), map(), State.t()) :: State.t()
@@ -225,9 +229,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     {:reply, :ok, state}
   end
 
-  defp remove_by_id(nil, state), do: state
+  defp remove_by_id(nil, state, _attributes), do: state
 
-  defp remove_by_id(connection_id, state) do
+  defp remove_by_id(connection_id, state, attributes) do
+    connection = Map.get(state.connections, connection_id)
     state = clear_speech_to_text(connection_id, false, state)
     {monitor, connection_monitors} = pop_monitor(connection_id, state)
 
@@ -235,11 +240,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       Process.demonitor(monitor, [:flush])
     end
 
-    %{
+    state = %{
       state
       | connection_monitors: connection_monitors,
         connections: Map.delete(state.connections, connection_id)
     }
+
+    if connection == nil do
+      state
+    else
+      archive_recorder =
+        ArchiveRecorder.connection_detached(
+          state.archive_recorder,
+          connection_id,
+          connection,
+          attributes
+        )
+
+      %{state | archive_recorder: archive_recorder}
+    end
   end
 
   defp clear_speech_to_text(connection_id, notify?, state) do

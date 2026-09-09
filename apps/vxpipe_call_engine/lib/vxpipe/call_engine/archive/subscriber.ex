@@ -3,7 +3,8 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.Archive.{Handoff, Subscriber.State}
+  alias Vxpipe.CallEngine.Archive.{Fact, Handoff, Subscriber.State}
+  alias Vxpipe.CallEngine.Id
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
 
@@ -38,7 +39,11 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
          writer_task: nil,
          source_monitor: nil,
          closing?: false,
-         drain_timer: nil
+         drain_timer: nil,
+         archive_context: nil,
+         source_reason: nil,
+         completion_enqueued?: false,
+         completion_finished?: false
        }}
     else
       {:error, reason} -> {:stop, reason}
@@ -53,7 +58,7 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
     case Handoff.message(state.handoff, {kind, token, value}) do
       {:ok, {:fact, fact}} -> state |> enqueue(fact) |> continue()
       {:ok, {:source_started, source}} -> {:noreply, monitor_source(state, source)}
-      {:ok, {:source_stopped, _reason}} -> state |> begin_drain() |> continue()
+      {:ok, {:source_stopped, reason}} -> state |> begin_drain(reason) |> continue()
       :error -> {:noreply, state}
     end
   end
@@ -61,10 +66,12 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   def handle_info(:write_current, %State{current: nil} = state), do: continue(state)
 
   def handle_info(:write_current, %State{writer_task: nil} = state) do
+    {_origin, value} = state.current
+
     task =
       Task.Supervisor.async_nolink(
         Vxpipe.CallEngine.ArchiveWriterTaskSupervisor,
-        fn -> safe_write(state.writer, state.current) end
+        fn -> safe_write(state.writer, value) end
       )
 
     {:noreply, %{state | writer_task: task}}
@@ -89,10 +96,10 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   end
 
   def handle_info(
-        {:DOWN, reference, :process, _pid, _reason},
+        {:DOWN, reference, :process, _pid, reason},
         %State{source_monitor: reference} = state
       ) do
-    state |> begin_drain() |> continue()
+    state |> begin_drain(reason) |> continue()
   end
 
   def handle_info(
@@ -114,15 +121,53 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   def handle_info(_message, state), do: {:noreply, state}
 
   defp enqueue(state, fact) do
-    state = %{state | pending: :queue.in(fact, state.pending)}
+    state = state |> capture_archive_context(fact) |> enqueue_entry({:handoff, fact})
     start_next(state)
   end
 
+  defp enqueue_entry(state, entry) do
+    %{state | pending: :queue.in(entry, state.pending)}
+  end
+
+  defp enqueue_completion(state, fact) do
+    state
+    |> Map.put(:completion_enqueued?, true)
+    |> enqueue_entry({:completion, fact})
+    |> start_next()
+  end
+
+  defp capture_archive_context(state, %Fact{} = fact) do
+    context = %{
+      tenant_id: fact.tenant_id,
+      call_id: fact.call_id,
+      room_id: fact.room_id,
+      incarnation_id: fact.incarnation_id,
+      source_policy: fact.source_policy,
+      maximum_sequence: fact.sequence
+    }
+
+    case state.archive_context do
+      nil ->
+        %{state | archive_context: context}
+
+      %{tenant_id: tenant_id, call_id: call_id, incarnation_id: incarnation_id} = existing
+      when tenant_id == fact.tenant_id and call_id == fact.call_id and
+             incarnation_id == fact.incarnation_id ->
+        maximum_sequence = max(existing.maximum_sequence, fact.sequence)
+        %{state | archive_context: %{existing | maximum_sequence: maximum_sequence}}
+
+      _conflicting_context ->
+        state
+    end
+  end
+
+  defp capture_archive_context(state, _fact), do: state
+
   defp start_next(%State{current: nil, writer_task: nil} = state) do
     case :queue.out(state.pending) do
-      {{:value, fact}, pending} ->
+      {{:value, entry}, pending} ->
         send(self(), :write_current)
-        %{state | current: fact, pending: pending}
+        %{state | current: entry, pending: pending}
 
       {:empty, _pending} ->
         state
@@ -131,14 +176,28 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
 
   defp start_next(state), do: state
 
-  defp accepted(state) do
+  defp accepted(%State{current: {:handoff, _fact}} = state) do
     :ok = Handoff.acknowledge(state.handoff)
     state |> Map.put(:current, nil) |> start_next()
   end
 
-  defp discarded(state) do
+  defp accepted(%State{current: {:completion, _fact}} = state) do
+    state
+    |> Map.put(:current, nil)
+    |> Map.put(:completion_finished?, true)
+    |> start_next()
+  end
+
+  defp discarded(%State{current: {:handoff, _fact}} = state) do
     :ok = Handoff.discard(state.handoff)
     state |> Map.put(:current, nil) |> start_next()
+  end
+
+  defp discarded(%State{current: {:completion, _fact}} = state) do
+    state
+    |> Map.put(:current, nil)
+    |> Map.put(:completion_finished?, true)
+    |> start_next()
   end
 
   defp retry(state), do: retry(state, :writer_retry)
@@ -149,13 +208,20 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
     state
   end
 
-  defp begin_drain(%State{closing?: true} = state), do: state
+  defp begin_drain(%State{closing?: true} = state, _reason), do: state
 
-  defp begin_drain(state) do
+  defp begin_drain(state, reason) do
     Handoff.close(state.handoff)
     demonitor_source(state.source_monitor)
     timer = Process.send_after(self(), :drain_timeout, state.drain_timeout_ms)
-    %{state | closing?: true, source_monitor: nil, drain_timer: timer}
+
+    %{
+      state
+      | closing?: true,
+        source_monitor: nil,
+        drain_timer: timer,
+        source_reason: reason
+    }
   end
 
   defp monitor_source(%State{source_monitor: nil, closing?: false} = state, source) do
@@ -165,6 +231,8 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   defp monitor_source(state, _source), do: state
 
   defp continue(state) do
+    state = maybe_enqueue_completion(state)
+
     if drained?(state) do
       cancel_timer(state.drain_timer)
       {:stop, :normal, state}
@@ -175,7 +243,47 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
 
   defp drained?(state) do
     state.closing? and is_nil(state.current) and is_nil(state.writer_task) and
-      :queue.is_empty(state.pending) and Handoff.stats(state.handoff).pending == 0
+      :queue.is_empty(state.pending) and Handoff.stats(state.handoff).pending == 0 and
+      (is_nil(state.archive_context) or state.completion_finished?)
+  end
+
+  defp maybe_enqueue_completion(%State{archive_context: nil} = state), do: state
+  defp maybe_enqueue_completion(%State{closing?: false} = state), do: state
+  defp maybe_enqueue_completion(%State{completion_enqueued?: true} = state), do: state
+
+  defp maybe_enqueue_completion(state) do
+    if is_nil(state.current) and is_nil(state.writer_task) and :queue.is_empty(state.pending) and
+         Handoff.stats(state.handoff).pending == 0 do
+      enqueue_completion(state, completion_fact(state))
+    else
+      state
+    end
+  end
+
+  defp completion_fact(state) do
+    context = state.archive_context
+    stats = Handoff.stats(state.handoff)
+
+    Fact.new!(
+      id: Id.generate(:event),
+      kind: :archive_stream_closed,
+      sequence: context.maximum_sequence + 1,
+      tenant_id: context.tenant_id,
+      call_id: context.call_id,
+      room_id: context.room_id,
+      incarnation_id: context.incarnation_id,
+      occurred_at: DateTime.utc_now(:millisecond),
+      source_policy: context.source_policy,
+      payload: %{
+        "accepted" => stats.accepted,
+        "discarded" => stats.discarded,
+        "incomplete" => stats.incomplete?,
+        "overflow" => stats.overflow,
+        "retries" => stats.retries,
+        "source_reason" => state.source_reason,
+        "unavailable" => stats.unavailable
+      }
+    )
   end
 
   defp safe_write({module, context}, fact) do

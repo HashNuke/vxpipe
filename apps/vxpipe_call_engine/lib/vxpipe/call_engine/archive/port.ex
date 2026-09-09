@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Archive.Port do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Archive.{EventProjection, Fact, Handoff, Sanitizer}
+  alias Vxpipe.CallEngine.Archive.{EventProjection, Fact, Handoff, Policy, Sanitizer}
 
   @derive {Inspect, except: [:handoff]}
   @enforce_keys [
@@ -70,7 +70,12 @@ defmodule Vxpipe.CallEngine.Archive.Port do
         public_sequence: Keyword.get(attributes, :public_sequence),
         occurred_at: Keyword.fetch!(attributes, :occurred_at),
         source_policy: port.source_policy,
-        payload: Keyword.get(attributes, :payload, %{})
+        payload:
+          Policy.filter_payload(
+            kind,
+            Keyword.get(attributes, :payload, %{}),
+            port.source_policy
+          )
       )
 
     _accepted_or_dropped = Handoff.offer(port.handoff, fact)

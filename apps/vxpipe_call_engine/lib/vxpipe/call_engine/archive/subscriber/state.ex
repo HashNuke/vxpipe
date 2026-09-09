@@ -13,7 +13,11 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber.State do
     :writer_task,
     :source_monitor,
     :closing?,
-    :drain_timer
+    :drain_timer,
+    :archive_context,
+    :source_reason,
+    :completion_enqueued?,
+    :completion_finished?
   ]
   defstruct @enforce_keys
 
@@ -27,6 +31,10 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber.State do
           writer_task: nil | Task.t(),
           source_monitor: nil | reference(),
           closing?: boolean(),
-          drain_timer: nil | reference()
+          drain_timer: nil | reference(),
+          archive_context: nil | map(),
+          source_reason: nil | term(),
+          completion_enqueued?: boolean(),
+          completion_finished?: boolean()
         }
 end

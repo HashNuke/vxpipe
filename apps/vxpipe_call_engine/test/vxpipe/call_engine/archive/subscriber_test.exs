@@ -1,8 +1,73 @@
 defmodule Vxpipe.CallEngine.Archive.SubscriberTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Archive.{Handoff, Supervisor}
-  alias Vxpipe.CallEngine.TestArchiveWriter
+  alias Vxpipe.CallEngine.Archive.{Fact, Handoff, Supervisor}
+
+  alias Vxpipe.CallEngine.{
+    TestArchiveWriter,
+    TestBlockingArchiveWriter,
+    TestCollectingArchiveWriter
+  }
+
+  test "writes an explicit archive closure after retained room facts drain" do
+    handoff = open_archive(writer: {TestCollectingArchiveWriter, self()})
+    subscriber = handoff.subscriber
+    monitor = Process.monitor(subscriber)
+    source = spawn(fn -> Process.sleep(:infinity) end)
+
+    assert :ok = Handoff.source_started(handoff, source)
+    assert :ok = Handoff.offer(handoff, archive_fact())
+    assert_receive {:test_archive_fact, %Fact{kind: :room_opened, sequence: 1}}
+
+    Process.exit(source, :kill)
+
+    assert_receive {:test_archive_fact,
+                    %Fact{
+                      kind: :archive_stream_closed,
+                      sequence: 2,
+                      payload: %{
+                        "incomplete" => false,
+                        "overflow" => 0,
+                        "source_reason" => "killed",
+                        "unavailable" => 0
+                      }
+                    }}
+
+    assert_receive {:DOWN, ^monitor, :process, ^subscriber, :normal}
+    assert %{accepted: 1, pending: 0} = Handoff.stats(handoff)
+  end
+
+  test "records overflow as a known-incomplete archive closure" do
+    handoff =
+      open_archive(
+        maximum_pending_facts: 1,
+        writer: {TestBlockingArchiveWriter, self()}
+      )
+
+    subscriber = handoff.subscriber
+    monitor = Process.monitor(subscriber)
+    source = spawn(fn -> Process.sleep(:infinity) end)
+
+    assert :ok = Handoff.source_started(handoff, source)
+    assert :ok = Handoff.offer(handoff, archive_fact())
+    assert_receive {:test_archive_write, retained_writer, %Fact{kind: :room_opened}}
+
+    assert {:error, :full} =
+             Handoff.offer(handoff, %{archive_fact() | id: "event-dropped", sequence: 2})
+
+    Process.exit(source, :kill)
+    send(retained_writer, {:test_archive_write_result, :ok})
+
+    assert_receive {:test_archive_write, completion_writer,
+                    %Fact{
+                      kind: :archive_stream_closed,
+                      payload: %{"incomplete" => true, "overflow" => 1}
+                    }}
+
+    send(completion_writer, {:test_archive_write_result, :ok})
+    assert_receive {:DOWN, ^monitor, :process, ^subscriber, :normal}
+    assert %{accepted: 1, overflow: 1, pending: 0} = Handoff.stats(handoff)
+  end
 
   test "strictly bounds accepted facts while a writer is unavailable and drains after the room" do
     handoff = open_archive(maximum_pending_facts: 2)
@@ -118,6 +183,21 @@ defmodule Vxpipe.CallEngine.Archive.SubscriberTest do
     end)
 
     handoff
+  end
+
+  defp archive_fact do
+    Fact.new!(
+      id: "event-open",
+      kind: :room_opened,
+      sequence: 1,
+      tenant_id: "tenant-test",
+      call_id: "call-test",
+      room_id: "room-test",
+      incarnation_id: "incarnation-test",
+      occurred_at: ~U[2026-09-09 13:58:00.000000Z],
+      source_policy: %{"revision" => 0},
+      payload: %{}
+    )
   end
 
   defp eventually(predicate, attempts \\ 100)

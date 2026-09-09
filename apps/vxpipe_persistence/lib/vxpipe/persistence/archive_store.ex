@@ -5,9 +5,48 @@ defmodule Vxpipe.Persistence.ArchiveStore do
 
   import Ecto.Query
 
-  alias Vxpipe.Calls.{VariableSnapshot, VariableSnapshotHistory}
+  alias Vxpipe.Calls.{CallFact, VariableSnapshot, VariableSnapshotHistory}
   alias Vxpipe.Persistence.Schema.{Call, Tenant}
+  alias Vxpipe.Persistence.Schema.CallFact, as: StoredFact
   alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredSnapshot
+
+  @impl true
+  def store_call_fact(repo, %CallFact{} = fact) do
+    repo.transaction(fn ->
+      with %Call{} = call <- fetch_call(repo, fact, lock: "FOR UPDATE"),
+           :ok <- archive_available(call),
+           :ok <- fact_incarnation_matches(repo, call, fact),
+           {:ok, stored} <- insert_or_deduplicate_fact(repo, call, fact),
+           {:ok, archived} <- to_call_fact(stored, fact.tenant_key, call.public_id) do
+        archived
+      else
+        nil -> repo.rollback(:call_not_found)
+        {:error, %Ecto.Changeset{}} -> repo.rollback(:call_fact_insert_failed)
+        {:error, reason} -> repo.rollback(reason)
+      end
+    end)
+  end
+
+  @impl true
+  def fetch_call_facts(repo, tenant_key, call_id) do
+    query =
+      from call in Call,
+        join: tenant in Tenant,
+        on: tenant.id == call.tenant_id,
+        where: tenant.key == ^tenant_key and call.public_id == ^call_id,
+        select: call
+
+    case repo.one(query) do
+      nil ->
+        {:error, :call_not_found}
+
+      call ->
+        call.id
+        |> fact_query()
+        |> repo.all()
+        |> convert_facts(tenant_key, call_id)
+    end
+  end
 
   @impl true
   def store_variable_snapshot(repo, %VariableSnapshot{} = snapshot) do
@@ -66,6 +105,12 @@ defmodule Vxpipe.Persistence.ArchiveStore do
     repo.one(with_lock(query, options))
   end
 
+  defp fact_query(call_id) do
+    from fact in StoredFact,
+      where: fact.call_id == ^call_id,
+      order_by: [asc: fact.sequence, asc: fact.occurred_at, asc: fact.id]
+  end
+
   defp with_lock(query, options) do
     case Keyword.get(options, :lock) do
       nil -> query
@@ -92,6 +137,112 @@ defmodule Vxpipe.Persistence.ArchiveStore do
     if is_nil(expected_incarnation) or expected_incarnation == snapshot.incarnation_id,
       do: :ok,
       else: {:error, :call_incarnation_mismatch}
+  end
+
+  defp fact_incarnation_matches(repo, call, fact) do
+    existing_incarnation =
+      repo.one(
+        from stored in StoredFact,
+          where: stored.call_id == ^call.id,
+          select: stored.incarnation_id,
+          limit: 1
+      )
+
+    expected_incarnation = call.incarnation_id || existing_incarnation
+
+    if is_nil(expected_incarnation) or expected_incarnation == fact.incarnation_id,
+      do: :ok,
+      else: {:error, :call_incarnation_mismatch}
+  end
+
+  defp insert_or_deduplicate_fact(repo, call, fact) do
+    case repo.one(
+           from stored in StoredFact,
+             where: stored.call_id == ^call.id and stored.public_id == ^fact.id
+         ) do
+      nil -> insert_fact(repo, call, fact)
+      stored -> deduplicate_fact(stored, fact, fact.tenant_key, call.public_id)
+    end
+  end
+
+  defp insert_fact(repo, call, fact) do
+    case repo.insert(fact_changeset(call, fact)) do
+      {:ok, stored} ->
+        {:ok, stored}
+
+      {:error, changeset} ->
+        if sequence_conflict?(changeset),
+          do: {:error, :call_fact_sequence_conflict},
+          else: {:error, changeset}
+    end
+  end
+
+  defp deduplicate_fact(stored, fact, tenant_key, call_id) do
+    case to_call_fact(stored, tenant_key, call_id) do
+      {:ok, ^fact} -> {:ok, stored}
+      {:ok, _different} -> {:error, :call_fact_conflict}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp fact_changeset(call, fact) do
+    StoredFact.changeset(%StoredFact{}, %{
+      public_id: fact.id,
+      call_id: call.id,
+      kind: Atom.to_string(fact.kind),
+      sequence: fact.sequence,
+      room_id: fact.room_id,
+      incarnation_id: fact.incarnation_id,
+      participant_id: fact.participant_id,
+      activation_id: fact.activation_id,
+      source_participant_id: fact.source_participant_id,
+      connection_id: fact.connection_id,
+      command_id: fact.command_id,
+      correlation_id: fact.correlation_id,
+      tool_call_id: fact.tool_call_id,
+      public_sequence: fact.public_sequence,
+      occurred_at: fact.occurred_at,
+      source_policy: fact.source_policy,
+      payload: fact.payload
+    })
+  end
+
+  defp to_call_fact(stored, tenant_key, call_id) do
+    CallFact.new(
+      id: stored.public_id,
+      kind: String.to_existing_atom(stored.kind),
+      sequence: stored.sequence,
+      tenant_key: tenant_key,
+      call_id: call_id,
+      room_id: stored.room_id,
+      incarnation_id: stored.incarnation_id,
+      participant_id: stored.participant_id,
+      activation_id: stored.activation_id,
+      source_participant_id: stored.source_participant_id,
+      connection_id: stored.connection_id,
+      command_id: stored.command_id,
+      correlation_id: stored.correlation_id,
+      tool_call_id: stored.tool_call_id,
+      public_sequence: stored.public_sequence,
+      occurred_at: stored.occurred_at,
+      source_policy: stored.source_policy,
+      payload: stored.payload
+    )
+  rescue
+    ArgumentError -> {:error, :invalid_call_fact}
+  end
+
+  defp convert_facts(facts, tenant_key, call_id) do
+    Enum.reduce_while(facts, {:ok, []}, fn stored, {:ok, converted} ->
+      case to_call_fact(stored, tenant_key, call_id) do
+        {:ok, fact} -> {:cont, {:ok, [fact | converted]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, converted} -> {:ok, Enum.reverse(converted)}
+      {:error, _reason} = error -> error
+    end
   end
 
   defp insert_or_deduplicate(repo, call, snapshot) do
@@ -229,6 +380,14 @@ defmodule Vxpipe.Persistence.ArchiveStore do
       {_field, {_message, options}} ->
         Keyword.get(options, :constraint_name) ==
           "call_variable_snapshots_call_incarnation_revision_index"
+    end)
+  end
+
+  defp sequence_conflict?(changeset) do
+    Enum.any?(changeset.errors, fn
+      {_field, {_message, options}} ->
+        Keyword.get(options, :constraint_name) ==
+          "call_facts_call_incarnation_sequence_index"
     end)
   end
 end
