@@ -9,14 +9,21 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     AgentActivationSupervisor,
     CallDefinition,
     CallInvocation,
+    CallVariables,
     DefinitionCompiler,
     Error,
     PlanStartup
   }
 
+  alias Vxpipe.CallEngine.CallVariables.UpdateSnapshot
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
 
-  alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
+  alias Vxpipe.CallEngine.Command.{
+    AttachConnection,
+    ReadCallVariables,
+    SendText,
+    UpdateCallVariables
+  }
 
   alias Vxpipe.CallEngine.Event.{
     AgentTurnCompleted,
@@ -118,6 +125,92 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert_receive {:vxpipe_event, %TextOutput{sequence: 5, text: "The host action completed."}}
 
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 6}}
+  end
+
+  test "starts a room-owned Call Variables process independently of RoomAuthority" do
+    room_id = unique_id("room-variables")
+
+    transform = fn input ->
+      input
+      |> put_in([:call_variables, :sections], %{
+        "order" => %{
+          schema: %{
+            "type" => "object",
+            "properties" => %{"id" => %{"type" => "string"}},
+            "additionalProperties" => false
+          }
+        }
+      })
+      |> put_in(
+        [:participants, "receiver", :variable_permissions],
+        %{"order" => ["read", "write"]}
+      )
+    end
+
+    plan =
+      compile_plan(room_id,
+        definition_transform: transform,
+        initial_variables: %{"order" => %{"id" => "order-1"}}
+      )
+
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan, call_variables_archival_subscriber: self())
+
+    assert variables = CallVariables.whereis(room.incarnation_id)
+
+    assert {:ok, command} =
+             ReadCallVariables.new(
+               tenant_id: plan.tenant_id,
+               room_id: room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: receiver.participant_id,
+               sections: ["order"],
+               deadline: future_deadline()
+             )
+
+    assert [{authority, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
+
+    :ok = :sys.suspend(authority)
+
+    try do
+      assert {:ok,
+              %{
+                "sections" => %{
+                  "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
+                }
+              }} = CallVariables.read(variables, command)
+    after
+      :ok = :sys.resume(authority)
+    end
+
+    assert {:ok, update} =
+             UpdateCallVariables.new(
+               tenant_id: plan.tenant_id,
+               room_id: room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: receiver.participant_id,
+               activation_id: receiver.activation_id,
+               source_participant_id: plan.participants[plan.entry_caller].participant_id,
+               correlation_id: "turn-variables",
+               tool_call_id: "tool-variables",
+               section: "order",
+               expected_revision: 0,
+               operation: {:put, "id", "order-2"},
+               deadline: future_deadline()
+             )
+
+    assert {:ok, %{"revision" => 1}} = CallVariables.update(variables, update)
+
+    assert_receive {:vxpipe_call_variables_snapshot,
+                    %UpdateSnapshot{
+                      room_id: ^room_id,
+                      section: "order",
+                      section_revision: 1,
+                      sections: %{"order" => %{value: %{"id" => "order-2"}}}
+                    }}
   end
 
   test "routes the next room turn through a restarted agent activation" do
@@ -420,18 +513,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
            [:participants, "receiver", :first_message],
            %{mode: "generated"}
          )
-       end, ["participants", "receiver", "first_message", "mode"]},
-      {fn input ->
-         put_in(input, [:call_variables, :sections], %{
-           "booking" => %{
-             schema: %{
-               "type" => "object",
-               "properties" => %{"status" => %{"type" => "string"}},
-               "additionalProperties" => false
-             }
-           }
-         })
-       end, ["call_variables", "sections"]}
+       end, ["participants", "receiver", "first_message", "mode"]}
     ]
 
     for {transform, expected_path} <- cases do
@@ -502,10 +584,10 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     input = options |> definition_input() |> transform.()
     profiles = capability_profiles(options)
 
-    compile_plan_from(room_id, input, profiles)
+    compile_plan_from(room_id, input, profiles, options)
   end
 
-  defp compile_plan_from(room_id, input, profiles) do
+  defp compile_plan_from(room_id, input, profiles, options \\ []) do
     assert {:ok, definition} =
              CallDefinition.new(input,
                resource_id: "definition-test",
@@ -516,7 +598,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              CallInvocation.new(
                %{
                  call_definition: %{id: "definition-test", revision: 1},
-                 initial_variables: %{},
+                 initial_variables: Keyword.get(options, :initial_variables, %{}),
                  transport: %{type: "web"}
                },
                tenant_id: "tenant-test",

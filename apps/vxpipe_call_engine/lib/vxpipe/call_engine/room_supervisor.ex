@@ -233,7 +233,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       plan: plan,
       incarnation_id: incarnation_id,
       start_command_id: Id.generate(:command),
-      agent_request_options: Keyword.get(runtime_options, :agent_request_options, [])
+      agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
+      archival_subscriber: Keyword.get(runtime_options, :call_variables_archival_subscriber)
     ]
 
     case DynamicSupervisor.start_child(__MODULE__, {RoomIncarnationSupervisor, options}) do

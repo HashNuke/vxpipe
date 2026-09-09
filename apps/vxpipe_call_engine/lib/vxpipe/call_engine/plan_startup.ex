@@ -85,7 +85,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     with :ok <- supported_transport(plan),
          :ok <- supported_connection(caller),
          :ok <- supported_first_message(receiver),
-         :ok <- supported_call_variables(plan),
          :ok <- supported_transfers(plan),
          :ok <- supported_tools(plan) do
       :ok
@@ -120,17 +119,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     unsupported(
       ["participants", receiver.definition_key, "first_message", "mode"],
       "only wait_for_input is supported"
-    )
-  end
-
-  defp supported_call_variables(%ResolvedCallPlan{call_variables: %{sections: sections}})
-       when map_size(sections) == 0,
-       do: :ok
-
-  defp supported_call_variables(_plan) do
-    unsupported(
-      ["call_variables", "sections"],
-      "Call Variables require the Call Variables runtime"
     )
   end
 

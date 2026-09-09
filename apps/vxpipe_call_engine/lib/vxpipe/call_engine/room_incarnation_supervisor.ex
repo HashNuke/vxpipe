@@ -3,7 +3,13 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
   use Supervisor
 
-  alias Vxpipe.CallEngine.{RoomAuthority, RoomCapabilitySupervisor, RoomParticipantSupervisor}
+  alias Vxpipe.CallEngine.{
+    CallVariables,
+    ResolvedCallPlan,
+    RoomAuthority,
+    RoomCapabilitySupervisor,
+    RoomParticipantSupervisor
+  }
 
   def start_link(options), do: Supervisor.start_link(__MODULE__, options)
 
@@ -29,9 +35,20 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
       significant: true
     }
 
-    Supervisor.init([participant_supervisor, capability_supervisor, authority],
+    children =
+      [participant_supervisor, capability_supervisor] ++
+        call_variables_child(options) ++ [authority]
+
+    Supervisor.init(children,
       strategy: :one_for_one,
       auto_shutdown: :any_significant
     )
+  end
+
+  defp call_variables_child(options) do
+    case Keyword.get(options, :plan) do
+      %ResolvedCallPlan{} -> [{CallVariables, options}]
+      nil -> []
+    end
   end
 end

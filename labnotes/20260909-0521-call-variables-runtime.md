@@ -31,3 +31,17 @@ candidate. It returns only grant-safe results and keeps all failure paths non-mu
   suite is green with five tests. The full umbrella gates are also green: format,
   warnings-as-errors compilation, 142 Call Engine tests (one excluded), 46 Gateway
   tests (four excluded), 20 Console tests, and the unused-dependency check.
+- Removed the startup rejection for non-empty Call Variables and placed the owner
+  beside RoomAuthority under the room-incarnation supervisor. It is a significant,
+  temporary child: loss of authoritative variable state ends the incarnation instead
+  of silently restarting with initial values. A focused integration test suspends
+  RoomAuthority and confirms variable reads still complete.
+- Added a private, non-blocking archival port. Each accepted update sends an exact
+  full snapshot and trusted turn/tool attribution to an optional local subscriber;
+  the default explicitly drops the handoff because persistence is a later milestone.
+  Tests also confirm snapshots/process-state inspection redact values, competing
+  revisions serialize to one winner, and queued work completes after its caller dies.
+- Verification after supervision and archival integration: format and
+  warnings-as-errors compilation pass; the umbrella has 146 Call Engine tests
+  (one excluded), 46 Gateway tests (four excluded), and 20 Console tests passing;
+  the unused-dependency check is clean.

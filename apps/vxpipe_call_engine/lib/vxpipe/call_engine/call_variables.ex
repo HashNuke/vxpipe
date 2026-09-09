@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.CallVariables do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.CallVariables.State
+  alias Vxpipe.CallEngine.CallVariables.{ArchivalPort, State, UpdateSnapshot}
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
   alias Vxpipe.CallEngine.Error
 
@@ -21,8 +21,18 @@ defmodule Vxpipe.CallEngine.CallVariables do
   def child_spec(options) do
     %{
       id: {__MODULE__, Keyword.fetch!(options, :incarnation_id)},
-      start: {__MODULE__, :start_link, [options]}
+      start: {__MODULE__, :start_link, [options]},
+      restart: :temporary,
+      significant: true
     }
+  end
+
+  @spec whereis(String.t()) :: pid() | nil
+  def whereis(incarnation_id) when is_binary(incarnation_id) do
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, registry_key(incarnation_id)) do
+      [{server, _value}] -> server
+      [] -> nil
+    end
   end
 
   @spec read(GenServer.server(), ReadCallVariables.t(), timeout()) ::
@@ -54,6 +64,7 @@ defmodule Vxpipe.CallEngine.CallVariables do
        incarnation_id: incarnation_id,
        sections: plan.call_variables.sections,
        grants: grants,
+       archival_port: ArchivalPort.new(Keyword.get(options, :archival_subscriber)),
        global_revision: 0
      }}
   end
@@ -109,6 +120,8 @@ defmodule Vxpipe.CallEngine.CallVariables do
         "global_revision" => global_revision,
         "value" => candidate
       }
+
+      :ok = ArchivalPort.handoff(state.archival_port, update_snapshot(command, state, section))
 
       {:ok, result, state}
     end
@@ -238,8 +251,34 @@ defmodule Vxpipe.CallEngine.CallVariables do
      )}
   end
 
+  defp update_snapshot(command, state, section) do
+    sections =
+      Map.new(state.sections, fn {name, current} ->
+        {name, %{revision: current.revision, value: current.value}}
+      end)
+
+    %UpdateSnapshot{
+      command_id: command.id,
+      tenant_id: state.tenant_id,
+      room_id: state.room_id,
+      incarnation_id: state.incarnation_id,
+      participant_id: command.participant_id,
+      activation_id: command.activation_id,
+      source_participant_id: command.source_participant_id,
+      correlation_id: command.correlation_id,
+      tool_call_id: command.tool_call_id,
+      section: section.name,
+      section_revision: section.revision,
+      global_revision: state.global_revision,
+      sections: sections,
+      occurred_at: DateTime.utc_now()
+    }
+  end
+
   defp via(options) do
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
-    {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {:call_variables, incarnation_id}}}
+    {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, registry_key(incarnation_id)}}
   end
+
+  defp registry_key(incarnation_id), do: {:call_variables, incarnation_id}
 end

@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   alias Vxpipe.CallEngine.CallDefinition
   alias Vxpipe.CallEngine.CallInvocation
   alias Vxpipe.CallEngine.CallVariables
+  alias Vxpipe.CallEngine.CallVariables.UpdateSnapshot
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
   alias Vxpipe.CallEngine.DefinitionCompiler
   alias Vxpipe.CallEngine.Error
@@ -216,14 +217,124 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
             }} = CallVariables.read(server, read)
   end
 
-  defp start_variables do
+  test "hands an exact private snapshot with trusted attribution to the archival subscriber" do
+    %{server: server, identity: identity} = start_variables(archival_subscriber: self())
+
+    assert {:ok, command} =
+             update_command(identity,
+               section: "intake",
+               expected_revision: 0,
+               operation: {:merge, %{"summary" => "Ready"}}
+             )
+
+    assert {:ok, %{"revision" => 1}} = CallVariables.update(server, command)
+
+    assert_receive {:vxpipe_call_variables_snapshot,
+                    %UpdateSnapshot{
+                      command_id: command_id,
+                      tenant_id: "tenant-demo",
+                      room_id: room_id,
+                      incarnation_id: "rinc-test",
+                      participant_id: participant_id,
+                      activation_id: "act-test",
+                      source_participant_id: "part-caller",
+                      correlation_id: "corr-test",
+                      tool_call_id: "tool-call-test",
+                      section: "intake",
+                      section_revision: 1,
+                      global_revision: 1,
+                      sections: sections
+                    } = snapshot}
+
+    assert command_id == command.id
+    assert room_id == Keyword.fetch!(identity, :room_id)
+    assert participant_id == Keyword.fetch!(identity, :participant_id)
+
+    assert sections["customer"].value["id"] == "customer-1"
+    assert sections["intake"].value == %{"summary" => "Ready"}
+    assert sections["intake"].revision == 1
+    refute inspect(snapshot) =~ "customer-1"
+    refute inspect(:sys.get_state(server)) =~ "customer-1"
+  end
+
+  test "serializes competing updates so only one matching revision succeeds" do
+    %{server: server, identity: identity} = start_variables()
+
+    commands =
+      for priority <- [1, 2] do
+        assert {:ok, command} =
+                 update_command(identity,
+                   section: "intake",
+                   expected_revision: 0,
+                   operation: {:put, "priority", priority},
+                   tool_call_id: "tool-call-#{priority}"
+                 )
+
+        command
+      end
+
+    results =
+      commands
+      |> Task.async_stream(&CallVariables.update(server, &1),
+        ordered: false,
+        timeout: :infinity,
+        max_concurrency: 2
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.count(results, &match?({:ok, %{"revision" => 1}}, &1)) == 1
+
+    assert Enum.count(
+             results,
+             &match?({:error, %Error{code: :call_variables_revision_conflict}}, &1)
+           ) == 1
+  end
+
+  test "finishes an accepted queued update after its originating caller terminates" do
+    %{server: server, identity: identity} = start_variables(archival_subscriber: self())
+
+    assert {:ok, command} =
+             update_command(identity,
+               section: "intake",
+               expected_revision: 0,
+               operation: {:put, "summary", "Finish independently"}
+             )
+
+    :ok = :sys.suspend(server)
+    task_supervisor = start_supervised!(Task.Supervisor)
+
+    task =
+      Task.Supervisor.async_nolink(task_supervisor, fn ->
+        CallVariables.update(server, command)
+      end)
+
+    try do
+      wait_until_queued(server)
+      monitor = Process.monitor(task.pid)
+      Process.exit(task.pid, :kill)
+      assert_receive {:DOWN, ^monitor, :process, _pid, :killed}
+    after
+      :ok = :sys.resume(server)
+    end
+
+    assert_receive {:vxpipe_call_variables_snapshot,
+                    %UpdateSnapshot{
+                      section: "intake",
+                      section_revision: 1,
+                      sections: %{
+                        "intake" => %{value: %{"summary" => "Finish independently"}}
+                      }
+                    }}
+  end
+
+  defp start_variables(options \\ []) do
     plan = resolved_plan()
     incarnation_id = "rinc-test"
 
-    server =
-      start_supervised!(
-        {CallVariables, plan: plan, incarnation_id: incarnation_id, register: false}
-      )
+    child =
+      {CallVariables, [plan: plan, incarnation_id: incarnation_id, register: false] ++ options}
+
+    server = start_supervised!(child, significant: false)
 
     participant = plan.participants["reception"]
 
@@ -246,7 +357,7 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
           activation_id: "act-test",
           source_participant_id: "part-caller",
           correlation_id: "corr-test",
-          tool_call_id: "tool-call-test",
+          tool_call_id: Keyword.get(options, :tool_call_id, "tool-call-test"),
           deadline: deadline()
         ]
     )
@@ -365,4 +476,19 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   end
 
   defp deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
+
+  defp wait_until_queued(server, attempts \\ 10_000)
+
+  defp wait_until_queued(_server, 0), do: flunk("Call Variables command was not queued")
+
+  defp wait_until_queued(server, attempts) do
+    case Process.info(server, :message_queue_len) do
+      {:message_queue_len, length} when length > 0 ->
+        :ok
+
+      _other ->
+        :erlang.yield()
+        wait_until_queued(server, attempts - 1)
+    end
+  end
 end
