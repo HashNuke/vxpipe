@@ -28,7 +28,7 @@ defmodule Vxpipe.Calls.CallTimelineEntry do
   @type t :: %__MODULE__{
           id: String.t(),
           kind: atom(),
-          source: :persisted,
+          source: :persisted | :live,
           source_sequence: pos_integer() | nil,
           occurred_at: DateTime.t(),
           participant_id: String.t() | nil,
@@ -50,7 +50,7 @@ defmodule Vxpipe.Calls.CallTimelineEntry do
     %__MODULE__{
       id: fact.id,
       kind: fact.kind,
-      source: :persisted,
+      source: source(options),
       source_sequence: fact.sequence,
       occurred_at: fact.occurred_at,
       participant_id: fact.participant_id,
@@ -68,12 +68,12 @@ defmodule Vxpipe.Calls.CallTimelineEntry do
     }
   end
 
-  @spec from_variable_snapshot(VariableSnapshot.t()) :: t()
-  def from_variable_snapshot(%VariableSnapshot{} = snapshot) do
+  @spec from_variable_snapshot(VariableSnapshot.t(), keyword()) :: t()
+  def from_variable_snapshot(%VariableSnapshot{} = snapshot, options \\ []) do
     %__MODULE__{
       id: snapshot.id,
       kind: :variable_snapshot,
-      source: :persisted,
+      source: source(options),
       source_sequence: nil,
       occurred_at: snapshot.occurred_at,
       participant_id: snapshot.participant_id,
@@ -89,5 +89,11 @@ defmodule Vxpipe.Calls.CallTimelineEntry do
       observed_duration_ms: nil,
       duration_basis: nil
     }
+  end
+
+  defp source(options) do
+    case Keyword.get(options, :source, :persisted) do
+      value when value in [:persisted, :live] -> value
+    end
   end
 end

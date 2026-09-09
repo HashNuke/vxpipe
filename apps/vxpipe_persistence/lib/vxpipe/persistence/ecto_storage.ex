@@ -6,8 +6,7 @@ defmodule Vxpipe.Persistence.EctoStorage do
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.Archive.Fact, as: EngineFact
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.CallFact
-  alias Vxpipe.Calls.VariableSnapshot
+  alias Vxpipe.Calls.EngineArchiveProjection
 
   @terminal_errors [
     :call_incarnation_mismatch,
@@ -25,84 +24,23 @@ defmodule Vxpipe.Persistence.EctoStorage do
   @impl true
   def write(options, %BaselineSnapshot{} = fact) when is_list(options) do
     fact
-    |> baseline_snapshot()
+    |> EngineArchiveProjection.project()
     |> store(options)
   end
 
   def write(options, %UpdateSnapshot{} = fact) when is_list(options) do
     fact
-    |> update_snapshot()
+    |> EngineArchiveProjection.project()
     |> store(options)
   end
 
   def write(options, %EngineFact{} = fact) when is_list(options) do
     fact
-    |> call_fact()
+    |> EngineArchiveProjection.project()
     |> store_call_fact(options)
   end
 
   def write(_options, _unsupported), do: {:discard, :unsupported_archive_fact}
-
-  defp baseline_snapshot(fact) do
-    VariableSnapshot.new(
-      common_attributes(fact) ++
-        [kind: :baseline]
-    )
-  end
-
-  defp call_fact(fact) do
-    CallFact.new(
-      id: fact.id,
-      kind: fact.kind,
-      sequence: fact.sequence,
-      tenant_key: fact.tenant_id,
-      call_id: fact.call_id,
-      room_id: fact.room_id,
-      incarnation_id: fact.incarnation_id,
-      participant_id: fact.participant_id,
-      activation_id: fact.activation_id,
-      source_participant_id: fact.source_participant_id,
-      connection_id: fact.connection_id,
-      command_id: fact.command_id,
-      correlation_id: fact.correlation_id,
-      tool_call_id: fact.tool_call_id,
-      public_sequence: fact.public_sequence,
-      occurred_at: fact.occurred_at,
-      source_policy: fact.source_policy,
-      payload: fact.payload
-    )
-  end
-
-  defp update_snapshot(fact) do
-    VariableSnapshot.new(
-      common_attributes(fact) ++
-        [
-          kind: :update,
-          command_id: fact.command_id,
-          participant_id: fact.participant_id,
-          activation_id: fact.activation_id,
-          source_participant_id: fact.source_participant_id,
-          correlation_id: fact.correlation_id,
-          tool_call_id: fact.tool_call_id,
-          section: fact.section,
-          section_revision: fact.section_revision
-        ]
-    )
-  end
-
-  defp common_attributes(fact) do
-    [
-      id: fact.id,
-      tenant_key: fact.tenant_id,
-      call_id: fact.call_id,
-      room_id: fact.room_id,
-      incarnation_id: fact.incarnation_id,
-      global_revision: fact.global_revision,
-      sections: fact.sections,
-      source_policy: fact.source_policy,
-      occurred_at: fact.occurred_at
-    ]
-  end
 
   defp store({:ok, snapshot}, options) do
     case Calls.archive_variable_snapshot(snapshot, options) do

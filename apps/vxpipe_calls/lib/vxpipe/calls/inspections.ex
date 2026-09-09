@@ -8,6 +8,8 @@ defmodule Vxpipe.Calls.Inspections do
     CallListPage,
     CallTimeline,
     HistoryCursor,
+    LiveCallInspection,
+    LiveInspectionSource,
     Principal,
     Repositories
   }
@@ -58,6 +60,20 @@ defmodule Vxpipe.Calls.Inspections do
   end
 
   def inspect_call(_principal, _call_id, _options),
+    do: {:error, :invalid_call_inspection_request}
+
+  @spec inspect_live_call(Principal.t(), String.t(), keyword()) ::
+          {:ok, LiveCallInspection.t()} | {:error, term()}
+  def inspect_live_call(%Principal{} = principal, call_id, options)
+      when is_binary(call_id) and byte_size(call_id) > 0 and byte_size(call_id) <= 256 and
+             is_list(options) do
+    with :ok <- authorize(principal),
+         {:ok, snapshot} <- LiveInspectionSource.read(options, principal.tenant_key, call_id) do
+      LiveCallInspection.from_engine(snapshot, principal.tenant_key, call_id)
+    end
+  end
+
+  def inspect_live_call(_principal, _call_id, _options),
     do: {:error, :invalid_call_inspection_request}
 
   defp authorize(%Principal{scopes: scopes}) do

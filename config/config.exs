@@ -15,7 +15,9 @@ config :vxpipe_persistence,
 
 config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
 
-config :vxpipe_calls, Vxpipe.Calls, registries: %{capability_profiles: %{}, host_tools: %{}}
+config :vxpipe_calls, Vxpipe.Calls,
+  live_inspection_source: {Vxpipe.Calls.EngineLiveInspectionSource, []},
+  registries: %{capability_profiles: %{}, host_tools: %{}}
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [

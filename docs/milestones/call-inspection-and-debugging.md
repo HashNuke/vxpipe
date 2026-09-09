@@ -147,10 +147,15 @@ Implementation evidence to date:
 - The live buffer is a non-significant temporary child. If it fails, inspection becomes
   unavailable rather than restarting with fabricated continuity, while the room and its
   participants continue. Its snapshot hides retained private records from `Inspect`.
+- `Calls.inspect_live_call/3` is the tenant authorization boundary above that engine
+  source. It requires the established `:calls` scope, validates snapshot and per-record
+  call identities, converts engine records into Calls-owned values, and returns only a
+  correlated timeline explicitly labeled `live` plus bounded loss/revision metadata.
+  Ecto archival writes reuse the same engine-to-Calls projection.
 
-The Console pages, operator browser authorization, Calls-owned live translation, rendered
-browser verification and end-to-end fault fixtures are still incomplete; this evidence
-does not complete the milestone.
+The Console pages, operator browser authorization, rendered browser verification and
+end-to-end fault fixtures are still incomplete; this evidence does not complete the
+milestone.
 
 ## Specification review
 

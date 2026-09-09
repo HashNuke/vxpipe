@@ -125,3 +125,26 @@
   2,456 modules/functions. Root format, warnings-as-errors compile and unused-dependency
   validation pass. The complete migrated umbrella suite passes against a fresh isolated
   PostgreSQL cluster with 327 tests, 0 failures and 6 integration exclusions.
+
+## 2026-09-09 — authorized live timeline boundary
+
+- Added a Calls-owned live inspection source port and a default adapter that reads only
+  the engine's bounded public projection. Tests can replace the source without starting
+  a room, while production configuration names the engine adapter explicitly.
+- `Calls.inspect_live_call/3` validates the existing trusted principal and `:calls` scope
+  before touching the source. It supplies the principal's tenant key rather than trusting
+  a caller-selected tenant and returns `:call_not_live` for another tenant's call.
+- Added `EngineArchiveProjection` as the single conversion from engine facts/variable
+  snapshots to Calls-owned validated values. Both live inspection and `EctoStorage` now
+  use it; the persistence adapter no longer maintains a parallel conversion.
+- `LiveCallInspection` validates the outer snapshot and every record's tenant, call, room
+  and incarnation identity before projecting a descending correlated timeline. Timeline
+  entries now carry either `persisted` or `live` explicitly. Raw engine records do not
+  escape, and private timeline payloads remain excluded from `Inspect`.
+- Red evidence: focused tests failed because `Calls.inspect_live_call/3` did not exist.
+- Green evidence: the full Calls suite passes with 34 tests and 0 failures, including
+  scope, malformed-ID, cross-tenant, record-identity, source-adapter, source-label and
+  tool-duration checks. Root format, warnings-as-errors compile, strict Credo (258 files /
+  2,481 modules/functions), and unused-dependency checks pass. The complete migrated
+  umbrella suite passes against a fresh isolated PostgreSQL cluster with 331 tests,
+  0 failures and 6 integration exclusions.

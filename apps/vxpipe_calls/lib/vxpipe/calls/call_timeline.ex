@@ -12,13 +12,16 @@ defmodule Vxpipe.Calls.CallTimeline do
   @spec project([CallFact.t()], [VariableSnapshot.t()], keyword()) :: [CallTimelineEntry.t()]
   def project(facts, snapshots, options \\ []) when is_list(facts) and is_list(snapshots) do
     tool_starts = tool_starts(facts)
+    source = Keyword.get(options, :source, :persisted)
 
     fact_entries =
       Enum.map(facts, fn fact ->
-        CallTimelineEntry.from_fact(fact, observed_interval(fact, tool_starts))
+        interval_options = Keyword.put(observed_interval(fact, tool_starts), :source, source)
+        CallTimelineEntry.from_fact(fact, interval_options)
       end)
 
-    snapshot_entries = Enum.map(snapshots, &CallTimelineEntry.from_variable_snapshot/1)
+    snapshot_entries =
+      Enum.map(snapshots, &CallTimelineEntry.from_variable_snapshot(&1, source: source))
 
     Enum.sort_by(fact_entries ++ snapshot_entries, &sort_key/1, order(options))
   end

@@ -64,4 +64,7 @@ defmodule Vxpipe.Calls do
 
   def inspect_call(principal, call_id, options \\ []),
     do: Inspections.inspect_call(principal, call_id, options)
+
+  def inspect_live_call(principal, call_id, options \\ []),
+    do: Inspections.inspect_live_call(principal, call_id, options)
 end
