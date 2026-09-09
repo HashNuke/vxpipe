@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
   alias Vxpipe.CallEngine.{
     CallVariables,
+    LiveInspection.Buffer,
     ResolvedCallPlan,
     RoomAuthority,
     RoomCapabilitySupervisor,
@@ -37,7 +38,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
     children =
       [participant_supervisor, capability_supervisor] ++
-        call_variables_child(options) ++ [authority]
+        live_inspection_child(options) ++ call_variables_child(options) ++ [authority]
 
     Supervisor.init(children,
       strategy: :one_for_one,
@@ -49,6 +50,30 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
     case Keyword.get(options, :plan) do
       %ResolvedCallPlan{} -> [{CallVariables, options}]
       nil -> []
+    end
+  end
+
+  defp live_inspection_child(options) do
+    case Keyword.get(options, :plan) do
+      %ResolvedCallPlan{} = plan ->
+        settings = Keyword.fetch!(options, :live_inspection)
+
+        identity = %{
+          tenant_id: plan.tenant_id,
+          call_id: plan.call_id,
+          room_id: plan.room_id,
+          incarnation_id: Keyword.fetch!(options, :incarnation_id)
+        }
+
+        [
+          {Buffer,
+           identity: identity,
+           maximum_pending_records: Keyword.fetch!(settings, :maximum_pending_records),
+           maximum_retained_records: Keyword.fetch!(settings, :maximum_retained_records)}
+        ]
+
+      nil ->
+        []
     end
   end
 end

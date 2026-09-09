@@ -5,7 +5,14 @@ defmodule Vxpipe.CallEngine.CallVariables do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.CallVariables.{ArchivalPort, BaselineSnapshot, State, UpdateSnapshot}
+  alias Vxpipe.CallEngine.CallVariables.{
+    ArchivalPort,
+    BaselineSnapshot,
+    InspectionPort,
+    State,
+    UpdateSnapshot
+  }
+
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
   alias Vxpipe.CallEngine.{Error, Id}
 
@@ -66,6 +73,7 @@ defmodule Vxpipe.CallEngine.CallVariables do
         sections: plan.call_variables.sections,
         grants: grants,
         archival_port: ArchivalPort.new(Keyword.get(options, :archive_handoff)),
+        inspection_port: InspectionPort.new(plan),
         source_policy: Keyword.get(options, :archive_source_policy, %{"revision" => 0}),
         global_revision: 0
       }
@@ -75,7 +83,9 @@ defmodule Vxpipe.CallEngine.CallVariables do
 
   @impl true
   def handle_continue(:archive_baseline, state) do
-    :ok = ArchivalPort.handoff(state.archival_port, baseline_snapshot(state))
+    snapshot = baseline_snapshot(state)
+    :ok = ArchivalPort.handoff(state.archival_port, snapshot)
+    :ok = InspectionPort.offer(state.inspection_port, snapshot)
     {:noreply, state}
   end
 
@@ -131,7 +141,9 @@ defmodule Vxpipe.CallEngine.CallVariables do
         "value" => candidate
       }
 
-      :ok = ArchivalPort.handoff(state.archival_port, update_snapshot(command, state, section))
+      snapshot = update_snapshot(command, state, section)
+      :ok = ArchivalPort.handoff(state.archival_port, snapshot)
+      :ok = InspectionPort.offer(state.inspection_port, snapshot)
 
       {:ok, result, state}
     end

@@ -1,9 +1,9 @@
 defmodule Vxpipe.CallEngine.CallVariables.State do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallVariables.ArchivalPort
+  alias Vxpipe.CallEngine.CallVariables.{ArchivalPort, InspectionPort}
 
-  @derive {Inspect, except: [:sections, :grants, :archival_port]}
+  @derive {Inspect, except: [:sections, :grants, :archival_port, :inspection_port]}
   @enforce_keys [
     :tenant_id,
     :call_id,
@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.CallVariables.State do
     :sections,
     :grants,
     :archival_port,
+    :inspection_port,
     :source_policy,
     :global_revision
   ]
@@ -25,6 +26,7 @@ defmodule Vxpipe.CallEngine.CallVariables.State do
           sections: map(),
           grants: map(),
           archival_port: ArchivalPort.t(),
+          inspection_port: InspectionPort.t(),
           source_policy: map(),
           global_revision: non_neg_integer()
         }

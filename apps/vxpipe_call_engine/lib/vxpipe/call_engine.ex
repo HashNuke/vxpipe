@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine do
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
+  alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.RoomSupervisor
 
@@ -35,6 +36,12 @@ defmodule Vxpipe.CallEngine do
   def participant_snapshot(tenant_id, room_id, participant_id)
       when is_binary(tenant_id) and is_binary(room_id) and is_binary(participant_id) do
     RoomSupervisor.participant_snapshot(tenant_id, room_id, participant_id)
+  end
+
+  @spec inspect_live_call(String.t(), String.t()) ::
+          {:ok, Vxpipe.CallEngine.LiveInspection.Snapshot.t()} | {:error, :call_not_live}
+  def inspect_live_call(tenant_id, call_id) when is_binary(tenant_id) and is_binary(call_id) do
+    LiveInspectionBuffer.snapshot(tenant_id, call_id)
   end
 
   @spec join_participant(JoinParticipant.t()) ::

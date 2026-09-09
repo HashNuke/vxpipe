@@ -29,6 +29,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   ],
   model_fixture: [enabled: false],
   model_inference: [enabled: false],
+  live_inspection: [maximum_pending_records: 64, maximum_retained_records: 256],
   speech_to_text: [enabled: false],
   telemetry: [sample_interval_ms: 1_000],
   text_to_speech: [enabled: false]

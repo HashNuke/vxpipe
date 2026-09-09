@@ -98,3 +98,30 @@
 - Green evidence: 13 focused Calls tests, the focused Ecto inspection test, and the three
   affected engine tests passed. A full migrated umbrella run passed with 325 tests,
   0 failures, and 6 integration exclusions.
+
+## 2026-09-09 — bounded engine live projection
+
+- Added one `LiveInspection.Buffer` beneath each planned room incarnation, before Call
+  Variables and room authority startup. It has application-level finite limits (64
+  pending and 256 retained by default), and producers use a non-suspending port rather
+  than a synchronous GenServer call.
+- Existing archive fact construction remains the single policy-filtering and sequencing
+  path. That path now fans the resulting fact independently to archival storage and the
+  live buffer, so a full or unavailable archive cannot suppress live inspection. Call
+  Variables similarly offers each baseline/update snapshot independently after accepting
+  it in memory.
+- The buffer is a non-significant `:temporary` child. Losing it leaves the room and
+  participant processes running and makes the live read explicitly return
+  `:call_not_live`; it is not restarted as an empty buffer that would imply continuous
+  history. Retention overflow counts dropped oldest records, and rejected producer work
+  is exposed separately.
+- Red evidence: the room-level test timed out because planned rooms did not start a live
+  buffer. A supervision test then failed against a deliberately permanent child because
+  it restarted with an empty snapshot after being killed.
+- Green evidence: the live-buffer tests pass with 2 tests and 0 failures. Focused archive,
+  Call Variables, definition-driven room and live-inspection tests pass with 30 tests and
+  0 failures. The full call-engine suite passes with 181 tests, 0 failures and 2
+  integration exclusions. Strict Credo reports no issues across 254 source files and
+  2,456 modules/functions. Root format, warnings-as-errors compile and unused-dependency
+  validation pass. The complete migrated umbrella suite passes against a fresh isolated
+  PostgreSQL cluster with 327 tests, 0 failures and 6 integration exclusions.

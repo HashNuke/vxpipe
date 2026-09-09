@@ -1,7 +1,9 @@
 # Call inspection and debugging
 
-Status: not implemented. Scope requested by the user; specification reviewed locally
-on 2026-09-08. Browser operator authentication must be selected before external exposure.
+Status: in progress. Persisted inspection reads and the engine-owned bounded live
+projection are implemented; the Console workflow and browser operator-auth boundary
+remain. Scope requested by the user; specification reviewed locally on 2026-09-08.
+Browser operator authentication must be selected before external exposure.
 Prerequisites: [Observable sample call](observable-sample-call.md);
 [Asynchronous history](asynchronous-call-history.md), including its tenant admission,
 Call Variables and background-tool prerequisites.
@@ -131,7 +133,24 @@ Later provider/transfer/storage slices extend the inspector for their implemente
 - [ ] Update this milestone, index entry, architecture/user docs and implementation labnote
   with actual authorization, fault-injection, focused-test and rendered-browser evidence.
 
-Implementation evidence: none yet. Specification review does not complete the milestone.
+Implementation evidence to date:
+
+- `vxpipe_calls` owns tenant-authorized, cursor-bounded call summaries and persisted
+  detail pages, one correlated fact/variable timeline, latest persisted revision, and
+  explicit archive closure/gap/duplicate metadata. Its Ecto adapter selects only the
+  bounded fields and records needed by those contracts.
+- Each planned room incarnation now owns an engine-local live inspection buffer. Its
+  producer port rejects excess work instead of blocking room processes; the default
+  limits are 64 pending and 256 retained records. The buffer receives the same
+  policy-filtered private facts as archival storage plus accepted Call Variables
+  baselines/updates, including when archival storage is disabled.
+- The live buffer is a non-significant temporary child. If it fails, inspection becomes
+  unavailable rather than restarting with fabricated continuity, while the room and its
+  participants continue. Its snapshot hides retained private records from `Inspect`.
+
+The Console pages, operator browser authorization, Calls-owned live translation, rendered
+browser verification and end-to-end fault fixtures are still incomplete; this evidence
+does not complete the milestone.
 
 ## Specification review
 

@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Port
+  alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
   alias Vxpipe.CallEngine.Command.{CreateRoom, SendText}
 
   alias Vxpipe.CallEngine.{
@@ -31,6 +32,7 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     port =
       Port.new(
         Keyword.get(options, :archive_handoff),
+        live_inspection_port(plan),
         %{
           tenant_id: plan.tenant_id,
           call_id: plan.call_id,
@@ -164,5 +166,12 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
 
   defp activation(recorder, participant_id) do
     Map.get(recorder.participant_activations, participant_id)
+  end
+
+  defp live_inspection_port(plan) do
+    case LiveInspectionBuffer.port(plan.tenant_id, plan.call_id) do
+      {:ok, port} -> port
+      {:error, :unavailable} -> nil
+    end
   end
 end

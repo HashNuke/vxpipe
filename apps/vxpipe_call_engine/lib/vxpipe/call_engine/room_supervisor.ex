@@ -238,7 +238,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       start_command_id: Id.generate(:command),
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
       archive_handoff: archive.handoff,
-      archive_source_policy: archive.source_policy
+      archive_source_policy: archive.source_policy,
+      live_inspection: live_inspection_options()
     ]
 
     case DynamicSupervisor.start_child(__MODULE__, {RoomIncarnationSupervisor, options}) do
@@ -310,6 +311,12 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
+  end
+
+  defp live_inspection_options do
+    :vxpipe_call_engine
+    |> Application.fetch_env!(Vxpipe.CallEngine.Application)
+    |> Keyword.fetch!(:live_inspection)
   end
 
   defp lookup_room(tenant_id, room_id) do

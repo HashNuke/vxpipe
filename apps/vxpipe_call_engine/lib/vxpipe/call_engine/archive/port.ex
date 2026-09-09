@@ -2,10 +2,12 @@ defmodule Vxpipe.CallEngine.Archive.Port do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.{EventProjection, Fact, Handoff, Policy, Sanitizer}
+  alias Vxpipe.CallEngine.LiveInspection.Port, as: LiveInspectionPort
 
-  @derive {Inspect, except: [:handoff]}
+  @derive {Inspect, except: [:handoff, :live_inspection_port]}
   @enforce_keys [
     :handoff,
+    :live_inspection_port,
     :tenant_id,
     :call_id,
     :room_id,
@@ -23,7 +25,8 @@ defmodule Vxpipe.CallEngine.Archive.Port do
         }
 
   @type t :: %__MODULE__{
-          handoff: Handoff.t(),
+          handoff: nil | Handoff.t(),
+          live_inspection_port: nil | LiveInspectionPort.t(),
           tenant_id: String.t(),
           call_id: String.t(),
           room_id: String.t(),
@@ -33,11 +36,18 @@ defmodule Vxpipe.CallEngine.Archive.Port do
         }
 
   @spec new(nil | Handoff.t(), identity(), map()) :: nil | t()
-  def new(nil, _identity, _source_policy), do: nil
+  def new(handoff, identity, source_policy), do: new(handoff, nil, identity, source_policy)
 
-  def new(%Handoff{} = handoff, identity, source_policy) when is_map(source_policy) do
+  @spec new(nil | Handoff.t(), nil | LiveInspectionPort.t(), identity(), map()) :: nil | t()
+  def new(nil, nil, _identity, _source_policy), do: nil
+
+  def new(handoff, live_inspection_port, identity, source_policy)
+      when (is_nil(handoff) or is_struct(handoff, Handoff)) and
+             (is_nil(live_inspection_port) or is_struct(live_inspection_port, LiveInspectionPort)) and
+             is_map(source_policy) do
     %__MODULE__{
       handoff: handoff,
+      live_inspection_port: live_inspection_port,
       tenant_id: Map.fetch!(identity, :tenant_id),
       call_id: Map.fetch!(identity, :call_id),
       room_id: Map.fetch!(identity, :room_id),
@@ -78,7 +88,8 @@ defmodule Vxpipe.CallEngine.Archive.Port do
           )
       )
 
-    _accepted_or_dropped = Handoff.offer(port.handoff, fact)
+    offer_archive(port.handoff, fact)
+    offer_live_inspection(port.live_inspection_port, fact)
     %{port | next_sequence: port.next_sequence + 1}
   end
 
@@ -99,5 +110,19 @@ defmodule Vxpipe.CallEngine.Archive.Port do
 
         emit(port, kind, attributes)
     end
+  end
+
+  defp offer_archive(nil, _fact), do: :ok
+
+  defp offer_archive(handoff, fact) do
+    _accepted_or_dropped = Handoff.offer(handoff, fact)
+    :ok
+  end
+
+  defp offer_live_inspection(nil, _fact), do: :ok
+
+  defp offer_live_inspection(live_inspection_port, fact) do
+    _accepted_or_dropped = LiveInspectionPort.offer(live_inspection_port, fact)
+    :ok
   end
 end
