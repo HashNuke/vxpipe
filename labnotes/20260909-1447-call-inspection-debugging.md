@@ -303,3 +303,42 @@ remaining end-to-end failure checks have not been demonstrated yet.
   terminated-room implementation task. It also completes the correlated variable/slow-tool
   timeline check. Reconnection, stale purge-cache behavior, and other remaining acceptance
   checks keep the milestone in progress.
+
+## 2026-09-09 — bounded reconnection and disclosure
+
+- Calls live disclosure now proves that transcript content denied by its source policy and
+  nested credential sentinels are removed before a timeline reaches Console. Safe request
+  metadata remains available.
+- The Console timeline projection sorts out-of-order evidence by source timestamp and
+  deduplicates records sharing the same source and public event ID.
+- A reconnect creates a fresh LiveView and repeats only the bounded inspection reads: call
+  list limit 25, persisted-detail limit 50, and the bounded live projection. When the fresh
+  persisted and live sources both report the call missing, evidence retained by the prior
+  view is not republished.
+- Green evidence: the Calls suite passes 35 tests, the Console suite passes 55 tests, and
+  root format, warnings-as-errors compilation and strict Credo checks pass.
+- Checkpoint `6857fc4`, together with the previously documented authorization, inert payload,
+  pagination/gap, repository-outage, not-found and closed-view evidence, satisfies the four
+  remaining acceptance checks for access isolation, forbidden-content handling, bounded
+  reconnection, and safe missing/purged lifecycle behavior.
+- The immediately following `bf1f871` fixture supplies script-like content and an HTTPS
+  resource URI. The response escapes the script content, leaves the URI visible only as
+  inert text, and emits no matching `href` or `src`; the focused endpoint file passes 18
+  tests. This verifies the remote-content half of the forbidden-content check without
+  fetching or inspecting the resource.
+- The common root test and unused-dependency gates plus final milestone/index documentation
+  synchronization remain outstanding, so the milestone remains in progress.
+
+## 2026-09-09 — milestone completed
+
+- Final root verification passed: `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix credo --strict`, `mix test`, and
+  `mix deps.unlock --check-unused`.
+- The complete umbrella suite passed with 362 tests, no failures, and six tagged integration
+  exclusions. The local default PostgreSQL required unavailable password authentication, so
+  the test run used an isolated temporary PostgreSQL instance without external credentials.
+- The milestone checklist, completion evidence, Console operator README, and milestone index
+  now reflect the implemented behavior. Architecture and gateway-boundary documentation had
+  already been updated in their owning checkpoints.
+- Milestone 9, call inspection and debugging, is complete. Milestone 10, MCP client
+  integration and conformance, is next.

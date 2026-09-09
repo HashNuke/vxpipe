@@ -22,9 +22,24 @@ revalidated `/assets/*` files. If either compiled bundle is absent, the root ret
 remains available at `/diagnostics`. This application does not own Ecto or call
 protocol implementations.
 
-No route in this asset path adds authentication. API keys remain scoped to
-call-management endpoints and join tokens to call admission; Console and
-LiveDashboard pages receive no additional login layer in this milestone.
+The sample root, diagnostics, and LiveDashboard have no Console-specific authentication.
+Call inspection is separate and requires its operator session as described below. Join
+tokens remain scoped to call admission and do not grant inspection access.
+
+## Call inspection
+
+Open `/operator/sign-in` and submit a tenant key plus an existing API key with the `calls`
+scope. Console verifies that credential server-side, then stores only tenant/API-key
+identifiers, closed scopes, and expiry in its signed browser session; the API-key secret is
+not serialized into the session.
+
+After sign-in, `/calls` shows a tenant-scoped list of at most 25 calls per page and
+`/calls/:call_id` shows at most 50 persisted timeline records per history page alongside
+the bounded live projection when the room is active. Persisted and live reads remain
+independent, so an archive outage can still show permitted live evidence. The page labels
+source, revision, gaps, loss, unavailable data, and unknown outcomes rather than inventing
+continuity. Closing or reconnecting the page only stops or repeats these bounded reads; it
+does not start, resume, or end a call.
 
 ## Development diagnostics
 
@@ -71,10 +86,10 @@ controls for the next model request. These controls exercise only the fixed loca
 delay, failure and no-output scenarios; they are absent when the fixture process is not
 configured. They do not modify call input or expose a general provider-control endpoint.
 
-This milestone deliberately adds no diagnostics authentication. Deployments must
-control whether and where the opt-in Console endpoint is exposed. API-key authentication
-belongs to call-management endpoints, while join-token validation belongs to call
-admission; neither credential is an additional login mechanism for Console pages or
-LiveDashboard. The same diagnostics setting gates both HTTP routes and new LiveView
-socket connections, so a disabled deployment cannot bypass its 404 by connecting to
-the socket path directly.
+This milestone deliberately adds no authentication to diagnostics, the sample, or
+LiveDashboard. Deployments must control whether and where those opt-in Console surfaces are
+exposed. Call inspection is the exception: it exchanges a `calls`-scoped API key server-side
+for the non-secret signed operator session described above. Join-token validation remains
+limited to call admission. The same diagnostics setting gates both HTTP routes and new
+LiveView socket connections, so a disabled deployment cannot bypass its 404 by connecting
+to the socket path directly.

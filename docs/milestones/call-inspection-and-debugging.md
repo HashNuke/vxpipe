@@ -1,11 +1,11 @@
 # Call inspection and debugging
 
-Status: in progress. Persisted inspection reads, the engine-owned bounded live
+Status: complete. Persisted inspection reads, the engine-owned bounded live
 projection, and the Console's authenticated list/detail workflow are implemented and
 browser-verified. A deterministic end-to-end call proves conversation, tools, variables,
-live inspection, and later archive drain through a storage outage; the remaining failure
-and lifecycle acceptance checks are pending. Scope requested by the user; specification
-reviewed locally on 2026-09-08.
+live inspection, and later archive drain through a storage outage. The acceptance checks
+and common implementation gates have passed. Scope requested by the user; specification
+reviewed locally on 2026-09-08 and completed on 2026-09-09.
 Prerequisites: [Observable sample call](observable-sample-call.md);
 [Asynchronous history](asynchronous-call-history.md), including its tenant admission,
 Call Variables and background-tool prerequisites.
@@ -95,13 +95,13 @@ call ends, the same page remains useful from stored history without a live room 
   unavailable/incomplete rather than invented from current state or aggregates.
 - [x] Delay/fail storage during a live call: ongoing conversation and variable acceptance
   continue; live and persisted revisions/lag are distinguishable in the page.
-- [ ] Another tenant, ordinary caller or forged call identifier cannot read or subscribe
+- [x] Another tenant, ordinary caller or forged call identifier cannot read or subscribe
   to private data. Hidden caller events remain hidden while authorized operator history works.
-- [ ] Credential/forbidden-content sentinels do not reach responses, UI caches or logs;
+- [x] Credential/forbidden-content sentinels do not reach responses, UI caches or logs;
   remote HTML/resource links cannot execute or trigger automatic fetches.
-- [ ] Paginated, duplicate/out-of-order and interrupted subscriptions retain bounded
+- [x] Paginated, duplicate/out-of-order and interrupted subscriptions retain bounded
   state and honest gaps; reconnect never creates a call, executes a tool or replays audio.
-- [ ] Missing, denied, unavailable and purged-call responses are safe; stale cached facts
+- [x] Missing, denied, unavailable and purged-call responses are safe; stale cached facts
   cannot recreate deleted history. A closed page releases subscriptions without ending calls.
 - [x] No console/gateway-to-Repo dependency, gateway-to-Phoenix/UI dependency,
   unrestricted process inspection or additional media capture is introduced. General
@@ -130,9 +130,9 @@ Later provider/transfer/storage slices extend the inspector for their implemente
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and all acceptance/failure checks above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, index entry, architecture/user docs and implementation labnote
+- [x] Demonstrate the runnable outcome and all acceptance/failure checks above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, index entry, architecture/user docs and implementation labnote
   with actual authorization, fault-injection, focused-test and rendered-browser evidence.
 
 Implementation evidence to date:
@@ -201,6 +201,17 @@ Implementation evidence to date:
   LiveView prevents any further live read beyond a complete polling interval. The focused
   endpoint file passes 17 tests, the complete Console suite passes 53 tests, and root format,
   warnings-as-errors compilation and strict Credo checks pass.
+- Calls live disclosure removes transcript content denied by source policy and credential
+  sentinels before returning a timeline. The Console orders out-of-order evidence by source
+  time and deduplicates repeated identities within one source. Reconnecting starts a fresh
+  view, performs bounded list (25), persisted-detail (50) and live reads, and does not
+  republish evidence retained only by the prior view after both sources report the call
+  missing. The Calls suite passes 35 tests, the Console suite passes 55 tests, and root
+  format, warnings-as-errors compilation and strict Credo checks pass.
+- An ended-call fixture includes script-like content and an HTTPS resource URI. The Console
+  escapes the script content and preserves the URI only as inert text, emitting no matching
+  `href` or `src`; the focused endpoint file passes 18 tests. This closes the remote-content
+  portion of the forbidden-content acceptance check without adding resource inspection.
 - Rendered review at 1440px and 390px verified the list/detail workflow, event selection,
   call/history pagination, variable diff, mobile reading order and zero horizontal overflow.
   The approved screenshots are `.impeccable/review/desktop.png` and
@@ -211,9 +222,15 @@ Implementation evidence to date:
   ID · 1 duplicate sequence` with the unknown tool payload, retained equal 390px document
   and viewport widths, and produced no browser errors.
 
-Reconnect/bounded-history behavior, complete missing/denied/purged safety including stale
-cache behavior, and the remaining credential/content checks still need consolidated
-verification. This evidence does not complete the milestone.
+- Final root verification passed: `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix credo --strict`, `mix test`, and
+  `mix deps.unlock --check-unused`. The full suite completed with 362 tests, no failures,
+  and six tagged integration exclusions. Because the machine's default PostgreSQL required
+  unavailable password authentication, the suite used an isolated temporary PostgreSQL
+  instance without external credentials.
+
+The runnable outcome, acceptance/failure checks, responsive browser review, documentation
+updates and common gates are complete.
 
 ## Specification review
 
@@ -225,4 +242,4 @@ The subsequent approved console/gateway boundary received a focused specificatio
 the earlier observable-call slice supplies the Phoenix shell, inspection uses public
 Calls/live-projection interfaces, and browser authorization remains separate from API-key
 and caller-token admission. No new prerequisite or tenant administration UI is implied.
-This is specification evidence only; implementation and browser checks remain unchecked.
+Implementation and browser evidence are recorded above.

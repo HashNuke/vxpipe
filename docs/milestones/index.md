@@ -1,7 +1,8 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestones 1 through 8 are complete and milestone 9 is in progress. The earlier
-behavior contracts have completed focused review. The 2026-09-08 released-package investigation
+Status: 23 milestone specifications; milestones 1 through 9 are complete and milestone 10,
+MCP client integration and conformance, is next. The earlier behavior contracts have
+completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
@@ -40,7 +41,7 @@ progress without claiming the entire milestone is complete.
 6. [x] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
 7. [x] [Prepared calls and single-use joining](prepared-call-admission.md) — Prepare in PostgreSQL, then start exactly one live call when its caller joins.
 8. [x] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
-9. [ ] [Call inspection and debugging](call-inspection-and-debugging.md) — Inspect an authorized live or ended call's timeline, permitted snapshots, timings and archival gaps.
+9. [x] [Call inspection and debugging](call-inspection-and-debugging.md) — Inspect an authorized live or ended call's timeline, permitted snapshots, timings and archival gaps.
 10. [ ] [MCP client integration and conformance](mcp-client-library.md) — Verify ExMCP through a thin policy adapter and version-pinned reference/conformance server, independently of Jido.
 11. [ ] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
 12. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
@@ -216,7 +217,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Complete; independently reviewed | Database-neutral Calls workflows, Ecto/PostgreSQL adapters, immutable publication routes, hash-only scoped keys, restart checks, and trusted operator commands are implemented and verified. |
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
-| [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | In progress; locally reviewed | Calls-owned bounded persisted/live projections and the Console-owned authenticated list/detail workflow are implemented and browser-verified; deterministic storage/tool failure fixtures and the remaining end-to-end acceptance checks are pending. |
+| [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | Complete; locally reviewed | Calls-owned bounded persisted/live projections and the Console-owned authenticated list/detail workflow are implemented and browser-verified. Storage outage, tool failure, authorization, disclosure, archive-gap, lifecycle and reconnection checks pass with the common implementation gates. |
 | [MCP client integration and conformance](mcp-client-library.md#specification-review) | Revised after investigation | ExMCP replaces direct Jido MCP; protocol/policy gates remain. No Jido dependency or model exposure in this standalone slice; transport conformance is not yet demonstrated. |
 | [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Revised; implementation blocked | Owns the required public Jido AI data-tool projection/executor gate, exact aliases/schemas and mixed-loop proof; ExMCP alone does not resolve it. |
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
