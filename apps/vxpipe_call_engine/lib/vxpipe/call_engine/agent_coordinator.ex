@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.Telemetry
-  alias Vxpipe.CallEngine.Tool.{Call, Context}
+  alias Vxpipe.CallEngine.Tool.{Call, Context, Dispatcher}
 
   @call_timeout 5_000
   @default_maximum_completed_requests 32
@@ -317,13 +317,16 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       source_participant_id: command.participant_id,
       connection_id: command.connection_id,
       command_id: command.id,
-      correlation_id: command.correlation_id
+      correlation_id: command.correlation_id,
+      agent_request_id: request_id,
+      tool_call_id: nil
     }
 
     existing_tool_context = Keyword.get(state.request_options, :tool_context, %{})
 
     tool_context =
       Map.merge(existing_tool_context, %{
+        __tool_guardrail_callback__: tool_guardrail_callback(state.tool_dispatcher, request_id),
         vxpipe_discarded_agent_request_ids: state.discarded_request_ids,
         vxpipe_tool_context: tool_context,
         vxpipe_tool_dispatcher: state.tool_dispatcher
@@ -345,6 +348,10 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       vxpipe_request_id: request_id
     })
     |> Keyword.put(:tool_context, tool_context)
+  end
+
+  defp tool_guardrail_callback(dispatcher, request_id) do
+    fn tool_call -> Dispatcher.register_tool_call(dispatcher, request_id, tool_call) end
   end
 
   defp push_text(text, state) do

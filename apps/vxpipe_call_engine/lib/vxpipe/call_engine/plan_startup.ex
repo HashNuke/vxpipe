@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
   alias Vxpipe.CallEngine.Command.JoinParticipant
+  alias Vxpipe.CallEngine.CallVariables.Binding
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -41,7 +42,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   @spec validate(ResolvedCallPlan.t(), keyword()) ::
           :ok | {:error, Error.t()}
   def validate(%ResolvedCallPlan{} = plan, options) when is_list(options) do
-    case new(plan, options) do
+    case new(plan, Keyword.put(options, :validation_only, true)) do
       {:ok, %__MODULE__{}} -> :ok
       {:error, %Error{}} = error -> error
     end
@@ -53,7 +54,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, receiver} <-
            entry_participant(plan, :entry_receiver, plan.entry_receiver, :agent),
          :ok <- supported_features(plan, caller, receiver),
-         {:ok, activation_options} <- agent_activation_options(receiver, options),
+         {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text} <- speech_to_text_runtime(caller, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(receiver, options),
          {:ok, caller_command} <- participant_command(plan, caller),
@@ -175,7 +176,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp agent_activation_options(receiver, options) do
+  defp agent_activation_options(plan, receiver, options) do
     with %CapabilitySelection{provider: :req_llm, options: provider_options} <-
            receiver.capabilities.model_inference,
          {:ok, model} <- agent_model(provider_options),
@@ -185,30 +186,35 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          settings when is_list(settings) <- Keyword.get(options, :agent_runtime) do
       model_fixture = Keyword.get(settings, :model_fixture)
 
-      tools =
+      host_tools =
         receiver.tools
         |> Map.values()
         |> Enum.sort_by(& &1.name)
         |> Enum.map(& &1.action)
 
-      {:ok,
-       [
-         activation_id: receiver.activation_id,
-         agent_participant_id: receiver.participant_id,
-         owner: owner,
-         provider: if(model_fixture, do: :local_fixture, else: :req_llm),
-         system_prompt: receiver.prompt,
-         tools: tools,
-         maximum_completed_requests: Keyword.fetch!(settings, :maximum_completed_requests),
-         maximum_output_bytes: Keyword.fetch!(settings, :maximum_output_bytes),
-         maximum_pending_requests: Keyword.fetch!(settings, :maximum_pending_requests),
-         maximum_tool_result_bytes: Keyword.fetch!(settings, :maximum_tool_result_bytes),
-         request_options:
-           request_options
-           |> put_model_fixture(model_fixture)
-           |> Keyword.put(:model, model),
-         request_timeout_ms: Keyword.fetch!(settings, :request_timeout_ms)
-       ]}
+      tools = host_tools ++ Binding.actions(receiver.variable_permissions.grants)
+
+      with {:ok, variable_binding} <- variable_binding(plan, receiver, options) do
+        {:ok,
+         [
+           activation_id: receiver.activation_id,
+           agent_participant_id: receiver.participant_id,
+           owner: owner,
+           provider: if(model_fixture, do: :local_fixture, else: :req_llm),
+           system_prompt: receiver.prompt,
+           tools: tools,
+           variable_binding: variable_binding,
+           maximum_completed_requests: Keyword.fetch!(settings, :maximum_completed_requests),
+           maximum_output_bytes: Keyword.fetch!(settings, :maximum_output_bytes),
+           maximum_pending_requests: Keyword.fetch!(settings, :maximum_pending_requests),
+           maximum_tool_result_bytes: Keyword.fetch!(settings, :maximum_tool_result_bytes),
+           request_options:
+             request_options
+             |> put_model_fixture(model_fixture)
+             |> Keyword.put(:model, model),
+           request_timeout_ms: Keyword.fetch!(settings, :request_timeout_ms)
+         ]}
+      end
     else
       _unsupported ->
         unsupported(
@@ -222,6 +228,29 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         ["participants", receiver.definition_key, "capabilities", "model_inference"],
         "must select a supported ReqLLM model profile"
       )
+  end
+
+  defp variable_binding(plan, receiver, options) do
+    cond do
+      map_size(receiver.variable_permissions.grants) == 0 ->
+        {:ok, nil}
+
+      Keyword.get(options, :validation_only, false) ->
+        {:ok, nil}
+
+      true ->
+        build_variable_binding(plan, receiver, options)
+    end
+  end
+
+  defp build_variable_binding(plan, receiver, options) do
+    case {Keyword.get(options, :call_variables), Keyword.get(options, :incarnation_id)} do
+      {server, incarnation_id} when is_pid(server) and is_binary(incarnation_id) ->
+        {:ok, Binding.new(server, plan, receiver, incarnation_id)}
+
+      _invalid ->
+        unsupported(["call_variables", "sections"], "runtime binding is unavailable")
+    end
   end
 
   defp put_model_fixture(request_options, nil), do: request_options

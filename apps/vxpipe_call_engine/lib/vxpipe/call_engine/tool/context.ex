@@ -11,7 +11,7 @@ defmodule Vxpipe.CallEngine.Tool.Context do
     :command_id,
     :correlation_id
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [:agent_request_id, :tool_call_id]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -21,6 +21,8 @@ defmodule Vxpipe.CallEngine.Tool.Context do
           source_participant_id: String.t(),
           connection_id: String.t(),
           command_id: String.t(),
-          correlation_id: String.t()
+          correlation_id: String.t(),
+          agent_request_id: nil | String.t(),
+          tool_call_id: nil | String.t()
         }
 end

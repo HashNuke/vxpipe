@@ -27,6 +27,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
     AgentCoordinator,
+    CallVariables,
     Error,
     Id,
     PlanStartup,
@@ -319,6 +320,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
     startup_options = [
       owner: self(),
+      call_variables: CallVariables.whereis(state.snapshot.incarnation_id),
+      incarnation_id: state.snapshot.incarnation_id,
       agent_runtime: Keyword.fetch!(settings, :agent_runtime),
       agent_request_options: Keyword.get(options, :agent_request_options, []),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),

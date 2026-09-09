@@ -129,29 +129,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   test "starts a room-owned Call Variables process independently of RoomAuthority" do
     room_id = unique_id("room-variables")
-
-    transform = fn input ->
-      input
-      |> put_in([:call_variables, :sections], %{
-        "order" => %{
-          schema: %{
-            "type" => "object",
-            "properties" => %{"id" => %{"type" => "string"}},
-            "additionalProperties" => false
-          }
-        }
-      })
-      |> put_in(
-        [:participants, "receiver", :variable_permissions],
-        %{"order" => ["read", "write"]}
-      )
-    end
-
-    plan =
-      compile_plan(room_id,
-        definition_transform: transform,
-        initial_variables: %{"order" => %{"id" => "order-1"}}
-      )
+    plan = compile_variables_plan(room_id)
 
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
@@ -196,9 +174,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                source_participant_id: plan.participants[plan.entry_caller].participant_id,
                correlation_id: "turn-variables",
                tool_call_id: "tool-variables",
-               section: "order",
+               section: "intake",
                expected_revision: 0,
-               operation: {:put, "id", "order-2"},
+               operation: {:put, "summary", "ready"},
                deadline: future_deadline()
              )
 
@@ -207,10 +185,96 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert_receive {:vxpipe_call_variables_snapshot,
                     %UpdateSnapshot{
                       room_id: ^room_id,
-                      section: "order",
+                      section: "intake",
                       section_revision: 1,
-                      sections: %{"order" => %{value: %{"id" => "order-2"}}}
+                      sections: %{
+                        "order" => %{value: %{"id" => "order-1"}},
+                        "intake" => %{value: %{"summary" => "ready"}}
+                      }
                     }}
+  end
+
+  test "executes generated variable actions through the definition-driven Jido loop" do
+    room_id = unique_id("room-variable-actions")
+    plan = compile_variables_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    script =
+      expect_react do
+        user("Collect the intake details.")
+        call("read_variables", %{"sections" => ["order"]}, id: "tool-read-variables")
+
+        call(
+          "update_variables",
+          %{
+            "section_name" => "intake",
+            "data" => %{"summary" => "Asked for assistance"},
+            "expected_revision" => 0
+          },
+          id: "tool-update-variables"
+        )
+
+        answer("The intake details are saved.")
+      end
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               agent_request_options: Jido.AI.Test.react_opts(script),
+               call_variables_archival_subscriber: self()
+             )
+
+    attach_caller(plan, room, caller, "conn-variable-actions")
+
+    command =
+      send_command(
+        plan,
+        room,
+        caller,
+        "conn-variable-actions",
+        "Collect the intake details."
+      )
+
+    assert :ok = CallEngine.send_text(command)
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{
+                      tool_call_id: "tool-read-variables",
+                      result: %{
+                        "global_revision" => 0,
+                        "sections" => %{
+                          "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
+                        }
+                      }
+                    }},
+                   2_000
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{
+                      tool_call_id: "tool-update-variables",
+                      result: %{
+                        "section" => "intake",
+                        "revision" => 1,
+                        "value" => %{"summary" => "Asked for assistance"}
+                      }
+                    }},
+                   2_000
+
+    assert_receive {:vxpipe_call_variables_snapshot,
+                    %UpdateSnapshot{
+                      participant_id: participant_id,
+                      tool_call_id: "tool-update-variables",
+                      section: "intake",
+                      section_revision: 1
+                    }},
+                   2_000
+
+    assert participant_id == receiver.participant_id
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "The intake details are saved."}},
+                   2_000
+
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{}}, 2_000
   end
 
   test "routes the next room turn through a restarted agent activation" do
@@ -585,6 +649,37 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     profiles = capability_profiles(options)
 
     compile_plan_from(room_id, input, profiles, options)
+  end
+
+  defp compile_variables_plan(room_id) do
+    transform = fn input ->
+      input
+      |> put_in([:call_variables, :sections], %{
+        "order" => %{
+          schema: %{
+            "type" => "object",
+            "properties" => %{"id" => %{"type" => "string"}},
+            "additionalProperties" => false
+          }
+        },
+        "intake" => %{
+          schema: %{
+            "type" => "object",
+            "properties" => %{"summary" => %{"type" => "string"}},
+            "additionalProperties" => false
+          }
+        }
+      })
+      |> put_in(
+        [:participants, "receiver", :variable_permissions],
+        %{"order" => ["read"], "intake" => ["read", "write"]}
+      )
+    end
+
+    compile_plan(room_id,
+      definition_transform: transform,
+      initial_variables: %{"order" => %{"id" => "order-1"}}
+    )
   end
 
   defp compile_plan_from(room_id, input, profiles, options \\ []) do

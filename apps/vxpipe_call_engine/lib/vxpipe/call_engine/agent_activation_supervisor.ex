@@ -54,6 +54,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
          activation_id: activation_id,
          name: tool_dispatcher,
          tools: Keyword.fetch!(options, :tools),
+         variable_binding: Keyword.get(options, :variable_binding),
          maximum_result_bytes: Keyword.fetch!(options, :maximum_tool_result_bytes)},
         id: :tool_dispatcher,
         restart: :permanent

@@ -45,3 +45,25 @@ candidate. It returns only grant-safe results and keeps all failure paths non-mu
   warnings-as-errors compilation pass; the umbrella has 146 Call Engine tests
   (one excluded), 46 Gateway tests (four excluded), and 20 Console tests passing;
   the unused-dependency check is clean.
+- Added the finite application-owned Jido Actions `read_variables`,
+  `update_variables`, and `update_variable`. Plan startup derives the applicable
+  action set from the receiver's grants and binds them through the activation's
+  dispatcher; definitions do not generate modules or list these tools explicitly.
+- The dispatcher owns the private binding. Host actions continue receiving only
+  the existing redacted `Tool.Context`; neither that struct nor Jido runtime
+  context contains the variables PID, grants, schemas, or resolved plan. The
+  dispatcher state redacts the binding and pending variable-tool correlations.
+- Jido's preflight guardrail callback supplies exact provider tool-call IDs before
+  action execution. This fixed the first implementation's request-ID approximation
+  and makes private update attribution agree with public tool lifecycle events.
+- The request transformer asks the dispatcher for a fresh grant-filtered projection
+  on every provider round and inserts it as a transient engine system message after
+  the agent prompt. A focused test replaces the projection between transformations
+  and confirms the old value is absent and the original Jido context is unchanged.
+- A complete definition-driven Jido test reads a prefilled order section, merges an
+  intake section, observes exact tool results and archival attribution, and completes
+  the agent turn. The focused agent/tool/transformer/runtime group is green with 41
+  tests.
+- Full checkpoint verification passes: format, warnings-as-errors compilation,
+  148 Call Engine tests (one excluded), 46 Gateway tests (four excluded), 20
+  Console tests, and the unused-dependency check.

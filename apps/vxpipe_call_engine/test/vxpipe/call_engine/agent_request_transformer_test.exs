@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformerTest do
   alias Jido.AI.Reasoning.ReAct.State
   alias Vxpipe.CallEngine.AgentRequestTransformer
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
+  alias Vxpipe.CallEngine.TestVariableProjectionDispatcher
 
   test "excludes discarded request entries from every model projection" do
     context =
@@ -65,6 +66,68 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformerTest do
     assert script.user == "exercise the fixture"
     assert [%{type: :answer, text: ""}] = script.turns
     assert %{next_scenario: :success} = ModelFixture.status(fixture)
+  end
+
+  test "inserts a refreshed Call Variables projection without adding it to history" do
+    first = %{
+      "global_revision" => 0,
+      "sections" => %{
+        "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
+      }
+    }
+
+    dispatcher =
+      start_supervised!({TestVariableProjectionDispatcher, projection: first})
+
+    context =
+      Context.new(system_prompt: "Stay concise.")
+      |> Context.append_user("current user")
+
+    state =
+      "current user"
+      |> State.new("Stay concise.", request_id: "variables-request")
+      |> then(&%{&1 | context: context})
+
+    request = %{messages: Context.to_messages(context), llm_opts: [], tools: %{}, model: :fast}
+
+    assert {:ok, %{messages: first_messages}} =
+             AgentRequestTransformer.transform_request(
+               request,
+               state,
+               %{},
+               %{vxpipe_tool_dispatcher: dispatcher}
+             )
+
+    assert [
+             %{role: :system, content: "Stay concise."},
+             %{role: :system, content: first_projection},
+             %{role: :user, content: "current user"}
+           ] = first_messages
+
+    assert first_projection =~ "Current Call Variables"
+    assert first_projection =~ "order-1"
+
+    second = %{
+      "global_revision" => 1,
+      "sections" => %{
+        "order" => %{"revision" => 1, "value" => %{"id" => "order-2"}}
+      }
+    }
+
+    assert :ok = TestVariableProjectionDispatcher.replace(dispatcher, second)
+
+    assert {:ok, %{messages: second_messages}} =
+             AgentRequestTransformer.transform_request(
+               request,
+               state,
+               %{},
+               %{vxpipe_tool_dispatcher: dispatcher}
+             )
+
+    assert Enum.count(second_messages, fn message -> message.role == :system end) == 2
+    assert Enum.any?(second_messages, &String.contains?(&1.content, "order-2"))
+    refute Enum.any?(second_messages, &String.contains?(&1.content, "order-1"))
+    assert Context.to_messages(context) == request.messages
   end
 
   test "applies the configured delay before returning local model output" do
