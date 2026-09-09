@@ -46,6 +46,7 @@ defmodule Vxpipe.Gateway.Session do
       room_id: Keyword.fetch!(options, :room_id),
       incarnation_id: Keyword.fetch!(options, :incarnation_id),
       participant_id: Keyword.fetch!(options, :participant_id),
+      tool_visibility: Keyword.fetch!(options, :tool_visibility),
       expires_at: expires_at
     }
 

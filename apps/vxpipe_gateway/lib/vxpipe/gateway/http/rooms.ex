@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
   alias Vxpipe.CallEngine.Command.{CreateRoom, JoinParticipant}
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Participant.Snapshot, as: ParticipantSnapshot
+  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility
   alias Vxpipe.CallEngine.Room.Snapshot
   alias Vxpipe.Gateway.Session.Snapshot, as: SessionSnapshot
   alias Vxpipe.Gateway.{SessionSupervisor, TrustedCall}
@@ -99,9 +100,9 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
   defp create_trusted_call(conn, principal) do
     room_id = Map.get(conn.body_params, "room_id")
 
-    with {:ok, snapshot, participant} <-
+    with {:ok, snapshot, participant, tool_visibility} <-
            TrustedCall.start(principal.trusted_call, principal_options(principal), room_id),
-         {:ok, session} <- issue_session(participant, principal) do
+         {:ok, session} <- issue_session(participant, principal, tool_visibility) do
       send_json(conn, 201, %{
         "room" => Snapshot.to_public(snapshot),
         "participant" => ParticipantSnapshot.to_public(participant),
@@ -125,7 +126,7 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
              deadline: deadline
            ),
          {:ok, participant} <- CallEngine.join_participant(command),
-         {:ok, session} <- issue_session(participant, principal) do
+         {:ok, session} <- issue_session(participant, principal, ToolVisibility.hidden()) do
       send_json(conn, 201, %{
         "participant" => ParticipantSnapshot.to_public(participant),
         "session" => session_public(session)
@@ -136,14 +137,15 @@ defmodule Vxpipe.Gateway.HTTP.Rooms do
     end
   end
 
-  defp issue_session(participant, principal) do
+  defp issue_session(participant, principal, tool_visibility) do
     SessionSupervisor.issue(
       [
         tenant_id: participant.tenant_id,
         actor_id: principal.actor_id,
         room_id: participant.room_id,
         incarnation_id: participant.incarnation_id,
-        participant_id: participant.participant_id
+        participant_id: participant.participant_id,
+        tool_visibility: tool_visibility
       ],
       principal.session_ttl_ms
     )

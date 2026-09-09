@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
   import Plug.Test
 
   alias Vxpipe.Gateway.HTTP.Endpoint
+  alias Vxpipe.Gateway.Session
 
   @allowed_origin "https://client.example.test"
   @request_stop_event [:vxpipe, :gateway, :http, :request, :stop]
@@ -176,6 +177,39 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
     assert "sess_" <> _ = session_id
   end
 
+  test "pins trusted tool visibility and ignores a browser visibility field" do
+    room_id = "room-visibility-#{System.unique_integer([:positive, :monotonic])}"
+
+    definition =
+      trusted_call_options()
+      |> Keyword.fetch!(:definition)
+      |> Map.put(:tool_visibility, "hidden")
+      |> Map.put(:tool_visibility_overrides, %{
+        "receiver" => %{"get_current_time" => "hidden"}
+      })
+
+    conn =
+      :post
+      |> conn(
+        "/api/rooms",
+        JSON.encode!(%{"room_id" => room_id, "tool_visibility" => "full"})
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(
+        trusted_endpoint_options(definition: definition, tool_visibility: "metadata")
+      )
+
+    assert conn.status == 201
+    public_session = get_in(JSON.decode!(conn.resp_body), ["session"])
+    session_id = public_session["session_id"]
+
+    refute Map.has_key?(public_session, "tool_visibility")
+
+    assert {:ok, session} = Session.claim(session_id)
+    assert session.tool_visibility.default == :metadata
+    assert session.tool_visibility.overrides == %{}
+  end
+
   test "rejects a trusted definition call without a valid room ID" do
     conn =
       :post
@@ -264,7 +298,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
       resource_id: "sample-call",
       revision: 1,
       definition: %{
-        schema_version: "20260906.02",
+        schema_version: "20260909.01",
         entry_caller: "caller",
         entry_receiver: "receiver",
         defaults: %{capabilities: %{}},
@@ -279,7 +313,9 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
             prompt: "Answer briefly.",
             first_message: %{mode: "wait_for_input"},
             capabilities: %{model_inference: "sample-model"},
-            tools: %{},
+            tools: %{
+              "get_current_time" => %{type: "host", tool: "get_current_time"}
+            },
             transfers: []
           }
         },
@@ -292,11 +328,15 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
           options: %{model: "test:scripted"}
         }
       },
-      host_tools: %{}
+      host_tools: %{
+        "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime
+      }
     ]
   end
 
-  defp trusted_endpoint_options do
+  defp trusted_endpoint_options(trusted_overrides \\ []) do
+    trusted_call = Keyword.merge(trusted_call_options(), trusted_overrides)
+
     Endpoint.init(
       cors: [],
       room_creation: [
@@ -306,7 +346,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
           actor_id: "actor-samples",
           scopes: ["rooms:create", "rooms:join"]
         ],
-        trusted_call: trusted_call_options()
+        trusted_call: trusted_call
       ]
     )
   end

@@ -70,6 +70,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioFrameTest do
       room_id: "room-demo",
       incarnation_id: "rinc-demo",
       participant_id: "part-human",
+      tool_visibility: Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility.hidden(),
       expires_at: ~U[2026-09-04 13:00:00.000Z]
     }
   end

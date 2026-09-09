@@ -10,12 +10,15 @@ defmodule Vxpipe.Gateway.TrustedCall do
     ResolvedCallPlan
   }
 
+  alias Vxpipe.CallEngine.CallDefinition.ToolVisibility
+
   @enforce_keys [:definition, :registries]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [tool_visibility_override: nil]
 
   @type t :: %__MODULE__{
           definition: CallDefinition.t(),
-          registries: map()
+          registries: map(),
+          tool_visibility_override: nil | ToolVisibility.t()
         }
 
   @spec new(keyword()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t() | :invalid_config}
@@ -30,11 +33,13 @@ defmodule Vxpipe.Gateway.TrustedCall do
            CallDefinition.new(definition_input,
              resource_id: resource_id,
              revision: revision
-           ) do
+           ),
+         {:ok, tool_visibility_override} <- tool_visibility_override(options, definition) do
       {:ok,
        %__MODULE__{
          definition: definition,
-         registries: %{capability_profiles: capability_profiles, host_tools: host_tools}
+         registries: %{capability_profiles: capability_profiles, host_tools: host_tools},
+         tool_visibility_override: tool_visibility_override
        }}
     else
       nil -> {:error, :invalid_config}
@@ -45,7 +50,8 @@ defmodule Vxpipe.Gateway.TrustedCall do
   end
 
   @spec start(t(), keyword(), term()) ::
-          {:ok, Vxpipe.CallEngine.Room.Snapshot.t(), Vxpipe.CallEngine.Participant.Snapshot.t()}
+          {:ok, Vxpipe.CallEngine.Room.Snapshot.t(), Vxpipe.CallEngine.Participant.Snapshot.t(),
+           Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility.t()}
           | {:error, Vxpipe.CallEngine.Error.t()}
   def start(%__MODULE__{} = trusted_call, principal, room_id) when is_list(principal) do
     definition = trusted_call.definition
@@ -63,7 +69,12 @@ defmodule Vxpipe.Gateway.TrustedCall do
              room_id: room_id
            ),
          {:ok, %ResolvedCallPlan{} = plan} <-
-           DefinitionCompiler.compile(definition, invocation, trusted_call.registries),
+           DefinitionCompiler.compile(
+             definition,
+             invocation,
+             trusted_call.registries,
+             compiler_options(trusted_call)
+           ),
          {:ok, room} <- CallEngine.start_call(plan),
          entry_caller <- Map.fetch!(plan.participants, plan.entry_caller),
          {:ok, participant} <-
@@ -72,7 +83,26 @@ defmodule Vxpipe.Gateway.TrustedCall do
              plan.room_id,
              entry_caller.participant_id
            ) do
-      {:ok, room, participant}
+      {:ok, room, participant, plan.tool_visibility}
     end
+  end
+
+  defp tool_visibility_override(options, definition) do
+    if Keyword.has_key?(options, :tool_visibility) or
+         Keyword.has_key?(options, :tool_visibility_overrides) do
+      ToolVisibility.new(
+        Keyword.get(options, :tool_visibility, "hidden"),
+        Keyword.get(options, :tool_visibility_overrides, %{}),
+        definition.participants
+      )
+    else
+      {:ok, nil}
+    end
+  end
+
+  defp compiler_options(%__MODULE__{tool_visibility_override: nil}), do: []
+
+  defp compiler_options(%__MODULE__{tool_visibility_override: policy}) do
+    [tool_visibility: policy]
   end
 end

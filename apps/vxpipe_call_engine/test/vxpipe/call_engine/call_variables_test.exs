@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   alias Vxpipe.CallEngine.DefinitionCompiler
   alias Vxpipe.CallEngine.Error
 
-  @schema_version "20260906.02"
+  @schema_version "20260909.01"
 
   test "reads only requested authorized sections and fails a mixed forbidden read without values" do
     %{server: server, identity: identity} = start_variables()

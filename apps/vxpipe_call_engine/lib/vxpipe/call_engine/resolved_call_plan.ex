@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   A self-contained immutable call plan pinned before live room startup.
   """
 
-  alias Vxpipe.CallEngine.ResolvedCallPlan.{CallVariables, Participant}
+  alias Vxpipe.CallEngine.ResolvedCallPlan.{CallVariables, Participant, ToolVisibility}
 
   @enforce_keys [
     :definition_id,
@@ -18,6 +18,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
     :entry_receiver,
     :participants,
     :call_variables,
+    :tool_visibility,
     :max_duration_ms
   ]
   defstruct @enforce_keys
@@ -35,6 +36,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           entry_receiver: String.t(),
           participants: %{String.t() => Participant.t()},
           call_variables: CallVariables.t(),
+          tool_visibility: ToolVisibility.t(),
           max_duration_ms: pos_integer()
         }
 end

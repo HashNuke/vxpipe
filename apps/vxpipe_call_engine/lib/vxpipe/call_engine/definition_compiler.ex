@@ -8,22 +8,38 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   alias Vxpipe.CallEngine.CallDefinition.{CapabilitySelection, ToolSelection}
 
   alias Vxpipe.CallEngine.{CallInvocation, DefinitionValidation, Id, ResolvedCallPlan}
-  alias Vxpipe.CallEngine.ResolvedCallPlan.{CallVariables, ToolBinding, VariableSection}
+
+  alias Vxpipe.CallEngine.ResolvedCallPlan.{
+    CallVariables,
+    ToolBinding,
+    ToolVisibility,
+    VariableSection
+  }
 
   @code :call_definition_resolution_failed
   @message "The call definition could not be resolved."
 
-  @spec compile(CallDefinition.t(), CallInvocation.t(), map()) ::
+  @spec compile(CallDefinition.t(), CallInvocation.t(), map(), keyword()) ::
           {:ok, ResolvedCallPlan.t()} | {:error, Vxpipe.CallEngine.Error.t()}
-  def compile(%CallDefinition{} = definition, %CallInvocation{} = invocation, registries)
-      when is_map(registries) do
+  def compile(
+        %CallDefinition{} = definition,
+        %CallInvocation{} = invocation,
+        registries,
+        options \\ []
+      )
+      when is_map(registries) and is_list(options) do
     with :ok <- matching_definition(definition, invocation),
          {:ok, capability_profiles} <- registry(registries, :capability_profiles),
          {:ok, host_tools} <- registry(registries, :host_tools),
          {:ok, call_variables} <-
            resolve_call_variables(definition.call_variables, invocation.initial_variables),
          {:ok, participants} <-
-           resolve_participants(definition, capability_profiles, host_tools) do
+           resolve_participants(definition, capability_profiles, host_tools),
+         {:ok, tool_visibility} <-
+           resolve_tool_visibility(
+             Keyword.get(options, :tool_visibility, definition.tool_visibility),
+             participants
+           ) do
       {:ok,
        %ResolvedCallPlan{
          definition_id: definition.resource_id,
@@ -38,9 +54,27 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          entry_receiver: definition.entry_receiver,
          participants: participants,
          call_variables: call_variables,
+         tool_visibility: tool_visibility,
          max_duration_ms: definition.max_duration_ms
        }}
     end
+  end
+
+  defp resolve_tool_visibility(
+         %CallDefinition.ToolVisibility{} = policy,
+         participants
+       ) do
+    overrides =
+      Map.new(policy.overrides, fn {definition_key, tool_levels} ->
+        participant = Map.fetch!(participants, definition_key)
+        {participant.participant_id, tool_levels}
+      end)
+
+    {:ok, %ToolVisibility{default: policy.default, overrides: overrides}}
+  end
+
+  defp resolve_tool_visibility(_invalid, _participants) do
+    invalid(["tool_visibility"], "is not a validated trusted policy")
   end
 
   defp matching_definition(definition, invocation) do

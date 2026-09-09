@@ -114,31 +114,59 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
 
   @spec encode_event(ToolCallStarted.t()) :: {:ok, binary()}
   def encode_event(%ToolCallStarted{} = event) do
+    encode_event(event, :full)
+  end
+
+  @spec encode_event(ToolCallCompleted.t()) :: {:ok, binary()}
+  def encode_event(%ToolCallCompleted{} = event) do
+    encode_event(event, :full)
+  end
+
+  @spec encode_event(ToolCallFailed.t()) :: {:ok, binary()}
+  def encode_event(%ToolCallFailed{} = event) do
+    encode_event(event, :full)
+  end
+
+  @spec encode_event(ToolCallCancelled.t()) :: {:ok, binary()}
+  def encode_event(%ToolCallCancelled{} = event) do
+    encode_event(event, :full)
+  end
+
+  @spec encode_event(ToolCallStarted.t(), :metadata | :full) :: {:ok, binary()}
+  def encode_event(%ToolCallStarted{} = event, visibility)
+      when visibility in [:metadata, :full] do
+    data = %{
+      "tool_call_id" => event.tool_call_id,
+      "function_name" => event.name
+    }
+
+    data = if visibility == :full, do: Map.put(data, "arguments", event.arguments), else: data
+
     {:ok,
      JSON.encode!(%{
        "id" => event.id,
        "label" => @label,
        "type" => "llm-function-call-in-progress",
-       "data" => %{
-         "tool_call_id" => event.tool_call_id,
-         "function_name" => event.name,
-         "arguments" => event.arguments
-       }
+       "data" => data
      })}
   end
 
-  @spec encode_event(ToolCallCompleted.t()) :: {:ok, binary()}
-  def encode_event(%ToolCallCompleted{} = event) do
-    {:ok, encode_tool_call_stopped(event, false, event.result)}
+  @spec encode_event(ToolCallCompleted.t(), :metadata | :full) :: {:ok, binary()}
+  def encode_event(%ToolCallCompleted{} = event, visibility)
+      when visibility in [:metadata, :full] do
+    result = if visibility == :full, do: event.result, else: nil
+    {:ok, encode_tool_call_stopped(event, false, result)}
   end
 
-  @spec encode_event(ToolCallFailed.t()) :: {:ok, binary()}
-  def encode_event(%ToolCallFailed{} = event) do
-    {:ok, encode_tool_call_stopped(event, false, %{"error" => Atom.to_string(event.reason)})}
+  @spec encode_event(ToolCallFailed.t(), :metadata | :full) :: {:ok, binary()}
+  def encode_event(%ToolCallFailed{} = event, visibility) when visibility in [:metadata, :full] do
+    result = if visibility == :full, do: %{"error" => Atom.to_string(event.reason)}, else: nil
+    {:ok, encode_tool_call_stopped(event, false, result)}
   end
 
-  @spec encode_event(ToolCallCancelled.t()) :: {:ok, binary()}
-  def encode_event(%ToolCallCancelled{} = event) do
+  @spec encode_event(ToolCallCancelled.t(), :metadata | :full) :: {:ok, binary()}
+  def encode_event(%ToolCallCancelled{} = event, visibility)
+      when visibility in [:metadata, :full] do
     {:ok, encode_tool_call_stopped(event, true, nil)}
   end
 

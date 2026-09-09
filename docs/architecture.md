@@ -1224,9 +1224,15 @@ credential/header exclusions still apply even to full tool visibility.
 The detailed failed-transfer restoration reason is also internal-only: full
 visibility, including samples, cannot expose it through debug tool payloads.
 
-This is an approved visibility contract, not current gateway behavior. The
-current tool-event path still sends arguments/results without this audience
-distinction.
+The gateway now implements this boundary for the trusted definition-driven call
+path. Schema `20260909.01` validates the definition policy and resolves participant
+definition keys to runtime participant IDs in the immutable call plan. Trusted
+creation may replace the complete policy pair; the result is carried privately in
+the one-time transport session and is absent from its public response. The RTVI
+projection drops hidden events before transport, omits arguments/results at
+metadata level, and includes them only at full level. Preset/ad-hoc room joins
+without a pinned definition policy remain hidden. The Console development call
+selects full visibility in trusted server configuration, not in browser input.
 
 Tool-history storage is independent of client visibility. Always retain all
 observed invocation data with the call: invocation and participant/tool identity,

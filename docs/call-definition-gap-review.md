@@ -950,8 +950,10 @@ No frontend-specific exception or additional debug-session grant is
 required. A browser flag, route, or visual concealment cannot change that policy.
 Existing credential/header exclusions still apply. The detailed failed-transfer
 restoration cause is internal even for samples/full visibility. Visibility grants
-neither tool execution nor additional agent variable or cross-call access. The current
-gateway has not implemented this distinction.
+neither tool execution nor additional agent variable or cross-call access. The
+definition-driven gateway path implements the policy as of schema `20260909.01`:
+it pins runtime participant/tool selections in a private one-time session and
+filters the RTVI projection before transport delivery.
 
 **Approved independent tool-history storage:** always store all observed tool
 invocation data with the call: identity/participant/tool metadata, timing/outcomes,

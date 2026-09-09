@@ -3,10 +3,16 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   A validated, versioned definition of reusable call behavior.
   """
 
-  alias Vxpipe.CallEngine.CallDefinition.{CallVariables, Capabilities, Participant}
+  alias Vxpipe.CallEngine.CallDefinition.{
+    CallVariables,
+    Capabilities,
+    Participant,
+    ToolVisibility
+  }
+
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260906.02"
+  @schema_version "20260909.01"
   @fields [
     :schema_version,
     :name,
@@ -15,6 +21,8 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :defaults,
     :call_variables,
     :participants,
+    :tool_visibility,
+    :tool_visibility_overrides,
     :limits
   ]
 
@@ -28,6 +36,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :default_capabilities,
     :call_variables,
     :participants,
+    :tool_visibility,
     :max_duration_ms
   ]
   defstruct @enforce_keys
@@ -42,6 +51,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           default_capabilities: Capabilities.t(),
           call_variables: CallVariables.t(),
           participants: %{String.t() => Participant.t()},
+          tool_visibility: ToolVisibility.t(),
           max_duration_ms: pos_integer()
         }
 
@@ -79,6 +89,12 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, participants} <- participants(participants_input, code, message),
          :ok <- validate_entries(entry_caller, entry_receiver, participants, code, message),
          :ok <- validate_variable_permissions(participants, call_variables, code, message),
+         {:ok, tool_visibility} <-
+           ToolVisibility.new(
+             Map.get(input, :tool_visibility, "hidden"),
+             Map.get(input, :tool_visibility_overrides, %{}),
+             participants
+           ),
          {:ok, max_duration_ms} <- limits(Map.get(input, :limits, %{}), code, message) do
       {:ok,
        %__MODULE__{
@@ -91,6 +107,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          default_capabilities: defaults,
          call_variables: call_variables,
          participants: participants,
+         tool_visibility: tool_visibility,
          max_duration_ms: max_duration_ms
        }}
     end

@@ -10,6 +10,7 @@ defmodule Vxpipe.Gateway.Session.Snapshot do
     :room_id,
     :incarnation_id,
     :participant_id,
+    :tool_visibility,
     :expires_at
   ]
   defstruct @enforce_keys
@@ -21,6 +22,7 @@ defmodule Vxpipe.Gateway.Session.Snapshot do
           room_id: String.t(),
           incarnation_id: String.t(),
           participant_id: String.t(),
+          tool_visibility: Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility.t(),
           expires_at: DateTime.t()
         }
 

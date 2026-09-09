@@ -67,3 +67,24 @@ candidate. It returns only grant-safe results and keeps all failure paths non-mu
 - Full checkpoint verification passes: format, warnings-as-errors compilation,
   148 Call Engine tests (one excluded), 46 Gateway tests (four excluded), 20
   Console tests, and the unused-dependency check.
+- Added focused visibility tests first and observed the expected compilation-red
+  state because neither the typed policy nor gateway projection module existed.
+  The cases cover default-hidden behavior, metadata/full payload differences,
+  identical local tool names on different agent participants, invalid definition
+  targets/levels, trusted replacement, and an ignored browser elevation field.
+- Released call-definition schema `20260909.01` for the additive policy fields.
+  The compiler validates `tool_visibility` plus participant-key/local-tool-key
+  overrides, then resolves definition keys to generated runtime participant IDs
+  in the immutable plan. This avoids matching client-provided labels at delivery.
+- Trusted call creation can replace the whole policy pair. The effective policy is
+  carried privately in the one-time gateway session and is never included in the
+  public session projection. Definition and legacy preset paths default hidden;
+  the development Console call explicitly selects full visibility in server-owned
+  configuration, so no browser control or frontend exception can elevate it.
+- The WebRTC data-channel boundary now drops hidden tool events before encoding.
+  Metadata projections preserve lifecycle identity and local function name while
+  omitting arguments and results, including failure payloads; full projections
+  retain the existing RTVI payload. The focused compiler and gateway suites are
+  green: 9 compiler tests and 16 projection/HTTP tests. The full application suites
+  are also green at 150 Call Engine tests (one excluded) and 50 Gateway tests (four
+  excluded).

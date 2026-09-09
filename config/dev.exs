@@ -62,8 +62,9 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
       trusted_call: [
         resource_id: "development-sample",
         revision: 1,
+        tool_visibility: "full",
         definition: %{
-          schema_version: "20260906.02",
+          schema_version: "20260909.01",
           name: "Development sample",
           entry_caller: "caller",
           entry_receiver: "assistant",

@@ -26,8 +26,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     ToolCallStarted
   }
 
-  alias Vxpipe.Gateway.RTVI.Codec
-  alias Vxpipe.Gateway.RTVI.TurnState
+  alias Vxpipe.Gateway.RTVI.{Codec, ToolProjection, TurnState}
   alias Vxpipe.Gateway.WebRTC.AudioFrame
   alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
 
@@ -238,7 +237,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
              ToolCallFailed,
              ToolCallCancelled
            ] and event.connection_id == connection_id do
-    send_event(event, state)
+    send_tool_event(event, state)
     {:noreply, state}
   end
 
@@ -275,6 +274,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   defp send_event(event, state) do
     with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
          {:ok, message} <- Codec.encode_event(event) do
+      :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
+    end
+  end
+
+  defp send_tool_event(event, state) do
+    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
+         {:ok, message} <- ToolProjection.encode(event, state.session.tool_visibility) do
       :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
     end
   end

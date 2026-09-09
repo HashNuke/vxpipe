@@ -52,12 +52,14 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The first definition-driven checkpoint adds a pure, engine-owned compiler for
-schema `20260906.02`. Trusted hosts supply resource and tenant identity separately
+The definition-driven compiler's current schema is `20260909.01`; it adds the
+pinned client tool-visibility policy to the earlier `20260906.02` shape. Trusted
+hosts supply resource and tenant identity separately
 from JSON-safe definition and invocation maps. The compiler validates a closed
 one-human/one-agent web subset and pins capability profiles, host-tool bindings,
 typed Call Variables schemas/grants/partial initial values, runtime participant
-identities, and call limits into a `ResolvedCallPlan`. Variable schemas use the
+identities, call limits, and resolved participant-local visibility overrides into
+a `ResolvedCallPlan`. Variable schemas use the
 released closed subset and do not enforce `required` completeness. Plan startup now
 rejects valid-but-deferred features before it creates a room or provider process.
 

@@ -2,15 +2,23 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.CallDefinition
-  alias Vxpipe.CallEngine.CallDefinition.{CapabilitySelection, ConnectionIntent, Participant}
+
+  alias Vxpipe.CallEngine.CallDefinition.{
+    CapabilitySelection,
+    ConnectionIntent,
+    Participant,
+    ToolVisibility
+  }
+
   alias Vxpipe.CallEngine.CallInvocation
   alias Vxpipe.CallEngine.DefinitionCompiler
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan
+  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility, as: ResolvedToolVisibility
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.CurrentTime
 
-  @schema_version "20260906.02"
+  @schema_version "20260909.01"
 
   test "Elixir and JSON inputs produce the same typed definition" do
     input = definition_input()
@@ -29,6 +37,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     assert from_elixir.revision == 7
     assert from_elixir.entry_caller == "caller"
     assert from_elixir.entry_receiver == "reception"
+    assert from_elixir.tool_visibility == %ToolVisibility{default: :hidden, overrides: %{}}
 
     assert %Participant{
              kind: :human,
@@ -67,7 +76,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
   test "rejects unsupported schema versions, fields, and participant options" do
     cases = [
-      {%{definition_input() | schema_version: "20260906.01"}, ["schema_version"]},
+      {%{definition_input() | schema_version: "20260906.02"}, ["schema_version"]},
       {Map.put(definition_input(), :provider_api_key, "do-not-echo-me"), ["provider_api_key"]},
       {Map.put(definition_input(), :media_policy, %{record_audio: false}), ["media_policy"]},
       {put_in(definition_input(), [:participants, "caller", :prompt], "wrong kind"),
@@ -164,6 +173,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     assert plan.room_id == "room-one"
     assert plan.entry_caller == "caller"
     assert plan.entry_receiver == "reception"
+    assert plan.tool_visibility == %ResolvedToolVisibility{default: :hidden, overrides: %{}}
 
     caller = plan.participants["caller"]
     receiver = plan.participants["reception"]
@@ -201,6 +211,74 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
     assert get_in(changed, [:capability_profiles, "careful-model", :options, :model]) == "changed"
     assert receiver.capabilities.model_inference.options == %{model: "careful"}
+  end
+
+  test "validates and resolves participant-local tool visibility overrides" do
+    reception = get_in(definition_input(), [:participants, "reception"])
+
+    input =
+      definition_input()
+      |> Map.put(:tool_visibility, "full")
+      |> Map.put(:tool_visibility_overrides, %{
+        "reception" => %{"get_current_time" => "metadata"},
+        "billing" => %{"get_current_time" => "hidden"}
+      })
+      |> put_in([:participants, "billing"], reception)
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "support", revision: 7)
+
+    assert definition.tool_visibility == %ToolVisibility{
+             default: :full,
+             overrides: %{
+               "reception" => %{"get_current_time" => :metadata},
+               "billing" => %{"get_current_time" => :hidden}
+             }
+           }
+
+    assert {:ok, invocation} =
+             CallInvocation.new(invocation_input(),
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo"
+             )
+
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+
+    reception_id = plan.participants["reception"].participant_id
+    billing_id = plan.participants["billing"].participant_id
+
+    assert %ResolvedToolVisibility{default: :full, overrides: overrides} =
+             plan.tool_visibility
+
+    assert overrides == %{
+             reception_id => %{"get_current_time" => :metadata},
+             billing_id => %{"get_current_time" => :hidden}
+           }
+  end
+
+  test "rejects invalid tool visibility policies with precise paths" do
+    cases = [
+      {Map.put(definition_input(), :tool_visibility, "verbose"), ["tool_visibility"]},
+      {Map.put(definition_input(), :tool_visibility_overrides, []),
+       ["tool_visibility_overrides"]},
+      {Map.put(definition_input(), :tool_visibility_overrides, %{"missing" => %{}}),
+       ["tool_visibility_overrides", "missing"]},
+      {Map.put(definition_input(), :tool_visibility_overrides, %{"caller" => %{}}),
+       ["tool_visibility_overrides", "caller"]},
+      {Map.put(definition_input(), :tool_visibility_overrides, %{"reception" => []}),
+       ["tool_visibility_overrides", "reception"]},
+      {Map.put(definition_input(), :tool_visibility_overrides, %{
+         "reception" => %{"missing" => "full"}
+       }), ["tool_visibility_overrides", "reception", "missing"]},
+      {Map.put(definition_input(), :tool_visibility_overrides, %{
+         "reception" => %{"get_current_time" => "verbose"}
+       }), ["tool_visibility_overrides", "reception", "get_current_time"]}
+    ]
+
+    for {input, path} <- cases do
+      assert {:error, %Error{code: :invalid_call_definition, details: %{"path" => ^path}}} =
+               CallDefinition.new(input, resource_id: "support", revision: 7)
+    end
   end
 
   test "creates fresh runtime participant and activation identities for every call" do
