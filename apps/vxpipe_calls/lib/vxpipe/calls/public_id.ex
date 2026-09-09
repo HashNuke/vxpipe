@@ -18,6 +18,16 @@ defmodule Vxpipe.Calls.PublicId do
     "vxp_#{encoded}"
   end
 
+  @spec join_token() :: String.t()
+  def join_token do
+    encoded =
+      32
+      |> :crypto.strong_rand_bytes()
+      |> Base.url_encode64(padding: false)
+
+    "vxj_#{encoded}"
+  end
+
   @spec uuid() :: String.t()
   def uuid do
     <<part1::32, part2::16, _version::4, part3::12, _variant::2, part4::14, part5::48>> =

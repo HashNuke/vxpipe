@@ -1,0 +1,277 @@
+defmodule Vxpipe.Calls.AdmissionsTest do
+  use ExUnit.Case, async: true
+
+  alias Vxpipe.Calls
+  alias Vxpipe.Calls.{Administration, TestMemoryRepository}
+
+  @now ~U[2026-09-09 10:00:00.000000Z]
+  @call_id "5fd13da8-05c3-4a3e-9eaa-17587fa46e92"
+  @room_id "61f0d53f-12e8-4ab4-b0bd-a0747f4c1966"
+  @actor_id "dd0e7153-16ac-4d34-a80e-8b28f5b8a0ae"
+  @token_id "70572cb7-e280-4ae6-bd09-f1e49c6232c9"
+  @token "vxj_test-only-prepared-call-token"
+
+  setup do
+    repository = start_supervised!(TestMemoryRepository)
+
+    base_options = [
+      credential_repository: TestMemoryRepository.credential_repository(repository),
+      definition_repository: TestMemoryRepository.definition_repository(repository),
+      call_repository: TestMemoryRepository.call_repository(repository),
+      registries: registries()
+    ]
+
+    assert {:ok, tenant, issued_key} =
+             Administration.bootstrap_tenant("Admission tenant", [:calls], base_options)
+
+    assert {:ok, principal} =
+             Administration.authenticate(tenant.key, issued_key.secret, :calls, base_options)
+
+    assert {:ok, draft} = Calls.save_definition(tenant.key, definition_input(), base_options)
+    assert {:ok, published} = Calls.publish_definition(tenant.key, draft.definition_id, 1, base_options)
+    assert [caller_route] = Enum.filter(published.routes, &(&1.participant_ref == "caller"))
+
+    options =
+      base_options ++
+        [
+          now: @now,
+          call_id_generator: fn -> @call_id end,
+          room_id_generator: fn -> @room_id end,
+          actor_id_generator: fn -> @actor_id end,
+          token_id_generator: fn -> @token_id end,
+          join_token_generator: fn -> @token end
+        ]
+
+    [
+      caller_route: caller_route,
+      options: options,
+      principal: principal,
+      repository: repository,
+      tenant: tenant
+    ]
+  end
+
+  test "prepares a pinned call and first single-use token without starting runtime work", context do
+    initial_variables = %{"order" => %{"id" => "ORD-1042"}}
+
+    assert {:ok, prepared_call, issued_token} =
+             Calls.prepare_call(
+               context.principal,
+               context.caller_route.key,
+               initial_variables,
+               context.options
+             )
+
+    assert prepared_call.id == @call_id
+    assert prepared_call.room_id == @room_id
+    assert prepared_call.state == :prepared
+    assert prepared_call.created_at == @now
+    assert prepared_call.started_at == nil
+    assert prepared_call.ended_at == nil
+    assert prepared_call.initial_variables == initial_variables
+    assert prepared_call.plan.call_id == @call_id
+    assert prepared_call.plan.room_id == @room_id
+    assert prepared_call.plan.definition_revision == 1
+    assert prepared_call.plan.call_variables.sections["order"].value == initial_variables["order"]
+    assert is_binary(prepared_call.plan_digest)
+    assert byte_size(prepared_call.plan_digest) == 32
+
+    assert issued_token.secret == @token
+    assert issued_token.call_id == @call_id
+    assert issued_token.participant_key == context.caller_route.key
+    assert issued_token.participant_ref == "caller"
+    assert issued_token.expires_at == DateTime.add(@now, 300, :second)
+
+    refute inspect(prepared_call) =~ "ORD-1042"
+    refute inspect(issued_token) =~ @token
+
+    assert {:ok, stored} = Calls.fetch_call(context.tenant.key, @call_id, context.options)
+    assert stored.initial_variables == initial_variables
+    assert TestMemoryRepository.admissions(context.repository) == []
+  end
+
+  test "validates supplied variables without requiring missing sections", context do
+    assert {:ok, call, _token} =
+             Calls.prepare_call(
+               context.principal,
+               context.caller_route.key,
+               %{},
+               context.options
+             )
+
+    assert call.plan.call_variables.sections["order"].value == nil
+
+    assert {:error, error} =
+             Calls.prepare_call(
+               context.principal,
+               context.caller_route.key,
+               %{"order" => %{"id" => 42}},
+               context.options
+             )
+
+    assert error.code == :call_definition_resolution_failed
+  end
+
+  test "rejects a published web route that is not the entry caller", context do
+    assert {:ok, draft} =
+             Calls.save_definition(
+               context.tenant.key,
+               definition_input("observer"),
+               Keyword.delete(context.options, :definition_id)
+             )
+
+    assert {:ok, published} =
+             Calls.publish_definition(
+               context.tenant.key,
+               draft.definition_id,
+               draft.revision,
+               context.options
+             )
+
+    assert observer_route = Enum.find(published.routes, &(&1.participant_ref == "observer"))
+
+    assert {:error, :participant_not_entry_caller} =
+             Calls.prepare_call(context.principal, observer_route.key, %{}, context.options)
+  end
+
+  test "accepts an explicitly longer token lifetime and preserves independent tokens", context do
+    assert {:ok, call, first} = prepare(context)
+
+    assert {:ok, second} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.caller_route.key,
+               Keyword.merge(context.options,
+                 join_token_ttl_seconds: 900,
+                 token_id_generator: fn -> "90a191c1-66b7-4b07-b85a-08e6464d3e96" end,
+                 join_token_generator: fn -> "vxj_test-only-second-token" end
+               )
+             )
+
+    assert first.expires_at == DateTime.add(@now, 300, :second)
+    assert second.expires_at == DateTime.add(@now, 900, :second)
+    assert first.id != second.id
+  end
+
+  test "claims one token atomically and binds it to the requested URL scope", context do
+    assert {:ok, call, token} = prepare(context)
+
+    expected_scope = %{
+      tenant_key: context.tenant.key,
+      call_id: call.id,
+      participant_key: context.caller_route.key
+    }
+
+    assert {:error, :token_scope_mismatch} =
+             Calls.claim_join_token(
+               token.secret,
+               %{expected_scope | call_id: "7996906c-9976-4083-8730-6577d08f96aa"},
+               context.options
+             )
+
+    assert {:ok, claim} = Calls.claim_join_token(token.secret, expected_scope, context.options)
+    assert claim.call.id == call.id
+    assert claim.call.state == :admitting
+    assert claim.participant_ref == "caller"
+    assert claim.accepted_at == @now
+    refute inspect(claim) =~ token.secret
+
+    assert {:error, :token_already_claimed} =
+             Calls.claim_join_token(token.secret, expected_scope, context.options)
+  end
+
+  test "does not claim expired tokens and lets distinct tokens share admission exclusion", context do
+    assert {:ok, call, first} = prepare(context)
+
+    assert {:ok, second} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.caller_route.key,
+               Keyword.merge(context.options,
+                 token_id_generator: fn -> "993c589a-a306-48ff-a88a-9a59a92699ba" end,
+                 join_token_generator: fn -> "vxj_test-only-competing-token" end
+               )
+             )
+
+    scope = %{
+      tenant_key: context.tenant.key,
+      call_id: call.id,
+      participant_key: context.caller_route.key
+    }
+
+    expired_options = Keyword.put(context.options, :now, DateTime.add(@now, 301, :second))
+    assert {:error, :token_expired} = Calls.claim_join_token(first.secret, scope, expired_options)
+
+    assert {:ok, _claim} = Calls.claim_join_token(second.secret, scope, context.options)
+    assert {:error, :participant_admission_unavailable} =
+             Calls.claim_join_token(first.secret, scope, context.options)
+  end
+
+  defp prepare(context) do
+    Calls.prepare_call(
+      context.principal,
+      context.caller_route.key,
+      %{"order" => %{"id" => "ORD-1042"}},
+      context.options
+    )
+  end
+
+  defp registries do
+    %{
+      capability_profiles: %{
+        "test-model" => %{kind: :model_inference, provider: :test, options: %{model: "test"}}
+      },
+      host_tools: %{}
+    }
+  end
+
+  defp definition_input(extra_web_participant \\ nil) do
+    participants = %{
+      "caller" => %{
+        type: "human",
+        connection: %{service: "web", mode: "receive", admission: "start_call"}
+      },
+      "assistant" => %{
+        type: "agent",
+        prompt: "Help the caller.",
+        first_message: %{mode: "wait_for_input"},
+        variable_permissions: %{"order" => ["read"]},
+        tools: %{},
+        transfers: []
+      }
+    }
+
+    participants =
+      if extra_web_participant do
+        Map.put(participants, extra_web_participant, %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"}
+        })
+      else
+        participants
+      end
+
+    %{
+      schema_version: "20260909.01",
+      name: "Admission example",
+      entry_caller: "caller",
+      entry_receiver: "assistant",
+      defaults: %{capabilities: %{model_inference: "test-model"}},
+      call_variables: %{
+        sections: %{
+          "order" => %{
+            schema: %{
+              "type" => "object",
+              "properties" => %{"id" => %{"type" => "string"}},
+              "required" => ["id"],
+              "additionalProperties" => false
+            }
+          }
+        }
+      },
+      participants: participants
+    }
+  end
+end

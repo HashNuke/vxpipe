@@ -148,6 +148,18 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     end
   end
 
+  test "accepts every URL-safe leading character used by tenant keys" do
+    for tenant_id <- ["-tenant-key", "_tenant-key"] do
+      assert {:ok, invocation} =
+               CallInvocation.new(invocation_input(),
+                 tenant_id: tenant_id,
+                 actor_id: "actor-demo"
+               )
+
+      assert invocation.tenant_id == tenant_id
+    end
+  end
+
   test "compiles a pinned plan from closed capability and host-tool registries" do
     assert {:ok, definition} =
              CallDefinition.new(definition_input(), resource_id: "support", revision: 7)

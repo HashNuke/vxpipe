@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.DefinitionValidation do
 
   alias Vxpipe.CallEngine.Error
 
-  @identifier_pattern ~r/\A[A-Za-z0-9][A-Za-z0-9_-]{0,127}\z/
+  @identifier_pattern ~r/\A[A-Za-z0-9_-]{1,128}\z/
 
   def normalize_map(value, allowed, code, message, path) when is_map(value) do
     Enum.reduce_while(value, {:ok, %{}}, fn {key, field_value}, {:ok, normalized} ->
