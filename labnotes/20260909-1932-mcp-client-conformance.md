@@ -84,6 +84,30 @@ evidence that this production concern is solved.
   focused test was rerun from its owning application. The complete umbrella suite will
   use the established isolated PostgreSQL setup at the milestone completion gate.
 
+## 2026-09-09 — bounded catalog discovery
+
+- Red: three focused tests failed at compile time because the discovery/catalog boundary
+  did not exist. They define multi-page cursor propagation, complete raw-definition
+  preservation, repeated-cursor rejection, and aggregate decoded-size rejection.
+- Green: added a narrow protocol-client behaviour, an ExMCP-only implementation, a bounded
+  pagination coordinator, and an immutable catalog index. These responsibilities remain in
+  separate modules; tenant selection, connection ownership, invocation, and model exposure
+  are not mixed into discovery.
+- Discovery carries one decreasing timeout across all pages, disables generic retries at
+  each ExMCP request, allows only safe read-stream recovery, rejects repeated cursors, and
+  withholds the entire catalog when any page fails or exceeds its aggregate re-encoded JSON
+  byte budget. Tool definitions remain complete string-keyed maps; none of their names or
+  schema values become atoms or modules.
+- Added Jason as a direct dependency because Vxpipe itself measures the stable encoded size
+  of decoded page data instead of depending transitively on ExMCP's JSON dependency.
+- Verification: `mix test` and warnings-as-errors compilation pass in `vxpipe_mcp` with
+  5 tests and 0 failures. `mix deps.unlock --check-unused` passes from the umbrella root.
+  Root `mix credo --strict` checks 284 source files with no issues. A child-local Credo
+  command is unavailable because Credo is an umbrella-root development dependency.
+- This checkpoint does not prove an actual ExMCP connection, initialization, negotiated
+  version, server-issued session, invocation, or conformance scenario. Those boxes remain
+  open.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)

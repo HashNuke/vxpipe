@@ -1,7 +1,8 @@
 # MCP client integration and conformance
 
-Status: not implemented. Specification updated after the 2026-09-08 released-package
-investigation. ExMCP compatibility/conformance gates remain unproven; the separate Jido
+Status: in progress. The exact dependency/profile and bounded all-or-nothing discovery
+contract are implemented. ExMCP transport compatibility/conformance gates, configured
+connection ownership, and validated invocation remain unproven; the separate Jido
 runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
@@ -69,7 +70,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 
 - [ ] Verify and pin an ExMCP release against the selected profile and project-owned
   security, identity, size-limit, timeout and no-resubmission requirements.
-- [ ] Red-test the smallest `vxpipe_mcp` contract, then add ExMCP to the owning internal
+- [x] Red-test the smallest `vxpipe_mcp` contract, then add ExMCP to the owning internal
   library with its lockfile; keep Jido/domain dependencies out of this child.
 - [ ] Wire configured ExMCP supervision/readiness, discovery and validated invocation,
   including bounded failure and cleanup behavior.
@@ -138,8 +139,17 @@ milestone. Passing this checkpoint does not resolve Jido AI's runtime-tool inter
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence:
+
+- The `vxpipe_mcp` child pins ExMCP 1.3.0 and owns no Jido/domain dependency. Its fixed
+  production client profile accepts verified HTTPS only and selects MCP `2025-11-25`.
+- `Vxpipe.MCP.Discovery` obtains every page through the narrow protocol boundary under one
+  absolute deadline and aggregate decoded-JSON budget. It rejects repeated cursors and
+  returns no partial catalog. `Vxpipe.MCP.Catalog` preserves complete string-keyed remote
+  definitions while rejecting malformed or duplicate tool identities.
+- The focused behavior test was observed red before implementation and is green with the
+  complete child suite (5 tests, 0 failures). This is deterministic adapter evidence only;
+  no remote/reference or official-conformance claim is made yet.
 
 ## Specification review
 
