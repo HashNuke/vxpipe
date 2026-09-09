@@ -1,0 +1,154 @@
+defmodule Vxpipe.Console.CallInspectionDetailLive do
+  @moduledoc false
+
+  use Phoenix.LiveView, layout: false
+
+  alias Vxpipe.Calls.CallDetailPage
+  alias Vxpipe.Console.{CallInspection, CallInspectionComponents}
+
+  @list_page_size 25
+  @history_page_size 50
+  @refresh_interval_ms 1_000
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok,
+     assign(socket,
+       loaded?: false,
+       selected_id: nil,
+       selected_event_id: nil,
+       list_cursor: nil,
+       history_cursor: nil,
+       refresh_token: nil
+     )}
+  end
+
+  @impl true
+  def handle_params(%{"call_id" => call_id} = params, _uri, socket) do
+    requested = requested_state(call_id, params)
+    reload_call? = not socket.assigns.loaded? or socket.assigns.selected_id != call_id
+
+    socket =
+      socket
+      |> maybe_cancel_refresh(reload_call?)
+      |> maybe_load_list(requested, reload_call?)
+      |> maybe_load_detail(requested, reload_call?)
+      |> assign(
+        loaded?: true,
+        selected_id: requested.call_id,
+        selected_event_id: requested.event,
+        list_cursor: requested.list_cursor,
+        history_cursor: requested.history_cursor
+      )
+      |> reconcile_live_refresh()
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def render(assigns), do: CallInspectionComponents.index(assigns)
+
+  @impl true
+  def handle_info({:refresh_live_inspection, token}, %{assigns: %{refresh_token: token}} = socket) do
+    socket = assign(socket, refresh_token: nil)
+
+    case CallInspection.inspect_live_call(socket.assigns.principal, socket.assigns.selected_id) do
+      {:ok, live} ->
+        {:noreply,
+         socket
+         |> assign(detail_status: :live, live: live)
+         |> reconcile_live_refresh()}
+
+      {:error, _reason} ->
+        status = if socket.assigns.persisted, do: :persisted, else: :unavailable
+        {:noreply, assign(socket, detail_status: status, live: nil)}
+    end
+  end
+
+  def handle_info({:refresh_live_inspection, _stale_token}, socket), do: {:noreply, socket}
+
+  defp requested_state(call_id, params) do
+    %{
+      call_id: call_id,
+      event: query_value(params, "event"),
+      list_cursor: query_value(params, "cursor"),
+      history_cursor: query_value(params, "history_cursor")
+    }
+  end
+
+  defp maybe_load_list(socket, requested, reload_call?) do
+    if reload_call? or socket.assigns.list_cursor != requested.list_cursor do
+      {status, page} = load_list(socket.assigns.principal, requested.list_cursor)
+      assign(socket, status: status, page: page)
+    else
+      socket
+    end
+  end
+
+  defp maybe_load_detail(socket, requested, reload_call?) do
+    if reload_call? or socket.assigns.history_cursor != requested.history_cursor do
+      {status, persisted, live} =
+        load_detail(socket.assigns.principal, requested.call_id, requested.history_cursor)
+
+      assign(socket, detail_status: status, persisted: persisted, live: live)
+    else
+      socket
+    end
+  end
+
+  defp load_list(principal, cursor) do
+    options = [limit: @list_page_size] ++ option(cursor, :cursor)
+
+    case CallInspection.list_calls(principal, options) do
+      {:ok, page} -> {:available, page}
+      {:error, _reason} -> {:unavailable, nil}
+    end
+  end
+
+  defp load_detail(principal, call_id, cursor) do
+    options = [limit: @history_page_size] ++ option(cursor, :cursor)
+
+    case CallInspection.inspect_call(principal, call_id, options) do
+      {:ok, persisted} -> load_live(principal, call_id, persisted)
+      {:error, :call_not_found} -> {:not_found, nil, nil}
+      {:error, _reason} -> {:unavailable, nil, nil}
+    end
+  end
+
+  defp load_live(principal, call_id, %CallDetailPage{call: %{state: state}} = persisted)
+       when state in [:admitting, :running] do
+    case CallInspection.inspect_live_call(principal, call_id) do
+      {:ok, live} -> {:live, persisted, live}
+      {:error, _reason} -> {:persisted, persisted, nil}
+    end
+  end
+
+  defp load_live(_principal, _call_id, persisted), do: {:persisted, persisted, nil}
+
+  defp option(nil, _option), do: []
+  defp option(value, option), do: [{option, value}]
+
+  defp query_value(params, key) do
+    case Map.get(params, key) do
+      value when is_binary(value) and byte_size(value) > 0 -> value
+      _missing -> nil
+    end
+  end
+
+  defp maybe_cancel_refresh(socket, false), do: socket
+
+  defp maybe_cancel_refresh(socket, true) do
+    assign(socket, refresh_token: nil)
+  end
+
+  defp reconcile_live_refresh(socket) do
+    if connected?(socket) and socket.assigns.detail_status == :live and
+         is_nil(socket.assigns.refresh_token) do
+      token = make_ref()
+      _timer = Process.send_after(self(), {:refresh_live_inspection, token}, @refresh_interval_ms)
+      assign(socket, refresh_token: token)
+    else
+      socket
+    end
+  end
+end

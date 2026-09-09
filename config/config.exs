@@ -9,6 +9,8 @@
 # move said applications out of the umbrella.
 import Config
 
+config :phoenix, :filter_parameters, ["password", "secret", "token", "api_key"]
+
 config :vxpipe_persistence,
   ecto_repos: [Vxpipe.Persistence.Repo],
   enabled: false

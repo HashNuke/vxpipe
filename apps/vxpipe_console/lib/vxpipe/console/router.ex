@@ -6,6 +6,7 @@ defmodule Vxpipe.Console.Router do
 
   pipeline :browser do
     plug :accepts, ["html"]
+    plug Plug.Parsers, parsers: [:urlencoded, :multipart], pass: ["*/*"]
     plug :fetch_session
     plug :protect_from_forgery
     plug :put_secure_browser_headers
@@ -13,6 +14,10 @@ defmodule Vxpipe.Console.Router do
 
   pipeline :diagnostics do
     plug Vxpipe.Console.DiagnosticsEnabled
+  end
+
+  pipeline :operator do
+    plug Vxpipe.Console.RequireOperator
   end
 
   pipeline :sample_api do
@@ -30,6 +35,22 @@ defmodule Vxpipe.Console.Router do
     pipe_through :browser
 
     get "/", Vxpipe.Console.PageController, :index
+    get "/operator/sign-in", Vxpipe.Console.OperatorSessionController, :new
+    post "/operator/session", Vxpipe.Console.OperatorSessionController, :create
+    post "/operator/sign-out", Vxpipe.Console.OperatorSessionController, :delete
+    get "/calls/assets/:kind/:hash", Vxpipe.Console.CallInspectionAssetController, :show
+  end
+
+  scope "/calls" do
+    pipe_through [:browser, :operator]
+
+    live_session :vxpipe_call_inspection,
+      root_layout: {Vxpipe.Console.CallInspectionLayout, :root},
+      session: {Vxpipe.Console.OperatorSession, :live_session, []},
+      on_mount: [Vxpipe.Console.OperatorLiveAuthentication] do
+      live "/", Vxpipe.Console.CallInspectionLive, :index
+      live "/:call_id", Vxpipe.Console.CallInspectionDetailLive, :show
+    end
   end
 
   scope "/diagnostics" do

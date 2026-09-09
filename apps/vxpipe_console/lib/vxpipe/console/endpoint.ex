@@ -10,6 +10,9 @@ defmodule Vxpipe.Console.Endpoint do
   socket "/diagnostics/live", Vxpipe.Console.DiagnosticsSocket,
     websocket: [connect_info: [session: @session_options]]
 
+  socket "/calls/live", Phoenix.LiveView.Socket,
+    websocket: [connect_info: [session: @session_options]]
+
   if code_reloading? do
     socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket
   end
