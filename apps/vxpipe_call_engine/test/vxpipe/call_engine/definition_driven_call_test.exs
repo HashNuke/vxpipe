@@ -22,6 +22,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
+  alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
 
   alias Vxpipe.CallEngine.Command.{
     AttachConnection,
@@ -471,6 +472,41 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                 "intake" => %{"value" => %{"summary" => "accepted locally"}}
               }
             }} = CallVariables.read(variables, read)
+
+    assert {:ok, inspection_port} =
+             LiveInspectionBuffer.port(plan.tenant_id, plan.call_id)
+
+    _ = :sys.get_state(inspection_port.buffer)
+
+    assert {:ok, live_inspection} =
+             CallEngine.inspect_live_call(plan.tenant_id, plan.call_id)
+
+    assert live_inspection.latest_variable_revision == 1
+
+    assert Enum.any?(live_inspection.records, fn
+             %Fact{
+               kind: :tool_call_completed,
+               correlation_id: correlation_id,
+               tool_call_id: "tool-during-archive-outage"
+             } ->
+               correlation_id == command.correlation_id
+
+             _record ->
+               false
+           end)
+
+    assert Enum.any?(live_inspection.records, fn
+             %UpdateSnapshot{
+               participant_id: participant_id,
+               correlation_id: correlation_id,
+               global_revision: 1
+             } ->
+               participant_id == receiver.participant_id and
+                 correlation_id == command.correlation_id
+
+             _record ->
+               false
+           end)
 
     assert %{pending: pending, retries: retries} = Handoff.stats(handoff)
     assert pending > 0
