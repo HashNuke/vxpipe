@@ -11,9 +11,10 @@ configure `Vxpipe.Gateway.Application` with `http: [enabled: false, ...]` so the
 gateway runtime starts without its standalone Bandit listener. The Console
 endpoint is then the only listener.
 
-The existing React/Vite voice playground source lives under `assets/`. `bin/dev`
-runs it through a separate Vite process for hot reload, while `mix assets.build`
-writes a release bundle into the application's ignored `priv/static` directory.
+The existing React/Vite voice playground source lives under `assets/`. In
+development, the Phoenix endpoint supervises Vite as its asset watcher for hot
+reload; it is not a separate Goreman application. `mix assets.build` writes a
+release bundle into the application's ignored `priv/static` directory.
 The Console root serves that built index and `Plug.Static` serves only its hashed
 `/assets/*` files. If the bundle is absent, the root returns 503 rather than a
 placeholder shell. The separate bounded diagnostics surface remains available

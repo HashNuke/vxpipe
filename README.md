@@ -17,13 +17,13 @@ Install the Watchman Python client as an isolated user-level tool:
 uv tool install pywatchman
 ```
 
-Install the sample frontend dependencies once:
+Install the Console frontend dependencies once:
 
 ```shell
 npm install --prefix apps/vxpipe_console/assets
 ```
 
-Then start the Vxpipe umbrella and sample frontend together:
+Then start the Vxpipe umbrella and Console frontend together:
 
 ```shell
 bin/dev
@@ -51,11 +51,11 @@ restarts. Reusable call-engine code receives provider options through the OTP
 application environment and does not read these environment variables directly.
 
 Goreman runs the call engine, gateway, and Console applications in one BEAM
-instance, serves the Vite playground on loopback port 5174, and runs Caddy
-as the tailnet-only HTTPS ingress at `https://<machine-fqdn>:5173/`. The machine
-FQDN and Tailscale IPv4 address are discovered automatically. Caddy sends
-`/api/*`, `/healthz`, and `/diagnostics*` to the Console endpoint on loopback
-port 4000 and all other requests to Vite.
+instance. The Console's Phoenix endpoint supervises its Vite development watcher
+on loopback port 5174, and Goreman runs Caddy as the tailnet-only HTTPS ingress at
+`https://<machine-fqdn>:5173/`. The machine FQDN and Tailscale IPv4 address are
+discovered automatically. Caddy sends `/api/*`, `/healthz`, and `/diagnostics*`
+to the Console endpoint on loopback port 4000 and all other requests to Vite.
 
 Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
 Mix manifests, or runtime configuration ask Goreman to restart only the
@@ -66,10 +66,11 @@ restart the development server.
 Caddy automatically obtains a certificate for the `.ts.net` hostname from the
 local Tailscale daemon. MagicDNS and HTTPS certificates must be enabled for the
 tailnet. `bin/dev` renders a complete JSON configuration, obtains sudo once, and
-Goreman runs only the Caddy process as root. Mix and Vite continue to run as the
-calling user. No `TS_PERMIT_CERT_UID` or manually exported Caddy variables are
-required. Caddy binds only to the discovered Tailscale address; it does not use
-Tailscale Funnel or make the development stack public.
+Goreman runs only the Caddy process as root. Mix and the Phoenix-supervised Vite
+watcher continue to run as the calling user. No `TS_PERMIT_CERT_UID` or manually
+exported Caddy variables are required. Caddy binds only to the discovered
+Tailscale address; it does not use Tailscale Funnel or make the development stack
+public.
 
 Use `--http` to omit Caddy and run Vite directly on port 5173 for local
 troubleshooting. In HTTP mode, set `APP_HOST` to bind the playground to a

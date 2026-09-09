@@ -371,3 +371,26 @@ now use that verified release command rather than selecting an umbrella release 
 The complete root format, warnings-as-errors compile, default suite and unused-lock gates passed:
 call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
 and Console `13 tests, 0 failures`.
+
+## Checkpoint 12: Phoenix-owned development watcher
+
+The first shell-contract run failed because `bin/dev` still passed `assets` to Goreman. The
+focused test now requires that Goreman's selected process list omit that former standalone
+frontend entry. The negative-line assertion itself initially returned the final failed `read`
+under `set -e`; giving the helper an explicit successful return fixed the test rather than
+weakening the behavior it describes.
+
+The Console endpoint now starts `npm run dev` from its Phoenix watcher configuration. The
+Procfile no longer declares `assets`, and `bin/dev` starts only the shared BEAM runtime and
+Watchman reload helper plus Caddy in its default HTTPS mode. Vite still owns React hot reload,
+the same loopback ports, proxy behavior and production build; this change only makes its
+lifecycle a child of the Console development endpoint. It supersedes checkpoint 11's separate
+Goreman-process detail and does not change the rendered interface.
+
+The green shell contract passed. A fresh `bin/dev` HTTPS run showed only `vxpipe`, `reloader`
+and `caddy` as Goreman processes; Vite's ready message and loopback 5174 listener appeared under
+the `vxpipe` label after the Console endpoint started. The frontend passed `3 tests, 0 failures`
+and its production build completed. Chromium rendered the public HTTPS entry at 1440x900 and
+390x844 with no page errors or horizontal overflow. Root format, warnings-as-errors compile,
+default suite and unused-lock gates passed with call engine `116 tests, 0 failures (1 excluded)`,
+gateway `45 tests, 0 failures (3 excluded)`, and Console `13 tests, 0 failures`.

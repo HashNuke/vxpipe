@@ -100,6 +100,9 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
 config :vxpipe_console, Vxpipe.Console.Endpoint,
   debug_errors: true,
   secret_key_base: String.duplicate("development-only-", 4),
-  server: true
+  server: true,
+  watchers: [
+    npm: ["run", "dev", cd: Path.expand("../apps/vxpipe_console/assets", __DIR__)]
+  ]
 
 config :vxpipe_console, :diagnostics, enabled: true

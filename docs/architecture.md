@@ -1669,6 +1669,11 @@ paths to the Console-owned Vite assets application over loopback. This supplies 
 stable secure browser origin and leaves room for additional development
 applications without making Caddy part of the product protocol model.
 
+The Console Phoenix endpoint supervises Vite as a development asset watcher. Goreman
+does not model the playground as a separate application; it starts the shared BEAM
+runtime, reload helper and optional Caddy ingress. Vite remains the React development
+and build tool and is not replaced by LiveView.
+
 `bin/dev` resolves the tailnet hostname and address, renders a complete Caddy
 JSON configuration as the invoking user, and then asks Goreman to run only the
 Caddy process through sudo. The root process does not inherit application
@@ -1743,7 +1748,7 @@ client can cross the browser, HTTP, WebRTC, RTVI, and OTP boundaries:
 3. The gateway issues an opaque, single-use session bound to the tenant, actor,
    room incarnation, and participant. The default development lifetime is five
    minutes; expiry is enforced with monotonic time.
-4. The samples app passes that session in the current Pipecat client's
+4. The Console playground passes that session in the current Pipecat client's
    `webrtcRequestParams.requestData` and uses the same-origin
    `/api/rtvi/offer` endpoint.
 5. The gateway implements Pipecat Small WebRTC's `POST` offer/answer and `PATCH`

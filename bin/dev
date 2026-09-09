@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-processes=(vxpipe assets reloader)
+processes=(vxpipe reloader)
 dev_mode="https"
 export VXPIPE_CONSOLE_ASSETS_PORT="5173"
 export VXPIPE_DEV_TLS="http"

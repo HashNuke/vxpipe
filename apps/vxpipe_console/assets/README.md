@@ -2,9 +2,9 @@
 
 This Console-owned Vite application is a frontend-only playground for exercising
 Vxpipe gateway endpoints. It does not host a Pipecat server or duplicate call-engine
-behavior in the browser. Development runs it as a separate Vite process for hot
-reload; `mix assets.build` writes its release bundle to the Console application's
-ignored `priv/static` directory.
+behavior in the browser. The Console's Phoenix endpoint supervises Vite as its
+development asset watcher for hot reload; `mix assets.build` writes the release
+bundle to the Console application's ignored `priv/static` directory.
 
 The initial screen uses `ConsoleTemplate` from
 `@pipecat-ai/voice-ui-kit`. It pulls in `@pipecat-ai/client-react` and the core
@@ -86,8 +86,8 @@ In HTTP mode, set `APP_HOST` to a hostname or interface address to change the
 Vite bind host. Without `APP_HOST`, Vite binds to `0.0.0.0`. The proxy uses
 `http://127.0.0.1:4000` by default.
 
-By default, `bin/dev` uses trusted HTTPS within the tailnet. Vite listens only on
-loopback port 5174 and Goreman runs Caddy on HTTPS port 5173. Caddy routes
+By default, `bin/dev` uses trusted HTTPS within the tailnet. Phoenix supervises
+Vite on loopback port 5174 and Goreman runs Caddy on HTTPS port 5173. Caddy routes
 `/api/*` to the shared Console endpoint, where the mounted gateway handles it,
 and sends other paths, including Vite's hot module replacement connection, to
 the frontend. The machine FQDN and Tailscale address are discovered automatically.

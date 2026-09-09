@@ -86,8 +86,9 @@ slow response or missing measurement. The existing voice console still works unc
 - [x] Add the approved console shell using the existing gateway dependency; verify
   explicit startup/mounting and adjust gateway configuration only where needed, without
   moving protocol ownership into Phoenix or rewriting the gateway.
-- [x] Move the unchanged React/Vite playground source under Console ownership, preserve
-  the separate Vite development process, and package its built assets in a Console release.
+- [x] Move the unchanged React/Vite playground source under Console ownership, supervise
+  its development watcher through the Phoenix endpoint, and package its built assets in
+  a Console release.
 - [x] Select/document the dashboard mechanism and trusted operator-access boundary;
   keep Phoenix/dashboard/frontend dependencies in the console application.
 - [x] Write red tests for project-owned timing/outcome projection, missing observations,
@@ -255,9 +256,9 @@ claim unrelated concurrent events. Umbrella gates then passed with call engine `
 0 failures`.
 
 Implementation evidence, checkpoint 11 (2026-09-09): moved the unchanged React/Vite source
-from the former top-level sample directory into `vxpipe_console/assets`. Goreman continues to
-run it as a separate `assets` process on the same development ports, so Caddy routing and hot
-reload remain unchanged. The root `assets.build` alias targets only the Console child and writes
+from the former top-level sample directory into `vxpipe_console/assets`. That checkpoint
+initially retained a separate Goreman `assets` process on the same development ports. The root
+`assets.build` alias targets only the Console child and writes
 the ignored production bundle to `vxpipe_console/priv/static`; the Console serves the no-store
 SPA index and only hashed `/assets/*` files with immutable caching. Missing release assets now
 return an explicit 503 instead of a placeholder page.
@@ -273,6 +274,19 @@ definition; documentation now gives the verified Console child release command r
 adding broader release policy in this milestone. The complete umbrella gates pass with call
 engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`, and
 Console `13 tests, 0 failures`.
+
+Implementation evidence, checkpoint 12 (2026-09-09): completed Console development ownership
+by moving the Vite command into the Phoenix endpoint's watcher configuration. `bin/dev` and its
+Procfile no longer expose an `assets` process; Goreman manages the BEAM application, Watchman
+reload helper and optional Caddy ingress, while Vite remains a Node child supervised with the
+Console endpoint. This supersedes only checkpoint 11's process-management detail: the same Vite
+source, ports, proxy behavior, Caddy routes and release bundle contract remain in force.
+The focused shell test passes, and a live default-HTTPS run shows only `vxpipe`, `reloader`
+and `caddy` Goreman labels while Vite reports its loopback 5174 listener under `vxpipe`.
+The frontend's three tests and production build pass. Chromium rendered the HTTPS entry at
+1440x900 and 390x844 without page errors or horizontal overflow. The complete umbrella gates
+pass with call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures
+(3 excluded)`, and Console `13 tests, 0 failures`.
 
 ## Specification review
 

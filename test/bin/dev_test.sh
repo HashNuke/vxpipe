@@ -47,6 +47,19 @@ assert_file_has_line() {
   fail "expected $path to contain line: $expected"
 }
 
+assert_file_lacks_line() {
+  local file_name="$1"
+  local unexpected="$2"
+  local file_line
+
+  while IFS= read -r file_line; do
+    [[ "$file_line" == "$unexpected" ]] &&
+      fail "expected $file_name not to contain line: $unexpected"
+  done <"$file_name"
+
+  return 0
+}
+
 mkdir -p "$fake_bin"
 ln -s "$(command -v bash)" "$fake_bin/bash"
 ln -s "$(command -v dirname)" "$fake_bin/dirname"
@@ -77,8 +90,8 @@ PATH="$fake_bin" \
 
 assert_file_has_line "$goreman_args" "start"
 assert_file_has_line "$goreman_args" "vxpipe"
-assert_file_has_line "$goreman_args" "assets"
 assert_file_has_line "$goreman_args" "reloader"
+assert_file_lacks_line "$goreman_args" "assets"
 
 assert_file_has_line "$repo_root/Procfile" "reloader: bin/watch-vxpipe"
 

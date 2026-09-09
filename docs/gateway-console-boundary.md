@@ -102,10 +102,10 @@ or implementation-completion claim.
 Source inspection found an existing Plug HTTP endpoint, an optionally enabled
 standalone HTTP supervisor and no Phoenix dependency in the gateway. That is a
 starting point, not evidence that arbitrary host mounting is already supported.
-The current sample is a separate React/Vite project. At the design checkpoint,
-documentation consistency and relative links were checked while runtime mounting,
-browser rendering, transport interoperability and release packaging were still
-unverified.
+At the design checkpoint, the current sample was still a top-level React/Vite
+project. Documentation consistency and relative links were checked while runtime
+mounting, browser rendering, transport interoperability and release packaging
+were still unverified.
 
 Implementation checkpoint 1 added and red-tested `Vxpipe.Gateway.HTTP.Mount` as the
 supported composable boundary. It claims only `/healthz` and `/api` at a root mount,
@@ -131,6 +131,7 @@ The subsequent access correction keeps diagnostics disabled by default but adds 
 authentication when enabled. The project-owned Plug now checks only the enabled setting, and
 Caddy routes `/diagnostics*` to the shared Console endpoint for repository development. API keys
 and join tokens retain only their API/admission meanings. Rendered desktop/mobile checks verify
-the LiveDashboard surface. The React/Vite playground source is now Console-owned: development
-still uses a separate Vite process, while release builds place the bundle in Console
-`priv/static` for direct serving.
+the LiveDashboard surface. The React/Vite playground source is now Console-owned:
+the Phoenix endpoint supervises its Vite watcher in development, while release
+builds place the bundle in Console `priv/static` for direct serving. Goreman does
+not manage a separate frontend application.
