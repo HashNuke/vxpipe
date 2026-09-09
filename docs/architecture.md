@@ -1687,6 +1687,15 @@ Existing source-interval privacy and credential exclusions apply, and debugging 
 starts STT, recording or audio monitoring implicitly. Silent listening remains in the
 live-mixing milestone. Later slices extend these views with their implemented facts.
 
+The Console implements that inspection boundary at `/operator/sign-in`, `/calls`, and
+`/calls/:call_id`. It exchanges an existing tenant key plus `:calls`-scoped API key for a
+non-secret signed browser session, filters the submitted secret from request logs, and
+keeps sample and platform-diagnostics routes outside this tenant guard. Calls supplies
+cursor-bounded persisted pages; the engine supplies only its bounded live projection.
+URL-backed event selection is local to the loaded evidence, while connected running-call
+pages refresh only the live projection. Ended calls require no room process. Console and
+Gateway gain neither Repo access nor unrestricted process inspection through this flow.
+
 Phoenix is approved for the separate `vxpipe_console` application, not a gateway
 migration. Preserve the existing gateway protocol handlers, React sample,
 application-option ownership and engine/persistence dependency direction.

@@ -193,3 +193,42 @@
   2,515 modules and functions), and unused-dependency validation pass. The complete migrated
   umbrella suite passes against a fresh isolated PostgreSQL cluster with 339 tests, no
   failures, and six integration exclusions.
+
+## 2026-09-09 — Console operator workflow
+
+- Implemented the separate `/operator/sign-in`, `/calls`, and `/calls/:call_id` workflow.
+  Only call-inspection routes require the signed operator session; the existing sample,
+  diagnostics, and LiveDashboard behavior remains unchanged.
+- Kept the browser session non-secret and added Phoenix request filtering for API-key,
+  password, token, and secret parameters. Red evidence: the request-log sentinel test
+  initially captured the submitted API key. Green evidence: debug output contains
+  `[FILTERED]` and not the sentinel.
+- Split presentation by responsibility: the call matrix, detailed event evidence,
+  formatting, sourced-timeline projection, and variable-diff projection are independent
+  modules. The route processes coordinate only bounded reads, URL state, and live refresh.
+- The list is capped at 25 calls and persisted detail at 50 events. Call and history
+  cursors are independent. Selecting an event is represented in the URL and does not
+  refetch list, persisted detail, or live detail. Red evidence: the focused LiveView test
+  observed an unexpected `list_calls` request after selection. Green evidence: selection
+  updates with no backend reads.
+- One tokenized one-second timer refreshes only a running call's bounded live projection.
+  A refresh does not reread persisted history or the call list, and stale timer messages
+  cannot refresh a different or ended selection.
+- Rendered `agent-browser` review used a synthetic tenant-safe backend at desktop 1440px
+  and mobile 390px. It verified exact persisted/live event selection, preserved call and
+  history pagination URLs, the `r2` to `r3` variable diff, all nine mobile events, a 390px
+  document width, and no browser errors. The final UI reviewer returned `ship` after the
+  six material findings were resolved.
+- Focused authentication and endpoint tests pass with 20 tests and no failures. The full
+  Console child suite passes with 49 tests and no failures.
+- Root format, warnings-as-errors compilation, strict Credo (278 source files / 2,691
+  modules and functions), and unused-dependency validation pass. The first umbrella test
+  command stopped before executing tests because the machine's default PostgreSQL required
+  an unavailable password. A fresh temporary trust-authenticated PostgreSQL 18 cluster on
+  loopback supplied the test database without using external credentials; the complete
+  suite then passed with 355 tests, no failures, and six integration exclusions.
+- Work is isolated on `milestone/call-inspection-console`. Presentation and route behavior
+  were committed and pushed as small checkpoints before updating milestone evidence.
+
+The milestone remains in progress. Controlled delayed-storage/tool fixtures and the
+remaining end-to-end failure checks have not been demonstrated yet.

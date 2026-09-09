@@ -85,6 +85,27 @@ join tokens into operator credentials or add authentication to the sample, diagn
 or LiveDashboard routes. A release may include the console, while an embedding host can
 omit it and attach its own framework-independent telemetry reporter.
 
+### Call-inspection operator workflow
+
+An operator opens `/operator/sign-in` over TLS and submits the tenant's public key plus an
+existing API key carrying the `:calls` scope. Console authenticates it server-side and
+stores only the non-secret principal in its signed, one-hour browser session. API-key
+values are filtered from Phoenix request logs. Signing out removes that browser identity.
+
+The protected `/calls` route loads one cursor-bounded page of at most 25 tenant call
+summaries. `/calls/:call_id` adds at most 50 persisted events and, only while the call is
+running, the engine's bounded live projection. Separate opaque URL cursors retain call and
+history pagination; an event key in the URL retains exact evidence selection without a
+backend refetch. Connected live detail pages refresh only the bounded live projection.
+Persisted history remains visible when no room process exists, and unavailable sources,
+archive gaps, live loss, and variable-revision differences remain explicit.
+
+This browser access is private operator history, not ordinary caller tool visibility.
+Join tokens and public call identifiers cannot establish an operator session. The page
+uses public Calls APIs through the Console inspection adapter; neither Console nor Gateway
+queries Repo or reads arbitrary room state. Payloads are rendered as inert data, and the
+workflow adds no audio capture, playback, variable editing, tool execution, or call control.
+
 ## Alternatives not selected
 
 - **Convert gateway to Phoenix:** technically still usable as an OTP dependency,

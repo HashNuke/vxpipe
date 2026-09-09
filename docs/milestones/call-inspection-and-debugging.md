@@ -1,10 +1,10 @@
 # Call inspection and debugging
 
 Status: in progress. Persisted inspection reads, the engine-owned bounded live
-projection, and the Console's non-secret operator-session foundation are implemented;
-the Console workflow and route enforcement remain. Scope requested by the user;
-specification reviewed locally on 2026-09-08. Browser operator authentication is now
-selected, but its page/route integration must be complete before external exposure.
+projection, and the Console's authenticated list/detail workflow are implemented and
+browser-verified. Deterministic storage/tool failure fixtures and the remaining
+end-to-end acceptance checks are pending. Scope requested by the user; specification
+reviewed locally on 2026-09-08.
 Prerequisites: [Observable sample call](observable-sample-call.md);
 [Asynchronous history](asynchronous-call-history.md), including its tenant admission,
 Call Variables and background-tool prerequisites.
@@ -75,22 +75,22 @@ call ends, the same page remains useful from stored history without a live room 
 
 - [x] Specify the bounded list/detail/live projections and operator-auth boundary using
   existing trusted identity and history contracts; do not invent new call scopes in the UI.
-- [ ] Red-test cross-tenant/unauthorized access, private projections, pagination, event
+- [x] Red-test cross-tenant/unauthorized access, private projections, pagination, event
   correlation, snapshot revisions and live-versus-persisted source labeling.
-- [ ] Add any missing permitted per-call timing facts to the existing asynchronous
+- [x] Add any missing permitted per-call timing facts to the existing asynchronous
   archival projection without changing general metric labels or making writes synchronous.
-- [ ] Implement console-owned read-only pages and bounded updates through public APIs,
+- [x] Implement console-owned read-only pages and bounded updates through public APIs,
   with explicit stale/gap/error states and no UI dependency in the reusable gateway.
 - [ ] Exercise delayed storage, failed/unknown tool outcomes and terminated rooms through
   deterministic fixtures; keep hosted-provider/network checks in the integration lane.
-- [ ] Inspect desktop/mobile list/detail views and verify the voice console stays unchanged.
-- [ ] Document the operator workflow, access limits and differences from caller visibility.
+- [x] Inspect desktop/mobile list/detail views and verify the voice console stays unchanged.
+- [x] Document the operator workflow, access limits and differences from caller visibility.
 
 ## Acceptance and failure checks
 
 - [ ] A variable update and slow host tool appear on their original participant/turn/
   invocation timeline with the correct snapshot revision and observed outcome.
-- [ ] An ended call is inspectable with no room PID; absent timing/history is explicitly
+- [x] An ended call is inspectable with no room PID; absent timing/history is explicitly
   unavailable/incomplete rather than invented from current state or aggregates.
 - [ ] Delay/fail storage during a live call: ongoing conversation and variable acceptance
   continue; live and persisted revisions/lag are distinguishable in the page.
@@ -102,7 +102,7 @@ call ends, the same page remains useful from stored history without a live room 
   state and honest gaps; reconnect never creates a call, executes a tool or replays audio.
 - [ ] Missing, denied, unavailable and purged-call responses are safe; stale cached facts
   cannot recreate deleted history. A closed page releases subscriptions without ending calls.
-- [ ] No console/gateway-to-Repo dependency, gateway-to-Phoenix/UI dependency,
+- [x] No console/gateway-to-Repo dependency, gateway-to-Phoenix/UI dependency,
   unrestricted process inspection or additional media capture is introduced. General
   VM visibility is never implied by tenant authorization.
 
@@ -164,9 +164,26 @@ Implementation evidence to date:
   options take precedence over per-page cursor/limit options, and unexpected adapter values
   fail closed before reaching a page. The replaceable boundary supports deterministic
   Console fixtures without adding Repo or engine-private access to the presentation app.
+- `/operator/sign-in` now exchanges an existing tenant key and `:calls`-scoped API key for
+  the non-secret signed browser session. `/calls` and `/calls/:call_id` are the only routes
+  behind that guard; the sample, diagnostics and LiveDashboard remain outside it. Phoenix
+  request filtering removes API-key values from debug request logs.
+- The Console loads at most 25 call summaries and 50 persisted timeline entries per page.
+  Explicit URL cursors page each source, and URL-backed event selection changes only the
+  selected evidence instead of repeating persisted/live reads. A connected running-call
+  page polls only the bounded live projection once per second and ignores stale timer
+  messages; an ended-call page performs no live read.
+- The workbench combines explicitly sourced persisted and live facts, exposes exact safe
+  correlation/provenance fields, preserves inert remote payload rendering, compares the
+  latest comparable permitted variable snapshots, and keeps archive gaps, live loss and
+  unavailable timing distinct rather than implying continuity.
+- Rendered review at 1440px and 390px verified the list/detail workflow, event selection,
+  call/history pagination, variable diff, mobile reading order and zero horizontal overflow.
+  The approved screenshots are `.impeccable/review/desktop.png` and
+  `.impeccable/review/mobile.png`; the final UI review disposition was `ship`.
 
-The Console pages, route enforcement, rendered browser verification and end-to-end fault
-fixtures are still incomplete; this evidence does not complete the milestone.
+Deterministic end-to-end fault fixtures and the remaining acceptance checks are still
+incomplete; this evidence does not complete the milestone.
 
 ## Specification review
 
