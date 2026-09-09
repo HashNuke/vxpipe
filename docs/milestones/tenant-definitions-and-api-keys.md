@@ -19,20 +19,20 @@ An operator bootstraps a tenant/API key through trusted OTP/CLI administration, 
 
 ## Implementation checklist
 
-- [ ] Write red repository/workflow tests for immutable revisions, draft/publication routing, tenant isolation, IDs, key issuance/verification/revocation.
-- [ ] Introduce Calls ports and Ecto schemas/migrations/constraints in the correct applications with no reverse engine dependency.
+- [x] Write red repository/workflow tests for immutable revisions, draft/publication routing, tenant isolation, IDs, key issuance/verification/revocation.
+- [x] Introduce Calls ports and Ecto schemas/migrations/constraints in the correct applications with no reverse engine dependency.
 - [ ] Implement trusted OTP/CLI tenant and first-key bootstrap plus authorized key rotation/revocation.
-- [ ] Implement save/publish/read definition workflows through ports and record supported-feature errors before publication.
+- [x] Implement save/publish/read definition workflows through ports and record supported-feature errors before publication.
 - [ ] Document migration/bootstrap commands and safe one-time key handling without committing actual credentials.
 
 ## Acceptance and failure checks
 
-- [ ] Restart configured persistence/authentication: the original key verifies, but its stored digest, a wrong key, or another tenant's key does not.
-- [ ] Revoke one of two keys: the other remains valid; no new dependency from existing tokens/sessions to the revoked key.
-- [ ] Admin-only versus calls-only checks use explicit grants, not implicit hierarchy or per-definition ACLs.
-- [ ] Draft routes cannot initiate; publication resolves the correct tenant/participant/revision; editing creates a new revision rather than mutating the old one.
-- [ ] Public identifiers never disclose SQL primary keys; simulate uniqueness conflicts safely.
-- [ ] Embedded engine still runs without starting Ecto or PostgreSQL.
+- [x] Restart configured persistence/authentication: the original key verifies, but its stored digest, a wrong key, or another tenant's key does not.
+- [x] Revoke one of two keys: the other remains valid; no new dependency from existing tokens/sessions to the revoked key.
+- [x] Admin-only versus calls-only checks use explicit grants, not implicit hierarchy or per-definition ACLs.
+- [x] Draft routes cannot initiate; publication resolves the correct tenant/participant/revision; editing creates a new revision rather than mutating the old one.
+- [x] Public identifiers never disclose SQL primary keys; simulate uniqueness conflicts safely.
+- [x] Embedded engine still runs without starting Ecto or PostgreSQL.
 - [ ] Definition revisions and route records contain no provider credentials or private lease material; separate calls can pin different later configuration revisions without mutating the reusable definition.
 
 ## Manual verification
@@ -55,11 +55,16 @@ No room startup/token endpoints until prepared-call admission, no transcript/arc
 
 Implementation evidence (partial, 2026-09-09): the new database-neutral
 `vxpipe_calls` child owns credential/definition repository behaviours and tested
-administration/definition workflows. Focused red-green evidence covers one-time
+administration/definition workflows. The separate `vxpipe_persistence` child now
+owns its Repo, four control-plane tables, constraints, transactions, and both
+Ecto port adapters. Focused red-green evidence covers one-time
 hash-only API-key issuance, explicit scopes, independent revocation, immutable
 revision editing, tenant-isolated draft/publication routing, and publication
-rejection for unsupported features. PostgreSQL adapters, restart evidence, and
-operator CLI workflows remain, so no implementation checkbox is complete yet.
+rejection for unsupported features. `mix test apps/vxpipe_calls/test` passes 7
+tests; `mix test apps/vxpipe_persistence/test` passes 6 tests, including a real
+Repo restart. `mix deps.unlock --check-unused` passes. Running `mix test` from
+the `vxpipe_call_engine` child passes 164 tests (2 excluded) without starting
+Ecto or PostgreSQL. Operator CLI workflows and final umbrella gates remain.
 
 ## Specification review
 

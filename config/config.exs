@@ -9,6 +9,12 @@
 # move said applications out of the umbrella.
 import Config
 
+config :vxpipe_persistence,
+  ecto_repos: [Vxpipe.Persistence.Repo],
+  enabled: false
+
+config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
+
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [
     background_tool_timeout_ms: 30_000,
