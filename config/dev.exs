@@ -16,6 +16,52 @@ accepted, not completed: acknowledge that it is running, continue the
 conversation, and do not claim it is ready until the later completion arrives.
 """
 
+sample_capability_profiles = %{
+  "deepgram-flux-stt" => %{
+    kind: :speech_to_text,
+    provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
+    options: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
+  },
+  "gemini-flash-lite" => %{
+    kind: :model_inference,
+    provider: :req_llm,
+    options: %{model: "google:gemini-3.5-flash-lite"}
+  },
+  "deepgram-flux-voice" => %{
+    kind: :text_to_speech,
+    provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
+    options: %{model: "flux-haley-en", encoding: :linear16, sample_rate: 48_000}
+  },
+  "morse-code-stt" => %{
+    kind: :speech_to_text,
+    provider: Vxpipe.CallEngine.Provider.MorseCodeSTT,
+    options: %{
+      amplitude: 4_096,
+      frequency_hz: 700,
+      sample_rate: 16_000,
+      unit_duration_ms: 60
+    }
+  },
+  "morse-code-tts" => %{
+    kind: :text_to_speech,
+    provider: Vxpipe.CallEngine.Provider.MorseCodeTTS,
+    options: %{
+      amplitude: 4_096,
+      frequency_hz: 700,
+      sample_rate: 48_000,
+      unit_duration_ms: 60
+    }
+  }
+}
+
+sample_host_tools = %{
+  "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime,
+  "prepare_background_report" => Vxpipe.CallEngine.Tool.DelayedReport
+}
+
+config :vxpipe_calls, Vxpipe.Calls,
+  registries: %{capability_profiles: sample_capability_profiles, host_tools: sample_host_tools}
+
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   speech_to_text: [
     enabled: true,
@@ -140,47 +186,8 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           },
           limits: %{max_duration_ms: 1_800_000}
         },
-        capability_profiles: %{
-          "deepgram-flux-stt" => %{
-            kind: :speech_to_text,
-            provider: Vxpipe.CallEngine.Provider.Deepgram.Flux,
-            options: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
-          },
-          "gemini-flash-lite" => %{
-            kind: :model_inference,
-            provider: :req_llm,
-            options: %{model: "google:gemini-3.5-flash-lite"}
-          },
-          "deepgram-flux-voice" => %{
-            kind: :text_to_speech,
-            provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
-            options: %{model: "flux-haley-en", encoding: :linear16, sample_rate: 48_000}
-          },
-          "morse-code-stt" => %{
-            kind: :speech_to_text,
-            provider: Vxpipe.CallEngine.Provider.MorseCodeSTT,
-            options: %{
-              amplitude: 4_096,
-              frequency_hz: 700,
-              sample_rate: 16_000,
-              unit_duration_ms: 60
-            }
-          },
-          "morse-code-tts" => %{
-            kind: :text_to_speech,
-            provider: Vxpipe.CallEngine.Provider.MorseCodeTTS,
-            options: %{
-              amplitude: 4_096,
-              frequency_hz: 700,
-              sample_rate: 48_000,
-              unit_duration_ms: 60
-            }
-          }
-        },
-        host_tools: %{
-          "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime,
-          "prepare_background_report" => Vxpipe.CallEngine.Tool.DelayedReport
-        }
+        capability_profiles: sample_capability_profiles,
+        host_tools: sample_host_tools
       ]
     ]
   ]

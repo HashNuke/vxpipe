@@ -1,0 +1,30 @@
+{
+  "schema_version": "20260909.01",
+  "name": "Development database example",
+  "entry_caller": "caller",
+  "entry_receiver": "assistant",
+  "defaults": {
+    "capabilities": {
+      "model_inference": "gemini-flash-lite"
+    }
+  },
+  "participants": {
+    "caller": {
+      "type": "human",
+      "connection": {
+        "service": "web",
+        "mode": "receive",
+        "admission": "start_call"
+      }
+    },
+    "assistant": {
+      "type": "agent",
+      "prompt": "Help the caller concisely.",
+      "first_message": {
+        "mode": "wait_for_input"
+      },
+      "tools": {},
+      "transfers": []
+    }
+  }
+}

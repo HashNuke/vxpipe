@@ -728,6 +728,15 @@ remain in `vxpipe_persistence`; `vxpipe_calls` owns database-neutral workflows a
 repository interfaces. This split changes neither the engine's independent
 embedding contract nor the asynchronous live-storage design.
 
+The implemented control-plane baseline follows this boundary. `vxpipe_calls`
+defines credential and definition/deployment repository ports, while
+`vxpipe_persistence` supplies the optional PostgreSQL adapter. Its tenant/API-key,
+immutable definition-revision, and participant-route tables use private SQL keys;
+public tenant keys, API-key IDs, definition IDs, and route UUIDs remain separate.
+Draft routes resolve only after explicit publication. See
+[tenant control-plane operations](tenant-control-plane.md) for migration and
+trusted bootstrap commands.
+
 ## Gateway protocol adapter contract
 
 Every client protocol adapter must implement the same responsibilities:

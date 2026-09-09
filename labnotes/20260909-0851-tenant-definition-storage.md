@@ -74,3 +74,29 @@ routes.
 - Local test setup created the disposable `vxpipe_test` PostgreSQL database and
   a peer-authenticated role matching the operating-system user. No database
   credential was written to source or output.
+
+## Trusted operator checkpoint
+
+- Added red command-boundary tests before Mix task implementations. They require
+  bootstrap, rotation, revocation, definition save/publish/show, JSON-safe output,
+  and absence of stored digests from management output.
+- Red: the focused operator test failed with undefined tenant-bootstrap and
+  definition-save Mix task modules, which was the intended missing boundary.
+- The first command pass exposed that a valid random tenant key may begin with
+  `-`; normalizing known string option/value pairs before `OptionParser` keeps
+  that key usable without changing its approved 12-random-byte encoding.
+- Green: the operator task suite passes 2 tests. It covers bootstrap, independent
+  rotation/revocation, definition save/publish/show, one-time secret output, and
+  omission of digests from command responses.
+- Manual: a disposable PostgreSQL database passed migration, tenant/key
+  bootstrap, authentication across separate BEAM invocations, replacement-key
+  issuance, old-key revocation, new-key authentication, draft route rejection,
+  publication, route resolution, and definition readback. Output was redirected
+  and asserted without printing key material; temporary output and the disposable
+  database were removed afterward.
+- Final gates: `mix format --check-formatted`, warnings-as-errors compilation,
+  root `mix test`, the unused-dependency check, and whitespace checks passed.
+  Test totals were Call Engine 164 (2 integration exclusions), Calls 7,
+  Persistence 8, Gateway 52 (4 integration exclusions), and Console 20.
+- No frontend or rendered sample changed, so the browser-inspection gate did not
+  apply to this milestone.

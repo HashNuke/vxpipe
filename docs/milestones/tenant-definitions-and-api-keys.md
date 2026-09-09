@@ -1,6 +1,6 @@
 # Tenant definitions and API-key administration
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: complete (2026-09-09). Specification review: approved (2026-09-08).
 Prerequisites: [Definition-driven call](definition-driven-call.md).
 Sources: [Admission credentials](../../labnotes/20260905-0405-call-definition-design.md#initial-variables-and-api-key-admission--approved-g2-decisions); [routes](../../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing); [application boundaries](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 
@@ -21,9 +21,9 @@ An operator bootstraps a tenant/API key through trusted OTP/CLI administration, 
 
 - [x] Write red repository/workflow tests for immutable revisions, draft/publication routing, tenant isolation, IDs, key issuance/verification/revocation.
 - [x] Introduce Calls ports and Ecto schemas/migrations/constraints in the correct applications with no reverse engine dependency.
-- [ ] Implement trusted OTP/CLI tenant and first-key bootstrap plus authorized key rotation/revocation.
+- [x] Implement trusted OTP/CLI tenant and first-key bootstrap plus authorized key rotation/revocation.
 - [x] Implement save/publish/read definition workflows through ports and record supported-feature errors before publication.
-- [ ] Document migration/bootstrap commands and safe one-time key handling without committing actual credentials.
+- [x] Document migration/bootstrap commands and safe one-time key handling without committing actual credentials.
 
 ## Acceptance and failure checks
 
@@ -33,7 +33,7 @@ An operator bootstraps a tenant/API key through trusted OTP/CLI administration, 
 - [x] Draft routes cannot initiate; publication resolves the correct tenant/participant/revision; editing creates a new revision rather than mutating the old one.
 - [x] Public identifiers never disclose SQL primary keys; simulate uniqueness conflicts safely.
 - [x] Embedded engine still runs without starting Ecto or PostgreSQL.
-- [ ] Definition revisions and route records contain no provider credentials or private lease material; separate calls can pin different later configuration revisions without mutating the reusable definition.
+- [x] Definition revisions and route records contain no provider credentials or private lease material; separate calls can pin different later configuration revisions without mutating the reusable definition.
 
 ## Manual verification
 
@@ -48,27 +48,39 @@ No room startup/token endpoints until prepared-call admission, no transcript/arc
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence (partial, 2026-09-09): the new database-neutral
+Implementation evidence (2026-09-09): the new database-neutral
 `vxpipe_calls` child owns credential/definition repository behaviours and tested
 administration/definition workflows. The separate `vxpipe_persistence` child now
-owns its Repo, four control-plane tables, constraints, transactions, and both
+owns its Repo, five control-plane tables, constraints, transactions, and both
 Ecto port adapters. Focused red-green evidence covers one-time
 hash-only API-key issuance, explicit scopes, independent revocation, immutable
 revision editing, tenant-isolated draft/publication routing, and publication
 rejection for unsupported features. `mix test apps/vxpipe_calls/test` passes 7
-tests; `mix test apps/vxpipe_persistence/test` passes 6 tests, including a real
+tests; `mix test apps/vxpipe_persistence/test` passes 8 tests, including a real
 Repo restart. `mix deps.unlock --check-unused` passes. Running `mix test` from
 the `vxpipe_call_engine` child passes 164 tests (2 excluded) without starting
-Ecto or PostgreSQL. Operator CLI workflows and final umbrella gates remain.
+Ecto or PostgreSQL.
+
+The trusted operator suite passes 2 command-flow tests and covers tenant
+bootstrap, key rotation/revocation, and definition save/publish/show while
+capturing the one-time key. A separate disposable PostgreSQL run executed those
+documented commands across fresh BEAM invocations, authenticated before and
+after key revocation, proved draft versus published route resolution, read the
+definition after restart, and removed the disposable database without printing
+keys or digests. Final umbrella gates passed: formatted, warnings-as-errors
+compile, 164 Call Engine tests (2 excluded), 7 Calls tests, 8 Persistence tests,
+52 Gateway tests (4 excluded), 20 Console tests, and no unused dependencies.
+No sample UI changed, so browser inspection was not applicable to this slice.
 
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Separated reusable revision metadata from per-call plan/credential resolution; excluded credentials and leases from revisions/routes; focused re-review approved.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+The review remains specification evidence; the separate implementation evidence
+above now establishes the completed runtime slice.

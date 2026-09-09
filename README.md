@@ -98,6 +98,17 @@ optional Goreman process overrides. A static `APP_HOST` can be placed in `.env`
 for HTTP mode; HTTPS mode derives it from Tailscale automatically. Goreman loads
 `.env` into its child processes without exporting values into the parent shell.
 
+PostgreSQL-backed tenant/API-key and call-definition storage is opt-in through
+`VXPIPE_DATABASE_URL`. Without it, the development sample continues using its
+trusted static definition and no Repo is started. Migration, one-time tenant/key
+bootstrap, key rotation/revocation, and immutable definition publication are
+documented in [Tenant control-plane operations](docs/tenant-control-plane.md).
+
+The umbrella test alias creates and migrates the configured test database. Use
+`VXPIPE_TEST_DATABASE_URL`, or standard PostgreSQL variables plus
+`VXPIPE_TEST_DATABASE` (default `vxpipe_test`). Running the call-engine tests from
+its child directory remains database-free.
+
 Without `APP_HOST`, HTTP mode binds the Console endpoint to `0.0.0.0`. The React
 page and mounted gateway are same-origin in both modes, so no frontend proxy or
 second asset port is involved.

@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestones 1 through 5 are complete and milestone 6 is next. The earlier
+Status: 23 milestone specifications; milestones 1 through 6 are complete and milestone 7 is next. The earlier
 behavior contracts have completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
@@ -37,7 +37,7 @@ progress without claiming the entire milestone is complete.
 3. [x] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
 4. [x] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.
 5. [x] [Conversation during background tools](background-tool-conversation.md) — Keep conversation responsive while a submitted tool finishes.
-6. [ ] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
+6. [x] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
 7. [ ] [Prepared calls and single-use joining](prepared-call-admission.md) — Prepare in PostgreSQL, then start exactly one live call when its caller joins.
 8. [ ] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
 9. [ ] [Call inspection and debugging](call-inspection-and-debugging.md) — Inspect an authorized live or ended call's timeline, permitted snapshots, timings and archival gaps.
@@ -213,7 +213,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Complete; independently reviewed | Real audio, independent fixtures, bounded streaming, explicit transport limits, closed selection, direct-PCM room round trip and optional credential-free sample profile are implemented and verified. |
 | [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Approved | Original behavior approved by milestone_review_b; focused Jido review added finite Action-module, strict-envelope and private-context gates. |
 | [Conversation during background tools](background-tool-conversation.md#specification-review) | Complete; independently reviewed | Activation-owned bounded workers, serialized private completion continuations, provider interoperability, room projection, operational telemetry and the runnable sample are implemented and verified. |
-| [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Approved | milestone_review_a; Separated reusable revision metadata from per-call plan/credential resolution; excluded credentials and leases from revisions/routes; focused re-review approved. |
+| [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Complete; independently reviewed | Database-neutral Calls workflows, Ecto/PostgreSQL adapters, immutable publication routes, hash-only scoped keys, restart checks, and trusted operator commands are implemented and verified. |
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
 | [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | Scope requested; locally reviewed | Authorized live/ended call workflow, tenant isolation, revisions/lag, bounded subscriptions and no audio/privacy bypass; console-owned pages use public Calls/live projections after their prerequisites. |
