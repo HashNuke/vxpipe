@@ -15,7 +15,8 @@ and notice stale or saturated collection without opening logs.
 Primary task: scan current runtime health, request/model/speech timing, and safe provider
 failure categories while exercising the separate voice console.
 Constraints: use only bounded reporter snapshots; retain no event history; keep the voice
-console unchanged; expose no conversation payloads or credentials; work at desktop and mobile.
+console unchanged; expose no conversation payloads or credentials; keep any local failure
+fixture fixed and opt-in; work at desktop and mobile.
 
 ## Direction contract
 
@@ -26,7 +27,8 @@ OWN-WORLD: Operator's Bench neutrals, shallow bordered panels, sans labels, mono
 and green/coral used only for healthy or degraded state.
 
 STORY: The operator sees collection status first, scans runtime and latency, then identifies
-failed or missing work and can open VM details or return to the sample.
+failed or missing work, arms one controlled local outcome when available, and can open VM
+details or return to the sample.
 
 FIRST VIEWPORT: A compact header and status rail lead into one asymmetric work surface:
 runtime and collection at left, timing tables centrally, and failure/outcome ledgers at right.

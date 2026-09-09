@@ -263,3 +263,49 @@ failures (3 excluded)`, and Console `10 tests, 0 failures`.
 API-key authentication remains the call-management endpoint contract, and join tokens remain
 the call-admission contract. Console and LiveDashboard routes intentionally receive no additional
 application authentication.
+
+## Checkpoint 9: deterministic local model fixture
+
+The next dashboard slice needed reproducible delay, failure and missing-output behavior without
+putting diagnostic switches into production call input. The first focused engine run failed
+`4 tests, 3 failures` because the fixture process did not exist. A separate startup projection
+test then failed because the resolved activation still identified only ReqLLM, and provider
+dimension tests demonstrated that an otherwise working live failure appeared as `Other`.
+
+`Vxpipe.CallEngine.Diagnostics.ModelFixture` now owns a fixed, application-configured scenario
+set. It atomically hands one scenario to the Jido request transformer and resets to its configured
+default. Success and delayed success return fixed local text, failure produces the normal safe
+provider-unavailable path, and no-output exercises invalid-response handling without fabricating
+content or first-output timing. The deliberate delay runs in the model worker. Base configuration
+disables the process;
+`VXPIPE_DEV_MODEL_FIXTURE` enables it in repository development, removes the Gemini credential
+requirement, and exposes only the supervised process to the Console controls. No call definition,
+invocation, room-creation body or RTVI message accepts a fixture selector.
+
+Focused green runs covered fixed scenario validation/consumption, startup projection, request
+projection and the complete room path for success, failure and no output. The 20 ms transformer
+test verified that configured delay is applied before output. Telemetry and reporter tests preserve
+the closed `:local_fixture` label rather than collapsing it to `:other`, and the LiveView test
+verified one-shot arming.
+
+With `bin/dev` running in fixture mode, Chromium rendered the added controls at 1440x900 and
+390x844 with no horizontal overflow or current browser errors. Selecting Failure and sending a
+typed message produced no assistant text; the dashboard showed Local fixture / Unavailable / No
+first output plus one safe failure. Selecting Delay and sending another typed turn displayed and
+spoke `Local fixture response.` The board measured roughly 1.5 seconds to local first output and
+reported Deepgram first audio separately. Navigation away from the voice console ended that browser
+transport as expected; new rooms exercised subsequent scenarios. Final focused suites and umbrella
+gates passed: call engine `115 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures
+(3 excluded)`, and Console `12 tests, 0 failures`. Format, warnings-as-errors compilation and
+the unused-lock check passed as part of the same root run.
+
+The runtime configuration branches were also checked independently with disposable placeholder
+credentials. Fixture mode starts the supervised fixture and does not configure a hosted-model
+credential; normal development mode leaves the fixture absent and configures the hosted-model
+credential. No credential value was printed or recorded.
+
+The Impeccable finish review returned `ship` with no material fixes after inspecting the current
+desktop and mobile captures. It found the fixture controls faithful to the established
+three-column desktop board and mobile reading order, with a truthful neutral selected state.
+The design documentation review found the controls surface-specific and made no reusable-system
+changes.

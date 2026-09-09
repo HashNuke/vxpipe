@@ -92,10 +92,10 @@ slow response or missing measurement. The existing voice console still works unc
   safe metadata, bounded dimensions and reporter restart behavior.
 - [x] Instrument existing request/model/speech boundaries and add sampled VM measurements.
 - [x] Connect a bounded reporter to a separate dashboard and the existing sample entry.
-- [ ] Provide a deterministic local provider fixture for controlled delay/failure, without
+- [x] Provide a deterministic local provider fixture for controlled delay/failure, without
   relying on hosted credentials or adding failure switches to production call input.
 - [ ] Document how an embedded host consumes the same events without the dashboard.
-- [ ] Inspect desktop/mobile dashboard states and the unchanged voice console in a browser.
+- [x] Inspect desktop/mobile dashboard states and the unchanged voice console in a browser.
 
 ## Acceptance and failure checks
 
@@ -213,6 +213,31 @@ states and responsive single-column adaptation as a direct extension of the esta
 Operator's Bench system. No reusable design-system addition was warranted. Umbrella gates
 pass with call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures
 (3 excluded)`, and Console `10 tests, 0 failures`.
+
+Implementation evidence, checkpoint 9 (2026-09-09): added an opt-in supervised local
+model fixture with fixed success, 1.5-second delay, provider-failure and invalid-empty-output
+scenarios. A one-shot selection is consumed atomically and resets to the configured default.
+The trusted runtime setting injects it at the Jido request-transformer boundary; call
+definitions, invocation bodies and RTVI messages gain no fixture switch. The normal room,
+gateway, optional TTS and payload-free Telemetry paths remain in use, with the closed
+`:local_fixture` provider dimension. The diagnostics board shows controls only while the
+fixture is configured.
+
+Focused tests cover supervision selection, fixed scenario validation/consumption, request
+projection, known delay, complete success/failure/no-output room turns, bounded provider
+attribution and LiveView arming. Chromium verified the controls at 1440x900 and 390x844 with
+no horizontal overflow or browser errors. A live delayed typed turn displayed and spoke
+`Local fixture response.`, reported about 1.5 seconds to first output under Local fixture,
+and independently reported Deepgram first audio. A live failure produced no assistant text
+and appeared as Local fixture unavailable with missing first output.
+
+The Impeccable finish review returned `ship` with no material fixes. It confirmed that the
+fixed opt-in controls extend the existing Operator's Bench hierarchy at both viewports and
+that the neutral selected state does not imply a healthy or failed measurement. The design
+documentation review found no reusable system primitive to add. Runtime configuration checks
+also confirmed that fixture mode skips the hosted-model credential while normal development
+mode retains it. Umbrella gates pass with call engine `115 tests, 0 failures (1 excluded)`,
+gateway `45 tests, 0 failures (3 excluded)`, and Console `12 tests, 0 failures`.
 
 ## Specification review
 

@@ -89,6 +89,20 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
     assert snapshot.runtime.active_rooms == 2
   end
 
+  test "keeps the local diagnostic fixture as a bounded provider dimension" do
+    {_child_id, reporter} = start_reporter(max_pending_events: 4)
+
+    :telemetry.execute(
+      @model_request_stop,
+      %{duration: duration_ms(2)},
+      %{provider: :local_fixture, outcome: :unavailable, first_output: :missing}
+    )
+
+    assert TelemetryReporter.snapshot(reporter).model.requests[
+             {:local_fixture, :unavailable, :missing}
+           ] == 1
+  end
+
   test "replaces a stale handler after an abrupt stop and detaches on normal shutdown" do
     handler_id = {__MODULE__, make_ref()}
     {_first_child_id, first} = start_reporter(handler_id: handler_id)

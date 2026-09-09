@@ -88,6 +88,23 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     refute_receive {:telemetry_event, @model_first_token_event, _, _}
   end
 
+  test "attributes controlled diagnostic outcomes to the local fixture" do
+    attach_telemetry_events([@model_request_stop_event, @provider_failure_event])
+
+    coordinator = start_coordinator(provider: :local_fixture)
+    command = command("local-fixture-failure", "private-model-input")
+
+    assert :ok = AgentCoordinator.respond(coordinator, command)
+    assert_receive {:test_agent_request, ^coordinator, request_id, _, _options}
+    emit(coordinator, request_id, :request_failed, %{})
+
+    assert_receive {:telemetry_event, @model_request_stop_event, _measurements,
+                    %{provider: :local_fixture, outcome: :unavailable, first_output: :missing}}
+
+    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1},
+                    %{provider: :local_fixture, category: :unavailable}}
+  end
+
   test "projects streamed sentences and one tool lifecycle onto the existing contract" do
     coordinator = start_coordinator(request_options: [model: "google:configured-model"])
     command = command("stream-tool", "check a value")

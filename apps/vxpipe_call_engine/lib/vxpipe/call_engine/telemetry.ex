@@ -78,6 +78,7 @@ defmodule Vxpipe.CallEngine.Telemetry do
   end
 
   defp provider(:req_llm), do: :req_llm
+  defp provider(:local_fixture), do: :local_fixture
   defp provider(Flux), do: :deepgram
   defp provider(FluxTextToSpeech), do: :deepgram
   defp provider(_other), do: :other

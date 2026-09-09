@@ -17,6 +17,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     maximum_tool_result_bytes: 16_384,
     request_timeout_ms: 30_000
   ],
+  model_fixture: [enabled: false],
   model_inference: [enabled: false],
   speech_to_text: [enabled: false],
   telemetry: [sample_interval_ms: 1_000],

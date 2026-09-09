@@ -5,6 +5,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Vxpipe.Console.TelemetryReporter
+  alias Vxpipe.CallEngine.Diagnostics.ModelFixture
 
   @endpoint Vxpipe.Console.Endpoint
   @gateway_request_stop [:vxpipe, :gateway, :http, :request, :stop]
@@ -108,6 +109,29 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
     assert has_element?(view, "#collection-state", "Collector unavailable")
     assert has_element?(view, "#diagnostics-unavailable", "Call traffic is unaffected")
+  end
+
+  test "arms the next local model outcome when the opt-in fixture is available" do
+    fixture =
+      start_supervised!(
+        {ModelFixture,
+         name: nil, default_scenario: :success, delay_ms: 0, response: "Local fixture response."}
+      )
+
+    diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
+
+    Application.put_env(
+      :vxpipe_console,
+      :diagnostics,
+      Keyword.put(diagnostics, :model_fixture, fixture)
+    )
+
+    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+
+    assert has_element?(view, "#model-fixture-controls", "Next request: Success")
+    assert view |> element(~s(button[phx-value-scenario="failure"])) |> render_click()
+    assert has_element?(view, "#model-fixture-controls", "Next request: Failure")
+    assert %{next_scenario: :failure} = ModelFixture.status(fixture)
   end
 
   defp emit_runtime(active_rooms) do

@@ -48,6 +48,11 @@ page packages its Phoenix LiveView client locally with a content hash and does n
 depend on a hosted script. Use its **System dashboard** link for deeper VM inspection
 and **Voice console** to return to the separate sample.
 
+When the engine's local model fixture is explicitly enabled, the page also shows one-shot
+controls for the next model request. These controls exercise only the fixed local success,
+delay, failure and no-output scenarios; they are absent when the fixture process is not
+configured. They do not modify call input or expose a general provider-control endpoint.
+
 This milestone deliberately adds no diagnostics authentication. Deployments must
 control whether and where the opt-in Console endpoint is exposed. API-key authentication
 belongs to call-management endpoints, while join-token validation belongs to call

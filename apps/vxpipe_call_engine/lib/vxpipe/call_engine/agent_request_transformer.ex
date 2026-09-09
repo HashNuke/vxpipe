@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformer do
 
   alias Jido.AI.Context
   alias Jido.AI.Reasoning.ReAct.State
+  alias Vxpipe.CallEngine.Diagnostics.ModelFixture
 
   @impl true
   def transform_request(_request, %State{context: %Context{} = context}, _config, runtime_context)
@@ -27,7 +28,7 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformer do
         :error -> overrides
       end
 
-    {:ok, overrides}
+    apply_model_fixture(overrides, runtime_context)
   end
 
   def transform_request(_request, _state, _config, _runtime_context),
@@ -40,4 +41,64 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformer do
   end
 
   defp discarded_request?(_refs, _discarded), do: false
+
+  defp apply_model_fixture(overrides, runtime_context) do
+    case Map.fetch(runtime_context, :vxpipe_model_fixture) do
+      {:ok, fixture} -> fixture_overrides(overrides, fixture)
+      :error -> {:ok, overrides}
+    end
+  end
+
+  defp fixture_overrides(overrides, fixture) do
+    user = latest_user(overrides.messages)
+
+    with true <- user != "",
+         {:ok, result} <- ModelFixture.take(fixture, user) do
+      wait(result.delay_ms)
+
+      script = %{
+        id: "vxpipe-local-fixture",
+        user: result.user,
+        turns: [fixture_turn(result)]
+      }
+
+      {:ok, Map.put(overrides, :llm_opts, jido_ai_react_script: script)}
+    else
+      _unavailable -> {:error, :model_fixture_unavailable}
+    end
+  end
+
+  defp fixture_turn(%{scenario: scenario, response: response})
+       when scenario in [:success, :delay] do
+    %{type: :answer, text: response}
+  end
+
+  defp fixture_turn(%{scenario: :failure}) do
+    %{type: :fail, reason: :diagnostic_provider_failure}
+  end
+
+  defp fixture_turn(%{scenario: :missing}) do
+    %{type: :answer, text: ""}
+  end
+
+  defp latest_user(messages) do
+    messages
+    |> Enum.reverse()
+    |> Enum.find_value("", fn
+      %{role: role, content: content} when role in [:user, "user"] and is_binary(content) ->
+        content
+
+      _other ->
+        nil
+    end)
+  end
+
+  defp wait(0), do: :ok
+
+  defp wait(delay_ms) do
+    receive do
+    after
+      delay_ms -> :ok
+    end
+  end
 end

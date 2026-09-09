@@ -10,13 +10,17 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     CallDefinition,
     CallInvocation,
     DefinitionCompiler,
-    Error
+    Error,
+    PlanStartup
   }
+
+  alias Vxpipe.CallEngine.Diagnostics.ModelFixture
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
 
   alias Vxpipe.CallEngine.Event.{
     AgentTurnCompleted,
+    AgentTurnFailed,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
     TextOutput,
@@ -219,6 +223,95 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert agent_config.system_prompt == "Use the available host action."
     assert receiver.capabilities.model_inference.options == %{model: "test:scripted"}
+  end
+
+  test "projects an application-configured local model fixture into agent startup" do
+    fixture =
+      start_supervised!(
+        {ModelFixture,
+         name: nil, default_scenario: :success, delay_ms: 0, response: "Local fixture response."}
+      )
+
+    plan = compile_plan(unique_id("room-fixture"))
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      settings
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:model_fixture, fixture)
+
+    assert {:ok, startup} =
+             PlanStartup.new(plan,
+               owner: self(),
+               agent_runtime: agent_runtime,
+               agent_request_options: [],
+               speech_to_text: [enabled: false],
+               text_to_speech: [enabled: false]
+             )
+
+    assert startup.agent_activation[:provider] == :local_fixture
+
+    assert startup.agent_activation[:request_options][:tool_context][:vxpipe_model_fixture] ==
+             fixture
+  end
+
+  test "runs controlled local model outcomes through the complete room turn" do
+    fixture =
+      start_supervised!(
+        {ModelFixture,
+         name: nil, default_scenario: :success, delay_ms: 0, response: "Local fixture response."}
+      )
+
+    configure_model_fixture(fixture)
+    room_id = unique_id("room-fixture-turn")
+    plan = compile_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    attach_caller(plan, room, caller, "conn-fixture-turn")
+
+    success = send_command(plan, room, caller, "conn-fixture-turn", "use local success")
+    assert :ok = CallEngine.send_text(success)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: success_correlation}}
+    assert success_correlation == success.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnCompleted{correlation_id: ^success_correlation}}
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "Local fixture response."}}
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^success_correlation}}
+
+    assert :ok = ModelFixture.arm(fixture, :failure)
+    failed = send_command(plan, room, caller, "conn-fixture-turn", "use local failure")
+    assert :ok = CallEngine.send_text(failed)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: failure_correlation}}
+    assert failure_correlation == failed.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnCompleted{correlation_id: ^failure_correlation}}
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnFailed{
+                      correlation_id: ^failure_correlation,
+                      reason: :provider_unavailable
+                    }}
+
+    assert :ok = ModelFixture.arm(fixture, :missing)
+    missing = send_command(plan, room, caller, "conn-fixture-turn", "omit local output")
+    assert :ok = CallEngine.send_text(missing)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: missing_correlation}}
+    assert missing_correlation == missing.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnCompleted{correlation_id: ^missing_correlation}}
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnFailed{
+                      correlation_id: ^missing_correlation,
+                      reason: :invalid_response
+                    }}
+
+    refute_receive {:vxpipe_event, %TextOutput{correlation_id: ^missing_correlation}}
   end
 
   test "cleans the attempted room tree when the selected provider transport fails to start" do
@@ -535,6 +628,25 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       original
       |> Keyword.put(:speech_to_text, speech_to_text)
       |> Keyword.put(:text_to_speech, text_to_speech)
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+  end
+
+  defp configure_model_fixture(fixture) do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      original
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:model_fixture, fixture)
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(original, :agent_runtime, agent_runtime)
     )
 
     on_exit(fn ->

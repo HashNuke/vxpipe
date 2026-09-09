@@ -3,6 +3,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
 
   use Phoenix.LiveView, layout: false
 
+  alias Vxpipe.CallEngine.Diagnostics.ModelFixture
   alias Vxpipe.Console.TelemetryReporter
 
   @refresh_interval_ms 1_000
@@ -17,7 +18,9 @@ defmodule Vxpipe.Console.DiagnosticsLive do
     socket =
       socket
       |> assign(:reporter, reporter)
+      |> assign(:model_fixture, Keyword.get(diagnostics, :model_fixture))
       |> refresh_snapshot()
+      |> refresh_fixture()
 
     if connected?(socket), do: schedule_refresh()
 
@@ -27,7 +30,25 @@ defmodule Vxpipe.Console.DiagnosticsLive do
   @impl true
   def handle_info(:refresh, socket) do
     schedule_refresh()
-    {:noreply, refresh_snapshot(socket)}
+    {:noreply, socket |> refresh_snapshot() |> refresh_fixture()}
+  end
+
+  @impl true
+  def handle_event(
+        "arm-model-fixture",
+        _params,
+        %{assigns: %{model_fixture: nil}} = socket
+      ) do
+    {:noreply, socket}
+  end
+
+  def handle_event("arm-model-fixture", %{"scenario" => scenario}, socket) do
+    case fixture_scenario(scenario) do
+      {:ok, scenario} -> _ = ModelFixture.arm(socket.assigns.model_fixture, scenario)
+      :error -> :ok
+    end
+
+    {:noreply, refresh_fixture(socket)}
   end
 
   @impl true
@@ -50,6 +71,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
         <div class="workbench">
           <div class="workbench-column">
             <.runtime_panel runtime={@snapshot.runtime} />
+            <.fixture_panel :if={@fixture_status} status={@fixture_status} />
           </div>
 
           <div class="workbench-column">
@@ -76,6 +98,37 @@ defmodule Vxpipe.Console.DiagnosticsLive do
         </section>
       <% end %>
     </main>
+    """
+  end
+
+  attr :status, :map, required: true
+
+  defp fixture_panel(assigns) do
+    ~H"""
+    <section id="model-fixture-controls" class="instrument-section" aria-labelledby="fixture-heading">
+      <div class="section-heading">
+        <h2 id="fixture-heading">Local model fixture</h2>
+        <span class="section-note">One request</span>
+      </div>
+      <p class="fixture-status">
+        Next request: <strong>{scenario_label(@status.next_scenario)}</strong>
+      </p>
+      <div class="fixture-actions" role="group" aria-label="Arm the next local model result">
+        <button
+          :for={scenario <- [:success, :delay, :failure, :missing]}
+          type="button"
+          phx-click="arm-model-fixture"
+          phx-value-scenario={scenario}
+          aria-pressed={to_string(@status.next_scenario == scenario)}
+        >
+          {scenario_label(scenario)}
+        </button>
+      </div>
+      <p class="fixture-detail">
+        Delay waits {format_integer(@status.delay_ms)} ms. Each selection resets to
+        {scenario_label(@status.default_scenario)} after the next model request.
+      </p>
+    </section>
     """
   end
 
@@ -363,6 +416,17 @@ defmodule Vxpipe.Console.DiagnosticsLive do
     end
   end
 
+  defp refresh_fixture(%{assigns: %{model_fixture: nil}} = socket) do
+    assign(socket, :fixture_status, nil)
+  end
+
+  defp refresh_fixture(socket) do
+    case ModelFixture.status(socket.assigns.model_fixture) do
+      %{next_scenario: _scenario} = status -> assign(socket, :fixture_status, status)
+      {:error, :unavailable} -> assign(socket, :fixture_status, nil)
+    end
+  end
+
   defp read_snapshot(reporter) do
     {:ok, TelemetryReporter.snapshot(reporter, @snapshot_timeout_ms)}
   catch
@@ -413,6 +477,17 @@ defmodule Vxpipe.Console.DiagnosticsLive do
   defp first_output_label(:observed), do: "First output observed"
   defp first_output_label(:missing), do: "No first output"
 
+  defp fixture_scenario("success"), do: {:ok, :success}
+  defp fixture_scenario("delay"), do: {:ok, :delay}
+  defp fixture_scenario("failure"), do: {:ok, :failure}
+  defp fixture_scenario("missing"), do: {:ok, :missing}
+  defp fixture_scenario(_scenario), do: :error
+
+  defp scenario_label(:success), do: "Success"
+  defp scenario_label(:delay), do: "Delay"
+  defp scenario_label(:failure), do: "Failure"
+  defp scenario_label(:missing), do: "No output"
+
   defp average_duration(%{count: count, total_us: total_us}), do: div(total_us, count)
 
   defp format_duration(microseconds) when microseconds < 1_000 do
@@ -453,6 +528,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
   end
 
   defp humanize(:req_llm), do: "Req LLM"
+  defp humanize(:local_fixture), do: "Local fixture"
   defp humanize(:stt), do: "STT"
   defp humanize(:tts), do: "TTS"
 

@@ -42,6 +42,25 @@ The development system prompt requires the model to call this tool for current
 date or time questions, so a guessed answer without the two function-call events
 is a failed test.
 
+## Manual provider-fixture test
+
+1. Put a valid `DEEPGRAM_API_KEY` in the repository-root `.env`, set
+   `VXPIPE_DEV_MODEL_FIXTURE=true`, and omit `GEMINI_API_KEY` if it is not otherwise
+   needed.
+2. Run `bin/dev`, then open `/diagnostics` on the HTTPS development origin.
+3. Choose **Delay**, return through **Voice console**, create and connect a room, and
+   send a typed message. Verify the local response arrives after roughly 1.5 seconds
+   and the dashboard attributes first-output timing to **Local fixture**. With TTS
+   enabled, it also shows the independently measured Deepgram first-audio timing.
+4. Repeat with **Failure**. Verify no assistant text is fabricated and the dashboard
+   records a Local fixture unavailable outcome with missing first output.
+5. Repeat with **No output**. Verify the invalid empty result fails without assistant
+   content or a first-output timing. The next request returns to the configured default
+   scenario.
+
+These controls are development application state, not fields accepted from the browser's
+room creation or RTVI payloads.
+
 From the repository root:
 
 ```shell

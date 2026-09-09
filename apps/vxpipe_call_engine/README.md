@@ -89,6 +89,14 @@ under the call-engine application setting `telemetry: [sample_interval_ms: 1_000
 Durations use Erlang `:native` units; event names and exact observation boundaries are
 documented in [the architecture](../../docs/architecture.md#security-and-observability).
 
+The optional `Vxpipe.CallEngine.Diagnostics.ModelFixture` is an application-configured
+development boundary for exercising the same Jido coordinator, room events, optional
+TTS, gateway projection, and Telemetry paths without a hosted model request. It supports
+a fixed set of success, delayed success, provider failure, and invalid no-output outcomes.
+An armed outcome is consumed atomically by one request and resets to the configured
+default. The fixture is disabled in base configuration; its control never appears in a
+call definition, invocation, command, or RTVI message.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

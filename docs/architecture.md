@@ -1529,14 +1529,14 @@ Gateway operations are closed categories (`:cors_preflight`, `:health_check`,
 `:room_create`, `:session_create`, `:rtvi_offer`, `:rtvi_candidates`, or `:unknown`).
 Outcomes are `:ok`, `:client_error`, `:server_error`, `:exception`, or `:unknown`.
 The event does not carry the request path, query, headers, body, or correlation IDs.
-Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`, or `:other`
-set. Model outcomes are `:ok`, `:unavailable`, `:timeout`, `:invalid_response`, or
-`:cancelled`; failure categories are `:unavailable`, `:timeout`, `:invalid_response`,
-`:output_failure`, or `:unknown`. None of these events carries input/output text, audio,
-raw provider errors, model names, or correlation identifiers. `active_rooms` is the current
-DynamicSupervisor child count rather than a lifecycle-event estimate. The runtime sampler is
-an explicitly named call-engine child and its interval comes from the call-engine application
-setting `telemetry: [sample_interval_ms: ...]`.
+Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`,
+`:local_fixture`, or `:other` set. Model outcomes are `:ok`, `:unavailable`, `:timeout`,
+`:invalid_response`, or `:cancelled`; failure categories are `:unavailable`, `:timeout`,
+`:invalid_response`, `:output_failure`, or `:unknown`. None of these events carries
+input/output text, audio, raw provider errors, model names, or correlation identifiers.
+`active_rooms` is the current DynamicSupervisor child count rather than a lifecycle-event
+estimate. The runtime sampler is an explicitly named call-engine child and its interval comes
+from the call-engine application setting `telemetry: [sample_interval_ms: ...]`.
 
 ### Observability delivery
 
@@ -1571,6 +1571,17 @@ including fallbacks for unexpected metadata. Snapshot ages expose stale collecti
 and the dropped count exposes saturation. One stable Telemetry handler identifier is
 detached before attachment and during normal shutdown, so a replacement also removes a
 handler left behind by an abrupt reporter exit.
+
+An optional engine-owned local model fixture makes the early dashboard failure path
+deterministic. It is disabled in base application configuration and may be enabled only
+through trusted application/runtime settings; no call definition, invocation, browser
+room-creation body, or RTVI command can select a fixture result. The supervised fixture
+atomically supplies one fixed success, delayed success, provider failure, or invalid empty
+result to the next Jido request, then resets to its configured default. Deliberate delay runs
+in the model worker, not the room authority. The coordinator therefore emits the normal
+payload-free model timing/outcome events under the bounded `:local_fixture` provider label,
+and successful text continues through the ordinary optional TTS and gateway paths. Console
+controls appear only when the fixture process is configured.
 
 The gateway exposes authorized projections and the console presents them through
 public gateway/Calls APIs, not direct Repo queries or unrestricted room state.
@@ -1941,9 +1952,10 @@ input and output boundaries:
    protocol-neutral `AgentTurnFailed` becomes a correlated generic RTVI error
    response. A full pending queue rejects new work as retryable `agent_busy`
    before participant input events are committed.
-7. Development reads `GEMINI_API_KEY` only from runtime configuration when the
-   capability is enabled. The credential never enters commands, events, public
-   snapshots, JSON payloads, browser configuration, or logs.
+7. Development reads `GEMINI_API_KEY` only from runtime configuration when the hosted
+   model path is enabled. The optional local diagnostics fixture needs no model credential.
+   Credentials never enter commands, events, public snapshots, JSON payloads, browser
+   configuration, or logs.
 
 The engine does not expose provider token boundaries. It emits sentence-sized
 segments and closes the logical assistant turn only after model generation and

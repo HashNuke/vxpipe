@@ -290,6 +290,48 @@ defmodule Vxpipe.Console.DiagnosticsLayout do
             content: "";
           }
 
+          .fixture-status {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.8125rem;
+          }
+
+          .fixture-status strong {
+            color: var(--charcoal);
+            font-family: var(--mono);
+            font-weight: 700;
+          }
+
+          .fixture-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 12px;
+          }
+
+          .fixture-actions button {
+            min-height: 34px;
+            border: 1px solid var(--divider-strong);
+            border-radius: 4px;
+            padding: 6px 8px;
+            background: var(--canvas);
+            color: var(--charcoal);
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 650;
+            text-align: left;
+          }
+
+          .fixture-actions button:hover { border-color: var(--muted); background: var(--panel); }
+          .fixture-actions button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+          .fixture-actions button[aria-pressed="true"] { border-color: var(--charcoal); background: var(--charcoal); color: var(--paper); }
+
+          .fixture-detail {
+            margin: 10px 0 0;
+            color: var(--muted);
+            font-size: 0.75rem;
+          }
+
           .ledger {
             width: 100%;
             border-collapse: collapse;

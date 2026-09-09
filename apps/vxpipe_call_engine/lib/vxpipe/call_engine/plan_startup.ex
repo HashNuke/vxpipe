@@ -195,6 +195,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          request_options when is_list(request_options) <-
            Keyword.get(options, :agent_request_options, []),
          settings when is_list(settings) <- Keyword.get(options, :agent_runtime) do
+      model_fixture = Keyword.get(settings, :model_fixture)
+
       tools =
         receiver.tools
         |> Map.values()
@@ -206,14 +208,17 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          activation_id: receiver.activation_id,
          agent_participant_id: receiver.participant_id,
          owner: owner,
-         provider: :req_llm,
+         provider: if(model_fixture, do: :local_fixture, else: :req_llm),
          system_prompt: receiver.prompt,
          tools: tools,
          maximum_completed_requests: Keyword.fetch!(settings, :maximum_completed_requests),
          maximum_output_bytes: Keyword.fetch!(settings, :maximum_output_bytes),
          maximum_pending_requests: Keyword.fetch!(settings, :maximum_pending_requests),
          maximum_tool_result_bytes: Keyword.fetch!(settings, :maximum_tool_result_bytes),
-         request_options: Keyword.put(request_options, :model, model),
+         request_options:
+           request_options
+           |> put_model_fixture(model_fixture)
+           |> Keyword.put(:model, model),
          request_timeout_ms: Keyword.fetch!(settings, :request_timeout_ms)
        ]}
     else
@@ -229,6 +234,17 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         ["participants", receiver.definition_key, "capabilities", "model_inference"],
         "must select a supported ReqLLM model profile"
       )
+  end
+
+  defp put_model_fixture(request_options, nil), do: request_options
+
+  defp put_model_fixture(request_options, fixture) do
+    tool_context =
+      request_options
+      |> Keyword.get(:tool_context, %{})
+      |> Map.put(:vxpipe_model_fixture, fixture)
+
+    Keyword.put(request_options, :tool_context, tool_context)
   end
 
   defp speech_to_text_runtime(caller, options) do

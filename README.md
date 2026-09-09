@@ -38,6 +38,14 @@ DEEPGRAM_API_KEY=replace-with-a-development-key
 GEMINI_API_KEY=replace-with-a-development-key
 ```
 
+For a deterministic local model boundary, set `VXPIPE_DEV_MODEL_FIXTURE=true`
+instead of supplying `GEMINI_API_KEY`. The fixture keeps Deepgram speech enabled,
+so spoken sample output still requires `DEEPGRAM_API_KEY`. With the fixture enabled,
+the diagnostics board exposes one-shot **Success**, **Delay**, **Failure**, and
+**No output** controls for the next model request. Values `delay`, `failure`, and
+`missing` may also select the initial/default outcome. The fixture is disabled in
+base configuration and never reads a switch from call input.
+
 Goreman loads the credentials into its child processes, including Watchman
 restarts. Reusable call-engine code receives provider options through the OTP
 application environment and does not read these environment variables directly.
