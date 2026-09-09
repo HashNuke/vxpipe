@@ -108,7 +108,7 @@ slow response or missing measurement. The existing voice console still works unc
   explicitly missing/incomplete. Known fixture timings match documented boundaries.
 - [x] Synthetic secret/text/variable sentinels never enter metric payloads, labels or
   unprivileged responses. Many unique call IDs do not create one metric series per call.
-- [ ] Stop/restart the collector and disconnect/saturate the dashboard: calls continue,
+- [x] Stop/restart the collector and disconnect/saturate the dashboard: calls continue,
   retained buffers remain bounded, missing data is visible and measurements are not doubled.
 - [x] An embedded host receives engine events without gateway/database/UI dependencies.
 - [x] A consuming host mounts the gateway with documented supervision/configuration
@@ -358,6 +358,20 @@ actual unavailable request appears in provider failures. The focused LiveView fi
 before output, and checkpoint 9 records the live approximately 1.5-second observation boundary.
 The complete umbrella gates pass with call engine `117 tests, 0 failures (1 excluded)`, gateway
 `46 tests, 0 failures (4 excluded)`, and Console `16 tests, 0 failures`.
+
+Implementation evidence, checkpoint 18 (2026-09-09): added one Console-level fault-isolation
+characterization spanning the real gateway mount, engine room admission, reporter and LiveView.
+With a pending limit of one and the reporter suspended, room creation plus three health requests
+all completed. The dashboard's bounded read rendered `Collector unavailable`; terminating that
+LiveView did not stop collection, and the resumed snapshot retained one event and reported three
+drops. Killing the reporter did not prevent a second room
+from being admitted through the gateway. A replacement under the same handler ID started with
+zero observations, rendered `Waiting for signals`, retained exactly one handler, and counted
+exactly one subsequent request after refresh. The characterization passed on its first run
+because the existing process boundaries already provided the intended isolation; the focused
+LiveView file passes `6 tests, 0 failures`.
+The complete umbrella gates pass with call engine `117 tests, 0 failures (1 excluded)`, gateway
+`46 tests, 0 failures (4 excluded)`, and Console `17 tests, 0 failures`.
 
 ## Specification review
 

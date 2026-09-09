@@ -6,6 +6,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
   alias Vxpipe.Console.TelemetryReporter
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
+  alias Vxpipe.Gateway.HTTP.Mount
 
   @endpoint Vxpipe.Console.Endpoint
   @gateway_request_stop [:vxpipe, :gateway, :http, :request, :stop]
@@ -14,6 +15,16 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   @tts_first_audio [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure [:vxpipe, :call_engine, :provider, :failure]
   @runtime_sample [:vxpipe, :call_engine, :runtime, :sample]
+  @room_mount_options Mount.init(
+                        room_creation: [
+                          enabled: true,
+                          principal: [
+                            tenant_id: "tenant-diagnostics-test",
+                            actor_id: "actor-diagnostics-test",
+                            scopes: ["rooms:create"]
+                          ]
+                        ]
+                      )
 
   setup do
     original = Application.fetch_env!(:vxpipe_console, :diagnostics)
@@ -175,6 +186,59 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert has_element?(view, "#provider-failure-model-req-llm-unavailable", "1")
   end
 
+  test "call admission survives collector saturation, dashboard disconnect, and restart" do
+    handler_id = {__MODULE__, make_ref()}
+    {_first_child_id, first_reporter} = start_reporter(handler_id, 1)
+    configure_reporter(first_reporter)
+
+    :ok = :sys.suspend(first_reporter)
+    assert admit_room("room-collector-suspended").status == 201
+    assert health_request().status == 200
+    assert health_request().status == 200
+    assert health_request().status == 200
+
+    {:ok, first_view, _html} = live(build_conn(), "/diagnostics")
+    assert has_element?(first_view, "#collection-state", "Collector unavailable")
+
+    first_view_monitor = Process.monitor(first_view.pid)
+    :ok = GenServer.stop(first_view.pid, :normal)
+    assert_receive {:DOWN, ^first_view_monitor, :process, _pid, :normal}
+
+    :ok = :sys.resume(first_reporter)
+
+    assert %{received_events: 1, dropped_events: 3} =
+             TelemetryReporter.snapshot(first_reporter)
+
+    received_before_disconnect = TelemetryReporter.snapshot(first_reporter).received_events
+    assert health_request().status == 200
+
+    assert TelemetryReporter.snapshot(first_reporter).received_events ==
+             received_before_disconnect + 1
+
+    first_reporter_monitor = Process.monitor(first_reporter)
+    Process.exit(first_reporter, :kill)
+    assert_receive {:DOWN, ^first_reporter_monitor, :process, ^first_reporter, :killed}
+
+    assert admit_room("room-collector-offline").status == 201
+
+    {_second_child_id, second_reporter} = start_reporter(handler_id, 4)
+    configure_reporter(second_reporter)
+
+    assert handler_count(handler_id) == 1
+
+    assert %{received_events: 0, dropped_events: 0, last_event_age_ms: nil} =
+             TelemetryReporter.snapshot(second_reporter)
+
+    {:ok, second_view, _html} = live(build_conn(), "/diagnostics")
+    assert has_element?(second_view, "#collection-state", "Waiting for signals")
+
+    assert health_request().status == 200
+    send(second_view.pid, :refresh)
+
+    assert has_element?(second_view, "#collection-state", "Collecting")
+    assert TelemetryReporter.snapshot(second_reporter).received_events == 1
+  end
+
   test "arms the next local model outcome when the opt-in fixture is available" do
     fixture =
       start_supervised!(
@@ -208,5 +272,52 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
   defp duration_ms(milliseconds) do
     System.convert_time_unit(milliseconds, :millisecond, :native)
+  end
+
+  defp start_reporter(handler_id, max_pending_events) do
+    child_id = {TelemetryReporter, make_ref()}
+
+    reporter =
+      start_supervised!(
+        Supervisor.child_spec(
+          {TelemetryReporter,
+           name: nil, handler_id: handler_id, max_pending_events: max_pending_events},
+          id: child_id,
+          restart: :temporary
+        )
+      )
+
+    {child_id, reporter}
+  end
+
+  defp configure_reporter(reporter) do
+    diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
+
+    Application.put_env(
+      :vxpipe_console,
+      :diagnostics,
+      Keyword.put(diagnostics, :reporter, reporter)
+    )
+  end
+
+  defp admit_room(prefix) do
+    room_id = "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+
+    :post
+    |> Plug.Test.conn("/api/rooms", JSON.encode!(%{"room_id" => room_id}))
+    |> Plug.Conn.put_req_header("content-type", "application/json")
+    |> Mount.call(@room_mount_options)
+  end
+
+  defp health_request do
+    :get
+    |> Plug.Test.conn("/healthz")
+    |> Mount.call(@room_mount_options)
+  end
+
+  defp handler_count(handler_id) do
+    @runtime_sample
+    |> :telemetry.list_handlers()
+    |> Enum.count(fn handler -> handler.id == handler_id end)
   end
 end

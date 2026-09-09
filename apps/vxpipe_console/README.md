@@ -60,6 +60,10 @@ provider failure categories. Missing measurements have explicit empty states. Th
 page packages its Phoenix LiveView client locally with a content hash and does not
 depend on a hosted script. Use its **System dashboard** link for deeper VM inspection
 and **Voice console** to return to the separate sample.
+The LiveView does not own the Telemetry handler or a second event buffer: disconnecting
+it has no effect on collection or call traffic. A replacement reporter detaches a stale
+handler with the same stable ID before attaching, starts with an honestly empty snapshot,
+and cannot double-count later events.
 
 When the engine's local model fixture is explicitly enabled, the page also shows one-shot
 controls for the next model request. These controls exercise only the fixed local success,

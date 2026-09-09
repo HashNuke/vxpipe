@@ -506,3 +506,23 @@ request at the same request-to-first-output boundary.
 Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
 engine `117 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
 Console `16 tests, 0 failures`.
+
+## Checkpoint 18: Collector and dashboard fault isolation
+
+The existing unit checks covered pending-event drops and stale-handler replacement separately,
+but did not prove that real call admission stays available across those failures or that the
+LiveView owns no critical state. A Console integration characterization now composes the gateway
+mount, engine room admission, reporter and dashboard process.
+
+The test suspends a reporter with a one-event limit, admits a room and sends three more gateway
+requests. Every request returns normally. The dashboard's bounded reporter read displays
+`Collector unavailable` while suspended, and the LiveView is then terminated. After resuming,
+the reporter retains one event, records three drops, and still collects a later request.
+It then kills the reporter and admits a second room while the stale handler points at the dead
+process. A replacement with the same handler ID detaches that stale handler, begins with no
+observations, renders `Waiting for signals`, and records exactly one subsequent request without
+doubling. This characterization passed on its first run; no runtime change was required. The
+focused LiveView file passes `6 tests, 0 failures`.
+Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
+engine `117 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
+Console `17 tests, 0 failures`.
