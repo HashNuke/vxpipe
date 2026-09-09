@@ -15,6 +15,17 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.DiagnosticsEnabled
   end
 
+  pipeline :sample_api do
+    plug :accepts, ["json"]
+    plug :put_secure_browser_headers
+  end
+
+  scope "/sample" do
+    pipe_through :sample_api
+
+    post "/calls", Vxpipe.Console.SampleCallController, :create
+  end
+
   scope "/" do
     pipe_through :browser
 

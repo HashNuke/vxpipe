@@ -93,28 +93,17 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
       {:ok, room, participant} ->
         started_at = options.clock.()
         project(options, :mark_started, [claim, room.incarnation_id, started_at])
+        send_live_session(conn, options, claim, room.incarnation_id, participant, started_at)
 
-        case issue_session(options, claim, room, participant) do
-          {:ok, session} ->
-            send_json(conn, 201, %{
-              "call" => %{
-                "call_id" => claim.call.id,
-                "started_at" => DateTime.to_iso8601(started_at),
-                "state" => "running"
-              },
-              "participant" => ParticipantSnapshot.to_public(participant),
-              "session" => session_public(session)
-            })
-
-          {:error, _reason} ->
-            send_error(
-              conn,
-              503,
-              "session_start_failed",
-              "The gateway session could not be started.",
-              true
-            )
-        end
+      {:joined, participant} ->
+        send_live_session(
+          conn,
+          options,
+          claim,
+          claim.call.incarnation_id,
+          participant,
+          claim.call.started_at
+        )
 
       {:started, room} ->
         started_at = options.clock.()
@@ -138,16 +127,49 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
           "The call could not be started.",
           true
         )
+
+      {:join_error, _reason} ->
+        send_error(
+          conn,
+          503,
+          "participant_start_failed",
+          "The participant could not be started.",
+          true
+        )
     end
   end
 
-  defp issue_session(options, claim, room, participant) do
+  defp send_live_session(conn, options, claim, incarnation_id, participant, started_at) do
+    case issue_session(options, claim, incarnation_id, participant) do
+      {:ok, session} ->
+        send_json(conn, 201, %{
+          "call" => %{
+            "call_id" => claim.call.id,
+            "started_at" => DateTime.to_iso8601(started_at),
+            "state" => "running"
+          },
+          "participant" => ParticipantSnapshot.to_public(participant),
+          "session" => session_public(session)
+        })
+
+      {:error, _reason} ->
+        send_error(
+          conn,
+          503,
+          "session_start_failed",
+          "The gateway session could not be started.",
+          true
+        )
+    end
+  end
+
+  defp issue_session(options, claim, incarnation_id, participant) do
     SessionSupervisor.issue(
       [
         tenant_id: participant.tenant_id,
         actor_id: claim.call.plan.actor_id,
         room_id: participant.room_id,
-        incarnation_id: room.incarnation_id,
+        incarnation_id: incarnation_id,
         participant_id: participant.participant_id,
         tool_visibility: claim.call.plan.tool_visibility
       ],

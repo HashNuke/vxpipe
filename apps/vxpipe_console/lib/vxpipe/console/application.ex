@@ -4,23 +4,33 @@ defmodule Vxpipe.Console.Application do
   use Application
 
   alias Vxpipe.Console.Endpoint
+  alias Vxpipe.Console.SampleCall
   alias Vxpipe.Console.TelemetryReporter
   alias Vxpipe.Gateway.HTTP.Mount
 
   @impl true
   def start(_type, _args) do
     diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
+    sample_call = Application.fetch_env!(:vxpipe_console, :sample_call)
 
-    children = [
-      {Phoenix.PubSub, name: Vxpipe.Console.PubSub},
-      {TelemetryReporter, max_pending_events: Keyword.fetch!(diagnostics, :max_pending_events)},
-      {Endpoint, gateway_mount: gateway_mount()}
-    ]
+    children =
+      [
+        {Phoenix.PubSub, name: Vxpipe.Console.PubSub},
+        {TelemetryReporter, max_pending_events: Keyword.fetch!(diagnostics, :max_pending_events)}
+      ] ++ sample_call_children(sample_call) ++ [{Endpoint, gateway_mount: gateway_mount()}]
 
     Supervisor.start_link(children,
       strategy: :one_for_one,
       name: Vxpipe.Console.Supervisor
     )
+  end
+
+  defp sample_call_children(settings) do
+    if Keyword.get(settings, :enabled, false) do
+      [{SampleCall, Keyword.delete(settings, :enabled)}]
+    else
+      []
+    end
   end
 
   @impl true

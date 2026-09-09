@@ -2,7 +2,11 @@ defmodule Vxpipe.Gateway.CallAdmission do
   @moduledoc false
 
   alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.Calls
+  alias Vxpipe.Calls.{AdmissionClaim, PreparedCall}
+
+  @command_timeout_seconds 5
 
   def authenticate(options, tenant_key, secret) do
     Calls.authenticate(tenant_key, secret, :calls, options)
@@ -28,6 +32,31 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   def claim_token(options, secret, expected_scope) do
     Calls.claim_join_token(secret, expected_scope, options)
+  end
+
+  def start_call(
+        _options,
+        %AdmissionClaim{call: %PreparedCall{state: :running} = call} = claim
+      ) do
+    participant = Map.fetch!(call.plan.participants, claim.participant_ref)
+
+    with %DateTime{} <- call.started_at,
+         incarnation_id when is_binary(incarnation_id) and byte_size(incarnation_id) > 0 <-
+           call.incarnation_id,
+         {:ok, command} <-
+           JoinParticipant.new(
+             tenant_id: call.tenant_key,
+             actor_id: call.plan.actor_id,
+             room_id: call.room_id,
+             participant_id: participant.participant_id,
+             role: participant.kind,
+             deadline: DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)
+           ),
+         {:ok, participant_snapshot} <- CallEngine.join_participant(command) do
+      {:joined, participant_snapshot}
+    else
+      _unavailable -> {:join_error, :participant_start_failed}
+    end
   end
 
   def start_call(_options, claim) do

@@ -1,8 +1,8 @@
 # Reusable gateway and Phoenix console
 
-Status: implemented through the observable-sample milestone (2026-09-09). The reusable
-gateway mount, Phoenix console shell, operational dashboard and release asset integration
-are complete.
+Status: implemented through the prepared-call admission milestone (2026-09-09). The
+reusable gateway mount, Phoenix console shell, operational dashboard, release asset
+integration, and trusted managed-sample handoff are complete.
 
 ## Decision
 
@@ -156,3 +156,11 @@ Bandit listener on an ephemeral loopback port, verifies configured CORS, then cr
 same room/session path. Console's endpoint suite separately proves its page and mounted
 gateway health route share one endpoint while the standalone HTTP supervisor is absent.
 The gateway child has no Phoenix or Console dependency.
+
+Implementation checkpoint 6 adds the durable development sample without moving admission
+or persistence into Phoenix. Console supervises a trusted process that uses the public Calls
+API to bootstrap a private development tenant/key and publish the configured definition.
+Its endpoint returns only a safe call locator and join token. The React creation page then
+uses the mounted gateway's standard participant-session route; the API key and initial
+variables stay server-side. When persistence is not configured, the process is absent and
+the existing trusted, database-free gateway sample remains runnable.

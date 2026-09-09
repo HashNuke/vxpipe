@@ -6,6 +6,7 @@ defmodule Vxpipe.Console.EndpointTest do
   require Phoenix.ChannelTest
 
   alias Vxpipe.Console.DiagnosticsSocket
+  alias Vxpipe.Console.{SampleCall, TestSampleCallBackend}
   alias Vxpipe.Gateway.HTTP
 
   @endpoint Vxpipe.Console.Endpoint
@@ -54,6 +55,62 @@ defmodule Vxpipe.Console.EndpointTest do
     conn = get(build_conn(), "/api/not-a-route")
 
     assert response(conn, 404) == "not found"
+  end
+
+  test "trusted sample preparation returns only a scoped join locator" do
+    initial_variables = %{"order" => %{"id" => "private-endpoint-sentinel"}}
+
+    backend =
+      start_supervised!(
+        {TestSampleCallBackend, initial_variables: initial_variables, observer: self()},
+        id: :endpoint_sample_backend
+      )
+
+    sample =
+      start_supervised!(
+        {SampleCall,
+         backend: TestSampleCallBackend.backend(backend),
+         definition: %{
+           "schema_version" => "20260909.01",
+           "entry_caller" => "caller",
+           "entry_receiver" => "assistant"
+         },
+         initial_variables: initial_variables,
+         tenant_name: "Endpoint sample"},
+        id: :endpoint_sample_call
+      )
+
+    assert sample == Process.whereis(SampleCall)
+
+    conn =
+      build_conn()
+      |> Plug.Conn.put_req_header("origin", "https://other.example.test")
+      |> post("/sample/calls", %{})
+
+    assert %{
+             "call_id" => call_id,
+             "join_token" => %{
+               "expires_at" => "2026-09-09T13:05:02.000000Z",
+               "token" => "vxj_test-only-sample-join-token"
+             },
+             "participant_key" => participant_key,
+             "tenant_key" => tenant_key
+           } = json_response(conn, 201)
+
+    assert call_id == TestSampleCallBackend.call_id()
+    assert participant_key == TestSampleCallBackend.participant_key()
+    assert tenant_key == TestSampleCallBackend.tenant_key()
+    refute conn.resp_body =~ "private-endpoint-sentinel"
+    refute conn.resp_body =~ TestSampleCallBackend.api_key()
+    assert Plug.Conn.get_resp_header(conn, "access-control-allow-origin") == []
+  end
+
+  test "returns not found when the durable trusted sample is disabled" do
+    assert Process.whereis(SampleCall) == nil
+
+    conn = post(build_conn(), "/sample/calls", %{})
+
+    assert %{"error" => %{"code" => "durable_sample_disabled"}} = json_response(conn, 404)
   end
 
   test "diagnostics are disabled by default" do

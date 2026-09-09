@@ -10,6 +10,7 @@ defmodule Vxpipe.Console.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       listeners: [Phoenix.CodeReloader],
       deps: deps()
@@ -23,6 +24,9 @@ defmodule Vxpipe.Console.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_env), do: ["lib"]
+
   defp deps do
     [
       {:bandit, "~> 1.12"},
@@ -34,7 +38,8 @@ defmodule Vxpipe.Console.MixProject do
       {:phoenix_live_view, "~> 1.1"},
       {:phoenix_pubsub, "~> 2.1"},
       {:telemetry, "~> 1.3"},
-      {:vxpipe_gateway, in_umbrella: true}
+      {:vxpipe_gateway, in_umbrella: true},
+      {:vxpipe_calls, in_umbrella: true}
     ]
   end
 end

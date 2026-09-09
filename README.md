@@ -98,11 +98,19 @@ optional Goreman process overrides. A static `APP_HOST` can be placed in `.env`
 for HTTP mode; HTTPS mode derives it from Tailscale automatically. Goreman loads
 `.env` into its child processes without exporting values into the parent shell.
 
-PostgreSQL-backed tenant/API-key and call-definition storage is opt-in through
-`VXPIPE_DATABASE_URL`. Without it, the development sample continues using its
-trusted static definition and no Repo is started. Migration, one-time tenant/key
-bootstrap, key rotation/revocation, and immutable definition publication are
-documented in [Tenant control-plane operations](docs/tenant-control-plane.md).
+PostgreSQL-backed tenant/API-key, call-definition, and prepared-call storage is
+opt-in through `VXPIPE_DATABASE_URL`. When it is configured in development, the
+Console provisions a fresh private sample tenant, API key, and published definition
+when the BEAM starts. PostgreSQL retains only the API-key digest; the plaintext key
+and configured initial variables stay inside the supervised Console sample process.
+Each **Create room** action then prepares a new durable call and obtains its
+participant-bound join token through the public Calls workflows.
+
+Without `VXPIPE_DATABASE_URL`, no Repo or managed sample process starts and the
+development UI falls back to the existing database-free trusted definition route.
+Migration, one-time tenant/key bootstrap, key rotation/revocation, and immutable
+definition publication are documented in
+[Tenant control-plane operations](docs/tenant-control-plane.md).
 
 The umbrella test alias creates and migrates the configured test database. Use
 `VXPIPE_TEST_DATABASE_URL`, or standard PostgreSQL variables plus
@@ -118,14 +126,18 @@ application environment. In development, `APP_HOST` becomes the exact allowed
 origin on port 4000, using the selected HTTPS or HTTP scheme. Environment variables
 are read from `config/runtime.exs`, while `config/dev.exs` only enables the listener.
 
-The playground's **Create room** action asks the gateway to compile its configured
-trusted sample definition into a fresh pinned plan. The engine starts only the web
-caller and receiving agent, while the same response supplies a five-minute,
-single-use gateway session bound to that existing caller. The gateway supplies its
-configured development definition, profiles, tenant, and actor; the browser never
-asserts those values. This development principal is not an authentication mechanism,
-and the admission endpoints are disabled by default outside the repository's
-development configuration.
+With PostgreSQL enabled, the playground's **Create room** action first asks the
+Console's same-origin sample endpoint for a managed admission. The Console uses its
+private API key and configured initial variables to create a prepared call; the
+browser receives only the public tenant/call/participant locator and a five-minute
+join token. It presents that token to the gateway's participant-session route, which
+atomically claims it and starts the pinned plan exactly once. Neither the API key nor
+the initial variables enter browser requests or responses. The sample endpoint and
+managed admission routes are disabled by default outside repository development.
+
+The database-free fallback asks the gateway to compile the same trusted sample
+definition directly and returns a bound session in one response. It remains an
+embedding/development compatibility path, not the durable admission design.
 
 The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It
 targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and performs

@@ -159,6 +159,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               }
             }
           },
+          tool_visibility: "full",
           participants: %{
             "caller" => %{
               type: "human",

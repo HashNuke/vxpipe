@@ -214,6 +214,17 @@ if config_env() == :dev do
 
   config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
+  if database_url do
+    room_creation = Keyword.fetch!(gateway_http, :room_creation)
+    trusted_call = Keyword.fetch!(room_creation, :trusted_call)
+
+    config :vxpipe_console, :sample_call,
+      enabled: true,
+      definition: Keyword.fetch!(trusted_call, :definition),
+      initial_variables: Keyword.fetch!(trusted_call, :initial_variables),
+      tenant_name: "Vxpipe development sample"
+  end
+
   console_listener =
     if phoenix_tls? do
       [

@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     Agent.start_link(fn ->
       %{
         api_key: Keyword.fetch!(options, :api_key),
+        existing_call?: Keyword.get(options, :existing_call?, false),
         join_token: Keyword.fetch!(options, :join_token),
         observer: Keyword.fetch!(options, :observer),
         participant_failure?: Keyword.get(options, :participant_failure?, false),
@@ -71,7 +72,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
 
     Agent.get(agent, fn state ->
       if secret == state.join_token and expected_scope == expected_scope() do
-        {:ok, admission_claim()}
+        {:ok, admission_claim(state.existing_call?)}
       else
         {:error, :token_scope_mismatch}
       end
@@ -83,6 +84,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
 
     Agent.get(agent, fn state ->
       cond do
+        state.existing_call? -> {:joined, participant_snapshot()}
         state.start_failure? -> {:error, :room_start_failed}
         state.participant_failure? -> {:started, room_snapshot()}
         true -> {:ok, room_snapshot(), participant_snapshot()}
@@ -134,9 +136,9 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     }
   end
 
-  defp admission_claim do
+  defp admission_claim(existing_call?) do
     %AdmissionClaim{
-      call: %{prepared_call() | state: :admitting},
+      call: admitted_call(existing_call?),
       token_id: "40000000-0000-4000-8000-000000000004",
       participant_key: participant_key(),
       participant_ref: "caller",
@@ -144,6 +146,17 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
       accepted_at: ~U[2026-09-09 12:00:10.000000Z]
     }
   end
+
+  defp admitted_call(true) do
+    %{
+      prepared_call()
+      | state: :running,
+        started_at: ~U[2026-09-09 12:00:05.000000Z],
+        incarnation_id: "rinc_test-admission"
+    }
+  end
+
+  defp admitted_call(false), do: %{prepared_call() | state: :admitting}
 
   defp prepared_call do
     plan = resolved_plan()

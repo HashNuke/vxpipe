@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export type RoomSnapshot = {
+type RoomSnapshot = {
   room_id: string;
   incarnation_id: string;
   tenant_id: string;
@@ -13,6 +13,7 @@ type RoomResponse = {
 };
 
 type ParticipantSnapshot = {
+  incarnation_id: string;
   participant_id: string;
   role: string;
   room_id: string;
@@ -34,8 +35,26 @@ type SessionResponse = {
   session: GatewaySession;
 };
 
+type ManagedAdmission = {
+  tenant_key: string;
+  call_id: string;
+  participant_key: string;
+  join_token: {
+    token: string;
+    expires_at: string;
+  };
+};
+
+type ManagedSessionResponse = SessionResponse & {
+  call: {
+    call_id: string;
+    started_at: string;
+    state: "running";
+  };
+};
+
 export type RoomConnection = {
-  room: RoomSnapshot;
+  incarnationId: string;
   participant: ParticipantSnapshot;
   session: GatewaySession;
 };
@@ -96,6 +115,8 @@ function isSessionResponse(value: unknown): value is SessionResponse {
     typeof participant === "object" &&
     "participant_id" in participant &&
     typeof participant.participant_id === "string" &&
+    "incarnation_id" in participant &&
+    typeof participant.incarnation_id === "string" &&
     !!session &&
     typeof session === "object" &&
     "session_id" in session &&
@@ -115,6 +136,44 @@ function isSessionResponse(value: unknown): value is SessionResponse {
   );
 }
 
+function isManagedAdmission(value: unknown): value is ManagedAdmission {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("tenant_key" in value) ||
+    typeof value.tenant_key !== "string" ||
+    !("call_id" in value) ||
+    typeof value.call_id !== "string" ||
+    !("participant_key" in value) ||
+    typeof value.participant_key !== "string" ||
+    !("join_token" in value) ||
+    !value.join_token ||
+    typeof value.join_token !== "object"
+  ) {
+    return false;
+  }
+
+  return (
+    "token" in value.join_token &&
+    typeof value.join_token.token === "string" &&
+    "expires_at" in value.join_token &&
+    typeof value.join_token.expires_at === "string"
+  );
+}
+
+function isManagedSessionResponse(value: unknown): value is ManagedSessionResponse {
+  return (
+    isSessionResponse(value) &&
+    "call" in value &&
+    !!value.call &&
+    typeof value.call === "object" &&
+    "call_id" in value.call &&
+    typeof value.call.call_id === "string" &&
+    "state" in value.call &&
+    value.call.state === "running"
+  );
+}
+
 export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
   const [roomId] = useState(createRoomId);
   const [room, setRoom] = useState<RoomSnapshot>();
@@ -126,6 +185,53 @@ export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
     setError(undefined);
 
     try {
+      const preparationResponse = await fetch("/sample/calls", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      if (preparationResponse.status !== 404) {
+        if (!preparationResponse.ok) {
+          throw new Error("The sample backend could not prepare a call.");
+        }
+
+        const admission: unknown = await preparationResponse.json();
+
+        if (!isManagedAdmission(admission)) {
+          throw new Error("The sample backend returned an invalid admission response.");
+        }
+
+        const sessionResponse = await fetch(
+          `/api/tenants/${encodeURIComponent(admission.tenant_key)}/calls/${encodeURIComponent(admission.call_id)}/participants/${encodeURIComponent(admission.participant_key)}/sessions`,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${admission.join_token.token}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({}),
+          },
+        );
+
+        if (!sessionResponse.ok) {
+          throw new Error("The gateway could not start the prepared call.");
+        }
+
+        const sessionPayload: unknown = await sessionResponse.json();
+
+        if (!isManagedSessionResponse(sessionPayload)) {
+          throw new Error("The gateway returned an invalid prepared-call session.");
+        }
+
+        onCreated({
+          incarnationId: sessionPayload.participant.incarnation_id,
+          participant: sessionPayload.participant,
+          session: sessionPayload.session,
+        });
+        return;
+      }
+
       let createdRoom = room;
 
       if (!createdRoom) {
@@ -149,7 +255,7 @@ export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
 
         if (isSessionResponse(payload)) {
           onCreated({
-            room: createdRoom,
+            incarnationId: createdRoom.incarnation_id,
             participant: payload.participant,
             session: payload.session,
           });
@@ -174,7 +280,11 @@ export default function CreateRoomPage({ onCreated }: CreateRoomPageProps) {
         throw new Error("The gateway returned an invalid voice-session response.");
       }
 
-      onCreated({ room: createdRoom, ...sessionPayload });
+      onCreated({
+        incarnationId: createdRoom.incarnation_id,
+        participant: sessionPayload.participant,
+        session: sessionPayload.session,
+      });
     } catch (reason) {
       const detail = reason instanceof Error ? reason.message : "Room creation failed.";
       setError(`${detail} Check that bin/dev is running, then try again.`);

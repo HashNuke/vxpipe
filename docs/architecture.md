@@ -728,6 +728,16 @@ remain in `vxpipe_persistence`; `vxpipe_calls` owns database-neutral workflows a
 repository interfaces. This split changes neither the engine's independent
 embedding contract nor the asynchronous live-storage design.
 
+The managed repository-development sample follows the same boundary. Console
+supervises a small trusted backend process that bootstraps a private development
+tenant/API key and publishes the configured definition through Calls. It retains
+the plaintext key and configured initial variables only in redacted process state.
+Its same-origin endpoint returns a public call locator plus join token; the browser
+then uses the reusable gateway's ordinary participant-session admission. Console
+does not query Repo or implement token verification. If persistence is disabled,
+the sample process is absent and the browser retains the database-free trusted
+gateway fallback.
+
 The implemented control-plane baseline follows this boundary. `vxpipe_calls`
 defines credential and definition/deployment repository ports, while
 `vxpipe_persistence` supplies the optional PostgreSQL adapter. Its tenant/API-key,
@@ -1175,9 +1185,10 @@ clean up known resources without a speculative second dial or remote rollback
 promise. Recovery here means records about existing work, not repeating the call
 or adding a general durable recovery/exactly-once framework.
 
-These are approved contracts, not implemented authentication endpoints or CLI
-commands. Exact request encoding and the admin endpoint/scope matrix are not
-specified by this checkpoint.
+The tenant/API-key CLI bootstrap, prepared-call creation, existing-record token
+issuance, and token-authenticated browser session routes now implement this baseline.
+General HTTP administration and the broader endpoint/scope matrix remain outside
+this checkpoint.
 
 Public projections exclude:
 
@@ -2223,6 +2234,33 @@ settings own only runtime/provider integration concerns needed by this slice: pr
 credentials, transport modules, ingress/queue bounds, and agent execution bounds. The default
 sample still checks required development credentials at runtime, while the reusable base keeps
 legacy preset model inference disabled unless an embedding host configures it explicitly.
+
+### Implemented prepared-call admission slice
+
+The durable development path supersedes direct trusted room creation when PostgreSQL is
+configured, while preserving it as a database-free fallback:
+
+1. Console starts a trusted sample process before its endpoint. That process uses only
+   public Calls workflows to bootstrap a fresh development tenant/API key and publish the
+   configured sample definition. Its inspect projection excludes the plaintext key and
+   initial variables.
+2. `POST /sample/calls` authenticates with that server-held key, prepares a durable call,
+   and returns only the public tenant/call/participant locator and opaque join token.
+3. The browser posts an empty body and that bearer token to the tenant-scoped participant
+   session route. The gateway claims the token in one short repository transaction, then
+   starts the exact serialized plan pinned at preparation; browser data cannot replace
+   variables or tool visibility.
+4. First admission starts the room and entry participants. A later eligible participant
+   claim joins the already-running room using its persisted incarnation without restarting
+   the room or resetting `started_at`.
+5. Start-time projection runs as supervised bookkeeping after runtime success. Its failure
+   cannot tear down a live room; known pre-live failure records a bounded terminal reason,
+   and accepted tokens are never restored for speculative retries.
+
+The authenticated management routes grant no CORS access. Configured CORS applies only to
+browser token admission and signaling and remains independent of credential validation.
+API keys, initial variables, token digests, and consumed join tokens do not enter engine
+state or live-session responses.
 
 1. **Protocol-neutral types:** implement command, signal, media-frame, event,
    snapshot, error, identity, and incarnation contracts with serialization-safe

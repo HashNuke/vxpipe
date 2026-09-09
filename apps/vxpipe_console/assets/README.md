@@ -13,20 +13,39 @@ The initial screen uses `ConsoleTemplate` from
 client, and uses the Small WebRTC transport. The default offer URL is
 `/api/rtvi/offer`.
 
-The **Create room** control calls `POST /api/rooms` on the same Phoenix origin
-with a browser-generated room ID. The development gateway compiles its trusted
-sample definition into a fresh pinned plan, starts only the web caller and receiving
-agent, and returns the caller's five-minute, single-use Small WebRTC session in the
-same response. Only then does the creation screen give the whole viewport to the
-responsive Pipecat console. The definition, capability profiles, development tenant,
-and actor are injected by server configuration; they are not supplied or authenticated
-by the browser.
+With `VXPIPE_DATABASE_URL` configured, the **Create room** control calls
+`POST /sample/calls` on the same Phoenix origin. The Console's supervised sample
+backend uses its private development API key and configured initial variables to
+prepare a call, then returns only its public tenant/call/participant locator and
+five-minute join token. The browser presents that token to the matching gateway
+participant-session route. Its atomic claim starts the stored pinned plan and returns
+the Small WebRTC session. The API key and initial variables never enter the browser.
+
+Without PostgreSQL, `POST /sample/calls` returns 404 and the control keeps the
+database-free development fallback: it calls `POST /api/rooms` with a random room ID,
+and the trusted gateway adapter starts the configured plan and returns its session.
+Only after either path succeeds does the creation screen give the whole viewport to
+the responsive Pipecat console.
 
 The Pipecat **Connect** control sends its offer to the returned endpoint along
 with the request data from the session response. The current gateway completes
 WebRTC and RTVI readiness. Typed input and committed microphone speech run
 through the room's Gemini model capability; final model text is displayed and
 spoken through the configured Deepgram path.
+
+## Manual prepared-call admission test
+
+1. Configure and migrate a development PostgreSQL database, then set its URL as
+   `VXPIPE_DATABASE_URL` before starting `bin/dev`.
+2. Open the Console and choose **Create room**. Verify a new call row is initially
+   prepared with no `started_at` and that no room process exists before admission.
+3. Verify the browser receives a join token and public locator, but no API key or
+   initial-variable snapshot, then uses the token on the participant-session route.
+4. Verify that call becomes running only after the session response, retains one
+   room incarnation and original pinned definition revision, and has one admission
+   for the caller.
+5. Choose **Connect** and complete one typed or spoken turn through the ordinary
+   Small WebRTC/RTVI path.
 
 ## Manual tool-call test
 

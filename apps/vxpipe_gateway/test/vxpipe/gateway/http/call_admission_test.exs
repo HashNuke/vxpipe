@@ -79,6 +79,22 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     assert TestAdmissionBackend.operations(context.backend) == []
   end
 
+  test "rejects an invalid API key independently of CORS", context do
+    conn =
+      :post
+      |> conn(prepare_path(), JSON.encode!(%{"initial_variables" => %{}}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer vxp_invalid")
+      |> put_req_header("origin", @origin)
+      |> Endpoint.call(context.endpoint)
+
+    assert conn.status == 401
+    assert %{"error" => %{"code" => "invalid_api_key"}} = body(conn)
+    assert get_resp_header(conn, "access-control-allow-origin") == []
+    assert [{:authenticate, tenant_key}] = TestAdmissionBackend.operations(context.backend)
+    assert tenant_key == TestAdmissionBackend.tenant_key()
+  end
+
   test "issues another existing-call token through the backend-only route", context do
     conn =
       :post
@@ -209,6 +225,43 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     refute_receive {:test_admission_failed, _reason}
   end
 
+  test "joins an eligible participant to the existing call without restarting it", _context do
+    backend =
+      start_supervised!(
+        {TestAdmissionBackend,
+         api_key: @api_key, join_token: @join_token, observer: self(), existing_call?: true},
+        id: :existing_call_backend
+      )
+
+    conn =
+      :post
+      |> conn(session_path(), JSON.encode!(%{}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer #{@join_token}")
+      |> Endpoint.call(endpoint_options(backend))
+
+    assert conn.status == 201
+
+    assert %{
+             "call" => %{
+               "started_at" => "2026-09-09T12:00:05.000000Z",
+               "state" => "running"
+             },
+             "participant" => %{"participant_id" => "part_test-caller"},
+             "session" => %{"incarnation_id" => "rinc_test-admission"}
+           } = body(conn)
+
+    refute_receive {:test_admission_started, _incarnation_id, _started_at}
+    refute_receive {:test_admission_failed, _reason}
+
+    assert [
+             {:claim_token, _scope},
+             {:start_call, call_id}
+           ] = TestAdmissionBackend.operations(backend)
+
+    assert call_id == TestAdmissionBackend.call_id()
+  end
+
   test "does not let browser session input replace prepared values or visibility", context do
     conn =
       :post
@@ -241,6 +294,21 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     assert TestAdmissionBackend.operations(context.backend) == []
   end
 
+  test "rejects an invalid bearer join token after granting its configured origin", context do
+    conn =
+      :post
+      |> conn(session_path(), JSON.encode!(%{}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer vxj_invalid")
+      |> put_req_header("origin", @origin)
+      |> Endpoint.call(context.endpoint)
+
+    assert conn.status == 401
+    assert %{"error" => %{"code" => "invalid_join_token"}} = body(conn)
+    assert get_resp_header(conn, "access-control-allow-origin") == [@origin]
+    assert [{:claim_token, _scope}] = TestAdmissionBackend.operations(context.backend)
+  end
+
   test "grants CORS only to token-based browser session admission", context do
     backend_preflight =
       :options
@@ -262,6 +330,16 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
 
     assert session_preflight.status == 204
     assert get_resp_header(session_preflight, "access-control-allow-origin") == [@origin]
+
+    disallowed_preflight =
+      :options
+      |> conn(session_path())
+      |> put_req_header("origin", "https://untrusted.example.test")
+      |> put_req_header("access-control-request-method", "POST")
+      |> put_req_header("access-control-request-headers", "content-type,authorization")
+      |> Endpoint.call(context.endpoint)
+
+    assert get_resp_header(disallowed_preflight, "access-control-allow-origin") == []
   end
 
   defp endpoint_options(backend) do

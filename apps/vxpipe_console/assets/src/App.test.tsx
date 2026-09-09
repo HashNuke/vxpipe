@@ -51,15 +51,24 @@ test("creates a room when randomUUID is unavailable on an HTTP origin", async ()
     }),
   });
 
-  const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce({ ok: false, status: 404 })
+    .mockResolvedValueOnce({ ok: false });
   vi.stubGlobal("fetch", fetchMock);
 
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Create room" }));
 
-  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
-  expect(fetchMock).toHaveBeenCalledWith("/api/rooms", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/sample/calls", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  });
+
+  expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/rooms", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ room_id: "room_00010203-0405-4607-8809-0a0b0c0d0e0f" }),
@@ -74,17 +83,28 @@ test("enters the uncluttered Pipecat page after creating a room", async () => {
     .mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        room: {
-          room_id: "room_demo",
-          incarnation_id: "rinc_demo",
-          tenant_id: "tenant-development",
-          created_by_actor_id: "actor-samples",
-          lifecycle: "open",
+        tenant_key: "BBBBBBBBBBBBBBBB",
+        participant_key: "20000000-0000-4000-8000-000000000002",
+        call_id: "30000000-0000-4000-8000-000000000003",
+        join_token: {
+          token: "vxj_browser-delegated-token",
+          expires_at: "2026-09-09T13:05:02.000000Z",
+        },
+      }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        call: {
+          call_id: "30000000-0000-4000-8000-000000000003",
+          state: "running",
+          started_at: "2026-09-09T13:00:02.000000Z",
         },
         participant: {
           participant_id: "part_demo",
           role: "human",
           room_id: "room_demo",
+          incarnation_id: "rinc_demo",
           state: "joined",
         },
         session: {
@@ -113,10 +133,74 @@ test("enters the uncluttered Pipecat page after creating a room", async () => {
   expect(screen.queryByRole("button", { name: "Create room" })).not.toBeInTheDocument();
   expect(screen.queryByText("room_demo")).not.toBeInTheDocument();
   expect(screen.queryByText("rinc_demo")).not.toBeInTheDocument();
-  expect(fetchMock).toHaveBeenCalledWith("/api/rooms", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/sample/calls", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    "/api/tenants/BBBBBBBBBBBBBBBB/calls/30000000-0000-4000-8000-000000000003/participants/20000000-0000-4000-8000-000000000002/sessions",
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer vxj_browser-delegated-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("private-order-sentinel");
+  expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("vxp_");
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test("keeps the database-free trusted room fallback", async () => {
+  vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
+
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce({ ok: false, status: 404 })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        room: {
+          room_id: "room_fallback",
+          incarnation_id: "rinc_fallback",
+          tenant_id: "tenant-development",
+          created_by_actor_id: "actor-samples",
+          lifecycle: "open",
+        },
+        participant: {
+          participant_id: "part_fallback",
+          role: "human",
+          room_id: "room_fallback",
+          incarnation_id: "rinc_fallback",
+          state: "joined",
+        },
+        session: {
+          session_id: "sess_fallback",
+          expires_at: "2026-09-09T13:05:02.000000Z",
+          transport: {
+            type: "smallwebrtc",
+            endpoint: "/api/rtvi/offer",
+            request_data: { session_id: "sess_fallback" },
+          },
+        },
+      }),
+    });
+
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+
+  const console = await screen.findByRole("region", { name: "RTVI console" });
+  expect(console).toHaveAttribute("data-session-id", "sess_fallback");
+  expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/rooms", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ room_id: "room_00000000-0000-4000-8000-000000000001" }),
   });
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
 });

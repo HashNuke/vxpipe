@@ -19,7 +19,7 @@ export default function App() {
   return (
     <main className="console-page">
       <ConsoleTemplate
-        key={connection.room.incarnation_id}
+        key={connection.incarnationId}
         transportType="smallwebrtc"
         connectParams={{
           webrtcRequestParams: {

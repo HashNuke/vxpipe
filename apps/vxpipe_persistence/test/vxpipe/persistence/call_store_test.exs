@@ -14,6 +14,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   @key_id "11111111-1111-4111-8111-111111111111"
   @definition_id "22222222-2222-4222-8222-222222222222"
   @route_id "33333333-3333-4333-8333-333333333333"
+  @support_route_id "34343434-3434-4434-8434-343434343434"
   @call_id "44444444-4444-4444-8444-444444444444"
   @room_id "55555555-5555-4555-8555-555555555555"
   @actor_id "66666666-6666-4666-8666-666666666666"
@@ -28,7 +29,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       definition_repository: {DefinitionStore, Repo},
       call_repository: {CallStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
-      uuid_generator: sequence([@key_id, @definition_id, @route_id]),
+      uuid_generator: sequence([@key_id, @definition_id, @route_id, @support_route_id]),
       api_key_generator: fn -> @api_key end,
       registries: registries()
     ]
@@ -37,11 +38,21 @@ defmodule Vxpipe.Persistence.CallStoreTest do
              Administration.bootstrap_tenant("Stored calls", [:calls], repository_options)
 
     assert {:ok, principal} =
-             Administration.authenticate(tenant.key, issued_key.secret, :calls, repository_options)
+             Administration.authenticate(
+               tenant.key,
+               issued_key.secret,
+               :calls,
+               repository_options
+             )
 
-    assert {:ok, draft} = Calls.save_definition(tenant.key, definition_input(), repository_options)
-    assert {:ok, published} = Calls.publish_definition(tenant.key, draft.definition_id, 1, repository_options)
-    assert [route] = published.routes
+    assert {:ok, draft} =
+             Calls.save_definition(tenant.key, definition_input(), repository_options)
+
+    assert {:ok, published} =
+             Calls.publish_definition(tenant.key, draft.definition_id, 1, repository_options)
+
+    assert route = Enum.find(published.routes, &(&1.participant_ref == "caller"))
+    assert support_route = Enum.find(published.routes, &(&1.participant_ref == "support"))
 
     options =
       repository_options ++
@@ -54,10 +65,17 @@ defmodule Vxpipe.Persistence.CallStoreTest do
           join_token_generator: fn -> @join_token end
         ]
 
-    [options: options, principal: principal, route: route, tenant: tenant]
+    [
+      options: options,
+      principal: principal,
+      route: route,
+      support_route: support_route,
+      tenant: tenant
+    ]
   end
 
-  test "atomically stores and reconstructs a private prepared call and its first token", context do
+  test "atomically stores and reconstructs a private prepared call and its first token",
+       context do
     variables = %{"order" => %{"id" => "ORD-2048"}}
 
     assert {:ok, prepared, issued} =
@@ -74,7 +92,8 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert is_binary(stored_call.resolved_plan)
     refute inspect(stored_call) =~ "ORD-2048"
 
-    assert %StoredJoinToken{} = stored_token =
+    assert %StoredJoinToken{} =
+             stored_token =
              Repo.get_by!(StoredJoinToken, public_id: @token_id)
 
     assert stored_token.digest == :crypto.hash(:sha256, issued.secret)
@@ -150,6 +169,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
              from(token in StoredJoinToken, where: not is_nil(token.consumed_at)),
              :count
            ) == 1
+
     assert Repo.get_by!(StoredCall, public_id: call.id).state == :admitting
   end
 
@@ -172,7 +192,8 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert Repo.aggregate(StoredAdmission, :count) == 1
   end
 
-  test "keeps an expired token unused and accepts an issued token after key revocation", context do
+  test "keeps an expired token unused and accepts an issued token after key revocation",
+       context do
     assert {:ok, call, expired} = prepare(context)
     scope = scope(context, call)
     later = Keyword.put(context.options, :now, DateTime.add(@now, 301, :second))
@@ -204,11 +225,33 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
     assert {:ok, claim} = Calls.claim_join_token(fresh.secret, scope, fresh_options)
     assert claim.call.id == call.id
+    assert claim.call.initial_variables == call.initial_variables
+    assert claim.call.plan == call.plan
+    assert claim.call.started_at == nil
+  end
+
+  test "leaves a token unused when its call has already ended", context do
+    assert {:ok, call, token} = prepare(context)
+
+    assert {1, nil} =
+             Repo.update_all(
+               from(stored in StoredCall, where: stored.public_id == ^call.id),
+               set: [state: :ended, ended_at: @now]
+             )
+
+    assert {:error, :call_unavailable} =
+             Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    assert Repo.get_by!(StoredJoinToken, public_id: token.id).consumed_at == nil
+    assert Repo.aggregate(StoredAdmission, :count) == 0
   end
 
   test "persists the first live-start occurrence idempotently", context do
     assert {:ok, call, token} = prepare(context)
-    assert {:ok, claim} = Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    assert {:ok, claim} =
+             Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
     started_at = DateTime.add(@now, 12, :second)
 
     assert {:ok, running} =
@@ -230,9 +273,58 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert duplicate.incarnation_id == "rinc_persisted"
   end
 
+  test "admits another pinned participant into a running call without resetting its start",
+       context do
+    assert {:ok, call, caller_token} = prepare(context)
+
+    assert {:ok, caller_claim} =
+             Calls.claim_join_token(caller_token.secret, scope(context, call), context.options)
+
+    started_at = DateTime.add(@now, 12, :second)
+
+    assert {:ok, _running} =
+             Calls.mark_call_started(
+               caller_claim,
+               "rinc_existing-call",
+               started_at,
+               context.options
+             )
+
+    support_options =
+      Keyword.merge(context.options,
+        token_id_generator: fn -> "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" end,
+        join_token_generator: fn -> "vxj_test-only-support-participant-token" end
+      )
+
+    assert {:ok, support_token} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.support_route.key,
+               support_options
+             )
+
+    support_scope = %{
+      tenant_key: context.tenant.key,
+      call_id: call.id,
+      participant_key: context.support_route.key
+    }
+
+    assert {:ok, support_claim} =
+             Calls.claim_join_token(support_token.secret, support_scope, support_options)
+
+    assert support_claim.participant_ref == "support"
+    assert support_claim.call.state == :running
+    assert support_claim.call.started_at == started_at
+    assert support_claim.call.incarnation_id == "rinc_existing-call"
+    assert Repo.aggregate(StoredAdmission, :count) == 2
+  end
+
   test "persists a terminal pre-live failure with no start time", context do
     assert {:ok, call, token} = prepare(context)
-    assert {:ok, claim} = Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    assert {:ok, claim} =
+             Calls.claim_join_token(token.secret, scope(context, call), context.options)
 
     assert {:ok, failed} =
              Calls.mark_call_failed(claim, :room_start_failed, context.options)
@@ -306,6 +398,10 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       },
       participants: %{
         "caller" => %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"}
+        },
+        "support" => %{
           type: "human",
           connection: %{service: "web", mode: "receive", admission: "start_call"}
         },

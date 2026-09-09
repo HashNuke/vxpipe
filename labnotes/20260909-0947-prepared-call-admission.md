@@ -188,3 +188,87 @@ Managed development configuration enables these routes when
 `VXPIPE_DATABASE_URL` is present; otherwise the existing database-free trusted
 sample remains available. The sample itself still uses the older trusted route
 and is the final implementation checkpoint for this milestone.
+
+## Checkpoint 4: managed sample and acceptance audit
+
+The Console now supervises a development-only `SampleCall` process when
+PostgreSQL is configured. On BEAM startup it uses public Calls workflows to
+bootstrap a fresh tenant and calls-scoped API key, save and publish the configured
+sample definition, and retain the entry-caller route. PostgreSQL stores only the
+key digest. The issued plaintext key and configured initial variables remain in
+the process's inspect-redacted state and are never returned by its controller.
+Backend exceptions become a bounded unavailable result without crashing the
+process.
+
+Each `POST /sample/calls` authenticates with that private key and prepares a new
+durable call. Its safe response contains only the public tenant/call/participant
+locator plus opaque join token and expiry. The React creation page then presents
+the token to the normal tenant participant-session route with an empty body. A
+404 from the managed sample endpoint selects the existing database-free trusted
+room fallback, so persistence remains opt-in and embedding development stays
+runnable.
+
+The first live development check caught an invalid sample-definition shape:
+tool visibility had initially been nested under a proposed client object. Moving
+the already-approved `tool_visibility` field to the definition root made the
+trusted configuration publishable. A disposable database then demonstrated the
+complete real adapter path: the call remained prepared with a null `started_at`
+after `/sample/calls`, became running only after token admission, and returned a
+joined Small WebRTC participant without returning the consumed token.
+
+The acceptance audit also found that the gateway always called full plan startup,
+even when storage accepted the first admission of another participant into an
+already-running call. A route test failed on the previously unhandled joined
+outcome. The production admission adapter now constructs the pinned participant's
+protocol-neutral join command and admits it beneath the persisted room incarnation.
+It preserves the call's original `started_at`, never reruns room startup, and does
+not project the existing call as failed if that participant cannot start. Direct
+adapter/engine and PostgreSQL tests prove both halves of that boundary.
+
+Additional acceptance coverage now verifies all three URL scope components,
+ended-call rejection without token consumption, changed published revisions after
+preparation, allowed and disallowed browser origins, missing and invalid credentials,
+and credential/CORS independence. The prepared record continues to carry its exact
+revision-one plan after revision two is published.
+
+Red/green and runtime evidence for this checkpoint:
+
+- Red: the focused Console contract suite had 3 expected failures before the
+  managed sample process/controller existed.
+- Red: the React suite had 3 expected failures before the two-request managed
+  admission flow replaced its direct call.
+- Red: the existing-live-call gateway test failed on the unhandled `{:joined,
+  participant}` outcome before the engine join path was added.
+- Red: forcing the sample backend to raise terminated the process before exception
+  containment was added; the regression now keeps it alive and reports unavailable.
+- Green: focused Calls admission — 10 tests; persistence call-store — 9 tests;
+  gateway admission/adapter — 14 tests; Console sample/endpoint — 12 tests; and
+  React assets — 4 tests, all with 0 failures.
+- A real disposable PostgreSQL database migrated through the full chain and a live
+  HTTP flow produced `prepared -> running`, one joined participant, and no exposed
+  token in the live response; the database was then removed.
+- Chromium inspection at 1440×1000 and 390×844 exercised **Create room** through
+  the real managed flow. The existing creation screen and responsive Voice UI Kit
+  console rendered without overflow or added chrome, so no visual redesign was
+  needed. Browser artifacts were kept outside the worktree.
+
+Final gates:
+
+- `mix format --check-formatted`, `mix compile --warnings-as-errors`, and
+  `mix deps.unlock --check-unused` passed.
+- The complete umbrella passed: call engine 165, Calls 17, persistence 17,
+  gateway 66, and Console 25 tests, all with 0 failures; 2 call-engine and 4
+  gateway network/provider integration tests remained excluded by default.
+- One prior umbrella run exposed the existing 100 ms model-timeout observer test
+  as scheduling-sensitive: it received the expected capability timeout but missed
+  the observer assertion under suite load. The exact test passed immediately in
+  isolation with the same seed, and the subsequent complete umbrella run passed.
+  No production behavior or unrelated test timing was changed in this milestone.
+- `mix assets.test` passed 4 tests; TypeScript checking and the esbuild asset build
+  passed.
+- A fresh disposable PostgreSQL database ran the complete three-migration chain
+  and all 9 call-store tests, then was explicitly removed.
+
+Milestone 7 is complete. The managed sample preserves the established frontend
+design, and the `impeccable` hardening pass influenced only error/fallback and
+responsive verification rather than adding new interface chrome.

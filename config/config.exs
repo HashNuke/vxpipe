@@ -65,6 +65,8 @@ config :vxpipe_console, :diagnostics,
   enabled: false,
   max_pending_events: 1_000
 
+config :vxpipe_console, :sample_call, enabled: false
+
 config :esbuild,
   version: "0.25.4",
   vxpipe_console: [
