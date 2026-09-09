@@ -229,3 +229,24 @@ the project's ordinary one-second asynchronous bound; no production timing chang
 passes formatting, warnings-as-errors, call engine `137 tests, 0 failures (1 excluded)`, gateway
 `46 tests, 0 failures (4 excluded)`, Console `19 tests, 0 failures`, and
 `mix deps.unlock --check-unused`.
+
+## Completion verification
+
+The subsequent Console delivery checkpoint moved the unchanged React sample under Phoenix's
+esbuild watcher and made Phoenix/Bandit the single HTTPS server on Tailscale port 4000. The Morse
+development profile remains application-selected and credential-free. Chromium rendered its
+desktop and mobile creation states and initialized the Pipecat console on the new origin. The
+required `agent-browser` command was unavailable, so this inspection used installed headless
+Chromium through its DevTools protocol. One earlier clean attempt reached client and agent
+`READY`; later headless retries hit ICE instability and do not supply extra media evidence.
+
+The direct-PCM definition-driven room test remains the authoritative full Morse round trip: an
+independent signal fixture traverses real room STT, transcript, agent fixture, TTS and output-sink
+boundaries, and independent decoding verifies the response. Together with the focused long-drain,
+backpressure, interruption, repeated-turn, failure and Telemetry tests, it covers every acceptance
+item without claiming that browser Opus or ordinary speech is supported Morse input.
+
+Final gates after the Console change pass formatting, warnings-as-errors, unused-dependency
+checking, frontend `3 tests, 0 failures`, and umbrella suites with call engine `137 tests,
+0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console `20 tests,
+0 failures`. Milestone 3 is complete; Call Variables is next.

@@ -1,6 +1,6 @@
 # Local Morse-code audio providers
 
-Status: implementation in progress. Specification review: approved (2026-09-08).
+Status: complete as of 2026-09-09. Specification review: approved (2026-09-08).
 Prerequisites: [Definition-driven call](definition-driven-call.md). This early optional provider slice does not become a semantic prerequisite for later production features.
 Sources: User-requested local testing/verification addition; [provider capability boundary](../architecture.md); [International Morse code, ITU-R M.1677-1](https://www.itu.int/rec/R-REC-M.1677-1-200910-I/en). Verify the normative timing/alphabet against the recommendation during implementation.
 
@@ -50,9 +50,9 @@ No hosted speech dependency, speech ML model, local VAD, general human-language 
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence, checkpoint 1 (2026-09-09): added the independent in-process codec
@@ -200,10 +200,32 @@ one-second asynchronous teardown bound made the complete gates green: formatting
 warnings-as-errors, call engine `137 tests, 0 failures (1 excluded)`, gateway `46 tests, 0
 failures (4 excluded)`, Console `19 tests, 0 failures`, and no unused dependencies.
 
+Implementation evidence, completion (2026-09-09): the complete implementation preserves
+the independently checked codec fixtures, bounded encoder/decoder state, local provider
+transports, closed registry selection, real room audio round trip, long-output backpressure,
+interruption recovery, repeated attribution, explicit provider failures, credential-free
+development profile and bounded observability established by checkpoints 1–10. The direct-PCM
+room check is the normative end-to-end Morse input/output proof. Browser input remains explicitly
+outside that claim because the current WebRTC ingress is Opus; the Console profile supports
+typed input and routes its response through the same Morse TTS/audio-output boundary.
+
+The final development delivery check serves the Console and mounted gateway from Phoenix HTTPS
+on Tailscale port 4000 without a second web server. Chromium rendered desktop, mobile and the
+initialized Pipecat console from that origin. One earlier clean browser attempt reached client
+and agent `READY`; repeated headless retries later encountered ICE instability and are not
+misreported as additional media successes. The required `agent-browser` binary was unavailable,
+so the rendered inspection used installed headless Chromium through its DevTools protocol.
+
+Final gates pass: `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+`mix deps.unlock --check-unused`, frontend `3 tests, 0 failures`, and the umbrella suite with
+call engine `137 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`,
+and Console `20 tests, 0 failures`.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08. Approved the deterministic
 real-audio outcome, independent fixtures, provider boundary adaptation and explicit
 codec/browser limitations; second index position is appropriate and optional.
 Index and architecture cross-references now distinguish the plan from implemented adapters.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+The review paragraph records specification evidence; the implementation and runtime evidence
+above establishes the completed slice separately.

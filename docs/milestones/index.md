@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestones 1 and 2 are complete and milestone 3 is next. The earlier
+Status: 23 milestone specifications; milestones 1 through 3 are complete and milestone 4 is next. The earlier
 behavior contracts have completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
@@ -34,7 +34,7 @@ progress without claiming the entire milestone is complete.
 
 1. [x] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through Jido AI.
 2. [x] [Observable sample call](observable-sample-call.md) — Run a sample conversation and inspect live timing, provider failures and VM health on a separate dashboard.
-3. [ ] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
+3. [x] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
 4. [ ] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.
 5. [ ] [Conversation during background tools](background-tool-conversation.md) — Keep conversation responsive while a submitted tool finishes.
 6. [ ] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
@@ -210,7 +210,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | --- | --- | --- |
 | [Definition-driven one-agent call](definition-driven-call.md#specification-review) | Reviewed; subset clarified | Prior agent review approved AgentServer readiness/teardown boundaries. Released-package probe verified repeated rounds and exposed alias loss; initial static keys must match Action names until the public binding extension exists. |
 | [Observable sample call](observable-sample-call.md#specification-review) | Complete; locally reviewed | Phoenix Console, mounted reusable gateway, bounded payload-free telemetry, live diagnostics, deterministic success/failure evidence, embedded-host event contract and Console-owned release assets are implemented and verified. |
-| [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Approved | milestone_review_a; real audio, independent fixtures, bounded streaming and explicit transport limits. |
+| [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Complete; independently reviewed | Real audio, independent fixtures, bounded streaming, explicit transport limits, closed selection, direct-PCM room round trip and optional credential-free sample profile are implemented and verified. |
 | [Call Variables and private tool projections](call-variables-and-tool-visibility.md#specification-review) | Approved | Original behavior approved by milestone_review_b; focused Jido review added finite Action-module, strict-envelope and private-context gates. |
 | [Conversation during background tools](background-tool-conversation.md#specification-review) | Approved | Original behavior approved by milestone_review_c; focused Jido review added the retained in-memory Vxpipe mailbox/internal-continuation boundary instead of best-effort Jido injection. |
 | [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md#specification-review) | Approved | milestone_review_a; Separated reusable revision metadata from per-call plan/credential resolution; excluded credentials and leases from revisions/routes; focused re-review approved. |
