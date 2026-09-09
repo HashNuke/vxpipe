@@ -180,9 +180,17 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
   test "renders escaped persisted evidence and honest archive status for an ended call" do
     call = %{call_summary() | state: :ended, ended_at: ~U[2026-09-09 16:31:00Z]}
 
+    inert_remote_payload =
+      timeline_entry(:persisted, :tool_call_completed, %{
+        payload: %{
+          "result" => "<script>not executable</script>",
+          "resource" => %{"uri" => "https://untrusted.invalid/resource"}
+        }
+      })
+
     configure_backend(%{
       list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
-      inspect_call: {:ok, persisted_detail(call)}
+      inspect_call: {:ok, %{persisted_detail(call) | timeline: [inert_remote_payload]}}
     })
 
     conn = sign_in()
@@ -194,7 +202,10 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     assert html =~ "tool call completed"
     assert html =~ "Archive not yet confirmed"
     assert html =~ "&lt;script&gt;not executable&lt;/script&gt;"
+    assert html =~ "https://untrusted.invalid/resource"
     refute html =~ "<script>not executable</script>"
+    refute html =~ ~s(href="https://untrusted.invalid/resource")
+    refute html =~ ~s(src="https://untrusted.invalid/resource")
     assert_receive {:inspect_call, _, "call-public-id", [limit: 50]}
     refute_receive {:inspect_live_call, _, _, _}
   end
