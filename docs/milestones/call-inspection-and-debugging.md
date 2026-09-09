@@ -1,9 +1,10 @@
 # Call inspection and debugging
 
-Status: in progress. Persisted inspection reads and the engine-owned bounded live
-projection are implemented; the Console workflow and browser operator-auth boundary
-remain. Scope requested by the user; specification reviewed locally on 2026-09-08.
-Browser operator authentication must be selected before external exposure.
+Status: in progress. Persisted inspection reads, the engine-owned bounded live
+projection, and the Console's non-secret operator-session foundation are implemented;
+the Console workflow and route enforcement remain. Scope requested by the user;
+specification reviewed locally on 2026-09-08. Browser operator authentication is now
+selected, but its page/route integration must be complete before external exposure.
 Prerequisites: [Observable sample call](observable-sample-call.md);
 [Asynchronous history](asynchronous-call-history.md), including its tenant admission,
 Call Variables and background-tool prerequisites.
@@ -72,7 +73,7 @@ call ends, the same page remains useful from stored history without a live room 
 
 ## Implementation checklist
 
-- [ ] Specify the bounded list/detail/live projections and operator-auth boundary using
+- [x] Specify the bounded list/detail/live projections and operator-auth boundary using
   existing trusted identity and history contracts; do not invent new call scopes in the UI.
 - [ ] Red-test cross-tenant/unauthorized access, private projections, pagination, event
   correlation, snapshot revisions and live-versus-persisted source labeling.
@@ -152,10 +153,15 @@ Implementation evidence to date:
   call identities, converts engine records into Calls-owned values, and returns only a
   correlated timeline explicitly labeled `live` plus bounded loss/revision metadata.
   Ecto archival writes reuse the same engine-to-Calls projection.
+- Console operator authentication reuses a tenant API key with the existing `:calls`
+  scope. The API-key secret is submitted to the server for authentication but is never
+  serialized into the browser session. The signed session carries only tenant/API-key
+  identifiers, closed scopes, and a one-hour expiry; malformed, wrong-scope, and expired
+  identities fail closed. Authentication dispatch is replaceable at the Console boundary,
+  while the production adapter delegates credential verification to the public Calls API.
 
-The Console pages, operator browser authorization, rendered browser verification and
-end-to-end fault fixtures are still incomplete; this evidence does not complete the
-milestone.
+The Console pages, route enforcement, rendered browser verification and end-to-end fault
+fixtures are still incomplete; this evidence does not complete the milestone.
 
 ## Specification review
 

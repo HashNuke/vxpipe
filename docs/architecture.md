@@ -1695,8 +1695,13 @@ Vxpipe diagnostics page owns bounded call-path measurements. Diagnostics are dis
 by default and explicitly enabled through Console application settings. When enabled,
 this slice adds no page authentication; deployment exposure is an application concern.
 API keys authenticate call-management endpoints and caller join tokens authorize call
-admission; neither credential is a Console or LiveDashboard login. Repository development
-serves the diagnostics namespace from the shared Console endpoint. The Console
+admission. Tenant call inspection additionally permits an existing `:calls`-scoped API
+key to establish a Console-only, signed browser session. Authentication consumes the key
+server-side over TLS; the session stores only the tenant/API-key identifiers, closed scopes,
+and a bounded expiry, never the key secret. That session authorizes only call-inspection
+routes and is not a caller token, sample credential, diagnostics login, or LiveDashboard
+login. Repository development serves the diagnostics namespace from the shared Console
+endpoint. The Console
 shell and LiveDashboard route are
 implemented. The Vxpipe LiveView measurement page reads the bounded reporter with a short
 timeout and presents only its latest aggregate snapshot. It distinguishes current, stale,

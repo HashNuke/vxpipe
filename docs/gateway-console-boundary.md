@@ -76,9 +76,14 @@ proxy. Keep diagnostics on a separate page from the responsive voice console.
 Phoenix is the selected console framework. LiveDashboard owns platform VM inspection,
 and a separate Vxpipe page owns bounded call-path measurements. Diagnostics remain
 opt-in and add no Console-specific login; the deployment decides whether to expose them.
-API keys and join tokens remain limited to API and call-admission contracts. A release
-may include the console, while an embedding host can omit it and attach its own
-framework-independent telemetry reporter.
+Tenant call-inspection pages use a separate Console-owned browser session: an operator
+submits an existing tenant API key over TLS, Calls authenticates its existing `:calls`
+scope, and Console stores only the non-secret principal identifiers, closed scopes, and
+a bounded expiry in the signed session. The secret is neither frontend configuration nor
+browser-session data. This guard applies only to tenant call inspection; it does not turn
+join tokens into operator credentials or add authentication to the sample, diagnostics,
+or LiveDashboard routes. A release may include the console, while an embedding host can
+omit it and attach its own framework-independent telemetry reporter.
 
 ## Alternatives not selected
 

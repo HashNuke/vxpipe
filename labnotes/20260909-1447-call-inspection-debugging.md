@@ -148,3 +148,24 @@
   2,481 modules/functions), and unused-dependency checks pass. The complete migrated
   umbrella suite passes against a fresh isolated PostgreSQL cluster with 331 tests,
   0 failures and 6 integration exclusions.
+
+## 2026-09-09 — operator authentication and session foundation
+
+- Selected a Console-owned browser login for call inspection only. It submits an existing
+  tenant API key to the server, delegates verification to the public Calls authentication
+  workflow with the existing `:calls` scope, and does not alter caller join-token semantics.
+  Sample, diagnostics, and LiveDashboard routes remain outside this access boundary.
+- Split the boundary into an authenticator contract, a Calls-backed adapter, an
+  authentication workflow, and a session codec. This keeps credential verification,
+  adapter selection, and browser identity serialization out of future page controllers.
+- The signed session contains only the tenant key, API-key ID, closed scope names, and an
+  expiry. It never contains the API-key secret. Malformed identities, unknown scope names,
+  missing `:calls` scope, and expiry fail closed. The base setting gives sessions a one-hour
+  maximum age; route/form integration remains a later checkpoint.
+- Red evidence: six focused tests first failed on the absent authentication/session modules;
+  the expiry test then failed on the absent option-aware session functions.
+- Green evidence: the six focused tests pass. The complete Console child suite passes with
+  31 tests and no failures. Root format, warnings-as-errors compilation, strict Credo
+  (262 files / 2,502 modules and functions), and unused-dependency validation pass. The
+  complete migrated umbrella suite passes against a fresh isolated PostgreSQL cluster with
+  337 tests, no failures, and six integration exclusions.

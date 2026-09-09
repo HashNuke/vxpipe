@@ -70,6 +70,10 @@ config :vxpipe_console, :diagnostics,
 
 config :vxpipe_console, :sample_call, enabled: false
 
+config :vxpipe_console, :operator_authenticator, {Vxpipe.Console.CallsOperatorAuthenticator, []}
+
+config :vxpipe_console, :operator_session, max_age_seconds: 3_600
+
 config :esbuild,
   version: "0.25.4",
   vxpipe_console: [
