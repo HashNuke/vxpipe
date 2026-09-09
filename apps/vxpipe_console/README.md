@@ -55,8 +55,10 @@ Console entirely and attach its own handler to the framework-independent events.
 The diagnostics page reads the reporter with a short timeout and refreshes only the
 latest snapshot. It shows collection freshness and drops, runtime gauges, gateway
 request timing, model completion/first-output state, TTS first-audio timing and safe
-provider failure categories. Missing measurements have explicit empty states. The
-page packages its Phoenix LiveView client locally with a content hash and does not
+provider failure categories. Its compact background-tools instrument also shows admission
+outcomes, local worker timing, reservation pressure, and completion-mailbox handoff without
+tool names, arguments, results, or correlation identities. Missing measurements have explicit
+empty states. The page packages its Phoenix LiveView client locally with a content hash and does not
 depend on a hosted script. Use its **System dashboard** link for deeper VM inspection
 and **Voice console** to return to the separate sample.
 The LiveView does not own the Telemetry handler or a second event buffer: disconnecting

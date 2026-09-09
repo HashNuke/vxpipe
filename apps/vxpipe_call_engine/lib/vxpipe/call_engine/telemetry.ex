@@ -4,7 +4,8 @@ defmodule Vxpipe.CallEngine.Telemetry do
 
   Durations use the Erlang `:native` time unit from a monotonic clock. Event
   metadata contains only closed capability, provider, outcome, and observation
-  categories; conversational and correlation data is deliberately excluded.
+  categories; conversational, tool, and correlation data is deliberately
+  excluded.
   """
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
@@ -14,12 +15,18 @@ defmodule Vxpipe.CallEngine.Telemetry do
   @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+  @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
+  @background_tool_stop_event [:vxpipe, :call_engine, :background_tool, :stop]
+  @background_tool_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
   @runtime_sample_event [:vxpipe, :call_engine, :runtime, :sample]
   @events [
     @model_first_token_event,
     @model_request_stop_event,
     @tts_first_audio_event,
     @provider_failure_event,
+    @background_tool_admission_event,
+    @background_tool_stop_event,
+    @background_tool_handoff_event,
     @runtime_sample_event
   ]
 
@@ -75,6 +82,41 @@ defmodule Vxpipe.CallEngine.Telemetry do
     )
   end
 
+  @doc "Emits one background-tool admission outcome and reservation pressure at that boundary."
+  @spec background_tool_admission(
+          :accepted | :saturated | :start_failed | :unavailable | :invalid_tool,
+          non_neg_integer(),
+          non_neg_integer()
+        ) :: :ok
+  def background_tool_admission(outcome, reserved, limit)
+      when outcome in [:accepted, :saturated, :start_failed, :unavailable, :invalid_tool] and
+             is_integer(reserved) and reserved >= 0 and is_integer(limit) and limit >= 0 do
+    execute_pressure(@background_tool_admission_event, outcome, :reserved, reserved, limit)
+  end
+
+  @doc "Emits one terminal local background-worker outcome and elapsed duration."
+  @spec background_tool_stop(integer(), :ok | :failed | :unknown | :terminated) :: :ok
+  def background_tool_stop(started_at, outcome)
+      when is_integer(started_at) and outcome in [:ok, :failed, :unknown, :terminated] do
+    :telemetry.execute(
+      @background_tool_stop_event,
+      %{count: 1, duration: System.monotonic_time() - started_at},
+      %{outcome: outcome}
+    )
+  end
+
+  @doc "Emits one completion-mailbox outcome and its bounded queue depth."
+  @spec background_tool_handoff(
+          :queued | :duplicate | :overflow | :consumed,
+          non_neg_integer(),
+          pos_integer()
+        ) :: :ok
+  def background_tool_handoff(outcome, depth, limit)
+      when outcome in [:queued, :duplicate, :overflow, :consumed] and is_integer(depth) and
+             depth >= 0 and is_integer(limit) and limit > 0 do
+    execute_pressure(@background_tool_handoff_event, outcome, :depth, depth, limit)
+  end
+
   @doc "Emits one sampled active-room and VM-health observation."
   @spec runtime_sample(map()) :: :ok
   def runtime_sample(measurements) do
@@ -86,6 +128,14 @@ defmodule Vxpipe.CallEngine.Telemetry do
       event,
       %{duration: System.monotonic_time() - started_at},
       metadata
+    )
+  end
+
+  defp execute_pressure(event, outcome, pressure_key, pressure, limit) do
+    :telemetry.execute(
+      event,
+      %{pressure_key => pressure, count: 1, limit: limit},
+      %{outcome: outcome}
     )
   end
 

@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Tool.BackgroundInvocation do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.Tool.{BackgroundCompletion, Call, Context, Executor}
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
@@ -32,6 +33,7 @@ defmodule Vxpipe.CallEngine.Tool.BackgroundInvocation do
          %Executor{} <- state.executor,
          true <- is_pid(state.reply_to),
          true <- is_integer(state.timeout_ms) and state.timeout_ms > 0 do
+      state = Map.put(state, :started_at, Telemetry.started_at())
       task = Task.async(fn -> Executor.execute(state.executor, state.call, state.context) end)
       timer = Process.send_after(self(), :vxpipe_background_tool_timeout, state.timeout_ms)
       {:ok, Map.merge(state, %{task: task, timer: timer})}
@@ -64,16 +66,24 @@ defmodule Vxpipe.CallEngine.Tool.BackgroundInvocation do
   def handle_info(_message, state), do: {:noreply, state}
 
   @impl true
-  def terminate(_reason, %{task: task}) do
+  def terminate(_reason, %{task: nil}) do
+    :ok
+  end
+
+  def terminate(_reason, %{task: task} = state) do
     stop_task(task)
+    Telemetry.background_tool_stop(state.started_at, :terminated)
     :ok
   end
 
   defp report(outcome, state) do
+    outcome = normalize_outcome(outcome)
+    Telemetry.background_tool_stop(state.started_at, telemetry_outcome(outcome))
+
     completion = %BackgroundCompletion{
       call: state.call,
       context: state.context,
-      outcome: normalize_outcome(outcome)
+      outcome: outcome
     }
 
     send(
@@ -86,6 +96,10 @@ defmodule Vxpipe.CallEngine.Tool.BackgroundInvocation do
   defp normalize_outcome({:error, :invalid_result} = outcome), do: outcome
   defp normalize_outcome({:error, :unknown} = outcome), do: outcome
   defp normalize_outcome(_outcome), do: {:error, :tool_failed}
+
+  defp telemetry_outcome({:ok, _result}), do: :ok
+  defp telemetry_outcome({:error, :unknown}), do: :unknown
+  defp telemetry_outcome({:error, _reason}), do: :failed
 
   defp stop_task(nil), do: :ok
 

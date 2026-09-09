@@ -9,6 +9,9 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   alias Vxpipe.Gateway.HTTP.Mount
 
   @endpoint Vxpipe.Console.Endpoint
+  @background_admission [:vxpipe, :call_engine, :background_tool, :admission]
+  @background_handoff [:vxpipe, :call_engine, :background_tool, :handoff]
+  @background_stop [:vxpipe, :call_engine, :background_tool, :stop]
   @gateway_request_stop [:vxpipe, :gateway, :http, :request, :stop]
   @model_first_token [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop [:vxpipe, :call_engine, :model, :request, :stop]
@@ -81,6 +84,24 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
       %{capability: :model, provider: :req_llm, category: :timeout}
     )
 
+    :telemetry.execute(
+      @background_admission,
+      %{count: 1, reserved: 1, limit: 4},
+      %{outcome: :accepted}
+    )
+
+    :telemetry.execute(
+      @background_stop,
+      %{count: 1, duration: duration_ms(2)},
+      %{outcome: :unknown}
+    )
+
+    :telemetry.execute(
+      @background_handoff,
+      %{count: 1, depth: 1, limit: 4},
+      %{outcome: :queued}
+    )
+
     emit_runtime(7)
 
     {:ok, view, _html} = live(build_conn(), "/diagnostics")
@@ -101,6 +122,15 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
     assert has_element?(view, "#tts-first-audio-deepgram", "7.0 ms")
     assert has_element?(view, "#provider-failure-model-req-llm-timeout", "1")
+    assert has_element?(view, "#background-reservation-pressure", "1 / 4")
+    assert has_element?(view, "#background-mailbox-pressure", "1 / 4")
+    assert has_element?(view, "#background-admission-accepted td:first-child", "Accepted")
+    assert has_element?(view, "#background-admission-accepted td:last-child")
+    assert has_element?(view, "#background-worker-unknown td:first-child", "Unknown")
+    assert has_element?(view, "#background-worker-unknown td:nth-child(2)", "2.0 ms")
+    assert has_element?(view, "#background-worker-unknown td:last-child")
+    assert has_element?(view, "#background-handoff-queued td:first-child", "Queued")
+    assert has_element?(view, "#background-handoff-queued td:last-child")
     assert has_element?(view, ~s(a[href="/diagnostics/system"]), "System dashboard")
     assert has_element?(view, ~s(a[href="/"]), "Voice console")
     refute render(view) =~ sentinel

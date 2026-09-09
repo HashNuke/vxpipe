@@ -41,3 +41,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
 Unresolved decisions: none for this bounded milestone surface.
+
+## Finish evidence — background tools
+
+The existing instrument board gained one compact background-tools section rather than a
+new dashboard surface or detached card grid. It uses the established ledgers, status colors,
+mono measurements, spacing, and empty-state language. It shows only bounded sanitized
+aggregates: reservation/mailbox pressure, admissions, terminal duration, and handoff outcomes.
+Desktop 1440 px and mobile 390 px Chromium renders were inspected in empty and populated
+states; hierarchy remained scannable and no horizontal overflow appeared. The voice-console
+surface and design tokens did not change, so `DESIGN.md` requires no update for this extension.

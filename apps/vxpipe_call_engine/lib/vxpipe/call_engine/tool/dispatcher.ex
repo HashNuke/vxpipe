@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
   use GenServer
 
   alias Vxpipe.CallEngine.CallVariables.Binding
+  alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Call, Context, Executor}
   alias Vxpipe.CallEngine.Tool.Dispatcher.State
 
@@ -233,13 +234,13 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
   defp submit_call(%State{} = state, name, arguments, context) do
     cond do
       not Executor.background?(state.executor, name) ->
-        {:error, :unknown_tool, state}
+        reject_background_call(state, :unknown_tool, :invalid_tool)
 
       state.background_supervisor == nil or state.completion_target == nil ->
-        {:error, :tool_failed, state}
+        reject_background_call(state, :tool_failed, :unavailable)
 
       map_size(state.background_invocations) >= state.maximum_background_tools ->
-        {:error, :queue_full, state}
+        reject_background_call(state, :queue_full, :saturated)
 
       true ->
         start_background_call(state, name, arguments, context)
@@ -268,6 +269,12 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
             invocation = %{call: call, context: context, status: :running, worker: worker}
             invocations = Map.put(state.background_invocations, invocation_id, invocation)
 
+            Telemetry.background_tool_admission(
+              :accepted,
+              map_size(invocations),
+              state.maximum_background_tools
+            )
+
             acknowledgement = %{
               "invocation_id" => invocation_id,
               "status" => "running"
@@ -276,12 +283,22 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
             {:ok, acknowledgement, %{state | background_invocations: invocations}}
 
           {:error, _reason} ->
-            {:error, :tool_failed, state}
+            reject_background_call(state, :tool_failed, :start_failed)
         end
 
       {:error, state} ->
-        {:error, :tool_failed, state}
+        reject_background_call(state, :tool_failed, :start_failed)
     end
+  end
+
+  defp reject_background_call(state, reason, outcome) do
+    Telemetry.background_tool_admission(
+      outcome,
+      map_size(state.background_invocations),
+      state.maximum_background_tools
+    )
+
+    {:error, reason, state}
   end
 
   defp registered_tool_call?(state, name) do

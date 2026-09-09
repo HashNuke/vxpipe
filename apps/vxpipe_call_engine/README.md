@@ -98,13 +98,16 @@ temporary workers under the active agent's supervision subtree. Jido receives a 
 `running` acknowledgement only after worker startup, so it can complete that conversational
 request without waiting for the work. One bounded coordinator mailbox serializes the eventual
 result as private engine-origin context after caller work; it never fabricates participant
+speech. Chat-provider compatibility may encode that final non-model input with a user wire
+role, but its retained engine provenance and room projection keep it distinct from caller
 speech. Caller interruption does not cancel accepted work, while agent transfer or shutdown
 terminates its local workers. A submitted timeout is reported as an unknown outcome and is
 never retried automatically. The development definition exposes the deterministic
 `prepare_background_report` Action for exercising this lifecycle.
 
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
-TTS first provider audio, and safe model/STT/TTS provider failures. Its explicitly named
+TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,
+terminal duration, completion handoff, and bounded worker/mailbox pressure. Its explicitly named
 `Vxpipe.CallEngine.TelemetrySampler` periodically reports active room count, total BEAM
 memory bytes, and run queue without entering a room callback. Configure the sampling cadence
 under the call-engine application setting `telemetry: [sample_interval_ms: 1_000]`.

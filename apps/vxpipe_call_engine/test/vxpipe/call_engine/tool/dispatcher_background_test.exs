@@ -4,9 +4,24 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
   alias Vxpipe.CallEngine.TestBlockingTool
   alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Context, Dispatcher}
 
+  @admission_event [:vxpipe, :call_engine, :background_tool, :admission]
+  @stop_event [:vxpipe, :call_engine, :background_tool, :stop]
+
   setup do
     Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
     on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
+
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach_many(
+        handler_id,
+        [@admission_event, @stop_event],
+        &__MODULE__.handle_telemetry_event/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
   end
 
   test "accepts one bounded invocation without waiting and reports its result once" do
@@ -40,6 +55,9 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
     assert {:ok, %{"invocation_id" => "tool-one", "status" => "running"}} =
              Dispatcher.submit(dispatcher, "wait_for_test", %{}, first)
 
+    assert_receive {:background_tool_telemetry, @admission_event,
+                    %{count: 1, reserved: 1, limit: 1}, %{outcome: :accepted}}
+
     assert_receive {:test_blocking_tool_started, worker}
 
     assert :ok =
@@ -51,6 +69,9 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
 
     assert {:error, :queue_full} = Dispatcher.submit(dispatcher, "wait_for_test", %{}, second)
 
+    assert_receive {:background_tool_telemetry, @admission_event,
+                    %{count: 1, reserved: 1, limit: 1}, %{outcome: :saturated}}
+
     send(worker, :release_test_tool)
 
     assert_receive {:vxpipe_background_tool_finished, ^dispatcher, invocation}, 1_000
@@ -58,6 +79,11 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
     assert invocation.call.name == "wait_for_test"
     assert invocation.context == %{first | tool_call_id: "tool-one"}
     assert invocation.outcome == {:ok, %{"released" => true}}
+
+    assert_receive {:background_tool_telemetry, @stop_event, %{count: 1, duration: duration},
+                    %{outcome: :ok}}
+
+    assert is_integer(duration) and duration >= 0
     refute_receive {:vxpipe_background_tool_finished, ^dispatcher, _duplicate}
 
     assert :ok = Dispatcher.acknowledge_background_completion(dispatcher, "tool-one")
@@ -80,6 +106,11 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
     assert_receive {:vxpipe_background_tool_finished, ^dispatcher, invocation}, 500
     assert invocation.call.id == "tool-timeout"
     assert invocation.outcome == {:error, :unknown}
+
+    assert_receive {:background_tool_telemetry, @stop_event, %{count: 1, duration: duration},
+                    %{outcome: :unknown}}
+
+    assert is_integer(duration) and duration >= 0
     refute_receive {:test_blocking_tool_started, _duplicate}
     refute_receive {:vxpipe_background_tool_finished, ^dispatcher, _duplicate}
   end
@@ -93,7 +124,32 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
     assert {:error, :tool_failed} =
              Dispatcher.submit(dispatcher, "wait_for_test", %{}, context)
 
+    assert_receive {:background_tool_telemetry, @admission_event,
+                    %{count: 1, reserved: 0, limit: 1}, %{outcome: :start_failed}}
+
     refute_receive {:test_blocking_tool_started, _worker}
+    refute_receive {:vxpipe_background_tool_finished, ^dispatcher, _completion}
+  end
+
+  test "reports local worker termination when its owning subtree stops" do
+    {dispatcher, supervisor} = start_background_runtime([])
+    context = context("request-terminated", "command-terminated")
+
+    register(dispatcher, context, "tool-terminated")
+
+    assert {:ok, %{"status" => "running"}} =
+             Dispatcher.submit(dispatcher, "wait_for_test", %{}, context)
+
+    assert_receive {:test_blocking_tool_started, tool_task}
+    monitor = Process.monitor(tool_task)
+
+    :ok = Supervisor.stop(supervisor)
+    assert_receive {:DOWN, ^monitor, :process, ^tool_task, _reason}
+
+    assert_receive {:background_tool_telemetry, @stop_event, %{count: 1, duration: duration},
+                    %{outcome: :terminated}}
+
+    assert is_integer(duration) and duration >= 0
     refute_receive {:vxpipe_background_tool_finished, ^dispatcher, _completion}
   end
 
@@ -144,5 +200,9 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
       agent_request_id: request_id,
       tool_call_id: nil
     }
+  end
+
+  def handle_telemetry_event(event, measurements, metadata, test_pid) do
+    send(test_pid, {:background_tool_telemetry, event, measurements, metadata})
   end
 end

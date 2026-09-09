@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
   alias Vxpipe.CallEngine.Tool.Call
   alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Dispatcher}
 
+  @background_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
   @model_first_token_event [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
@@ -537,6 +538,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
   end
 
   test "serializes a background completion after active caller work as engine context" do
+    attach_telemetry_events([@background_handoff_event])
     Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
     on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
 
@@ -557,7 +559,9 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
          completion_target: self()}
       )
 
-    coordinator = start_coordinator(tool_dispatcher: dispatcher)
+    coordinator =
+      start_coordinator(tool_dispatcher: dispatcher, maximum_background_completions: 1)
+
     kickoff = command("background-kickoff", "prepare the report")
 
     assert :ok = AgentCoordinator.respond(coordinator, kickoff)
@@ -618,6 +622,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     refute_receive {:vxpipe_capability_tool_completed, ^coordinator, ^kickoff, ^call, _result}
 
     emit(coordinator, kickoff_request, :request_completed, %{result: "Report started."})
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^kickoff, "Report started."}
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^kickoff}
 
     active = command("caller-while-tool-runs", "what else can you do?")
@@ -626,6 +631,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     assert {:ok, [^active]} = AgentCoordinator.interrupt(coordinator, [])
     assert_receive {:test_agent_cancel, ^coordinator, ^active_request, :interrupted}
+    assert_receive {:test_agent_discard, ^coordinator, []}
 
     replacement = command("caller-after-interruption", "continue with this instead")
     assert :ok = AgentCoordinator.respond(coordinator, replacement)
@@ -635,6 +641,9 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     assert_receive {:vxpipe_background_tool_finished, ^dispatcher, completion}
     GenServer.cast(coordinator, {:vxpipe_background_tool_finished, dispatcher, completion})
+
+    assert_receive {:telemetry_event, @background_handoff_event, %{count: 1, depth: 1, limit: 1},
+                    %{outcome: :queued}}
 
     assert_receive {:vxpipe_capability_tool_completed, ^coordinator, ^kickoff, ^call,
                     %{"released" => true}}
@@ -648,16 +657,23 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
       result: "I can keep talking."
     })
 
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^replacement, "I can keep talking."}
+
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^replacement}
+
+    assert_receive next_continuation_message
+
+    assert {:test_agent_request, ^coordinator, continuation_request, query, continuation_options} =
+             next_continuation_message
 
     assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
                     %ContinueAgent{} = continuation}
 
+    assert_receive {:telemetry_event, @background_handoff_event, %{count: 1, depth: 0, limit: 1},
+                    %{outcome: :consumed}}
+
     assert continuation.tool_call_id == "tool-background"
     assert continuation.source_command_id == kickoff.id
-
-    assert_receive {:test_agent_request, ^coordinator, continuation_request, query,
-                    continuation_options}
 
     assert query =~ "tool-background"
     assert query =~ "released"
@@ -671,6 +687,159 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     assert_receive {:vxpipe_capability_text, ^coordinator, ^continuation, "The report is ready."}
 
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^continuation}
+    refute_receive {:test_agent_request, ^coordinator, _request, _query, _options}
+  end
+
+  test "serializes out-of-order background completions once with their original identities" do
+    Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
+    on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
+
+    activation_id = "act-background-order-#{System.unique_integer([:positive])}"
+
+    background_supervisor =
+      start_supervised!({BackgroundSupervisor, activation_id: activation_id, maximum_children: 2})
+
+    dispatcher =
+      start_supervised!(
+        {Dispatcher,
+         activation_id: activation_id,
+         tools: [TestBlockingTool],
+         maximum_result_bytes: 4_096,
+         maximum_background_tools: 2,
+         background_tool_timeout_ms: 2_000,
+         background_supervisor: background_supervisor,
+         completion_target: self()}
+      )
+
+    coordinator =
+      start_coordinator(tool_dispatcher: dispatcher, maximum_background_completions: 2)
+
+    kickoff = command("background-order", "prepare both reports")
+    assert :ok = AgentCoordinator.respond(coordinator, kickoff)
+    assert_receive {:test_agent_request, ^coordinator, request_id, _, request_options}
+
+    tool_context = Keyword.fetch!(request_options, :tool_context)
+    guardrail = Map.fetch!(tool_context, :__tool_guardrail_callback__)
+    execution_context = Map.fetch!(tool_context, :vxpipe_tool_context)
+
+    assert :ok =
+             guardrail.(%{
+               tool_call_id: "tool-first",
+               tool_name: "wait_for_test",
+               arguments: %{}
+             })
+
+    assert :ok =
+             guardrail.(%{
+               tool_call_id: "tool-second",
+               tool_name: "wait_for_test",
+               arguments: %{}
+             })
+
+    assert {:ok, first_acknowledgement} =
+             Dispatcher.submit(dispatcher, "wait_for_test", %{}, execution_context)
+
+    assert_receive {:test_blocking_tool_started, first_worker}
+
+    assert {:ok, second_acknowledgement} =
+             Dispatcher.submit(dispatcher, "wait_for_test", %{}, execution_context)
+
+    assert_receive {:test_blocking_tool_started, second_worker}
+
+    emit(
+      coordinator,
+      request_id,
+      :tool_started,
+      %{tool_call_id: "tool-first", tool_name: "wait_for_test", arguments: %{}},
+      tool_call_id: "tool-first",
+      tool_name: "wait_for_test"
+    )
+
+    assert_receive {:vxpipe_capability_tool_started, ^coordinator, ^kickoff,
+                    %Call{id: "tool-first"} = first_call}
+
+    emit(
+      coordinator,
+      request_id,
+      :tool_started,
+      %{tool_call_id: "tool-second", tool_name: "wait_for_test", arguments: %{}},
+      tool_call_id: "tool-second",
+      tool_name: "wait_for_test"
+    )
+
+    assert_receive {:vxpipe_capability_tool_started, ^coordinator, ^kickoff,
+                    %Call{id: "tool-second"} = second_call}
+
+    emit(
+      coordinator,
+      request_id,
+      :tool_completed,
+      %{
+        tool_call_id: "tool-first",
+        tool_name: "wait_for_test",
+        result: {:ok, first_acknowledgement, []}
+      },
+      tool_call_id: "tool-first",
+      tool_name: "wait_for_test"
+    )
+
+    assert_receive {:vxpipe_capability_tool_accepted, ^coordinator, ^kickoff, ^first_call,
+                    ^first_acknowledgement}
+
+    emit(
+      coordinator,
+      request_id,
+      :tool_completed,
+      %{
+        tool_call_id: "tool-second",
+        tool_name: "wait_for_test",
+        result: {:ok, second_acknowledgement, []}
+      },
+      tool_call_id: "tool-second",
+      tool_name: "wait_for_test"
+    )
+
+    assert_receive {:vxpipe_capability_tool_accepted, ^coordinator, ^kickoff, ^second_call,
+                    ^second_acknowledgement}
+
+    emit(coordinator, request_id, :request_completed, %{result: "Both reports are running."})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^kickoff}
+
+    send(second_worker, :release_test_tool)
+    assert_receive {:vxpipe_background_tool_finished, ^dispatcher, second_completion}
+    GenServer.cast(coordinator, {:vxpipe_background_tool_finished, dispatcher, second_completion})
+
+    assert_receive {:vxpipe_capability_tool_completed, ^coordinator, ^kickoff, ^second_call,
+                    %{"released" => true}}
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{tool_call_id: "tool-second"} = second_continuation}
+
+    assert_receive {:test_agent_request, ^coordinator, second_request, _, _}
+
+    send(first_worker, :release_test_tool)
+    assert_receive {:vxpipe_background_tool_finished, ^dispatcher, first_completion}
+    GenServer.cast(coordinator, {:vxpipe_background_tool_finished, dispatcher, first_completion})
+    GenServer.cast(coordinator, {:vxpipe_background_tool_finished, dispatcher, first_completion})
+
+    assert_receive {:vxpipe_capability_tool_completed, ^coordinator, ^kickoff, ^first_call,
+                    %{"released" => true}}
+
+    refute_receive {:vxpipe_capability_tool_completed, ^coordinator, ^kickoff, ^first_call, _}
+    refute_receive {:test_agent_request, ^coordinator, _request, _query, _options}
+
+    emit(coordinator, second_request, :request_completed, %{result: "Second report ready."})
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^second_continuation}
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{tool_call_id: "tool-first"} = first_continuation}
+
+    assert_receive {:test_agent_request, ^coordinator, first_request, _, _}
+    emit(coordinator, first_request, :request_completed, %{result: "First report ready."})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^first_continuation}
+
+    refute_receive {:vxpipe_capability_continuation_started, ^coordinator, _duplicate}
     refute_receive {:test_agent_request, ^coordinator, _request, _query, _options}
   end
 

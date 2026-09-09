@@ -3,6 +3,9 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
 
   alias Vxpipe.Console.TelemetryReporter
 
+  @background_admission [:vxpipe, :call_engine, :background_tool, :admission]
+  @background_handoff [:vxpipe, :call_engine, :background_tool, :handoff]
+  @background_stop [:vxpipe, :call_engine, :background_tool, :stop]
   @gateway_request_stop [:vxpipe, :gateway, :http, :request, :stop]
   @model_first_token [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop [:vxpipe, :call_engine, :model, :request, :stop]
@@ -50,9 +53,27 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
       %{node: sentinel}
     )
 
+    :telemetry.execute(
+      @background_admission,
+      %{count: 1, reserved: 1, limit: 4, command_id: sentinel},
+      %{outcome: :accepted, tool_name: sentinel}
+    )
+
+    :telemetry.execute(
+      @background_stop,
+      %{count: 1, duration: duration_ms(2), result: sentinel},
+      %{outcome: :unknown, invocation_id: sentinel}
+    )
+
+    :telemetry.execute(
+      @background_handoff,
+      %{count: 1, depth: 1, limit: 4, participant_id: sentinel},
+      %{outcome: :queued, call_id: sentinel}
+    )
+
     snapshot = TelemetryReporter.snapshot(reporter)
 
-    assert snapshot.received_events == 6
+    assert snapshot.received_events == 9
     assert snapshot.dropped_events == 0
     assert is_integer(snapshot.last_event_age_ms) and snapshot.last_event_age_ms >= 0
 
@@ -61,6 +82,12 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
     assert snapshot.model.requests[{:req_llm, :unavailable, :missing}] == 1
     assert snapshot.tts.first_audio[:deepgram] == duration_stats(9_000)
     assert snapshot.provider_failures[{:model, :req_llm, :unavailable}] == 1
+
+    assert snapshot.background_tools.admissions == %{accepted: 1}
+    assert snapshot.background_tools.reservation_pressure == %{reserved: 1, limit: 4}
+    assert snapshot.background_tools.stops[:unknown] == duration_stats(2_000)
+    assert snapshot.background_tools.handoffs == %{queued: 1}
+    assert snapshot.background_tools.mailbox_pressure == %{depth: 1, limit: 4}
 
     assert %{active_rooms: 2, memory_bytes: 123_456, run_queue: 1, age_ms: age_ms} =
              snapshot.runtime

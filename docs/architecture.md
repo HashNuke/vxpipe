@@ -175,9 +175,13 @@ events from a stale child cannot pass the room's current-capability check.
 Submitted long-running actions return a correlated running
 acknowledgement and continue under Vxpipe-owned supervision. Their later results enter a
 bounded Vxpipe mailbox. Once the Jido agent is idle, the coordinator supplies the result in
-an engine-origin continuation request that is never projected as caller speech. Do not use
-Jido `inject`/`steer` as the delivery guarantee: those controls apply only to an active run
-and queued input can be dropped when that run terminates.
+an engine-origin continuation request that is never projected as caller speech. The Jido
+context retains `vxpipe_origin: :engine`; a chat provider may still require the final
+non-model input to use its ordinary user wire role. Provider role is therefore not Vxpipe
+participant attribution. RoomAuthority creates only the agent turn and no participant or
+caller-transcript event for this request. Do not use Jido `inject`/`steer` as the delivery
+guarantee: those controls apply only to an active run and queued input can be dropped when
+that run terminates.
 
 The released definition uses `call_variables.sections`, invocation values use
 `initial_variables`, and per-agent section grants use `variable_permissions`.
@@ -1529,6 +1533,9 @@ The implemented framework-independent event contract currently includes:
 | `[:vxpipe, :call_engine, :model, :request, :stop]` | `duration` in Erlang `:native` units | `provider`, `outcome`, and `first_output` | Request dispatch to terminal completion, cancellation, timeout, or failure; `first_output` is `:observed` or `:missing` |
 | `[:vxpipe, :call_engine, :tts, :first_audio]` | `duration` in Erlang `:native` units | `provider` | TTS request dispatch to the first decoded provider audio frame, before output-sink acceptance or remote playout; emitted once and absent without audio |
 | `[:vxpipe, :call_engine, :provider, :failure]` | `count` equal to `1` | `capability`, `provider`, and `category` | Safe failure projection at the owning model, STT, or TTS boundary; no raw provider reason or response is included |
+| `[:vxpipe, :call_engine, :background_tool, :admission]` | `count` plus `reserved` and configured `limit` gauges observed at that admission | `outcome` | Engine submission boundary after validation and capacity checks; accepted work is counted only after worker startup |
+| `[:vxpipe, :call_engine, :background_tool, :stop]` | `count` and local-worker `duration` in Erlang `:native` units | `outcome` | One terminal observation for a successful, failed, unknown-timeout, or activation-terminated local worker |
+| `[:vxpipe, :call_engine, :background_tool, :handoff]` | `count` plus completion `depth` and configured `limit` gauges observed at that handoff | `outcome` | Bounded coordinator-mailbox queue, duplicate, overflow, or consumption boundary |
 | `[:vxpipe, :call_engine, :runtime, :sample]` | `active_rooms`, `memory_bytes`, and `run_queue` as non-negative gauges | none | Periodic engine-owned sample outside room callbacks; active rooms come from the room DynamicSupervisor and VM values from the local BEAM |
 
 Gateway operations are closed categories (`:cors_preflight`, `:health_check`,
@@ -1538,7 +1545,10 @@ The event does not carry the request path, query, headers, body, or correlation 
 Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`,
 `:local_fixture`, `:morse`, or `:other` set. Model outcomes are `:ok`, `:unavailable`, `:timeout`,
 `:invalid_response`, or `:cancelled`; failure categories are `:unavailable`, `:timeout`,
-`:invalid_response`, `:output_failure`, or `:unknown`. None of these events carries
+`:invalid_response`, `:output_failure`, or `:unknown`. Background admission outcomes are
+`:accepted`, `:saturated`, `:start_failed`, `:unavailable`, or `:invalid_tool`; worker outcomes
+are `:ok`, `:failed`, `:unknown`, or `:terminated`; handoff outcomes are `:queued`,
+`:duplicate`, `:overflow`, or `:consumed`. None of these events carries
 input/output text, audio, raw provider errors, model names, or correlation identifiers.
 `active_rooms` is the current DynamicSupervisor child count rather than a lifecycle-event
 estimate. The runtime sampler is an explicitly named call-engine child and its interval comes

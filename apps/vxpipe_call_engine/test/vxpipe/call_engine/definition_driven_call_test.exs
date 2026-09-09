@@ -192,6 +192,21 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                         "intake" => %{value: %{"summary" => "ready"}}
                       }
                     }}
+
+    assert [{activation, _value}] =
+             Registry.lookup(
+               Vxpipe.CallEngine.RoomRegistry,
+               {:agent_activation, receiver.activation_id, :supervisor}
+             )
+
+    activation_monitor = Process.monitor(activation)
+    :ok = Supervisor.stop(activation)
+    assert_receive {:DOWN, ^activation_monitor, :process, ^activation, _reason}
+
+    assert CallVariables.whereis(room.incarnation_id) == variables
+
+    assert {:ok, %{"sections" => %{"order" => %{"value" => %{"id" => "order-1"}}}}} =
+             CallVariables.read(variables, command)
   end
 
   test "executes generated variable actions through the definition-driven Jido loop" do

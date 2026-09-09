@@ -15,6 +15,9 @@ defmodule Vxpipe.Console.TelemetryReporter do
     [:vxpipe, :call_engine, :model, :request, :stop],
     [:vxpipe, :call_engine, :tts, :first_audio],
     [:vxpipe, :call_engine, :provider, :failure],
+    [:vxpipe, :call_engine, :background_tool, :admission],
+    [:vxpipe, :call_engine, :background_tool, :stop],
+    [:vxpipe, :call_engine, :background_tool, :handoff],
     [:vxpipe, :call_engine, :runtime, :sample]
   ]
 
@@ -30,6 +33,15 @@ defmodule Vxpipe.Console.TelemetryReporter do
   @gateway_outcomes [:ok, :client_error, :server_error, :exception, :unknown]
   @model_outcomes [:ok, :unavailable, :timeout, :invalid_response, :cancelled]
   @failure_categories [:unavailable, :timeout, :invalid_response, :output_failure, :unknown]
+  @background_admission_outcomes [
+    :accepted,
+    :saturated,
+    :start_failed,
+    :unavailable,
+    :invalid_tool
+  ]
+  @background_stop_outcomes [:ok, :failed, :unknown, :terminated]
+  @background_handoff_outcomes [:queued, :duplicate, :overflow, :consumed]
 
   @type option ::
           {:handler_id, term()}
@@ -102,6 +114,11 @@ defmodule Vxpipe.Console.TelemetryReporter do
      %{
        dropped: dropped,
        handler_id: handler_id,
+       background_tool_admissions: %{},
+       background_tool_handoffs: %{},
+       background_tool_mailbox_pressure: nil,
+       background_tool_reservation_pressure: nil,
+       background_tool_stops: %{},
        http_requests: %{},
        last_event_at: nil,
        model_first_token: %{},
@@ -118,6 +135,13 @@ defmodule Vxpipe.Console.TelemetryReporter do
   @impl true
   def handle_call(:snapshot, _from, state) do
     snapshot = %{
+      background_tools: %{
+        admissions: state.background_tool_admissions,
+        handoffs: state.background_tool_handoffs,
+        mailbox_pressure: state.background_tool_mailbox_pressure,
+        reservation_pressure: state.background_tool_reservation_pressure,
+        stops: state.background_tool_stops
+      },
       dropped_events: :atomics.get(state.dropped, 1),
       http: %{requests: state.http_requests},
       last_event_age_ms: age_ms(state.last_event_at),
@@ -231,6 +255,54 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   defp project(
+         [:vxpipe, :call_engine, :background_tool, :admission],
+         %{count: count, reserved: reserved, limit: limit},
+         metadata,
+         state
+       )
+       when is_integer(count) and count > 0 and is_integer(reserved) and reserved >= 0 and
+              is_integer(limit) and limit >= 0 do
+    outcome = normalize(metadata, :outcome, @background_admission_outcomes, :unavailable)
+
+    state
+    |> update_in([:background_tool_admissions], fn outcomes ->
+      Map.update(outcomes, outcome, count, &(&1 + count))
+    end)
+    |> Map.put(:background_tool_reservation_pressure, %{reserved: reserved, limit: limit})
+  end
+
+  defp project(
+         [:vxpipe, :call_engine, :background_tool, :stop],
+         %{count: 1, duration: duration},
+         metadata,
+         state
+       )
+       when is_integer(duration) and duration >= 0 do
+    outcome = normalize(metadata, :outcome, @background_stop_outcomes, :failed)
+
+    update_in(state.background_tool_stops, fn outcomes ->
+      update_duration(outcomes, outcome, duration)
+    end)
+  end
+
+  defp project(
+         [:vxpipe, :call_engine, :background_tool, :handoff],
+         %{count: count, depth: depth, limit: limit},
+         metadata,
+         state
+       )
+       when is_integer(count) and count > 0 and is_integer(depth) and depth >= 0 and
+              is_integer(limit) and limit > 0 do
+    outcome = normalize(metadata, :outcome, @background_handoff_outcomes, :overflow)
+
+    state
+    |> update_in([:background_tool_handoffs], fn outcomes ->
+      Map.update(outcomes, outcome, count, &(&1 + count))
+    end)
+    |> Map.put(:background_tool_mailbox_pressure, %{depth: depth, limit: limit})
+  end
+
+  defp project(
          [:vxpipe, :call_engine, :runtime, :sample],
          %{active_rooms: active_rooms, memory_bytes: memory_bytes, run_queue: run_queue},
          _metadata,
@@ -312,6 +384,41 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   defp sanitize_event(
+         [:vxpipe, :call_engine, :background_tool, :admission],
+         measurements,
+         metadata
+       ) do
+    {
+      sanitize_reservation_pressure(measurements),
+      %{
+        outcome: normalize(metadata, :outcome, @background_admission_outcomes, :unavailable)
+      }
+    }
+  end
+
+  defp sanitize_event(
+         [:vxpipe, :call_engine, :background_tool, :stop],
+         measurements,
+         metadata
+       ) do
+    {
+      sanitize_counted_duration(measurements),
+      %{outcome: normalize(metadata, :outcome, @background_stop_outcomes, :failed)}
+    }
+  end
+
+  defp sanitize_event(
+         [:vxpipe, :call_engine, :background_tool, :handoff],
+         measurements,
+         metadata
+       ) do
+    {
+      sanitize_mailbox_pressure(measurements),
+      %{outcome: normalize(metadata, :outcome, @background_handoff_outcomes, :overflow)}
+    }
+  end
+
+  defp sanitize_event(
          [:vxpipe, :call_engine, :runtime, :sample],
          measurements,
          _metadata
@@ -330,6 +437,26 @@ defmodule Vxpipe.Console.TelemetryReporter do
     do: %{count: count}
 
   defp sanitize_count(_measurements), do: %{}
+
+  defp sanitize_counted_duration(%{count: 1, duration: duration})
+       when is_integer(duration) and duration >= 0,
+       do: %{count: 1, duration: duration}
+
+  defp sanitize_counted_duration(_measurements), do: %{}
+
+  defp sanitize_reservation_pressure(%{count: count, reserved: reserved, limit: limit})
+       when is_integer(count) and count > 0 and is_integer(reserved) and reserved >= 0 and
+              is_integer(limit) and limit >= 0,
+       do: %{count: count, reserved: reserved, limit: limit}
+
+  defp sanitize_reservation_pressure(_measurements), do: %{}
+
+  defp sanitize_mailbox_pressure(%{count: count, depth: depth, limit: limit})
+       when is_integer(count) and count > 0 and is_integer(depth) and depth >= 0 and
+              is_integer(limit) and limit > 0,
+       do: %{count: count, depth: depth, limit: limit}
+
+  defp sanitize_mailbox_pressure(_measurements), do: %{}
 
   defp sanitize_runtime(%{
          active_rooms: active_rooms,

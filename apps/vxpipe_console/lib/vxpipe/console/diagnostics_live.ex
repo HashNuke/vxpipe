@@ -84,6 +84,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
 
           <div class="workbench-column">
             <.speech_panel first_audio={@snapshot.tts.first_audio} />
+            <.background_tools_panel metrics={@snapshot.background_tools} />
             <.failures_panel failures={@snapshot.provider_failures} />
           </div>
         </div>
@@ -372,6 +373,110 @@ defmodule Vxpipe.Console.DiagnosticsLive do
     """
   end
 
+  attr :metrics, :map, required: true
+
+  defp background_tools_panel(assigns) do
+    assigns =
+      assigns
+      |> assign(:admission_rows, sorted_entries(assigns.metrics.admissions))
+      |> assign(:handoff_rows, sorted_entries(assigns.metrics.handoffs))
+      |> assign(:stop_rows, sorted_entries(assigns.metrics.stops))
+
+    ~H"""
+    <section id="background-tool-metrics" class="instrument-section" aria-labelledby="background-tools-heading">
+      <div class="section-heading">
+        <h2 id="background-tools-heading">Background tools</h2>
+        <span class="section-note">Bounded lifecycle</span>
+      </div>
+
+      <dl class="runtime-grid">
+        <div>
+          <dt>Reservations at admission</dt>
+          <dd id="background-reservation-pressure">
+            {format_pressure(@metrics.reservation_pressure, :reserved)}
+          </dd>
+        </div>
+        <div>
+          <dt>Mailbox at handoff</dt>
+          <dd id="background-mailbox-pressure">
+            {format_pressure(@metrics.mailbox_pressure, :depth)}
+          </dd>
+        </div>
+      </dl>
+
+      <div class="section-heading section-heading--spaced">
+        <h3>Admissions</h3>
+        <span class="section-note">Submission boundary</span>
+      </div>
+
+      <%= if @admission_rows == [] do %>
+        <div class="empty-state">No background work submitted.</div>
+      <% else %>
+        <table class="ledger">
+          <caption class="visually-hidden">Background tool admission outcomes</caption>
+          <thead><tr><th>Outcome</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr
+              :for={{outcome, count} <- @admission_rows}
+              id={series_id("background-admission", [outcome])}
+            >
+              <td class={outcome_class(outcome)}>{humanize(outcome)}</td>
+              <td class="measure">{format_integer(count)}</td>
+            </tr>
+          </tbody>
+        </table>
+      <% end %>
+
+      <div class="section-heading section-heading--spaced">
+        <h3>Worker outcomes</h3>
+        <span class="section-note">Terminal duration</span>
+      </div>
+
+      <%= if @stop_rows == [] do %>
+        <div class="empty-state">No background worker has stopped.</div>
+      <% else %>
+        <table class="ledger">
+          <caption class="visually-hidden">Background worker terminal outcomes and timing</caption>
+          <thead><tr><th>Outcome</th><th>Latest</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr
+              :for={{outcome, stats} <- @stop_rows}
+              id={series_id("background-worker", [outcome])}
+            >
+              <td class={outcome_class(outcome)}>{humanize(outcome)}</td>
+              <td class="measure">{format_duration(stats.latest_us)}</td>
+              <td class="measure">{format_integer(stats.count)}</td>
+            </tr>
+          </tbody>
+        </table>
+      <% end %>
+
+      <div class="section-heading section-heading--spaced">
+        <h3>Completion handoff</h3>
+        <span class="section-note">Coordinator mailbox</span>
+      </div>
+
+      <%= if @handoff_rows == [] do %>
+        <div class="empty-state">No completion handoff observed.</div>
+      <% else %>
+        <table class="ledger">
+          <caption class="visually-hidden">Background completion handoff outcomes</caption>
+          <thead><tr><th>Outcome</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr
+              :for={{outcome, count} <- @handoff_rows}
+              id={series_id("background-handoff", [outcome])}
+            >
+              <td class={outcome_class(outcome)}>{humanize(outcome)}</td>
+              <td class="measure">{format_integer(count)}</td>
+            </tr>
+          </tbody>
+        </table>
+      <% end %>
+    </section>
+    """
+  end
+
   attr :failures, :map, required: true
 
   defp failures_panel(assigns) do
@@ -471,7 +576,9 @@ defmodule Vxpipe.Console.DiagnosticsLive do
   defp runtime_label(age_ms) when age_ms > @stale_after_ms, do: "Runtime sample is stale"
   defp runtime_label(_age_ms), do: "Runtime sample is current"
 
-  defp outcome_class(:ok), do: "outcome--ok"
+  defp outcome_class(outcome) when outcome in [:ok, :accepted, :queued, :consumed],
+    do: "outcome--ok"
+
   defp outcome_class(_outcome), do: "outcome--fault"
 
   defp first_output_label(:observed), do: "First output observed"
@@ -502,6 +609,12 @@ defmodule Vxpipe.Console.DiagnosticsLive do
   defp format_memory(bytes) do
     mebibytes = bytes / 1_048_576
     :erlang.float_to_binary(mebibytes, decimals: 1) <> " MiB"
+  end
+
+  defp format_pressure(nil, _key), do: "No observation"
+
+  defp format_pressure(pressure, key) do
+    "#{format_integer(Map.fetch!(pressure, key))} / #{format_integer(pressure.limit)}"
   end
 
   defp format_age(nil), do: "No signals"

@@ -35,7 +35,7 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformerTest do
     assert Enum.map(messages, &Map.get(&1, :content)) == ["Stay concise.", "current user"]
   end
 
-  test "projects engine-origin continuations as system context rather than caller speech" do
+  test "keeps engine-origin continuations as provider-compatible input" do
     engine_observation = "background invocation tool-one completed"
 
     context =
@@ -60,8 +60,10 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformerTest do
              {:system, "Stay concise."},
              {:user, "caller question"},
              {:assistant, "I started it."},
-             {:system, engine_observation}
+             {:user, engine_observation}
            ]
+
+    assert Enum.at(messages, -1).refs.vxpipe_origin == :engine
   end
 
   test "uses an armed local fixture without adding controls to the call input" do

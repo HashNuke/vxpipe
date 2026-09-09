@@ -579,25 +579,37 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         case Map.fetch(state.background_calls, completion.call.id) do
           {:ok, %{command: source}} ->
             continuation = ContinueAgent.new(source, completion)
-            send(state.owner, {:vxpipe_capability_continuation_started, self(), continuation})
             state = %{state | background_completions: remaining}
 
             case start_request(continuation, state) do
               {:ok, state} ->
-                _ =
-                  Dispatcher.acknowledge_background_completion(
-                    state.tool_dispatcher,
-                    completion.call.id
-                  )
+                case Dispatcher.acknowledge_background_completion(
+                       state.tool_dispatcher,
+                       completion.call.id
+                     ) do
+                  :ok ->
+                    send(
+                      state.owner,
+                      {:vxpipe_capability_continuation_started, self(), continuation}
+                    )
 
-                %{
-                  state
-                  | background_calls: Map.delete(state.background_calls, completion.call.id)
-                }
+                    Telemetry.background_tool_handoff(
+                      :consumed,
+                      :queue.len(remaining),
+                      state.maximum_background_completions
+                    )
 
-              {:error, state} ->
-                emit_failure(state.owner, self(), continuation, :provider_unavailable)
-                state
+                    %{
+                      state
+                      | background_calls: Map.delete(state.background_calls, completion.call.id)
+                    }
+
+                  {:error, _reason} ->
+                    exit(:background_completion_acknowledgement_failed)
+                end
+
+              {:error, _state} ->
+                exit(:background_continuation_unavailable)
             end
 
           :error ->
@@ -653,15 +665,35 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
     cond do
       completion_queued?(state.background_completions, invocation_id) ->
+        Telemetry.background_tool_handoff(
+          :duplicate,
+          :queue.len(state.background_completions),
+          state.maximum_background_completions
+        )
+
         {:ok, state}
 
       :queue.len(state.background_completions) >= state.maximum_background_completions ->
+        Telemetry.background_tool_handoff(
+          :overflow,
+          :queue.len(state.background_completions),
+          state.maximum_background_completions
+        )
+
         :overflow
 
       true ->
+        completions = :queue.in(completion, state.background_completions)
+
+        Telemetry.background_tool_handoff(
+          :queued,
+          :queue.len(completions),
+          state.maximum_background_completions
+        )
+
         state = %{
           state
-          | background_completions: :queue.in(completion, state.background_completions)
+          | background_completions: completions
         }
 
         {:ok, maybe_report_background_completion(state, invocation_id)}
@@ -702,7 +734,8 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
   defp valid_completion?(completion, state) do
     completion.context.agent_participant_id == state.agent_participant_id and
-      completion.context.tool_call_id == completion.call.id
+      completion.context.tool_call_id == completion.call.id and
+      Dispatcher.background_invocation?(state.tool_dispatcher, completion.call.id)
   end
 
   defp put_origin_ref(refs, %ContinueAgent{} = command) do

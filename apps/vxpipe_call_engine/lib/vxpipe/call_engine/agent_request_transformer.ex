@@ -25,8 +25,7 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformer do
            project_call_variables(
              context
              |> Map.put(:entries, entries)
-             |> Context.to_messages()
-             |> project_engine_origins(),
+             |> Context.to_messages(),
              runtime_context
            ) do
       overrides = %{messages: messages}
@@ -51,20 +50,6 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformer do
   end
 
   defp discarded_request?(_refs, _discarded), do: false
-
-  defp project_engine_origins(messages) do
-    Enum.map(messages, fn
-      %{role: role, refs: refs} = message when role in [:user, "user"] and is_map(refs) ->
-        if engine_origin?(refs), do: %{message | role: :system}, else: message
-
-      message ->
-        message
-    end)
-  end
-
-  defp engine_origin?(refs) do
-    Map.get(refs, :vxpipe_origin, Map.get(refs, "vxpipe_origin")) in [:engine, "engine"]
-  end
 
   defp project_call_variables(messages, runtime_context) do
     case Map.fetch(runtime_context, :vxpipe_tool_dispatcher) do
