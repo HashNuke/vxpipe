@@ -82,14 +82,14 @@ call ends, the same page remains useful from stored history without a live room 
   archival projection without changing general metric labels or making writes synchronous.
 - [x] Implement console-owned read-only pages and bounded updates through public APIs,
   with explicit stale/gap/error states and no UI dependency in the reusable gateway.
-- [ ] Exercise delayed storage, failed/unknown tool outcomes and terminated rooms through
+- [x] Exercise delayed storage, failed/unknown tool outcomes and terminated rooms through
   deterministic fixtures; keep hosted-provider/network checks in the integration lane.
 - [x] Inspect desktop/mobile list/detail views and verify the voice console stays unchanged.
 - [x] Document the operator workflow, access limits and differences from caller visibility.
 
 ## Acceptance and failure checks
 
-- [ ] A variable update and slow host tool appear on their original participant/turn/
+- [x] A variable update and slow host tool appear on their original participant/turn/
   invocation timeline with the correct snapshot revision and observed outcome.
 - [x] An ended call is inspectable with no room PID; absent timing/history is explicitly
   unavailable/incomplete rather than invented from current state or aggregates.
@@ -195,6 +195,12 @@ Implementation evidence to date:
   archive notice now reports each bounded count explicitly. The focused endpoint file passes
   15 tests, the complete Console suite passes 51 tests, and root format,
   warnings-as-errors compilation and strict Credo checks pass.
+- A failed tool event with an explicitly unknown outcome now renders its permitted payload
+  as inert evidence. When neither persisted nor live evidence exists, the call detail shows
+  a generic not-found result without leaking backend error atoms. Closing a connected detail
+  LiveView prevents any further live read beyond a complete polling interval. The focused
+  endpoint file passes 17 tests, the complete Console suite passes 53 tests, and root format,
+  warnings-as-errors compilation and strict Credo checks pass.
 - Rendered review at 1440px and 390px verified the list/detail workflow, event selection,
   call/history pagination, variable diff, mobile reading order and zero horizontal overflow.
   The approved screenshots are `.impeccable/review/desktop.png` and
@@ -205,9 +211,9 @@ Implementation evidence to date:
   ID · 1 duplicate sequence` with the unknown tool payload, retained equal 390px document
   and viewport widths, and produced no browser errors.
 
-Failed/unknown outcome presentation, terminated-room lifecycle, reconnect/bounded-history,
-and safe missing/denied/purged behavior still need consolidated verification. This evidence
-does not complete the milestone.
+Reconnect/bounded-history behavior, complete missing/denied/purged safety including stale
+cache behavior, and the remaining credential/content checks still need consolidated
+verification. This evidence does not complete the milestone.
 
 ## Specification review
 

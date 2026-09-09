@@ -283,3 +283,23 @@ remaining end-to-end failure checks have not been demonstrated yet.
 - This presentation checkpoint is commit `e1dfa09`. It does not complete the remaining
   subscription, lifecycle or safe missing/denied/purged acceptance checks, so the milestone
   remains in progress.
+
+## 2026-09-09 — failure and page-lifecycle edges
+
+- Added deterministic coverage for a failed tool event whose permitted payload reports an
+  unknown outcome. The payload is rendered as inert inspection evidence rather than hidden
+  or converted into a successful result.
+- A call absent from both persisted and live sources now presents the same generic not-found
+  state appropriate for missing or purged data. Internal `call_not_found` and `call_not_live`
+  atoms do not reach the rendered response.
+- Closing the detail LiveView terminates its inspection process and produces no further live
+  source reads after more than one polling interval. The test observes process termination
+  with a monitor and does not use a synchronization sleep.
+- Green evidence: the focused endpoint file passes 17 tests, the complete Console suite
+  passes 53 tests, and root format, warnings-as-errors compilation and strict Credo checks
+  pass.
+- Checkpoint `bcb75d2`, combined with the earlier end-to-end archive-outage and ended-call
+  fixtures, completes the deterministic delayed-storage, failed/unknown-outcome and
+  terminated-room implementation task. It also completes the correlated variable/slow-tool
+  timeline check. Reconnection, stale purge-cache behavior, and other remaining acceptance
+  checks keep the milestone in progress.
