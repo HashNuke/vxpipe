@@ -18,7 +18,9 @@ defmodule Vxpipe.MixProject do
   #
   # Run "mix help deps" for examples and options.
   defp deps do
-    []
+    [
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+    ]
   end
 
   defp aliases do
@@ -36,7 +38,13 @@ defmodule Vxpipe.MixProject do
         "do --app vxpipe_console cmd --cd assets npm run check",
         "do --app vxpipe_console esbuild vxpipe_console --minify"
       ],
-      "assets.test": ["do --app vxpipe_console cmd --cd assets npm test"]
+      "assets.test": ["do --app vxpipe_console cmd --cd assets npm test"],
+      quality: [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "credo --strict",
+        "deps.unlock --check-unused"
+      ]
     ]
   end
 end

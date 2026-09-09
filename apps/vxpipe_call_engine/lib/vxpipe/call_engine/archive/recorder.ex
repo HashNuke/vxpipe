@@ -1,0 +1,139 @@
+defmodule Vxpipe.CallEngine.Archive.Recorder do
+  @moduledoc false
+
+  alias Vxpipe.CallEngine.Archive.Port
+  alias Vxpipe.CallEngine.Command.{CreateRoom, SendText}
+
+  alias Vxpipe.CallEngine.{
+    Id,
+    ResolvedCallPlan,
+    TextToSpeechRequest
+  }
+
+  alias Vxpipe.CallEngine.Participant.Snapshot, as: ParticipantSnapshot
+  alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
+
+  @derive {Inspect, except: [:port]}
+  @enforce_keys [:port, :participant_activations]
+  defstruct @enforce_keys
+
+  @type t :: %__MODULE__{
+          port: nil | Port.t(),
+          participant_activations: %{optional(String.t()) => String.t()}
+        }
+
+  @spec new(CreateRoom.t() | ResolvedCallPlan.t(), String.t(), keyword()) :: t()
+  def new(%CreateRoom{}, _incarnation_id, _options) do
+    %__MODULE__{port: nil, participant_activations: %{}}
+  end
+
+  def new(%ResolvedCallPlan{} = plan, incarnation_id, options) do
+    port =
+      Port.new(
+        Keyword.get(options, :archive_handoff),
+        %{
+          tenant_id: plan.tenant_id,
+          call_id: plan.call_id,
+          room_id: plan.room_id,
+          incarnation_id: incarnation_id
+        },
+        Keyword.get(options, :archive_source_policy, %{"revision" => 0})
+      )
+
+    participant_activations =
+      plan.participants
+      |> Map.values()
+      |> Enum.reject(&is_nil(&1.activation_id))
+      |> Map.new(&{&1.participant_id, &1.activation_id})
+
+    %__MODULE__{port: port, participant_activations: participant_activations}
+  end
+
+  @spec room_opened(t(), RoomSnapshot.t()) :: t()
+  def room_opened(%__MODULE__{} = recorder, %RoomSnapshot{} = snapshot) do
+    emit(recorder, :room_opened,
+      id: Id.generate(:event),
+      command_id: snapshot.created_by_command_id,
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{
+        "created_by_actor_id" => snapshot.created_by_actor_id,
+        "lifecycle" => snapshot.lifecycle
+      }
+    )
+  end
+
+  @spec participant_joined(t(), ParticipantSnapshot.t()) :: t()
+  def participant_joined(%__MODULE__{} = recorder, %ParticipantSnapshot{} = participant) do
+    emit(recorder, :participant_joined,
+      id: Id.generate(:event),
+      participant_id: participant.participant_id,
+      activation_id: activation(recorder, participant.participant_id),
+      command_id: participant.created_by_command_id,
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{
+        "created_by_actor_id" => participant.created_by_actor_id,
+        "role" => participant.role,
+        "state" => participant.state
+      }
+    )
+  end
+
+  @spec connection_attached(t(), struct(), atom()) :: t()
+  def connection_attached(%__MODULE__{} = recorder, command, role) when is_atom(role) do
+    emit(recorder, :connection_attached,
+      id: Id.generate(:event),
+      participant_id: command.participant_id,
+      activation_id: activation(recorder, command.participant_id),
+      connection_id: command.connection_id,
+      command_id: command.id,
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{"actor_id" => command.actor_id, "role" => role}
+    )
+  end
+
+  @spec accepted_input(t(), SendText.t(), :audio | :text) :: t()
+  def accepted_input(%__MODULE__{} = recorder, %SendText{} = command, modality)
+      when modality in [:audio, :text] do
+    emit(recorder, :accepted_input,
+      id: Id.generate(:event),
+      participant_id: command.participant_id,
+      activation_id: activation(recorder, command.participant_id),
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id,
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{"content" => command.content, "modality" => modality}
+    )
+  end
+
+  @spec delivered_output(t(), TextToSpeechRequest.t()) :: t()
+  def delivered_output(%__MODULE__{} = recorder, %TextToSpeechRequest{} = request) do
+    emit(recorder, :agent_output_delivered,
+      id: Id.generate(:event),
+      participant_id: request.participant_id,
+      activation_id: activation(recorder, request.participant_id),
+      source_participant_id: request.source_participant_id,
+      connection_id: request.connection_id,
+      command_id: request.command_id,
+      correlation_id: request.correlation_id,
+      occurred_at: DateTime.utc_now(:millisecond),
+      payload: %{"output_id" => request.output_id, "text" => request.text}
+    )
+  end
+
+  @spec event(t(), struct(), keyword()) :: t()
+  def event(%__MODULE__{} = recorder, event, attributes \\ []) when is_list(attributes) do
+    attributes =
+      Keyword.put_new(attributes, :activation_id, activation(recorder, event.participant_id))
+
+    %{recorder | port: Port.emit_event(recorder.port, event, attributes)}
+  end
+
+  defp emit(recorder, kind, attributes) do
+    %{recorder | port: Port.emit(recorder.port, kind, attributes)}
+  end
+
+  defp activation(recorder, participant_id) do
+    Map.get(recorder.participant_activations, participant_id)
+  end
+end

@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   alias Vxpipe.CallEngine
 
-  alias Vxpipe.CallEngine.Archive.Handoff
+  alias Vxpipe.CallEngine.Archive.{Fact, Handoff}
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
 
   alias Vxpipe.CallEngine.{
@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     CallDefinition,
     CallInvocation,
     CallVariables,
+    ConnectionAttachment,
     DefinitionCompiler,
     Error,
     PlanStartup
@@ -46,10 +47,272 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
     TestArchiveWriter,
+    TestCollectingArchiveWriter,
     TestFailingTextToSpeechTransport,
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
   }
+
+  test "archives private lifecycle, accepted input, tool, and generated-output facts" do
+    room_id = unique_id("room-private-history")
+    plan = compile_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    script =
+      expect_react do
+        user("What time is it?")
+        call("get_current_time", %{}, id: "tool-private-history")
+        answer("The host action completed.")
+      end
+
+    archive =
+      archive_options(
+        writer: {TestCollectingArchiveWriter, self()},
+        maximum_pending_facts: 64
+      )
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               agent_request_options: Jido.AI.Test.react_opts(script),
+               archive: Keyword.put(archive, :enabled, true)
+             )
+
+    attach_caller(plan, room, caller, "conn-private-history")
+
+    command =
+      send_command(
+        plan,
+        room,
+        caller,
+        "conn-private-history",
+        "What time is it?"
+      )
+
+    assert :ok = CallEngine.send_text(command)
+
+    facts = collect_archive_facts_through(:agent_turn_completed)
+
+    assert Enum.map(facts, & &1.sequence) == Enum.to_list(1..length(facts))
+
+    assert %Fact{kind: :room_opened, call_id: call_id} = fact!(facts, :room_opened)
+    assert call_id == plan.call_id
+
+    assert Enum.any?(facts, fn
+             %Fact{
+               kind: :participant_joined,
+               participant_id: participant_id,
+               payload: %{"role" => "human"}
+             } ->
+               participant_id == caller.participant_id
+
+             _other ->
+               false
+           end)
+
+    assert Enum.any?(facts, fn
+             %Fact{
+               kind: :participant_joined,
+               participant_id: participant_id,
+               activation_id: activation_id,
+               payload: %{"role" => "agent"}
+             } ->
+               participant_id == receiver.participant_id and
+                 activation_id == receiver.activation_id
+
+             _other ->
+               false
+           end)
+
+    assert %Fact{
+             kind: :connection_attached,
+             participant_id: caller_participant_id,
+             connection_id: "conn-private-history"
+           } = fact!(facts, :connection_attached)
+
+    assert caller_participant_id == caller.participant_id
+
+    assert %Fact{
+             kind: :participant_turn_started,
+             command_id: command_id,
+             correlation_id: correlation_id,
+             public_sequence: 1,
+             payload: %{"modality" => "text"}
+           } = fact!(facts, :participant_turn_started)
+
+    assert command_id == command.id
+    assert correlation_id == command.correlation_id
+
+    assert %Fact{
+             kind: :accepted_input,
+             participant_id: caller_participant_id,
+             command_id: command_id,
+             correlation_id: correlation_id,
+             public_sequence: nil,
+             payload: %{"content" => "What time is it?", "modality" => "text"}
+           } = fact!(facts, :accepted_input)
+
+    assert caller_participant_id == caller.participant_id
+    assert command_id == command.id
+    assert correlation_id == command.correlation_id
+
+    assert %Fact{
+             kind: :participant_turn_completed,
+             public_sequence: 2,
+             payload: %{"modality" => "text"}
+           } = fact!(facts, :participant_turn_completed)
+
+    assert %Fact{
+             kind: :tool_call_started,
+             participant_id: agent_participant_id,
+             source_participant_id: source_participant_id,
+             tool_call_id: "tool-private-history",
+             public_sequence: 3,
+             payload: %{"arguments" => %{}, "name" => "get_current_time"}
+           } = fact!(facts, :tool_call_started)
+
+    assert agent_participant_id == receiver.participant_id
+    assert source_participant_id == caller.participant_id
+
+    assert %Fact{
+             kind: :tool_call_completed,
+             tool_call_id: "tool-private-history",
+             public_sequence: 4,
+             payload: %{
+               "name" => "get_current_time",
+               "result" => %{"timezone" => "UTC"}
+             }
+           } = fact!(facts, :tool_call_completed)
+
+    assert %Fact{
+             kind: :agent_output_generated,
+             public_sequence: 5,
+             payload: %{
+               "aggregated_by" => "sentence",
+               "text" => "The host action completed.",
+               "will_be_spoken" => false
+             }
+           } = fact!(facts, :agent_output_generated)
+
+    assert %Fact{kind: :agent_turn_completed, public_sequence: 6} =
+             fact!(facts, :agent_turn_completed)
+  end
+
+  test "archives final audio input and distinguishes generated from delivered output" do
+    configure_speech_runtime()
+    room_id = unique_id("room-private-audio-history")
+    plan = compile_plan(room_id, speech?: true)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    script =
+      expect_react do
+        user("Hello there")
+        answer("Hello back.")
+      end
+
+    archive =
+      archive_options(
+        writer: {TestCollectingArchiveWriter, self()},
+        maximum_pending_facts: 64
+      )
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               agent_request_options: Jido.AI.Test.react_opts(script),
+               archive: Keyword.put(archive, :enabled, true)
+             )
+
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+
+    assert {:ok, %ConnectionAttachment{}} =
+             attach_caller(plan, room, caller, "conn-private-audio-history", sink)
+
+    assert_receive {:test_stt_transport_started, stt_transport, _connection}
+
+    TestSpeechToTextTransport.deliver(
+      stt_transport,
+      stt_turn_message("StartOfTurn", 1, "Hello")
+    )
+
+    TestSpeechToTextTransport.deliver(
+      stt_transport,
+      stt_turn_message("EndOfTurn", 2, "Hello there", "model")
+    )
+
+    assert_receive {:test_tts_control, ^tts_transport, speak}, 2_000
+    assert JSON.decode!(speak) == %{"text" => "Hello back.", "type" => "Speak"}
+    assert_receive {:test_tts_control, ^tts_transport, _flush}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"speech-private"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(tts_transport, <<1, 0, 2, 0>>)
+    assert_receive {:test_audio_output, ^sink, _frame}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"speech-private"})
+    )
+
+    assert_receive {:test_audio_output_finish, ^sink, _turn_id}, 2_000
+    :ok = TestAudioOutputSink.playback_started(sink)
+    :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
+    :ok = TestAudioOutputSink.playback_completed(sink)
+
+    facts = collect_archive_facts_through(:agent_turn_completed)
+
+    refute Enum.any?(facts, &(&1.kind == :participant_transcription_partial))
+
+    assert %Fact{
+             kind: :participant_transcription_final,
+             participant_id: participant_id,
+             payload: %{
+               "final" => true,
+               "provider_turn_index" => 0,
+               "text" => "Hello there"
+             }
+           } = fact!(facts, :participant_transcription_final)
+
+    assert participant_id == caller.participant_id
+
+    assert %Fact{
+             kind: :accepted_input,
+             payload: %{"content" => "Hello there", "modality" => "audio"}
+           } = fact!(facts, :accepted_input)
+
+    generated = fact!(facts, :agent_output_generated)
+
+    assert %Fact{
+             kind: :agent_output_generated,
+             payload: %{"text" => "Hello back.", "will_be_spoken" => true}
+           } = generated
+
+    assert %Fact{
+             kind: :agent_output_delivery_started,
+             payload: %{"output_id" => output_id, "text" => "Hello back."}
+           } = fact!(facts, :agent_output_delivery_started)
+
+    assert output_id == generated.id
+
+    assert %Fact{
+             kind: :agent_output_delivery_progressed,
+             payload: %{
+               "output_id" => ^output_id,
+               "played_ms" => 20,
+               "text" => "Hello back.",
+               "total_ms" => 100
+             }
+           } = fact!(facts, :agent_output_delivery_progressed)
+
+    assert %Fact{
+             kind: :agent_output_delivered,
+             public_sequence: nil,
+             payload: %{"output_id" => ^output_id, "text" => "Hello back."}
+           } = fact!(facts, :agent_output_delivered)
+  end
 
   test "starts only entry participants and routes an attached caller through Jido" do
     room_id = unique_id("room")
@@ -713,6 +976,25 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     )
   end
 
+  defp collect_archive_facts_through(kind, facts \\ []) do
+    receive do
+      {:test_archive_fact, %Fact{kind: ^kind} = fact} ->
+        Enum.reverse([fact | facts])
+
+      {:test_archive_fact, %Fact{} = fact} ->
+        collect_archive_facts_through(kind, [fact | facts])
+
+      {:test_archive_fact, _other_archive_value} ->
+        collect_archive_facts_through(kind, facts)
+    after
+      2_000 -> flunk("timed out waiting for archived #{kind}")
+    end
+  end
+
+  defp fact!(facts, kind) do
+    Enum.find(facts, &(&1.kind == kind)) || flunk("missing archived #{kind}")
+  end
+
   defp compile_variables_plan(room_id) do
     transform = fn input ->
       input
@@ -895,6 +1177,24 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              )
 
     command
+  end
+
+  defp stt_turn_message(event, sequence, transcript, trigger \\ nil) do
+    message = %{
+      "type" => "TurnInfo",
+      "request_id" => "request-private-history",
+      "sequence_id" => sequence,
+      "event" => event,
+      "turn_index" => 0,
+      "audio_window_start" => 0.0,
+      "audio_window_end" => 1.0,
+      "transcript" => transcript,
+      "words" => [],
+      "end_of_turn_confidence" => 0.8
+    }
+
+    message = if trigger == nil, do: message, else: Map.put(message, "trigger", trigger)
+    JSON.encode!(message)
   end
 
   defp monitor_children(children) do

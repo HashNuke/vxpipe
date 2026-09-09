@@ -170,6 +170,7 @@ project-owned failures before finishing:
 ```shell
 mix format --check-formatted
 mix compile --warnings-as-errors
+mix credo --strict
 mix test
 mix deps.unlock --check-unused
 ```

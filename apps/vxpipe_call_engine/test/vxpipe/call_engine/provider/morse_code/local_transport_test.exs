@@ -300,6 +300,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
       connection_id: "conn-test",
       command_id: unique_id("command"),
       correlation_id: correlation_id,
+      output_id: unique_id("output"),
       text: text,
       output_sink: sink
     }

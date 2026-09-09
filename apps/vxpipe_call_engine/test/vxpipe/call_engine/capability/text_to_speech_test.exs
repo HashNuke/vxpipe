@@ -268,6 +268,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
       connection_id: "connection-test",
       command_id: "command-test",
       correlation_id: correlation_id,
+      output_id: "output-test",
       text: text,
       output_sink: sink
     }

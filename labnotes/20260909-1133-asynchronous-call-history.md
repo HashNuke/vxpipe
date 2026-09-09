@@ -29,10 +29,14 @@ after the room exits or storage temporarily fails.
    latest pointer.
 2. Add a strictly bounded room-scoped subscriber handoff, asynchronous Ecto writer,
    outage/saturation evidence, and lifecycle that can drain after room shutdown.
-3. Add the missing private accepted-input/lifecycle facts and archive all permitted
+3. Split `RoomAuthority` along its participant, connection, input-turn, agent-output,
+   tool-call, and archive responsibilities while preserving one serialized authority
+   process and the existing supervision topology. Use an explicit state struct and
+   keep extracted modules cohesive rather than moving everything to another catch-all.
+4. Add the missing private accepted-input/lifecycle facts and archive all permitted
    turn, transcript, output, tool, interruption, and available usage facts without
    coupling them to client visibility.
-4. Add tenant-authorized Calls history projections and incomplete/lag indicators,
+5. Add tenant-authorized Calls history projections and incomplete/lag indicators,
    then exercise the full completed-call/outage recovery slice and update durable
    documentation.
 
@@ -148,3 +152,65 @@ This checkpoint does not yet archive room lifecycle, accepted text, transcript,
 generated/delivered/interrupted output, tool, or usage facts. It also leaves the
 handoff's incomplete evidence in memory; the later read-projection checkpoint must
 persist and expose that evidence without pretending dropped facts can be recovered.
+
+## Checkpoint 3: RoomAuthority responsibility split (complete)
+
+The private-fact red/green cycle exposed an architectural problem before the work
+was committed: `RoomAuthority` already combined participant lifecycle, connection
+and STT lifecycle, input turns, agent output/TTS, tool transitions, interruptions,
+and failure handling. Adding archive state and fact constructors there would deepen
+that violation. The milestone now has an explicit responsibility-split gate with an
+owned state struct, cohesive extraction list, unchanged process topology, and focused
+regression suites. `Archive.Recorder` is the first extraction; it owns archive identity,
+participant activation attribution, lifecycle/input/delivery fact construction, and
+delegation to the low-level port.
+
+Credo `1.7.19` was added as a root-only development/test quality dependency after
+confirming the current Hex release. Running the stock strict profile produced many
+pre-existing low-signal/style findings, so the checked-in profile establishes a
+focused baseline instead of normalizing a permanently red gate. It checks unsafe
+constructs, consistency, names, unused operations, generous complexity/nesting
+ceilings, and a project-owned 800-line emergency module-size ceiling. The initial
+strict run failed on the roughly 1,800-line `RoomAuthority`, making the split
+observable; line count remains only a regression backstop and does not prove SRP.
+
+The completed extraction leaves the original `RoomAuthority` process as the sole
+GenServer and serialization boundary while reducing its module to 288 lines of API,
+callback routing, initialization, and snapshot construction. Cohesive modules now
+own startup, participant lifecycle, connection/STT attachment lifecycle, accepted
+input turns, generated/spoken agent output and interruption, tool-call transitions,
+turn state, client/archive event publication, and private archive recording. No new
+process or cyclic synchronous call was introduced.
+
+Verification after the extraction:
+
+- `mix test` in `apps/vxpipe_call_engine`: 173 tests, 0 failures, 2 excluded
+- `mix compile --warnings-as-errors` in `apps/vxpipe_call_engine`: passed
+- `mix credo --strict` at the umbrella root: 233 source files, 0 issues
+- `mix format --check-formatted`, umbrella compilation with warnings as errors,
+  and `mix deps.unlock --check-unused`: passed
+- umbrella-root `mix test`: blocked before test execution because this
+  noninteractive shell had no PostgreSQL password; the error exposed no credential
+  value and the database-backed suites were not represented as verified
+
+The broader definition-driven test initially exposed a writer-boundary collision:
+private facts queued ahead of a deliberately blocked variable-snapshot test writer.
+The test writer now accepts private facts immediately under a separate observation
+tag while retaining explicit acknowledgement control for variable snapshots. The
+full call-engine suite then passed without changing the production handoff ordering.
+
+## Checkpoint 4: private room facts (started; blocked on checkpoint 3)
+
+The first focused contract failed at compilation because `Archive.Fact` and
+`Archive.Port` did not exist. The new port contract then passed and proves a
+room-local monotonic archive sequence, inspect-redacted payloads, source-policy
+capture, and recursive removal of authorization/API-key material before the
+bounded handoff. The test uses a non-blocking collecting writer so writer
+acknowledgement mechanics do not obscure fact construction.
+
+The first room-boundary test subsequently timed out waiting for an archived
+`agent_turn_completed` fact, as expected: `RoomAuthority` still only projected
+events to its attached client. That red test covers configured participant and
+room startup, attachment, exact accepted typed input, tool arguments/result,
+generated output, and turn completion. It also requires the private archive
+sequence to remain contiguous while retaining the separate public event sequence.

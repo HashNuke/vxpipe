@@ -66,7 +66,7 @@ Every milestone inherits these requirements; its own checklist adds the slice-sp
 - [ ] Run focused tests from the owning umbrella child and record commands/results in
   the milestone's implementation evidence. Do not test dependency-guaranteed behavior.
 - [ ] Run from the umbrella root: `mix format --check-formatted`,
-  `mix compile --warnings-as-errors`, `mix test`, and
+  `mix compile --warnings-as-errors`, `mix credo --strict`, `mix test`, and
   `mix deps.unlock --check-unused`. Keep real provider/network tests in a tagged
   integration lane excluded from the default suite.
 - [ ] Inspect any changed sample UI in a rendered browser using `agent-browser`,

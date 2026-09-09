@@ -25,6 +25,40 @@ An authorized operator inspects a completed call's transcript, tool history and 
 - [ ] Implement bounded shutdown/draining and honest incomplete/lag indicators; document the selected internal overflow behavior without adding a durable queue dependency.
 - [ ] Carry policy/retention coordination metadata needed by later recording/publication/cleanup without implementing those features early.
 
+### RoomAuthority responsibility-split checkpoint
+
+Complete this checkpoint before the private room-fact implementation is considered
+finished. It is a structural gate for this milestone, not deferred cleanup:
+
+- [x] Introduce an explicit `RoomAuthority.State` struct that names the state owned
+  by the serializer and prevents extracted modules from depending on an anonymous,
+  open-ended map.
+- [x] Keep `RoomAuthority` as the single GenServer/callback router and room-level
+  serialization boundary; do not add another competing authority process or change
+  the supervision topology merely to split source files.
+- [x] Move private fact construction, credential removal, archive sequencing, and
+  bounded handoff into a cohesive archive recorder. Room callbacks may report an
+  authoritative occurrence, but must not assemble persistence envelopes.
+- [x] Extract participant admission/removal and connection attach/detach/STT-binding
+  lifecycle into cohesive modules with explicit inputs and returned state.
+- [x] Extract typed/audio input-turn normalization and accepted-input dispatch from
+  agent output/TTS handling; neither module may own the other's callback family.
+- [x] Extract active/background tool-call transitions from agent text/audio output
+  and interruption transitions.
+- [x] Leave authorization and ordering decisions at one clearly named owning
+  boundary. Avoid cyclic synchronous process calls and do not let extracted modules
+  reach through another umbrella application's private implementation.
+- [x] Run the existing participant, text, audio, TTS, tool, definition-driven call,
+  and archive suites during each extraction. Add focused tests only where an
+  extracted project-owned contract is not already characterized.
+- [x] Finish with no callback-family implementation merely copied into another
+  catch-all module: each extracted module must have one cohesive reason to change,
+  and `RoomAuthority` must read as orchestration rather than the implementation of
+  every room concern.
+- [x] Make the repository Credo gate green. The checked-in profile includes an
+  800-line emergency ceiling for module files; this is a regression backstop, not
+  proof of SRP or a substitute for the responsibility checks above.
+
 ## Acceptance and failure checks
 
 - [ ] Stop/delay PostgreSQL after admission: room speech, tools and variables continue without SQL waits; resume only retained facts, with no lossless claim.

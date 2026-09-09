@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRequest do
     :connection_id,
     :command_id,
     :correlation_id,
+    :output_id,
     :text,
     :output_sink
   ]
@@ -24,6 +25,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRequest do
           connection_id: String.t(),
           command_id: String.t(),
           correlation_id: String.t(),
+          output_id: String.t(),
           text: String.t(),
           output_sink: pid()
         }
