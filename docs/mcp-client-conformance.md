@@ -32,6 +32,9 @@ starting unrelated development voice-provider configuration. The task itself sta
   ExMCP request boundary.
 - Discovery maps dependency failures to a categorical error rather than returning transport
   diagnostics that could contain authorization data.
+- Invocation maps JSON-RPC error objects to `:remote_error`; malformed payloads and mismatched
+  response IDs become `:outcome_unknown` after submission. These categories do not include
+  remote messages, and the effective wire tests observe exactly one `tools/call` per case.
 - `Vxpipe.MCP.ReferenceProbe.run/2` is the fixture-facing boundary that discovers and calls
   Everything's `echo` tool while preserving the remote definition and result as data.
 

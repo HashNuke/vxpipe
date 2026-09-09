@@ -91,7 +91,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   Jido nor database/call engine running; decoded names/schemas remain data.
 - [x] Applicable pinned official client scenarios pass; omitted/unsupported scenarios and
   upstream harness defects are explicit, not blanket success.
-- [ ] Negotiated-version mismatch, malformed/error responses, wrong correlation IDs and
+- [x] Negotiated-version mismatch, malformed/error responses, wrong correlation IDs and
   unsupported interactions fail safely without speculative resubmission.
 - [x] Argument schema failure occurs before network submission; external schema refs do not
   trigger hidden fetches.
@@ -159,6 +159,10 @@ Implementation evidence:
   rather than scaling with the supplied identities. Same-named tools in two catalogs also
   resolve only from the catalog value explicitly supplied by the caller; there is no global
   remote-name registry in this library.
+- Effective loopback wire tests cover server JSON-RPC failures, method-not-found responses,
+  malformed JSON, and wrong correlation IDs through the supervised ExMCP client. Remote and
+  unsupported errors become `:remote_error`; malformed and mismatched responses preserve the
+  honest `:outcome_unknown` state. Every case emits exactly one `tools/call`.
 - `Vxpipe.MCP.Invocation` selects only from that complete catalog and delegates schema work
   to `Vxpipe.MCP.ArgumentValidator`. Default/explicit JSON Schema 2020-12 and canonical
   explicit Draft 7 arguments are checked without casts or remote resolvers before submission;
@@ -181,7 +185,7 @@ Implementation evidence:
   discovered/validated `tools/call`; the full scenario matrix and internal API are recorded in
   [MCP client conformance profile](../mcp-client-conformance.md).
 - The focused behavior test was observed red before implementation and is green with the
-  default child suite (21 tests, 0 failures, three integration tests excluded). The opt-in
+  default child suite (23 tests, 0 failures, three integration tests excluded). The opt-in
   lane passes all three wrapper tests: the two unmodified harness scenarios each score 1/1,
   the corrected recovery fixture scores 3/3, and the Everything probe returns its expected
   tool and result. This is partial conformance evidence, not a blanket claim.

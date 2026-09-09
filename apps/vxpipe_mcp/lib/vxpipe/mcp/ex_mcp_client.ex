@@ -51,6 +51,9 @@ defmodule Vxpipe.MCP.ExMCPClient do
   defp normalize_invocation_result({:error, %ExMCP.Error.ProtocolError{}}),
     do: {:error, :remote_error}
 
+  defp normalize_invocation_result({:error, %{"code" => code}}) when is_integer(code),
+    do: {:error, :remote_error}
+
   defp normalize_invocation_result({:error, %{type: :protocol_error}}),
     do: {:error, :remote_error}
 

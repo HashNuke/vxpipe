@@ -286,6 +286,25 @@ evidence that this production concern is solved.
   excluded; warnings-as-errors compilation, root formatting, strict Credo across 299 files,
   and the unused-dependency check pass.
 
+## 2026-09-09 — effective wire failures
+
+- Added a test-only Bandit/Plug MCP fault fixture so malformed and error responses traverse
+  the real supervised `Connections`, `Discovery`, `Invocation`, and ExMCP public path. Bandit
+  is test-only; Plug was already an ExMCP runtime dependency and is now explicit in the
+  owning child. The lockfile versions did not change.
+- Bypass was tried first but its Ranch 1 requirement conflicts with the umbrella's locked
+  Ranch 2 graph. It was removed without changing the lockfile.
+- Red: ExMCP returns JSON-RPC errors as string-keyed maps when `format: :map` is selected.
+  `ExMCPClient` did not recognize that public shape, so server and method-not-found errors
+  incorrectly became `:outcome_unknown`.
+- Green: the adapter recognizes integer-coded JSON-RPC error maps and returns only
+  `:remote_error`, discarding the remote message. Malformed JSON and wrong correlation IDs
+  correctly remain `:outcome_unknown` because submission occurred. The fixture observes
+  exactly one `tools/call` in every case, with no speculative resubmission.
+- Verification: the default MCP suite passes 23 tests with three integrations excluded; the
+  opt-in lane passes all three tests. Warnings-as-errors compilation, root formatting,
+  strict Credo across 299 files, and the unused-dependency check pass.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)
