@@ -543,3 +543,37 @@ join, text input, audio input, model output, synthesized speech and spoken/text 
 Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
 engine `117 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
 Console `18 tests, 0 failures`.
+
+## Checkpoint 20: runnable success and controlled-failure acceptance
+
+The final browser acceptance used the live default-HTTPS stack with
+`VXPIPE_DEV_MODEL_FIXTURE=success`. The Console-owned React/Vite sample created a room, joined
+through the mounted gateway, and reached both client and agent `READY` using the unmodified
+Pipecat client. A typed success turn rendered `Local fixture response.` and emitted the
+assistant audio lifecycle. The separate diagnostics page attributed Local fixture model first
+output at `119.2 ms` and Deepgram TTS first audio at `284.1 ms`; gateway room-create and RTVI
+offer/candidate measurements were also populated.
+
+The first attempted failure check was not accepted as evidence: headless Chromium exposed no
+microphone, so Deepgram closed its idle STT socket after 60 seconds and the room ended before
+the message reached the engine. A fresh room reached `READY`, the Failure fixture was armed,
+and `Fresh controlled failure` was sent before that provider timeout. The voice console kept
+only the user's message and remained ready. Diagnostics reset the one-shot fixture to Success
+and added exactly the safe terminal projections `Local fixture / Unavailable / No first output`
+and `Model / Local fixture / Unavailable`; it added no assistant text/audio, successful outcome,
+zero-duration timing or new TTS work. Both browser tabs reported no page errors.
+
+This rendered check proves typed ingress plus real Deepgram audio egress. It does not claim a
+microphone-backed spoken turn; focused engine preservation coverage already exercises audio
+ingress and STT independently. The final project and packaging gates follow below.
+
+Final verification passed `mix format --check-formatted`,
+`mix compile --warnings-as-errors`, `mix test`, and
+`mix deps.unlock --check-unused`. The umbrella suite reported call engine `117 tests,
+0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console `18 tests,
+0 failures`. `mix assets.test` passed one Node lifecycle test and three Vitest tests;
+`mix assets.build` completed the production bundle with only Vite's existing non-fatal large-
+chunk advisory. The first shell-contract invocation used a nonexistent singular path;
+repository file discovery identified the actual `test/bin/dev_test.sh`, which passed. Finally,
+`MIX_ENV=prod mix release --overwrite` from `apps/vxpipe_console` assembled the Console release
+with the built sample assets.

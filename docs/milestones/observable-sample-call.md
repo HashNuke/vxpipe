@@ -1,9 +1,8 @@
 # Observable sample call
 
-Status: implementation in progress. The reusable gateway mounting and single-listener
-configuration checkpoint completed on 2026-09-08. A separate Phoenix shell,
-`vxpipe_console` / `Vxpipe.Console`, is approved; the reusable gateway remains independent
-of Phoenix and UI dependencies.
+Status: complete as of 2026-09-09. The Phoenix Console owns the dashboard and
+React/Vite sample assets, while the reusable gateway remains independent of Phoenix
+and UI dependencies.
 Prerequisites: [Definition-driven call](definition-driven-call.md).
 Sources: [Security and observability](../architecture.md#security-and-observability);
 [Gateway/console boundary](../gateway-console-boundary.md);
@@ -102,7 +101,7 @@ slow response or missing measurement. The existing voice console still works unc
 
 ## Acceptance and failure checks
 
-- [ ] A sample text/audio exchange produces correctly attributed measurements; a scripted
+- [x] A sample text/audio exchange produces correctly attributed measurements; a scripted
   provider failure appears as a safe error category, not successful/zero-duration work.
 - [x] No first token/audio, cancellation and unavailable provider measurements remain
   explicitly missing/incomplete. Known fixture timings match documented boundaries.
@@ -148,9 +147,9 @@ LiveView or introducing a production operator-login product.
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and all acceptance/failure checks above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, index entry, architecture/user docs and implementation labnote
+- [x] Demonstrate the runnable outcome and all acceptance/failure checks above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, index entry, architecture/user docs and implementation labnote
   with actual focused-test, integration and rendered-browser evidence.
 
 Implementation evidence, checkpoint 1 (2026-09-08): added the public
@@ -384,6 +383,24 @@ passes `20 tests, 0 failures`. Focused gateway endpoint, mounted CORS/admission 
 coverage passes `19 tests, 0 failures`.
 The complete umbrella gates pass with call engine `117 tests, 0 failures (1 excluded)`, gateway
 `46 tests, 0 failures (4 excluded)`, and Console `18 tests, 0 failures`.
+
+Implementation evidence, checkpoint 20 (2026-09-09): completed the runnable browser
+acceptance through the repository's default private-HTTPS development stack. An unmodified
+Pipecat client connected through the Console-owned React/Vite sample and reported both client
+and agent `READY`. A typed success turn rendered `Local fixture response.`, emitted the
+assistant's spoken lifecycle, and produced correctly attributed observations: Local fixture
+model first output at `119.2 ms` and Deepgram TTS first audio at `284.1 ms`. A separately armed
+failure turn rendered only the user's input while the connection remained ready. Diagnostics
+added `Local fixture / Unavailable / No first output` and `Model / Local fixture / Unavailable`,
+without adding a successful model result, a zero-duration measurement, assistant output or TTS
+work. Both the sample and diagnostics tabs reported no browser errors.
+
+The headless browser exposed no microphone, so this run does not claim spoken-input coverage;
+the focused engine preservation suite supplies that audio-ingress/STT evidence. A first stale
+room was deliberately excluded from the failure evidence after Deepgram closed its idle STT
+socket because no microphone packets arrived. Repeating the check in a fresh room before that
+provider timeout isolated the intended model-failure boundary. Final project gates and the
+Console asset/release checks are recorded in the implementation labnote.
 
 ## Specification review
 
