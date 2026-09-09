@@ -107,23 +107,31 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
 
   defp load_detail(principal, call_id, cursor) do
     options = [limit: @history_page_size] ++ option(cursor, :cursor)
+    persisted_result = CallInspection.inspect_call(principal, call_id, options)
+    live_result = load_live(principal, call_id, persisted_result)
 
-    case CallInspection.inspect_call(principal, call_id, options) do
-      {:ok, persisted} -> load_live(principal, call_id, persisted)
-      {:error, :call_not_found} -> {:not_found, nil, nil}
-      {:error, _reason} -> {:unavailable, nil, nil}
-    end
+    inspection_state(persisted_result, live_result)
   end
 
-  defp load_live(principal, call_id, %CallDetailPage{call: %{state: state}} = persisted)
+  defp load_live(principal, call_id, {:ok, %CallDetailPage{call: %{state: state}}})
        when state in [:admitting, :running] do
-    case CallInspection.inspect_live_call(principal, call_id) do
-      {:ok, live} -> {:live, persisted, live}
-      {:error, _reason} -> {:persisted, persisted, nil}
-    end
+    CallInspection.inspect_live_call(principal, call_id)
   end
 
-  defp load_live(_principal, _call_id, persisted), do: {:persisted, persisted, nil}
+  defp load_live(_principal, _call_id, {:ok, %CallDetailPage{}}), do: :not_requested
+
+  defp load_live(principal, call_id, {:error, _reason}) do
+    CallInspection.inspect_live_call(principal, call_id)
+  end
+
+  defp inspection_state({:ok, persisted}, {:ok, live}), do: {:live, persisted, live}
+  defp inspection_state({:ok, persisted}, _live_result), do: {:persisted, persisted, nil}
+  defp inspection_state({:error, _reason}, {:ok, live}), do: {:live_only, nil, live}
+
+  defp inspection_state({:error, :call_not_found}, {:error, :call_not_live}),
+    do: {:not_found, nil, nil}
+
+  defp inspection_state({:error, _reason}, _live_result), do: {:unavailable, nil, nil}
 
   defp option(nil, _option), do: []
   defp option(value, option), do: [{option, value}]

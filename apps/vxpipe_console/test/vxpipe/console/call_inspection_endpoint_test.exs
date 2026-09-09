@@ -221,6 +221,26 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     assert_receive {:inspect_live_call, _, "call-public-id", []}
   end
 
+  test "keeps bounded live evidence available while persisted history is unavailable" do
+    call = call_summary()
+
+    configure_backend(%{
+      list_calls: {:error, :repository_unavailable},
+      inspect_call: {:error, :repository_unavailable},
+      inspect_live_call: {:ok, live_detail()}
+    })
+
+    conn = sign_in()
+    html = html_response(conn |> recycle() |> get("/calls/#{call.id}"), 200)
+
+    assert html =~ "Live evidence available"
+    assert html =~ "agent output generated"
+    assert html =~ "Persisted revision"
+    assert html =~ "Unavailable"
+    assert html =~ "Calls in progress are unaffected"
+    assert_receive {:inspect_live_call, _, "call-public-id", []}
+  end
+
   test "selects exact sourced evidence and preserves bounded pagination context" do
     call = call_summary()
 

@@ -81,12 +81,12 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
             <footer class="ledger-footer">
               <span>Newest first. Source time shown in UTC.</span>
               <.link
-                :if={@persisted.next_cursor}
+                :if={next_history_cursor(@persisted)}
                 class="button"
                 patch={
                   history_path(
                     @selected_id,
-                    @persisted.next_cursor,
+                    next_history_cursor(@persisted),
                     @list_cursor,
                     @selected_event
                   )
@@ -163,7 +163,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
     """
   end
 
-  attr :persisted, Vxpipe.Calls.CallDetailPage, required: true
+  attr :persisted, Vxpipe.Calls.CallDetailPage, default: nil
   attr :live, Vxpipe.Calls.LiveCallInspection, default: nil
   attr :participants, :string, required: true
 
@@ -172,12 +172,12 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
     <dl class="call-context">
       <div>
         <dt>Definition</dt>
-        <dd>{@persisted.call.definition_id} · r{@persisted.call.definition_revision}</dd>
+        <dd>{definition_label(@persisted)}</dd>
       </div>
       <div><dt>Room</dt><dd>{live_value(@live, :room_id)}</dd></div>
       <div><dt>Incarnation</dt><dd>{live_value(@live, :incarnation_id)}</dd></div>
-      <div><dt>Started</dt><dd>{CallInspectionFormat.timestamp(@persisted.call.started_at)}</dd></div>
-      <div><dt>Duration</dt><dd>{call_duration(@persisted.call)}</dd></div>
+      <div><dt>Started</dt><dd>{started_label(@persisted)}</dd></div>
+      <div><dt>Duration</dt><dd>{call_duration(persisted_call(@persisted))}</dd></div>
       <div class="call-context-participants"><dt>Participants</dt><dd>{@participants}</dd></div>
     </dl>
     """
@@ -191,11 +191,13 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   end
 
   defp source_status(:live), do: "Live and persisted evidence available"
+  defp source_status(:live_only), do: "Live evidence available"
   defp source_status(:persisted), do: "Persisted evidence selected"
   defp source_status(:not_found), do: "Call not found"
   defp source_status(:unavailable), do: "Evidence unavailable"
 
   defp call_state(:live), do: "Live"
+  defp call_state(:live_only), do: "Live only"
   defp call_state(:persisted), do: "Persisted"
   defp call_state(:not_found), do: "Not found"
   defp call_state(:unavailable), do: "Unavailable"
@@ -308,6 +310,19 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   defp live_value(live, :room_id), do: live.room_id
   defp live_value(live, :incarnation_id), do: live.incarnation_id
 
+  defp definition_label(nil), do: "Unavailable"
+
+  defp definition_label(persisted) do
+    "#{persisted.call.definition_id} · r#{persisted.call.definition_revision}"
+  end
+
+  defp started_label(nil), do: "Unavailable"
+  defp started_label(persisted), do: CallInspectionFormat.timestamp(persisted.call.started_at)
+
+  defp persisted_call(nil), do: nil
+  defp persisted_call(persisted), do: persisted.call
+
+  defp call_duration(nil), do: "Unavailable"
   defp call_duration(%{started_at: nil}), do: "Not started"
   defp call_duration(%{started_at: _started_at, ended_at: nil}), do: "In progress"
 
@@ -342,6 +357,9 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
 
   defp selected_event_key(nil), do: nil
   defp selected_event_key(event), do: CallInspectionTimeline.selection_key(event)
+
+  defp next_history_cursor(nil), do: nil
+  defp next_history_cursor(persisted), do: persisted.next_cursor
 
   defp path_with_query(call_id, values) do
     query =
