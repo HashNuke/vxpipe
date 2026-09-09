@@ -13,13 +13,13 @@ defmodule Vxpipe.MCP.Discovery do
 
   @type error ::
           :discovery_page_limit_exceeded
+          | :discovery_failed
           | :discovery_timed_out
           | :discovery_too_large
           | :invalid_discovery_response
           | :repeated_cursor
           | Catalog.error()
           | {:invalid_option, :deadline_ms | :max_decoded_bytes | :max_pages}
-          | {:protocol_error, term()}
 
   @spec discover(term(), keyword()) :: {:ok, Catalog.t()} | {:error, error()}
   def discover(client, opts \\ []) do
@@ -81,7 +81,7 @@ defmodule Vxpipe.MCP.Discovery do
   defp request_page(state, timeout) do
     case state.protocol.list_tools(state.client, state.cursor, timeout) do
       {:ok, page} -> {:ok, page}
-      {:error, reason} -> {:error, {:protocol_error, reason}}
+      {:error, _reason} -> {:error, :discovery_failed}
       _other -> {:error, :invalid_discovery_response}
     end
   end

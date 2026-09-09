@@ -30,6 +30,8 @@ starting unrelated development voice-provider configuration. The task itself sta
 - Discovery returns a complete `Vxpipe.MCP.Catalog` or an error, never a partial catalog.
   Invocation accepts only a tool in that catalog and validates its arguments before the
   ExMCP request boundary.
+- Discovery maps dependency failures to a categorical error rather than returning transport
+  diagnostics that could contain authorization data.
 - `Vxpipe.MCP.ReferenceProbe.run/2` is the fixture-facing boundary that discovers and calls
   Everything's `echo` tool while preserving the remote definition and result as data.
 

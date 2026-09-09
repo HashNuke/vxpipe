@@ -252,6 +252,24 @@ evidence that this production concern is solved.
   formatting, strict Credo across 299 files, and the unused-dependency check pass;
   `shellcheck` is not installed in this environment.
 
+## 2026-09-09 — bounded discovery failures
+
+- Expanded the deterministic discovery evidence from one-page size and repeated-cursor
+  cases to cumulative size across pages, endlessly changing cursors stopped by `max_pages`,
+  malformed page shapes, and duplicate tool identities. Every failure returns only an error,
+  so no partial `Catalog` is available for invocation.
+- Red: a scripted dependency error containing authorization-like data was returned verbatim
+  inside `{:protocol_error, reason}`. That violated the credential-free diagnostic contract.
+- Green: discovery now returns the categorical `:discovery_failed` error for dependency
+  failures and discards the raw reason. The focused suite passes six tests.
+- Two fixture Agents in one test initially collided on ExUnit's default child ID; the helper
+  now supplies a unique child-spec ID while retaining supervised ExUnit cleanup.
+- A compile run contended with the active development watcher over the shared build tree.
+  Rerunning the already-compiled focused suite completed with six tests and no failures; the
+  subsequent clean child compile and suite passed 19 tests with three integrations excluded.
+- The opt-in integration lane still passes all three tests. Root formatting, strict Credo
+  across 299 files, and the unused-dependency check pass.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)

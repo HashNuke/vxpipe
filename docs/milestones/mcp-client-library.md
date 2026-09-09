@@ -95,7 +95,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   unsupported interactions fail safely without speculative resubmission.
 - [x] Argument schema failure occurs before network submission; external schema refs do not
   trigger hidden fetches.
-- [ ] Repeated cursors, endless pages and aggregate discovery limits stop without an
+- [x] Repeated cursors, endless pages and aggregate discovery limits stop without an
   unbounded loop or falsely complete catalog; partial bindings cannot be invoked.
 - [ ] Oversized compressed/chunked/SSE responses stop incrementally at the configured limit;
   timeout/disconnect retains an honest unknown outcome after submission.
@@ -149,10 +149,15 @@ Implementation evidence:
   absolute deadline and aggregate decoded-JSON budget. It rejects repeated cursors and
   returns no partial catalog. `Vxpipe.MCP.Catalog` preserves complete string-keyed remote
   definitions while rejecting malformed or duplicate tool identities.
+- Deterministic discovery checks cover repeated and endlessly changing cursors, cumulative
+  decoded size across pages, malformed page shapes, duplicate identities, and the page cap.
+  Dependency failures become the credential-free `:discovery_failed` category rather than
+  exposing raw diagnostics.
 - `Vxpipe.MCP.Invocation` selects only from that complete catalog and delegates schema work
-  to `Vxpipe.MCP.ArgumentValidator`. JSON Schema 2020-12 arguments are checked without casts
-  or remote resolvers before submission; unknown tools, invalid arguments, unsupported
-  schemas, and oversized decoded results return bounded categorical errors. The ExMCP-only
+  to `Vxpipe.MCP.ArgumentValidator`. Default/explicit JSON Schema 2020-12 and canonical
+  explicit Draft 7 arguments are checked without casts or remote resolvers before submission;
+  unknown tools, invalid arguments, unsupported schemas, and oversized decoded results
+  return bounded categorical errors. The ExMCP-only
   adapter uses the single-request `tools/call` path with generic and ambiguous stream replay
   disabled.
 - `Vxpipe.MCP.Connections` scopes a supervised client subtree to a bounded resolved
@@ -170,7 +175,7 @@ Implementation evidence:
   discovered/validated `tools/call`; the full scenario matrix and internal API are recorded in
   [MCP client conformance profile](../mcp-client-conformance.md).
 - The focused behavior test was observed red before implementation and is green with the
-  default child suite (16 tests, 0 failures, three integration tests excluded). The opt-in
+  default child suite (19 tests, 0 failures, three integration tests excluded). The opt-in
   lane passes all three wrapper tests: the two unmodified harness scenarios each score 1/1,
   the corrected recovery fixture scores 3/3, and the Everything probe returns its expected
   tool and result. This is partial conformance evidence, not a blanket claim.
