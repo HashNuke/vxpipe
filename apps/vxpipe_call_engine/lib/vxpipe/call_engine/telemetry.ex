@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.Telemetry do
   @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+  @runtime_sample_event [:vxpipe, :call_engine, :runtime, :sample]
 
   @doc "Returns a timestamp from the clock used for elapsed measurements."
   @spec started_at() :: integer()
@@ -60,6 +61,12 @@ defmodule Vxpipe.CallEngine.Telemetry do
         category: failure_category(reason)
       }
     )
+  end
+
+  @doc "Emits one sampled active-room and VM-health observation."
+  @spec runtime_sample(map()) :: :ok
+  def runtime_sample(measurements) do
+    :telemetry.execute(@runtime_sample_event, measurements, %{})
   end
 
   defp execute_duration(event, started_at, metadata) do

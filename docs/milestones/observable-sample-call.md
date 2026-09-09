@@ -89,7 +89,7 @@ slow response or missing measurement. The existing voice console still works unc
   keep Phoenix/dashboard/frontend dependencies in the console application.
 - [ ] Write red tests for project-owned timing/outcome projection, missing observations,
   safe metadata, bounded dimensions and reporter restart behavior.
-- [ ] Instrument existing request/model/speech boundaries and add sampled VM measurements.
+- [x] Instrument existing request/model/speech boundaries and add sampled VM measurements.
 - [ ] Connect a bounded reporter to a separate dashboard and the existing sample entry.
 - [ ] Provide a deterministic local provider fixture for controlled delay/failure, without
   relying on hosted credentials or adding failure switches to production call input.

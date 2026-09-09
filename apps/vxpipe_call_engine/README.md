@@ -81,6 +81,14 @@ restarts through a stable activation reference. Plan-selected speech combines pu
 options with application-owned secrets, transports, and bounds before startup. The repository
 sample exercises this path; legacy `CreateRoom` presets remain available to embedded hosts.
 
+The engine emits payload-free `:telemetry` events for model request/first-output timing,
+TTS first provider audio, and safe model/STT/TTS provider failures. Its explicitly named
+`Vxpipe.CallEngine.TelemetrySampler` periodically reports active room count, total BEAM
+memory bytes, and run queue without entering a room callback. Configure the sampling cadence
+under the call-engine application setting `telemetry: [sample_interval_ms: 1_000]`.
+Durations use Erlang `:native` units; event names and exact observation boundaries are
+documented in [the architecture](../../docs/architecture.md#security-and-observability).
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

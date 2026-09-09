@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.Telemetry
 
   @call_timeout 5_000
   @maximum_audio_bytes 131_072
@@ -71,6 +72,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
          }}
 
       {:error, _reason} ->
+        Telemetry.provider_failure(:stt, provider_module, :transport_closed)
         {:stop, :transport_start_failed}
     end
   end
@@ -170,9 +172,17 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   defp stop_unavailable(reason, state) do
+    maybe_report_provider_failure(reason, state.provider_module)
     send(state.owner, {:vxpipe_stt_unavailable, self(), state.identity, reason})
     {:stop, reason, state}
   end
+
+  defp maybe_report_provider_failure(reason, provider)
+       when reason in [:transport_closed, :invalid_provider_message, :provider_failed] do
+    Telemetry.provider_failure(:stt, provider, reason)
+  end
+
+  defp maybe_report_provider_failure(_reason, _provider), do: :ok
 
   defp acknowledge_audio(ingress, reference, sequence_number, result) do
     send(

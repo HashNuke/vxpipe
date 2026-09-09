@@ -1522,7 +1522,8 @@ The implemented framework-independent event contract currently includes:
 | `[:vxpipe, :call_engine, :model, :first_token]` | `duration` in Erlang `:native` units | `provider` | Request dispatch to first non-empty model output observed by the agent coordinator; emitted once per request and absent when no output arrives |
 | `[:vxpipe, :call_engine, :model, :request, :stop]` | `duration` in Erlang `:native` units | `provider`, `outcome`, and `first_output` | Request dispatch to terminal completion, cancellation, timeout, or failure; `first_output` is `:observed` or `:missing` |
 | `[:vxpipe, :call_engine, :tts, :first_audio]` | `duration` in Erlang `:native` units | `provider` | TTS request dispatch to the first decoded provider audio frame, before output-sink acceptance or remote playout; emitted once and absent without audio |
-| `[:vxpipe, :call_engine, :provider, :failure]` | `count` equal to `1` | `capability`, `provider`, and `category` | Safe failure projection at the owning model or speech boundary; no raw provider reason or response is included |
+| `[:vxpipe, :call_engine, :provider, :failure]` | `count` equal to `1` | `capability`, `provider`, and `category` | Safe failure projection at the owning model, STT, or TTS boundary; no raw provider reason or response is included |
+| `[:vxpipe, :call_engine, :runtime, :sample]` | `active_rooms`, `memory_bytes`, and `run_queue` as non-negative gauges | none | Periodic engine-owned sample outside room callbacks; active rooms come from the room DynamicSupervisor and VM values from the local BEAM |
 
 Gateway operations are closed categories (`:cors_preflight`, `:health_check`,
 `:room_create`, `:session_create`, `:rtvi_offer`, `:rtvi_candidates`, or `:unknown`).
@@ -1532,8 +1533,10 @@ Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`, or 
 set. Model outcomes are `:ok`, `:unavailable`, `:timeout`, `:invalid_response`, or
 `:cancelled`; failure categories are `:unavailable`, `:timeout`, `:invalid_response`,
 `:output_failure`, or `:unknown`. None of these events carries input/output text, audio,
-raw provider errors, model names, or correlation identifiers. Room and sampled-VM events
-will join this table as their owning milestone checkpoint lands.
+raw provider errors, model names, or correlation identifiers. `active_rooms` is the current
+DynamicSupervisor child count rather than a lifecycle-event estimate. The runtime sampler is
+an explicitly named call-engine child and its interval comes from the call-engine application
+setting `telemetry: [sample_interval_ms: ...]`.
 
 ### Observability delivery
 

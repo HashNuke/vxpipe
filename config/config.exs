@@ -19,6 +19,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   ],
   model_inference: [enabled: false],
   speech_to_text: [enabled: false],
+  telemetry: [sample_interval_ms: 1_000],
   text_to_speech: [enabled: false]
 
 config :vxpipe_gateway, Vxpipe.Gateway.Application,

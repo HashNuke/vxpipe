@@ -9,6 +9,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
 
+  @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+
   test "validates audio and relays normalized provider signals without raw payloads" do
     assert {:ok, provider} =
              Flux.new(
@@ -69,6 +71,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   end
 
   test "ignores repeated provider sequence numbers and terminates on transport failure" do
+    attach_provider_events()
     {capability, transport} = start_capability()
     payload = turn_message("Update", 4, "hello")
 
@@ -82,6 +85,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     TestSpeechToTextTransport.disconnect(transport, :closed)
 
     assert_receive {:vxpipe_stt_unavailable, ^capability, _, :transport_closed}
+    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1}, metadata}
+
+    assert metadata == %{capability: :stt, provider: :deepgram, category: :unavailable}
+
     assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}, 500
   end
 
@@ -151,5 +158,23 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       "words" => [],
       "end_of_turn_confidence" => 0.8
     })
+  end
+
+  def handle_telemetry_event(event, measurements, metadata, test_pid) do
+    send(test_pid, {:telemetry_event, event, measurements, metadata})
+  end
+
+  defp attach_provider_events do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        @provider_failure_event,
+        &__MODULE__.handle_telemetry_event/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
   end
 end

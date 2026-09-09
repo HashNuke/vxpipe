@@ -182,3 +182,27 @@ declares `:telemetry` directly instead of depending on Jido or another transitiv
 Umbrella format, warnings-as-errors compile, default tests, and unused-lock checks passed with
 call engine `105 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
 and Console `4 tests, 0 failures`.
+
+## Checkpoint 6: sampled runtime health and STT failures
+
+`Vxpipe.CallEngine.TelemetrySampler` is one explicitly named application child. Every configured
+interval it samples the active child count from `RoomSupervisor`, total local BEAM memory bytes,
+and the VM run queue, then emits `[:vxpipe, :call_engine, :runtime, :sample]` with empty metadata.
+The sampler runs outside every room/media callback. Its public bounded `sample/1` call provides a
+deterministic acknowledgement for tests and embedded operational checks.
+
+The sampler red test failed because neither its module nor application child existed. The green
+test uses a dedicated DynamicSupervisor and moves its active count from zero to one without a
+sleep, then verifies that the application supervisor owns exactly one named sampler. The test
+environment retains the real supervised child but sets its automatic interval to one hour so it
+cannot race focused event assertions. The focused sampler run passed `2 tests, 0 failures`.
+
+Review of the remaining speech boundary found that STT transport/provider failures had not yet
+joined the common provider event. A focused red assertion failed on transport closure, then
+passed after instrumenting provider/transport failures. Local unsupported-audio and media-overload
+reasons are deliberately excluded because they are not provider failures. The combined sampler
+and STT test run passed `5 tests, 0 failures`.
+
+Umbrella format, warnings-as-errors compile, default tests, and unused-lock checks passed with
+call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
+and Console `4 tests, 0 failures`.
