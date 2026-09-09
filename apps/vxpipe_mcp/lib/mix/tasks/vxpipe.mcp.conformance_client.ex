@@ -7,7 +7,9 @@ defmodule Mix.Tasks.Vxpipe.Mcp.ConformanceClient do
 
       mix vxpipe.mcp.conformance_client http://localhost:4321/mcp
 
-  Only the pinned, in-scope `initialize` and `tools_call` scenarios are supported.
+  The pinned `initialize` and `tools_call` scenarios are supported directly. The
+  `sse-retry` action is used only by Vxpipe's exact-version corrected fixture because the
+  upstream `0.1.16` scenario advertises `2025-11-25` but negotiates `2025-03-26`.
   """
 
   use Mix.Task

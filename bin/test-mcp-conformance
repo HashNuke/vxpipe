@@ -2,7 +2,7 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-client_command="env MIX_ENV=test mix vxpipe.mcp.conformance_client"
+client_command="$project_root/bin/mcp-conformance-client"
 
 cd "$project_root"
 

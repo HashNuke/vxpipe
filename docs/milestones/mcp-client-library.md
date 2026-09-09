@@ -88,7 +88,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 
 - [x] A standalone ExMCP-backed wrapper discovers/calls a reference tool with neither
   Jido nor database/call engine running; decoded names/schemas remain data.
-- [ ] Applicable pinned official client scenarios pass; omitted/unsupported scenarios and
+- [x] Applicable pinned official client scenarios pass; omitted/unsupported scenarios and
   upstream harness defects are explicit, not blanket success.
 - [ ] Negotiated-version mismatch, malformed/error responses, wrong correlation IDs and
   unsupported interactions fail safely without speculative resubmission.
@@ -105,7 +105,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   do not cause atom/module growth proportional to tenant/catalog churn or cross-tenant tool
   resolution. Measure BEAM atom/module counts across many unique endpoint, tool and schema
   revisions rather than checking only live proxy cleanup.
-- [ ] Initialization completes before discovery with and without a server-issued session ID;
+- [x] Initialization completes before discovery with and without a server-issued session ID;
   sessions/credentials do not cross integration generations and reconnect never repeats an
   uncertain invocation.
 - [ ] Break/resume a response stream: the original deadline and cumulative byte budget still
@@ -169,9 +169,15 @@ Implementation evidence:
   the full scenario matrix and internal API are recorded in
   [MCP client conformance profile](../mcp-client-conformance.md).
 - The focused behavior test was observed red before implementation and is green with the
-  default child suite (14 tests, 0 failures, one integration test excluded). The opt-in
-  official lane passes its one wrapper test and both harness scenarios score 1/1 with no
-  failures or warnings. This is partial conformance evidence, not a blanket claim.
+  default child suite (14 tests, 0 failures, two integration tests excluded). The opt-in
+  official lane passes both wrapper tests: the two unmodified harness scenarios each score
+  1/1, and the corrected recovery fixture scores 3/3, all with no failures or warnings.
+  This is partial conformance evidence, not a blanket claim.
+- The unmodified official `sse-retry` scenario is explicitly rejected because its
+  `2025-11-25`-tagged server negotiates `2025-03-26`. A reproducible one-line
+  exact-version correction against the verified tag commit passes 3/3, including the
+  500 ms retry interval, `Last-Event-ID`, original-result delivery, and only one observed
+  `tools/call`. This is corrected-fixture evidence, not an official-pass claim.
 
 ## Specification review
 

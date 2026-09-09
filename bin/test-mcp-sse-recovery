@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fixture_root="$(mktemp -d -t vxpipe-mcp-conformance.XXXXXXXX)"
+expected_commit="21a9a2febd7100d7c17ac1021ee7f2ed9f66a1e0"
+
+cleanup() {
+  rm -rf -- "$fixture_root"
+}
+
+trap cleanup EXIT
+
+git clone --quiet --depth 1 --branch v0.1.16 \
+  https://github.com/modelcontextprotocol/conformance.git "$fixture_root"
+
+actual_commit="$(git -C "$fixture_root" rev-parse HEAD)"
+if [[ "$actual_commit" != "$expected_commit" ]]; then
+  echo "unexpected MCP conformance source revision" >&2
+  exit 1
+fi
+
+git -C "$fixture_root" apply \
+  "$project_root/apps/vxpipe_mcp/conformance/patches/sse-retry-2025-11-25.patch"
+
+npm --prefix "$fixture_root" ci --ignore-scripts --no-audit --no-fund
+npm --prefix "$fixture_root" start -- client \
+  --command "$project_root/bin/mcp-conformance-client" \
+  --scenario sse-retry \
+  --spec-version 2025-11-25 \
+  --timeout 30000

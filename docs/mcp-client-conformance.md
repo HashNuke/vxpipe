@@ -42,7 +42,7 @@ Run date: 2026-09-09. The harness lists these scenarios for MCP `2025-11-25`.
 | --- | --- | --- |
 | `initialize` | Pass | 1/1 scored check; exact revision and client metadata accepted. |
 | `tools_call` | Pass | 1/1 scored check; initialized, listed `add_numbers`, then invoked it once. |
-| `sse-retry` | Pending | Applicable to the approved recovery contract; not yet implemented in the driver. |
+| `sse-retry` | Upstream defect; corrected fixture passes | Unmodified `0.1.16` negotiates `2025-03-26` despite selecting this scenario for `2025-11-25`, so Vxpipe correctly rejects it. The same pinned source with only that response fixed to `2025-11-25` passes 3/3. |
 | `elicitation-sep1034-client-defaults` | Not applicable | Server-requested elicitation is explicitly outside this milestone. |
 | `auth/metadata-default` | Not applicable | OAuth onboarding is deferred. |
 | `auth/metadata-var1` | Not applicable | OAuth onboarding is deferred. |
@@ -65,11 +65,21 @@ From the umbrella root:
 
 ```sh
 bin/test-mcp-conformance
+bin/test-mcp-sse-recovery
 ```
 
 The harness creates a fresh loopback server per scenario and appends its URL to the Vxpipe
-task. The Vxpipe task dispatches only the two supported scenario strings; any other value
-fails explicitly.
+task. The task dispatches the two unmodified official scenarios plus the corrected-fixture
+recovery action; any other value fails explicitly. The recovery runner clones exact tag commit `21a9a2f` into a temporary
+directory, verifies the commit, applies the committed one-line protocol-version patch, and
+runs only `sse-retry`. It removes that temporary checkout afterward. This is an explicit
+corrected-fixture result, not an unmodified official pass.
+
+The corrected recovery run observes one `tools/call`, a graceful response-stream close,
+reconnection after the server's 500 ms retry value, `Last-Event-ID: event-2`, and delivery
+of the original result over the resumed GET stream. It scores 3/3 with no warnings. The
+unmodified run is retained as a harness defect because accepting `2025-03-26` would weaken
+the product's exact-version gate.
 
 ## Open compatibility gate
 

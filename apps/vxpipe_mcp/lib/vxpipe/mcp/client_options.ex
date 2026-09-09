@@ -13,6 +13,7 @@ defmodule Vxpipe.MCP.ClientOptions do
           :endpoint_required
           | :https_required
           | :invalid_endpoint
+          | :invalid_reconnect
           | :loopback_required
           | TransportOptions.error()
 
@@ -34,8 +35,9 @@ defmodule Vxpipe.MCP.ClientOptions do
   def build_loopback_test(config) when is_list(config) do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_loopback_endpoint(endpoint),
+         {:ok, reconnect?} <- loopback_reconnect(config),
          {:ok, transport_options} <- TransportOptions.build(config) do
-      {:ok, options(endpoint, config, transport_options, false)}
+      {:ok, options(endpoint, config, transport_options, reconnect?)}
     end
   end
 
@@ -71,6 +73,13 @@ defmodule Vxpipe.MCP.ClientOptions do
   end
 
   defp validate_loopback_endpoint(_endpoint), do: {:error, :loopback_required}
+
+  defp loopback_reconnect(config) do
+    case Keyword.get(config, :reconnect, false) do
+      reconnect? when is_boolean(reconnect?) -> {:ok, reconnect?}
+      _invalid -> {:error, :invalid_reconnect}
+    end
+  end
 
   defp loopback_host?(host) do
     normalized = String.downcase(host)

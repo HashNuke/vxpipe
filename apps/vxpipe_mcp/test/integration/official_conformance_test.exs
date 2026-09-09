@@ -5,8 +5,20 @@ defmodule Vxpipe.MCP.OfficialConformanceIntegrationTest do
   @moduletag timeout: 120_000
 
   test "passes the pinned in-scope official client scenarios" do
+    output = run_fixture("test-mcp-conformance")
+
+    assert output =~ "Passed: 1/1, 0 failed, 0 warnings"
+  end
+
+  test "resumes the corrected exact-version SSE fixture without another tool call" do
+    output = run_fixture("test-mcp-sse-recovery")
+
+    assert output =~ "Passed: 3/3, 0 failed, 0 warnings"
+  end
+
+  defp run_fixture(script) do
     project_root = Path.expand("../../../..", __DIR__)
-    runner = Path.join(project_root, "bin/test-mcp-conformance")
+    runner = Path.join([project_root, "bin", script])
 
     {output, status} =
       System.cmd(runner, [],
@@ -16,6 +28,6 @@ defmodule Vxpipe.MCP.OfficialConformanceIntegrationTest do
       )
 
     assert status == 0, output
-    assert output =~ "Passed: 1/1, 0 failed, 0 warnings"
+    output
   end
 end

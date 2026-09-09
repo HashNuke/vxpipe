@@ -11,6 +11,7 @@ defmodule Vxpipe.MCP.ConformanceClient do
          {:ok, connection} <-
            Connections.open_loopback_test(key,
              endpoint: server_url,
+             reconnect: true,
              limits: [
                max_request_bytes: 262_144,
                max_response_bytes: 262_144,
@@ -40,6 +41,20 @@ defmodule Vxpipe.MCP.ConformanceClient do
              catalog,
              "add_numbers",
              %{"a" => 20, "b" => 22}
+           ) do
+      :ok
+    end
+  end
+
+  defp run_scenario("sse-retry", connection) do
+    with {:ok, catalog} <- discover(connection),
+         {:ok, _result} <-
+           Invocation.call(
+             Connection.client(connection),
+             catalog,
+             "test_reconnection",
+             %{},
+             deadline_ms: 5_000
            ) do
       :ok
     end

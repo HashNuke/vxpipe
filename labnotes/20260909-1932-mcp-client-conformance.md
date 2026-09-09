@@ -199,6 +199,34 @@ evidence that this production concern is solved.
 - The initial manual red harness run saved diagnostic results under `/tmp`; no generated
   result directory or dependency install is committed.
 
+## 2026-09-09 — exact-version SSE recovery
+
+- The unmodified official `sse-retry` scenario selected by `--spec-version 2025-11-25`
+  hard-codes `protocolVersion: 2025-03-26` in its initialize response. Vxpipe rejects it as
+  required. That run scored one incidental check plus two warnings but exited through the
+  exact-version error; it is not counted as a pass.
+- Red: the Vxpipe driver initially had no recovery scenario action, and the fixture's wrong
+  revision prevented readiness. A focused profile test also showed that loopback reconnect
+  could not be explicitly enabled.
+- Green: loopback reconnect remains off by default but can be enabled only through the
+  dedicated fixture builder. The scenario action discovers `test_reconnection` and invokes
+  it through the ordinary validated, no-reissue invocation path with one deadline.
+- Added a reproducible corrected-fixture runner. It clones exact official tag commit
+  `21a9a2f` into a temporary directory, verifies that identity, and applies a committed
+  one-line patch changing only the server's initialize revision to `2025-11-25`.
+- The corrected run passes 3/3 with no warnings. It observes a single `tools/call`, a broken
+  SSE response stream, reconnection after the advertised 500 ms retry interval with
+  `Last-Event-ID: event-2`, and delivery of the original result over the re-established GET
+  stream. No speculative tool-call resubmission occurs.
+- This proves exact-version session initialization and response-stream resumption. It does
+  not yet prove near-limit cumulative byte accounting or timeout expiry during recovery.
+- Verification: the default MCP child suite passes 14 tests with two integration tests
+  excluded; the opt-in integration lane passes both tests; root formatting, strict Credo
+  across 296 files, and unused-dependency checks pass.
+- The umbrella `mix test` command could not create its test database because this shell has
+  no PostgreSQL password or test database URL configured. The failure occurred before the
+  umbrella tests ran; MCP-owned tests remain green as recorded above.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)

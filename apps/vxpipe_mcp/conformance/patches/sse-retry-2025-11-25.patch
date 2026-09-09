@@ -1,0 +1,13 @@
+diff --git a/src/scenarios/client/sse-retry.ts b/src/scenarios/client/sse-retry.ts
+index c8f0792..50ff339 100644
+--- a/src/scenarios/client/sse-retry.ts
++++ b/src/scenarios/client/sse-retry.ts
+@@ -286,7 +286,7 @@ export class SSERetryScenario implements Scenario {
+       jsonrpc: '2.0',
+       id: request.id,
+       result: {
+-        protocolVersion: '2025-03-26',
++        protocolVersion: '2025-11-25',
+         serverInfo: {
+           name: 'sse-retry-test-server',
+           version: '1.0.0'
