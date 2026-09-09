@@ -35,6 +35,7 @@ defmodule Vxpipe.Calls.ArchivesTest do
              )
 
     refute inspect(fact) =~ "private transcript"
+
     assert fact.payload == %{
              "content" => "private transcript",
              "modality" => "text",
@@ -113,7 +114,13 @@ defmodule Vxpipe.Calls.ArchivesTest do
     }
 
     assert {:ok, history} = Calls.fetch_call_history(principal, snapshot.call_id, options)
-    assert Enum.map(history.facts, & &1.kind) == [:accepted_input, :tool_call_completed, :agent_output_generated]
+
+    assert Enum.map(history.facts, & &1.kind) == [
+             :accepted_input,
+             :tool_call_completed,
+             :agent_output_generated
+           ]
+
     assert Enum.map(history.transcript, & &1.kind) == [:accepted_input, :agent_output_generated]
     assert history.tool_history == [tool]
     assert history.variable_snapshots.snapshots == [snapshot]
@@ -122,6 +129,79 @@ defmodule Vxpipe.Calls.ArchivesTest do
     refute history.archive_status.complete?
     assert history.archive_status.last_sequence == 3
     assert history.archive_status.missing_sequence_count == 0
+  end
+
+  test "correlates persisted tool and variable activity without inventing timing" do
+    snapshot_history = %Vxpipe.Calls.VariableSnapshotHistory{
+      snapshots: [attributed_snapshot()],
+      latest: attributed_snapshot()
+    }
+
+    started =
+      attributed_fact(
+        :tool_call_started,
+        1,
+        ~U[2026-09-09 11:41:01.000000Z],
+        %{"arguments" => %{"order_id" => "order-7"}, "name" => "lookup_order"}
+      )
+
+    completed =
+      attributed_fact(
+        :tool_call_completed,
+        2,
+        ~U[2026-09-09 11:41:04.250000Z],
+        %{"name" => "lookup_order", "result" => %{"status" => "ready"}}
+      )
+
+    history = Vxpipe.Calls.CallHistory.new([started, completed], snapshot_history)
+
+    assert [tool_started, variables_updated, tool_completed] = history.timeline
+
+    assert %{
+             id: "attributed-event-1",
+             kind: :tool_call_started,
+             source: :persisted,
+             source_sequence: 1,
+             participant_id: "assistant-1",
+             activation_id: "activation-1",
+             correlation_id: "turn-1",
+             tool_call_id: "tool-1",
+             observed_duration_ms: nil
+           } = tool_started
+
+    assert %{
+             id: "snapshot-1",
+             kind: :variable_snapshot,
+             source: :persisted,
+             source_sequence: nil,
+             participant_id: "assistant-1",
+             activation_id: "activation-1",
+             correlation_id: "turn-1",
+             tool_call_id: "tool-1",
+             variable_revision: 1,
+             section_revision: 1,
+             observed_duration_ms: nil
+           } = variables_updated
+
+    assert variables_updated.payload == attributed_snapshot().sections
+
+    assert %{
+             id: "attributed-event-2",
+             kind: :tool_call_completed,
+             source: :persisted,
+             source_sequence: 2,
+             participant_id: "assistant-1",
+             activation_id: "activation-1",
+             correlation_id: "turn-1",
+             tool_call_id: "tool-1",
+             observed_duration_ms: 3_250,
+             duration_basis: :source_timestamps
+           } = tool_completed
+
+    incomplete = Vxpipe.Calls.CallHistory.new([completed], snapshot_history)
+    assert List.last(incomplete.timeline).observed_duration_ms == nil
+    assert List.last(incomplete.timeline).duration_basis == nil
+    refute inspect(history) =~ "order-7"
   end
 
   test "reports complete and known-incomplete archive streams without inventing history" do
@@ -235,6 +315,50 @@ defmodule Vxpipe.Calls.ArchivesTest do
   defp baseline_snapshot do
     assert {:ok, snapshot} = VariableSnapshot.new(attributes(:baseline, 0))
     snapshot
+  end
+
+  defp attributed_snapshot do
+    assert {:ok, snapshot} =
+             attributes(:update, 1)
+             |> Keyword.merge(
+               command_id: "command-1",
+               participant_id: "assistant-1",
+               activation_id: "activation-1",
+               source_participant_id: "caller-1",
+               correlation_id: "turn-1",
+               tool_call_id: "tool-1",
+               section: "order",
+               section_revision: 1,
+               occurred_at: ~U[2026-09-09 11:41:02.000000Z]
+             )
+             |> VariableSnapshot.new()
+
+    snapshot
+  end
+
+  defp attributed_fact(kind, sequence, occurred_at, payload) do
+    assert {:ok, fact} =
+             CallFact.new(
+               id: "attributed-event-#{sequence}",
+               kind: kind,
+               sequence: sequence,
+               tenant_key: "AAAAAAAAAAAAAAAA",
+               call_id: "44444444-4444-4444-8444-444444444444",
+               room_id: "55555555-5555-4555-8555-555555555555",
+               incarnation_id: "rinc_archive-test",
+               participant_id: "assistant-1",
+               activation_id: "activation-1",
+               source_participant_id: "caller-1",
+               connection_id: "connection-1",
+               command_id: "command-1",
+               correlation_id: "turn-1",
+               tool_call_id: "tool-1",
+               occurred_at: occurred_at,
+               source_policy: %{"revision" => 0},
+               payload: payload
+             )
+
+    fact
   end
 
   defp call_fact(kind, sequence, payload, options \\ []) do
