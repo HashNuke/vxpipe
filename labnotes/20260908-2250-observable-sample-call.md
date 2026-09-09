@@ -465,3 +465,23 @@ composition contracts. The gateway Mix project has no Phoenix or Console depende
 Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
 engine `116 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
 Console `14 tests, 0 failures`.
+
+## Checkpoint 16: Payload-free bounded reporter queue
+
+The reporter normalized dimensions only after raw Telemetry messages reached its GenServer.
+Snapshots were safe, but a suspended reporter retained synthetic text, variables and unique
+call/participant/turn identities in its bounded mailbox. The focused red test demonstrated this
+with 100 distinct events and failed on the queued-message sentinel check.
+
+After its atomic admission, the synchronous Telemetry callback now performs only bounded
+validation and closed-dimension normalization before the local send. The reporter receives
+numeric measurements and atoms rather than raw metadata. The green test confirms that neither queued
+messages nor the final snapshot contains a sentinel and that 100 unique identities produce one
+aggregate key with count 100. The public diagnostics test also renders an event carrying private
+fields and finds no sentinel in the HTML. The combined focused run passes `9 tests, 0 failures`.
+
+The first root suite run encountered an unrelated ordering failure in the existing Jido
+two-tool-loop test: only the first `tool_started` event reached its assertion. The same focused
+test passed ten consecutive repetitions, and the complete umbrella rerun passed with call engine
+`116 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console
+`15 tests, 0 failures`. Root format, warnings-as-errors compile and unused-lock gates also pass.

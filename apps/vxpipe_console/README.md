@@ -37,9 +37,11 @@ same Console endpoint as the gateway API while the voice sample remains on Vite.
 
 `Vxpipe.Console.TelemetryReporter` subscribes to the implemented gateway and call-engine
 events. It retains only bounded aggregates and the latest runtime sample. Telemetry
-callbacks admit events with atomics and send them locally; once the configured pending
-limit is reached, later events are counted as dropped rather than accumulating in the
-mailbox. Configure the bound alongside diagnostics:
+callbacks admit events with atomics, reduce them to validated numeric measurements and
+closed dimensions, and only then send them locally. Raw metadata and correlation values
+never enter the reporter mailbox. Once the configured pending limit is reached, later
+events are counted as dropped rather than accumulating in the mailbox. Configure the bound
+alongside diagnostics:
 
 ```elixir
 config :vxpipe_console, :diagnostics,

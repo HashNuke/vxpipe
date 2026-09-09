@@ -30,6 +30,8 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   end
 
   test "renders live bounded call-path measurements" do
+    sentinel = "private-diagnostics-sentinel"
+
     :telemetry.execute(
       @gateway_request_stop,
       %{duration: duration_ms(4)},
@@ -44,8 +46,16 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
     :telemetry.execute(
       @model_request_stop,
-      %{duration: duration_ms(30)},
-      %{provider: :req_llm, outcome: :timeout, first_output: :missing}
+      %{duration: duration_ms(30), text: sentinel},
+      %{
+        provider: :req_llm,
+        outcome: :timeout,
+        first_output: :missing,
+        call_id: sentinel,
+        participant_id: sentinel,
+        turn_id: sentinel,
+        variables: %{"private" => sentinel}
+      }
     )
 
     :telemetry.execute(
@@ -82,6 +92,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert has_element?(view, "#provider-failure-model-req-llm-timeout", "1")
     assert has_element?(view, ~s(a[href="/diagnostics/system"]), "System dashboard")
     assert has_element?(view, ~s(a[href="/"]), "Voice console")
+    refute render(view) =~ sentinel
   end
 
   test "refreshes the current snapshot without accumulating browser history" do

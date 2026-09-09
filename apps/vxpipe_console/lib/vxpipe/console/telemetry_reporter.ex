@@ -57,6 +57,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
     pending_count = :atomics.add_get(config.pending, 1, 1)
 
     if pending_count <= config.max_pending_events do
+      {measurements, metadata} = sanitize_event(event, measurements, metadata)
       send(config.reporter, {:vxpipe_telemetry_event, event, measurements, metadata})
     else
       :atomics.add_get(config.pending, 1, -1)
@@ -249,6 +250,98 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   defp project(_event, _measurements, _metadata, state), do: state
+
+  defp sanitize_event(
+         [:vxpipe, :gateway, :http, :request, :stop],
+         measurements,
+         metadata
+       ) do
+    {
+      sanitize_duration(measurements),
+      %{
+        operation: normalize(metadata, :operation, @gateway_operations, :unknown),
+        outcome: normalize(metadata, :outcome, @gateway_outcomes, :unknown)
+      }
+    }
+  end
+
+  defp sanitize_event(
+         [:vxpipe, :call_engine, :model, :first_token],
+         measurements,
+         metadata
+       ) do
+    {sanitize_duration(measurements), %{provider: normalize_provider(metadata)}}
+  end
+
+  defp sanitize_event(
+         [:vxpipe, :call_engine, :model, :request, :stop],
+         measurements,
+         metadata
+       ) do
+    {
+      sanitize_duration(measurements),
+      %{
+        provider: normalize_provider(metadata),
+        outcome: normalize(metadata, :outcome, @model_outcomes, :invalid_response),
+        first_output: normalize(metadata, :first_output, [:observed, :missing], :missing)
+      }
+    }
+  end
+
+  defp sanitize_event(
+         [:vxpipe, :call_engine, :tts, :first_audio],
+         measurements,
+         metadata
+       ) do
+    {sanitize_duration(measurements), %{provider: normalize_provider(metadata)}}
+  end
+
+  defp sanitize_event(
+         [:vxpipe, :call_engine, :provider, :failure],
+         measurements,
+         metadata
+       ) do
+    {
+      sanitize_count(measurements),
+      %{
+        capability: normalize(metadata, :capability, [:model, :stt, :tts], :other),
+        provider: normalize_provider(metadata),
+        category: normalize(metadata, :category, @failure_categories, :unknown)
+      }
+    }
+  end
+
+  defp sanitize_event(
+         [:vxpipe, :call_engine, :runtime, :sample],
+         measurements,
+         _metadata
+       ) do
+    {sanitize_runtime(measurements), %{}}
+  end
+
+  defp sanitize_event(_event, _measurements, _metadata), do: {%{}, %{}}
+
+  defp sanitize_duration(%{duration: duration}) when is_integer(duration) and duration >= 0,
+    do: %{duration: duration}
+
+  defp sanitize_duration(_measurements), do: %{}
+
+  defp sanitize_count(%{count: count}) when is_integer(count) and count > 0,
+    do: %{count: count}
+
+  defp sanitize_count(_measurements), do: %{}
+
+  defp sanitize_runtime(%{
+         active_rooms: active_rooms,
+         memory_bytes: memory_bytes,
+         run_queue: run_queue
+       })
+       when is_integer(active_rooms) and active_rooms >= 0 and is_integer(memory_bytes) and
+              memory_bytes >= 0 and is_integer(run_queue) and run_queue >= 0 do
+    %{active_rooms: active_rooms, memory_bytes: memory_bytes, run_queue: run_queue}
+  end
+
+  defp sanitize_runtime(_measurements), do: %{}
 
   defp normalize(metadata, key, allowed, fallback) when is_map(metadata) do
     value = Map.get(metadata, key)

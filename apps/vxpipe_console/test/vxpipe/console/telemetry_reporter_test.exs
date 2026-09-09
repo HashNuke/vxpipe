@@ -103,6 +103,38 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
            ] == 1
   end
 
+  test "sanitizes queued events and never dimensions aggregates by call identity" do
+    {_child_id, reporter} = start_reporter(max_pending_events: 128)
+    sentinel = "private-sentinel"
+    :ok = :sys.suspend(reporter)
+
+    Enum.each(1..100, fn sequence ->
+      :telemetry.execute(
+        @model_request_stop,
+        %{duration: duration_ms(2), text: "#{sentinel}-text-#{sequence}"},
+        %{
+          provider: "#{sentinel}-provider-#{sequence}",
+          outcome: :ok,
+          first_output: :observed,
+          call_id: "#{sentinel}-call-#{sequence}",
+          participant_id: "#{sentinel}-participant-#{sequence}",
+          turn_id: "#{sentinel}-turn-#{sequence}",
+          variables: %{"private" => "#{sentinel}-variable-#{sequence}"}
+        }
+      )
+    end)
+
+    assert {:messages, queued_messages} = Process.info(reporter, :messages)
+    refute inspect(queued_messages) =~ sentinel
+
+    :ok = :sys.resume(reporter)
+    snapshot = TelemetryReporter.snapshot(reporter)
+
+    assert snapshot.received_events == 100
+    assert snapshot.model.requests == %{{:other, :ok, :observed} => 100}
+    refute inspect(snapshot) =~ sentinel
+  end
+
   test "replaces a stale handler after an abrupt stop and detaches on normal shutdown" do
     handler_id = {__MODULE__, make_ref()}
     {_first_child_id, first} = start_reporter(handler_id: handler_id)

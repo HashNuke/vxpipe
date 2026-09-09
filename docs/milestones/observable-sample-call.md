@@ -106,7 +106,7 @@ slow response or missing measurement. The existing voice console still works unc
   provider failure appears as a safe error category, not successful/zero-duration work.
 - [ ] No first token/audio, cancellation and unavailable provider measurements remain
   explicitly missing/incomplete. Known fixture timings match documented boundaries.
-- [ ] Synthetic secret/text/variable sentinels never enter metric payloads, labels or
+- [x] Synthetic secret/text/variable sentinels never enter metric payloads, labels or
   unprivileged responses. Many unique call IDs do not create one metric series per call.
 - [ ] Stop/restart the collector and disconnect/saturate the dashboard: calls continue,
   retained buffers remain bounded, missing data is visible and measurements are not doubled.
@@ -330,6 +330,20 @@ absent and the connection runtime alive. Source dependency inspection confirms t
 no Phoenix or Console dependency. The complete umbrella gates pass with call engine `116 tests,
 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console `14 tests,
 0 failures`.
+
+Implementation evidence, checkpoint 16 (2026-09-09): hardened the bounded reporter queue
+itself against payload and cardinality leakage. The red test suspended the reporter and found
+all 100 synthetic text, variable, call, participant and turn sentinels in its mailbox even
+though the eventual snapshot was safe. The Telemetry callback now validates numeric
+measurements and normalizes metadata to closed dimensions before the local send. The green
+test observes only one `{:other, :ok, :observed}` aggregate for 100 distinct identities and
+finds no sentinel in either queued messages or the snapshot. A diagnostics LiveView assertion
+also verifies that the same private values do not enter its rendered response. The focused
+Console run passes `9 tests, 0 failures`. The first umbrella run encountered an unrelated
+Jido two-tool test ordering failure; that test then passed ten consecutive repetitions and the
+complete rerun passed with call engine `116 tests, 0 failures (1 excluded)`, gateway `46 tests,
+0 failures (4 excluded)`, and Console `15 tests, 0 failures`. Format, warnings-as-errors compile
+and unused-lock gates also pass.
 
 ## Specification review
 
