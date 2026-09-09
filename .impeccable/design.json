@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T17:25:45Z",
+  "generatedAt": "2026-09-09T18:43:00Z",
   "title": "Design System: Vxpipe Operator's Bench",
   "extensions": {
     "colorMeta": {
@@ -25,8 +25,8 @@
       "muted-readout": {
         "role": "neutral",
         "displayName": "Muted Readout",
-        "canonical": "oklch(0.552 0.016 285.938)",
-        "tonalRamp": ["oklch(0.15 0.016 285.938)", "oklch(0.25 0.016 285.938)", "oklch(0.35 0.016 285.938)", "oklch(0.45 0.016 285.938)", "oklch(0.55 0.016 285.938)", "oklch(0.65 0.016 285.938)", "oklch(0.8 0.016 285.938)", "oklch(0.95 0.016 285.938)"]
+        "canonical": "oklch(0.48 0.014 285.938)",
+        "tonalRamp": ["oklch(0.15 0.014 285.938)", "oklch(0.25 0.014 285.938)", "oklch(0.35 0.014 285.938)", "oklch(0.45 0.014 285.938)", "oklch(0.55 0.014 285.938)", "oklch(0.65 0.014 285.938)", "oklch(0.8 0.014 285.938)", "oklch(0.95 0.014 285.938)"]
       },
       "subtle-divider": {
         "role": "neutral",
@@ -61,14 +61,26 @@
       "signal-green": {
         "role": "primary",
         "displayName": "Signal Green",
-        "canonical": "oklch(0.696 0.17 162.48)",
-        "tonalRamp": ["oklch(0.15 0.17 162.48)", "oklch(0.25 0.17 162.48)", "oklch(0.35 0.17 162.48)", "oklch(0.45 0.17 162.48)", "oklch(0.55 0.17 162.48)", "oklch(0.65 0.17 162.48)", "oklch(0.8 0.17 162.48)", "oklch(0.95 0.17 162.48)"]
+        "canonical": "oklch(0.51 0.13 162.48)",
+        "tonalRamp": ["oklch(0.15 0.13 162.48)", "oklch(0.25 0.13 162.48)", "oklch(0.35 0.13 162.48)", "oklch(0.45 0.13 162.48)", "oklch(0.55 0.13 162.48)", "oklch(0.65 0.13 162.48)", "oklch(0.8 0.13 162.48)", "oklch(0.95 0.13 162.48)"]
+      },
+      "signal-green-soft": {
+        "role": "primary",
+        "displayName": "Signal Green Soft",
+        "canonical": "oklch(0.95 0.055 162.48)",
+        "tonalRamp": ["oklch(0.15 0.055 162.48)", "oklch(0.25 0.055 162.48)", "oklch(0.35 0.055 162.48)", "oklch(0.45 0.055 162.48)", "oklch(0.55 0.055 162.48)", "oklch(0.65 0.055 162.48)", "oklch(0.8 0.055 162.48)", "oklch(0.95 0.055 162.48)"]
       },
       "fault-coral": {
         "role": "secondary",
         "displayName": "Fault Coral",
-        "canonical": "oklch(0.7022 0.1892 22.23)",
-        "tonalRamp": ["oklch(0.15 0.1892 22.23)", "oklch(0.25 0.1892 22.23)", "oklch(0.35 0.1892 22.23)", "oklch(0.45 0.1892 22.23)", "oklch(0.55 0.1892 22.23)", "oklch(0.65 0.1892 22.23)", "oklch(0.8 0.1892 22.23)", "oklch(0.95 0.1892 22.23)"]
+        "canonical": "oklch(0.56 0.185 22.23)",
+        "tonalRamp": ["oklch(0.15 0.185 22.23)", "oklch(0.25 0.185 22.23)", "oklch(0.35 0.185 22.23)", "oklch(0.45 0.185 22.23)", "oklch(0.55 0.185 22.23)", "oklch(0.65 0.185 22.23)", "oklch(0.8 0.185 22.23)", "oklch(0.95 0.185 22.23)"]
+      },
+      "fault-coral-soft": {
+        "role": "secondary",
+        "displayName": "Fault Coral Soft",
+        "canonical": "oklch(0.96 0.045 22.23)",
+        "tonalRamp": ["oklch(0.15 0.045 22.23)", "oklch(0.25 0.045 22.23)", "oklch(0.35 0.045 22.23)", "oklch(0.45 0.045 22.23)", "oklch(0.55 0.045 22.23)", "oklch(0.65 0.045 22.23)", "oklch(0.8 0.045 22.23)", "oklch(0.95 0.045 22.23)"]
       },
       "agent-violet": {
         "role": "tertiary",
@@ -79,12 +91,25 @@
       "client-blue": {
         "role": "tertiary",
         "displayName": "Client Blue",
-        "canonical": "oklch(0.623 0.214 259.815)",
-        "tonalRamp": ["oklch(0.15 0.214 259.815)", "oklch(0.25 0.214 259.815)", "oklch(0.35 0.214 259.815)", "oklch(0.45 0.214 259.815)", "oklch(0.55 0.214 259.815)", "oklch(0.65 0.214 259.815)", "oklch(0.8 0.214 259.815)", "oklch(0.95 0.214 259.815)"]
+        "canonical": "oklch(0.55 0.19 259.815)",
+        "tonalRamp": ["oklch(0.15 0.19 259.815)", "oklch(0.25 0.19 259.815)", "oklch(0.35 0.19 259.815)", "oklch(0.45 0.19 259.815)", "oklch(0.55 0.19 259.815)", "oklch(0.65 0.19 259.815)", "oklch(0.8 0.19 259.815)", "oklch(0.95 0.19 259.815)"]
+      },
+      "selection-blue-soft": {
+        "role": "tertiary",
+        "displayName": "Selection Blue Soft",
+        "canonical": "oklch(0.96 0.025 259.815)",
+        "tonalRamp": ["oklch(0.15 0.025 259.815)", "oklch(0.25 0.025 259.815)", "oklch(0.35 0.025 259.815)", "oklch(0.45 0.025 259.815)", "oklch(0.55 0.025 259.815)", "oklch(0.65 0.025 259.815)", "oklch(0.8 0.025 259.815)", "oklch(0.95 0.025 259.815)"]
+      },
+      "focus-blue": {
+        "role": "tertiary",
+        "displayName": "Focus Blue",
+        "canonical": "oklch(0.623 0.214 259.815 / 0.28)",
+        "tonalRamp": ["oklch(0.15 0.214 259.815 / 0.28)", "oklch(0.25 0.214 259.815 / 0.28)", "oklch(0.35 0.214 259.815 / 0.28)", "oklch(0.45 0.214 259.815 / 0.28)", "oklch(0.55 0.214 259.815 / 0.28)", "oklch(0.65 0.214 259.815 / 0.28)", "oklch(0.8 0.214 259.815 / 0.28)", "oklch(0.95 0.214 259.815 / 0.28)"]
       }
     },
     "typographyMeta": {
       "title": {"displayName": "Title", "purpose": "Compact workspace and product titles."},
+      "detail-title": {"displayName": "Detail Title", "purpose": "Selected operational objects inside a workbench."},
       "body": {"displayName": "Body", "purpose": "Instructions, empty states, and general interface copy."},
       "control": {"displayName": "Control", "purpose": "Buttons, selectors, and compact actions."},
       "bench-label": {"displayName": "Bench Label", "purpose": "Uppercase panel headings, tabs, and operational categories."},
@@ -110,7 +135,8 @@
       }
     ],
     "breakpoints": [
-      {"name": "workspace", "value": "640px"}
+      {"name": "workspace", "value": "640px"},
+      {"name": "data-workbench", "value": "760px"}
     ]
   },
   "components": [
@@ -120,7 +146,7 @@
       "refersTo": "button-active",
       "description": "The primary readiness and connection action.",
       "html": "<button class=\"ds-button-active\">Connect</button>",
-      "css": ".ds-button-active { height: 36px; padding: 8px 18px; border: 1px solid transparent; border-radius: 6px; background: var(--color-active, oklch(0.696 0.17 162.48)); color: var(--color-active-foreground, oklch(0.9793 0.0207 166.11)); font: 500 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-active:hover { background: color-mix(in oklch, var(--color-active, oklch(0.696 0.17 162.48)) 90%, transparent); } .ds-button-active:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-active-ring, oklch(0.696 0.17 162.48 / 20%)); }"
+      "css": ".ds-button-active { height: 36px; padding: 8px 18px; border: 1px solid transparent; border-radius: 6px; background: var(--color-active, oklch(0.51 0.13 162.48)); color: var(--color-active-foreground, oklch(0.9793 0.0207 166.11)); font: 500 14px/20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-active:hover { background: color-mix(in oklch, var(--color-active, oklch(0.51 0.13 162.48)) 90%, transparent); } .ds-button-active:focus-visible { outline: 3px solid var(--color-focus, oklch(0.623 0.214 259.815 / 0.28)); outline-offset: 2px; }"
     },
     {
       "name": "Primary Icon Button",
@@ -128,7 +154,7 @@
       "refersTo": "button-primary-light",
       "description": "A compact icon action such as send or commit.",
       "html": "<button class=\"ds-button-icon\" aria-label=\"Send\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M22 2 11 13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"m22 2-7 20-4-9-9-4Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"/></svg></button>",
-      "css": ".ds-button-icon { display: inline-grid; width: 36px; height: 36px; place-items: center; border: 1px solid transparent; border-radius: 6px; background: var(--color-primary, oklch(0.21 0.006 285.885)); color: var(--color-primary-foreground, oklch(0.985 0 0)); transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-icon:hover { background: color-mix(in oklch, var(--color-primary, oklch(0.21 0.006 285.885)) 90%, transparent); } .ds-button-icon:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); }"
+      "css": ".ds-button-icon { display: inline-grid; width: 36px; height: 36px; place-items: center; border: 1px solid transparent; border-radius: 6px; background: var(--color-primary, oklch(0.21 0.006 285.885)); color: var(--color-primary-foreground, oklch(0.985 0 0)); transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-icon:hover { background: color-mix(in oklch, var(--color-primary, oklch(0.21 0.006 285.885)) 90%, transparent); } .ds-button-icon:focus-visible { outline: 3px solid var(--color-focus, oklch(0.623 0.214 259.815 / 0.28)); outline-offset: 2px; }"
     },
     {
       "name": "Ghost Utility Button",
@@ -136,7 +162,7 @@
       "refersTo": "button-primary-light",
       "description": "A low-emphasis toolbar action that becomes tonal on hover.",
       "html": "<button class=\"ds-button-ghost\">Open keypad</button>",
-      "css": ".ds-button-ghost { height: 36px; padding: 0 13px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 500 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-ghost:hover { background: var(--color-accent, oklch(0.967 0.001 286.375)); } .ds-button-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); }"
+      "css": ".ds-button-ghost { height: 36px; padding: 0 13px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 500 14px/20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-ghost:hover { background: var(--color-accent, oklch(0.967 0.001 286.375)); } .ds-button-ghost:focus-visible { outline: 3px solid var(--color-focus, oklch(0.623 0.214 259.815 / 0.28)); outline-offset: 2px; }"
     },
     {
       "name": "Workbench Panel",
@@ -144,7 +170,7 @@
       "refersTo": "panel-light",
       "description": "The flat bordered container for one operational responsibility.",
       "html": "<section class=\"ds-panel\"><header class=\"ds-panel-header\">BOT AUDIO</header><div class=\"ds-panel-body\">No audio</div></section>",
-      "css": ".ds-panel { overflow: hidden; min-height: 180px; border: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); border-radius: 4px; background: var(--color-card, oklch(1 0 0)); color: var(--color-card-foreground, oklch(0.552 0.016 285.938)); box-shadow: none; } .ds-panel-header { padding: 12px; border-bottom: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SF Mono\", Consolas, monospace; letter-spacing: 0.05em; } .ds-panel-body { display: grid; min-height: 136px; place-items: center; padding: 16px; font: 500 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; }"
+      "css": ".ds-panel { overflow: hidden; min-height: 180px; border: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); border-radius: 4px; background: var(--color-card, oklch(1 0 0)); color: var(--color-card-foreground, oklch(0.48 0.014 285.938)); box-shadow: none; } .ds-panel-header { padding: 12px; border-bottom: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; letter-spacing: 0.05em; } .ds-panel-body { display: grid; min-height: 136px; place-items: center; padding: 16px; font: 500 14px/20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; }"
     },
     {
       "name": "Segmented Workspace Tabs",
@@ -152,7 +178,7 @@
       "refersTo": "segmented-tab",
       "description": "A compact switch between sibling operational views.",
       "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"Workspace view\"><button class=\"ds-tab is-active\" role=\"tab\" aria-selected=\"true\">CONVERSATION</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">METRICS</button></div>",
-      "css": ".ds-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: var(--color-muted, oklch(0.967 0.001 286.375)); } .ds-tab { height: 33px; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SF Mono\", Consolas, monospace; letter-spacing: 0.05em; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-tab:hover { background: color-mix(in oklch, var(--color-muted-foreground, oklch(0.552 0.016 285.938)) 10%, transparent); } .ds-tab.is-active { background: var(--color-background, oklch(1 0 0)); } .ds-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); }"
+      "css": ".ds-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 6px; background: var(--color-muted, oklch(0.967 0.001 286.375)); } .ds-tab { height: 33px; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; letter-spacing: 0.05em; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-tab:hover { background: color-mix(in oklch, var(--color-muted-foreground, oklch(0.48 0.014 285.938)) 10%, transparent); } .ds-tab.is-active { background: var(--color-background, oklch(1 0 0)); } .ds-tab:focus-visible { outline: 3px solid var(--color-focus, oklch(0.623 0.214 259.815 / 0.28)); outline-offset: 2px; }"
     },
     {
       "name": "Filter Field",
@@ -160,7 +186,7 @@
       "refersTo": "input",
       "description": "A compact filter field for dense event and data regions.",
       "html": "<label class=\"ds-filter\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" aria-hidden=\"true\"><path d=\"M4 5h16l-6 7v5l-4 2v-7Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linejoin=\"round\"/></svg><span class=\"ds-sr-only\">Filter events</span><input type=\"search\" placeholder=\"Filter\" /></label>",
-      "css": ".ds-filter { display: inline-flex; height: 36px; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--color-input, oklch(0.92 0.004 286.32)); border-radius: 6px; background: var(--color-secondary, oklch(0.967 0.001 286.375)); color: var(--color-muted-foreground, oklch(0.552 0.016 285.938)); transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-filter:focus-within { border-color: var(--color-ring, oklch(0.705 0.015 286.067)); box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring, oklch(0.705 0.015 286.067)) 50%, transparent); } .ds-filter input { width: 150px; border: 0; outline: 0; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 400 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-filter input::placeholder { color: var(--color-muted-foreground, oklch(0.552 0.016 285.938)); } .ds-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }"
+      "css": ".ds-filter { display: inline-flex; height: 36px; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--color-input, oklch(0.92 0.004 286.32)); border-radius: 6px; background: var(--color-secondary, oklch(0.967 0.001 286.375)); color: var(--color-muted-foreground, oklch(0.48 0.014 285.938)); transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-filter:focus-within { border-color: var(--color-ring, oklch(0.705 0.015 286.067)); box-shadow: 0 0 0 3px var(--color-focus, oklch(0.623 0.214 259.815 / 0.28)); } .ds-filter input { width: 150px; border: 0; outline: 0; background: transparent; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 400 14px/20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-filter input::placeholder { color: var(--color-muted-foreground, oklch(0.48 0.014 285.938)); } .ds-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }"
     },
     {
       "name": "Status Readout",
@@ -168,7 +194,23 @@
       "refersTo": "panel-light",
       "description": "A compact label-and-value block for live system state.",
       "html": "<section class=\"ds-status\"><h3>STATUS</h3><dl><div><dt>Client</dt><dd>INITIALIZED</dd></div><div><dt>Agent</dt><dd>---</dd></div></dl></section>",
-      "css": ".ds-status { border: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); border-radius: 4px; background: var(--color-card, oklch(1 0 0)); color: var(--color-card-foreground, oklch(0.552 0.016 285.938)); } .ds-status h3 { margin: 0; padding: 10px 12px 4px; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SF Mono\", Consolas, monospace; letter-spacing: 0.05em; } .ds-status dl { margin: 0; padding: 4px 12px 10px; } .ds-status dl div { display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: 16px; } .ds-status dt { font: 400 14px/20px Inter, ui-sans-serif, system-ui, sans-serif; } .ds-status dd { margin: 0; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 400 12px/18px \"Geist Mono\", \"SF Mono\", Consolas, monospace; }"
+      "css": ".ds-status { border: 1px solid var(--color-border, oklch(0.92 0.004 286.32)); border-radius: 4px; background: var(--color-card, oklch(1 0 0)); color: var(--color-card-foreground, oklch(0.48 0.014 285.938)); } .ds-status h3 { margin: 0; padding: 10px 12px 4px; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; letter-spacing: 0.05em; } .ds-status dl { margin: 0; padding: 4px 12px 10px; } .ds-status dl div { display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: 16px; } .ds-status dt { font: 400 14px/20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-status dd { margin: 0; color: var(--color-foreground, oklch(0.141 0.005 285.823)); font: 400 12px/18px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; }"
+    },
+    {
+      "name": "Status Rail",
+      "kind": "custom",
+      "refersTo": "panel-dark",
+      "description": "A high-contrast operational summary with an explicit state and divided readouts.",
+      "html": "<section class=\"ds-status-rail\"><div class=\"ds-status-primary\"><span class=\"ds-status-marker\" aria-hidden=\"true\"></span><div><strong>System available</strong><small>Bounded records are loaded.</small></div></div><div class=\"ds-status-value\"><span>ITEMS</span><strong>6</strong></div><div class=\"ds-status-value\"><span>SOURCE</span><strong>Persisted</strong></div></section>",
+      "css": ".ds-status-rail { display: grid; grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(120px, 1fr)); overflow: hidden; border: 1px solid var(--color-divider-strong, oklch(0.705 0.015 286.067)); border-radius: 4px; background: var(--color-charcoal, oklch(0.21 0.006 285.885)); color: var(--color-paper, oklch(0.985 0 0)); } .ds-status-primary { display: flex; min-height: 64px; align-items: center; gap: 12px; padding: 12px 16px; } .ds-status-primary strong, .ds-status-primary small { display: block; } .ds-status-primary strong { font: 700 16px/24px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-status-primary small { color: var(--color-divider-strong, oklch(0.705 0.015 286.067)); font: 400 12px/18px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-status-marker { width: 10px; height: 10px; flex: 0 0 auto; border: 2px solid var(--color-charcoal, oklch(0.21 0.006 285.885)); border-radius: 50%; background: var(--color-green, oklch(0.51 0.13 162.48)); box-shadow: 0 0 0 3px var(--color-green-soft, oklch(0.95 0.055 162.48)); } .ds-status-value { min-height: 64px; padding: 12px 16px; border-left: 1px solid var(--color-worktop, oklch(0.274 0.006 286.033)); } .ds-status-value span, .ds-status-value strong { display: block; font-family: \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; } .ds-status-value span { color: var(--color-divider-strong, oklch(0.705 0.015 286.067)); font-size: 12px; font-weight: 700; letter-spacing: 0.055em; } .ds-status-value strong { margin-top: 4px; font-size: 14px; font-weight: 400; }"
+    },
+    {
+      "name": "Data Matrix",
+      "kind": "custom",
+      "refersTo": "panel-light",
+      "description": "A compact divided table whose selected row stays subordinate to operational state.",
+      "html": "<table class=\"ds-matrix\"><thead><tr><th>ITEM</th><th>STATE</th><th>REVISION</th></tr></thead><tbody><tr class=\"ds-matrix-selected\"><td><a href=\"#\">item-7f2e9a</a></td><td><span class=\"ds-matrix-state\"><i aria-hidden=\"true\"></i>Live</span></td><td>r3</td></tr><tr><td><a href=\"#\">item-ended-01</a></td><td>Ended</td><td>r2</td></tr></tbody></table>",
+      "css": ".ds-matrix { width: 100%; border-collapse: collapse; border: 1px solid var(--color-divider-strong, oklch(0.705 0.015 286.067)); background: var(--color-canvas, oklch(1 0 0)); color: var(--color-muted, oklch(0.48 0.014 285.938)); font: 400 14px/17.5px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; font-variant-numeric: tabular-nums; } .ds-matrix th, .ds-matrix td { padding: 8px 12px; border-right: 1px solid var(--color-divider, oklch(0.92 0.004 286.32)); border-bottom: 1px solid var(--color-divider, oklch(0.92 0.004 286.32)); text-align: left; } .ds-matrix th { background: var(--color-paper, oklch(0.985 0 0)); color: var(--color-ink, oklch(0.141 0.005 285.823)); font: 700 12px/16px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; letter-spacing: 0.055em; } .ds-matrix th:last-child, .ds-matrix td:last-child { border-right: 0; } .ds-matrix tbody tr:last-child td { border-bottom: 0; } .ds-matrix tbody tr:hover { background: var(--color-panel, oklch(0.967 0.001 286.375)); } .ds-matrix .ds-matrix-selected, .ds-matrix .ds-matrix-selected:hover { background: var(--color-selection, oklch(0.96 0.025 259.815)); } .ds-matrix a { color: var(--color-ink, oklch(0.141 0.005 285.823)); font: 650 14px/17.5px \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; text-underline-offset: 3px; } .ds-matrix a:focus-visible { outline: 3px solid var(--color-focus, oklch(0.623 0.214 259.815 / 0.28)); outline-offset: 2px; } .ds-matrix-state { display: inline-flex; align-items: center; gap: 8px; color: var(--color-ink, oklch(0.141 0.005 285.823)); font-family: \"Geist Mono\", \"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace; font-size: 12px; font-weight: 650; } .ds-matrix-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-green, oklch(0.51 0.13 162.48)); }"
     }
   ],
   "narrative": {
@@ -187,6 +229,7 @@
       {"name": "The Quiet Canvas Rule", "body": "Do not add decorative gradients or brand color washes to operational surfaces.", "section": "colors"},
       {"name": "The Readout Split Rule", "body": "Use sans-serif type for prose and actions; use mono for terse labels, identifiers, status values, and timestamps.", "section": "typography"},
       {"name": "The One Working Surface Rule", "body": "Group related tools inside one bordered panel; do not create decorative cards inside cards.", "section": "layout"},
+      {"name": "The Container Owns Overflow Rule", "body": "Wide matrices and raw readouts contain their own overflow; responsive pages never create page-level horizontal scroll.", "section": "layout"},
       {"name": "The Flat at Rest Rule", "body": "Core work surfaces never float; one-pixel dividers and tonal contrast define hierarchy. Shadows belong only to temporary overlays.", "section": "elevation"},
       {"name": "The Tool, Not Toy Rule", "body": "Keep corners shallow and functional; do not turn ordinary content, labels, or panels into pills.", "section": "shapes"},
       {"name": "The One State, One Signal Rule", "body": "A control's color, label, icon, and disabled treatment must agree about its operational state.", "section": "components"}
@@ -195,7 +238,8 @@
       "Do build hierarchy from panels, alignment, tonal layers, and dividers.",
       "Do keep status colors tied to readiness, failure, agent, and client roles.",
       "Do use uppercase mono labels for terse categories and sans-serif type for readable instructions and actions.",
-      "Do preserve the 640px transition from resizable workspace to single-panel mobile navigation.",
+      "Do preserve the evidenced responsive model for each operator surface: the realtime workspace changes mode at 640px, while data workbenches reflow by 760px.",
+      "Do keep selected rows quiet enough that live, ended, and failed markers remain the strongest operational signals.",
       "Do bring new custom surfaces onto these tokens before treating them as design authority."
     ],
     "donts": [
@@ -203,7 +247,8 @@
       "Don't soften the console into consumer chat styling with plush message bubbles, oversized pills, or friendly gradient cards.",
       "Don't import decorative marketing treatments such as hero-scale type, ornamental glows, or gradient backdrops into operational screens.",
       "Don't nest decorative cards inside working panels.",
-      "Don't use saturated color as ornament; every bright hue must communicate a defined state or identity."
+      "Don't use saturated color as ornament; every bright hue must communicate a defined state or identity.",
+      "Don't solve narrow layouts with page-level horizontal scrolling; contain raw data locally and reflow or remove secondary fields."
     ]
   }
 }
