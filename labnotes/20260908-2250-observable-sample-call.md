@@ -526,3 +526,20 @@ focused LiveView file passes `6 tests, 0 failures`.
 Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
 engine `117 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
 Console `17 tests, 0 failures`.
+
+## Checkpoint 19: Read-only diagnostics and preserved call paths
+
+A new clean-reporter characterization opens the diagnostics LiveView and asserts that no
+supported call-path Telemetry event was emitted. Its model first-output/outcome, TTS first-audio
+and provider-failure maps remain empty. The room DynamicSupervisor child set and the Registry
+entry count—which includes both room and participant registrations—are identical before and
+after the page opens. The test passed on its first run because the existing read-only projection
+already owned the desired behavior; the focused LiveView file passes `7 tests, 0 failures`.
+
+The acceptance-preservation suites were also run explicitly. Engine room creation, participant
+join, text input, audio input, model output, synthesized speech and spoken/text interruption pass
+`20 tests, 0 failures`. Gateway endpoint, mounted CORS/admission and RTVI/WebRTC coverage passes
+`19 tests, 0 failures`.
+Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
+engine `117 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
+Console `18 tests, 0 failures`.

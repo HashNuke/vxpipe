@@ -119,7 +119,7 @@ slow response or missing measurement. The existing voice console still works unc
 - [x] Disabled diagnostic requests/subscriptions fail closed. When enabled, diagnostics
   require no additional authentication; API keys retain only their call-management role
   and join tokens retain only their call-admission role.
-- [ ] Existing room creation, RTVI joining, text/audio, CORS and interruption checks remain
+- [x] Existing room creation, RTVI joining, text/audio, CORS and interruption checks remain
   green. Opening diagnostics neither creates a participant nor captures extra audio/text.
 
 ## Manual verification
@@ -372,6 +372,18 @@ because the existing process boundaries already provided the intended isolation;
 LiveView file passes `6 tests, 0 failures`.
 The complete umbrella gates pass with call engine `117 tests, 0 failures (1 excluded)`, gateway
 `46 tests, 0 failures (4 excluded)`, and Console `17 tests, 0 failures`.
+
+Implementation evidence, checkpoint 19 (2026-09-09): verified that diagnostics observation
+does not mutate the call domain. A clean reporter remains at zero received events after the
+diagnostics LiveView opens; model timing/outcomes, TTS timing and provider-failure aggregates
+remain empty, and both the room supervisor child set and the combined room/participant registry
+count are unchanged. This characterization passed on its first run and the focused LiveView file
+passes `7 tests, 0 failures`. Focused engine preservation coverage for room creation, participant
+join, text input, audio input, model output, synthesized speech and spoken/text interruption
+passes `20 tests, 0 failures`. Focused gateway endpoint, mounted CORS/admission and RTVI/WebRTC
+coverage passes `19 tests, 0 failures`.
+The complete umbrella gates pass with call engine `117 tests, 0 failures (1 excluded)`, gateway
+`46 tests, 0 failures (4 excluded)`, and Console `18 tests, 0 failures`.
 
 ## Specification review
 
