@@ -135,3 +135,12 @@ the LiveDashboard surface. The React/Vite playground source is now Console-owned
 the Phoenix endpoint supervises its Vite watcher in development, while release
 builds place the bundle in Console `priv/static` for direct serving. Goreman does
 not manage a separate frontend application.
+
+Implementation checkpoint 4 verified both reusable delivery modes at their owning
+boundaries. The gateway-only mount suite now creates a room and issues a bound participant
+session under a host prefix while the standalone listener is absent and the session/WebRTC
+runtime remains supervised. A tagged local-network test starts the optional standalone
+Bandit listener on an ephemeral loopback port, verifies configured CORS, then creates the
+same room/session path. Console's endpoint suite separately proves its page and mounted
+gateway health route share one endpoint while the standalone HTTP supervisor is absent.
+The gateway child has no Phoenix or Console dependency.

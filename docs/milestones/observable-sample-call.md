@@ -111,10 +111,10 @@ slow response or missing measurement. The existing voice console still works unc
 - [ ] Stop/restart the collector and disconnect/saturate the dashboard: calls continue,
   retained buffers remain bounded, missing data is visible and measurements are not doubled.
 - [x] An embedded host receives engine events without gateway/database/UI dependencies.
-- [ ] A consuming host mounts the gateway with documented supervision/configuration
+- [x] A consuming host mounts the gateway with documented supervision/configuration
   while its standalone listener is disabled, without Phoenix/console dependencies.
   The optional standalone listener also preserves existing protocol/CORS behavior.
-- [ ] Console pages and gateway call routes share the Phoenix HTTP listener without
+- [x] Console pages and gateway call routes share the Phoenix HTTP listener without
   an internal HTTP hop; disabling the gateway listener does not stop its connection runtime.
 - [x] Disabled diagnostic requests/subscriptions fail closed. When enabled, diagnostics
   require no additional authentication; API keys retain only their call-management role
@@ -313,6 +313,23 @@ the production bundle and shell development contract also pass. Chromium reopene
 voice entry after the restart with no browser errors or horizontal overflow. The complete
 umbrella gates pass with call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests,
 0 failures (3 excluded)`, and Console `14 tests, 0 failures`.
+
+Implementation evidence, checkpoint 15 (2026-09-09): completed executable verification of
+the reusable gateway compositions without changing runtime behavior. The gateway-only mount
+suite now creates a room and issues its participant session below `/voice` while the standalone
+HTTP supervisor is absent and the gateway's session/WebRTC supervisors remain alive. The
+characterization passed on its first run because the public mount already routed admission
+correctly. A tagged local-network test starts the optional standalone Bandit listener on an
+ephemeral loopback port, verifies the configured preflight response, then creates a room and
+issues its participant session over HTTP. Its first request-client attempt was blocked by a
+missing OTP `:http_util` module before sending; replacing that test-only client with a raw bounded
+HTTP/1.1 socket preserved the boundary and passed. The focused mount suite passes `5 tests,
+0 failures`; the tagged standalone lane passes `1 test, 0 failures`. Existing Console endpoint
+tests prove its page and mounted gateway routes share one listener with the standalone supervisor
+absent and the connection runtime alive. Source dependency inspection confirms the gateway has
+no Phoenix or Console dependency. The complete umbrella gates pass with call engine `116 tests,
+0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console `14 tests,
+0 failures`.
 
 ## Specification review
 

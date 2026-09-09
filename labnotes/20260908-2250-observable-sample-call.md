@@ -442,3 +442,26 @@ shell development contract passes. Chromium reopened the HTTPS voice entry after
 no page errors or horizontal overflow. Root format, warnings-as-errors compile, default suite and
 unused-lock gates passed with call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests,
 0 failures (3 excluded)`, and Console `14 tests, 0 failures`.
+
+## Checkpoint 15: Reusable gateway compositions
+
+The mount already covered root/prefixed routing, CORS, host fallthrough, halting and gateway
+runtime supervision, but it did not execute the room/session admission path. The added
+gateway-only characterization creates a room and issues its participant session below `/voice`
+while `Vxpipe.Gateway.HTTP.Supervisor` is absent. It passed on the first run, confirming that no
+runtime change was needed. The focused mount suite passes `5 tests, 0 failures`.
+
+The optional standalone path had only source-level configuration evidence. A tagged local-network
+test now starts `Vxpipe.Gateway.HTTP.Supervisor` on an ephemeral loopback port, verifies its
+configured CORS preflight, creates a room and issues the participant session through real HTTP.
+The first run started Bandit but the OTP `:httpc` test client failed before sending because its
+internal `:http_util` module was unavailable in this runtime. A bounded raw HTTP/1.1 socket helper
+removed that unrelated client dependency; the tagged lane then passed `1 test, 0 failures`.
+
+Together with the existing Console endpoint test—which serves the Console page and gateway health
+route through one Phoenix endpoint, observes no standalone HTTP supervisor, and observes live
+gateway session/WebRTC supervisors—these checks satisfy the mounted, standalone and shared-listener
+composition contracts. The gateway Mix project has no Phoenix or Console dependency.
+Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
+engine `116 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
+Console `14 tests, 0 failures`.

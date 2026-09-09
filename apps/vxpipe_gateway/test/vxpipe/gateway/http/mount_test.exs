@@ -20,6 +20,17 @@ defmodule Vxpipe.Gateway.HTTP.MountTest do
                    ]
                  )
   @root_mount_options Mount.init([])
+  @room_mount_options Mount.init(
+                        path_prefix: "/voice",
+                        room_creation: [
+                          enabled: true,
+                          principal: [
+                            tenant_id: "tenant-mount-test",
+                            actor_id: "actor-mount-test",
+                            scopes: ["rooms:create", "rooms:join"]
+                          ]
+                        ]
+                      )
 
   test "mounts the gateway at root without claiming console pages" do
     gateway_conn =
@@ -88,5 +99,37 @@ defmodule Vxpipe.Gateway.HTTP.MountTest do
 
     assert conn.status == 404
     assert conn.halted
+  end
+
+  test "creates a room and issues a participant session through the mounted routes" do
+    room_id = "room-mounted-#{System.unique_integer([:positive, :monotonic])}"
+
+    create_conn =
+      :post
+      |> conn("/voice/api/rooms", JSON.encode!(%{"room_id" => room_id}))
+      |> put_req_header("content-type", "application/json")
+      |> Mount.call(@room_mount_options)
+
+    assert create_conn.status == 201
+    assert create_conn.halted
+
+    session_conn =
+      :post
+      |> conn("/voice/api/rooms/#{room_id}/sessions")
+      |> Mount.call(@room_mount_options)
+
+    assert session_conn.status == 201
+    assert session_conn.halted
+
+    assert %{
+             "participant" => %{"room_id" => ^room_id, "state" => "joined"},
+             "session" => %{
+               "session_id" => session_id,
+               "transport" => %{
+                 "endpoint" => "/api/rtvi/offer",
+                 "request_data" => %{"session_id" => session_id}
+               }
+             }
+           } = JSON.decode!(session_conn.resp_body)
   end
 end
