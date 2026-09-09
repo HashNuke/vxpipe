@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestones 1 through 3 are complete and milestone 4 is next. The earlier
+Status: 23 milestone specifications; milestones 1 through 4 are complete and milestone 5 is next. The earlier
 behavior contracts have completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
@@ -35,7 +35,7 @@ progress without claiming the entire milestone is complete.
 1. [x] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through Jido AI.
 2. [x] [Observable sample call](observable-sample-call.md) — Run a sample conversation and inspect live timing, provider failures and VM health on a separate dashboard.
 3. [x] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
-4. [ ] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.
+4. [x] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.
 5. [ ] [Conversation during background tools](background-tool-conversation.md) — Keep conversation responsive while a submitted tool finishes.
 6. [ ] [Tenant definitions and API-key administration](tenant-definitions-and-api-keys.md) — Save immutable definitions and bootstrap tenant-scoped administrative access.
 7. [ ] [Prepared calls and single-use joining](prepared-call-admission.md) — Prepare in PostgreSQL, then start exactly one live call when its caller joins.
@@ -92,9 +92,9 @@ owns ordering; insert or move entries here without renaming milestone files.
 ## Scope and dependency rules
 
 The current playground already creates rooms and supports a single human/agent text/audio
-path, streaming model output, hosted speech services, and engine-owned tool execution.
-It does not implement the reviewed definition compiler, durable admission, Call Variables,
-remote MCP, multi-party mixer, telephony, or storage system. Reuse working code; do not
+path, streaming model output, hosted speech services, engine-owned tool execution, and
+room-scoped Call Variables with private model/client projections. It does not implement
+durable admission, remote MCP, multi-party mixer, telephony, or storage. Reuse working code; do not
 recreate applications or label existing primitives as newly implemented.
 
 Early milestones expose only their implemented subset. Reject unsupported enabled features

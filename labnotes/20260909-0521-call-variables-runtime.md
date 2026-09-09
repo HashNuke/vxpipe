@@ -127,3 +127,8 @@ candidate. It returns only grant-safe results and keeps all failure paths non-mu
   warnings-as-errors compilation, 151 Call Engine tests (one excluded), 52
   Gateway tests (four excluded), 20 Console tests, and the unused-dependency
   check.
+- Closed milestone 4 after reconciling its checklist against the focused tests,
+  browser observation, and umbrella gate. The milestone/index now identify Call
+  Variables and private client projections as implemented, the architecture no
+  longer describes non-empty variables as startup-rejected, and the Call Engine
+  README documents the current process/tool/durability boundary.

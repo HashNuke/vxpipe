@@ -1,7 +1,7 @@
 # Call Variables and private tool projections
 
-Status: not implemented. Specification review: approved, including the Jido Action
-follow-up (2026-09-08).
+Status: complete as of 2026-09-09. Specification review: approved, including the
+Jido Action follow-up (2026-09-08).
 Prerequisites: [Definition-driven call](definition-driven-call.md), including its Jido-backed
 agent loop and action boundary.
 Sources: [Call Variables](../../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned); [authorization](../../labnotes/20260905-0405-call-definition-design.md#authorization-transaction); [client visibility](../../labnotes/20260905-0405-call-definition-design.md#tool-event-visibility-and-sample-debugging--approved-g5-decision).
@@ -44,35 +44,36 @@ engine resolves it to the pinned tenant/room/incarnation/participant grant.
 
 ## Implementation checklist
 
-- [ ] Add failing tests for generated tools, variable initialization/authorization/revisions, merge semantics, and public event projections.
-- [ ] Implement CallVariables ownership and bounded commands under the room supervisor.
-- [ ] Integrate generated tools and transient model projections; distinguish them from explicitly bound built-in/host tools.
-- [ ] Emit exact private update snapshots plus safe public metadata through separate boundaries.
-- [ ] Implement call-level tool visibility and trusted sample selection without adding controls to the console.
-- [ ] Document observed in-memory success and the later asynchronous-history projection boundary.
+- [x] Add failing tests for generated tools, variable initialization/authorization/revisions, merge semantics, and public event projections.
+- [x] Implement CallVariables ownership and bounded commands under the room supervisor.
+- [x] Integrate generated tools and transient model projections; distinguish them from explicitly bound built-in/host tools.
+- [x] Emit exact private update snapshots plus safe public metadata through separate boundaries.
+- [x] Implement call-level tool visibility and trusted sample selection without adding controls to the console.
+- [x] Document observed in-memory success and the later asynchronous-history projection boundary.
 
 ## Acceptance and failure checks
 
-- [ ] Wrong tenant/incarnation/grant or stale revision fails without mutation or hidden values; a mixed authorized/forbidden read returns no values.
-- [ ] Authored tool aliases cannot collide with generated read/update tool names.
-- [ ] Missing data reads null; successive partial updates populate it. Recursive address updates preserve postal_code; array replacement and nullable clearing behave correctly.
-- [ ] Datatype mismatch in one supplied value rejects the whole update; required missing values do not reject otherwise valid partial data.
-- [ ] Suspend RoomAuthority message servicing using a deterministic test boundary: variable reads/updates still complete.
-- [ ] Terminate an update's originating worker after submission: accepted work can finish without making another authority/liveness check.
-- [ ] Hidden/metadata/full and same-local-name bindings on different agents project correctly; forged browser policy never elevates visibility.
+- [x] Wrong tenant/incarnation/grant or stale revision fails without mutation or hidden values; a mixed authorized/forbidden read returns no values.
+- [x] Authored tool aliases cannot collide with generated read/update tool names.
+- [x] Missing data reads null; successive partial updates populate it. Recursive address updates preserve postal_code; array replacement and nullable clearing behave correctly.
+- [x] Datatype mismatch in one supplied value rejects the whole update; required missing values do not reject otherwise valid partial data.
+- [x] Suspend RoomAuthority message servicing using a deterministic test boundary: variable reads/updates still complete.
+- [x] Terminate an update's originating worker after submission: accepted work can finish without making another authority/liveness check.
+- [x] Hidden/metadata/full and same-local-name bindings on different agents project correctly; forged browser policy never elevates visibility.
 
 Additional acceptance gates:
 
-- [ ] Expired queued commands and oversized/malformed operations reject without mutation.
-- [ ] Host/MCP invocation contexts contain no private variables target, grants, or plan.
-- [ ] Jido status, checkpoints, telemetry and errors do not disclose capability handles,
+- [x] Expired queued commands and oversized/malformed operations reject without mutation.
+- [x] Host invocation contexts contain no private variables target, grants, or plan. This
+  slice adds no MCP runtime; its later boundary remains limited to declared arguments.
+- [x] Jido status, checkpoints, telemetry and errors do not disclose capability handles,
   credentials, unrestricted variables, or the resolved plan; model-visible arguments cannot
   forge a different execution identity.
-- [ ] Each turn refreshes only granted values/revisions; projections are not appended to
+- [x] Each turn refreshes only granted values/revisions; projections are not appended to
   conversation history. An update's value/new revision reaches the next same-turn model round.
-- [ ] Race two updates with the same expected revision: only one succeeds; the other reports
+- [x] Race two updates with the same expected revision: only one succeeds; the other reports
   conflict without blind retry or overwriting newer values. Caller timeout is not cancellation.
-- [ ] Room-owned variables shutdown is not documented or tested as guaranteed completion.
+- [x] Room-owned variables shutdown is not documented or tested as guaranteed completion.
 
 ## Manual verification
 
@@ -87,13 +88,43 @@ No database persistence yet, no direct browser variable-write API, no per-variab
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence (2026-09-09): checkpoints `a312652`, `cb42ae4`, and `0d39db7`
+introduced the typed commands, transactional room-scoped owner, private archival handoff,
+generated Jido Actions, exact tool attribution, and transient permission-filtered model
+projection. The focused suites prove authorization and non-leakage, missing reads, recursive
+merge, array replacement, nullable clearing, atomic schema failure, deadlines and size bounds,
+optimistic revision races, caller termination after submission, RoomAuthority independence,
+Jido round continuation, and exact snapshot attribution.
+
+Checkpoint `31e3abf` released call-definition schema `20260909.01` and implemented the
+independent gateway projection policy. Compiler, session, endpoint, and RTVI projection tests
+prove hidden-by-default behavior, metadata/full differences, participant-local override
+resolution, same-name isolation, private session state, trusted replacement, and rejection of
+browser elevation. Checkpoint `e412788` added the trusted sample's validated initial variables
+without exposing them through the public request or inspection surfaces.
+
+Rendered Chromium verification on the single Phoenix HTTPS listener at port 4000 caught a
+provider-facing Action schema mismatch that scripted tool calls could not expose. Checkpoint
+`428781d` added the failing model-schema regression test, switched the finite Actions to their
+provider-compatible JSON envelopes, retained stricter project-owned command validation, and
+made the sample's two writable variables explicit. A fresh browser room reached client and
+agent `READY`; `update_variables` visibly received both values as an object, committed revision
+one, returned the authorized section value, and produced the final spoken/text response. The
+required `agent-browser` binary was unavailable, so this rendered interaction used installed
+headless Chromium through its DevTools protocol.
+
+Final gates pass: `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+`mix deps.unlock --check-unused`, and the umbrella suite with Call Engine `151 tests, 0
+failures (1 excluded)`, Gateway `52 tests, 0 failures (4 excluded)`, and Console `20 tests, 0
+failures`. The initial gate exposed a global telemetry test race; the committed provider filter
+made the focused STT test and repeated umbrella gate deterministic without changing runtime
+behavior. Detailed red/green commands and browser observations are in the
+[implementation labnote](../../labnotes/20260909-0521-call-variables-runtime.md).
 
 ## Specification review
 
@@ -103,4 +134,5 @@ Added deadlines/bounds, private binding isolation, projection/result refresh, co
 The 2026-09-08 Jido follow-up approved finite application-owned Action modules plus
 per-activation registration. It added strict stable envelopes, runtime per-call validation,
 and protection of private execution context from Jido status/checkpoint/model surfaces.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+Those paragraphs remain specification evidence; the completion evidence above records the
+implemented and verified runtime.

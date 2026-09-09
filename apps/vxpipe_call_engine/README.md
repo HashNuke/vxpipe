@@ -63,6 +63,16 @@ a `ResolvedCallPlan`. Variable schemas use the
 released closed subset and do not enforce `required` completeness. Plan startup now
 rejects valid-but-deferred features before it creates a room or provider process.
 
+Each definition-driven room with declared Call Variables starts one authoritative
+`CallVariables` process beside `RoomAuthority`. Generated `read_variables`,
+`update_variables`, and `update_variable` Actions call that owner directly with
+engine-bound identity, section grants, revisions, schema checks, deadlines, and size bounds.
+Readable values are refreshed into each model round without becoming conversation history;
+accepted updates emit an exact private archival handoff but do not claim database durability.
+Public tool events are hidden by default and are filtered to configured metadata or full
+detail at the gateway before delivery. The trusted Console sample selects full visibility and
+prefills a synthetic read-only order so this path can be exercised on the shared Phoenix port.
+
 The runtime foundation now includes an application-owned Jido instance, a finite
 Jido AI agent module, synchronous prompt/Action configuration before readiness, and
 a serialized Vxpipe host-Action dispatcher. An engine-owned coordinator now admits

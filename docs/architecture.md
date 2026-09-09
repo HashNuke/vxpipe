@@ -179,7 +179,7 @@ an engine-origin continuation request that is never projected as caller speech. 
 Jido `inject`/`steer` as the delivery guarantee: those controls apply only to an active run
 and queued input can be dropped when that run terminates.
 
-The planned definition uses `call_variables.sections`, invocation values use
+The released definition uses `call_variables.sections`, invocation values use
 `initial_variables`, and per-agent section grants use `variable_permissions`.
 The tools are `read_variables(sections)`, `update_variables(section_name, data)`,
 and `update_variable(section_name, variable_name, value)`. Sections are read-only
@@ -2108,10 +2108,10 @@ the existing room-wide interruption path:
 The implementation and verification evidence are detailed in
 [`spoken-barge-in.md`](spoken-barge-in.md).
 
-### In-progress definition-driven call slice
+### Current definition-driven call runtime
 
-The first two checkpoints of milestone 1 release the engine-owned call-definition
-schema `20260906.02` and its pure compiler. Resource ID/revision and trusted
+The initial definition checkpoints released engine-owned schema `20260906.02`; the
+current additive schema is `20260909.01`. Resource ID/revision and trusted
 tenant/actor identity are constructor metadata rather than fields accepted from
 definition or invocation documents. Fixed known keys are normalized without
 creating atoms from input; equivalent JSON and Elixir maps produce the same typed
@@ -2181,11 +2181,11 @@ creates the room supervisor child. This check resolves application-owned provide
 without starting provider processes and returns a path-specific `unsupported_call_plan` error.
 The initial runnable subset accepts only a web receive/start-call caller, a
 `wait_for_input` receiver, supported local host tools, the Jido/ReqLLM model path, and compatible
-configured speech profiles. Typed Call Variables remain pinned in plans for their later
-milestone, but a non-empty section set is rejected at startup until its authoritative process
-exists. Generated/fixed greetings are likewise rejected until the opening-audio/lifecycle
-slice implements them. Privacy/media policy, remote-tool, transfer, and other connection modes
-remain closed-schema constructor errors rather than ignored settings.
+configured speech profiles. Typed Call Variables are active for non-empty section sets through
+the room-owned process and generated tools described above. Generated/fixed greetings remain
+rejected until the opening-audio/lifecycle slice implements them. Privacy/media policy,
+remote-tool, transfer, and other connection modes remain closed-schema constructor errors rather
+than ignored settings.
 
 The repository development gateway is the first trusted host for this path. Its startup
 configuration validates one definition plus closed capability/tool registries. For each
