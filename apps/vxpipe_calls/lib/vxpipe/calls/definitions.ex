@@ -1,0 +1,226 @@
+defmodule Vxpipe.Calls.Definitions do
+  @moduledoc "Definition revision and participant-route workflows."
+
+  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, Error}
+
+  alias Vxpipe.Calls.{
+    DefinitionRevision,
+    ParticipantRoute,
+    PrivateMaterial,
+    PublicId,
+    Repositories
+  }
+
+  @maximum_attempts 4
+
+  @spec save(String.t(), map(), keyword()) :: {:ok, DefinitionRevision.t()} | {:error, term()}
+  def save(tenant_key, source, options \\ [])
+
+  def save(tenant_key, source, options) when is_map(source) do
+    with false <- PrivateMaterial.present?(source),
+         {:ok, credential_repository} <- Repositories.fetch(options, :credential_repository),
+         {:ok, _tenant} <-
+           Repositories.call(credential_repository, :fetch_tenant, [tenant_key]),
+         {:ok, definition_repository} <-
+           Repositories.fetch(options, :definition_repository),
+         {:ok, source} <- json_safe(source) do
+      definition_id = Keyword.get_lazy(options, :definition_id, fn -> uuid(options) end)
+
+      attempt_save(
+        definition_repository,
+        tenant_key,
+        definition_id,
+        source,
+        options,
+        @maximum_attempts
+      )
+    else
+      true -> {:error, :private_definition_material}
+      {:error, :not_found} -> {:error, :tenant_not_found}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  def save(_tenant_key, _source, _options), do: {:error, :invalid_definition_source}
+
+  @spec fetch(String.t(), String.t(), pos_integer(), keyword()) ::
+          {:ok, DefinitionRevision.t()} | {:error, term()}
+  def fetch(tenant_key, definition_id, revision, options \\ []) do
+    with {:ok, repository} <- Repositories.fetch(options, :definition_repository) do
+      Repositories.call(repository, :fetch_revision, [tenant_key, definition_id, revision])
+    end
+  end
+
+  @spec publish(String.t(), String.t(), pos_integer(), keyword()) ::
+          {:ok, DefinitionRevision.t()} | {:error, term()}
+  def publish(tenant_key, definition_id, revision, options \\ []) do
+    with {:ok, repository} <- Repositories.fetch(options, :definition_repository),
+         {:ok, stored} <-
+           Repositories.call(repository, :fetch_revision, [tenant_key, definition_id, revision]),
+         :ok <- publishable(stored) do
+      Repositories.call(repository, :publish_revision, [
+        tenant_key,
+        definition_id,
+        revision,
+        now(options)
+      ])
+    end
+  end
+
+  @spec resolve_route(String.t(), String.t(), keyword()) ::
+          {:ok, ParticipantRoute.t()} | {:error, term()}
+  def resolve_route(tenant_key, route_key, options \\ []) do
+    with {:ok, repository} <- Repositories.fetch(options, :definition_repository) do
+      Repositories.call(repository, :resolve_route, [tenant_key, route_key])
+    end
+  end
+
+  defp attempt_save(_repository, _tenant_key, _definition_id, _source, _options, 0),
+    do: {:error, :revision_generation_exhausted}
+
+  defp attempt_save(repository, tenant_key, definition_id, source, options, attempts_left) do
+    with {:ok, revision_number} <-
+           Repositories.call(repository, :next_revision, [tenant_key, definition_id]),
+         {:ok, definition} <-
+           CallDefinition.new(source, resource_id: definition_id, revision: revision_number) do
+      validation_errors = validate_support(definition, tenant_key, options)
+      routes = participant_routes(definition, tenant_key, options)
+
+      revision = %DefinitionRevision{
+        tenant_key: tenant_key,
+        definition_id: definition_id,
+        revision: revision_number,
+        schema_version: definition.schema_version,
+        source: source,
+        source_digest: source_digest(source),
+        compiled_metadata: compiled_metadata(definition),
+        validation_errors: validation_errors,
+        routes: routes,
+        published_at: nil,
+        inserted_at: now(options)
+      }
+
+      case Repositories.call(repository, :insert_revision, [tenant_key, revision, routes]) do
+        {:error, :revision_conflict} ->
+          attempt_save(
+            repository,
+            tenant_key,
+            definition_id,
+            source,
+            options,
+            attempts_left - 1
+          )
+
+        result ->
+          result
+      end
+    end
+  end
+
+  defp validate_support(definition, tenant_key, options) do
+    invocation_input = %{
+      call_definition: %{id: definition.resource_id, revision: definition.revision},
+      initial_variables: %{},
+      transport: %{type: "web"}
+    }
+
+    with {:ok, invocation} <-
+           CallInvocation.new(invocation_input,
+             tenant_id: tenant_key,
+             actor_id: "definition-validation",
+             call_id: "definition-validation-call",
+             room_id: "definition-validation-room"
+           ),
+         {:ok, registries} <- registries(options),
+         {:ok, _plan} <- DefinitionCompiler.compile(definition, invocation, registries) do
+      []
+    else
+      {:error, %Error{} = error} -> [Error.to_public(error)]
+      {:error, reason} -> [%{"code" => "configuration_unavailable", "reason" => inspect(reason)}]
+    end
+  end
+
+  defp registries(options) do
+    configured = Application.get_env(:vxpipe_calls, Vxpipe.Calls, [])
+
+    case Keyword.get(options, :registries, Keyword.get(configured, :registries)) do
+      value when is_map(value) -> {:ok, value}
+      _unavailable -> {:error, :registries_unavailable}
+    end
+  end
+
+  defp participant_routes(definition, tenant_key, options) do
+    definition.participants
+    |> Enum.filter(fn {_ref, participant} ->
+      participant.connection && participant.connection.service == :web
+    end)
+    |> Enum.map(fn {participant_ref, _participant} ->
+      %ParticipantRoute{
+        key: uuid(options),
+        tenant_key: tenant_key,
+        definition_id: definition.resource_id,
+        definition_revision: definition.revision,
+        participant_ref: participant_ref,
+        published_at: nil
+      }
+    end)
+    |> Enum.sort_by(& &1.participant_ref)
+  end
+
+  defp compiled_metadata(definition) do
+    participants =
+      Map.new(definition.participants, fn {ref, participant} ->
+        connection =
+          if participant.connection do
+            %{
+              "admission" => Atom.to_string(participant.connection.admission),
+              "mode" => Atom.to_string(participant.connection.mode),
+              "service" => Atom.to_string(participant.connection.service)
+            }
+          end
+
+        {ref,
+         %{
+           "kind" => Atom.to_string(participant.kind),
+           "connection" => connection
+         }}
+      end)
+
+    %{
+      "entry_caller" => definition.entry_caller,
+      "entry_receiver" => definition.entry_receiver,
+      "participants" => participants,
+      "schema_version" => definition.schema_version
+    }
+  end
+
+  defp source_digest(source) do
+    source
+    |> JSON.encode!()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp json_safe(source) do
+    try do
+      source
+      |> JSON.encode!()
+      |> JSON.decode()
+    rescue
+      _error -> {:error, :invalid_definition_source}
+    end
+  end
+
+  defp publishable(%DefinitionRevision{validation_errors: []}), do: :ok
+
+  defp publishable(%DefinitionRevision{validation_errors: errors}),
+    do: {:error, {:definition_not_publishable, errors}}
+
+  defp now(options), do: Keyword.get_lazy(options, :now, &DateTime.utc_now/0)
+
+  defp uuid(options) do
+    options
+    |> Keyword.get(:uuid_generator, &PublicId.uuid/0)
+    |> then(& &1.())
+  end
+end

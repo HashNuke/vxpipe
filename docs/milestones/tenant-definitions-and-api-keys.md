@@ -53,8 +53,13 @@ No room startup/token endpoints until prepared-call admission, no transcript/arc
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence (partial, 2026-09-09): the new database-neutral
+`vxpipe_calls` child owns credential/definition repository behaviours and tested
+administration/definition workflows. Focused red-green evidence covers one-time
+hash-only API-key issuance, explicit scopes, independent revocation, immutable
+revision editing, tenant-isolated draft/publication routing, and publication
+rejection for unsupported features. PostgreSQL adapters, restart evidence, and
+operator CLI workflows remain, so no implementation checkbox is complete yet.
 
 ## Specification review
 
