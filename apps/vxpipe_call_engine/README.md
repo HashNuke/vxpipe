@@ -88,6 +88,8 @@ memory bytes, and run queue without entering a room callback. Configure the samp
 under the call-engine application setting `telemetry: [sample_interval_ms: 1_000]`.
 Durations use Erlang `:native` units; event names and exact observation boundaries are
 documented in [the architecture](../../docs/architecture.md#security-and-observability).
+Runtime request cancellation is reported as a terminal `:cancelled` model outcome with its
+first-output observation preserved; it is not counted as provider unavailability.
 
 The optional `Vxpipe.CallEngine.Diagnostics.ModelFixture` is an application-configured
 development boundary for exercising the same Jido coordinator, room events, optional

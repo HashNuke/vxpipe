@@ -485,3 +485,24 @@ two-tool-loop test: only the first `tool_started` event reached its assertion. T
 test passed ten consecutive repetitions, and the complete umbrella rerun passed with call engine
 `116 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console
 `15 tests, 0 failures`. Root format, warnings-as-errors compile and unused-lock gates also pass.
+
+## Checkpoint 17: Honest cancellation and missing output
+
+The Jido `request_cancelled` runtime event was incorrectly routed through
+`:provider_unavailable`. The new focused test failed with an unavailable model outcome, a false
+provider-failure event and a room-facing unavailable reason. Mapping that event to the existing
+`:interrupted` path makes cancellation terminal and distinct from provider failure. The green
+coordinator file passes `11 tests, 0 failures`: cancellation reports `outcome: :cancelled`, keeps
+`first_output: :missing`, emits no first-token or provider-failure event, and tells the room that
+the request was interrupted.
+
+A clean per-test Console reporter now verifies the corresponding operator projection.
+Cancellation and unavailability remain separate terminal rows that both state `No first output`;
+the board shows explicit empty states for model first output and synthesized first audio instead
+of zero durations, and only unavailability increments provider failures. The focused LiveView
+file passes `5 tests, 0 failures`. The fixture transformer already has deterministic elapsed-time
+coverage for its configured delay, while checkpoint 9 recorded the live 1.5-second delayed
+request at the same request-to-first-output boundary.
+Root format, warnings-as-errors compile, default suite and unused-lock gates passed with call
+engine `117 tests, 0 failures (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and
+Console `16 tests, 0 failures`.

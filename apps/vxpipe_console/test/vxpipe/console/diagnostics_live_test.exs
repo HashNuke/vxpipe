@@ -122,6 +122,59 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert has_element?(view, "#diagnostics-unavailable", "Call traffic is unaffected")
   end
 
+  test "renders cancelled and unavailable work without inventing first output or audio" do
+    reporter =
+      start_supervised!(
+        {TelemetryReporter,
+         name: nil, handler_id: {__MODULE__, make_ref()}, max_pending_events: 16}
+      )
+
+    diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
+
+    Application.put_env(
+      :vxpipe_console,
+      :diagnostics,
+      Keyword.put(diagnostics, :reporter, reporter)
+    )
+
+    :telemetry.execute(
+      @model_request_stop,
+      %{duration: duration_ms(11)},
+      %{provider: :req_llm, outcome: :cancelled, first_output: :missing}
+    )
+
+    :telemetry.execute(
+      @model_request_stop,
+      %{duration: duration_ms(12)},
+      %{provider: :req_llm, outcome: :unavailable, first_output: :missing}
+    )
+
+    :telemetry.execute(
+      @provider_failure,
+      %{count: 1},
+      %{capability: :model, provider: :req_llm, category: :unavailable}
+    )
+
+    {:ok, view, _html} = live(build_conn(), "/diagnostics")
+
+    assert has_element?(view, ".empty-state", "No first-output timing observed.")
+
+    assert has_element?(
+             view,
+             "#model-request-req-llm-cancelled-missing",
+             "Cancelled No first output 1"
+           )
+
+    assert has_element?(
+             view,
+             "#model-request-req-llm-unavailable-missing",
+             "Unavailable No first output 1"
+           )
+
+    assert has_element?(view, ".empty-state", "No synthesized-audio timing observed.")
+    assert has_element?(view, "#provider-failure-model-req-llm-unavailable", "1")
+  end
+
   test "arms the next local model outcome when the opt-in fixture is available" do
     fixture =
       start_supervised!(

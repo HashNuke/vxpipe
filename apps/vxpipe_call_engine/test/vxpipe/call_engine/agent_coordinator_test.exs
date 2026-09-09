@@ -88,6 +88,32 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     refute_receive {:telemetry_event, @model_first_token_event, _, _}
   end
 
+  test "reports a runtime cancellation as incomplete without a provider failure" do
+    attach_telemetry_events([
+      @model_first_token_event,
+      @model_request_stop_event,
+      @provider_failure_event
+    ])
+
+    coordinator = start_coordinator(provider: :req_llm)
+    command = command("cancelled-model-request", "private-model-input")
+
+    assert :ok = AgentCoordinator.respond(coordinator, command)
+    assert_receive {:test_agent_request, ^coordinator, request_id, _, _options}
+
+    emit(coordinator, request_id, :request_cancelled, %{})
+
+    assert_receive {:vxpipe_capability_failed, ^coordinator, ^command, :interrupted}
+
+    assert_receive {:telemetry_event, @model_request_stop_event, %{duration: duration},
+                    %{provider: :req_llm, outcome: :cancelled, first_output: :missing}}
+
+    assert is_integer(duration)
+    assert duration >= 0
+    refute_receive {:telemetry_event, @model_first_token_event, _, _}
+    refute_receive {:telemetry_event, @provider_failure_event, _, _}
+  end
+
   test "attributes controlled diagnostic outcomes to the local fixture" do
     attach_telemetry_events([@model_request_stop_event, @provider_failure_event])
 

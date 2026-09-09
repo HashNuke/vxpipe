@@ -204,7 +204,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
 
   defp project_runtime_event(%Event{kind: :request_cancelled}, state) do
     state
-    |> fail_current(:provider_unavailable)
+    |> fail_current(:interrupted)
     |> start_next()
   end
 

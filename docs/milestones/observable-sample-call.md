@@ -104,7 +104,7 @@ slow response or missing measurement. The existing voice console still works unc
 
 - [ ] A sample text/audio exchange produces correctly attributed measurements; a scripted
   provider failure appears as a safe error category, not successful/zero-duration work.
-- [ ] No first token/audio, cancellation and unavailable provider measurements remain
+- [x] No first token/audio, cancellation and unavailable provider measurements remain
   explicitly missing/incomplete. Known fixture timings match documented boundaries.
 - [x] Synthetic secret/text/variable sentinels never enter metric payloads, labels or
   unprivileged responses. Many unique call IDs do not create one metric series per call.
@@ -344,6 +344,20 @@ Jido two-tool test ordering failure; that test then passed ten consecutive repet
 complete rerun passed with call engine `116 tests, 0 failures (1 excluded)`, gateway `46 tests,
 0 failures (4 excluded)`, and Console `15 tests, 0 failures`. Format, warnings-as-errors compile
 and unused-lock gates also pass.
+
+Implementation evidence, checkpoint 17 (2026-09-09): corrected cancellation attribution at
+the Jido runtime boundary. The red coordinator test showed `request_cancelled` becoming
+`provider_unavailable`, incrementing provider-failure telemetry and notifying the room with the
+wrong reason. The event now follows the existing interrupted path: the room receives
+`:interrupted`, model telemetry records `outcome: :cancelled` with `first_output: :missing`, and
+no provider failure is emitted. The focused coordinator file passes `11 tests, 0 failures`.
+An isolated Console reporter/LiveView test confirms cancelled and unavailable rows both say
+`No first output`, no first-token timing or TTS first-audio duration is invented, and only the
+actual unavailable request appears in provider failures. The focused LiveView file passes
+`5 tests, 0 failures`. Existing deterministic coverage verifies the configured fixture delay
+before output, and checkpoint 9 records the live approximately 1.5-second observation boundary.
+The complete umbrella gates pass with call engine `117 tests, 0 failures (1 excluded)`, gateway
+`46 tests, 0 failures (4 excluded)`, and Console `16 tests, 0 failures`.
 
 ## Specification review
 
