@@ -1,10 +1,11 @@
 # MCP client integration and conformance
 
 Status: in progress. The exact dependency/profile, bounded all-or-nothing discovery,
-pre-submission validated invocation, scoped supervised connection contracts, and two
-in-scope official client scenarios are implemented. Recovery, Everything-server, and
-credentialed-production compatibility gates remain unproven; the separate Jido
-runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
+pre-submission validated invocation, scoped supervised connection contracts, two unmodified
+official scenarios, corrected recovery fixture, and Everything-server interoperability are
+implemented. Credentialed production and remaining failure/security gates remain unproven;
+the separate Jido runtime-tool interface blocker belongs to the live-MCP milestone, not this
+library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
 Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [loop/tool-binding decision](../jido-tool-execution.md); [approved remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
@@ -164,20 +165,25 @@ Implementation evidence:
   loopback-only builder exists for isolated fixtures; adding `test_mode` to ordinary
   production configuration cannot select plaintext transport.
 - `mix vxpipe.mcp.conformance_client` starts only `:vxpipe_mcp` and dispatches the two
-  explicitly supported official scenarios. The pinned opt-in runner and tagged integration
-  lane reproduce MCP `2025-11-25` initialization and one discovered/validated `tools/call`;
-  the full scenario matrix and internal API are recorded in
+  unmodified official scenarios plus the corrected recovery action. The pinned opt-in
+  runner and tagged integration lane reproduce MCP `2025-11-25` initialization and one
+  discovered/validated `tools/call`; the full scenario matrix and internal API are recorded in
   [MCP client conformance profile](../mcp-client-conformance.md).
 - The focused behavior test was observed red before implementation and is green with the
-  default child suite (14 tests, 0 failures, two integration tests excluded). The opt-in
-  official lane passes both wrapper tests: the two unmodified harness scenarios each score
-  1/1, and the corrected recovery fixture scores 3/3, all with no failures or warnings.
-  This is partial conformance evidence, not a blanket claim.
+  default child suite (16 tests, 0 failures, three integration tests excluded). The opt-in
+  lane passes all three wrapper tests: the two unmodified harness scenarios each score 1/1,
+  the corrected recovery fixture scores 3/3, and the Everything probe returns its expected
+  tool and result. This is partial conformance evidence, not a blanket claim.
 - The unmodified official `sse-retry` scenario is explicitly rejected because its
   `2025-11-25`-tagged server negotiates `2025-03-26`. A reproducible one-line
   exact-version correction against the verified tag commit passes 3/3, including the
   500 ms retry interval, `Last-Event-ID`, original-result delivery, and only one observed
   `tools/call`. This is corrected-fixture evidence, not an official-pass claim.
+- The additional Everything fixture is pinned to tag `2026.8.31` / commit `a40bc270`, whose
+  lockfile selects MCP SDK `1.30.0`. Its Streamable HTTP server negotiates `2025-11-25`,
+  issues a session ID, publishes an explicit Draft 7 `echo` schema, and returns the expected
+  result through the standalone Vxpipe probe. The earlier date-matched server package was
+  rejected because its locked SDK supports only revisions through `2025-06-18`.
 
 ## Specification review
 

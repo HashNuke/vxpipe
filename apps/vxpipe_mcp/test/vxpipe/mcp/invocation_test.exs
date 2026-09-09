@@ -41,9 +41,7 @@ defmodule Vxpipe.MCP.InvocationTest do
     catalog = catalog([order_tool(), external_ref_tool])
 
     assert {:error, :unknown_tool} =
-             Invocation.call(client, catalog, "missing", %{},
-               protocol: ScriptedProtocolClient
-             )
+             Invocation.call(client, catalog, "missing", %{}, protocol: ScriptedProtocolClient)
 
     assert {:error, :unsupported_input_schema} =
              Invocation.call(client, catalog, "external_ref", %{},
@@ -53,11 +51,43 @@ defmodule Vxpipe.MCP.InvocationTest do
     assert invocations(client) == []
   end
 
+  test "validates explicit Draft 7 arguments before submission" do
+    client = start_client([{:ok, %{"content" => []}}])
+
+    tool = %{
+      "name" => "echo",
+      "inputSchema" => %{
+        "$schema" => "http://json-schema.org/draft-07/schema#",
+        "type" => "object",
+        "properties" => %{"message" => %{"type" => "string"}},
+        "required" => ["message"]
+      }
+    }
+
+    assert {:error, :invalid_arguments} =
+             Invocation.call(client, catalog([tool]), "echo", %{"message" => 42},
+               protocol: ScriptedProtocolClient
+             )
+
+    assert invocations(client) == []
+
+    assert {:ok, %{"content" => []}} =
+             Invocation.call(client, catalog([tool]), "echo", %{"message" => "hello"},
+               protocol: ScriptedProtocolClient
+             )
+
+    assert [%{arguments: %{"message" => "hello"}}] = invocations(client)
+  end
+
   test "withholds a decoded result that exceeds the configured byte limit" do
     client = start_client([{:ok, %{"content" => [String.duplicate("x", 100)]}}])
 
     assert {:error, :result_too_large} =
-             Invocation.call(client, catalog([order_tool()]), "lookup_order", %{"order_id" => "1"},
+             Invocation.call(
+               client,
+               catalog([order_tool()]),
+               "lookup_order",
+               %{"order_id" => "1"},
                protocol: ScriptedProtocolClient,
                max_result_bytes: 10
              )

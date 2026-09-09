@@ -1,6 +1,7 @@
 defmodule Vxpipe.MCP.ArgumentValidator do
   @moduledoc false
 
+  @schema_draft_7 "http://json-schema.org/draft-07/schema"
   @schema_2020_12 "https://json-schema.org/draft/2020-12/schema"
 
   @spec validate(map(), map()) ::
@@ -23,6 +24,8 @@ defmodule Vxpipe.MCP.ArgumentValidator do
   defp supported_dialect(schema) do
     case Map.get(schema, "$schema") do
       nil -> :ok
+      @schema_draft_7 -> :ok
+      @schema_draft_7 <> "#" -> :ok
       @schema_2020_12 -> :ok
       @schema_2020_12 <> "#" -> :ok
       _unsupported -> {:error, :unsupported_input_schema}

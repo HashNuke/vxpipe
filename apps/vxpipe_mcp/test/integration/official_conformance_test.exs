@@ -16,6 +16,13 @@ defmodule Vxpipe.MCP.OfficialConformanceIntegrationTest do
     assert output =~ "Passed: 3/3, 0 failed, 0 warnings"
   end
 
+  test "discovers and invokes the pinned Everything reference server" do
+    output = run_fixture("test-mcp-everything")
+
+    assert output =~ ~s("name":"echo")
+    assert output =~ "Echo: vxpipe-reference-probe"
+  end
+
   defp run_fixture(script) do
     project_root = Path.expand("../../../..", __DIR__)
     runner = Path.join([project_root, "bin", script])

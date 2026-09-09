@@ -9,8 +9,9 @@ MCP client certification.
 - Client dependency: ExMCP `1.3.0`, locked by the umbrella.
 - Official client harness: `@modelcontextprotocol/conformance@0.1.16`, tag commit
   `21a9a2febd7100d7c17ac1021ee7f2ed9f66a1e0`.
-- Additional Everything server fixture: `@modelcontextprotocol/server-everything@2025.11.25`,
-  tag commit `0155af3069fb6d593165037a28703cb3a595cf67` (interoperability run pending).
+- Additional Everything server fixture: `@modelcontextprotocol/server-everything@2026.8.31`,
+  tag commit `a40bc270fb5ece62673f8a1196f57116d885c5eb`, whose lockfile pins MCP SDK
+  `1.30.0`.
 
 The harness version is invoked exactly by [the opt-in runner](../bin/test-mcp-conformance);
 it is not a runtime application dependency. The runner uses `MIX_ENV=test` only to avoid
@@ -29,6 +30,8 @@ starting unrelated development voice-provider configuration. The task itself sta
 - Discovery returns a complete `Vxpipe.MCP.Catalog` or an error, never a partial catalog.
   Invocation accepts only a tool in that catalog and validates its arguments before the
   ExMCP request boundary.
+- `Vxpipe.MCP.ReferenceProbe.run/2` is the fixture-facing boundary that discovers and calls
+  Everything's `echo` tool while preserving the remote definition and result as data.
 
 Tenant lookup, credential resolution, enabled-tool selection, agent grants, call lifetime,
 and model projection do not belong to this library. The later live-MCP milestone supplies
@@ -66,6 +69,7 @@ From the umbrella root:
 ```sh
 bin/test-mcp-conformance
 bin/test-mcp-sse-recovery
+bin/test-mcp-everything
 ```
 
 The harness creates a fresh loopback server per scenario and appends its URL to the Vxpipe
@@ -80,6 +84,18 @@ reconnection after the server's 500 ms retry value, `Last-Event-ID: event-2`, an
 of the original result over the resumed GET stream. It scores 3/3 with no warnings. The
 unmodified run is retained as a harness defect because accepting `2025-03-26` would weaken
 the product's exact-version gate.
+
+The Everything runner clones and verifies exact tag commit `a40bc270`, installs its locked
+dependencies, builds only the Everything workspace, and starts its Streamable HTTP endpoint
+on an ephemeral loopback port. Vxpipe negotiates `2025-11-25` with a server-issued session,
+discovers the `echo` tool, validates its explicitly declared Draft 7 input schema, invokes it
+once, and returns the preserved tool definition and result. No Jido, database, call engine,
+or model provider runs in this path.
+
+The earlier date-matched Everything release `2025.11.25` is not a compatible fixture: tag
+commit `0155af3` locks MCP SDK `1.19.1`, whose newest supported revision is `2025-06-18`.
+Using that package would test fallback negotiation instead of Vxpipe's selected protocol,
+so it was inspected and rejected rather than represented as a pass.
 
 ## Open compatibility gate
 

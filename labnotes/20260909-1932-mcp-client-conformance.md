@@ -227,6 +227,31 @@ evidence that this production concern is solved.
   no PostgreSQL password or test database URL configured. The failure occurred before the
   umbrella tests ran; MCP-owned tests remain green as recorded above.
 
+## 2026-09-09 — Everything-server interoperability
+
+- The initially recorded `@modelcontextprotocol/server-everything@2025.11.25` fixture is not
+  compatible with the selected protocol despite its release number. Its exact tag commit
+  `0155af3` locks MCP SDK `1.19.1`, which supports revisions only through `2025-06-18`.
+  It was rejected rather than weakening Vxpipe's exact-version gate.
+- The current official tag `2026.8.31` / commit `a40bc270` locks SDK `1.30.0`, which supports
+  `2025-11-25`. The reproducible runner verifies that commit, uses its lockfile, builds only
+  the Everything workspace, and starts Streamable HTTP on an ephemeral loopback port.
+- Red: the first unit test failed because `ReferenceProbe` did not exist. The integration
+  test then failed because the runner did not exist. Once wired, the real server exposed a
+  second red case: its valid explicit Draft 7 input schema was rejected by Vxpipe's
+  2020-12-only dialect gate.
+- Green: `ArgumentValidator` now accepts the canonical embedded Draft 7 dialect allowed by
+  MCP while retaining the no-external-reference rule. The probe discovers `echo`, validates
+  its arguments, invokes it once, and returns its full string-keyed definition and result as
+  data through a server-issued session.
+- The standalone successful result contains `Echo: vxpipe-reference-probe` and the preserved
+  official tool annotations, title, description, execution metadata, and input schema. The
+  path starts no Jido, database, call-engine, or model-provider application.
+- Verification: the default MCP child suite passes 16 tests with three integration tests
+  excluded; the opt-in integration lane passes all three tests in 18 seconds. Root
+  formatting, strict Credo across 299 files, and the unused-dependency check pass;
+  `shellcheck` is not installed in this environment.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)
