@@ -3,7 +3,11 @@ defmodule Vxpipe.Calls.Repositories do
 
   @spec fetch(
           keyword(),
-          :archive_repository | :credential_repository | :definition_repository | :call_repository
+          :archive_repository
+          | :credential_repository
+          | :definition_repository
+          | :call_repository
+          | :inspection_repository
         ) ::
           {:ok, {module(), term()}} | {:error, :repository_unavailable}
   def fetch(options, key) do

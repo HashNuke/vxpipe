@@ -26,3 +26,22 @@
 - Green evidence: focused Calls tests: 8 tests, 0 failures. Root format, warnings-as-errors
   compile, strict Credo (241 files / 2,340 functions), unused-dependency check, and the
   full migrated umbrella suite passed: 318 tests, 0 failures, 6 integration exclusions.
+
+## 2026-09-09 — bounded call index
+
+- Added an inspection-specific repository port rather than expanding the prepared-call
+  write/admission repository or letting Console see Ecto.
+- `Calls.list_calls/2` requires the existing trusted principal with `:calls` scope,
+  supplies only non-payload call summaries, caps pages at 100, and rejects malformed
+  cursors before repository access. A query asks for one extra row solely to decide
+  whether a continuation cursor exists.
+- The cursor contains the stable `(created_at, public call ID)` boundary in URL-safe
+  encoded form. It is opaque pagination state, not a credential or authorization token.
+- Red evidence: the new focused test failed to compile because `CallSummary` and the
+  inspection repository contract did not exist.
+- Green evidence: focused inspection tests: 2 tests, 0 failures. Root format,
+  warnings-as-errors compile, strict Credo (246 files / 2,357 functions), and the
+  unused-dependency check passed. The first full-suite attempt hit an existing
+  timing-sensitive archive assertion in `DefinitionDrivenCallTest`; its isolated
+  rerun passed, and a subsequent full migrated run passed with 320 tests, 0 failures,
+  and 6 integration exclusions.
