@@ -102,7 +102,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 - [ ] Credentials are absent from diagnostics/status; redirects, changed DNS/private
   addresses and credential forwarding obey production policy.
 - [x] Test-only loopback settings cannot be selected through production integration config.
-- [ ] Repeatedly register and retire bounded test catalogs; externally supplied identifiers
+- [x] Repeatedly register and retire bounded test catalogs; externally supplied identifiers
   do not cause atom/module growth proportional to tenant/catalog churn or cross-tenant tool
   resolution. Measure BEAM atom/module counts across many unique endpoint, tool and schema
   revisions rather than checking only live proxy cleanup.
@@ -153,6 +153,12 @@ Implementation evidence:
   decoded size across pages, malformed page shapes, duplicate identities, and the page cap.
   Dependency failures become the credential-free `:discovery_failed` category rather than
   exposing raw diagnostics.
+- A synchronous churn test creates 250 unique endpoint hosts, integration IDs, credential
+  generations, tool names, and schema revisions, opening and retiring each supervised
+  connection. BEAM atom and loaded-module growth remain below a fixed five-item ceiling
+  rather than scaling with the supplied identities. Same-named tools in two catalogs also
+  resolve only from the catalog value explicitly supplied by the caller; there is no global
+  remote-name registry in this library.
 - `Vxpipe.MCP.Invocation` selects only from that complete catalog and delegates schema work
   to `Vxpipe.MCP.ArgumentValidator`. Default/explicit JSON Schema 2020-12 and canonical
   explicit Draft 7 arguments are checked without casts or remote resolvers before submission;
@@ -175,7 +181,7 @@ Implementation evidence:
   discovered/validated `tools/call`; the full scenario matrix and internal API are recorded in
   [MCP client conformance profile](../mcp-client-conformance.md).
 - The focused behavior test was observed red before implementation and is green with the
-  default child suite (19 tests, 0 failures, three integration tests excluded). The opt-in
+  default child suite (21 tests, 0 failures, three integration tests excluded). The opt-in
   lane passes all three wrapper tests: the two unmodified harness scenarios each score 1/1,
   the corrected recovery fixture scores 3/3, and the Everything probe returns its expected
   tool and result. This is partial conformance evidence, not a blanket claim.

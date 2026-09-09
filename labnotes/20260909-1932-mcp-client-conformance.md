@@ -270,6 +270,22 @@ evidence that this production concern is solved.
 - The opt-in integration lane still passes all three tests. Root formatting, strict Credo
   across 299 files, and the unused-dependency check pass.
 
+## 2026-09-09 — identifier churn
+
+- Added a synchronous project-boundary test covering 250 unique endpoint hosts, integration
+  IDs, credential generations, tool names, and schema revisions. Each iteration constructs a
+  catalog, opens one supervised ready connection, monitors its owner, closes it, observes
+  shutdown, and verifies the registry no longer resolves the key.
+- The test warms the same path before measuring and requires both BEAM atom growth and newly
+  loaded module growth to remain at or below five. It passed, demonstrating bounded runtime
+  overhead rather than growth proportional to external identifier churn.
+- A companion isolation check builds two catalogs with the same remote tool name and
+  different scope data. Fetching requires the explicit catalog value and returns only that
+  catalog's definition; the library has no global remote-name registry.
+- Verification: the complete default child suite passes 21 tests with three integrations
+  excluded; warnings-as-errors compilation, root formatting, strict Credo across 299 files,
+  and the unused-dependency check pass.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)
