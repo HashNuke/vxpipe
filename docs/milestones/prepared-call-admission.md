@@ -1,6 +1,6 @@
 # Prepared calls and single-use joining
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: in progress. Specification review: approved (2026-09-08).
 Prerequisites: [Tenant definitions/API keys](tenant-definitions-and-api-keys.md); [Call Variables](call-variables-and-tool-visibility.md).
 Sources: [Web routes](../../labnotes/20260905-0405-call-definition-design.md#web-participant-admission-routes--approved-g2-routing); [single-use tokens](../../labnotes/20260905-0405-call-definition-design.md#single-use-join-tokens-and-existing-call-recovery--approved-g2-decisions); [timing](../../labnotes/20260905-0405-call-definition-design.md#record-creation-and-actual-call-start--approved-timing-contract).
 
@@ -26,8 +26,8 @@ failure to mark an already-running call must not tear it down or start another r
 
 ## Implementation checklist
 
-- [ ] Red-test preparation/token/claim workflows through ports and real adapter transaction integration.
-- [ ] Add prepared call, token and admission claim persistence with safe public IDs and independent lifetimes.
+- [x] Red-test preparation/token/claim workflows through ports and real adapter transaction integration.
+- [x] Add prepared call, token and admission claim persistence with safe public IDs and independent lifetimes.
 - [ ] Implement authenticated routes, safe response envelopes, CORS separation, and WebRTC session translation.
 - [ ] Coordinate room startup and bookkeeping without spanning network work with SQL transactions.
 - [ ] Update trusted samples backend setup to prepare then join; never ship its API key or initial variables to the browser.
@@ -66,8 +66,13 @@ No direct API-key media socket, HMAC payload signature, same-call caller reconne
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence: database-neutral preparation, issue, and atomic-claim workflows
+landed in `69019a9`. The PostgreSQL adapter adds transactional prepared-call/first-token
+insertion, immutable resolved-plan reconstruction, independently expiring digest-only tokens,
+and one admission per call/participant. Focused real-adapter coverage includes transaction
+rollback, expired-token non-consumption, API-key revocation independence, and concurrent same-
+and distinct-token claims. Gateway routes, live startup/bookkeeping, browser verification, and
+the remaining failure matrix are still open; this slice is not complete.
 
 ## Specification review
 

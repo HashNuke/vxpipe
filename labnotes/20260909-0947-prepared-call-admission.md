@@ -71,5 +71,54 @@ Verification so far:
 - `mix compile --warnings-as-errors` passed after the admission modules were
   added.
 
-The first milestone checklist item remains open until the real persistence
-adapter transaction is implemented and tested.
+At that checkpoint the first milestone checklist item remained open pending the
+real persistence adapter transaction below.
+
+## Checkpoint 2: PostgreSQL preparation and atomic claim
+
+The Ecto adapter introduces three normalized records:
+
+- `calls` holds the durable identity, exact definition revision, private initial
+  variables, serialized resolved plan and digest, room identity, lifecycle state,
+  and distinct creation/start/end timestamps;
+- `join_tokens` holds only a SHA-256 digest plus participant scope and an
+  independent issue/expiry/consumption lifetime;
+- `call_admissions` records the accepted token and enforces one admission for a
+  participant definition within a call.
+
+Preparation uses one `Ecto.Multi`, so a first-token uniqueness failure rolls the
+new call back. Issuance and claiming lock the call row in short transactions.
+Claiming additionally locks the token row, rechecks URL scope, expiry, call state,
+route-to-participant mapping, and existing admission before consuming the token.
+The transaction ends before any engine/provider work exists.
+
+The plan is encoded as a deterministic Erlang external term and decoded with
+`:safe`; this preserves the exact resolved profiles, runtime identities, tool
+bindings, validators, and initialized variables selected at preparation. The
+call row separately pins the immutable definition revision and SHA-256 plan
+digest. Both the domain and Ecto structs exclude variables/plan bytes from
+ordinary inspection.
+
+An initial green attempt exposed misuse of string-length validation for arbitrary
+32-byte digests: whether a random digest passed depended on UTF-8 validity. The
+changesets now validate byte size, matching the PostgreSQL octet-length
+constraints. A second green attempt exposed a selection tuple mismatch while
+rehydrating the definition relation; the adapter now consistently carries tenant,
+definition, and revision records.
+
+Verification:
+
+- Red: `cd apps/vxpipe_persistence && mix test
+  test/vxpipe/persistence/call_store_test.exs` failed at the missing Ecto schemas
+  and adapter boundary.
+- Green: the focused call-store suite — 5 tests, 0 failures.
+- Green: the complete `vxpipe_calls` suite — 13 tests, 0 failures.
+- Green: the complete `vxpipe_persistence` suite — 13 tests, 0 failures.
+- `mix format --check-formatted` and `mix compile --warnings-as-errors` passed.
+- A disposable empty PostgreSQL database migrated from the full migration chain
+  and ran the 5 focused call-store tests with 0 failures; it was then removed.
+
+The managed runtime now configures `Vxpipe.Persistence.CallStore` as the Calls
+repository whenever `VXPIPE_DATABASE_URL` enables persistence. The first two
+milestone implementation checklist items are complete. Gateway authentication,
+session translation, live-start bookkeeping, and browser verification remain.
