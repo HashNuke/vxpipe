@@ -1,0 +1,123 @@
+defmodule Vxpipe.MCP.Connections do
+  @moduledoc """
+  Opens, reuses, and retires supervised MCP sessions by resolved connection identity.
+
+  A connection is returned only after its runtime reports `:ready` with the exact Vxpipe
+  protocol revision.
+  """
+
+  alias Vxpipe.MCP.{
+    ClientOptions,
+    Connection,
+    ConnectionKey,
+    ConnectionNames,
+    ExMCPRuntime,
+    IntegrationSupervisor
+  }
+
+  @connection_supervisor Vxpipe.MCP.ConnectionSupervisor
+  @protocol_version "2025-11-25"
+
+  @type error ::
+          ClientOptions.error()
+          | :connection_failed
+          | :not_ready
+          | {:unsupported_protocol_version, String.t() | nil}
+
+  @spec open(ConnectionKey.t(), keyword(), keyword()) ::
+          {:ok, Connection.t()} | {:error, error()}
+  def open(%ConnectionKey{} = key, config, opts \\ []) when is_list(config) do
+    case lookup(key) do
+      {:ok, connection} ->
+        {:ok, connection}
+
+      :error ->
+        start_connection(key, config, opts)
+    end
+  end
+
+  @spec lookup(ConnectionKey.t()) :: {:ok, Connection.t()} | :error
+  def lookup(%ConnectionKey{} = key) do
+    with {:ok, owner} <- ConnectionNames.lookup(:owner, key),
+         {:ok, client} <- ConnectionNames.lookup(:client, key) do
+      {:ok, Connection.new(key, owner, client)}
+    else
+      :error -> :error
+    end
+  end
+
+  @spec close(Connection.t() | ConnectionKey.t()) :: :ok
+  def close(%Connection{} = connection), do: close(Connection.key(connection))
+
+  def close(%ConnectionKey{} = key) do
+    case ConnectionNames.lookup(:owner, key) do
+      {:ok, owner} ->
+        case DynamicSupervisor.terminate_child(@connection_supervisor, owner) do
+          :ok -> :ok
+          {:error, :not_found} -> :ok
+        end
+
+      :error ->
+        :ok
+    end
+  end
+
+  defp start_connection(key, config, opts) do
+    runtime = Keyword.get(opts, :runtime, ExMCPRuntime)
+    runtime_options = Keyword.get(opts, :runtime_options, [])
+
+    with {:ok, client_options} <- ClientOptions.build(config),
+         {:ok, _owner} <-
+           start_integration(key, runtime, client_options, runtime_options),
+         {:ok, connection} <- lookup(key),
+         :ok <- ensure_ready(connection, runtime) do
+      {:ok, connection}
+    else
+      {:error, {:unsupported_protocol_version, _version}} = error ->
+        close(key)
+        error
+
+      {:error, :not_ready} = error ->
+        close(key)
+        error
+
+      {:error, reason} when reason in [:endpoint_required, :https_required, :invalid_endpoint] ->
+        {:error, reason}
+
+      _failure ->
+        close(key)
+        {:error, :connection_failed}
+    end
+  end
+
+  defp start_integration(key, runtime, client_options, runtime_options) do
+    child =
+      {IntegrationSupervisor,
+       key: key,
+       runtime: runtime,
+       client_options: client_options,
+       runtime_options: runtime_options}
+
+    case DynamicSupervisor.start_child(@connection_supervisor, child) do
+      {:ok, owner} -> {:ok, owner}
+      {:error, {:already_started, owner}} -> {:ok, owner}
+      {:error, _reason} -> {:error, :connection_failed}
+    end
+  end
+
+  defp ensure_ready(connection, runtime) do
+    case runtime.status(Connection.client(connection)) do
+      {:ok, %{connection_status: :ready, protocol_version: @protocol_version}} ->
+        :ok
+
+      {:ok, %{protocol_version: version}} ->
+        {:error, {:unsupported_protocol_version, version}}
+
+      {:ok, _status} ->
+        {:error, :not_ready}
+
+      {:error, _reason} ->
+        {:error, :connection_failed}
+    end
+  end
+end

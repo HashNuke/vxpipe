@@ -130,6 +130,29 @@ evidence that this production concern is solved.
 - This deterministic checkpoint does not yet prove transport-level incremental response
   limits, initialization/readiness, or a real remote invocation. Those remain open.
 
+## 2026-09-09 — scoped supervised connections
+
+- Red: three focused lifecycle tests failed because connection identities, handles, and
+  supervised ownership did not exist. They require reuse for one integration/credential
+  generation, isolation across generations, credential-free handles, complete subtree
+  retirement, and rejection/cleanup of a mismatched negotiated revision.
+- Green: the application now supervises an explicitly named unique Registry and
+  `DynamicSupervisor`. Each dynamic integration subtree owns exactly one protocol client;
+  no worker starts another worker directly. `Connections` coordinates open/reuse/close,
+  while key validation, registry naming, connection data, runtime adaptation, and subtree
+  supervision remain separate cohesive modules.
+- A connection key contains only bounded integration and credential-generation strings.
+  Endpoint headers stay in the supervised client options and never enter the returned
+  connection handle or readiness error. Reusing the same key intentionally pins the
+  existing session; the integration owner must change the generation when credentials do.
+- Readiness requires both `connection_status: :ready` and exact MCP `2025-11-25`.
+  Mismatched or unready trees are terminated before `open/3` returns an error.
+- Verification: the complete `vxpipe_mcp` suite passes with 11 tests and 0 failures;
+  warnings-as-errors compilation, root formatting, strict Credo over 293 source files, and
+  the unused-lock check pass.
+- Tests use a deterministic supervised runtime double. Actual ExMCP initialization,
+  session headers, connection loss/recovery, and reference-server use remain unproven.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)

@@ -1,8 +1,8 @@
 # MCP client integration and conformance
 
-Status: in progress. The exact dependency/profile, bounded all-or-nothing discovery, and
-pre-submission validated invocation contracts are implemented. ExMCP transport
-compatibility/conformance gates and configured connection ownership remain unproven; the separate Jido
+Status: in progress. The exact dependency/profile, bounded all-or-nothing discovery,
+pre-submission validated invocation, and scoped supervised connection contracts are
+implemented. ExMCP transport compatibility/conformance gates remain unproven; the separate Jido
 runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
@@ -153,8 +153,13 @@ Implementation evidence:
   schemas, and oversized decoded results return bounded categorical errors. The ExMCP-only
   adapter uses the single-request `tools/call` path with generic and ambiguous stream replay
   disabled.
+- `Vxpipe.MCP.Connections` scopes a supervised client subtree to a bounded resolved
+  integration identity plus credential generation. It reuses only that exact generation,
+  returns a credential-free opaque handle after exact-version readiness, and retires the
+  owning subtree through its `DynamicSupervisor`; connection registry, runtime adapter,
+  identity, handle, and subtree supervision remain separate modules.
 - The focused behavior test was observed red before implementation and is green with the
-  complete child suite (8 tests, 0 failures). This is deterministic adapter evidence only;
+  complete child suite (11 tests, 0 failures). This is deterministic adapter evidence only;
   no remote/reference or official-conformance claim is made yet.
 
 ## Specification review
