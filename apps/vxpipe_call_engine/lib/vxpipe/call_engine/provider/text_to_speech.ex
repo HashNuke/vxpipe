@@ -4,10 +4,7 @@ defmodule Vxpipe.CallEngine.Provider.TextToSpeech do
   alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
 
   @callback new(keyword()) :: {:ok, struct()} | {:error, :invalid_configuration}
-  @callback connection_options(struct()) :: %{
-              url: String.t(),
-              headers: [{String.t(), String.t()}]
-            }
+  @callback connection_options(struct()) :: map()
   @callback media_format(struct()) :: map()
   @callback encode_speak(String.t()) :: binary()
   @callback encode_flush() :: binary()

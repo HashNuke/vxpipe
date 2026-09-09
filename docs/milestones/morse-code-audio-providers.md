@@ -91,6 +91,20 @@ state remains complete. The focused suite passes `9 tests, 0 failures`; warnings
 and the complete owning child suite pass with `126 tests, 0 failures (1 excluded)`. This completes
 the bounded incremental codec checklist item before transport integration.
 
+Implementation evidence, checkpoint 4 (2026-09-09): added provider translation modules for
+`MorseCodeSTT` and `MorseCodeTTS` while leaving transport startup pending. Both construct the same
+validated local codec configuration, advertise mono `linear16` media, and return structured local
+connection data containing no invented URL or headers. The provider-neutral connection callback
+types now accept a map rather than falsely requiring remote WebSocket fields; existing Deepgram
+adapters retain their prior values and behavior. STT control decoding normalizes bounded
+start/update/end/error messages; TTS uses the existing speak/flush/interrupt and
+started/completed/interrupted/error signal shapes plus bounded audio chunks.
+
+The focused red run failed because both provider modules were absent. Their green suite passes
+`2 tests, 0 failures`, including invalid configuration/messages and the no-fake-URL contract.
+Warnings-as-errors compile and the complete owning child suite pass with `128 tests, 0 failures
+(1 excluded)`. No registry/default or capability process has changed yet.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08. Approved the deterministic

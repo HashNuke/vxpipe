@@ -76,3 +76,21 @@ proves more than ten bounded chunks concatenate byte-for-byte to the existing ex
 then observes stable exhaustion. This gives the upcoming transport a discardable state rather than
 an 8 MiB PCM allocation. The focused suite passes `9 tests, 0 failures`; warnings-as-errors compile
 and the full owning child suite pass with `126 tests, 0 failures (1 excluded)`.
+
+## Checkpoint 4: provider-neutral local connection data
+
+The provider behaviors previously typed `connection_options/1` as a map that always contained a
+remote URL and headers. Supplying those fields for an in-process codec would create a pretend
+endpoint. The new red provider tests required both local providers to return `%{config: config}`
+with no URL while still exposing the existing media and control/signal contracts; both tests
+failed because the modules were absent.
+
+`MorseCodeSTT` now translates bounded local JSON control messages into the same normalized STT
+signals used by the room. `MorseCodeTTS` emits the existing speak/flush/interrupt commands,
+normalizes lifecycle signals, and validates bounded audio frames. Both reuse the codec Config
+struct, and the provider-neutral connection callback types now accept arbitrary structured maps.
+Deepgram continues returning its URL/header map unchanged.
+
+The focused provider suite passes `2 tests, 0 failures`; warnings-as-errors compile and the full
+owning child suite pass with `128 tests, 0 failures (1 excluded)`. Transport processes, runtime
+selection and default settings remain untouched.

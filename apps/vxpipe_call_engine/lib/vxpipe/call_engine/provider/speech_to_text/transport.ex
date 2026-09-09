@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Provider.SpeechToText.Transport do
   @moduledoc false
 
-  @type connection :: %{url: String.t(), headers: [{String.t(), String.t()}]}
+  @type connection :: map()
 
   @callback start_link(keyword()) :: GenServer.on_start()
   @callback send_audio(pid(), binary()) :: :ok | {:error, term()}
