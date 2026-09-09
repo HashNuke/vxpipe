@@ -190,12 +190,20 @@ Implementation evidence to date:
   correlation, after conversation already continued. Recovery still drains each retained
   fact once and closes the archive. This supplies the end-to-end outage half of the
   independently tested Console live-only presentation boundary.
+- Calls already supplied bounded missing-sequence samples and duplicate ID/sequence counts,
+  but the Console reduced that evidence to a generic missing count and hid duplicates. The
+  archive notice now reports each bounded count explicitly. The focused endpoint file passes
+  15 tests, the complete Console suite passes 51 tests, and root format,
+  warnings-as-errors compilation and strict Credo checks pass.
 - Rendered review at 1440px and 390px verified the list/detail workflow, event selection,
   call/history pagination, variable diff, mobile reading order and zero horizontal overflow.
   The approved screenshots are `.impeccable/review/desktop.png` and
   `.impeccable/review/mobile.png`; the final UI review disposition was `ship`.
 - A rendered 390px repository-outage check retained a 390px document width, showed the
   live-only/tool-failure evidence, and produced no browser errors.
+- A rendered 390px archive-gap check showed `Archive gap: 2 missing sequences · 1 duplicate
+  ID · 1 duplicate sequence` with the unknown tool payload, retained equal 390px document
+  and viewport widths, and produced no browser errors.
 
 Failed/unknown outcome presentation, terminated-room lifecycle, reconnect/bounded-history,
 and safe missing/denied/purged behavior still need consolidated verification. This evidence

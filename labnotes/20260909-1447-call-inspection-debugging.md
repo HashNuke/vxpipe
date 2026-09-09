@@ -265,3 +265,21 @@ remaining end-to-end failure checks have not been demonstrated yet.
 - Together with the independently tested Console live-only state, this proves the storage-
   outage acceptance path across the owning boundaries. The remaining milestone failure and
   lifecycle checks are still pending.
+
+## 2026-09-09 — explicit archive-gap evidence
+
+- Calls already supplied bounded missing-sequence samples and duplicate ID/sequence counts.
+  The Console hid the duplicate counts and reduced the missing evidence to a generic count,
+  which prevented an operator from distinguishing those archive-integrity signals.
+- The Console now displays all three bounded counts in its archive-gap notice.
+- Red evidence: the focused endpoint assertion for the exact archive notice failed because
+  only the generic missing count was rendered.
+- Green evidence: the focused endpoint file passes 15 tests, the complete Console suite
+  passes 51 tests, and root format, warnings-as-errors compilation and strict Credo checks
+  pass.
+- Rendered `agent-browser` verification at 390px showed the exact notice `Archive gap: 2
+  missing sequences · 1 duplicate ID · 1 duplicate sequence`, kept the unknown tool payload
+  visible, retained `scrollWidth = innerWidth = 390`, and reported no browser errors.
+- This presentation checkpoint is commit `e1dfa09`. It does not complete the remaining
+  subscription, lifecycle or safe missing/denied/purged acceptance checks, so the milestone
+  remains in progress.
