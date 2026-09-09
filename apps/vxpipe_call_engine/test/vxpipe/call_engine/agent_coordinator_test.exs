@@ -8,11 +8,12 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
   alias Vxpipe.CallEngine.AgentCoordinator
   alias Vxpipe.CallEngine.AgentFactory
   alias Vxpipe.CallEngine.JidoAgentRuntime
-  alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
+  alias Vxpipe.CallEngine.TestBlockingTool
   alias Vxpipe.CallEngine.TestAgentTool
   alias Vxpipe.CallEngine.TestAgentRuntime
   alias Vxpipe.CallEngine.Tool.Call
-  alias Vxpipe.CallEngine.Tool.Dispatcher
+  alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Dispatcher}
 
   @model_first_token_event [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
@@ -208,6 +209,46 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
     })
 
     assert_receive {:vxpipe_capability_text, ^coordinator, ^command, "Second sentence!"}
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
+    refute_receive {:vxpipe_capability_text, ^coordinator, ^command, _duplicate}
+  end
+
+  test "preserves buffered mixed tool text and does not redeliver streamed text" do
+    coordinator = start_coordinator()
+    command = command("mixed-tool-text", "start it")
+
+    assert :ok = AgentCoordinator.respond(coordinator, command)
+    assert_receive {:test_agent_request, ^coordinator, request_id, _, _options}
+
+    emit(
+      coordinator,
+      request_id,
+      :llm_completed,
+      %{turn_type: :tool_calls, text: "I started the report."},
+      llm_call_id: "llm-buffered"
+    )
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^command, "I started the report."}
+
+    emit(
+      coordinator,
+      request_id,
+      :llm_delta,
+      %{chunk_type: :content, delta: "It is still running."},
+      llm_call_id: "llm-streamed"
+    )
+
+    emit(
+      coordinator,
+      request_id,
+      :llm_completed,
+      %{turn_type: :answer, text: "It is still running."},
+      llm_call_id: "llm-streamed"
+    )
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^command, "It is still running."}
+
+    emit(coordinator, request_id, :request_completed, %{result: "It is still running."})
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
     refute_receive {:vxpipe_capability_text, ^coordinator, ^command, _duplicate}
   end
@@ -432,6 +473,144 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     completed_identity = {command.connection_id, command.correlation_id, command.id}
     assert {:ok, []} = AgentCoordinator.interrupt(coordinator, [completed_identity])
+  end
+
+  test "serializes a background completion after active caller work as engine context" do
+    Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
+    on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
+
+    activation_id = "act-background-coordinator-#{System.unique_integer([:positive])}"
+
+    background_supervisor =
+      start_supervised!({BackgroundSupervisor, activation_id: activation_id, maximum_children: 1})
+
+    dispatcher =
+      start_supervised!(
+        {Dispatcher,
+         activation_id: activation_id,
+         tools: [TestBlockingTool],
+         maximum_result_bytes: 4_096,
+         maximum_background_tools: 1,
+         background_tool_timeout_ms: 1_000,
+         background_supervisor: background_supervisor,
+         completion_target: self()}
+      )
+
+    coordinator = start_coordinator(tool_dispatcher: dispatcher)
+    kickoff = command("background-kickoff", "prepare the report")
+
+    assert :ok = AgentCoordinator.respond(coordinator, kickoff)
+    assert_receive {:test_agent_request, ^coordinator, kickoff_request, _, kickoff_options}
+
+    tool_context = Keyword.fetch!(kickoff_options, :tool_context)
+    guardrail = Map.fetch!(tool_context, :__tool_guardrail_callback__)
+
+    assert :ok =
+             guardrail.(%{
+               tool_call_id: "tool-background",
+               tool_name: "wait_for_test",
+               arguments: %{}
+             })
+
+    assert {:ok, acknowledgement} =
+             Dispatcher.submit(
+               dispatcher,
+               "wait_for_test",
+               %{},
+               Map.fetch!(tool_context, :vxpipe_tool_context)
+             )
+
+    assert_receive {:test_blocking_tool_started, worker}
+
+    emit(
+      coordinator,
+      kickoff_request,
+      :tool_started,
+      %{
+        tool_call_id: "tool-background",
+        tool_name: "wait_for_test",
+        arguments: %{}
+      },
+      tool_call_id: "tool-background",
+      tool_name: "wait_for_test"
+    )
+
+    assert_receive {:vxpipe_capability_tool_started, ^coordinator, ^kickoff,
+                    %Call{id: "tool-background"} = call}
+
+    emit(
+      coordinator,
+      kickoff_request,
+      :tool_completed,
+      %{
+        tool_call_id: "tool-background",
+        tool_name: "wait_for_test",
+        result: {:ok, acknowledgement, []}
+      },
+      tool_call_id: "tool-background",
+      tool_name: "wait_for_test"
+    )
+
+    assert_receive {:vxpipe_capability_tool_accepted, ^coordinator, ^kickoff, ^call,
+                    ^acknowledgement}
+
+    refute_receive {:vxpipe_capability_tool_completed, ^coordinator, ^kickoff, ^call, _result}
+
+    emit(coordinator, kickoff_request, :request_completed, %{result: "Report started."})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^kickoff}
+
+    active = command("caller-while-tool-runs", "what else can you do?")
+    assert :ok = AgentCoordinator.respond(coordinator, active)
+    assert_receive {:test_agent_request, ^coordinator, active_request, _, _options}
+
+    assert {:ok, [^active]} = AgentCoordinator.interrupt(coordinator, [])
+    assert_receive {:test_agent_cancel, ^coordinator, ^active_request, :interrupted}
+
+    replacement = command("caller-after-interruption", "continue with this instead")
+    assert :ok = AgentCoordinator.respond(coordinator, replacement)
+    assert_receive {:test_agent_request, ^coordinator, replacement_request, _, _options}
+
+    send(worker, :release_test_tool)
+
+    assert_receive {:vxpipe_background_tool_finished, ^dispatcher, completion}
+    GenServer.cast(coordinator, {:vxpipe_background_tool_finished, dispatcher, completion})
+
+    assert_receive {:vxpipe_capability_tool_completed, ^coordinator, ^kickoff, ^call,
+                    %{"released" => true}}
+
+    refute_receive {:test_agent_request, ^coordinator, _request, _query, _options}
+
+    emit(coordinator, active_request, :request_completed, %{result: "stale"})
+    refute_receive {:vxpipe_capability_text, ^coordinator, ^active, "stale"}
+
+    emit(coordinator, replacement_request, :request_completed, %{
+      result: "I can keep talking."
+    })
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^replacement}
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{} = continuation}
+
+    assert continuation.tool_call_id == "tool-background"
+    assert continuation.source_command_id == kickoff.id
+
+    assert_receive {:test_agent_request, ^coordinator, continuation_request, query,
+                    continuation_options}
+
+    assert query =~ "tool-background"
+    assert query =~ "released"
+
+    assert continuation_options
+           |> Keyword.fetch!(:extra_refs)
+           |> Map.fetch!(:vxpipe_origin) == :engine
+
+    emit(coordinator, continuation_request, :request_completed, %{result: "The report is ready."})
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^continuation, "The report is ready."}
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^continuation}
+    refute_receive {:test_agent_request, ^coordinator, _request, _query, _options}
   end
 
   defp start_coordinator(overrides \\ []) do

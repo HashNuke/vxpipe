@@ -35,6 +35,35 @@ defmodule Vxpipe.CallEngine.AgentRequestTransformerTest do
     assert Enum.map(messages, &Map.get(&1, :content)) == ["Stay concise.", "current user"]
   end
 
+  test "projects engine-origin continuations as system context rather than caller speech" do
+    engine_observation = "background invocation tool-one completed"
+
+    context =
+      Context.new(system_prompt: "Stay concise.")
+      |> Context.append_user("caller question", refs: %{vxpipe_request_id: "caller-request"})
+      |> Context.append_assistant("I started it.")
+      |> Context.append_user(engine_observation,
+        refs: %{vxpipe_origin: :engine, vxpipe_request_id: "continuation-request"}
+      )
+
+    state =
+      engine_observation
+      |> State.new("Stay concise.", request_id: "continuation-request")
+      |> then(&%{&1 | context: context})
+
+    request = %{messages: Context.to_messages(context), llm_opts: [], tools: %{}, model: :fast}
+
+    assert {:ok, %{messages: messages}} =
+             AgentRequestTransformer.transform_request(request, state, %{}, %{})
+
+    assert Enum.map(messages, &{&1.role, &1.content}) == [
+             {:system, "Stay concise."},
+             {:user, "caller question"},
+             {:assistant, "I started it."},
+             {:system, engine_observation}
+           ]
+  end
+
   test "uses an armed local fixture without adding controls to the call input" do
     fixture =
       start_supervised!(

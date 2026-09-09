@@ -36,3 +36,35 @@ Evidence:
 
 This checkpoint provides the execution primitive only. No configured Action uses
 it yet, and coordinator mailbox/continuation behavior remains to be implemented.
+
+### Serialized completion handoff
+
+- Red: a focused coordinator test failed because no internal continuation command
+  or completion mailbox existed. A request-transformer test separately proved
+  that Jido initially projected the completion input as caller-role content.
+- `AgentCoordinator` now recognizes a private running acknowledgement only when
+  the dispatcher has the corresponding reserved invocation. It emits acceptance,
+  retains completions in a bounded FIFO mailbox, prioritizes queued caller work,
+  and starts one internal continuation only after Jido is idle.
+- Caller interruption cancels and discards the active conversational request but
+  leaves accepted background work and queued completion observations intact. A
+  stale terminal event cannot revive interrupted output.
+- The continuation carries a fresh command/request identity plus the original
+  invocation and source-command references. The request transformer projects its
+  Jido history entry as system context based on private engine-origin metadata;
+  it is not caller speech.
+- Added per-LLM-call text tracking so buffered text accompanying a tool call is
+  retained while an equivalent streamed completion is not emitted twice. Each
+  LLM-message boundary flushes its residual sentence text.
+
+Focused evidence:
+
+- `mix test test/vxpipe/call_engine/agent_coordinator_test.exs test/vxpipe/call_engine/agent_request_transformer_test.exs test/vxpipe/call_engine/tool/dispatcher_background_test.exs`
+  — 21 tests, 0 failures.
+- Umbrella format, warnings-as-errors compile, default tests, and unused-dependency
+  check passed after this checkpoint: Call Engine 157/0 (1 excluded), Gateway
+  52/0 (4 excluded), Console 20/0.
+
+RoomAuthority does not consume the new acceptance/continuation messages yet, and
+the development definition still exposes no background Action. Those are the
+next integration checkpoint.

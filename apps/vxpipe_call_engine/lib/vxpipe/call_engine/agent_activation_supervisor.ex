@@ -98,6 +98,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
          owner: Keyword.fetch!(options, :owner),
          provider: Keyword.get(options, :provider, :other),
          tool_dispatcher: tool_dispatcher,
+         maximum_background_completions: Keyword.get(options, :maximum_background_tools, 4),
          maximum_completed_requests: Keyword.fetch!(options, :maximum_completed_requests),
          maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
          maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),

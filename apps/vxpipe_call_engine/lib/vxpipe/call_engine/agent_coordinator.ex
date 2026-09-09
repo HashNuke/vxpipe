@@ -6,10 +6,10 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   alias Jido.AI.Runtime.Event
   alias Vxpipe.CallEngine.AgentRequestTransformer
   alias Vxpipe.CallEngine.Capability.SentenceAccumulator
-  alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.Telemetry
-  alias Vxpipe.CallEngine.Tool.{Call, Context, Dispatcher}
+  alias Vxpipe.CallEngine.Tool.{BackgroundCompletion, Call, Context, Dispatcher}
 
   @call_timeout 5_000
   @default_maximum_completed_requests 32
@@ -49,11 +49,14 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       agent_participant_id: Keyword.fetch!(options, :agent_participant_id),
       agent_runtime: Keyword.fetch!(options, :agent_runtime),
       agent_server: Keyword.fetch!(options, :agent_server),
+      background_calls: %{},
+      background_completions: :queue.new(),
       completed: [],
       current: nil,
       discarded_request_ids: [],
       maximum_completed_requests:
         Keyword.get(options, :maximum_completed_requests, @default_maximum_completed_requests),
+      maximum_background_completions: Keyword.get(options, :maximum_background_completions, 4),
       maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
       maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
       owner: Keyword.fetch!(options, :owner),
@@ -111,6 +114,23 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   end
 
   @impl true
+  def handle_cast(
+        {:vxpipe_background_tool_finished, dispatcher, %BackgroundCompletion{} = completion},
+        state
+      ) do
+    if current_dispatcher?(dispatcher, state) and valid_completion?(completion, state) do
+      case enqueue_completion(completion, state) do
+        {:ok, state} -> {:noreply, maybe_start_next(state)}
+        :overflow -> {:stop, :background_completion_overflow, state}
+      end
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_cast(_message, state), do: {:noreply, state}
+
+  @impl true
   def handle_info(
         {:jido_ai_request_event, %Event{request_id: request_id} = event},
         %{current: %{request_id: request_id}} = state
@@ -140,11 +160,22 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
     end
   end
 
-  defp project_runtime_event(%Event{kind: :llm_delta, data: data}, state) do
+  defp project_runtime_event(%Event{kind: :llm_delta, data: data} = event, state) do
     case {Map.get(data, :chunk_type), Map.get(data, :delta)} do
-      {:content, delta} when is_binary(delta) -> push_text(delta, state)
-      _other -> state
+      {:content, delta} when is_binary(delta) ->
+        state
+        |> record_llm_delta(event, delta)
+        |> then(&push_text(delta, &1))
+
+      _other ->
+        state
     end
+  end
+
+  defp project_runtime_event(%Event{kind: :llm_completed} = event, state) do
+    event
+    |> push_unstreamed_llm_text(state)
+    |> flush_llm_text()
   end
 
   defp project_runtime_event(%Event{kind: :tool_started} = event, state) do
@@ -216,9 +247,14 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         current = %{state.current | tool_calls: remaining}
         state = %{state | current: current}
 
-        state
-        |> emit_tool_result(call, result)
-        |> maybe_complete_terminal()
+        state =
+          if background_acknowledgement?(call, result, state) do
+            accept_background_call(call, result, state)
+          else
+            emit_tool_result(state, call, result)
+          end
+
+        maybe_complete_terminal(state)
 
       {nil, _remaining} ->
         pending_tool_results = Map.put(state.current.pending_tool_results, call_id, result)
@@ -273,6 +309,20 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
     state
   end
 
+  defp accept_background_call(call, result, state) do
+    acknowledgement = acknowledgement_payload(result)
+
+    send(
+      state.owner,
+      {:vxpipe_capability_tool_accepted, self(), state.current.command, call, acknowledgement}
+    )
+
+    background_calls =
+      Map.put(state.background_calls, call.id, %{call: call, command: state.current.command})
+
+    maybe_report_background_completion(%{state | background_calls: background_calls}, call.id)
+  end
+
   defp start_request(command, state) do
     request_id = Id.generate(:agent_request)
     options = request_options(command, request_id, state)
@@ -292,6 +342,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
           command: command,
           pending_tool_results: %{},
           first_output_observed?: false,
+          llm_text_by_call: %{},
           request_id: request_id,
           seen_event_ids: MapSet.new(),
           started_at: started_at,
@@ -338,15 +389,19 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         :error -> tool_context
       end
 
+    extra_refs =
+      %{
+        vxpipe_command_id: command.id,
+        vxpipe_request_id: request_id
+      }
+      |> put_origin_ref(command)
+
     state.request_options
     |> Keyword.delete(:model)
     |> Keyword.put(:request_id, request_id)
     |> Keyword.put(:request_transformer, AgentRequestTransformer)
     |> Keyword.put(:stream_to, {:pid, self()})
-    |> Keyword.put(:extra_refs, %{
-      vxpipe_command_id: command.id,
-      vxpipe_request_id: request_id
-    })
+    |> Keyword.put(:extra_refs, extra_refs)
     |> Keyword.put(:tool_context, tool_context)
   end
 
@@ -366,6 +421,48 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         cancel_fail_and_advance(reason, state)
     end
   end
+
+  defp record_llm_delta(state, event, delta) do
+    key = llm_call_key(event)
+    text = Map.get(state.current.llm_text_by_call, key, "") <> delta
+    llm_text_by_call = Map.put(state.current.llm_text_by_call, key, text)
+    %{state | current: %{state.current | llm_text_by_call: llm_text_by_call}}
+  end
+
+  defp push_unstreamed_llm_text(event, state) do
+    case Map.get(event.data, :text) do
+      text when is_binary(text) and text != "" ->
+        streamed = Map.get(state.current.llm_text_by_call, llm_call_key(event), "")
+
+        case unstreamed_suffix(text, streamed) do
+          "" -> state
+          suffix -> push_text(suffix, state)
+        end
+
+      _missing ->
+        state
+    end
+  end
+
+  defp flush_llm_text(state) do
+    case SentenceAccumulator.flush(state.current.accumulator) do
+      {:ok, accumulator, segments} ->
+        Enum.each(segments, &emit_segment(state, &1))
+        %{state | current: %{state.current | accumulator: accumulator}}
+    end
+  end
+
+  defp unstreamed_suffix(text, ""), do: text
+
+  defp unstreamed_suffix(text, streamed) do
+    if String.starts_with?(text, streamed) do
+      binary_part(text, byte_size(streamed), byte_size(text) - byte_size(streamed))
+    else
+      ""
+    end
+  end
+
+  defp llm_call_key(event), do: {event.iteration, event.llm_call_id || :unknown}
 
   defp maybe_push_final_result(result, state) when is_binary(result) do
     if state.current.accumulator.byte_count == 0 do
@@ -469,13 +566,58 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
         end
 
       {:empty, _pending} ->
+        start_next_completion(state)
+    end
+  end
+
+  defp maybe_start_next(%{current: nil} = state), do: start_next(state)
+  defp maybe_start_next(state), do: state
+
+  defp start_next_completion(state) do
+    case :queue.out(state.background_completions) do
+      {{:value, %BackgroundCompletion{} = completion}, remaining} ->
+        case Map.fetch(state.background_calls, completion.call.id) do
+          {:ok, %{command: source}} ->
+            continuation = ContinueAgent.new(source, completion)
+            send(state.owner, {:vxpipe_capability_continuation_started, self(), continuation})
+            state = %{state | background_completions: remaining}
+
+            case start_request(continuation, state) do
+              {:ok, state} ->
+                _ =
+                  Dispatcher.acknowledge_background_completion(
+                    state.tool_dispatcher,
+                    completion.call.id
+                  )
+
+                %{
+                  state
+                  | background_calls: Map.delete(state.background_calls, completion.call.id)
+                }
+
+              {:error, state} ->
+                emit_failure(state.owner, self(), continuation, :provider_unavailable)
+                state
+            end
+
+          :error ->
+            state
+            |> Map.put(:background_completions, remaining)
+            |> start_next_completion()
+        end
+
+      {:empty, _queue} ->
         state
     end
   end
 
   defp interrupted_commands(state) do
     pending = :queue.to_list(state.pending)
-    if state.current, do: [state.current.command | pending], else: pending
+
+    case state.current do
+      %{command: %SendText{} = command} -> [command | pending]
+      _none_or_internal -> pending
+    end
   end
 
   defp completed_request_ids(completed, completed_turn_ids) do
@@ -494,6 +636,83 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
   defp command_identity(command) do
     {command.connection_id, command.correlation_id, command.id}
   end
+
+  defp background_acknowledgement?(call, result, state) do
+    match?(
+      %{"invocation_id" => id, "status" => "running"} when id == call.id,
+      acknowledgement_payload(result)
+    ) and Dispatcher.background_invocation?(state.tool_dispatcher, call.id)
+  end
+
+  defp acknowledgement_payload({:ok, result, _effects}) when is_map(result), do: result
+  defp acknowledgement_payload({:ok, result}) when is_map(result), do: result
+  defp acknowledgement_payload(_result), do: %{}
+
+  defp enqueue_completion(completion, state) do
+    invocation_id = completion.call.id
+
+    cond do
+      completion_queued?(state.background_completions, invocation_id) ->
+        {:ok, state}
+
+      :queue.len(state.background_completions) >= state.maximum_background_completions ->
+        :overflow
+
+      true ->
+        state = %{
+          state
+          | background_completions: :queue.in(completion, state.background_completions)
+        }
+
+        {:ok, maybe_report_background_completion(state, invocation_id)}
+    end
+  end
+
+  defp completion_queued?(queue, invocation_id) do
+    Enum.any?(:queue.to_list(queue), &(&1.call.id == invocation_id))
+  end
+
+  defp maybe_report_background_completion(state, invocation_id) do
+    with %{call: call, command: command} <- Map.get(state.background_calls, invocation_id),
+         %BackgroundCompletion{outcome: outcome} <- queued_completion(state, invocation_id) do
+      emit_background_outcome(state.owner, self(), command, call, outcome)
+      state
+    else
+      _not_ready -> state
+    end
+  end
+
+  defp queued_completion(state, invocation_id) do
+    Enum.find(:queue.to_list(state.background_completions), &(&1.call.id == invocation_id))
+  end
+
+  defp emit_background_outcome(owner, coordinator, command, call, {:ok, result}) do
+    send(owner, {:vxpipe_capability_tool_completed, coordinator, command, call, result})
+  end
+
+  defp emit_background_outcome(owner, coordinator, command, call, {:error, reason}) do
+    send(owner, {:vxpipe_capability_tool_failed, coordinator, command, call, reason})
+  end
+
+  defp current_dispatcher?(dispatcher, state) when is_pid(dispatcher) do
+    GenServer.whereis(state.tool_dispatcher) == dispatcher
+  end
+
+  defp current_dispatcher?(_dispatcher, _state), do: false
+
+  defp valid_completion?(completion, state) do
+    completion.context.agent_participant_id == state.agent_participant_id and
+      completion.context.tool_call_id == completion.call.id
+  end
+
+  defp put_origin_ref(refs, %ContinueAgent{} = command) do
+    refs
+    |> Map.put(:vxpipe_origin, :engine)
+    |> Map.put(:vxpipe_source_command_id, command.source_command_id)
+    |> Map.put(:vxpipe_tool_call_id, command.tool_call_id)
+  end
+
+  defp put_origin_ref(refs, %SendText{}), do: refs
 
   defp current_request?(%{current: %{request_id: request_id}}, request_id), do: true
   defp current_request?(_state, _request_id), do: false
@@ -517,6 +736,8 @@ defmodule Vxpipe.CallEngine.AgentCoordinator do
       valid_server?(state.agent_server) and
       valid_server?(state.tool_dispatcher) and
       is_integer(state.maximum_completed_requests) and state.maximum_completed_requests > 0 and
+      is_integer(state.maximum_background_completions) and
+      state.maximum_background_completions > 0 and
       is_integer(state.maximum_output_bytes) and state.maximum_output_bytes > 0 and
       is_integer(state.maximum_pending_requests) and state.maximum_pending_requests >= 0 and
       is_list(state.request_options) and

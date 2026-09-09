@@ -49,6 +49,13 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
     :exit, _reason -> {:error, :tool_failed}
   end
 
+  @spec background_invocation?(GenServer.server(), String.t()) :: boolean()
+  def background_invocation?(dispatcher, invocation_id) when is_binary(invocation_id) do
+    GenServer.call(dispatcher, {:background_invocation?, invocation_id}, @call_timeout)
+  catch
+    :exit, _reason -> false
+  end
+
   @spec variable_projection(GenServer.server()) :: {:ok, nil | map()} | {:error, :tool_failed}
   def variable_projection(dispatcher) do
     GenServer.call(dispatcher, :variable_projection, @call_timeout)
@@ -116,6 +123,10 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
       _missing_or_running ->
         {:reply, {:error, :tool_failed}, state}
     end
+  end
+
+  def handle_call({:background_invocation?, invocation_id}, _from, %State{} = state) do
+    {:reply, Map.has_key?(state.background_invocations, invocation_id), state}
   end
 
   def handle_call({:register_tool_call, request_id, tool_call}, _from, %State{} = state) do
