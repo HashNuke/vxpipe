@@ -359,3 +359,29 @@ evidence that this production concern is solved.
   mark this milestone dependency-blocked. Do not compensate with global tenant-origin trust,
   a host-wide log filter, disabled SSE, or a Vxpipe-owned alternate MCP parser. A compatible
   ExMCP public boundary is required before production approval.
+
+## 2026-09-09 — upstream and fork feasibility
+
+- Queried the current upstream branches and complete issue/pull-request list. No open or
+  closed item addresses per-client credential trust, cumulative SSE response budgets, or
+  remote-response-safe client diagnostics. Upstream `master` is still commit `56880c6`; its
+  two commits after release 1.3.0 are unrelated test changes.
+- In a temporary upstream checkout, first added a failing isolation test with two clients
+  trusting different exact origins. Passing each client's `security` map into the existing
+  `SecurityConfig.get_transport_config/2` call sites made the test and its focused suite pass
+  (14 tests). This shows that the trust-scope defect itself is a small dependency patch.
+- Added a failing async-POST logging test whose remote failure term contained a private
+  sentinel. Replacing raw inspected reasons in the primary `ExMCP.Client` failure logs with
+  existing shape-only summaries made that test and the broader focused client suites pass
+  (33 tests). A production patch would also audit the connection-manager and other active
+  HTTP client log paths before claiming complete diagnostic safety.
+- The cumulative stream limit is not safely fixed by retaining one byte counter in
+  `SSEClient`. Legacy MCP `2025-11-25` uses a shared GET SSE stream for multiple pending
+  requests and keeps that process across reconnects. A lifetime counter would charge later,
+  unrelated tool calls for earlier traffic. Correct dependency work must track request IDs
+  and progress tokens in the client, carry each request's budget over reconnects, and stop
+  only the affected work when exhausted while retaining a separate bound for uncorrelated
+  traffic.
+- No temporary dependency edits, generated dependencies, or external repository changes
+  were copied into Vxpipe. Adopting a fork or publishing an upstream contribution remains an
+  explicit user decision.
