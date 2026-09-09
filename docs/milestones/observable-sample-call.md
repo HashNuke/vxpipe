@@ -94,7 +94,7 @@ slow response or missing measurement. The existing voice console still works unc
 - [x] Connect a bounded reporter to a separate dashboard and the existing sample entry.
 - [x] Provide a deterministic local provider fixture for controlled delay/failure, without
   relying on hosted credentials or adding failure switches to production call input.
-- [ ] Document how an embedded host consumes the same events without the dashboard.
+- [x] Document how an embedded host consumes the same events without the dashboard.
 - [x] Inspect desktop/mobile dashboard states and the unchanged voice console in a browser.
 
 ## Acceptance and failure checks
@@ -107,7 +107,7 @@ slow response or missing measurement. The existing voice console still works unc
   unprivileged responses. Many unique call IDs do not create one metric series per call.
 - [ ] Stop/restart the collector and disconnect/saturate the dashboard: calls continue,
   retained buffers remain bounded, missing data is visible and measurements are not doubled.
-- [ ] An embedded host receives engine events without gateway/database/UI dependencies.
+- [x] An embedded host receives engine events without gateway/database/UI dependencies.
 - [ ] A consuming host mounts the gateway with documented supervision/configuration
   while its standalone listener is disabled, without Phoenix/console dependencies.
   The optional standalone listener also preserves existing protocol/CORS behavior.
@@ -238,6 +238,19 @@ documentation review found no reusable system primitive to add. Runtime configur
 also confirmed that fixture mode skips the hosted-model credential while normal development
 mode retains it. Umbrella gates pass with call engine `115 tests, 0 failures (1 excluded)`,
 gateway `45 tests, 0 failures (3 excluded)`, and Console `12 tests, 0 failures`.
+
+Implementation evidence, checkpoint 10 (2026-09-09): the engine now exposes its complete
+current event list through `Vxpipe.CallEngine.Telemetry.events/0`. An engine-local test attaches
+an ordinary Telemetry handler to that contract and receives a runtime observation without
+depending on the gateway, Console, Phoenix, or a database. The engine README documents stable
+handler identity, detach-before-attach startup, orderly cleanup, native-duration conversion,
+bounded local callback work and the host collector's responsibility to bound admission. The
+focused red test first failed because the event-list function was absent, then passed after the
+public contract was added. The first root run exposed a global-Telemetry test-isolation race
+between async STT and TTS tests; their assertions now match the owning capability rather than
+claim unrelated concurrent events. Umbrella gates then passed with call engine `116 tests,
+0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`, and Console `12 tests,
+0 failures`.
 
 ## Specification review
 

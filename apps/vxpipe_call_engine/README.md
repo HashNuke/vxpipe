@@ -97,6 +97,45 @@ An armed outcome is consumed atomically by one request and resets to the configu
 default. The fixture is disabled in base configuration; its control never appears in a
 call definition, invocation, command, or RTVI message.
 
+## Embedded telemetry consumer
+
+An application embedding the engine can attach its own collector directly, without
+starting `vxpipe_gateway`, `vxpipe_console`, Phoenix, or a database. Depend on
+`:telemetry` directly in the host application and use `Vxpipe.CallEngine.Telemetry.events/0`
+as the complete current engine event list:
+
+```elixir
+defmodule MyApp.VxpipeTelemetry do
+  @handler_id {__MODULE__, :call_engine}
+
+  def attach(collector) do
+    :telemetry.detach(@handler_id)
+
+    :telemetry.attach_many(
+      @handler_id,
+      Vxpipe.CallEngine.Telemetry.events(),
+      &__MODULE__.handle_event/4,
+      collector
+    )
+  end
+
+  def detach, do: :telemetry.detach(@handler_id)
+
+  def handle_event(event, measurements, metadata, collector) do
+    send(collector, {:vxpipe_telemetry, event, measurements, metadata})
+    :ok
+  end
+end
+```
+
+Attach after the host collector starts, detach during orderly shutdown, and use a stable
+handler ID so startup can remove a handler left by an earlier collector. The callback runs
+in the process emitting the event, so it must only perform bounded local work. The receiving
+collector must bound its mailbox or apply admission before forwarding data to a network,
+database, or metrics backend. Durations are in Erlang `:native` units; convert them with
+`System.convert_time_unit/3`. The exact measurements, bounded metadata, and observation
+boundaries are listed in [the architecture](../../docs/architecture.md#security-and-observability).
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed

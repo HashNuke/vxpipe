@@ -14,6 +14,17 @@ defmodule Vxpipe.CallEngine.Telemetry do
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
   @runtime_sample_event [:vxpipe, :call_engine, :runtime, :sample]
+  @events [
+    @model_first_token_event,
+    @model_request_stop_event,
+    @tts_first_audio_event,
+    @provider_failure_event,
+    @runtime_sample_event
+  ]
+
+  @doc "Returns the complete framework-independent call-engine event contract."
+  @spec events() :: [nonempty_list(atom())]
+  def events, do: @events
 
   @doc "Returns a timestamp from the clock used for elapsed measurements."
   @spec started_at() :: integer()

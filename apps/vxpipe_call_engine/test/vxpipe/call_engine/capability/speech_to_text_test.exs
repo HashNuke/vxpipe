@@ -85,7 +85,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     TestSpeechToTextTransport.disconnect(transport, :closed)
 
     assert_receive {:vxpipe_stt_unavailable, ^capability, _, :transport_closed}
-    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1}, metadata}
+
+    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1},
+                    %{capability: :stt} = metadata}
 
     assert metadata == %{capability: :stt, provider: :deepgram, category: :unavailable}
 

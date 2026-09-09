@@ -1555,9 +1555,13 @@ The owning engine/gateway boundaries emit framework-independent Telemetry events
 Project-owned handlers perform bounded local work because Telemetry invokes handlers
 in the emitting process; downstream reporting/inspection must not introduce SQL,
 network waits or unbounded queues into media/model callbacks. Embedded hosts can
-consume engine events without a gateway/UI dependency. Measurement boundaries must
-distinguish provider output, gateway egress and actual remote playback; missing data
-is not zero. [Telemetry execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4).
+attach to the complete list returned by `Vxpipe.CallEngine.Telemetry.events/0` without a
+gateway, Console, Phoenix, or database dependency. A stable handler identifier,
+detach-before-attach startup, orderly detach and a bounded receiving collector keep that
+integration safe; the engine README contains a minimal host example. Measurement boundaries
+must distinguish provider output, gateway egress and actual remote playback; missing data is
+not zero.
+[Telemetry execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4).
 
 The Console's `Vxpipe.Console.TelemetryReporter` is one optional consumer. Its event
 handler performs only atomic admission and a local message send. The configured

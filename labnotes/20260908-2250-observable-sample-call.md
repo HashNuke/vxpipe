@@ -309,3 +309,28 @@ desktop and mobile captures. It found the fixture controls faithful to the estab
 three-column desktop board and mobile reading order, with a truthful neutral selected state.
 The design documentation review found the controls surface-specific and made no reusable-system
 changes.
+
+## Checkpoint 10: embedded Telemetry consumption
+
+The embedded-host acceptance needed a public way to attach to every current call-engine event
+without duplicating a private list from the Console reporter. The focused test initially failed
+with an undefined `Vxpipe.CallEngine.Telemetry.events/0`. The engine now returns its complete
+framework-independent event list from that function. The green test attached an ordinary
+Telemetry handler to the list and received a runtime observation using only the call-engine
+application.
+
+The engine README now gives a minimal host-owned adapter. It uses a stable handler identifier,
+detach-before-attach startup, explicit orderly detach and a local message to a host collector.
+The documentation makes the synchronous callback constraint and receiver-side bounded-admission
+requirement explicit, along with native-duration conversion. No gateway, Console, Phoenix,
+database, authentication, or browser dependency is introduced.
+
+The first root gate run exposed a test-isolation race rather than a runtime failure: async STT
+and TTS tests both attach to the process-global provider-failure event, and the TTS no-failure
+assertion could receive a valid STT failure emitted by the other test. The owning assertions now
+match their `:stt` or `:tts` capability dimension, so they continue to reject a failure from the
+subject under test without treating unrelated concurrent engine traffic as their own observation.
+The focused embedded consumer and speech-capability run passed `10 tests, 0 failures`. The
+subsequent root format, warnings-as-errors compile, default suite and unused-lock gates passed:
+call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
+and Console `12 tests, 0 failures`.

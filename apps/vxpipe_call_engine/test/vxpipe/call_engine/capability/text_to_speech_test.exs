@@ -36,7 +36,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
     assert duration >= 0
     assert metadata == %{provider: :deepgram}
     refute inspect(metadata) =~ sentinel
-    refute_receive {:telemetry_event, @provider_failure_event, _, _}
+    refute_receive {:telemetry_event, @provider_failure_event, _, %{capability: :tts}}
 
     TestTextToSpeechTransport.deliver_audio(transport, <<3, 0, 4, 0>>)
     refute_receive {:telemetry_event, @tts_first_audio_event, _, _}
@@ -227,7 +227,8 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
 
     assert_receive {:vxpipe_tts_unavailable, ^capability, :provider_failed}
 
-    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1}, metadata}
+    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1},
+                    %{capability: :tts} = metadata}
 
     assert metadata == %{capability: :tts, provider: :deepgram, category: :unavailable}
 
