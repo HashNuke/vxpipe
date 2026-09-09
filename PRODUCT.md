@@ -68,7 +68,7 @@ commitments have been established.
 
 - `docs/architecture.md` records the proposed protocol and runtime architecture,
   the implemented create-room slice, and its verification criteria.
-- `apps/vxpipe_console/assets/` provides the Console-owned React and Vite browser
+- `apps/vxpipe_console/assets/` provides the Console-owned React and esbuild browser
   playground using Pipecat's Voice UI Kit and Small WebRTC transport.
 - `apps/vxpipe_call_engine/` contains the OTP-native call-engine application.
 - `apps/vxpipe_gateway/` contains the client-facing HTTP and protocol boundary.

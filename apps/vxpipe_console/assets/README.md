@@ -1,20 +1,19 @@
 # Vxpipe Console assets
 
-This Console-owned Vite application is a frontend-only playground for exercising
+This Console-owned React application is a frontend-only playground for exercising
 Vxpipe gateway endpoints. It does not host a Pipecat server or duplicate call-engine
-behavior in the browser. The Console's Phoenix endpoint supervises Vite as its
-development asset watcher for hot reload; `mix assets.build` writes the release
-bundle to the Console application's ignored `priv/static` directory.
-The `vite-dev.mjs` entrypoint consumes the parent port's stdin and closes the
-Vite server once Phoenix exits. Use that entrypoint rather than invoking the Vite
-CLI directly so umbrella reloads do not orphan the configured listener.
+behavior in the browser. The Console's Phoenix endpoint supervises Phoenix's esbuild
+wrapper as its development watcher and uses LiveReload for browser refreshes;
+`mix assets.deploy` writes the minified release bundle to the Console application's
+ignored `priv/static/assets` directory. Phoenix serves the UI and mounted gateway
+from one listener.
 
 The initial screen uses `ConsoleTemplate` from
 `@pipecat-ai/voice-ui-kit`. It pulls in `@pipecat-ai/client-react` and the core
 client, and uses the Small WebRTC transport. The default offer URL is
 `/api/rtvi/offer`.
 
-The **Create room** control calls `POST /api/rooms` through the same-origin proxy
+The **Create room** control calls `POST /api/rooms` on the same Phoenix origin
 with a browser-generated room ID. The development gateway compiles its trusted
 sample definition into a fresh pinned plan, starts only the web caller and receiving
 agent, and returns the caller's five-minute, single-use Small WebRTC session in the
@@ -34,7 +33,7 @@ spoken through the configured Deepgram path.
 1. Put valid `GEMINI_API_KEY` and `DEEPGRAM_API_KEY` values in the repository-root
    `.env` file.
 2. From the repository root, run `bin/dev`.
-3. Open `https://<this-machine's-tailscale-fqdn>:5173/`, choose **Create room**,
+3. Open `https://<this-machine's-tailscale-fqdn>:4000/`, choose **Create room**,
    and then choose **Connect** in the Pipecat console.
 4. Type or say: `Use the get_current_time tool and tell me the current UTC time.`
 5. In the console event log, verify an `llm-function-call-in-progress` event for
@@ -85,31 +84,26 @@ control and no field that a client can use to select a provider.
 From the repository root:
 
 ```shell
-npm install --prefix apps/vxpipe_console/assets
+mix assets.setup
 bin/dev
 ```
 
-To run only the frontend:
+To check, test, or build the frontend without starting the endpoint:
 
 ```shell
-npm run dev --prefix apps/vxpipe_console/assets
+mix assets.test
+mix assets.build
 ```
 
-Copy `.env.example` to `.env.local` when an endpoint differs from the defaults.
-`VITE_VXPIPE_RTVI_OFFER_URL` is exposed to the browser. `VXPIPE_GATEWAY_URL` is
-used only by the Vite development proxy in HTTP mode. Never store credentials
-in either variable; browser clients should obtain scoped, short-lived connection
-details from the gateway.
+The browser uses only the scoped, short-lived connection details returned by the
+gateway. There is no build-time gateway URL or frontend environment file, and
+credentials must never be added to browser assets.
 
 In HTTP mode, set `APP_HOST` to a hostname or interface address to change the
-Vite bind host. Without `APP_HOST`, Vite binds to `0.0.0.0`. The proxy uses
-`http://127.0.0.1:4000` by default.
+Phoenix bind address. Without `APP_HOST`, Phoenix binds to `0.0.0.0` on port 4000.
 
 By default, `bin/dev` uses trusted HTTPS within the tailnet. Phoenix supervises
-Vite on loopback port 5174 and Goreman runs Caddy on HTTPS port 5173. Caddy routes
-`/api/*` to the shared Console endpoint, where the mounted gateway handles it,
-and sends other paths, including Vite's hot module replacement connection, to
-the frontend. The machine FQDN and Tailscale address are discovered automatically.
-Run `bin/dev --http` to omit Caddy for local troubleshooting. The HTTPS path may
-ask for sudo once so only Caddy can run as root and obtain the Tailscale certificate;
-the application processes stay unprivileged.
+its esbuild watcher and is the only web server, listening with a Tailscale certificate
+on HTTPS port 4000. It serves the assets and invokes the mounted gateway on that same
+origin. The machine FQDN and Tailscale address are discovered automatically.
+Run `bin/dev --http` to omit TLS for local troubleshooting.

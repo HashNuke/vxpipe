@@ -11,6 +11,7 @@ defmodule Vxpipe.Console.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
+      listeners: [Phoenix.CodeReloader],
       deps: deps()
     ]
   end
@@ -25,9 +26,11 @@ defmodule Vxpipe.Console.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.12"},
+      {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:lazy_html, "~> 0.1", only: :test},
       {:phoenix, "~> 1.8"},
       {:phoenix_live_dashboard, "~> 0.9.1"},
+      {:phoenix_live_reload, "~> 1.6", only: :dev},
       {:phoenix_live_view, "~> 1.1"},
       {:phoenix_pubsub, "~> 2.1"},
       {:telemetry, "~> 1.3"},

@@ -6,9 +6,7 @@ import CreateRoomPage, { type RoomConnection } from "./CreateRoomPage";
 const DEFAULT_OFFER_URL = "/api/rtvi/offer";
 
 function offerUrl(sessionEndpoint: string): string {
-  return (
-    import.meta.env.VITE_VXPIPE_RTVI_OFFER_URL?.trim() || sessionEndpoint || DEFAULT_OFFER_URL
-  );
+  return sessionEndpoint || DEFAULT_OFFER_URL;
 }
 
 export default function App() {

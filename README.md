@@ -8,8 +8,7 @@ The development stack requires Elixir, Node.js and npm, a Rust toolchain,
 `pkg-config`, OpenSSL development headers,
 [Goreman](https://github.com/mattn/goreman),
 [Watchman](https://facebook.github.io/watchman/) with its `watchman-make`
-Python client, [Caddy](https://caddyserver.com/), Tailscale, and `jq`. Vite 8
-requires Node.js 20.19.x or Node.js 22.12 or newer.
+Python client, Tailscale, and `jq`.
 
 Install the Watchman Python client as an isolated user-level tool:
 
@@ -17,10 +16,10 @@ Install the Watchman Python client as an isolated user-level tool:
 uv tool install pywatchman
 ```
 
-Install the Console frontend dependencies once:
+Install the Console frontend dependencies and Phoenix-managed esbuild binary once:
 
 ```shell
-npm install --prefix apps/vxpipe_console/assets
+mix assets.setup
 ```
 
 Then start the Vxpipe umbrella and Console frontend together:
@@ -66,32 +65,29 @@ restarts. Reusable call-engine code receives provider options through the OTP
 application environment and does not read these environment variables directly.
 
 Goreman runs the call engine, gateway, and Console applications in one BEAM
-instance. The Console's Phoenix endpoint supervises its Vite development watcher
-on loopback port 5174, and Goreman runs Caddy as the tailnet-only HTTPS ingress at
-`https://<machine-fqdn>:5173/`. The machine FQDN and Tailscale IPv4 address are
-discovered automatically. Caddy sends `/api/*`, `/healthz`, and `/diagnostics*`
-to the Console endpoint on loopback port 4000 and all other requests to Vite.
+instance. The Console's Phoenix endpoint supervises its esbuild development watcher,
+serves the React assets, and mounts the reusable gateway. It is the only HTTP server.
+By default Phoenix listens with TLS on the machine's Tailscale address at
+`https://<machine-fqdn>:4000/`. The machine FQDN and Tailscale IPv4 address are
+discovered automatically; WebRTC media continues to use its negotiated ICE path.
 
 Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
 Mix manifests, or runtime configuration ask Goreman to restart only the
 `vxpipe` process. A reload therefore starts a fresh BEAM instance and discards
 development rooms, sessions, and WebRTC connections. Test changes do not
 restart the development server. The Console asset watcher consumes its Phoenix
-parent's stdin and closes Vite before that BEAM process exits, so a reload does
-not leave the development port owned by an orphaned frontend process.
+parent's lifecycle, so a reload does not leave a second frontend listener or
+orphaned development server.
 
-Caddy automatically obtains a certificate for the `.ts.net` hostname from the
-local Tailscale daemon. MagicDNS and HTTPS certificates must be enabled for the
-tailnet. `bin/dev` renders a complete JSON configuration, obtains sudo once, and
-Goreman runs only the Caddy process as root. Mix and the Phoenix-supervised Vite
-watcher continue to run as the calling user. No `TS_PERMIT_CERT_UID` or manually
-exported Caddy variables are required. Caddy binds only to the discovered
-Tailscale address; it does not use Tailscale Funnel or make the development stack
-public.
+`bin/dev` asks the local Tailscale daemon for a certificate for the discovered
+`.ts.net` hostname and gives its ignored runtime paths to Phoenix/Bandit. MagicDNS
+and HTTPS certificates must be enabled for the tailnet. The complete stack runs as
+the calling user; no root process, reverse proxy, `TS_PERMIT_CERT_UID`, or manually
+exported TLS variables are required. Phoenix binds only to the discovered Tailscale
+address. This does not use Tailscale Funnel or make the development stack public.
 
-Use `--http` to omit Caddy and run Vite directly on port 5173 for local
-troubleshooting. In HTTP mode, set `APP_HOST` to bind the playground to a
-specific hostname or interface:
+Use `--http` to omit TLS for local troubleshooting. In HTTP mode, set `APP_HOST`
+to bind the Console endpoint to a specific hostname or interface:
 
 ```shell
 APP_HOST=vxpipe.example.ts.net bin/dev --http
@@ -102,15 +98,14 @@ optional Goreman process overrides. A static `APP_HOST` can be placed in `.env`
 for HTTP mode; HTTPS mode derives it from Tailscale automatically. Goreman loads
 `.env` into its child processes without exporting values into the parent shell.
 
-Without `APP_HOST`, HTTP mode binds Vite to `0.0.0.0`. Vite proxies `/api`
-requests to the gateway over loopback in HTTP mode; Caddy owns that routing in
-the default HTTPS mode. `VXPIPE_GATEWAY_URL` remains available to override the
-Vite proxy target.
+Without `APP_HOST`, HTTP mode binds the Console endpoint to `0.0.0.0`. The React
+page and mounted gateway are same-origin in both modes, so no frontend proxy or
+second asset port is involved.
 
 The gateway reads its listener and CORS options from the `vxpipe_gateway`
 application environment. In development, `APP_HOST` becomes the exact allowed
-HTTPS origin on port 5173. Environment variables are read from
-`config/runtime.exs`, while `config/dev.exs` only enables the listener.
+origin on port 4000, using the selected HTTPS or HTTP scheme. Environment variables
+are read from `config/runtime.exs`, while `config/dev.exs` only enables the listener.
 
 The playground's **Create room** action asks the gateway to compile its configured
 trusted sample definition into a fresh pinned plan. The engine starts only the web
@@ -151,22 +146,24 @@ Asking for the current UTC time exercises a model/tool/model loop inside the
 original supervised turn and produces standard RTVI function-call lifecycle
 events before the streamed spoken answer. Exact browser verification steps are
 in the [Console asset README](apps/vxpipe_console/assets/README.md#manual-tool-call-test).
-Set `VITE_VXPIPE_RTVI_OFFER_URL` in `apps/vxpipe_console/assets/.env.local` to
-test a different offer endpoint.
+The browser uses the session's server-issued offer endpoint; no browser build-time
+endpoint setting is required.
 
 The optional local Morse provider contract, direct-PCM test command, supported alphabet,
 signal settings, and transport limits are documented in the
 [call-engine README](apps/vxpipe_call_engine/README.md#local-morse-audio-providers).
 
-For release assets, build the unchanged Vite application into the Console's
+For release assets, build and minify the React application through Phoenix's
+esbuild integration into the Console's
 `priv/static` directory before assembling the release:
 
 ```shell
-mix assets.build
+mix assets.deploy
 cd apps/vxpipe_console
 MIX_ENV=prod mix release
 ```
 
-The generated bundle is ignored by Git and packaged with `vxpipe_console` by Mix.
-At runtime, the Console serves the SPA index with no-store caching and its hashed
-assets with immutable caching. A missing bundle returns 503 instead of a placeholder.
+The generated JS/CSS bundle is ignored by Git and packaged with `vxpipe_console`
+by Mix; the small SPA index is tracked. At runtime, the Console serves the index
+with no-store caching and revalidates the stable bundle names. Missing compiled
+JS or CSS returns 503 instead of a nonfunctional shell.

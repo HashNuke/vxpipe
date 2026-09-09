@@ -54,6 +54,17 @@ config :vxpipe_console, :diagnostics,
   enabled: false,
   max_pending_events: 1_000
 
+config :esbuild,
+  version: "0.25.4",
+  vxpipe_console: [
+    args:
+      ~w(src/main.tsx --bundle --format=esm --target=es2022 --outdir=../priv/static/assets --entry-names=app),
+    cd: Path.expand("../apps/vxpipe_console/assets", __DIR__),
+    env: %{
+      "NODE_PATH" => Path.expand("../apps/vxpipe_console/assets/node_modules", __DIR__)
+    }
+  ]
+
 # Sample configuration:
 #
 #     config :logger, :default_handler,

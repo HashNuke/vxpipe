@@ -10,6 +10,10 @@ defmodule Vxpipe.Console.Endpoint do
   socket "/diagnostics/live", Vxpipe.Console.DiagnosticsSocket,
     websocket: [connect_info: [session: @session_options]]
 
+  if code_reloading? do
+    socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket
+  end
+
   plug Vxpipe.Console.GatewayMount
 
   plug Plug.Static,
@@ -17,7 +21,12 @@ defmodule Vxpipe.Console.Endpoint do
     from: :vxpipe_console,
     gzip: false,
     only: ["assets"],
-    cache_control_for_etags: "public, max-age=31536000, immutable"
+    cache_control_for_etags: "public, max-age=0, must-revalidate"
+
+  if code_reloading? do
+    plug Phoenix.LiveReloader
+    plug Phoenix.CodeReloader
+  end
 
   plug Plug.Session, @session_options
   plug Vxpipe.Console.Router

@@ -64,15 +64,6 @@ mkdir -p "$fake_bin"
 ln -s "$(command -v bash)" "$fake_bin/bash"
 ln -s "$(command -v dirname)" "$fake_bin/dirname"
 make_executable goreman 'exit 0'
-make_executable npm 'exit 0'
-
-if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --http 2>&1)"; then
-  fail "expected bin/dev to reject a missing node executable"
-fi
-
-assert_output_contains "$output" "Error: bin/dev requires Node.js on PATH."
-
-make_executable node 'exit 0'
 
 if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --http 2>&1)"; then
   fail "expected bin/dev to reject a missing watchman executable"
@@ -100,8 +91,56 @@ assert_file_has_line "$goreman_args" "start"
 assert_file_has_line "$goreman_args" "vxpipe"
 assert_file_has_line "$goreman_args" "reloader"
 assert_file_lacks_line "$goreman_args" "assets"
+assert_file_lacks_line "$goreman_args" "caddy"
 
 assert_file_has_line "$repo_root/Procfile" "reloader: bin/watch-vxpipe"
+assert_file_lacks_line "$repo_root/Procfile" "caddy: bin/run-caddy"
+
+make_executable tailscale \
+  'case "${1:-}" in' \
+  '  status)' \
+  '    printf '\''%s\n'\'' '\''{"Self":{"DNSName":"console.example.ts.net.","TailscaleIPs":["100.64.0.12","fd7a:115c:a1e0::12"]}}'\''' \
+  '    ;;' \
+  '  cert)' \
+  '    printf '\''%s\n'\'' "$@" >"$VXPIPE_TEST_TAILSCALE_CERT_ARGS"' \
+  '    ;;' \
+  'esac'
+ln -s "$(command -v jq)" "$fake_bin/jq"
+ln -s "$(command -v mkdir)" "$fake_bin/mkdir"
+ln -s "$(command -v chmod)" "$fake_bin/chmod"
+make_executable goreman \
+  'printf "%s\n" "$@" >"$VXPIPE_TEST_GOREMAN_ARGS"' \
+  'if [[ -n "${VXPIPE_TEST_TLS_ENV:-}" ]]; then' \
+  '  printf "%s\n" "$APP_HOST" "$VXPIPE_DEV_TLS_CERTFILE" "$VXPIPE_DEV_TLS_KEYFILE" "$VXPIPE_TAILSCALE_IP" >"$VXPIPE_TEST_TLS_ENV"' \
+  'fi'
+
+https_args="$test_tmp/https-args"
+tailscale_cert_args="$test_tmp/tailscale-cert-args"
+tls_env="$test_tmp/tls-env"
+PATH="$fake_bin" \
+  VXPIPE_TEST_GOREMAN_ARGS="$https_args" \
+  VXPIPE_TEST_TAILSCALE_CERT_ARGS="$tailscale_cert_args" \
+  VXPIPE_TEST_TLS_ENV="$tls_env" \
+  "$repo_root/bin/dev"
+
+assert_file_has_line "$https_args" "start"
+assert_file_has_line "$https_args" "vxpipe"
+assert_file_has_line "$https_args" "reloader"
+assert_file_lacks_line "$https_args" "caddy"
+[[ "$(sed -n '1p' "$tls_env")" == "console.example.ts.net" ]] ||
+  fail "expected bin/dev to derive APP_HOST from Tailscale"
+[[ "$(sed -n '2p' "$tls_env")" == "$repo_root/tmp/tls/console.example.ts.net.crt" ]] ||
+  fail "expected bin/dev to configure Phoenix's TLS certificate path"
+[[ "$(sed -n '3p' "$tls_env")" == "$repo_root/tmp/tls/console.example.ts.net.key" ]] ||
+  fail "expected bin/dev to configure Phoenix's TLS key path"
+[[ "$(sed -n '4p' "$tls_env")" == "100.64.0.12" ]] ||
+  fail "expected bin/dev to bind Phoenix to the Tailscale IPv4 address"
+assert_file_has_line "$tailscale_cert_args" "cert"
+assert_file_has_line "$tailscale_cert_args" "--cert-file"
+assert_file_has_line "$tailscale_cert_args" "$repo_root/tmp/tls/console.example.ts.net.crt"
+assert_file_has_line "$tailscale_cert_args" "--key-file"
+assert_file_has_line "$tailscale_cert_args" "$repo_root/tmp/tls/console.example.ts.net.key"
+assert_file_has_line "$tailscale_cert_args" "console.example.ts.net"
 
 make_executable watchman-make \
   'printf "%s\n" "$PWD" >"$VXPIPE_TEST_WATCHMAN_CWD"' \

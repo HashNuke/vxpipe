@@ -6,6 +6,7 @@ defmodule Vxpipe.MixProject do
       apps_path: "apps",
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
+      listeners: [Phoenix.CodeReloader],
       deps: deps(),
       aliases: aliases()
     ]
@@ -22,7 +23,18 @@ defmodule Vxpipe.MixProject do
 
   defp aliases do
     [
-      "assets.build": ["do --app vxpipe_console cmd --cd assets npm run build"],
+      "assets.setup": [
+        "do --app vxpipe_console cmd --cd assets npm ci",
+        "do --app vxpipe_console esbuild.install --if-missing"
+      ],
+      "assets.build": [
+        "do --app vxpipe_console cmd --cd assets npm run check",
+        "do --app vxpipe_console esbuild vxpipe_console"
+      ],
+      "assets.deploy": [
+        "do --app vxpipe_console cmd --cd assets npm run check",
+        "do --app vxpipe_console esbuild vxpipe_console --minify"
+      ],
       "assets.test": ["do --app vxpipe_console cmd --cd assets npm test"]
     ]
   end

@@ -4,7 +4,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 processes=(vxpipe reloader)
 dev_mode="https"
-export VXPIPE_CONSOLE_ASSETS_PORT="5173"
 export VXPIPE_DEV_TLS="http"
 goreman_args=(
   -basedir "$repo_root"
@@ -15,16 +14,6 @@ goreman_args=(
 
 if ! command -v goreman >/dev/null 2>&1; then
   echo "Error: bin/dev requires goreman on PATH." >&2
-  exit 1
-fi
-
-if ! command -v npm >/dev/null 2>&1; then
-  echo "Error: bin/dev requires Node.js and npm on PATH." >&2
-  exit 1
-fi
-
-if ! command -v node >/dev/null 2>&1; then
-  echo "Error: bin/dev requires Node.js on PATH." >&2
   exit 1
 fi
 
@@ -49,11 +38,6 @@ case "${1:-}" in
 esac
 
 if [[ "$dev_mode" == "https" ]]; then
-  if ! command -v caddy >/dev/null 2>&1; then
-    echo "Error: bin/dev requires caddy on PATH. Use --http to run without TLS." >&2
-    exit 1
-  fi
-
   if ! command -v tailscale >/dev/null 2>&1; then
     echo "Error: bin/dev requires tailscale on PATH. Use --http to run without TLS." >&2
     exit 1
@@ -87,32 +71,23 @@ if [[ "$dev_mode" == "https" ]]; then
 
   export APP_HOST="$tailscale_host"
   export VXPIPE_TAILSCALE_IP="$tailscale_ip"
-  export VXPIPE_CONSOLE_ASSETS_PORT="5174"
-  export VXPIPE_DEV_TLS="caddy"
+  export VXPIPE_DEV_TLS="phoenix"
 
-  caddy_runtime_dir="$repo_root/tmp/caddy"
-  caddy_runtime_config="$caddy_runtime_dir/config.json"
-  mkdir -p "$caddy_runtime_dir"
+  tls_runtime_dir="$repo_root/tmp/tls"
+  export VXPIPE_DEV_TLS_CERTFILE="$tls_runtime_dir/$tailscale_host.crt"
+  export VXPIPE_DEV_TLS_KEYFILE="$tls_runtime_dir/$tailscale_host.key"
 
-  if ! caddy adapt \
-    --config "$repo_root/Caddyfile" \
-    --adapter caddyfile \
-    --pretty >"$caddy_runtime_config"; then
-    echo "Error: unable to render the Caddy runtime configuration." >&2
+  umask 077
+  mkdir -p "$tls_runtime_dir"
+  chmod 700 "$tls_runtime_dir"
+
+  if ! tailscale cert \
+    --cert-file "$VXPIPE_DEV_TLS_CERTFILE" \
+    --key-file "$VXPIPE_DEV_TLS_KEYFILE" \
+    "$tailscale_host"; then
+    echo "Error: unable to provision this machine's Tailscale certificate." >&2
     exit 1
   fi
-
-  if ! caddy validate --config "$caddy_runtime_config"; then
-    echo "Error: generated Caddy runtime configuration is invalid." >&2
-    exit 1
-  fi
-
-  if ! sudo -v; then
-    echo "Error: root access is required to run Caddy with Tailscale certificates." >&2
-    exit 1
-  fi
-
-  processes+=(caddy)
 fi
 
 if [[ $# -gt 0 ]]; then

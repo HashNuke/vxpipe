@@ -118,12 +118,6 @@ if config_env() == :dev do
       value -> value |> String.trim() |> String.trim_trailing(".")
     end
 
-  allowed_origins =
-    case app_host do
-      host when host in [nil, ""] -> []
-      host -> ["https://#{host}:5173"]
-    end
-
   port =
     "PORT"
     |> System.get_env("4000")
@@ -131,11 +125,40 @@ if config_env() == :dev do
 
   console_host = if app_host in [nil, ""], do: "localhost", else: app_host
 
-  console_url =
-    if System.get_env("VXPIPE_DEV_TLS") == "caddy" and app_host not in [nil, ""] do
-      [scheme: "https", host: app_host, port: 5173]
-    else
-      [scheme: "http", host: console_host, port: port]
+  phoenix_tls? = System.get_env("VXPIPE_DEV_TLS") == "phoenix"
+
+  console_scheme = if phoenix_tls?, do: "https", else: "http"
+
+  console_url = [scheme: console_scheme, host: console_host, port: port]
+
+  console_ip =
+    cond do
+      phoenix_tls? ->
+        case System.fetch_env("VXPIPE_TAILSCALE_IP") do
+          {:ok, address} ->
+            case :inet.parse_address(String.to_charlist(address)) do
+              {:ok, parsed_address} -> parsed_address
+              {:error, reason} -> raise "invalid VXPIPE_TAILSCALE_IP: #{inspect(reason)}"
+            end
+
+          :error ->
+            raise "VXPIPE_TAILSCALE_IP is required for Phoenix development TLS"
+        end
+
+      app_host in [nil, ""] ->
+        {0, 0, 0, 0}
+
+      true ->
+        case :inet.getaddr(String.to_charlist(app_host), :inet) do
+          {:ok, address} -> address
+          {:error, reason} -> raise "cannot resolve APP_HOST: #{:inet.format_error(reason)}"
+        end
+    end
+
+  allowed_origins =
+    case app_host do
+      host when host in [nil, ""] -> []
+      _host -> ["#{console_scheme}://#{console_host}:#{port}"]
     end
 
   gateway_settings = Application.fetch_env!(:vxpipe_gateway, Vxpipe.Gateway.Application)
@@ -169,9 +192,22 @@ if config_env() == :dev do
 
   config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
-  config :vxpipe_console, Vxpipe.Console.Endpoint,
-    http: [ip: {127, 0, 0, 1}, port: port],
-    url: console_url
+  console_listener =
+    if phoenix_tls? do
+      [
+        http: false,
+        https: [
+          ip: console_ip,
+          port: port,
+          certfile: System.fetch_env!("VXPIPE_DEV_TLS_CERTFILE"),
+          keyfile: System.fetch_env!("VXPIPE_DEV_TLS_KEYFILE")
+        ]
+      ]
+    else
+      [http: [ip: console_ip, port: port], https: false]
+    end
+
+  config :vxpipe_console, Vxpipe.Console.Endpoint, [url: console_url] ++ console_listener
 
   if fixture_scenario do
     diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)

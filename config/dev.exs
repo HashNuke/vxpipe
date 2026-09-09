@@ -139,13 +139,17 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
   ]
 
 config :vxpipe_console, Vxpipe.Console.Endpoint,
+  code_reloader: true,
   debug_errors: true,
   secret_key_base: String.duplicate("development-only-", 4),
   server: true,
   watchers: [
-    node: [
-      "vite-dev.mjs",
-      cd: Path.expand("../apps/vxpipe_console/assets", __DIR__)
+    esbuild: {Esbuild, :install_and_run, [:vxpipe_console, ~w(--sourcemap=inline --watch)]}
+  ],
+  live_reload: [
+    patterns: [
+      ~r"priv/static/assets/.*\.(css|js)$",
+      ~r"lib/vxpipe/console/.*\.(ex|heex)$"
     ]
   ]
 

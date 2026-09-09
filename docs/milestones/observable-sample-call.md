@@ -1,7 +1,7 @@
 # Observable sample call
 
 Status: complete as of 2026-09-09. The Phoenix Console owns the dashboard and
-React/Vite sample assets, while the reusable gateway remains independent of Phoenix
+React/esbuild sample assets, while the reusable gateway remains independent of Phoenix
 and UI dependencies.
 Prerequisites: [Definition-driven call](definition-driven-call.md).
 Sources: [Security and observability](../architecture.md#security-and-observability);
@@ -59,7 +59,7 @@ slow response or missing measurement. The existing voice console still works unc
   Keep `vxpipe_gateway` as reusable Plug/protocol handling and connection supervision,
   with no Phoenix or UI dependency. Console depends on gateway public interfaces;
   neither owns Repo. Preserve existing application names, process owners, RTVI/WebRTC
-  contracts, configured CORS and Caddy/Vite development behavior; do not regenerate
+  contracts, configured CORS and single-listener development TLS behavior; do not regenerate
   the gateway as a Phoenix application. This is additive: include the existing gateway
   as a dependency and build the shell in the new console app, not a gateway rewrite.
 - The console's Phoenix endpoint mounts/invokes the gateway Plug in-process. It owns
@@ -73,8 +73,9 @@ slow response or missing measurement. The existing voice console still works unc
   can use the gateway without the console. This is a planned verified integration
   contract, not a claim that the existing router is already a supported mounting interface.
 - Move sample asset ownership to the console during implementation without rewriting
-  React or replacing its client/UI dependencies with LiveView. Retain Vite for
-  development/build tooling and serve built assets from the console in a release.
+  React or replacing its client/UI dependencies with LiveView. Use Phoenix's esbuild
+  integration for development/build tooling and serve built assets from the console on
+  the same endpoint in development and a release.
   Select the operational dashboard implementation, with LiveDashboard a candidate;
   full VM/ETS inspection is platform-operator access, never tenant call inspection.
 
@@ -85,7 +86,7 @@ slow response or missing measurement. The existing voice console still works unc
 - [x] Add the approved console shell using the existing gateway dependency; verify
   explicit startup/mounting and adjust gateway configuration only where needed, without
   moving protocol ownership into Phoenix or rewriting the gateway.
-- [x] Move the unchanged React/Vite playground source under Console ownership, supervise
+- [x] Move the unchanged React playground source under Console ownership, supervise
   its development watcher through the Phoenix endpoint, and package its built assets in
   a Console release.
 - [x] Select/document the dashboard mechanism and trusted operator-access boundary;
@@ -401,6 +402,29 @@ room was deliberately excluded from the failure evidence after Deepgram closed i
 socket because no microphone packets arrived. Repeating the check in a fresh room before that
 provider timeout isolated the intended model-failure boundary. Final project gates and the
 Console asset/release checks are recorded in the implementation labnote.
+
+Implementation evidence, checkpoint 21 (2026-09-09): moved the unchanged React sample from
+the Vite runtime/build layer to Phoenix's `esbuild` Hex integration. The endpoint supervises
+the esbuild watcher and LiveReload, serves the tracked SPA shell plus revalidated `app.js` and
+`app.css`, and continues to invoke the gateway Plug in-process. Phoenix/Bandit also terminates
+development TLS directly on the Tailscale address at port 4000. Caddy and the former asset
+listener on port 5174 are both removed. The browser no longer receives a build-time gateway URL
+and instead uses the session's server-issued offer endpoint.
+
+The first shell test failed because `bin/dev` still rejected an environment without Node even
+though no Node server should be needed at runtime. The endpoint test also failed on the old
+hashed Vite shell, and a release-boundary test proved the controller initially served the shell
+when a compiled asset was absent. The green checks pass the `bin/dev` integration test, seven
+Console endpoint tests, three React interface tests, TypeScript checking and a real 3.4 MB JS /
+121.2 kB CSS esbuild bundle. The HTTPS stack exposes only Phoenix 4000, serves health, shell
+and both assets from that endpoint, and injects LiveReload without the Phoenix 1.8
+missing-listener warning after the Mix listener correction. Headless Chromium
+rendered the existing create-room UI at 1440x900 and 390x844 and reached the Pipecat console;
+an initial fresh WebRTC attempt reported both client and agent `READY`. Repeated headless ICE
+attempts later failed independently of HTTP asset delivery and are not represented as a second
+successful media check. Final umbrella gates pass with call engine `137 tests, 0 failures
+(1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console `20 tests, 0 failures`;
+the frontend has `3 tests, 0 failures`, and the dependency lock has no unused entries.
 
 ## Specification review
 

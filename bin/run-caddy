@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-caddy_runtime_config="$repo_root/tmp/caddy/config.json"
-
-exec sudo -n caddy run --config "$caddy_runtime_config"

@@ -11,17 +11,16 @@ configure `Vxpipe.Gateway.Application` with `http: [enabled: false, ...]` so the
 gateway runtime starts without its standalone Bandit listener. The Console
 endpoint is then the only listener.
 
-The existing React/Vite voice playground source lives under `assets/`. In
-development, the Phoenix endpoint supervises Vite as its asset watcher for hot
-reload; it is not a separate Goreman application. `mix assets.build` writes a
-release bundle into the application's ignored `priv/static` directory.
-The development entrypoint observes its Phoenix parent's stdin and closes Vite
-on EOF or termination, allowing Watchman to replace the BEAM without leaving the
-asset port occupied.
-The Console root serves that built index and `Plug.Static` serves only its hashed
-`/assets/*` files. If the bundle is absent, the root returns 503 rather than a
-placeholder shell. The separate bounded diagnostics surface remains available
-at `/diagnostics`. This application does not own Ecto or call protocol implementations.
+The React voice playground source lives under `assets/`. Phoenix's `esbuild` Hex
+integration owns development watching and release bundling; Phoenix LiveReload
+refreshes the browser after watched changes. There is no separate frontend HTTP
+server or Goreman application. `mix assets.build` writes `app.js` and `app.css`
+into the application's ignored `priv/static/assets` directory.
+The Console root serves the tracked SPA index and `Plug.Static` serves its
+revalidated `/assets/*` files. If either compiled bundle is absent, the root returns
+503 rather than a nonfunctional shell. The separate bounded diagnostics surface
+remains available at `/diagnostics`. This application does not own Ecto or call
+protocol implementations.
 
 No route in this asset path adds authentication. API keys remain scoped to
 call-management endpoints and join tokens to call admission; Console and
@@ -32,8 +31,8 @@ LiveDashboard pages receive no additional login layer in this milestone.
 The Console uses Phoenix LiveDashboard for platform VM/runtime inspection and
 reserves `/diagnostics` for Vxpipe's bounded operational measurements. Diagnostics
 are disabled by default and may be enabled with the namespaced Console application
-setting. Repository development enables the namespace, and Caddy routes it to the
-same Console endpoint as the gateway API while the voice sample remains on Vite.
+setting. Repository development enables the namespace on the same Console endpoint
+as the gateway API and React sample.
 
 `Vxpipe.Console.TelemetryReporter` subscribes to the implemented gateway and call-engine
 events. It retains only bounded aggregates and the latest runtime sample. Telemetry

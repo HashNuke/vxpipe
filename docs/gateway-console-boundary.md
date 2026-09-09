@@ -67,11 +67,11 @@ storage-subscriber boundary; this split changes no admission or durability contr
 ## Presentation and delivery
 
 The console owns browser presentation, not a second implementation of the call
-API. Keep the sample frontend in React with its existing components and Vite build
-workflow; serving its built assets from the console does not require a LiveView
-rewrite. The eventual asset relocation, development watcher/proxy wiring and
-production static delivery must be verified together. Keep diagnostics on a
-separate page from the responsive voice console.
+API. Keep the sample frontend in React with its existing components and use
+Phoenix's esbuild integration for development and release bundles; this does not
+require a LiveView rewrite. Phoenix serves those assets on the same endpoint as
+the mounted gateway, so Console has no second frontend listener or development
+proxy. Keep diagnostics on a separate page from the responsive voice console.
 
 Phoenix is the selected console framework. LiveDashboard owns platform VM inspection,
 and a separate Vxpipe page owns bounded call-path measurements. Diagnostics remain
@@ -90,6 +90,10 @@ framework-independent telemetry reporter.
   console namespace; use `vxpipe_console` / `Vxpipe.Console` instead.
 - **Move Ecto into the console:** confuses browser presentation with shared
   persistence ownership and breaks the existing database-neutral workflow boundary.
+- **Keep a separate Vite development server:** adds a second HTTP listener, proxy
+  configuration and shutdown lifecycle even though Phoenix's esbuild watcher can
+  build the existing React UI for the shared endpoint. Vitest may remain a test-only
+  tool without making Vite the application asset pipeline.
 
 ## Delivery and verification evidence
 
@@ -129,12 +133,20 @@ Implementation checkpoint 3 selected Phoenix LiveDashboard for platform VM/runti
 and a separate Vxpipe page for call-path measurements. These dependencies live only in Console.
 The subsequent access correction keeps diagnostics disabled by default but adds no Console-page
 authentication when enabled. The project-owned Plug now checks only the enabled setting, and
-Caddy routes `/diagnostics*` to the shared Console endpoint for repository development. API keys
+Repository development exposes `/diagnostics*` on the shared Console endpoint. API keys
 and join tokens retain only their API/admission meanings. Rendered desktop/mobile checks verify
 the LiveDashboard surface. The React/Vite playground source is now Console-owned:
 the Phoenix endpoint supervises its Vite watcher in development, while release
 builds place the bundle in Console `priv/static` for direct serving. Goreman does
 not manage a separate frontend application.
+
+Implementation checkpoint 5 supersedes that Vite build/runtime detail without changing
+the React UI or ownership boundary. Console now uses Phoenix's `esbuild` Hex integration,
+supervises its watcher with Phoenix LiveReload, and serves stable revalidated JS/CSS from
+the same listener that mounts the gateway. Phoenix/Bandit terminates development TLS directly
+on port 4000; Caddy, port 5174, the Vite proxy and the custom watcher lifecycle code are gone.
+The release shell remains no-store, and a missing compiled JS or CSS file fails explicitly
+instead of serving a broken page.
 
 Implementation checkpoint 4 verified both reusable delivery modes at their owning
 boundaries. The gateway-only mount suite now creates a room and issues a bound participant

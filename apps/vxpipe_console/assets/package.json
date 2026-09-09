@@ -4,9 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit && vite build",
-    "dev": "node vite-dev.mjs",
-    "test": "node --test vite-dev-lifecycle.node.mjs && vitest run"
+    "check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@pipecat-ai/client-js": "^1.13.0",
@@ -22,10 +21,8 @@
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^27.4.0",
     "typescript": "~5.9.3",
-    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   }
 }

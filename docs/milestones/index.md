@@ -140,9 +140,10 @@ and, when introduced by its owning prerequisite, Calls public APIs. Its Phoenix 
 mounts/invokes the gateway Plug in-process on one shared HTTP listener/port, disabling
 only the gateway standalone listener while retaining session/connection supervision.
 No internal HTTP proxy hop or second gateway listener is needed; the standalone listener
-is an alternative embedding mode. React/Vite remains the sample implementation under
-Console asset ownership; Phoenix supervises its development watcher, and moving asset
-ownership does not mean rewriting the sample in LiveView.
+is an alternative embedding mode. React remains the sample implementation under
+Console asset ownership; Phoenix supervises its esbuild watcher and serves the generated
+assets on that shared listener. Moving asset ownership does not mean rewriting the sample
+in LiveView or operating a separate frontend server.
 Engine/gateway instrumentation is independent of its reporter/UI, and inspection uses
 authorized live projections and Calls history rather than console/gateway Repo access.
 LiveDashboard remains the selected VM dashboard; this slice adds no Console-page authentication,

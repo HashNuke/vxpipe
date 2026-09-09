@@ -14,7 +14,7 @@ The same approved call flow runs embedded in an Elixir host and in a built Docke
 - OTP namespaced application settings are canonical at application boundaries; reusable supervisors accept explicit options for embedded hosts. No runtime Mix.env branching or dependency config/<env>.exs assumptions. Read deployment environment only in config/runtime.exs and normalize once.
 - Provide an image/release runner accepting an explicit --config path for one versioned JSON file. Inline definitions and pinned resource references normalize through the same typed compiler/settings as embedded use. Closed registries only; reject unknown versions/unsupported enabled features rather than loading arbitrary modules/atoms.
 - Document API-key/provider/MCP secret provisioning through runtime environment/mounted secret references/private configuration boundaries. Public definitions/plans, errors, logs and image layers never contain credentials; no env-file contents committed. Distinguish provider credentials from gateway-issued hash-only API keys and one-time bootstrap output.
-- An embedded engine with inline trusted configuration can run without PostgreSQL; full durable tenant preparation/admission still requires configured persistence. Runtime archive is async, not a database-free admission guarantee. Reusable host app has no dependency on gateway, sample frontend, Caddy or Tailscale.
+- An embedded engine with inline trusted configuration can run without PostgreSQL; full durable tenant preparation/admission still requires configured persistence. Runtime archive is async, not a database-free admission guarantee. Reusable host app has no dependency on gateway, sample frontend or development Tailscale ingress.
 - A host may additionally embed `vxpipe_gateway` without Phoenix or `vxpipe_console`.
   Document its explicit supervision/configuration and mountable Plug/protocol interface,
   using either the host listener or the optional gateway standalone listener. Do not
@@ -29,7 +29,7 @@ The same approved call flow runs embedded in an Elixir host and in a built Docke
   second gateway listener is part of this topology. Engine/gateway-only hosts do not
   inherit its Phoenix or UI dependencies. Operator diagnostic access remains explicit, not enabled merely
   because the release includes the console. Repo/migrations stay in persistence.
-- Configure HTTP binding/origins, database/object storage and provider-reachable telephony ingress explicitly. Development Caddy/tailnet ingress is not production routing. HTTPS reverse proxy covers signaling/HTTP; WebRTC requires separately configured ICE/media connectivity, not proxying RTP through Caddy.
+- Configure HTTP binding/origins, database/object storage and provider-reachable telephony ingress explicitly. Development Phoenix/tailnet ingress is not production routing. HTTPS covers signaling/HTTP; WebRTC requires separately configured ICE/media connectivity rather than carrying RTP through the HTTP listener.
 - Readiness means required configured engine/gateway/admission services are ready, not merely BEAM alive; keep liveness distinct from an async archive sink outage that must not terminate live calls. Define/test graceful shutdown: stop new admission, bounded session/worker drain, honest incomplete artifacts/history on timeout, deterministic exit; no restart/replay of ended calls.
 - Run migrations/bootstrap through documented explicit commands and preserve child dependency ownership/lockfiles. Do not ship dev watchers, sample development servers, local models or credentials inside the production release.
 
@@ -58,7 +58,7 @@ The same approved call flow runs embedded in an Elixir host and in a built Docke
 - [ ] Embedded hosts can consume engine telemetry without dashboard dependencies.
   Container diagnostic/inspection routes are disabled unless explicitly configured and
   authorized; browser caller tokens never grant operator or cross-tenant access. Missing
-  collectors cannot fail established calls, and the image contains no Vite dev server.
+  collectors cannot fail established calls, and the image contains no frontend dev server.
 - [ ] Readiness/liveness and post-admission archive outage differ; storage failure does not kill established calls.
 - [ ] Shutdown rejects new calls, drains permitted work within documented bounds and reports incomplete outcomes without a lossless promise or automatic call replay.
 - [ ] Complete final cross-slice regression using definition, private variables, remote tool, human transfer, permitted recording, usage/publication and retention.
@@ -72,7 +72,7 @@ The same approved call flow runs embedded in an Elixir host and in a built Docke
 5. Verify microphone/HTTPS and WebRTC media connectivity, not only a successful HTTP page load.
 6. Run the gateway-only host fixture without Phoenix/console, first mounted and then with
    its standalone listener. Compare joining with the console-enabled container and verify
-   the container serves the built sample without a Vite development server.
+   the container serves the built sample without a frontend development server.
 
 ## Scope boundaries
 

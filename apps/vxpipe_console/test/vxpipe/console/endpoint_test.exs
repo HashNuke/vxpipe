@@ -11,11 +11,16 @@ defmodule Vxpipe.Console.EndpointTest do
   @endpoint Vxpipe.Console.Endpoint
 
   test "serves the configured sample index and mounted gateway routes through one endpoint" do
-    configure_sample_index(Path.expand("../../../assets/index.html", __DIR__))
+    configure_sample_index(Path.expand("../../../priv/static/index.html", __DIR__))
 
     console_conn = get(build_conn(), "/")
 
-    assert html_response(console_conn, 200) =~ "Vxpipe RTVI Playground"
+    html = html_response(console_conn, 200)
+
+    assert html =~ "Vxpipe RTVI Playground"
+    assert html =~ ~s(src="/assets/app.js")
+    assert html =~ ~s(href="/assets/app.css")
+    refute html =~ "/src/main.tsx"
     assert Plug.Conn.get_resp_header(console_conn, "cache-control") == ["no-store"]
 
     gateway_conn = get(build_conn(), "/healthz")
@@ -28,6 +33,17 @@ defmodule Vxpipe.Console.EndpointTest do
 
   test "reports unavailable sample assets without hiding the release error" do
     configure_sample_index(Path.join(System.tmp_dir!(), "missing-vxpipe-sample-index.html"))
+
+    conn = get(build_conn(), "/")
+
+    assert response(conn, 503) == "Vxpipe Console assets are not built"
+  end
+
+  test "reports unavailable sample assets when a compiled bundle is missing" do
+    configure_sample_assets(
+      Path.expand("../../../priv/static/index.html", __DIR__),
+      [Path.join(System.tmp_dir!(), "missing-vxpipe-sample-app.js")]
+    )
 
     conn = get(build_conn(), "/")
 
@@ -90,6 +106,10 @@ defmodule Vxpipe.Console.EndpointTest do
   end
 
   defp configure_sample_index(index_path) do
+    configure_sample_assets(index_path, [])
+  end
+
+  defp configure_sample_assets(index_path, required_paths) do
     original = Application.get_env(:vxpipe_console, :sample_assets, :not_configured)
 
     on_exit(fn ->
@@ -99,6 +119,9 @@ defmodule Vxpipe.Console.EndpointTest do
       end
     end)
 
-    Application.put_env(:vxpipe_console, :sample_assets, index_path: index_path)
+    Application.put_env(:vxpipe_console, :sample_assets,
+      index_path: index_path,
+      required_paths: required_paths
+    )
   end
 end

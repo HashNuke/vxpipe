@@ -1604,7 +1604,7 @@ by default and explicitly enabled through Console application settings. When ena
 this slice adds no page authentication; deployment exposure is an application concern.
 API keys authenticate call-management endpoints and caller join tokens authorize call
 admission; neither credential is a Console or LiveDashboard login. Repository development
-routes the diagnostics namespace through Caddy to the shared Console endpoint. The Console
+serves the diagnostics namespace from the shared Console endpoint. The Console
 shell and LiveDashboard route are
 implemented. The Vxpipe LiveView measurement page reads the bounded reporter with a short
 timeout and presents only its latest aggregate snapshot. It distinguishes current, stale,
@@ -1664,30 +1664,28 @@ secret-safe, and exportable without a local interactive login.
 
 ### Development ingress
 
-The repository development stack uses Caddy as its single tailnet HTTPS ingress.
-Caddy binds to the discovered Tailscale address, routes `/api/*`, `/healthz`, and
-`/diagnostics*` to the shared Console endpoint over loopback, and routes remaining
-paths to the Console-owned Vite assets application over loopback. This supplies one
-stable secure browser origin and leaves room for additional development
-applications without making Caddy part of the product protocol model.
+The repository development stack uses the Console Phoenix endpoint as its single tailnet
+HTTPS listener. Phoenix/Bandit binds to the discovered Tailscale address on port 4000,
+serves the Console-owned React assets, and invokes the gateway Plug in-process. This
+supplies one stable secure browser origin without a reverse-proxy hop or second web server.
 
-The Console Phoenix endpoint supervises Vite as a development asset watcher. Goreman
+The Console Phoenix endpoint supervises Phoenix's esbuild wrapper as a development
+asset watcher and uses Phoenix LiveReload for browser refreshes. Goreman
 does not model the playground as a separate application; it starts the shared BEAM
-runtime, reload helper and optional Caddy ingress. Vite remains the React development
-and build tool and is not replaced by LiveView. The watcher entrypoint consumes the
-Phoenix parent port's stdin and closes Vite when that input ends; a Watchman BEAM restart
-therefore releases the asset listener before its replacement starts.
+runtime and reload helper. React remains the sample UI and is
+not replaced by LiveView. There is no separate frontend HTTP listener: esbuild writes
+the watched bundle into Console `priv/static`, and Phoenix serves it on the same endpoint
+as API, health and diagnostics routes.
 
-`bin/dev` resolves the tailnet hostname and address, renders a complete Caddy
-JSON configuration as the invoking user, and then asks Goreman to run only the
-Caddy process through sudo. The root process does not inherit application
-secrets or depend on manually preserved environment variables. This lets Caddy
-retrieve `.ts.net` certificates from tailscaled without configuring
-`TS_PERMIT_CERT_UID`; Mix and Vite remain unprivileged.
+`bin/dev` resolves the tailnet hostname and address, asks Tailscale for the current
+`.ts.net` certificate in the ignored runtime directory, and passes the certificate,
+key, address and public URL into Phoenix runtime configuration. The development stack
+runs as the invoking user and does not require a root process, `TS_PERMIT_CERT_UID`,
+or manually preserved TLS environment variables.
 
-Caddy terminates only HTTP and WebSocket traffic. WebRTC media and RTVI data
-channels still establish their own ICE-selected path and are not proxied through
-Caddy. Production ingress remains deployment-specific.
+Phoenix terminates HTTP and WebSocket TLS. WebRTC media and RTVI data channels still
+establish their own ICE-selected path and are not carried through the HTTP listener.
+Production ingress remains deployment-specific.
 
 ## Deterministic testing facilities
 
