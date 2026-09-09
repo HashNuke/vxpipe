@@ -105,6 +105,22 @@ The focused red run failed because both provider modules were absent. Their gree
 Warnings-as-errors compile and the complete owning child suite pass with `128 tests, 0 failures
 (1 excluded)`. No registry/default or capability process has changed yet.
 
+Implementation evidence, checkpoint 5 (2026-09-09): added linked, in-process STT and TTS
+transports behind the existing speech capability GenServers. STT incrementally decodes every
+accepted PCM frame and sends ordered connected, turn-start, transcript-update, turn-end and error
+messages through the provider adapter. TTS keeps one resumable encoder and at most one
+acknowledged output frame in flight. It defaults to real-time 20 ms pacing and generation-tags
+scheduled work so interruption discards stale emissions while retaining the existing output-sink
+acknowledgement, finish and playback lifecycle.
+
+All three focused tests failed first because the transport modules were absent. The green run
+passes `3 tests, 0 failures`: arbitrarily odd PCM chunks produce one attributed `SOS` turn;
+`ET` drains in more than ten bounded 20 ms frames and the collected output independently decodes;
+and interrupting a paced long response starts its replacement without a later stale frame. A
+warnings-as-errors compile and the complete owning child suite pass with `131 tests, 0 failures
+(1 excluded)`. Closed-registry selection, a definition-driven room proof and explicit long/error
+boundary tests remain pending.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08. Approved the deterministic

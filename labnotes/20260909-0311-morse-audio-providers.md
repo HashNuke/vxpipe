@@ -94,3 +94,25 @@ Deepgram continues returning its URL/header map unchanged.
 The focused provider suite passes `2 tests, 0 failures`; warnings-as-errors compile and the full
 owning child suite pass with `128 tests, 0 failures (1 excluded)`. Transport processes, runtime
 selection and default settings remain untouched.
+
+## Checkpoint 5: in-process speech transports
+
+The next red tests started the real `SpeechToText` and `TextToSpeech` capability GenServers with
+local transport modules that did not yet exist. They require PCM split repeatedly on odd byte
+boundaries to become one attributed `SOS` turn, a short `ET` reply to drain as more than ten
+bounded audio frames through the ordinary output sink, and interruption of a paced long reply to
+discard its remaining encoder state before a replacement begins.
+
+`MorseCodeSTT.Transport` owns one incremental decoder and emits only the provider adapter's
+ordinary connected/start/update/end/error control payloads. `MorseCodeTTS.Transport` owns one
+pending text request, one resumable encoder and at most one unacknowledged output frame. The
+default 20 ms chunks are scheduled at real time; a private zero-delay option is used only to keep
+deterministic tests fast. Scheduled emissions carry a generation, so interruption invalidates any
+already queued message and clears the old encoder without bypassing the existing capability's
+playback interruption result.
+
+The focused suite passes `3 tests, 0 failures`. The collected TTS frames independently decode to
+`ET`, and the paced interruption test observes the replacement frame followed by no stale old
+frame. `mix compile --warnings-as-errors && mix test` in `apps/vxpipe_call_engine` passes `131
+tests, 0 failures (1 excluded)`. Registry/default configuration remains unchanged; definition
+selection and whole-room verification are the next checkpoint.
