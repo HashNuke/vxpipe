@@ -5,9 +5,9 @@ defmodule Vxpipe.CallEngine.CallVariables do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.CallVariables.{ArchivalPort, State, UpdateSnapshot}
+  alias Vxpipe.CallEngine.CallVariables.{ArchivalPort, BaselineSnapshot, State, UpdateSnapshot}
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
-  alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.{Error, Id}
 
   @call_timeout 5_000
   @max_update_bytes 16_384
@@ -57,16 +57,26 @@ defmodule Vxpipe.CallEngine.CallVariables do
         {participant.participant_id, participant.variable_permissions.grants}
       end)
 
-    {:ok,
-     %State{
-       tenant_id: plan.tenant_id,
-       room_id: plan.room_id,
-       incarnation_id: incarnation_id,
-       sections: plan.call_variables.sections,
-       grants: grants,
-       archival_port: ArchivalPort.new(Keyword.get(options, :archival_subscriber)),
-       global_revision: 0
-     }}
+    state =
+      %State{
+        tenant_id: plan.tenant_id,
+        call_id: plan.call_id,
+        room_id: plan.room_id,
+        incarnation_id: incarnation_id,
+        sections: plan.call_variables.sections,
+        grants: grants,
+        archival_port: ArchivalPort.new(Keyword.get(options, :archive_handoff)),
+        source_policy: Keyword.get(options, :archive_source_policy, %{"revision" => 0}),
+        global_revision: 0
+      }
+
+    {:ok, state, {:continue, :archive_baseline}}
+  end
+
+  @impl true
+  def handle_continue(:archive_baseline, state) do
+    :ok = ArchivalPort.handoff(state.archival_port, baseline_snapshot(state))
+    {:noreply, state}
   end
 
   @impl true
@@ -252,14 +262,11 @@ defmodule Vxpipe.CallEngine.CallVariables do
   end
 
   defp update_snapshot(command, state, section) do
-    sections =
-      Map.new(state.sections, fn {name, current} ->
-        {name, %{revision: current.revision, value: current.value}}
-      end)
-
     %UpdateSnapshot{
+      id: Id.generate(:variable_snapshot),
       command_id: command.id,
       tenant_id: state.tenant_id,
+      call_id: state.call_id,
       room_id: state.room_id,
       incarnation_id: state.incarnation_id,
       participant_id: command.participant_id,
@@ -270,9 +277,30 @@ defmodule Vxpipe.CallEngine.CallVariables do
       section: section.name,
       section_revision: section.revision,
       global_revision: state.global_revision,
-      sections: sections,
+      sections: snapshot_sections(state.sections),
+      source_policy: state.source_policy,
       occurred_at: DateTime.utc_now()
     }
+  end
+
+  defp baseline_snapshot(state) do
+    %BaselineSnapshot{
+      id: Id.generate(:variable_snapshot),
+      tenant_id: state.tenant_id,
+      call_id: state.call_id,
+      room_id: state.room_id,
+      incarnation_id: state.incarnation_id,
+      global_revision: 0,
+      sections: snapshot_sections(state.sections),
+      source_policy: state.source_policy,
+      occurred_at: DateTime.utc_now()
+    }
+  end
+
+  defp snapshot_sections(sections) do
+    Map.new(sections, fn {name, current} ->
+      {name, %{revision: current.revision, value: current.value}}
+    end)
   end
 
   defp via(options) do

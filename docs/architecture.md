@@ -1316,9 +1316,34 @@ calls-authorized read workflow. Persistence stores each full snapshot and condit
 advances `calls.latest_variables_snapshot_id` in one transaction. An identical delivery is
 idempotent; a different snapshot claiming the same call/incarnation/global revision fails;
 older valid history and a late revision-zero baseline persist without moving the pointer
-backward. Call, room, and established incarnation checks prevent cross-call linkage. The
-bounded asynchronous subscriber, source handoff, and broader event archive are subsequent
-checkpoints; until those land, no room process calls this SQL adapter.
+backward. Call, room, and established incarnation checks prevent cross-call linkage. That
+database checkpoint deliberately leaves room processes unwired; the following checkpoint
+adds the bounded source handoff, while the broader event archive remains subsequent work.
+
+The second archive checkpoint supplies that live boundary for Call Variables. An
+engine-owned global archive supervisor starts one temporary subscriber for each durable room;
+the subscriber is not a child of the room incarnation, monitors that incarnation, and may
+drain after it exits. Producers reserve capacity through shared atomics and use a non-suspending
+message offer. Capacity includes the active writer plus queued facts. At capacity, the newest
+fact is rejected at the source and the local variable update remains accepted; no unbounded
+subscriber mailbox is used. A writer task performs injected adapter work sequentially outside
+the room and retries a retained fact without reserving it twice.
+
+The initial database-backed admission configuration uses 256 pending facts, a 250 ms retry
+delay, and a five-second post-room drain window. Expiry terminates the outstanding writer,
+abandons retained facts, and increments discard/incomplete evidence. Overflow, unavailable
+offers, retries, pending work, and terminal/expiry discards remain distinct counters. A crashed
+subscriber is temporary and is not silently restarted behind an already-issued handoff; later
+offers report unavailable. These counters are currently available on the internal handoff and
+become durable/read-projected incomplete indicators in a later checkpoint.
+
+`CallVariables` emits an exact revision-zero baseline before it handles commands, with stable
+call/room/incarnation identity and no invented participant, turn, or tool attribution. Each
+accepted update similarly hands off the exact post-update snapshot with its originating
+command/participant/activation/correlation/tool IDs. `EctoStorage` maps those engine facts to
+the Calls-owned archive workflow. Runtime archival is enabled only for the durable,
+database-backed admission path; the legacy trusted room sample does not create archive work
+for a call record that does not exist.
 
 Subscribers may persist directly or publish to a future queue, such as SQS;
 no queue dependency is selected. Database/storage failures must not themselves

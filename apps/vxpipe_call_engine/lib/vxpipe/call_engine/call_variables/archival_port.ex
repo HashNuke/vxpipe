@@ -1,22 +1,27 @@
 defmodule Vxpipe.CallEngine.CallVariables.ArchivalPort do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallVariables.UpdateSnapshot
+  alias Vxpipe.CallEngine.Archive.Handoff
+  alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
 
-  @derive {Inspect, except: [:subscriber]}
-  defstruct [:subscriber]
+  @derive {Inspect, except: [:handoff]}
+  defstruct [:handoff]
 
-  @type t :: %__MODULE__{subscriber: nil | pid()}
+  @type snapshot :: BaselineSnapshot.t() | UpdateSnapshot.t()
+  @type t :: %__MODULE__{handoff: nil | Handoff.t()}
 
-  @spec new(nil | pid()) :: t()
-  def new(subscriber) when is_pid(subscriber), do: %__MODULE__{subscriber: subscriber}
-  def new(nil), do: %__MODULE__{subscriber: nil}
+  @spec new(nil | Handoff.t()) :: t()
+  def new(%Handoff{} = handoff), do: %__MODULE__{handoff: handoff}
+  def new(nil), do: %__MODULE__{handoff: nil}
 
-  @spec handoff(t(), UpdateSnapshot.t()) :: :ok
-  def handoff(%__MODULE__{subscriber: nil}, %UpdateSnapshot{}), do: :ok
+  @spec handoff(t(), snapshot()) :: :ok
+  def handoff(%__MODULE__{handoff: nil}, snapshot)
+      when is_struct(snapshot, BaselineSnapshot) or is_struct(snapshot, UpdateSnapshot),
+      do: :ok
 
-  def handoff(%__MODULE__{subscriber: subscriber}, %UpdateSnapshot{} = snapshot) do
-    send(subscriber, {:vxpipe_call_variables_snapshot, snapshot})
+  def handoff(%__MODULE__{handoff: handoff}, snapshot)
+      when is_struct(snapshot, BaselineSnapshot) or is_struct(snapshot, UpdateSnapshot) do
+    _accepted_or_dropped = Handoff.offer(handoff, snapshot)
     :ok
   end
 end

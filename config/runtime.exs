@@ -208,7 +208,19 @@ if config_env() == :dev do
 
   gateway_http =
     if database_url do
-      Keyword.put(gateway_http, :call_admission, enabled: true)
+      archive = [
+        enabled: true,
+        writer: {Vxpipe.Persistence.EctoStorage, []},
+        maximum_pending_facts: 256,
+        retry_delay_ms: 250,
+        drain_timeout_ms: 5_000,
+        source_policy: %{"revision" => 0}
+      ]
+
+      Keyword.put(gateway_http, :call_admission,
+        enabled: true,
+        backend: {Vxpipe.Gateway.CallAdmission, [archive: archive]}
+      )
     else
       gateway_http
     end

@@ -59,8 +59,8 @@ defmodule Vxpipe.Gateway.CallAdmission do
     end
   end
 
-  def start_call(_options, claim) do
-    case CallEngine.start_call(claim.call.plan) do
+  def start_call(options, claim) do
+    case CallEngine.start_call(claim.call.plan, archive: archive_options(options)) do
       {:ok, room} ->
         case CallEngine.participant_snapshot(
                claim.call.tenant_key,
@@ -89,4 +89,6 @@ defmodule Vxpipe.Gateway.CallAdmission do
   defp ttl_options(options, ttl_seconds) do
     Keyword.put(options, :join_token_ttl_seconds, ttl_seconds)
   end
+
+  defp archive_options(options), do: Keyword.get(options, :archive, enabled: false)
 end

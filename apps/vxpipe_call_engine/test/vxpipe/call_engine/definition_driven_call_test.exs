@@ -5,6 +5,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   alias Vxpipe.CallEngine
 
+  alias Vxpipe.CallEngine.Archive.Handoff
+  alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
+
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
     CallDefinition,
@@ -15,7 +18,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     PlanStartup
   }
 
-  alias Vxpipe.CallEngine.CallVariables.UpdateSnapshot
+  alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
 
   alias Vxpipe.CallEngine.Command.{
@@ -42,6 +45,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
+    TestArchiveWriter,
     TestFailingTextToSpeechTransport,
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
@@ -133,8 +137,14 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:ok, room} =
-             CallEngine.start_call(plan, call_variables_archival_subscriber: self())
+    handoff = open_archive()
+    archive_monitor = Process.monitor(handoff.subscriber)
+
+    assert {:ok, room} = CallEngine.start_call(plan, archive_handoff: handoff)
+
+    assert_receive {:test_archive_write, baseline_writer, %BaselineSnapshot{call_id: call_id}}
+    assert call_id == plan.call_id
+    send(baseline_writer, {:test_archive_write_result, :ok})
 
     assert variables = CallVariables.whereis(room.incarnation_id)
 
@@ -182,7 +192,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert {:ok, %{"revision" => 1}} = CallVariables.update(variables, update)
 
-    assert_receive {:vxpipe_call_variables_snapshot,
+    assert_receive {:test_archive_write, update_writer,
                     %UpdateSnapshot{
                       room_id: ^room_id,
                       section: "intake",
@@ -207,6 +217,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert {:ok, %{"sections" => %{"order" => %{"value" => %{"id" => "order-1"}}}}} =
              CallVariables.read(variables, command)
+
+    send(update_writer, {:test_archive_write_result, :ok})
+    assert eventually(fn -> Handoff.stats(handoff).pending == 0 end)
+
+    Process.exit(authority, :shutdown)
+    assert_receive {:DOWN, ^archive_monitor, :process, _subscriber, :normal}
   end
 
   test "executes generated variable actions through the definition-driven Jido loop" do
@@ -214,6 +230,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     plan = compile_variables_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    archive = archive_options()
 
     script =
       expect_react do
@@ -236,8 +253,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert {:ok, room} =
              CallEngine.start_call(plan,
                agent_request_options: Jido.AI.Test.react_opts(script),
-               call_variables_archival_subscriber: self()
+               archive: Keyword.put(archive, :enabled, true)
              )
+
+    assert_receive {:test_archive_write, baseline_writer, %BaselineSnapshot{}}
+    send(baseline_writer, {:test_archive_write_result, :ok})
 
     attach_caller(plan, room, caller, "conn-variable-actions")
 
@@ -275,7 +295,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                     }},
                    2_000
 
-    assert_receive {:vxpipe_call_variables_snapshot,
+    assert_receive {:test_archive_write, update_writer,
                     %UpdateSnapshot{
                       participant_id: participant_id,
                       tool_call_id: "tool-update-variables",
@@ -285,6 +305,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                    2_000
 
     assert participant_id == receiver.participant_id
+    send(update_writer, {:test_archive_write_result, :ok})
 
     assert_receive {:vxpipe_event, %TextOutput{text: "The intake details are saved."}},
                    2_000
@@ -666,6 +687,32 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     compile_plan_from(room_id, input, profiles, options)
   end
 
+  defp open_archive(options \\ []) do
+    options = archive_options(options)
+
+    assert {:ok, handoff} = ArchiveSupervisor.open(options)
+
+    on_exit(fn ->
+      if Process.alive?(handoff.subscriber) do
+        Handoff.source_stopped(handoff, :test_cleanup)
+      end
+    end)
+
+    handoff
+  end
+
+  defp archive_options(options \\ []) do
+    Keyword.merge(
+      [
+        writer: {TestArchiveWriter, self()},
+        maximum_pending_facts: 4,
+        retry_delay_ms: 5,
+        drain_timeout_ms: 1_000
+      ],
+      options
+    )
+  end
+
   defp compile_variables_plan(room_id) do
     transform = fn input ->
       input
@@ -936,6 +983,19 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
+
+  defp eventually(predicate, attempts \\ 100)
+
+  defp eventually(predicate, attempts) when attempts > 0 do
+    if predicate.() do
+      true
+    else
+      Process.sleep(5)
+      eventually(predicate, attempts - 1)
+    end
+  end
+
+  defp eventually(_predicate, 0), do: false
 
   defp unique_id(prefix) do
     "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"

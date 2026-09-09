@@ -4,10 +4,13 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   alias Vxpipe.CallEngine.CallDefinition
   alias Vxpipe.CallEngine.CallInvocation
   alias Vxpipe.CallEngine.CallVariables
-  alias Vxpipe.CallEngine.CallVariables.UpdateSnapshot
+  alias Vxpipe.CallEngine.Archive.Handoff
+  alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
+  alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
   alias Vxpipe.CallEngine.DefinitionCompiler
   alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.TestArchiveWriter
 
   @schema_version "20260909.01"
 
@@ -217,8 +220,29 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
             }} = CallVariables.read(server, read)
   end
 
-  test "hands an exact private snapshot with trusted attribution to the archival subscriber" do
-    %{server: server, identity: identity} = start_variables(archival_subscriber: self())
+  test "hands an exact baseline and accepted update through the bounded private archive" do
+    handoff = open_archive()
+    %{server: server, identity: identity, plan: plan} = start_variables(archive_handoff: handoff)
+
+    assert_receive {:test_archive_write, baseline_writer,
+                    %BaselineSnapshot{
+                      id: "vsnap_" <> _,
+                      tenant_id: "tenant-demo",
+                      call_id: call_id,
+                      room_id: room_id,
+                      incarnation_id: "rinc-test",
+                      global_revision: 0,
+                      sections: baseline_sections,
+                      source_policy: %{"revision" => 0},
+                      occurred_at: %DateTime{}
+                    } = baseline}
+
+    assert call_id == plan.call_id
+    assert room_id == plan.room_id
+    assert baseline_sections["customer"].value["id"] == "customer-1"
+    assert baseline_sections["intake"].value == nil
+    refute inspect(baseline) =~ "customer-1"
+    send(baseline_writer, {:test_archive_write_result, :ok})
 
     assert {:ok, command} =
              update_command(identity,
@@ -229,10 +253,12 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
 
     assert {:ok, %{"revision" => 1}} = CallVariables.update(server, command)
 
-    assert_receive {:vxpipe_call_variables_snapshot,
+    assert_receive {:test_archive_write, update_writer,
                     %UpdateSnapshot{
+                      id: "vsnap_" <> _,
                       command_id: command_id,
                       tenant_id: "tenant-demo",
+                      call_id: ^call_id,
                       room_id: room_id,
                       incarnation_id: "rinc-test",
                       participant_id: participant_id,
@@ -243,7 +269,9 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
                       section: "intake",
                       section_revision: 1,
                       global_revision: 1,
-                      sections: sections
+                      sections: sections,
+                      source_policy: %{"revision" => 0},
+                      occurred_at: %DateTime{}
                     } = snapshot}
 
     assert command_id == command.id
@@ -255,6 +283,32 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
     assert sections["intake"].revision == 1
     refute inspect(snapshot) =~ "customer-1"
     refute inspect(:sys.get_state(server)) =~ "customer-1"
+    send(update_writer, {:test_archive_write_result, :ok})
+    assert eventually(fn -> Handoff.stats(handoff).pending == 0 end)
+    assert %{accepted: 2, overflow: 0} = Handoff.stats(handoff)
+  end
+
+  test "keeps an accepted variable update local when the bounded archive is full" do
+    handoff = open_archive(maximum_pending_facts: 1)
+    %{server: server, identity: identity} = start_variables(archive_handoff: handoff)
+
+    assert_receive {:test_archive_write, baseline_writer, %BaselineSnapshot{}}
+
+    assert {:ok, command} =
+             update_command(identity,
+               section: "intake",
+               expected_revision: 0,
+               operation: {:put, "summary", "Accepted while storage is stalled"}
+             )
+
+    assert {:ok, %{"revision" => 1, "global_revision" => 1}} =
+             CallVariables.update(server, command)
+
+    assert %{accepted: 1, overflow: 1, pending: 1, incomplete?: true} =
+             Handoff.stats(handoff)
+
+    send(baseline_writer, {:test_archive_write_result, :ok})
+    refute_receive {:test_archive_write, _writer, %UpdateSnapshot{}}, 50
   end
 
   test "serializes competing updates so only one matching revision succeeds" do
@@ -291,7 +345,12 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   end
 
   test "finishes an accepted queued update after its originating caller terminates" do
-    %{server: server, identity: identity} = start_variables(archival_subscriber: self())
+    handoff = open_archive()
+    %{server: server, identity: identity} = start_variables(archive_handoff: handoff)
+
+    assert_receive {:test_archive_write, baseline_writer, %BaselineSnapshot{}}
+    send(baseline_writer, {:test_archive_write_result, :ok})
+    assert eventually(fn -> Handoff.stats(handoff).pending == 0 end)
 
     assert {:ok, command} =
              update_command(identity,
@@ -317,7 +376,7 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
       :ok = :sys.resume(server)
     end
 
-    assert_receive {:vxpipe_call_variables_snapshot,
+    assert_receive {:test_archive_write, update_writer,
                     %UpdateSnapshot{
                       section: "intake",
                       section_revision: 1,
@@ -325,6 +384,8 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
                         "intake" => %{value: %{"summary" => "Finish independently"}}
                       }
                     }}
+
+    send(update_writer, {:test_archive_write_result, :ok})
   end
 
   defp start_variables(options \\ []) do
@@ -340,6 +401,7 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
 
     %{
       server: server,
+      plan: plan,
       identity: [
         tenant_id: plan.tenant_id,
         room_id: plan.room_id,
@@ -347,6 +409,29 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
         participant_id: participant.participant_id
       ]
     }
+  end
+
+  defp open_archive(options \\ []) do
+    options =
+      Keyword.merge(
+        [
+          writer: {TestArchiveWriter, self()},
+          maximum_pending_facts: 4,
+          retry_delay_ms: 5,
+          drain_timeout_ms: 1_000
+        ],
+        options
+      )
+
+    assert {:ok, handoff} = ArchiveSupervisor.open(options)
+
+    on_exit(fn ->
+      if Process.alive?(handoff.subscriber) do
+        Handoff.source_stopped(handoff, :test_cleanup)
+      end
+    end)
+
+    handoff
   end
 
   defp update_command(identity, options) do
@@ -476,6 +561,19 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   end
 
   defp deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
+
+  defp eventually(predicate, attempts \\ 100)
+
+  defp eventually(predicate, attempts) when attempts > 0 do
+    if predicate.() do
+      true
+    else
+      Process.sleep(5)
+      eventually(predicate, attempts - 1)
+    end
+  end
+
+  defp eventually(_predicate, 0), do: false
 
   defp wait_until_queued(server, attempts \\ 10_000)
 

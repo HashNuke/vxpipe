@@ -5,6 +5,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
   alias Vxpipe.CallEngine.ResolvedCallPlan
+  alias Vxpipe.CallEngine.Archive.Handoff
+  alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -35,7 +37,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
       [] ->
         with :ok <- PlanStartup.validate(plan, plan_startup_options(options)) do
-          start_planned_room(plan, options)
+          archive = prepare_archive(options)
+          start_planned_room(plan, options, archive)
         end
 
       [_room] ->
@@ -226,7 +229,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     end
   end
 
-  defp start_planned_room(plan, runtime_options) do
+  defp start_planned_room(plan, runtime_options, archive) do
     incarnation_id = Id.generate(:room_incarnation)
 
     options = [
@@ -234,17 +237,22 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       incarnation_id: incarnation_id,
       start_command_id: Id.generate(:command),
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
-      archival_subscriber: Keyword.get(runtime_options, :call_variables_archival_subscriber)
+      archive_handoff: archive.handoff,
+      archive_source_policy: archive.source_policy
     ]
 
     case DynamicSupervisor.start_child(__MODULE__, {RoomIncarnationSupervisor, options}) do
-      {:ok, _supervisor} ->
+      {:ok, supervisor} ->
+        source_started(archive.handoff, supervisor)
         {:ok, RoomAuthority.snapshot(plan.tenant_id, plan.room_id)}
 
       {:error, {:shutdown, {:failed_to_start_child, RoomAuthority, {:already_started, _pid}}}} ->
+        source_stopped(archive.handoff, :room_already_exists)
         {:error, room_already_exists(plan.room_id)}
 
       {:error, _reason} ->
+        source_stopped(archive.handoff, :room_start_failed)
+
         {:error,
          Error.new(
            :room_start_failed,
@@ -253,6 +261,44 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          )}
     end
   end
+
+  defp prepare_archive(runtime_options) do
+    source_policy = archive_source_policy(runtime_options)
+
+    case Keyword.get(runtime_options, :archive_handoff) do
+      %Handoff{} = handoff ->
+        %{handoff: handoff, source_policy: source_policy}
+
+      nil ->
+        %{handoff: open_archive(runtime_options), source_policy: source_policy}
+    end
+  end
+
+  defp open_archive(runtime_options) do
+    archive = Keyword.get(runtime_options, :archive, enabled: false)
+
+    if Keyword.get(archive, :enabled, false) do
+      archive
+      |> Keyword.drop([:enabled, :source_policy])
+      |> ArchiveSupervisor.open()
+      |> case do
+        {:ok, handoff} -> handoff
+        {:error, _reason} -> nil
+      end
+    end
+  end
+
+  defp archive_source_policy(runtime_options) do
+    runtime_options
+    |> Keyword.get(:archive, [])
+    |> Keyword.get(:source_policy, %{"revision" => 0})
+  end
+
+  defp source_started(nil, _source), do: :ok
+  defp source_started(handoff, source), do: Handoff.source_started(handoff, source)
+
+  defp source_stopped(nil, _reason), do: :ok
+  defp source_stopped(handoff, reason), do: Handoff.source_stopped(handoff, reason)
 
   defp plan_startup_options(runtime_options) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)

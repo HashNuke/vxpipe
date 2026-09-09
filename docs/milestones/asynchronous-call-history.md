@@ -70,6 +70,29 @@ is 20 Calls and 19 persistence tests, plus an empty-database four-migration run 
 adapter tests, all with 0 failures. Runtime subscriber wiring and non-variable call facts
 remain open, so no implementation checklist or acceptance box is complete yet.
 
+Implementation checkpoint 2 adds the bounded live-to-storage path for Call Variables. An
+engine-owned global supervisor creates one temporary subscriber per durable room. Its handoff
+uses atomics to reserve a fixed number of facts and a non-suspending message send; capacity
+includes both the active sequential writer task and queued facts. A full queue drops the newest
+offer while the local update remains successful. Retained failures retry without consuming a
+second slot. The subscriber monitors the room-incarnation supervisor, drains independently
+after that tree exits, and terminates an outstanding writer at the configured drain deadline.
+Overflow, unavailable, retry, pending, discard and incomplete evidence remain distinct. A
+crashed subscriber is intentionally not restarted behind the stale handoff.
+
+`CallVariables` now emits an exact unattributed baseline before serving commands and gives both
+baseline and update facts stable snapshot/call/room/incarnation identity plus source-policy
+provenance. `EctoStorage` maps those facts to the Calls workflow added in checkpoint 1. The
+database-backed Gateway admission configuration enables a 256-fact queue, 250 ms retry delay,
+and five-second final drain; legacy trusted rooms remain unarchived. Red evidence included 3
+missing-subscriber failures, a missing-baseline compile failure, a room-wiring baseline timeout,
+and a missing-EctoStorage failure. Focused engine, persistence, and Gateway suites passed. The
+full umbrella rerun passed with Call Engine 170, Calls 20, Persistence 21, Gateway 66, and
+Console 25 tests (0 failures; 6 integration exclusions). An initial full run hit the existing
+real-Jido coordinator's two-second timeout under load; that exact test passed with the same seed
+and the complete rerun was green. Broader lifecycle/turn/transcript/tool/usage facts and durable
+incomplete projections remain open, so the milestone is not complete.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

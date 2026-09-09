@@ -5,7 +5,18 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, VariableSnapshot}
-  alias Vxpipe.Persistence.{ArchiveStore, CallStore, CredentialStore, DefinitionStore, Repo}
+  alias Vxpipe.CallEngine.Archive.Handoff
+  alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
+  alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
+
+  alias Vxpipe.Persistence.{
+    ArchiveStore,
+    CallStore,
+    CredentialStore,
+    DefinitionStore,
+    EctoStorage,
+    Repo
+  }
   alias Vxpipe.Persistence.Schema.Admission, as: StoredAdmission
   alias Vxpipe.Persistence.Schema.Call, as: StoredCall
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredJoinToken
@@ -403,6 +414,123 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert Repo.aggregate(StoredVariableSnapshot, :count) == 1
   end
 
+  test "EctoStorage projects exact engine baseline and update facts", context do
+    {call, incarnation_id} = running_call(context)
+
+    baseline = %BaselineSnapshot{
+      id: "vsnap-engine-baseline",
+      tenant_id: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: incarnation_id,
+      global_revision: 0,
+      sections: %{"order" => %{revision: 0, value: %{"id" => "ORD-0"}}},
+      source_policy: %{"revision" => 0},
+      occurred_at: @now
+    }
+
+    update = %UpdateSnapshot{
+      id: "vsnap-engine-update",
+      command_id: "command-engine",
+      tenant_id: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: incarnation_id,
+      participant_id: "participant-engine",
+      activation_id: "activation-engine",
+      source_participant_id: "source-engine",
+      correlation_id: "correlation-engine",
+      tool_call_id: "tool-engine",
+      section: "order",
+      section_revision: 1,
+      global_revision: 1,
+      sections: %{"order" => %{revision: 1, value: %{"id" => "ORD-1"}}},
+      source_policy: %{"revision" => 0},
+      occurred_at: DateTime.add(@now, 1, :second)
+    }
+
+    assert :ok = EctoStorage.write(context.options, baseline)
+    assert :ok = EctoStorage.write(context.options, update)
+    assert :ok = EctoStorage.write(context.options, update)
+
+    assert {:ok, history} =
+             Calls.fetch_variable_snapshots(context.principal, call.id, context.options)
+
+    assert Enum.map(history.snapshots, &{&1.id, &1.kind}) == [
+             {baseline.id, :baseline},
+             {update.id, :update}
+           ]
+
+    assert history.latest.id == update.id
+    assert history.latest.command_id == update.command_id
+
+    assert {:discard, :call_not_found} =
+             EctoStorage.write(context.options, %{baseline | call_id: Ecto.UUID.generate()})
+  end
+
+  test "the bounded subscriber projects retained engine snapshots asynchronously", context do
+    {call, incarnation_id} = running_call(context)
+
+    assert {:ok, handoff} =
+             ArchiveSupervisor.open(
+               writer: {EctoStorage, context.options},
+               maximum_pending_facts: 4,
+               retry_delay_ms: 5,
+               drain_timeout_ms: 1_000
+             )
+
+    source = spawn(fn -> Process.sleep(:infinity) end)
+    assert :ok = Handoff.source_started(handoff, source)
+
+    baseline = %BaselineSnapshot{
+      id: "vsnap-async-baseline",
+      tenant_id: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: incarnation_id,
+      global_revision: 0,
+      sections: %{"order" => %{revision: 0, value: %{"id" => "ORD-0"}}},
+      source_policy: %{"revision" => 0},
+      occurred_at: @now
+    }
+
+    update = %UpdateSnapshot{
+      id: "vsnap-async-update",
+      command_id: "command-async",
+      tenant_id: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: incarnation_id,
+      participant_id: "participant-async",
+      activation_id: "activation-async",
+      source_participant_id: "source-async",
+      correlation_id: "correlation-async",
+      tool_call_id: "tool-async",
+      section: "order",
+      section_revision: 1,
+      global_revision: 1,
+      sections: %{"order" => %{revision: 1, value: %{"id" => "ORD-1"}}},
+      source_policy: %{"revision" => 0},
+      occurred_at: DateTime.add(@now, 1, :second)
+    }
+
+    assert :ok = Handoff.offer(handoff, baseline)
+    assert :ok = Handoff.offer(handoff, update)
+
+    assert eventually(fn -> Repo.aggregate(StoredVariableSnapshot, :count) == 2 end)
+    assert %{accepted: 2, pending: 0, retries: 0} = Handoff.stats(handoff)
+
+    subscriber_monitor = Process.monitor(handoff.subscriber)
+    Process.exit(source, :kill)
+    assert_receive {:DOWN, ^subscriber_monitor, :process, _subscriber, :normal}
+
+    assert {:ok, history} =
+             Calls.fetch_variable_snapshots(context.principal, call.id, context.options)
+
+    assert Enum.map(history.snapshots, & &1.id) == [baseline.id, update.id]
+    assert history.latest.id == update.id
+  end
+
   defp prepare(context) do
     Calls.prepare_call(
       context.principal,
@@ -491,6 +619,19 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       value
     end
   end
+
+  defp eventually(predicate, attempts \\ 100)
+
+  defp eventually(predicate, attempts) when attempts > 0 do
+    if predicate.() do
+      true
+    else
+      Process.sleep(10)
+      eventually(predicate, attempts - 1)
+    end
+  end
+
+  defp eventually(_predicate, 0), do: false
 
   defp registries do
     %{
