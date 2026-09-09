@@ -10,6 +10,9 @@ defmodule Vxpipe.CallEngine.AgentTest do
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.CurrentTime
   alias Vxpipe.CallEngine.Tool.Dispatcher
+  alias Vxpipe.CallEngine.Tool.ReadVariables
+  alias Vxpipe.CallEngine.Tool.UpdateVariable
+  alias Vxpipe.CallEngine.Tool.UpdateVariables
 
   test "pins the prompt, finite tool surface, and request policy before readiness" do
     agent_server = start_agent_server("act-test")
@@ -85,6 +88,14 @@ defmodule Vxpipe.CallEngine.AgentTest do
 
     assert [%Event{kind: :request_completed, data: %{result: "Both checks completed."}}] =
              Enum.filter(events, &(&1.kind == :request_completed))
+  end
+
+  test "advertises provider-compatible JSON values for generated variable actions" do
+    Enum.each([ReadVariables, UpdateVariables, UpdateVariable], fn action ->
+      model_tool = Jido.AI.ToolAdapter.from_action(action)
+
+      assert model_tool.parameter_schema == action.definition().parameters
+    end)
   end
 
   defp tool_context do

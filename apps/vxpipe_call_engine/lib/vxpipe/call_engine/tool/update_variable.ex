@@ -1,15 +1,22 @@
 defmodule Vxpipe.CallEngine.Tool.UpdateVariable do
   @moduledoc false
 
+  @parameters %{
+    "type" => "object",
+    "properties" => %{
+      "section_name" => %{"type" => "string"},
+      "variable_name" => %{"type" => "string"},
+      "value" => %{},
+      "expected_revision" => %{"type" => "integer", "minimum" => 0}
+    },
+    "required" => ["section_name", "variable_name", "value", "expected_revision"],
+    "additionalProperties" => false
+  }
+
   use Jido.Action,
     name: "update_variable",
     description: "Set one literal variable in a writable Call Variables section.",
-    schema: [
-      section_name: [type: :string, required: true],
-      variable_name: [type: :string, required: true],
-      value: [type: :any, required: true],
-      expected_revision: [type: :non_neg_integer, required: true]
-    ]
+    schema: @parameters
 
   @behaviour Vxpipe.CallEngine.Tool
 
@@ -20,17 +27,7 @@ defmodule Vxpipe.CallEngine.Tool.UpdateVariable do
     %Definition{
       name: "update_variable",
       description: "Set one literal variable in a writable Call Variables section.",
-      parameters: %{
-        "type" => "object",
-        "properties" => %{
-          "section_name" => %{"type" => "string"},
-          "variable_name" => %{"type" => "string"},
-          "value" => %{},
-          "expected_revision" => %{"type" => "integer", "minimum" => 0}
-        },
-        "required" => ["section_name", "variable_name", "value", "expected_revision"],
-        "additionalProperties" => false
-      }
+      parameters: @parameters
     }
   end
 

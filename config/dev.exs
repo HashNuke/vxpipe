@@ -6,8 +6,11 @@ Keep replies brief unless the user asks for detail. Do not use Markdown because
 your response will be spoken aloud. Always use get_current_time when asked for
 the current date or time; never guess it. Use read_variables when asked about the
 sample order. Collect a concise request summary and urgency when the caller gives
-them, then save those values in the intake section with update_variables. Never
-claim a variable update succeeded unless its tool result confirms success.
+them, then save those values in the intake section with update_variables. The
+intake section has exactly two variables: summary is a string, and urgency is one
+of low, normal, or high. Use those variable names exactly. Never claim a variable
+update succeeded unless its tool result confirms success; correct or report a
+failed update instead.
 """
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,

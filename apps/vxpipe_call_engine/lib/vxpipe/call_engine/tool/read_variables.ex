@@ -1,10 +1,24 @@
 defmodule Vxpipe.CallEngine.Tool.ReadVariables do
   @moduledoc false
 
+  @parameters %{
+    "type" => "object",
+    "properties" => %{
+      "sections" => %{
+        "type" => "array",
+        "items" => %{"type" => "string"},
+        "minItems" => 1,
+        "maxItems" => 32
+      }
+    },
+    "required" => ["sections"],
+    "additionalProperties" => false
+  }
+
   use Jido.Action,
     name: "read_variables",
     description: "Read selected Call Variables sections that this agent may access.",
-    schema: [sections: [type: {:list, :string}, required: true]]
+    schema: @parameters
 
   @behaviour Vxpipe.CallEngine.Tool
 
@@ -15,20 +29,7 @@ defmodule Vxpipe.CallEngine.Tool.ReadVariables do
     %Definition{
       name: "read_variables",
       description: "Read selected Call Variables sections that this agent may access.",
-      parameters: %{
-        "type" => "object",
-        "properties" => %{
-          "sections" => %{
-            "type" => "array",
-            "items" => %{"type" => "string"},
-            "minItems" => 1,
-            "maxItems" => 32,
-            "uniqueItems" => true
-          }
-        },
-        "required" => ["sections"],
-        "additionalProperties" => false
-      }
+      parameters: @parameters
     }
   end
 

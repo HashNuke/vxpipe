@@ -1,14 +1,21 @@
 defmodule Vxpipe.CallEngine.Tool.UpdateVariables do
   @moduledoc false
 
+  @parameters %{
+    "type" => "object",
+    "properties" => %{
+      "section_name" => %{"type" => "string"},
+      "data" => %{"type" => "object", "additionalProperties" => true},
+      "expected_revision" => %{"type" => "integer", "minimum" => 0}
+    },
+    "required" => ["section_name", "data", "expected_revision"],
+    "additionalProperties" => false
+  }
+
   use Jido.Action,
     name: "update_variables",
     description: "Recursively merge values into one writable Call Variables section.",
-    schema: [
-      section_name: [type: :string, required: true],
-      data: [type: :any, required: true],
-      expected_revision: [type: :non_neg_integer, required: true]
-    ]
+    schema: @parameters
 
   @behaviour Vxpipe.CallEngine.Tool
 
@@ -19,16 +26,7 @@ defmodule Vxpipe.CallEngine.Tool.UpdateVariables do
     %Definition{
       name: "update_variables",
       description: "Recursively merge values into one writable Call Variables section.",
-      parameters: %{
-        "type" => "object",
-        "properties" => %{
-          "section_name" => %{"type" => "string"},
-          "data" => %{"type" => "object"},
-          "expected_revision" => %{"type" => "integer", "minimum" => 0}
-        },
-        "required" => ["section_name", "data", "expected_revision"],
-        "additionalProperties" => false
-      }
+      parameters: @parameters
     }
   end
 

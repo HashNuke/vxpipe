@@ -100,3 +100,30 @@ candidate. It returns only grant-safe results and keeps all failure paths non-mu
   tools and to trust successful tool results only. Full visibility remains a
   server-owned sample selection, so the existing Console can display those calls
   without new controls.
+- Rendered-browser verification against the single Phoenix HTTPS listener at
+  `:4000` exposed a model-tool schema mismatch that deterministic scripted calls
+  had not caught. Jido's Nimble schema conversion represented `:any` as a string,
+  so the model sent the `update_variables.data` object as encoded JSON text and
+  the engine correctly rejected it. A focused regression test first reproduced
+  the mismatch at the Jido-to-model boundary.
+- The three generated variable Actions now use their canonical JSON parameter
+  schemas directly. The object merge is advertised as an open object while the
+  command boundary still validates its complete result against the pinned section
+  schema. The read envelope omits JSON Schema `uniqueItems`, which the configured
+  provider rejects, while `ReadCallVariables` continues to enforce uniqueness and
+  the 32-section operation bound locally.
+- After the fix and a dev-server reload, Chromium created a room, connected the
+  RTVI client, and reached client/agent `READY` through
+  `https://rocksalt.tail445590.ts.net:4000`. The sample sent one multi-variable
+  update; the visible full-debug tool card showed an object argument with exact
+  `summary` and `urgency` keys, revision zero, a successful revision-one result,
+  and the assistant confirmed the saved values. The sample prompt now names its
+  two synthetic intake variables explicitly so its intended manual exercise is
+  unambiguous.
+- The first umbrella run exposed an unrelated async-test race: the Deepgram STT
+  failure assertion could consume a simultaneous Morse STT telemetry event from
+  the global bus. The test handler now forwards only its selected provider's
+  event. A focused rerun and the complete umbrella gate are green: format,
+  warnings-as-errors compilation, 151 Call Engine tests (one excluded), 52
+  Gateway tests (four excluded), 20 Console tests, and the unused-dependency
+  check.

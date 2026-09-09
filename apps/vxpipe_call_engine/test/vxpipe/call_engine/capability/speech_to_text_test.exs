@@ -71,7 +71,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   end
 
   test "ignores repeated provider sequence numbers and terminates on transport failure" do
-    attach_provider_events()
+    attach_provider_events(:deepgram)
     {capability, transport} = start_capability()
     payload = turn_message("Update", 4, "hello")
 
@@ -162,11 +162,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     })
   end
 
-  def handle_telemetry_event(event, measurements, metadata, test_pid) do
-    send(test_pid, {:telemetry_event, event, measurements, metadata})
+  def handle_telemetry_event(event, measurements, metadata, {test_pid, provider}) do
+    if Map.get(metadata, :provider) == provider do
+      send(test_pid, {:telemetry_event, event, measurements, metadata})
+    end
   end
 
-  defp attach_provider_events do
+  defp attach_provider_events(provider) do
     handler_id = {__MODULE__, self(), make_ref()}
 
     :ok =
@@ -174,7 +176,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
         handler_id,
         @provider_failure_event,
         &__MODULE__.handle_telemetry_event/4,
-        self()
+        {self(), provider}
       )
 
     on_exit(fn -> :telemetry.detach(handler_id) end)
