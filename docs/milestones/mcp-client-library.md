@@ -1,8 +1,8 @@
 # MCP client integration and conformance
 
-Status: in progress. The exact dependency/profile and bounded all-or-nothing discovery
-contract are implemented. ExMCP transport compatibility/conformance gates, configured
-connection ownership, and validated invocation remain unproven; the separate Jido
+Status: in progress. The exact dependency/profile, bounded all-or-nothing discovery, and
+pre-submission validated invocation contracts are implemented. ExMCP transport
+compatibility/conformance gates and configured connection ownership remain unproven; the separate Jido
 runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
@@ -91,7 +91,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   upstream harness defects are explicit, not blanket success.
 - [ ] Negotiated-version mismatch, malformed/error responses, wrong correlation IDs and
   unsupported interactions fail safely without speculative resubmission.
-- [ ] Argument schema failure occurs before network submission; external schema refs do not
+- [x] Argument schema failure occurs before network submission; external schema refs do not
   trigger hidden fetches.
 - [ ] Repeated cursors, endless pages and aggregate discovery limits stop without an
   unbounded loop or falsely complete catalog; partial bindings cannot be invoked.
@@ -147,8 +147,14 @@ Implementation evidence:
   absolute deadline and aggregate decoded-JSON budget. It rejects repeated cursors and
   returns no partial catalog. `Vxpipe.MCP.Catalog` preserves complete string-keyed remote
   definitions while rejecting malformed or duplicate tool identities.
+- `Vxpipe.MCP.Invocation` selects only from that complete catalog and delegates schema work
+  to `Vxpipe.MCP.ArgumentValidator`. JSON Schema 2020-12 arguments are checked without casts
+  or remote resolvers before submission; unknown tools, invalid arguments, unsupported
+  schemas, and oversized decoded results return bounded categorical errors. The ExMCP-only
+  adapter uses the single-request `tools/call` path with generic and ambiguous stream replay
+  disabled.
 - The focused behavior test was observed red before implementation and is green with the
-  complete child suite (5 tests, 0 failures). This is deterministic adapter evidence only;
+  complete child suite (8 tests, 0 failures). This is deterministic adapter evidence only;
   no remote/reference or official-conformance claim is made yet.
 
 ## Specification review

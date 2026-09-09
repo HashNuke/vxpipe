@@ -108,6 +108,28 @@ evidence that this production concern is solved.
   version, server-issued session, invocation, or conformance scenario. Those boxes remain
   open.
 
+## 2026-09-09 — validated invocation boundary
+
+- Red: three focused invocation tests failed because `Vxpipe.MCP.Invocation` did not exist.
+  They require invalid arguments, unknown tools, and cross-document schema references to
+  stop before the protocol boundary; a valid call must preserve its data and timeout; an
+  oversized decoded result must not be returned.
+- Green: added `ArgumentValidator` for the JSON Schema concern and `Invocation` for catalog
+  selection, deadline, submission, and result-budget coordination. This keeps schema
+  mechanics out of the transport adapter and catalog modules.
+- JSV builds untrusted schemas with no remote resolver, atom-based casts disabled, and the
+  2020-12 dialect fixed. Runtime validation uses `cast: false`, so validation cannot silently
+  coerce model arguments before a tool call.
+- The ExMCP adapter submits `tools/call` through `make_request/5` with `retry_policy: false`,
+  `http_stream_retry: :safe_only`, and zero MRTR rounds. It exposes only categorical
+  not-submitted, remote-error, or unknown-outcome failures; dependency error payloads are
+  not returned through the Vxpipe invocation API.
+- Verification: the complete `vxpipe_mcp` suite passes with 8 tests and 0 failures;
+  warnings-as-errors compilation, root formatting, strict Credo over 286 source files, and
+  the unused-lock check pass.
+- This deterministic checkpoint does not yet prove transport-level incremental response
+  limits, initialization/readiness, or a real remote invocation. Those remain open.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)
