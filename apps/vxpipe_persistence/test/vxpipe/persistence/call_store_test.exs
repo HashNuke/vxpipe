@@ -575,6 +575,71 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert {:discard, :call_fact_insert_failed} = EctoStorage.write(context.options, invalid_room)
   end
 
+  test "pages persisted facts and variable revisions on one tenant detail", context do
+    {call, incarnation_id} = running_call(context)
+
+    started =
+      engine_fact(
+        call,
+        incarnation_id,
+        1,
+        "event-inspection-started",
+        :tool_call_started,
+        %{"arguments" => %{}, "name" => "slow_lookup"}
+      )
+
+    started = %{started | tool_call_id: "tool-inspection"}
+
+    completed =
+      engine_fact(
+        call,
+        incarnation_id,
+        3,
+        "event-inspection-completed",
+        :tool_call_completed,
+        %{"name" => "slow_lookup", "result" => %{"ok" => true}}
+      )
+
+    completed = %{completed | tool_call_id: "tool-inspection"}
+
+    snapshot = variable_snapshot(call, incarnation_id, 1, "snapshot-inspection")
+
+    snapshot = %{
+      snapshot
+      | tool_call_id: "tool-inspection",
+        occurred_at: DateTime.add(@now, 2, :second)
+    }
+
+    assert :ok = EctoStorage.write(context.options, started)
+    assert {:ok, ^snapshot} = Calls.archive_variable_snapshot(snapshot, context.options)
+    assert :ok = EctoStorage.write(context.options, completed)
+
+    assert {:ok, first_page} =
+             Calls.inspect_call(context.principal, call.id, context.options ++ [limit: 2])
+
+    assert first_page.call.id == call.id
+
+    assert Enum.map(first_page.timeline, & &1.kind) == [
+             :tool_call_completed,
+             :variable_snapshot
+           ]
+
+    assert is_binary(first_page.next_cursor)
+
+    assert {:ok, second_page} =
+             Calls.inspect_call(
+               context.principal,
+               call.id,
+               context.options ++ [limit: 2, cursor: first_page.next_cursor]
+             )
+
+    assert Enum.map(second_page.timeline, & &1.kind) == [:tool_call_started]
+    assert second_page.next_cursor == nil
+
+    other_tenant = %{context.principal | tenant_key: "ZZZZZZZZZZZZZZZZ"}
+    assert {:error, :call_not_found} = Calls.inspect_call(other_tenant, call.id, context.options)
+  end
+
   test "the bounded subscriber projects retained facts and snapshots before archive closure",
        context do
     {call, incarnation_id} = running_call(context)

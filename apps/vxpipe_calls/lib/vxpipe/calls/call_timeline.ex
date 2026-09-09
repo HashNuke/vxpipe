@@ -9,8 +9,8 @@ defmodule Vxpipe.Calls.CallTimeline do
     :tool_call_cancelled
   ]
 
-  @spec project([CallFact.t()], [VariableSnapshot.t()]) :: [CallTimelineEntry.t()]
-  def project(facts, snapshots) when is_list(facts) and is_list(snapshots) do
+  @spec project([CallFact.t()], [VariableSnapshot.t()], keyword()) :: [CallTimelineEntry.t()]
+  def project(facts, snapshots, options \\ []) when is_list(facts) and is_list(snapshots) do
     tool_starts = tool_starts(facts)
 
     fact_entries =
@@ -20,7 +20,7 @@ defmodule Vxpipe.Calls.CallTimeline do
 
     snapshot_entries = Enum.map(snapshots, &CallTimelineEntry.from_variable_snapshot/1)
 
-    Enum.sort_by(fact_entries ++ snapshot_entries, &sort_key/1)
+    Enum.sort_by(fact_entries ++ snapshot_entries, &sort_key/1, order(options))
   end
 
   defp tool_starts(facts) do
@@ -65,5 +65,12 @@ defmodule Vxpipe.Calls.CallTimeline do
   defp sort_key(entry) do
     source_rank = if is_integer(entry.source_sequence), do: 0, else: 1
     {entry.occurred_at, source_rank, entry.source_sequence || 0, entry.id}
+  end
+
+  defp order(options) do
+    case Keyword.get(options, :order, :asc) do
+      :asc -> :asc
+      :desc -> :desc
+    end
   end
 end

@@ -57,3 +57,24 @@
 - Green evidence: the focused Ecto test passed, as did format, warnings-as-errors
   compile, strict Credo (247 files / 2,362 functions), unused-dependency validation,
   and the full migrated umbrella suite: 321 tests, 0 failures, 6 integration exclusions.
+
+## 2026-09-09 — bounded call detail
+
+- Added `Calls.inspect_call/3` over the inspection port. It authorizes and validates
+  the history cursor before fetching the tenant-scoped call, then requests at most one
+  extra record for continuation detection.
+- Facts and variable snapshots share a stable, URL-safe history cursor based on source
+  timestamp, a fixed source rank, source sequence/revision, and public record ID. The
+  Ecto adapter runs one bounded query per record type, merges at most twice the query
+  limit, and never exposes database primary keys.
+- Detail pages are newest-first. If a tool terminal record is on a page without its
+  start, duration stays unavailable; page boundaries are not treated as evidence.
+- Extracted `ArchiveRecordCodec` so archival writes/reads and inspection reads share
+  one domain conversion rather than duplicating private-record reconstruction.
+- Red evidence: the Calls contract initially lacked `HistoryCursor` and
+  `inspect_call/3`; the persisted acceptance then failed at the absent
+  `InspectionStore.fetch_call/3` boundary.
+- Green evidence: 12 focused Calls tests and the focused Ecto detail test passed.
+  Root format, warnings-as-errors compile, strict Credo (250 files / 2,401 functions),
+  unused-dependency validation, and the full migrated umbrella suite passed with
+  324 tests, 0 failures, and 6 integration exclusions.

@@ -6,6 +6,7 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.{CallFact, VariableSnapshot, VariableSnapshotHistory}
+  alias Vxpipe.Persistence.ArchiveRecordCodec
   alias Vxpipe.Persistence.Schema.{Call, Tenant}
   alias Vxpipe.Persistence.Schema.CallFact, as: StoredFact
   alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredSnapshot
@@ -30,11 +31,12 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   @impl true
   def fetch_call_facts(repo, tenant_key, call_id) do
     query =
-      from call in Call,
+      from(call in Call,
         join: tenant in Tenant,
         on: tenant.id == call.tenant_id,
         where: tenant.key == ^tenant_key and call.public_id == ^call_id,
         select: call
+      )
 
     case repo.one(query) do
       nil ->
@@ -69,11 +71,12 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   @impl true
   def fetch_variable_snapshots(repo, tenant_key, call_id) do
     query =
-      from call in Call,
+      from(call in Call,
         join: tenant in Tenant,
         on: tenant.id == call.tenant_id,
         where: tenant.key == ^tenant_key and call.public_id == ^call_id,
         select: call
+      )
 
     case repo.one(query) do
       nil ->
@@ -82,9 +85,14 @@ defmodule Vxpipe.Persistence.ArchiveStore do
       call ->
         snapshots =
           repo.all(
-            from snapshot in StoredSnapshot,
+            from(snapshot in StoredSnapshot,
               where: snapshot.call_id == ^call.id,
-              order_by: [asc: snapshot.global_revision, asc: snapshot.occurred_at, asc: snapshot.id]
+              order_by: [
+                asc: snapshot.global_revision,
+                asc: snapshot.occurred_at,
+                asc: snapshot.id
+              ]
+            )
           )
 
         with {:ok, snapshots} <- convert_snapshots(snapshots, tenant_key, call_id),
@@ -96,19 +104,21 @@ defmodule Vxpipe.Persistence.ArchiveStore do
 
   defp fetch_call(repo, snapshot, options) do
     query =
-      from call in Call,
+      from(call in Call,
         join: tenant in Tenant,
         on: tenant.id == call.tenant_id,
         where: tenant.key == ^snapshot.tenant_key and call.public_id == ^snapshot.call_id,
         select: call
+      )
 
     repo.one(with_lock(query, options))
   end
 
   defp fact_query(call_id) do
-    from fact in StoredFact,
+    from(fact in StoredFact,
       where: fact.call_id == ^call_id,
       order_by: [asc: fact.sequence, asc: fact.occurred_at, asc: fact.id]
+    )
   end
 
   defp with_lock(query, options) do
@@ -126,10 +136,11 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   defp incarnation_matches(repo, call, snapshot) do
     existing_incarnation =
       repo.one(
-        from stored in StoredSnapshot,
+        from(stored in StoredSnapshot,
           where: stored.call_id == ^call.id,
           select: stored.incarnation_id,
           limit: 1
+        )
       )
 
     expected_incarnation = call.incarnation_id || existing_incarnation
@@ -142,10 +153,11 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   defp fact_incarnation_matches(repo, call, fact) do
     existing_incarnation =
       repo.one(
-        from stored in StoredFact,
+        from(stored in StoredFact,
           where: stored.call_id == ^call.id,
           select: stored.incarnation_id,
           limit: 1
+        )
       )
 
     expected_incarnation = call.incarnation_id || existing_incarnation
@@ -157,8 +169,9 @@ defmodule Vxpipe.Persistence.ArchiveStore do
 
   defp insert_or_deduplicate_fact(repo, call, fact) do
     case repo.one(
-           from stored in StoredFact,
+           from(stored in StoredFact,
              where: stored.call_id == ^call.id and stored.public_id == ^fact.id
+           )
          ) do
       nil -> insert_fact(repo, call, fact)
       stored -> deduplicate_fact(stored, fact, fact.tenant_key, call.public_id)
@@ -208,47 +221,18 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   end
 
   defp to_call_fact(stored, tenant_key, call_id) do
-    CallFact.new(
-      id: stored.public_id,
-      kind: String.to_existing_atom(stored.kind),
-      sequence: stored.sequence,
-      tenant_key: tenant_key,
-      call_id: call_id,
-      room_id: stored.room_id,
-      incarnation_id: stored.incarnation_id,
-      participant_id: stored.participant_id,
-      activation_id: stored.activation_id,
-      source_participant_id: stored.source_participant_id,
-      connection_id: stored.connection_id,
-      command_id: stored.command_id,
-      correlation_id: stored.correlation_id,
-      tool_call_id: stored.tool_call_id,
-      public_sequence: stored.public_sequence,
-      occurred_at: stored.occurred_at,
-      source_policy: stored.source_policy,
-      payload: stored.payload
-    )
-  rescue
-    ArgumentError -> {:error, :invalid_call_fact}
+    ArchiveRecordCodec.call_fact(stored, tenant_key, call_id)
   end
 
   defp convert_facts(facts, tenant_key, call_id) do
-    Enum.reduce_while(facts, {:ok, []}, fn stored, {:ok, converted} ->
-      case to_call_fact(stored, tenant_key, call_id) do
-        {:ok, fact} -> {:cont, {:ok, [fact | converted]}}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, converted} -> {:ok, Enum.reverse(converted)}
-      {:error, _reason} = error -> error
-    end
+    ArchiveRecordCodec.call_facts(facts, tenant_key, call_id)
   end
 
   defp insert_or_deduplicate(repo, call, snapshot) do
     case repo.one(
-           from stored in StoredSnapshot,
+           from(stored in StoredSnapshot,
              where: stored.call_id == ^call.id and stored.public_id == ^snapshot.id
+           )
          ) do
       nil -> insert_snapshot(repo, call, snapshot)
       stored -> deduplicate(stored, snapshot, snapshot.tenant_key, call.public_id)
@@ -278,8 +262,16 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   defp advance_latest(repo, call, stored) do
     current_revision =
       case call.latest_variables_snapshot_id do
-        nil -> nil
-        id -> repo.one(from snapshot in StoredSnapshot, where: snapshot.id == ^id, select: snapshot.global_revision)
+        nil ->
+          nil
+
+        id ->
+          repo.one(
+            from(snapshot in StoredSnapshot,
+              where: snapshot.id == ^id,
+              select: snapshot.global_revision
+            )
+          )
       end
 
     if is_nil(current_revision) or stored.global_revision > current_revision do
@@ -320,49 +312,11 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   end
 
   defp to_variable_snapshot(stored, tenant_key, call_id) do
-    VariableSnapshot.new(
-      id: stored.public_id,
-      kind: stored.kind,
-      tenant_key: tenant_key,
-      call_id: call_id,
-      room_id: stored.room_id,
-      incarnation_id: stored.incarnation_id,
-      global_revision: stored.global_revision,
-      sections: decode_sections(stored.sections),
-      source_policy: stored.source_policy,
-      occurred_at: stored.occurred_at,
-      command_id: stored.command_id,
-      participant_id: stored.participant_id,
-      activation_id: stored.activation_id,
-      source_participant_id: stored.source_participant_id,
-      correlation_id: stored.correlation_id,
-      tool_call_id: stored.tool_call_id,
-      section: stored.section,
-      section_revision: stored.section_revision
-    )
-  end
-
-  defp decode_sections(sections) do
-    Map.new(sections, fn {name, section} ->
-      {name,
-       %{
-         revision: Map.fetch!(section, "revision"),
-         value: Map.get(section, "value")
-       }}
-    end)
+    ArchiveRecordCodec.variable_snapshot(stored, tenant_key, call_id)
   end
 
   defp convert_snapshots(snapshots, tenant_key, call_id) do
-    Enum.reduce_while(snapshots, {:ok, []}, fn stored, {:ok, converted} ->
-      case to_variable_snapshot(stored, tenant_key, call_id) do
-        {:ok, snapshot} -> {:cont, {:ok, [snapshot | converted]}}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, converted} -> {:ok, Enum.reverse(converted)}
-      {:error, _reason} = error -> error
-    end
+    ArchiveRecordCodec.variable_snapshots(snapshots, tenant_key, call_id)
   end
 
   defp fetch_latest(_repo, %Call{latest_variables_snapshot_id: nil}, _tenant_key, _call_id),

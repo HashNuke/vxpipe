@@ -61,4 +61,7 @@ defmodule Vxpipe.Calls do
     do: Archives.fetch_call_history(principal, call_id, options)
 
   def list_calls(principal, options \\ []), do: Inspections.list_calls(principal, options)
+
+  def inspect_call(principal, call_id, options \\ []),
+    do: Inspections.inspect_call(principal, call_id, options)
 end

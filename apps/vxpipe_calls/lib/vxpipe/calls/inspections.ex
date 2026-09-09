@@ -1,7 +1,16 @@
 defmodule Vxpipe.Calls.Inspections do
   @moduledoc "Authorized, bounded workflows for inspecting calls."
 
-  alias Vxpipe.Calls.{CallListCursor, CallListPage, Principal, Repositories}
+  alias Vxpipe.Calls.{
+    CallDetailPage,
+    CallFact,
+    CallListCursor,
+    CallListPage,
+    CallTimeline,
+    HistoryCursor,
+    Principal,
+    Repositories
+  }
 
   @default_page_size 25
   @maximum_page_size 100
@@ -24,6 +33,31 @@ defmodule Vxpipe.Calls.Inspections do
 
   def list_calls(_principal, _options), do: {:error, :invalid_call_list_request}
 
+  @spec inspect_call(Principal.t(), String.t(), keyword()) ::
+          {:ok, CallDetailPage.t()} | {:error, term()}
+  def inspect_call(%Principal{} = principal, call_id, options)
+      when is_binary(call_id) and byte_size(call_id) > 0 and byte_size(call_id) <= 256 and
+             is_list(options) do
+    with :ok <- authorize(principal),
+         {:ok, limit} <- page_size(options),
+         {:ok, cursor} <- history_cursor(options),
+         {:ok, repository} <- Repositories.fetch(options, :inspection_repository),
+         {:ok, call} <-
+           Repositories.call(repository, :fetch_call, [principal.tenant_key, call_id]),
+         {:ok, candidates} <-
+           Repositories.call(repository, :list_history_records, [
+             principal.tenant_key,
+             call_id,
+             limit + 1,
+             cursor
+           ]) do
+      {:ok, detail_page(call, candidates, limit)}
+    end
+  end
+
+  def inspect_call(_principal, _call_id, _options),
+    do: {:error, :invalid_call_inspection_request}
+
   defp authorize(%Principal{scopes: scopes}) do
     if MapSet.member?(scopes, :calls), do: :ok, else: {:error, :insufficient_scope}
   end
@@ -43,6 +77,14 @@ defmodule Vxpipe.Calls.Inspections do
     end
   end
 
+  defp history_cursor(options) do
+    case Keyword.get(options, :cursor) do
+      nil -> {:ok, nil}
+      encoded when is_binary(encoded) -> HistoryCursor.decode(encoded)
+      _invalid -> {:error, :invalid_cursor}
+    end
+  end
+
   defp page(candidates, limit) do
     {calls, overflow} = Enum.split(candidates, limit)
 
@@ -57,5 +99,25 @@ defmodule Vxpipe.Calls.Inspections do
   defp next_cursor(calls, _overflow) do
     call = List.last(calls)
     CallListCursor.encode(%CallListCursor{created_at: call.created_at, call_id: call.id})
+  end
+
+  defp detail_page(call, candidates, limit) do
+    {records, overflow} = Enum.split(candidates, limit)
+    {facts, snapshots} = Enum.split_with(records, &match?(%CallFact{}, &1))
+
+    %CallDetailPage{
+      call: call,
+      timeline: CallTimeline.project(facts, snapshots, order: :desc),
+      next_cursor: next_history_cursor(records, overflow)
+    }
+  end
+
+  defp next_history_cursor(_records, []), do: nil
+
+  defp next_history_cursor(records, _overflow) do
+    records
+    |> List.last()
+    |> HistoryCursor.from_record()
+    |> HistoryCursor.encode()
   end
 end
