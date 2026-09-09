@@ -1,6 +1,6 @@
 # Local Morse-code audio providers
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: implementation in progress. Specification review: approved (2026-09-08).
 Prerequisites: [Definition-driven call](definition-driven-call.md). This early optional provider slice does not become a semantic prerequisite for later production features.
 Sources: User-requested local testing/verification addition; [provider capability boundary](../architecture.md); [International Morse code, ITU-R M.1677-1](https://www.itu.int/rec/R-REC-M.1677-1-200910-I/en). Verify the normative timing/alphabet against the recommendation during implementation.
 
@@ -55,8 +55,19 @@ No hosted speech dependency, speech ML model, local VAD, general human-language 
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence, checkpoint 1 (2026-09-09): added the independent in-process codec
+foundation without changing provider selection or application defaults. The encoder renders
+bounded 16-bit little-endian mono PCM from normalized supported text using the ITU 1:3 mark and
+1:3:7 spacing ratios. The incremental decoder retains partial samples/windows across arbitrary
+binary chunks, identifies the configured tone, and emits explicit start/partial/final results.
+Its default 14-unit local end gap is deliberately distinct from the ITU seven-unit word gap and
+provides deterministic utterance completion.
+
+The first focused run failed because the codec modules did not exist. The green run passes two
+tests: an expected-run assertion for normalized `ET A`, and a hand-authored square-wave `SOS 2`
+fixture split at odd byte boundaries so the decoder is not validated by its own encoder. A
+warnings-as-errors child compile also passes. Exhaustive alphabet, malformed/bounded input,
+flush and timing-tolerance checks remain pending before the codec checklist items are complete.
 
 ## Specification review
 
