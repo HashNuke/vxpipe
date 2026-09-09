@@ -18,14 +18,35 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
       maximum_bytes: 262_144,
       maximum_age_ms: 2_000,
       maximum_consecutive_overflows: 5
-    ]
+    ],
+    providers: %{
+      Vxpipe.CallEngine.Provider.MorseCodeSTT => [
+        enabled: true,
+        provider_options: [],
+        transport: {Vxpipe.CallEngine.Provider.MorseCodeSTT.Transport, []},
+        media_ingress: [
+          maximum_frames: 50,
+          maximum_bytes: 262_144,
+          maximum_age_ms: 2_000,
+          maximum_consecutive_overflows: 5
+        ]
+      ]
+    }
   ],
   text_to_speech: [
     enabled: true,
     provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
     provider_options: [],
     transport: {Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeechSocket, []},
-    maximum_requests: 4
+    maximum_requests: 4,
+    providers: %{
+      Vxpipe.CallEngine.Provider.MorseCodeTTS => [
+        enabled: true,
+        provider_options: [],
+        transport: {Vxpipe.CallEngine.Provider.MorseCodeTTS.Transport, []},
+        maximum_requests: 4
+      ]
+    }
   ]
 
 config :vxpipe_gateway, Vxpipe.Gateway.Application,
@@ -88,6 +109,26 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
             kind: :text_to_speech,
             provider: Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech,
             options: %{model: "flux-haley-en", encoding: :linear16, sample_rate: 48_000}
+          },
+          "morse-code-stt" => %{
+            kind: :speech_to_text,
+            provider: Vxpipe.CallEngine.Provider.MorseCodeSTT,
+            options: %{
+              amplitude: 4_096,
+              frequency_hz: 700,
+              sample_rate: 16_000,
+              unit_duration_ms: 60
+            }
+          },
+          "morse-code-tts" => %{
+            kind: :text_to_speech,
+            provider: Vxpipe.CallEngine.Provider.MorseCodeTTS,
+            options: %{
+              amplitude: 4_096,
+              frequency_hz: 700,
+              sample_rate: 16_000,
+              unit_duration_ms: 60
+            }
           }
         },
         host_tools: %{

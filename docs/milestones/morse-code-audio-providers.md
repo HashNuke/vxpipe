@@ -23,7 +23,7 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 
 - [x] Write failing independent known-signal decode tests and expected tone/silence encode tests before implementing the codec.
 - [x] Implement bounded incremental Morse encoding/decoding with documented normalization and invalid-input behavior.
-- [ ] Add local STT/TTS provider/transport adapters and closed-registry configuration, preserving current hosted adapters.
+- [x] Add local STT/TTS provider/transport adapters and closed-registry configuration, preserving current hosted adapters.
 - [ ] Drive an actual room audio ingress-to-transcript and text-to-audio egress path using a deterministic reply fixture.
 - [ ] Document an opt-in sample/embedded profile, encoded input method, audio safety settings and supported transport limitations.
 
@@ -120,6 +120,23 @@ and interrupting a paced long response starts its replacement without a later st
 warnings-as-errors compile and the complete owning child suite pass with `131 tests, 0 failures
 (1 excluded)`. Closed-registry selection, a definition-driven room proof and explicit long/error
 boundary tests remain pending.
+
+Implementation evidence, checkpoint 6 (2026-09-09): extended each application-owned speech
+runtime setting with an optional closed `:providers` map keyed by provider module. A compiled
+profile can use either the unchanged top-level/default runtime or one explicitly registered
+alternative; unknown, disabled or malformed alternatives still fail startup before a room is
+created. Public profile options continue to merge only after the application selects private
+transport, credentials and queue policy.
+
+The focused test first failed with the expected path-specific unsupported-STT error because the
+existing startup path required the selected provider to equal the top-level default. It now
+resolves both local providers and their codec configuration from registered alternatives while
+asserting that the Deepgram defaults are unchanged. Development configuration registers
+`morse-code-stt` and `morse-code-tts` capability profiles and local runtimes but continues to
+select the existing hosted profiles by default. The definition-driven file passes `11 tests,
+0 failures`; a development-config probe confirms both registry entries load, and the complete
+owning child passes `132 tests, 0 failures (1 excluded)`. Credential-free sample selection and
+the complete room audio loop remain pending.
 
 ## Specification review
 

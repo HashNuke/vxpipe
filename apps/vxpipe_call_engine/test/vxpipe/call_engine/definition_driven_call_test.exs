@@ -29,7 +29,9 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   }
 
   alias Vxpipe.CallEngine.Tool.CurrentTime
+  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseConfig
 
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
@@ -192,6 +194,68 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                     %{url: stt_url, headers: [{"Authorization", "Token runtime-secret"}]}}
 
     assert stt_url =~ "model=flux-general-multi"
+  end
+
+  test "resolves explicitly registered alternate speech providers without changing defaults" do
+    plan = compile_plan(unique_id("room-morse-runtime"), speech?: true, speech_profile: :morse)
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    default_stt = [
+      enabled: true,
+      provider: Flux,
+      provider_options: [api_key: "unused-default"],
+      transport: {TestSpeechToTextTransport, []},
+      media_ingress: media_ingress_options()
+    ]
+
+    default_tts = [
+      enabled: true,
+      provider: FluxTextToSpeech,
+      provider_options: [api_key: "unused-default"],
+      transport: {TestTextToSpeechTransport, []},
+      maximum_requests: 2
+    ]
+
+    speech_to_text =
+      Keyword.put(default_stt, :providers, %{
+        MorseCodeSTT => [
+          enabled: true,
+          provider_options: [],
+          transport: {MorseCodeSTT.Transport, []},
+          media_ingress: media_ingress_options()
+        ]
+      })
+
+    text_to_speech =
+      Keyword.put(default_tts, :providers, %{
+        MorseCodeTTS => [
+          enabled: true,
+          provider_options: [],
+          transport: {MorseCodeTTS.Transport, []},
+          maximum_requests: 2
+        ]
+      })
+
+    assert {:ok, startup} =
+             PlanStartup.new(plan,
+               owner: self(),
+               agent_runtime: Keyword.fetch!(settings, :agent_runtime),
+               agent_request_options: [],
+               speech_to_text: speech_to_text,
+               text_to_speech: text_to_speech
+             )
+
+    assert {MorseCodeSTT, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
+             startup.speech_to_text.provider
+
+    assert startup.speech_to_text.transport == {MorseCodeSTT.Transport, []}
+
+    assert {MorseCodeTTS, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
+             startup.text_to_speech.provider
+
+    assert startup.text_to_speech.transport == {MorseCodeTTS.Transport, []}
+    assert Keyword.fetch!(default_stt, :provider) == Flux
+    assert Keyword.fetch!(default_tts, :provider) == FluxTextToSpeech
   end
 
   test "keeps the active agent pinned after source definition and profile maps change" do
@@ -486,6 +550,16 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         kind: :text_to_speech,
         provider: FluxTextToSpeech,
         options: %{model: "flux-plan-voice", encoding: :linear16, sample_rate: 48_000}
+      },
+      "morse-stt" => %{
+        kind: :speech_to_text,
+        provider: MorseCodeSTT,
+        options: %{sample_rate: 16_000, unit_duration_ms: 20}
+      },
+      "morse-tts" => %{
+        kind: :text_to_speech,
+        provider: MorseCodeTTS,
+        options: %{sample_rate: 16_000, unit_duration_ms: 20}
       }
     }
   end
@@ -493,8 +567,19 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   defp definition_input(options) do
     speech? = Keyword.get(options, :speech?, false)
 
-    caller_capabilities = if speech?, do: %{speech_to_text: "plan-stt"}, else: %{}
-    receiver_capabilities = if speech?, do: %{text_to_speech: "plan-tts"}, else: %{}
+    speech_profile = Keyword.get(options, :speech_profile, :hosted)
+
+    {speech_to_text_profile, text_to_speech_profile} =
+      case speech_profile do
+        :hosted -> {"plan-stt", "plan-tts"}
+        :morse -> {"morse-stt", "morse-tts"}
+      end
+
+    caller_capabilities =
+      if speech?, do: %{speech_to_text: speech_to_text_profile}, else: %{}
+
+    receiver_capabilities =
+      if speech?, do: %{text_to_speech: text_to_speech_profile}, else: %{}
 
     %{
       schema_version: "20260906.02",
@@ -596,12 +681,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
         sample_rate: 48_000
       ],
       transport: {TestSpeechToTextTransport, [observer: self()]},
-      media_ingress: [
-        maximum_frames: 50,
-        maximum_bytes: 262_144,
-        maximum_age_ms: 2_000,
-        maximum_consecutive_overflows: 5
-      ]
+      media_ingress: media_ingress_options()
     ]
 
     text_to_speech = [
@@ -652,6 +732,15 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     on_exit(fn ->
       Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
     end)
+  end
+
+  defp media_ingress_options do
+    [
+      maximum_frames: 50,
+      maximum_bytes: 262_144,
+      maximum_age_ms: 2_000,
+      maximum_consecutive_overflows: 5
+    ]
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)

@@ -116,3 +116,26 @@ The focused suite passes `3 tests, 0 failures`. The collected TTS frames indepen
 frame. `mix compile --warnings-as-errors && mix test` in `apps/vxpipe_call_engine` passes `131
 tests, 0 failures (1 excluded)`. Registry/default configuration remains unchanged; definition
 selection and whole-room verification are the next checkpoint.
+
+## Checkpoint 6: closed alternate-provider selection
+
+One runtime setting per speech kind previously meant `PlanStartup` could accept only a profile
+whose provider module exactly matched the application default. The new red definition-driven
+test supplied a valid Morse profile plus a closed alternative runtime alongside unchanged
+Deepgram defaults. Startup rejected it at the caller's STT selection, confirming that profile
+compilation alone did not accidentally authorize an implementation.
+
+Each existing STT/TTS setting may now carry a `:providers` map keyed by provider module. Startup
+first checks the top-level/default provider, then performs an exact lookup in that map. The chosen
+entry must be enabled and structurally valid; no external string is converted to a module or
+atom. Provider construction still merges application-owned private options with the compiled
+public profile only after this lookup. The legacy application-default room path is unchanged.
+
+Development config now registers both local provider modules and the corresponding closed
+capability profiles without selecting them as sample defaults. The focused test moved from the
+expected unsupported-STT failure to green and proves both local runtime values plus unchanged
+Deepgram defaults. The complete definition-driven file passes `11 tests, 0 failures`. A later
+development-config probe with placeholder secrets confirms both registry entries load, and the
+complete owning child passes `132 tests, 0 failures (1 excluded)`. A later checkpoint must make
+the trusted sample opt into both Morse profiles without demanding a Deepgram credential, then
+prove the room audio loop.

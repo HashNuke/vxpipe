@@ -2141,7 +2141,12 @@ bounds. It starts both participant subtrees and installs the receiver's stable c
 reference as the room text capability. An unused catalog agent starts no participant or
 activation process. Plan startup also combines the caller's selected STT and receiver's
 selected TTS public options with application-owned credentials, transports and queue/ingress
-policy before participant admission. It retains those typed provider runtimes for the room,
+policy before participant admission. Each speech setting retains its top-level implementation as
+the application default and may expose a closed `:providers` map for additional implementations.
+The compiled provider module must match that default or an exact registered module key; call input
+cannot construct a module or select an unregistered transport. This permits different pinned call
+profiles, including in-process Morse providers, without changing legacy room defaults. It retains
+those typed provider runtimes for the room,
 starts TTS with the receiver and starts the pinned STT when the caller connection attaches.
 Existing preset startup remains intact. This subset does not yet provide the room-owned Call
 Variables process/tools, so the preflight below rejects non-empty sections until that later

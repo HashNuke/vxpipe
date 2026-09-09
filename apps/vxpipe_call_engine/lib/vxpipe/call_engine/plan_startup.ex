@@ -306,11 +306,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          options,
          kind
        ) do
-    settings = Keyword.get(options, kind)
-
-    with settings when is_list(settings) <- settings,
+    with {:ok, settings} <- provider_settings(Keyword.get(options, kind), provider),
          true <- Keyword.get(settings, :enabled) == true,
-         ^provider <- Keyword.get(settings, :provider),
          private_options when is_list(private_options) <-
            Keyword.get(settings, :provider_options),
          {:ok, selected_options} <- selected_options(public_options),
@@ -325,6 +322,28 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   rescue
     _exception -> {:error, unsupported_speech_configuration_reason(kind)}
   end
+
+  defp provider_settings(settings, provider) when is_list(settings) do
+    if Keyword.get(settings, :provider) == provider do
+      {:ok, settings}
+    else
+      case Keyword.get(settings, :providers, %{}) do
+        providers when is_map(providers) ->
+          case Map.fetch(providers, provider) do
+            {:ok, provider_settings} when is_list(provider_settings) ->
+              {:ok, provider_settings}
+
+            _missing_or_invalid ->
+              {:error, :provider_not_configured}
+          end
+
+        _invalid_registry ->
+          {:error, :provider_not_configured}
+      end
+    end
+  end
+
+  defp provider_settings(_settings, _provider), do: {:error, :provider_not_configured}
 
   defp selected_options(options) when is_map(options) do
     if Enum.all?(options, fn {key, _value} -> is_atom(key) end) do
