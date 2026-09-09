@@ -174,6 +174,31 @@ evidence that this production concern is solved.
   warnings-as-errors compilation, root formatting, strict Credo over 294 source files, and
   the unused-lock check pass.
 
+## 2026-09-09 — official initialization and tool-call scenarios
+
+- Pinned the official legacy client harness to
+  `@modelcontextprotocol/conformance@0.1.16` / tag commit `21a9a2f` and the additional
+  Everything fixture to `@modelcontextprotocol/server-everything@2025.11.25` / tag commit
+  `0155af3`. The latter is recorded but not yet claimed as executed.
+- Red: the first official `initialize` run failed because the Vxpipe conformance task did
+  not exist. After adding it, the next run exposed that umbrella development runtime config
+  required an unrelated Deepgram key. The driver now starts only `:vxpipe_mcp`; the pinned
+  harness invokes it under `MIX_ENV=test`, where unrelated voice apps/config are not loaded.
+- Added `Connections.open_loopback_test/3` as a distinct fixture-only entry. A focused test
+  first proved that it was missing and that ordinary `open/3` still rejects the same HTTP
+  endpoint. A transient post-shutdown Registry entry also surfaced; lookup now refuses a
+  dead registered PID, and retirement is acknowledged with process monitors.
+- Green: official `initialize` passes 1/1. Official `tools_call` passes 1/1 after observing
+  `initialize`, `notifications/initialized`, `tools/list`, and exactly one `tools/call` for
+  the discovered `add_numbers` schema. No Jido, database, call engine, or model provider is
+  started by the task.
+- Added `bin/test-mcp-conformance`, an opt-in tagged ExUnit wrapper, and
+  `docs/mcp-client-conformance.md`. The matrix names all harness scenarios selected for
+  `2025-11-25`: OAuth and elicitation are out of this milestone's scope, while `sse-retry`
+  remains pending and is not represented as a pass.
+- The initial manual red harness run saved diagnostic results under `/tmp`; no generated
+  result directory or dependency install is committed.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)

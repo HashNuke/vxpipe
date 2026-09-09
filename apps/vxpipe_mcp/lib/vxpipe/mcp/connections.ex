@@ -27,12 +27,28 @@ defmodule Vxpipe.MCP.Connections do
   @spec open(ConnectionKey.t(), keyword(), keyword()) ::
           {:ok, Connection.t()} | {:error, error()}
   def open(%ConnectionKey{} = key, config, opts \\ []) when is_list(config) do
+    do_open(key, config, opts, &ClientOptions.build/1)
+  end
+
+  @doc """
+  Opens a plaintext client only for an isolated loopback fixture.
+
+  This separate entry cannot be selected through production integration configuration.
+  """
+  @spec open_loopback_test(ConnectionKey.t(), keyword(), keyword()) ::
+          {:ok, Connection.t()} | {:error, error()}
+  def open_loopback_test(%ConnectionKey{} = key, config, opts \\ [])
+      when is_list(config) do
+    do_open(key, config, opts, &ClientOptions.build_loopback_test/1)
+  end
+
+  defp do_open(key, config, opts, options_builder) do
     case lookup(key) do
       {:ok, connection} ->
         {:ok, connection}
 
       :error ->
-        start_connection(key, config, opts)
+        start_connection(key, config, opts, options_builder)
     end
   end
 
@@ -62,11 +78,11 @@ defmodule Vxpipe.MCP.Connections do
     end
   end
 
-  defp start_connection(key, config, opts) do
+  defp start_connection(key, config, opts, options_builder) do
     runtime = Keyword.get(opts, :runtime, ExMCPRuntime)
     runtime_options = Keyword.get(opts, :runtime_options, [])
 
-    with {:ok, client_options} <- ClientOptions.build(config),
+    with {:ok, client_options} <- options_builder.(config),
          {:ok, _owner} <-
            start_integration(key, runtime, client_options, runtime_options),
          {:ok, connection} <- lookup(key),

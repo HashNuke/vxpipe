@@ -13,7 +13,7 @@ defmodule Vxpipe.MCP.ConnectionNames do
   @spec lookup(:client | :owner, ConnectionKey.t()) :: {:ok, pid()} | :error
   def lookup(role, %ConnectionKey{} = key) when role in [:client, :owner] do
     case Registry.lookup(@registry, {role, key}) do
-      [{pid, _value}] -> {:ok, pid}
+      [{pid, _value}] -> if Process.alive?(pid), do: {:ok, pid}, else: :error
       [] -> :error
     end
   end

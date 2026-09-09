@@ -1,8 +1,9 @@
 # MCP client integration and conformance
 
 Status: in progress. The exact dependency/profile, bounded all-or-nothing discovery,
-pre-submission validated invocation, and scoped supervised connection contracts are
-implemented. ExMCP transport compatibility/conformance gates remain unproven; the separate Jido
+pre-submission validated invocation, scoped supervised connection contracts, and two
+in-scope official client scenarios are implemented. Recovery, Everything-server, and
+credentialed-production compatibility gates remain unproven; the separate Jido
 runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
@@ -72,20 +73,20 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   security, identity, size-limit, timeout and no-resubmission requirements.
 - [x] Red-test the smallest `vxpipe_mcp` contract, then add ExMCP to the owning internal
   library with its lockfile; keep Jido/domain dependencies out of this child.
-- [ ] Wire configured ExMCP supervision/readiness, discovery and validated invocation,
+- [x] Wire configured ExMCP supervision/readiness, discovery and validated invocation,
   including bounded failure and cleanup behavior.
-- [ ] Return a discovered test tool as schema/name data without credential leakage or
+- [x] Return a discovered test tool as schema/name data without credential leakage or
   externally driven atom/module creation; leave Jido exposure to the live-MCP milestone.
-- [ ] Add the official client-conformance driver, pinned harness/reference inputs and a
+- [x] Add the official client-conformance driver, pinned harness/reference inputs and a
   documented supported-requirement matrix.
-- [ ] Add an opt-in tagged integration lane; keep deterministic contract/security tests in
+- [x] Add an opt-in tagged integration lane; keep deterministic contract/security tests in
   the library's own test suite.
-- [ ] Document the internal public API for later room integration without exporting
+- [x] Document the internal public API for later room integration without exporting
   room/tenant/database abstractions.
 
 ## Acceptance and failure checks
 
-- [ ] A standalone ExMCP-backed wrapper discovers/calls a reference tool with neither
+- [x] A standalone ExMCP-backed wrapper discovers/calls a reference tool with neither
   Jido nor database/call engine running; decoded names/schemas remain data.
 - [ ] Applicable pinned official client scenarios pass; omitted/unsupported scenarios and
   upstream harness defects are explicit, not blanket success.
@@ -162,9 +163,15 @@ Implementation evidence:
   response, stream-buffer, DNS, connect, and request settings to ExMCP. A separate
   loopback-only builder exists for isolated fixtures; adding `test_mode` to ordinary
   production configuration cannot select plaintext transport.
+- `mix vxpipe.mcp.conformance_client` starts only `:vxpipe_mcp` and dispatches the two
+  explicitly supported official scenarios. The pinned opt-in runner and tagged integration
+  lane reproduce MCP `2025-11-25` initialization and one discovered/validated `tools/call`;
+  the full scenario matrix and internal API are recorded in
+  [MCP client conformance profile](../mcp-client-conformance.md).
 - The focused behavior test was observed red before implementation and is green with the
-  complete child suite (13 tests, 0 failures). This is deterministic adapter evidence only;
-  no remote/reference or official-conformance claim is made yet.
+  default child suite (14 tests, 0 failures, one integration test excluded). The opt-in
+  official lane passes its one wrapper test and both harness scenarios score 1/1 with no
+  failures or warnings. This is partial conformance evidence, not a blanket claim.
 
 ## Specification review
 

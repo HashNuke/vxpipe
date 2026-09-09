@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+client_command="env MIX_ENV=test mix vxpipe.mcp.conformance_client"
+
+cd "$project_root"
+
+npx -y @modelcontextprotocol/conformance@0.1.16 client \
+  --command "$client_command" \
+  --scenario initialize \
+  --spec-version 2025-11-25 \
+  --timeout 30000
+
+npx -y @modelcontextprotocol/conformance@0.1.16 client \
+  --command "$client_command" \
+  --scenario tools_call \
+  --spec-version 2025-11-25 \
+  --timeout 30000

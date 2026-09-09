@@ -55,6 +55,27 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     assert :error = Connections.lookup(key)
   end
 
+  test "opens plaintext only through the explicit loopback test entry" do
+    key = key("loopback")
+    close_on_exit([key])
+
+    assert {:error, :https_required} =
+             Connections.open(
+               key,
+               [endpoint: "http://127.0.0.1:4321/mcp"],
+               runtime: ReadyClientRuntime
+             )
+
+    assert {:ok, connection} =
+             Connections.open_loopback_test(
+               key,
+               [endpoint: "http://127.0.0.1:4321/mcp"],
+               runtime: ReadyClientRuntime
+             )
+
+    assert Connection.key(connection) == key
+  end
+
   defp open(key, authorization) do
     Connections.open(
       key,
