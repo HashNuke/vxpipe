@@ -24,6 +24,22 @@ are disabled by default and may be enabled with the namespaced Console applicati
 setting. Repository development enables the namespace, and Caddy routes it to the
 same Console endpoint as the gateway API while the voice sample remains on Vite.
 
+`Vxpipe.Console.TelemetryReporter` subscribes to the implemented gateway and call-engine
+events. It retains only bounded aggregates and the latest runtime sample. Telemetry
+callbacks admit events with atomics and send them locally; once the configured pending
+limit is reached, later events are counted as dropped rather than accumulating in the
+mailbox. Configure the bound alongside diagnostics:
+
+```elixir
+config :vxpipe_console, :diagnostics,
+  enabled: false,
+  max_pending_events: 1_000
+```
+
+The reporter starts even when browser diagnostics are disabled so it can be enabled at
+the routing boundary without changing event ownership. An embedding host may omit the
+Console entirely and attach its own handler to the framework-independent events.
+
 This milestone deliberately adds no diagnostics authentication. Deployments must
 control whether and where the opt-in Console endpoint is exposed. API-key and join-token
 validation belong to their web API/admission contracts; neither credential is an

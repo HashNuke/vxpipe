@@ -87,7 +87,7 @@ slow response or missing measurement. The existing voice console still works unc
   moving protocol ownership into Phoenix or rewriting the gateway.
 - [x] Select/document the dashboard mechanism and trusted operator-access boundary;
   keep Phoenix/dashboard/frontend dependencies in the console application.
-- [ ] Write red tests for project-owned timing/outcome projection, missing observations,
+- [x] Write red tests for project-owned timing/outcome projection, missing observations,
   safe metadata, bounded dimensions and reporter restart behavior.
 - [x] Instrument existing request/model/speech boundaries and add sampled VM measurements.
 - [ ] Connect a bounded reporter to a separate dashboard and the existing sample entry.
@@ -185,6 +185,16 @@ enabled request behaves the same for loopback and non-loopback peers. Caddy rout
 `/diagnostics` and `/diagnostics/*` to the Console endpoint, including the LiveView socket path;
 API-key authentication and join-token validation remain confined to their API/admission
 contracts. This correction supersedes the checkpoint-3 loopback restriction.
+
+Implementation evidence, checkpoint 7 (2026-09-09): added the Console-owned bounded
+Telemetry reporter. Its hot-path callback performs atomic admission plus a local send;
+the configured pending limit produces an explicit dropped-event count rather than an
+unbounded mailbox. State contains only closed-dimension counts, duration aggregates and
+the latest runtime gauges with age information. Focused tests cover six event projections,
+payload-sentinel exclusion, saturation, abrupt replacement without double attachment and
+normal detach. Umbrella gates pass with call engine `107 tests, 0 failures (1 excluded)`, gateway
+`45 tests, 0 failures (3 excluded)`, and Console `7 tests, 0 failures`. The custom measurement
+page remains pending.
 
 ## Specification review
 

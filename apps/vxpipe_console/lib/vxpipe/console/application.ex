@@ -4,12 +4,16 @@ defmodule Vxpipe.Console.Application do
   use Application
 
   alias Vxpipe.Console.Endpoint
+  alias Vxpipe.Console.TelemetryReporter
   alias Vxpipe.Gateway.HTTP.Mount
 
   @impl true
   def start(_type, _args) do
+    diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
+
     children = [
       {Phoenix.PubSub, name: Vxpipe.Console.PubSub},
+      {TelemetryReporter, max_pending_events: Keyword.fetch!(diagnostics, :max_pending_events)},
       {Endpoint, gateway_mount: gateway_mount()}
     ]
 

@@ -206,3 +206,26 @@ and STT test run passed `5 tests, 0 failures`.
 Umbrella format, warnings-as-errors compile, default tests, and unused-lock checks passed with
 call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
 and Console `4 tests, 0 failures`.
+
+## Checkpoint 7: bounded Console reporter
+
+The Console now owns one optional `Vxpipe.Console.TelemetryReporter` process. Telemetry callbacks
+perform only atomic admission and a local send. `max_pending_events` is a hard bound: once the
+pending count reaches it, later observations increment a dropped counter instead of entering the
+mailbox. Reporter state retains finite duration aggregates and counts plus only the latest runtime
+sample. Raw event maps, request data, conversation data and provider payloads are not retained.
+
+Duration aggregates use microseconds and keep count, total, minimum, maximum and latest values.
+All dimension values are projected through fixed operation, provider, outcome, first-output,
+capability and failure-category sets. Snapshots include the age of the last admitted event and
+runtime sample so the dashboard can distinguish current, stale and missing information.
+
+The first focused test run failed because the reporter module did not exist. The first green
+attempt exposed that ordinary supervisor shutdown did not invoke the cleanup callback unless the
+collector trapped exits. The process now traps exits for best-effort detach, while correctness
+after an abrupt kill comes from replacement initialization detaching the stable handler identifier
+before attaching it again. The focused suite passed `3 tests, 0 failures`, and the complete Console
+suite passed `7 tests, 0 failures`. Umbrella format, warnings-as-errors compile, default tests and
+unused-lock checks passed with call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests,
+0 failures (3 excluded)`, and Console `7 tests, 0 failures`. The browser measurement page remains
+pending for this milestone.

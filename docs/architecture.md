@@ -1559,6 +1559,19 @@ consume engine events without a gateway/UI dependency. Measurement boundaries mu
 distinguish provider output, gateway egress and actual remote playback; missing data
 is not zero. [Telemetry execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4).
 
+The Console's `Vxpipe.Console.TelemetryReporter` is one optional consumer. Its event
+handler performs only atomic admission and a local message send. The configured
+`max_pending_events` is a hard bound: events beyond it are dropped and counted rather
+than growing the reporter mailbox or delaying the emitting process. The reporter keeps
+only finite counts, duration aggregates and the latest runtime sample; it never retains
+raw event history. Duration aggregates convert native monotonic durations to
+microseconds and retain count, total, minimum, maximum and latest values. Provider,
+operation, outcome and failure keys are normalized to the closed categories above,
+including fallbacks for unexpected metadata. Snapshot ages expose stale collection,
+and the dropped count exposes saturation. One stable Telemetry handler identifier is
+detached before attachment and during normal shutdown, so a replacement also removes a
+handler left behind by an abrupt reporter exit.
+
 The gateway exposes authorized projections and the console presents them through
 public gateway/Calls APIs, not direct Repo queries or unrestricted room state.
 Tenant call inspection is separate from platform-wide VM introspection;
@@ -1577,7 +1590,8 @@ this slice adds no page authentication; deployment exposure is an application co
 API keys and caller join tokens keep their API/admission meanings and are not Console
 login credentials. Repository development routes the diagnostics namespace through
 Caddy to the shared Console endpoint. The Console shell and LiveDashboard route are
-implemented; call-path instrumentation and the Vxpipe measurement page remain in progress.
+implemented; call-path instrumentation and its bounded in-memory reporter are implemented,
+while the Vxpipe measurement page remains in progress.
 
 ## Configuration and container boundary
 

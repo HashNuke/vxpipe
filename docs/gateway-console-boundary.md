@@ -71,13 +71,12 @@ rewrite. The eventual asset relocation, development watcher/proxy wiring and
 production static delivery must be verified together. Keep diagnostics on a
 separate page from the responsive voice console.
 
-Phoenix is the selected console framework. The operational-dashboard mechanism
-and browser authentication details still need an implementation choice. Platform
-VM introspection and tenant-scoped call inspection are separate access boundaries;
-neither a call token nor merely running the console grants operator access.
-Diagnostics remain opt-in and protected. A release may include the console, while
-an embedding host can omit it and attach its own framework-independent telemetry
-reporter.
+Phoenix is the selected console framework. LiveDashboard owns platform VM inspection,
+and a separate Vxpipe page owns bounded call-path measurements. Diagnostics remain
+opt-in and add no Console-specific login; the deployment decides whether to expose them.
+API keys and join tokens remain limited to API and call-admission contracts. A release
+may include the console, while an embedding host can omit it and attach its own
+framework-independent telemetry reporter.
 
 ## Alternatives not selected
 

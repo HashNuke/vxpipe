@@ -29,6 +29,7 @@ defmodule Vxpipe.Console.MixProject do
       {:phoenix_live_dashboard, "~> 0.9.1"},
       {:phoenix_live_view, "~> 1.1"},
       {:phoenix_pubsub, "~> 2.1"},
+      {:telemetry, "~> 1.3"},
       {:vxpipe_gateway, in_umbrella: true}
     ]
   end

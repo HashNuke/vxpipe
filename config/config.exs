@@ -49,7 +49,9 @@ config :vxpipe_console, Vxpipe.Console.Endpoint,
   server: false,
   url: [host: "localhost"]
 
-config :vxpipe_console, :diagnostics, enabled: false
+config :vxpipe_console, :diagnostics,
+  enabled: false,
+  max_pending_events: 1_000
 
 # Sample configuration:
 #
