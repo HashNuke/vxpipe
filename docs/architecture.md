@@ -1610,7 +1610,9 @@ implemented. The Vxpipe LiveView measurement page reads the bounded reporter wit
 timeout and presents only its latest aggregate snapshot. It distinguishes current, stale,
 missing, dropped and unavailable observations without creating a second history buffer.
 Its locally packaged, content-hashed client connects through the existing diagnostics
-socket; no hosted browser asset or additional Console or LiveDashboard authentication is
+socket. The diagnostics enablement decision is shared by the HTTP pipeline and socket
+connect callback: disabled HTTP requests return 404 and disabled socket connections are
+refused. No hosted browser asset or additional Console or LiveDashboard authentication is
 introduced.
 
 ## Configuration and container boundary

@@ -116,7 +116,7 @@ slow response or missing measurement. The existing voice console still works unc
   The optional standalone listener also preserves existing protocol/CORS behavior.
 - [ ] Console pages and gateway call routes share the Phoenix HTTP listener without
   an internal HTTP hop; disabling the gateway listener does not stop its connection runtime.
-- [ ] Disabled diagnostic requests/subscriptions fail closed. When enabled, diagnostics
+- [x] Disabled diagnostic requests/subscriptions fail closed. When enabled, diagnostics
   require no additional authentication; API keys retain only their call-management role
   and join tokens retain only their call-admission role.
 - [ ] Existing room creation, RTVI joining, text/audio, CORS and interruption checks remain
@@ -287,6 +287,17 @@ The frontend's three tests and production build pass. Chromium rendered the HTTP
 1440x900 and 390x844 without page errors or horizontal overflow. The complete umbrella gates
 pass with call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures
 (3 excluded)`, and Console `13 tests, 0 failures`.
+
+Implementation evidence, checkpoint 13 (2026-09-09): the diagnostic LiveView transport now
+uses a Console-owned socket whose connect callback shares the HTTP pipeline's enablement
+decision. The focused test first failed because that socket did not exist and the endpoint
+still mounted the unconditional dependency socket. It now verifies a refused disabled
+connection, an unauthenticated enabled connection and the endpoint wiring, while the existing
+HTTP tests retain disabled 404 and enabled local/remote behavior. The focused Console endpoint
+run passes `6 tests, 0 failures`. A live HTTPS diagnostics page connected through the new socket,
+reported `Collecting`, and produced no browser errors. The complete umbrella gates pass with
+call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
+and Console `14 tests, 0 failures`.
 
 ## Specification review
 

@@ -8,11 +8,16 @@ defmodule Vxpipe.Console.DiagnosticsEnabled do
   @impl true
   def init(options), do: options
 
+  @spec enabled?() :: boolean()
+  def enabled? do
+    :vxpipe_console
+    |> Application.fetch_env!(:diagnostics)
+    |> Keyword.fetch!(:enabled)
+  end
+
   @impl true
   def call(conn, _options) do
-    diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
-
-    if Keyword.fetch!(diagnostics, :enabled) do
+    if enabled?() do
       conn
     else
       conn

@@ -7,7 +7,7 @@ defmodule Vxpipe.Console.Endpoint do
     signing_salt: "vxpipe-console"
   ]
 
-  socket "/diagnostics/live", Phoenix.LiveView.Socket,
+  socket "/diagnostics/live", Vxpipe.Console.DiagnosticsSocket,
     websocket: [connect_info: [session: @session_options]]
 
   plug Vxpipe.Console.GatewayMount

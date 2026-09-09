@@ -394,3 +394,21 @@ and its production build completed. Chromium rendered the public HTTPS entry at 
 390x844 with no page errors or horizontal overflow. Root format, warnings-as-errors compile,
 default suite and unused-lock gates passed with call engine `116 tests, 0 failures (1 excluded)`,
 gateway `45 tests, 0 failures (3 excluded)`, and Console `13 tests, 0 failures`.
+
+## Checkpoint 13: Diagnostic socket enablement
+
+HTTP diagnostics already failed closed through `Vxpipe.Console.DiagnosticsEnabled`, but the
+endpoint mounted `Phoenix.LiveView.Socket` unconditionally. A direct socket connection could
+therefore pass the transport connect boundary even when the corresponding HTTP pages returned
+404. The focused endpoint test first failed because the expected Console-owned socket module
+did not exist.
+
+`Vxpipe.Console.DiagnosticsSocket` now uses the same enablement predicate as the HTTP Plug.
+It refuses disabled connections and accepts an empty, unauthenticated connection when enabled;
+the endpoint test also asserts that the diagnostic path mounts this module rather than the
+unconditional dependency socket. The focused run passes `6 tests, 0 failures`, including the
+existing disabled HTTP 404 and enabled local/remote page checks. A live HTTPS page connected
+through the new socket, showed `Collecting`, and produced no browser errors. Root format,
+warnings-as-errors compile, default suite and unused-lock gates passed with call engine
+`116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`, and Console
+`14 tests, 0 failures`.

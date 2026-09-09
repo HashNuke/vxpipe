@@ -65,4 +65,6 @@ This milestone deliberately adds no diagnostics authentication. Deployments must
 control whether and where the opt-in Console endpoint is exposed. API-key authentication
 belongs to call-management endpoints, while join-token validation belongs to call
 admission; neither credential is an additional login mechanism for Console pages or
-LiveDashboard.
+LiveDashboard. The same diagnostics setting gates both HTTP routes and new LiveView
+socket connections, so a disabled deployment cannot bypass its 404 by connecting to
+the socket path directly.

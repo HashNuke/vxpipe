@@ -3,6 +3,9 @@ defmodule Vxpipe.Console.EndpointTest do
 
   import Phoenix.ConnTest
 
+  require Phoenix.ChannelTest
+
+  alias Vxpipe.Console.DiagnosticsSocket
   alias Vxpipe.Gateway.HTTP
 
   @endpoint Vxpipe.Console.Endpoint
@@ -41,6 +44,25 @@ defmodule Vxpipe.Console.EndpointTest do
     conn = get(build_conn(), "/diagnostics")
 
     assert response(conn, 404) == "not found"
+  end
+
+  test "diagnostic subscriptions fail closed unless diagnostics are enabled" do
+    original = Application.fetch_env!(:vxpipe_console, :diagnostics)
+
+    on_exit(fn -> Application.put_env(:vxpipe_console, :diagnostics, original) end)
+
+    Application.put_env(:vxpipe_console, :diagnostics, Keyword.put(original, :enabled, false))
+
+    assert :error = Phoenix.ChannelTest.connect(DiagnosticsSocket, %{})
+
+    Application.put_env(:vxpipe_console, :diagnostics, Keyword.put(original, :enabled, true))
+
+    assert {:ok, %Phoenix.Socket{}} = Phoenix.ChannelTest.connect(DiagnosticsSocket, %{})
+
+    assert Enum.any?(@endpoint.__sockets__(), fn
+             {"/diagnostics/live", DiagnosticsSocket, _options} -> true
+             _socket -> false
+           end)
   end
 
   test "enabled diagnostics require no authentication" do
