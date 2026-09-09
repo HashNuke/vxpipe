@@ -106,7 +106,7 @@ commit `0155af3` locks MCP SDK `1.19.1`, whose newest supported revision is `202
 Using that package would test fallback negotiation instead of Vxpipe's selected protocol,
 so it was inspected and rejected rather than represented as a pass.
 
-## Open compatibility gate
+## Blocking compatibility findings
 
 ExMCP 1.3.0 and upstream `master` at `56880c6` read HTTP credential trust from the
 application-global `:ex_mcp, :security` configuration rather than from each client. A global
@@ -114,3 +114,26 @@ union of tenant origins would weaken per-integration credential binding, so prod
 credentialed remote sessions remain blocked until this is resolved through a public
 dependency boundary. The loopback conformance successes carry no credentialed-production
 claim.
+
+Two further release-level gaps were reproduced against the public client path:
+
+- A corrected pinned recovery fixture sent 300 complete progress events totaling 339,790
+  bytes of decoded JSON after `Last-Event-ID` reconnection. The invocation succeeded with
+  both `max_response_bytes` and `max_stream_buffer_bytes` set to 262,144 bytes. ExMCP bounds
+  an incomplete SSE frame, then clears that buffer after each complete event; it does not
+  retain a cumulative response-stream counter across events or reconnections.
+- ExMCP's asynchronous POST and transport failure handlers interpolate the raw failure term
+  into log messages. Decode failures can contain the malformed response body, so Vxpipe
+  cannot establish the stronger credential-free diagnostic contract at the public wrapper
+  boundary alone.
+
+The recovery deadline itself behaves correctly: with Vxpipe's 5,000 ms invocation deadline
+and a server-provided `retry: 6000`, the submitted call returned the bounded
+`:outcome_unknown` result at the original deadline and did not reconnect or resubmit the
+tool. The cumulative byte half of that acceptance gate remains failed.
+
+Vxpipe will not work around these gaps by sharing a global union of tenant trust, installing
+a host-wide Logger filter, disabling the required SSE path, or introducing a second MCP
+transport/parser. Milestone completion requires an ExMCP release or explicitly maintained
+dependency revision that exposes per-client trust, sanitized diagnostics, and cumulative
+stream accounting through its supported boundary.

@@ -331,3 +331,31 @@ evidence that this production concern is solved.
 - [ExMCP client API](https://ex-mcp.hexdocs.pm/ExMCP.Client.html)
 - [MCP 2025-11-25 Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 - [Official conformance SDK guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
+
+## 2026-09-09 — resumed-stream compatibility audit
+
+- Traced ExMCP 1.3.0's public request path and exact tagged tests. Explicit invocation
+  timeouts use one monotonic caller deadline, including time spent waiting for legacy SSE
+  recovery. The SSE transport's configured response limit does not have the same scope:
+  `BoundedStream` does not increment its response-size counter in stream mode, and
+  `SSEClient` bounds only the bytes retained for one incomplete frame before resetting the
+  buffer after a complete event.
+- Used a temporary checkout of the pinned conformance tag, corrected only to the selected
+  `2025-11-25` revision, and added paced progress events for the audit. Three hundred
+  individually bounded events contained 339,790 decoded JSON bytes in aggregate. With
+  Vxpipe's 262,144-byte response and stream-buffer limits, the client accepted all events,
+  delivered the final result after `Last-Event-ID` recovery, and the scenario passed. This
+  demonstrates a failed cumulative-budget requirement, not a successful limit check. The
+  temporary fixture was not added to the repository.
+- Changed that temporary server's retry instruction to 6,000 ms while retaining the
+  conformance action's 5,000 ms deadline. The tool was submitted once, its POST stream
+  closed, and Vxpipe returned `:outcome_unknown` at the original deadline before the delayed
+  GET reconnect. This confirms the deadline half of the recovery requirement.
+- A first unpaced variant also exposed ExMCP's incomplete-frame parser losing a fragmented
+  SSE event under a burst of writes and logging the raw `Jason.DecodeError` response data.
+  The paced run isolated the cumulative-budget result, while source inspection confirmed
+  that asynchronous POST failures likewise interpolate raw reasons into logs.
+- Decision: keep the cumulative-stream and credential/diagnostic acceptance gates open and
+  mark this milestone dependency-blocked. Do not compensate with global tenant-origin trust,
+  a host-wide log filter, disabled SSE, or a Vxpipe-owned alternate MCP parser. A compatible
+  ExMCP public boundary is required before production approval.

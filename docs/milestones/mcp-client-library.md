@@ -1,11 +1,12 @@
 # MCP client integration and conformance
 
-Status: in progress. The exact dependency/profile, bounded all-or-nothing discovery,
+Status: blocked on ExMCP compatibility. The exact dependency/profile, bounded all-or-nothing discovery,
 pre-submission validated invocation, scoped supervised connection contracts, two unmodified
 official scenarios, corrected recovery fixture, and Everything-server interoperability are
-implemented. Credentialed production and remaining failure/security gates remain unproven;
-the separate Jido runtime-tool interface blocker belongs to the live-MCP milestone, not this
-library.
+implemented. ExMCP 1.3.0 does not enforce a cumulative byte budget on complete SSE events,
+does not provide per-client credential-origin trust, and can include raw asynchronous
+transport reasons in logs. Those dependency gaps block the remaining production gates; the
+separate Jido runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
 Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [loop/tool-binding decision](../jido-tool-execution.md); [approved remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
@@ -168,6 +169,13 @@ Implementation evidence:
   beyond a 100 ms deadline and a server-side disconnect both return `:outcome_unknown`.
   All five post-submission failures emit one tool call and no retry. Cumulative accounting
   across resumed streams remains a separate unchecked gate.
+- A corrected pinned recovery fixture with a 5,000 ms invocation deadline and a server
+  `retry: 6000` instruction returns `:outcome_unknown` at the original deadline without a
+  reconnect or another tool submission. The same fixture delivered 300 individually bounded
+  progress messages totaling 339,790 bytes of decoded JSON after reconnection; the invocation
+  still succeeded despite the configured 262,144-byte response and stream-buffer limits.
+  ExMCP's SSE buffer is bounded only while a frame is incomplete and is reset after every
+  complete event, so release 1.3.0 cannot satisfy the cumulative stream budget contract.
 - `Vxpipe.MCP.Invocation` selects only from that complete catalog and delegates schema work
   to `Vxpipe.MCP.ArgumentValidator`. Default/explicit JSON Schema 2020-12 and canonical
   explicit Draft 7 arguments are checked without casts or remote resolvers before submission;
