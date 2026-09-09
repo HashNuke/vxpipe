@@ -153,6 +153,27 @@ evidence that this production concern is solved.
 - Tests use a deterministic supervised runtime double. Actual ExMCP initialization,
   session headers, connection loss/recovery, and reference-server use remain unproven.
 
+## 2026-09-09 — explicit transport profiles and limits
+
+- Rechecked ExMCP upstream `master` at commit `56880c6` after inspecting release 1.3.0.
+  Its HTTP request guard still reads application-global trusted origins; there is no newer
+  released or upstream per-client option to pin. A global union of tenant origins is not an
+  acceptable substitute for per-integration credential binding, so this compatibility gate
+  remains open.
+- Red: the focused profile tests showed that transport limits were absent and the dedicated
+  loopback test builder did not exist.
+- Green: `TransportOptions` now owns validated positive limits. Production client options
+  explicitly bound request bodies, responses, streaming buffers, DNS resolution, connection,
+  and request duration instead of inheriting broad dependency defaults. Private-host
+  exceptions remain explicit data passed to ExMCP's connect-time/DNS-rebinding policy.
+- `ClientOptions.build/1` remains HTTPS-only and rejects userinfo/fragments. A `test_mode`
+  key cannot weaken it. `build_loopback_test/1` is a separate code path that accepts only
+  plaintext localhost, IPv4 loopback, or IPv6 loopback targets and disables reconnect for
+  deterministic fixtures.
+- Verification: the complete `vxpipe_mcp` suite passes with 13 tests and 0 failures;
+  warnings-as-errors compilation, root formatting, strict Credo over 294 source files, and
+  the unused-lock check pass.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)

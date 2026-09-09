@@ -99,7 +99,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   timeout/disconnect retains an honest unknown outcome after submission.
 - [ ] Credentials are absent from diagnostics/status; redirects, changed DNS/private
   addresses and credential forwarding obey production policy.
-- [ ] Test-only loopback settings cannot be selected through production integration config.
+- [x] Test-only loopback settings cannot be selected through production integration config.
 - [ ] Repeatedly register and retire bounded test catalogs; externally supplied identifiers
   do not cause atom/module growth proportional to tenant/catalog churn or cross-tenant tool
   resolution. Measure BEAM atom/module counts across many unique endpoint, tool and schema
@@ -158,8 +158,12 @@ Implementation evidence:
   returns a credential-free opaque handle after exact-version readiness, and retires the
   owning subtree through its `DynamicSupervisor`; connection registry, runtime adapter,
   identity, handle, and subtree supervision remain separate modules.
+- Production client construction is HTTPS-only and supplies explicit bounded request,
+  response, stream-buffer, DNS, connect, and request settings to ExMCP. A separate
+  loopback-only builder exists for isolated fixtures; adding `test_mode` to ordinary
+  production configuration cannot select plaintext transport.
 - The focused behavior test was observed red before implementation and is green with the
-  complete child suite (11 tests, 0 failures). This is deterministic adapter evidence only;
+  complete child suite (13 tests, 0 failures). This is deterministic adapter evidence only;
   no remote/reference or official-conformance claim is made yet.
 
 ## Specification review
