@@ -74,6 +74,47 @@ defmodule Vxpipe.Calls.LiveInspectionsTest do
            ]
   end
 
+  test "filters denied transcript content and credential fields before live disclosure" do
+    snapshot = engine_snapshot()
+    [first | rest] = snapshot.records
+
+    denied = %{
+      first
+      | kind: :accepted_input,
+        source_policy: %{"revision" => 2, "save_transcripts" => false},
+        payload: %{
+          "content" => "forbidden-transcript-sentinel",
+          "modality" => "text",
+          "request" => %{
+            "Authorization" => "forbidden-credential-sentinel",
+            "request_id" => "safe-request-id"
+          }
+        }
+    }
+
+    source =
+      start_supervised!(
+        {TestLiveInspectionSource, snapshot: %{snapshot | records: [denied | rest]}}
+      )
+
+    assert {:ok, inspection} =
+             Calls.inspect_live_call(principal("tenant-live"), "call-live",
+               live_inspection_source: TestLiveInspectionSource.source(source)
+             )
+
+    accepted_input = Enum.find(inspection.timeline, &(&1.kind == :accepted_input))
+
+    assert accepted_input.payload == %{
+             "modality" => "text",
+             "request" => %{"request_id" => "safe-request-id"}
+           }
+
+    payloads = Enum.map(inspection.timeline, & &1.payload)
+
+    refute JSON.encode!(payloads) =~ "forbidden-transcript-sentinel"
+    refute JSON.encode!(payloads) =~ "forbidden-credential-sentinel"
+  end
+
   test "uses the configured engine source without exposing the engine buffer" do
     identity = %{
       tenant_id: "tenant-live",
@@ -88,8 +129,10 @@ defmodule Vxpipe.Calls.LiveInspectionsTest do
       )
 
     assert {:ok, port} = Buffer.port(buffer)
-    fact = %{engine_fact(:tool_call_started, 1, ~U[2026-09-09 16:00:01.000000Z]) |
-      incarnation_id: identity.incarnation_id
+
+    fact = %{
+      engine_fact(:tool_call_started, 1, ~U[2026-09-09 16:00:01.000000Z])
+      | incarnation_id: identity.incarnation_id
     }
 
     assert :ok = Port.offer(port, fact)
@@ -119,7 +162,8 @@ defmodule Vxpipe.Calls.LiveInspectionsTest do
   defp engine_fact(kind, sequence, occurred_at) do
     payload =
       case kind do
-        :tool_call_started -> %{"arguments" => %{}, "name" => "slow_lookup"}
+        :tool_call_started ->
+          %{"arguments" => %{}, "name" => "slow_lookup"}
 
         :tool_call_completed ->
           %{"name" => "slow_lookup", "result" => %{"value" => "private-live-result"}}

@@ -29,6 +29,30 @@ defmodule Vxpipe.Console.CallInspectionPresentationTest do
     assert CallInspectionTimeline.select(timeline, "persisted:shared-event") == persisted_entry
   end
 
+  test "orders out-of-order evidence by source time and deduplicates one source identity" do
+    older = timeline_entry(:persisted, "older-event", 1)
+
+    newer = %{
+      timeline_entry(:persisted, "newer-event", 3)
+      | occurred_at: ~U[2026-09-09 16:30:07Z]
+    }
+
+    duplicate = %{newer | payload: %{"text" => "duplicate receipt"}}
+
+    timeline =
+      CallInspectionTimeline.combine(
+        persisted_detail([newer, older, duplicate]),
+        nil
+      )
+
+    assert Enum.map(timeline, &CallInspectionTimeline.selection_key/1) == [
+             "persisted:newer-event",
+             "persisted:older-event"
+           ]
+
+    assert hd(timeline).payload == %{"text" => "hello"}
+  end
+
   test "reports only permitted field changes between persisted and live snapshots" do
     persisted_snapshot =
       variable_snapshot(:persisted, "persisted-r2", 2, %{

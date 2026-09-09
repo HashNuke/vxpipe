@@ -470,6 +470,51 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     refute_receive {:inspect_live_call, _, "call-public-id", []}, 1_200
   end
 
+  test "reconnects through bounded reads without republishing stale page evidence" do
+    call = call_summary()
+
+    previous_live = %{
+      live_detail()
+      | timeline: [
+          timeline_entry(:live, :tool_call_completed, %{
+            payload: %{"result" => "stale-page-evidence"}
+          })
+        ]
+    }
+
+    configure_backend(%{
+      list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
+      inspect_call: {:ok, persisted_detail(call)},
+      inspect_live_call: {:ok, previous_live}
+    })
+
+    conn = sign_in()
+    {:ok, first_view, first_html} = live(recycle(conn), "/calls/#{call.id}")
+
+    assert first_html =~ "stale-page-evidence"
+    assert_receive {:list_calls, _, [limit: 25]}
+    assert_receive {:inspect_call, _, "call-public-id", [limit: 50]}
+    assert_receive {:inspect_live_call, _, "call-public-id", []}
+
+    monitor = Process.monitor(first_view.pid)
+    :ok = GenServer.stop(first_view.pid)
+    assert_receive {:DOWN, ^monitor, :process, _pid, :normal}
+
+    configure_backend(%{
+      list_calls: {:ok, %CallListPage{calls: [], next_cursor: nil}},
+      inspect_call: {:error, :call_not_found},
+      inspect_live_call: {:error, :call_not_live}
+    })
+
+    {:ok, _reconnected_view, reconnected_html} = live(recycle(conn), "/calls/#{call.id}")
+
+    assert reconnected_html =~ "Call not found"
+    refute reconnected_html =~ "stale-page-evidence"
+    assert_receive {:list_calls, _, [limit: 25]}
+    assert_receive {:inspect_call, _, "call-public-id", [limit: 50]}
+    assert_receive {:inspect_live_call, _, "call-public-id", []}
+  end
+
   defp sign_in do
     post(build_conn(), "/operator/session", %{
       "operator" => %{
