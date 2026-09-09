@@ -65,6 +65,32 @@ Focused evidence:
   check passed after this checkpoint: Call Engine 157/0 (1 excluded), Gateway
   52/0 (4 excluded), Console 20/0.
 
-RoomAuthority does not consume the new acceptance/continuation messages yet, and
-the development definition still exposes no background Action. Those are the
-next integration checkpoint.
+### Room projection and runnable development Action
+
+- Red: the focused room test failed because `RoomAuthority` did not handle the
+  coordinator's continuation-start message. The delayed-report executor test
+  separately failed while that production Action did not exist.
+- `RoomAuthority` now tracks accepted background calls independently from the
+  originating conversational turn. Interruption settles only unsent/active
+  tool calls; an accepted call can report its one terminal result after the
+  originating turn has completed or been interrupted.
+- Engine-origin continuations create only an agent turn. They produce no fake
+  participant turn or caller transcript event, while their agent output follows
+  the normal sequenced text and optional speech path.
+- Added the finite `prepare_background_report` Jido Action. It validates a
+  short topic, bounds the requested delay to ten seconds, submits through the
+  engine dispatcher, and returns a deterministic result.
+- The trusted development definition exposes the Action with instructions that
+  distinguish accepted/running from completed/ready. Its default delay remains
+  two seconds.
+- A real Jido test proves it can accept the supervised Action and finish the
+  same conversational response while the worker is still blocked. Stopping the
+  activation subtree then terminates that worker.
+
+Focused evidence:
+
+- `mix test test/vxpipe/call_engine/tool/executor_test.exs test/vxpipe/call_engine/agent_coordinator_test.exs test/vxpipe/call_engine/text_turn_test.exs`
+  — 22 tests, 0 failures.
+
+The remaining milestone work is bounded operational telemetry, complete gate
+coverage, and rendered/manual browser verification.

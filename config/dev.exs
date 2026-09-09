@@ -10,7 +10,10 @@ them, then save those values in the intake section with update_variables. The
 intake section has exactly two variables: summary is a string, and urgency is one
 of low, normal, or high. Use those variable names exactly. Never claim a variable
 update succeeded unless its tool result confirms success; correct or report a
-failed update instead.
+failed update instead. Use prepare_background_report only when the caller
+explicitly asks for a background report. A running result means the report was
+accepted, not completed: acknowledge that it is running, continue the
+conversation, and do not claim it is ready until the later completion arrives.
 """
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
@@ -122,7 +125,11 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               prompt: sample_system_prompt,
               first_message: %{mode: "wait_for_input"},
               tools: %{
-                "get_current_time" => %{type: "host", tool: "get_current_time"}
+                "get_current_time" => %{type: "host", tool: "get_current_time"},
+                "prepare_background_report" => %{
+                  type: "host",
+                  tool: "prepare_background_report"
+                }
               },
               transfers: [],
               variable_permissions: %{
@@ -171,7 +178,8 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           }
         },
         host_tools: %{
-          "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime
+          "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime,
+          "prepare_background_report" => Vxpipe.CallEngine.Tool.DelayedReport
         }
       ]
     ]

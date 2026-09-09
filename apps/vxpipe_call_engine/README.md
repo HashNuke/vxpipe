@@ -93,6 +93,16 @@ restarts through a stable activation reference. Plan-selected speech combines pu
 options with application-owned secrets, transports, and bounds before startup. The repository
 sample exercises this path; legacy `CreateRoom` presets remain available to embedded hosts.
 
+Actions explicitly declared with `execution: :background` submit finite work to bounded,
+temporary workers under the active agent's supervision subtree. Jido receives a correlated
+`running` acknowledgement only after worker startup, so it can complete that conversational
+request without waiting for the work. One bounded coordinator mailbox serializes the eventual
+result as private engine-origin context after caller work; it never fabricates participant
+speech. Caller interruption does not cancel accepted work, while agent transfer or shutdown
+terminates its local workers. A submitted timeout is reported as an unknown outcome and is
+never retried automatically. The development definition exposes the deterministic
+`prepare_background_report` Action for exercising this lifecycle.
+
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, and safe model/STT/TTS provider failures. Its explicitly named
 `Vxpipe.CallEngine.TelemetrySampler` periodically reports active room count, total BEAM

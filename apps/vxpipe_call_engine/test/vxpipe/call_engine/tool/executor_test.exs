@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Tool.ExecutorTest do
 
   alias Vxpipe.CallEngine.Tool.{Call, Context, Executor}
   alias Vxpipe.CallEngine.Tool.CurrentTime
+  alias Vxpipe.CallEngine.Tool.DelayedReport
 
   test "executes a configured tool with bounded JSON-compatible output" do
     assert {:ok, registry} = Executor.new([CurrentTime], 4_096)
@@ -34,6 +35,25 @@ defmodule Vxpipe.CallEngine.Tool.ExecutorTest do
   test "rejects duplicate names and oversized results during configuration or execution" do
     assert {:error, :invalid_configuration} = Executor.new([CurrentTime, CurrentTime], 4_096)
     assert {:error, :invalid_configuration} = Executor.new([CurrentTime], 0)
+  end
+
+  test "exposes the finite delayed report as a background host tool" do
+    assert {:ok, registry} = Executor.new([DelayedReport], 4_096)
+    assert Executor.background?(registry, "prepare_background_report")
+
+    call = %Call{
+      id: "tool-report",
+      name: "prepare_background_report",
+      arguments: %{"topic" => "queue health", "delay_ms" => 0}
+    }
+
+    assert {:ok, result} = Executor.execute(registry, call, context())
+
+    assert result == %{
+             "status" => "ready",
+             "summary" => "The background report for queue health is ready.",
+             "topic" => "queue health"
+           }
   end
 
   defp context do

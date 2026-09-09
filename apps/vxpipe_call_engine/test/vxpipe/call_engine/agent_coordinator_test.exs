@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
   alias Jido.AI.Runtime.Event
   alias Vxpipe.CallEngine.Agent
+  alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.AgentCoordinator
   alias Vxpipe.CallEngine.AgentFactory
   alias Vxpipe.CallEngine.JidoAgentRuntime
@@ -473,6 +474,66 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     completed_identity = {command.connection_id, command.correlation_id, command.id}
     assert {:ok, []} = AgentCoordinator.interrupt(coordinator, [completed_identity])
+  end
+
+  test "real Jido continues its response after accepting a supervised background action" do
+    Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
+    on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
+
+    script =
+      expect_react do
+        user("start the background report")
+        call("wait_for_test", %{}, id: "tool-real-background")
+        answer("The report is running.")
+      end
+
+    activation_id = "act-real-background-#{System.unique_integer([:positive])}"
+
+    activation =
+      start_supervised!(
+        {AgentActivationSupervisor,
+         activation_id: activation_id,
+         agent_participant_id: "agent-real-background",
+         owner: self(),
+         system_prompt: "Start the selected report tool and keep responding.",
+         tools: [TestBlockingTool],
+         background_tool_timeout_ms: 2_000,
+         maximum_background_tools: 1,
+         maximum_completed_requests: 4,
+         maximum_output_bytes: 65_536,
+         maximum_pending_requests: 2,
+         maximum_tool_result_bytes: 4_096,
+         request_options: Jido.AI.Test.react_opts(script),
+         request_timeout_ms: 2_000}
+      )
+
+    coordinator = AgentActivationSupervisor.child_ref(activation_id, :coordinator)
+    command = command("real-background", "start the background report")
+
+    assert :ok = AgentCoordinator.respond(coordinator, command)
+    assert_receive {:test_blocking_tool_started, tool_worker}, 2_000
+
+    assert_receive {:vxpipe_capability_tool_started, coordinator_pid, ^command,
+                    %Call{id: "tool-real-background"} = call},
+                   2_000
+
+    assert_receive {:vxpipe_capability_tool_accepted, ^coordinator_pid, ^command, ^call,
+                    %{
+                      "invocation_id" => "tool-real-background",
+                      "status" => "running"
+                    }},
+                   2_000
+
+    assert_receive {:vxpipe_capability_text, ^coordinator_pid, ^command,
+                    "The report is running."},
+                   2_000
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator_pid, ^command}, 2_000
+    refute_receive {:vxpipe_capability_tool_completed, ^coordinator_pid, ^command, ^call, _}
+
+    monitor = Process.monitor(tool_worker)
+    :ok = Supervisor.stop(activation)
+    assert_receive {:DOWN, ^monitor, :process, ^tool_worker, _reason}, 1_000
   end
 
   test "serializes a background completion after active caller work as engine context" do

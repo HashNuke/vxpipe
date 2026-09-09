@@ -4,7 +4,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   use GenServer
 
   alias Vxpipe.CallEngine.Capability.{DeterministicText, ModelInference, TextToSpeech}
-  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+
+  alias Vxpipe.CallEngine.Command.{
+    AttachConnection,
+    ContinueAgent,
+    CreateRoom,
+    JoinParticipant,
+    SendText
+  }
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
@@ -104,6 +111,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       connection_monitors: %{},
       connections: %{},
       agent_turns: %{},
+      background_tool_calls: %{},
       next_sequence: 1,
       participant_monitors: %{},
       participant_ids: MapSet.new(),
@@ -185,6 +193,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_capability_continuation_started, capability, %ContinueAgent{} = command},
+        state
+      ) do
+    state =
+      if authorized_continuation?(capability, command, state) do
+        put_agent_turn(state, command)
+      else
+        state
+      end
+
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_capability_text, capability, command, text}, state) do
     state = emit_text_turn(capability, command, text, state)
     {:noreply, state}
@@ -197,6 +219,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({:vxpipe_capability_tool_started, capability, command, call}, state) do
     {:noreply, emit_tool_call_started(capability, command, call, state)}
+  end
+
+  def handle_info(
+        {:vxpipe_capability_tool_accepted, capability, command, call, _acknowledgement},
+        state
+      ) do
+    {:noreply, accept_background_tool_call(capability, command, call, state)}
   end
 
   def handle_info(
@@ -1028,27 +1057,88 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   defp emit_tool_call_completed(capability, command, call, result, state) do
-    emit_tool_call_stopped(capability, command, call, state, fn fields ->
+    emit_tool_call_stopped(capability, command, call, result, state, fn fields, result ->
       struct!(ToolCallCompleted, Map.put(fields, :result, result))
     end)
   end
 
   defp emit_tool_call_failed(capability, command, call, reason, state) do
-    emit_tool_call_stopped(capability, command, call, state, fn fields ->
+    emit_tool_call_stopped(capability, command, call, reason, state, fn fields, reason ->
       struct!(ToolCallFailed, Map.put(fields, :reason, reason))
     end)
   end
 
-  defp emit_tool_call_stopped(capability, command, call, state, build_event) do
+  defp emit_tool_call_stopped(capability, command, call, outcome, state, build_event) do
+    case Map.pop(state.background_tool_calls, call.id) do
+      {%{capability: ^capability, command: stored_command, call: stored_call}, background_calls}
+      when stored_call == call ->
+        state = %{state | background_tool_calls: background_calls}
+
+        if current_text_capability?(capability, state) and
+             turn_key(stored_command) == turn_key(command) do
+          emit_background_tool_stopped(stored_command, call, outcome, state, build_event)
+        else
+          state
+        end
+
+      {_missing_or_stale, _background_calls} ->
+        emit_active_tool_call_stopped(capability, command, call, outcome, state, build_event)
+    end
+  end
+
+  defp emit_active_tool_call_stopped(capability, command, call, outcome, state, build_event) do
     turn = Map.get(state.agent_turns, turn_key(command))
 
     if authorized_tool_event?(capability, command, state) and turn != nil and
          Map.has_key?(turn.active_tool_calls, call.id) do
       connection = Map.fetch!(state.connections, command.connection_id)
-      send(connection.pid, {:vxpipe_event, build_event.(tool_event_fields(command, call, state))})
+
+      send(
+        connection.pid,
+        {:vxpipe_event, build_event.(tool_event_fields(command, call, state), outcome)}
+      )
 
       state
       |> Map.update!(:next_sequence, &(&1 + 1))
+      |> update_agent_turn(command, fn turn ->
+        %{turn | active_tool_calls: Map.delete(turn.active_tool_calls, call.id)}
+      end)
+    else
+      state
+    end
+  end
+
+  defp emit_background_tool_stopped(command, call, outcome, state, build_event) do
+    case Map.get(state.connections, command.connection_id) do
+      %{participant_id: participant_id} = connection
+      when participant_id == command.participant_id ->
+        send(
+          connection.pid,
+          {:vxpipe_event, build_event.(tool_event_fields(command, call, state), outcome)}
+        )
+
+        %{state | next_sequence: state.next_sequence + 1}
+
+      _missing_connection ->
+        state
+    end
+  end
+
+  defp accept_background_tool_call(capability, command, call, state) do
+    turn = Map.get(state.agent_turns, turn_key(command))
+
+    if authorized_tool_event?(capability, command, state) and turn != nil and
+         Map.has_key?(turn.active_tool_calls, call.id) and
+         not Map.has_key?(state.background_tool_calls, call.id) do
+      background_tool_calls =
+        Map.put(state.background_tool_calls, call.id, %{
+          call: call,
+          capability: capability,
+          command: command
+        })
+
+      state
+      |> Map.put(:background_tool_calls, background_tool_calls)
       |> update_agent_turn(command, fn turn ->
         %{turn | active_tool_calls: Map.delete(turn.active_tool_calls, call.id)}
       end)
@@ -1339,7 +1429,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   defp command_id(%SendText{} = command), do: command.id
+  defp command_id(%ContinueAgent{} = command), do: command.id
   defp command_id(%TextToSpeechRequest{} = request), do: request.command_id
+
+  defp authorized_continuation?(capability, command, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    current_text_capability?(capability, state) and connection != nil and
+      connection.participant_id == command.participant_id and
+      command.tenant_id == state.snapshot.tenant_id and command.room_id == state.snapshot.room_id and
+      command.incarnation_id == state.snapshot.incarnation_id and
+      not active_agent_turn?(command, state)
+  end
 
   defp agent_event_fields(request, state) do
     %{
