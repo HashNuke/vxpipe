@@ -15,8 +15,10 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     CredentialStore,
     DefinitionStore,
     EctoStorage,
+    InspectionStore,
     Repo
   }
+
   alias Vxpipe.Persistence.Schema.Admission, as: StoredAdmission
   alias Vxpipe.Persistence.Schema.Call, as: StoredCall
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredJoinToken
@@ -42,6 +44,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       definition_repository: {DefinitionStore, Repo},
       call_repository: {CallStore, Repo},
       archive_repository: {ArchiveStore, Repo},
+      inspection_repository: {InspectionStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
       uuid_generator: sequence([@key_id, @definition_id, @route_id, @support_route_id]),
       api_key_generator: fn -> @api_key end,
@@ -121,6 +124,51 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert reloaded.plan_digest == prepared.plan_digest
     assert Repo.aggregate(StoredCall, :count) == 1
     assert Repo.aggregate(StoredJoinToken, :count) == 1
+  end
+
+  test "lists persisted calls through the bounded inspection adapter", context do
+    assert {:ok, first, _token} = prepare(context)
+
+    later_options =
+      Keyword.merge(context.options,
+        now: DateTime.add(@now, 30, :second),
+        call_id_generator: fn -> "88888888-8888-4888-8888-888888888888" end,
+        room_id_generator: fn -> "99999999-9999-4999-8999-999999999999" end,
+        actor_id_generator: fn -> "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" end,
+        token_id_generator: fn -> "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" end,
+        join_token_generator: fn -> "vxj_test-only-inspection-token" end
+      )
+
+    assert {:ok, second, _token} =
+             Calls.prepare_call(
+               context.principal,
+               context.route.key,
+               %{"order" => %{"id" => "must-not-appear-in-summary"}},
+               later_options
+             )
+
+    assert {:ok, first_page} = Calls.list_calls(context.principal, context.options ++ [limit: 1])
+    assert [summary] = first_page.calls
+    assert summary.id == second.id
+    assert summary.definition_id == second.definition_id
+    assert summary.definition_revision == second.definition_revision
+    assert summary.state == :prepared
+    assert summary.created_at == DateTime.add(@now, 30, :second)
+    refute inspect(summary) =~ "must-not-appear-in-summary"
+    assert is_binary(first_page.next_cursor)
+
+    assert {:ok, second_page} =
+             Calls.list_calls(
+               context.principal,
+               context.options ++ [limit: 1, cursor: first_page.next_cursor]
+             )
+
+    assert Enum.map(second_page.calls, & &1.id) == [first.id]
+    assert second_page.next_cursor == nil
+
+    other_tenant = %{context.principal | tenant_key: "ZZZZZZZZZZZZZZZZ"}
+    assert {:ok, empty} = Calls.list_calls(other_tenant, context.options)
+    assert empty.calls == []
   end
 
   test "rolls back the call when its first token cannot be stored", context do

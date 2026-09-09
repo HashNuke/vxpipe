@@ -45,3 +45,15 @@
   timing-sensitive archive assertion in `DefinitionDrivenCallTest`; its isolated
   rerun passed, and a subsequent full migrated run passed with 320 tests, 0 failures,
   and 6 integration exclusions.
+
+### Persistence adapter
+
+- `InspectionStore` applies the tenant predicate, newest-first `(created_at, public ID)`
+  ordering, cursor boundary and caller-supplied row bound in SQL. It selects only the
+  fields needed for `CallSummary`; resolved plans and initial variables are not decoded.
+- Runtime configuration selects this adapter only when Vxpipe persistence is enabled.
+- Red evidence: the focused persisted-list test reached the new Calls boundary and
+  failed because `InspectionStore.list_calls/4` was absent.
+- Green evidence: the focused Ecto test passed, as did format, warnings-as-errors
+  compile, strict Credo (247 files / 2,362 functions), unused-dependency validation,
+  and the full migrated umbrella suite: 321 tests, 0 failures, 6 integration exclusions.
