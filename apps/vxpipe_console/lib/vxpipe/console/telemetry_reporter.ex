@@ -44,9 +44,9 @@ defmodule Vxpipe.Console.TelemetryReporter do
     end
   end
 
-  @spec snapshot(GenServer.server()) :: map()
-  def snapshot(server \\ __MODULE__) do
-    GenServer.call(server, :snapshot)
+  @spec snapshot(GenServer.server(), timeout()) :: map()
+  def snapshot(server \\ __MODULE__, timeout \\ 1_000) do
+    GenServer.call(server, :snapshot, timeout)
   end
 
   @spec events() :: [nonempty_list(atom())]

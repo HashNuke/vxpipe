@@ -25,6 +25,7 @@ defmodule Vxpipe.Console.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.12"},
+      {:lazy_html, "~> 0.1", only: :test},
       {:phoenix, "~> 1.8"},
       {:phoenix_live_dashboard, "~> 0.9.1"},
       {:phoenix_live_view, "~> 1.1"},

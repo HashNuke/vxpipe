@@ -229,3 +229,37 @@ suite passed `7 tests, 0 failures`. Umbrella format, warnings-as-errors compile,
 unused-lock checks passed with call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests,
 0 failures (3 excluded)`, and Console `7 tests, 0 failures`. The browser measurement page remains
 pending for this milestone.
+
+## Checkpoint 8: live diagnostics board
+
+The static diagnostics placeholder has been replaced by `Vxpipe.Console.DiagnosticsLive`.
+It reads the reporter with a 250 ms timeout and refreshes its latest snapshot every second,
+without keeping browser-side or server-side event history. The page renders explicit states
+for a missing reporter, no observations, stale samples, dropped observations and the available
+aggregate series. The Console packages the Phoenix and LiveView browser clients into a
+content-hashed immutable asset, avoiding a hosted-script dependency.
+
+The initial focused test run failed `3 tests, 3 failures` with `{:error, :nosession}` because
+the diagnostics path was still a controller response. The LiveView test helper then identified
+its documented test-only `lazy_html` dependency; adding that direct dependency allowed the
+green focused run to pass `3 tests, 0 failures`. The complete Console suite passed `10 tests,
+0 failures`. Tests cover a populated snapshot, a subsequent latest-snapshot refresh and the
+honest collector-unavailable state.
+
+The established Operator's Bench system guided a compact, asymmetric work surface rather than
+a generic equal-card grid. The first rendered pass at 1440x900 and 390x844 had no horizontal
+overflow and a connected LiveView socket. Its accessibility scan found one contrast problem on
+healthy green text. Darkening that semantic color cleared the second scan with zero violations;
+the confirmation pass also retained no current page or console errors. Navigation reached the
+Phoenix system dashboard and the unchanged RTVI playground through the public HTTPS origin.
+The Impeccable finish review returned `ship` with no material fixes. It approved the
+status-rail-to-workbench hierarchy, restrained green/coral operational states, responsive
+adaptation and truthful unavailable/empty states as a direct Operator's Bench extension.
+The documentation review found no reusable design-system addition to promote. Umbrella gates
+then passed: format check, warnings-as-errors compilation, default tests and the unused-lock
+check. Results were call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests, 0
+failures (3 excluded)`, and Console `10 tests, 0 failures`.
+
+API-key authentication remains the call-management endpoint contract, and join tokens remain
+the call-admission contract. Console and LiveDashboard routes intentionally receive no additional
+application authentication.

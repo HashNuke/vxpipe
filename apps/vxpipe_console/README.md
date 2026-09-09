@@ -12,9 +12,9 @@ gateway runtime starts without its standalone Bandit listener. The Console
 endpoint is then the only listener.
 
 The current root page is the initial shell. The observable-sample milestone
-will move the existing React/Vite sample assets here and add the separate
-diagnostics surface. This application does not own Ecto or call
-protocol implementations.
+will move the existing React/Vite sample assets here; its separate bounded
+diagnostics surface is available at `/diagnostics`. This application does not
+own Ecto or call protocol implementations.
 
 ## Development diagnostics
 
@@ -40,7 +40,16 @@ The reporter starts even when browser diagnostics are disabled so it can be enab
 the routing boundary without changing event ownership. An embedding host may omit the
 Console entirely and attach its own handler to the framework-independent events.
 
+The diagnostics page reads the reporter with a short timeout and refreshes only the
+latest snapshot. It shows collection freshness and drops, runtime gauges, gateway
+request timing, model completion/first-output state, TTS first-audio timing and safe
+provider failure categories. Missing measurements have explicit empty states. The
+page packages its Phoenix LiveView client locally with a content hash and does not
+depend on a hosted script. Use its **System dashboard** link for deeper VM inspection
+and **Voice console** to return to the separate sample.
+
 This milestone deliberately adds no diagnostics authentication. Deployments must
-control whether and where the opt-in Console endpoint is exposed. API-key and join-token
-validation belong to their web API/admission contracts; neither credential is an
-additional login mechanism for Console pages or LiveDashboard.
+control whether and where the opt-in Console endpoint is exposed. API-key authentication
+belongs to call-management endpoints, while join-token validation belongs to call
+admission; neither credential is an additional login mechanism for Console pages or
+LiveDashboard.

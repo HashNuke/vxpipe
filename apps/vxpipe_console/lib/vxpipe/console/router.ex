@@ -2,6 +2,7 @@ defmodule Vxpipe.Console.Router do
   use Phoenix.Router
 
   import Phoenix.LiveDashboard.Router
+  import Phoenix.LiveView.Router
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -23,7 +24,12 @@ defmodule Vxpipe.Console.Router do
   scope "/diagnostics" do
     pipe_through [:diagnostics, :browser]
 
-    get "/", Vxpipe.Console.DiagnosticsController, :index
+    get "/assets/live/:hash", Vxpipe.Console.DiagnosticsAssetController, :show
+
+    live_session :vxpipe_diagnostics,
+      root_layout: {Vxpipe.Console.DiagnosticsLayout, :root} do
+      live "/", Vxpipe.Console.DiagnosticsLive, :index
+    end
 
     live_dashboard "/system",
       live_socket_path: "/diagnostics/live"

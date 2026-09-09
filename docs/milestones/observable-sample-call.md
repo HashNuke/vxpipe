@@ -52,8 +52,9 @@ slow response or missing measurement. The existing voice console still works unc
 - Enable diagnostics explicitly through namespaced application options. The early
   slice uses a trusted development setup with synthetic data, not public admission.
   Default exposure is off unless configured. This slice adds no page authentication:
-  deployments decide whether to expose the enabled Console, and later access-control
-  work must not repurpose API keys or caller join tokens as a Console login.
+  deployments decide whether to expose the enabled Console. API keys authenticate
+  call-management endpoints and join tokens authorize call admission; neither becomes
+  a Console or LiveDashboard login.
 - Introduce the separate Phoenix application `vxpipe_console`, using the
   `Vxpipe.Console` namespace, to own the endpoint, dashboard and sample frontend assets.
   Keep `vxpipe_gateway` as reusable Plug/protocol handling and connection supervision,
@@ -90,7 +91,7 @@ slow response or missing measurement. The existing voice console still works unc
 - [x] Write red tests for project-owned timing/outcome projection, missing observations,
   safe metadata, bounded dimensions and reporter restart behavior.
 - [x] Instrument existing request/model/speech boundaries and add sampled VM measurements.
-- [ ] Connect a bounded reporter to a separate dashboard and the existing sample entry.
+- [x] Connect a bounded reporter to a separate dashboard and the existing sample entry.
 - [ ] Provide a deterministic local provider fixture for controlled delay/failure, without
   relying on hosted credentials or adding failure switches to production call input.
 - [ ] Document how an embedded host consumes the same events without the dashboard.
@@ -113,8 +114,8 @@ slow response or missing measurement. The existing voice console still works unc
 - [ ] Console pages and gateway call routes share the Phoenix HTTP listener without
   an internal HTTP hop; disabling the gateway listener does not stop its connection runtime.
 - [ ] Disabled diagnostic requests/subscriptions fail closed. When enabled, diagnostics
-  require no additional authentication; API keys and join tokens retain only their API
-  and admission meanings.
+  require no additional authentication; API keys retain only their call-management role
+  and join tokens retain only their call-admission role.
 - [ ] Existing room creation, RTVI joining, text/audio, CORS and interruption checks remain
   green. Opening diagnostics neither creates a participant nor captures extra audio/text.
 
@@ -183,8 +184,9 @@ Implementation evidence, access correction (2026-09-08): enabled Console diagnos
 authentication layer. The project-owned Plug now owns only the enabled/disabled setting, and an
 enabled request behaves the same for loopback and non-loopback peers. Caddy routes
 `/diagnostics` and `/diagnostics/*` to the Console endpoint, including the LiveView socket path;
-API-key authentication and join-token validation remain confined to their API/admission
-contracts. This correction supersedes the checkpoint-3 loopback restriction.
+API-key authentication remains confined to call-management endpoints and join-token
+validation to call admission. Neither protects Console or LiveDashboard routes. This
+correction supersedes the checkpoint-3 loopback restriction.
 
 Implementation evidence, checkpoint 7 (2026-09-09): added the Console-owned bounded
 Telemetry reporter. Its hot-path callback performs atomic admission plus a local send;
@@ -195,6 +197,22 @@ payload-sentinel exclusion, saturation, abrupt replacement without double attach
 normal detach. Umbrella gates pass with call engine `107 tests, 0 failures (1 excluded)`, gateway
 `45 tests, 0 failures (3 excluded)`, and Console `7 tests, 0 failures`. The custom measurement
 page remains pending.
+
+Implementation evidence, checkpoint 8 (2026-09-09): replaced the diagnostics placeholder
+with a responsive LiveView instrument board backed by the reporter's latest snapshot. It
+shows collection freshness/drops, current runtime gauges, HTTP timing, model first-output
+timing and terminal outcomes, TTS first-audio timing, safe provider failures, and explicit
+empty/unavailable states. The page uses a 250 ms reporter-read timeout and keeps no browser
+history. Its content-hashed Phoenix/LiveView client asset is packaged by Console rather than
+loaded from a hosted service. The header links to both LiveDashboard and the existing voice
+sample without altering that sample.
+
+The Impeccable finish review returned `ship` with no material fixes. It confirmed the
+status-rail-to-workbench hierarchy, restrained operational color use, explicit failure
+states and responsive single-column adaptation as a direct extension of the established
+Operator's Bench system. No reusable design-system addition was warranted. Umbrella gates
+pass with call engine `107 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures
+(3 excluded)`, and Console `10 tests, 0 failures`.
 
 ## Specification review
 

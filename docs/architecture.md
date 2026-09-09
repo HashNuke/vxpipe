@@ -1587,11 +1587,16 @@ Phoenix LiveDashboard is selected for platform VM/runtime inspection; a separate
 Vxpipe diagnostics page owns bounded call-path measurements. Diagnostics are disabled
 by default and explicitly enabled through Console application settings. When enabled,
 this slice adds no page authentication; deployment exposure is an application concern.
-API keys and caller join tokens keep their API/admission meanings and are not Console
-login credentials. Repository development routes the diagnostics namespace through
-Caddy to the shared Console endpoint. The Console shell and LiveDashboard route are
-implemented; call-path instrumentation and its bounded in-memory reporter are implemented,
-while the Vxpipe measurement page remains in progress.
+API keys authenticate call-management endpoints and caller join tokens authorize call
+admission; neither credential is a Console or LiveDashboard login. Repository development
+routes the diagnostics namespace through Caddy to the shared Console endpoint. The Console
+shell and LiveDashboard route are
+implemented. The Vxpipe LiveView measurement page reads the bounded reporter with a short
+timeout and presents only its latest aggregate snapshot. It distinguishes current, stale,
+missing, dropped and unavailable observations without creating a second history buffer.
+Its locally packaged, content-hashed client connects through the existing diagnostics
+socket; no hosted browser asset or additional Console or LiveDashboard authentication is
+introduced.
 
 ## Configuration and container boundary
 
