@@ -159,6 +159,11 @@ Implementation evidence to date:
   identifiers, closed scopes, and a one-hour expiry; malformed, wrong-scope, and expired
   identities fail closed. Authentication dispatch is replaceable at the Console boundary,
   while the production adapter delegates credential verification to the public Calls API.
+- Console now has one inspection read boundary for list, persisted-detail, and live-detail
+  projections. Its production adapter calls only public Calls APIs, configured adapter
+  options take precedence over per-page cursor/limit options, and unexpected adapter values
+  fail closed before reaching a page. The replaceable boundary supports deterministic
+  Console fixtures without adding Repo or engine-private access to the presentation app.
 
 The Console pages, route enforcement, rendered browser verification and end-to-end fault
 fixtures are still incomplete; this evidence does not complete the milestone.

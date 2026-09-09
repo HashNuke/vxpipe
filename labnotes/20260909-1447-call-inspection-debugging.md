@@ -169,3 +169,27 @@
   (262 files / 2,502 modules and functions), and unused-dependency validation pass. The
   complete migrated umbrella suite passes against a fresh isolated PostgreSQL cluster with
   337 tests, no failures, and six integration exclusions.
+
+## 2026-09-09 — Console inspection read boundary
+
+- Added one Console-owned adapter contract covering bounded call lists, persisted detail,
+  and live detail. The production adapter delegates to public Calls workflows and never
+  imports Repo schemas, queries engine process state, or reimplements authorization.
+- `CallInspection` removes its adapter-selection option before delegation, validates the
+  three expected Calls-owned response structs, preserves explicit backend errors, and fails
+  closed on malformed results. Trusted configured backend options override page request
+  options, preventing a presentation caller from replacing repository/live-source wiring.
+- The seam is deliberately narrower than a generic data service: it exists to make delayed,
+  failed, live-unavailable, and ended-call Console fixtures deterministic while retaining the
+  same page contract as production.
+- Red evidence: the two focused tests failed on the absent `CallInspection` module.
+- Two initial full-suite runs reproduced an unrelated timing-sensitive STT test: its owner
+  received a process failure notification after ExUnit's implicit 100 ms mailbox timeout
+  under umbrella load. The test already allowed 500 ms for the subsequent monitor event;
+  all three failure-path messages now use that same finite test window. No runtime behavior
+  changed, and the focused failure test passed after the correction.
+- Green evidence: the two focused inspection-boundary tests and complete Console child suite
+  pass (33 tests). Root format, warnings-as-errors compilation, strict Credo (265 files /
+  2,515 modules and functions), and unused-dependency validation pass. The complete migrated
+  umbrella suite passes against a fresh isolated PostgreSQL cluster with 339 tests, no
+  failures, and six integration exclusions.

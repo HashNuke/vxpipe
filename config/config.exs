@@ -74,6 +74,8 @@ config :vxpipe_console, :operator_authenticator, {Vxpipe.Console.CallsOperatorAu
 
 config :vxpipe_console, :operator_session, max_age_seconds: 3_600
 
+config :vxpipe_console, :call_inspection_backend, {Vxpipe.Console.CallsInspectionBackend, []}
+
 config :esbuild,
   version: "0.25.4",
   vxpipe_console: [
