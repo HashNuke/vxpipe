@@ -365,7 +365,17 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
         duplicate_sequences: [8]
     }
 
-    persisted = %{persisted_detail(call) | archive_status: archive_status}
+    unknown_tool =
+      timeline_entry(:persisted, :tool_call_failed, %{
+        id: "tool-unknown",
+        payload: %{"name" => "slow_lookup", "reason" => "unknown"}
+      })
+
+    persisted = %{
+      persisted_detail(call)
+      | archive_status: archive_status,
+        timeline: [unknown_tool]
+    }
 
     configure_backend(%{
       list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
@@ -378,6 +388,25 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     assert html =~ "Archive gap: 2 missing sequences"
     assert html =~ "1 duplicate ID"
     assert html =~ "1 duplicate sequence"
+    assert html =~ "tool call failed"
+    assert html =~ ~s(&quot;reason&quot;:&quot;unknown&quot;)
+  end
+
+  test "returns a safe not-found state when neither retained nor live evidence exists" do
+    configure_backend(%{
+      list_calls: {:ok, %CallListPage{calls: [], next_cursor: nil}},
+      inspect_call: {:error, :call_not_found},
+      inspect_live_call: {:error, :call_not_live}
+    })
+
+    conn = sign_in()
+    html = html_response(conn |> recycle() |> get("/calls/purged-public-id"), 200)
+
+    assert html =~ "Call not found"
+    assert html =~ "No retained call is visible to this tenant"
+    refute html =~ "call_not_found"
+    refute html =~ "call_not_live"
+    assert_receive {:inspect_live_call, _, "purged-public-id", []}
   end
 
   test "changes selected evidence without reloading bounded call sources" do
@@ -420,6 +449,25 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     refute_receive {:inspect_call, _, _, _}
     refute_receive {:list_calls, _, _}
     assert render(view) =~ "Live and persisted evidence available"
+  end
+
+  test "stops live refresh work when the inspection page closes" do
+    call = call_summary()
+
+    configure_backend(%{
+      list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
+      inspect_call: {:ok, persisted_detail(call)},
+      inspect_live_call: {:ok, live_detail()}
+    })
+
+    conn = sign_in()
+    {:ok, view, _html} = live(recycle(conn), "/calls/#{call.id}")
+    flush_inspection_messages()
+
+    monitor = Process.monitor(view.pid)
+    :ok = GenServer.stop(view.pid)
+    assert_receive {:DOWN, ^monitor, :process, _pid, :normal}
+    refute_receive {:inspect_live_call, _, "call-public-id", []}, 1_200
   end
 
   defp sign_in do
