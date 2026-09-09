@@ -25,7 +25,7 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 - [x] Implement bounded incremental Morse encoding/decoding with documented normalization and invalid-input behavior.
 - [x] Add local STT/TTS provider/transport adapters and closed-registry configuration, preserving current hosted adapters.
 - [x] Drive an actual room audio ingress-to-transcript and text-to-audio egress path using a deterministic reply fixture.
-- [ ] Document an opt-in sample/embedded profile, encoded input method, audio safety settings and supported transport limitations.
+- [x] Document an opt-in sample/embedded profile, encoded input method, audio safety settings and supported transport limitations.
 
 ## Acceptance and failure checks
 
@@ -35,7 +35,7 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 - [x] Long output drains fully; an interruption drops only unplayed prior-generation output and a subsequent utterance still works.
 - [x] Turn/participant attribution and final transcript boundaries remain correct across repeated messages; timing, if emitted, follows generated audio samples.
 - [x] End-to-end local fixture succeeds without speech credentials or network access; no provider-default change or ordinary-speech-recognition claim.
-- [ ] Direct PCM tests and any claimed codec/browser integration run separately; microphone DSP/echo limitations are recorded, not concealed by loopback success.
+- [x] Direct PCM tests and any claimed codec/browser integration run separately; microphone DSP/echo limitations are recorded, not concealed by loopback success.
 
 ## Manual verification
 
@@ -168,6 +168,37 @@ interruption recovery and repeated attribution checks. No word timing is emitted
 timing is claimed. Documentation/sample selection and direct-PCM limitation disclosure remain
 before milestone completion. A warnings-as-errors compile and the complete owning child suite
 pass with `136 tests, 0 failures (1 excluded)`.
+
+Implementation evidence, checkpoint 9 (2026-09-09): added the opt-in development
+`VXPIPE_DEV_SPEECH_PROFILE=morse` setting. Combined with the existing local model fixture, it
+starts without Gemini or Deepgram credentials, removes STT from the browser call definition, and
+selects 48 kHz Morse TTS for typed Console turns. The Deepgram profile remains the default. The
+browser limitation is intentional and explicit: current WebRTC ingress supplies Opus, while
+Morse STT accepts direct linear16 PCM; no implicit transcoding, microphone-speech recognition or
+lossy-codec claim was added.
+
+Configuration-only probes verify the unchanged default profile, the credential-free Morse
+selection and rejection of an invalid profile value. Repository, Console-assets and call-engine
+documentation now give the selection steps, direct-PCM integration command, complete supported
+alphabet, normalization, ITU mark/gap ratios, local end gap, tone/sample defaults, amplitude and
+size/duration bounds, error behavior, pacing/backpressure, and acoustic/codec limits. This closes
+the documentation and direct-PCM disclosure checks; telemetry identity and milestone-wide gates
+remain.
+
+Implementation evidence, checkpoint 10 (2026-09-09): both local provider modules now normalize
+to the bounded `:morse` Telemetry dimension for TTS first-audio timing and STT/TTS failures. The
+Console reporter admits that fixed value and continues mapping arbitrary provider values to
+`:other`; it stores only duration/count aggregates and safe capability/category dimensions.
+
+The engine and reporter tests first failed with `:other`/missing Morse aggregates. Their green
+focused run passes engine `2 tests, 0 failures` and Console `6 tests, 0 failures`, proving local
+first-audio timing plus a controlled unavailable failure without text, audio, call identity or
+raw provider reason. The architecture's closed provider set is updated. Milestone-wide gates and
+the runnable Console check remain. The first umbrella run exposed only a 100 ms monitor timeout
+in an intentional failure test under parallel load; retaining the monitor assertion with a
+one-second asynchronous teardown bound made the complete gates green: formatting,
+warnings-as-errors, call engine `137 tests, 0 failures (1 excluded)`, gateway `46 tests, 0
+failures (4 excluded)`, Console `19 tests, 0 failures`, and no unused dependencies.
 
 ## Specification review
 

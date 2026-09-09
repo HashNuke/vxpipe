@@ -66,6 +66,22 @@ is a failed test.
 These controls are development application state, not fields accepted from the browser's
 room creation or RTVI payloads.
 
+## Manual local Morse output test
+
+1. In the repository-root `.env`, set `VXPIPE_DEV_MODEL_FIXTURE=true` and
+   `VXPIPE_DEV_SPEECH_PROFILE=morse`. Remove the hosted provider keys if the point of the
+   check is to prove credential-free startup.
+2. Run `bin/dev`, create a room, connect, and send a typed message containing only the
+   supported Morse alphabet documented in the call-engine README.
+3. Verify one normal assistant text row appears and its audio track plays audible Morse tones.
+   The default local fixture response is valid Morse input.
+4. Do not use microphone speech as a Morse STT assertion. This browser transport supplies Opus,
+   while the deterministic decoder accepts mono little-endian linear16. Run the call-engine
+   direct-PCM room test for the local recognition and complete audio round trip.
+
+This profile changes only trusted development application configuration; it adds no browser
+control and no field that a client can use to select a provider.
+
 From the repository root:
 
 ```shell

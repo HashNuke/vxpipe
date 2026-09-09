@@ -216,8 +216,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
     monitor = Process.monitor(capability)
     invalid = request(participant_id, "turn-invalid", "NOT SUPPORTED %", sink)
     assert :ok = TextToSpeech.synthesize(capability, invalid)
-    assert_receive {:vxpipe_tts_unavailable, ^capability, :provider_failed}
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
+    assert_receive {:vxpipe_tts_unavailable, ^capability, :provider_failed}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 1_000
     refute_receive {:test_audio_output, ^sink, %AudioOutputFrame{}}
   end
 
@@ -245,8 +245,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
     assert_receive {:vxpipe_stt_signal, ^capability, _,
                     %Signal{kind: :failed, provider_code: "UNSUPPORTED_FREQUENCY"}}
 
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}
-    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 1_000
   end
 
   defp collect_output(sink, correlation_id, frames) do

@@ -103,6 +103,26 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
            ] == 1
   end
 
+  test "keeps the local Morse provider as a bounded speech dimension" do
+    {_child_id, reporter} = start_reporter(max_pending_events: 4)
+
+    :telemetry.execute(
+      @tts_first_audio,
+      %{duration: duration_ms(3)},
+      %{provider: :morse}
+    )
+
+    :telemetry.execute(
+      @provider_failure,
+      %{count: 1},
+      %{capability: :stt, provider: :morse, category: :unavailable}
+    )
+
+    snapshot = TelemetryReporter.snapshot(reporter)
+    assert snapshot.tts.first_audio[:morse] == duration_stats(3_000)
+    assert snapshot.provider_failures[{:stt, :morse, :unavailable}] == 1
+  end
+
   test "sanitizes queued events and never dimensions aggregates by call identity" do
     {_child_id, reporter} = start_reporter(max_pending_events: 128)
     sentinel = "private-sentinel"

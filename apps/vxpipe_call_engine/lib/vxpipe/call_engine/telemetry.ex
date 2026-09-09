@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.Telemetry do
   """
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
 
   @model_first_token_event [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
@@ -92,6 +93,8 @@ defmodule Vxpipe.CallEngine.Telemetry do
   defp provider(:local_fixture), do: :local_fixture
   defp provider(Flux), do: :deepgram
   defp provider(FluxTextToSpeech), do: :deepgram
+  defp provider(MorseCodeSTT), do: :morse
+  defp provider(MorseCodeTTS), do: :morse
   defp provider(_other), do: :other
 
   defp model_outcome(:ok), do: :ok

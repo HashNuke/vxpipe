@@ -126,7 +126,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
             options: %{
               amplitude: 4_096,
               frequency_hz: 700,
-              sample_rate: 16_000,
+              sample_rate: 48_000,
               unit_duration_ms: 60
             }
           }

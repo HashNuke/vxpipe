@@ -46,6 +46,21 @@ the diagnostics board exposes one-shot **Success**, **Delay**, **Failure**, and
 `missing` may also select the initial/default outcome. The fixture is disabled in
 base configuration and never reads a switch from call input.
 
+For a credential-free typed call with audible Morse output, combine the local model
+fixture with the opt-in Morse speech profile:
+
+```shell
+VXPIPE_DEV_MODEL_FIXTURE=true
+VXPIPE_DEV_SPEECH_PROFILE=morse
+```
+
+With this profile, `DEEPGRAM_API_KEY` and `GEMINI_API_KEY` are not required. The
+trusted sample keeps browser speech-to-text unselected, accepts typed Console input,
+and emits the agent response through 48 kHz Morse TTS so the existing WebRTC output
+path can play it. Browser microphone RTP is Opus and is deliberately not presented as
+compatible with the linear16-only Morse STT provider. Use the call-engine direct-PCM
+verification path described below when testing local Morse recognition.
+
 Goreman loads the credentials into its child processes, including Watchman
 restarts. Reusable call-engine code receives provider options through the OTP
 application environment and does not read these environment variables directly.
@@ -138,6 +153,10 @@ events before the streamed spoken answer. Exact browser verification steps are
 in the [Console asset README](apps/vxpipe_console/assets/README.md#manual-tool-call-test).
 Set `VITE_VXPIPE_RTVI_OFFER_URL` in `apps/vxpipe_console/assets/.env.local` to
 test a different offer endpoint.
+
+The optional local Morse provider contract, direct-PCM test command, supported alphabet,
+signal settings, and transport limits are documented in the
+[call-engine README](apps/vxpipe_call_engine/README.md#local-morse-audio-providers).
 
 For release assets, build the unchanged Vite application into the Console's
 `priv/static` directory before assembling the release:

@@ -184,3 +184,48 @@ invalid TTS audio is emitted. The local transport suite passes `6 tests, 0 failu
 transport/room run passes `7 tests, 0 failures`. Full child and umbrella gates will be rerun after
 the remaining configuration and documentation work. The current warnings-as-errors compile and
 complete owning child suite pass with `136 tests, 0 failures (1 excluded)`.
+
+## Checkpoint 9: credential-free Console profile and contract documentation
+
+The browser's negotiated incoming audio is Opus at 48 kHz, while Morse STT deliberately accepts
+linear16. Selecting it for the sample would make the first microphone packet fail rather than
+prove recognition. The development `morse` profile therefore removes browser STT and selects
+48 kHz Morse TTS for typed input. Pairing it with `VXPIPE_DEV_MODEL_FIXTURE=true` starts the
+sample without either hosted provider credential. The ordinary Deepgram profiles remain the
+default and no provider selector was added to client input or the responsive Console.
+
+This is runtime/configuration work, so the repository rule permits skipping a new red behavior
+test. Three configuration probes supplied stronger boundary evidence: the default still selects
+and enables Deepgram; `morse` loads with both credential variables absent, disables both hosted
+defaults, omits browser STT, and selects the 48 kHz TTS profile; an unknown setting exits with the
+documented fixed error. No secret value was printed or stored.
+
+The root and Console-assets READMEs describe the typed audible test. The call-engine README now
+records the exact alphabet, whitespace/case normalization, 1:3 mark and 1:3:7 spacing ratios,
+14-unit local utterance gap, PCM format/sample rates, frequency/amplitude/window/tolerance
+defaults, input/audio/duration bounds, explicit errors, one-frame backpressure, interruption
+semantics, and the direct-PCM room command. Architecture now describes the implementation rather
+than the old plan. It explicitly separates direct PCM from Opus, microphone DSP, acoustic echo,
+ordinary speech and general noise robustness.
+
+## Checkpoint 10: bounded Morse observability
+
+The existing Telemetry normalizer mapped both new modules to `:other`, which made local speech
+indistinguishable from an unknown integration. Red tests attached to the real engine event
+contract and submitted the projected event to the Console reporter. They observed `:other` and a
+missing `:morse` aggregate respectively.
+
+Both `MorseCodeSTT` and `MorseCodeTTS` now map to one fixed `:morse` provider label. The Console
+reporter's allowlist includes only that added atom; arbitrary strings still collapse to `:other`.
+The focused green run passes engine `2 tests, 0 failures` and Console `6 tests, 0 failures` for
+first-audio timing and a controlled STT unavailable count. Only duration/count, capability,
+provider and safe failure category enter the aggregate—no transcript, PCM, call identity or raw
+provider error. Architecture's documented closed provider set now matches the implementation.
+
+The first complete umbrella test run exposed one test synchronization race: after the local TTS
+failure notification arrived, process teardown sometimes exceeded ExUnit's 100 ms default under
+parallel load. The test still uses a process monitor and exact `:provider_failed` reason, now with
+the project's ordinary one-second asynchronous bound; no production timing changed. The rerun
+passes formatting, warnings-as-errors, call engine `137 tests, 0 failures (1 excluded)`, gateway
+`46 tests, 0 failures (4 excluded)`, Console `19 tests, 0 failures`, and
+`mix deps.unlock --check-unused`.

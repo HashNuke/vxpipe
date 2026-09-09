@@ -352,7 +352,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
   defp normalize(_metadata, _key, _allowed, fallback), do: fallback
 
   defp normalize_provider(metadata) do
-    normalize(metadata, :provider, [:req_llm, :deepgram, :local_fixture, :other], :other)
+    normalize(metadata, :provider, [:req_llm, :deepgram, :local_fixture, :morse, :other], :other)
   end
 
   defp update_duration(aggregates, key, native_duration) do

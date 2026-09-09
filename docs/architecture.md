@@ -1530,7 +1530,7 @@ Gateway operations are closed categories (`:cors_preflight`, `:health_check`,
 Outcomes are `:ok`, `:client_error`, `:server_error`, `:exception`, or `:unknown`.
 The event does not carry the request path, query, headers, body, or correlation IDs.
 Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`,
-`:local_fixture`, or `:other` set. Model outcomes are `:ok`, `:unavailable`, `:timeout`,
+`:local_fixture`, `:morse`, or `:other` set. Model outcomes are `:ok`, `:unavailable`, `:timeout`,
 `:invalid_response`, or `:cancelled`; failure categories are `:unavailable`, `:timeout`,
 `:invalid_response`, `:output_failure`, or `:unknown`. None of these events carries
 input/output text, audio, raw provider errors, model names, or correlation identifiers.
@@ -1691,13 +1691,30 @@ Caddy. Production ingress remains deployment-specific.
 
 ## Deterministic testing facilities
 
-Vxpipe plans deterministic Morse/tone STT and TTS adapters in the library; they
-are not implemented yet. These encode/decode controlled tones, not ordinary
-speech or a local speech model. The [Morse audio milestone](milestones/morse-code-audio-providers.md)
-specifies reproducible provider-free audio for exact routing, transcription-phase,
-interruption, playout, tool-call and teardown assertions.
+Vxpipe includes opt-in in-process Morse/tone STT and TTS adapters in the call-engine
+library. They implement the ordinary speech capability and local transport boundaries;
+they do not bypass room turns, participant attribution, output acknowledgements,
+interruption, or playout completion. A compiled provider profile must resolve through
+the application's closed provider registry. No call/client input can choose a transport
+module directly.
 
-The planned adapters support:
+The codec handles a documented International Morse ASCII subset as bounded, mono,
+little-endian linear16 PCM. Encoding is resumable and TTS retains at most one
+unacknowledged 20 ms frame. Decoding retains partial windows and split samples across
+arbitrary chunks, with explicit final-flush, malformed-signal, duration, text, and audio
+bounds. Provider failures use the existing speech failure lifecycle rather than fabricated
+text or silence. Exact alphabet, timing, safety defaults and verification commands are in
+the [call-engine README](../apps/vxpipe_call_engine/README.md#local-morse-audio-providers) and
+[Morse audio milestone](milestones/morse-code-audio-providers.md).
+
+These encode/decode controlled tones, not ordinary speech, VAD, or a local speech model.
+Direct PCM verification is distinct from browser microphone processing: the current
+WebRTC ingress supplies Opus and is not claimed as Morse STT input. The opt-in Console
+profile therefore uses typed input with 48 kHz Morse TTS; the complete local STT/model/TTS
+round trip runs at the engine's direct-PCM boundary without speech credentials or network
+access.
+
+The adapters support:
 
 - protocol conformance tests;
 - multi-participant routing tests;

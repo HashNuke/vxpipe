@@ -9,6 +9,25 @@ if config_env() == :dev do
   speech_to_text = Keyword.fetch!(call_engine_settings, :speech_to_text)
   text_to_speech = Keyword.fetch!(call_engine_settings, :text_to_speech)
 
+  speech_profile =
+    case System.get_env("VXPIPE_DEV_SPEECH_PROFILE") do
+      value when value in [nil, "", "deepgram"] -> :deepgram
+      "morse" -> :morse
+      _invalid -> raise "VXPIPE_DEV_SPEECH_PROFILE must be deepgram or morse"
+    end
+
+  {speech_to_text, text_to_speech} =
+    case speech_profile do
+      :deepgram ->
+        {speech_to_text, text_to_speech}
+
+      :morse ->
+        {
+          Keyword.put(speech_to_text, :enabled, false),
+          Keyword.put(text_to_speech, :enabled, false)
+        }
+    end
+
   fetch_required_env = fn name, requirement ->
     case System.fetch_env(name) do
       {:ok, value} ->
@@ -119,11 +138,36 @@ if config_env() == :dev do
       [scheme: "http", host: console_host, port: port]
     end
 
-  config :vxpipe_gateway, Vxpipe.Gateway.Application,
-    http: [
-      port: port,
-      cors: [allowed_origins: allowed_origins]
-    ]
+  gateway_settings = Application.fetch_env!(:vxpipe_gateway, Vxpipe.Gateway.Application)
+  gateway_http = Keyword.fetch!(gateway_settings, :http)
+
+  gateway_http =
+    if speech_profile == :morse do
+      room_creation = Keyword.fetch!(gateway_http, :room_creation)
+      trusted_call = Keyword.fetch!(room_creation, :trusted_call)
+      definition = Keyword.fetch!(trusted_call, :definition)
+      defaults = Map.fetch!(definition, :defaults)
+      capabilities = Map.fetch!(defaults, :capabilities)
+
+      capabilities =
+        capabilities
+        |> Map.delete(:speech_to_text)
+        |> Map.put(:text_to_speech, "morse-code-tts")
+
+      definition = Map.put(definition, :defaults, Map.put(defaults, :capabilities, capabilities))
+      trusted_call = Keyword.put(trusted_call, :definition, definition)
+      room_creation = Keyword.put(room_creation, :trusted_call, trusted_call)
+      Keyword.put(gateway_http, :room_creation, room_creation)
+    else
+      gateway_http
+    end
+
+  gateway_http =
+    gateway_http
+    |> Keyword.put(:port, port)
+    |> Keyword.update!(:cors, &Keyword.put(&1, :allowed_origins, allowed_origins))
+
+  config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
   config :vxpipe_console, Vxpipe.Console.Endpoint,
     http: [ip: {127, 0, 0, 1}, port: port],

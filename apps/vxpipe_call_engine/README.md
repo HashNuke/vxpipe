@@ -99,6 +99,45 @@ An armed outcome is consumed atomically by one request and resets to the configu
 default. The fixture is disabled in base configuration; its control never appears in a
 call definition, invocation, command, or RTVI message.
 
+## Local Morse audio providers
+
+`Vxpipe.CallEngine.Provider.MorseCodeSTT` and `MorseCodeTTS` are opt-in, in-process
+implementations of the ordinary speech capability contracts. They encode and decode controlled
+International Morse tones; they do not recognize spoken language, run VAD, or use a hosted API.
+The application must register each implementation under the relevant speech setting's closed
+`:providers` map, and a trusted capability profile must select the same module. Existing
+top-level STT/TTS settings remain the legacy/default implementations.
+
+The direct signal format is signed 16-bit little-endian mono PCM. Supported sample rates are
+8, 16, 24, and 48 kHz. Defaults are 16 kHz, a 700 Hz tone, amplitude 4,096, a 60 ms dot unit,
+a 10 ms analysis window, 100 Hz frequency tolerance, and detection threshold 300. Dashes are
+three units; gaps within a character, between characters, and between words are 1, 3, and 7
+units. A local 14-unit trailing gap completes an utterance. Decoder timing accepts one analysis
+window of tolerance. Default bounds are 256 UTF-8 input bytes, 8,388,608 generated/accepted
+audio bytes, and 60 seconds per undecided utterance; invalid configuration, unsupported text,
+wrong-frequency/malformed signals, and bound violations fail explicitly.
+
+Text is uppercased, leading/trailing whitespace is removed, and runs of whitespace become one
+word gap. The supported alphabet is `A-Z`, `0-9`, and `. , : ? ' - / ( ) " = + @`. No other
+character is transliterated or silently removed. TTS emits acknowledged 20 ms frames at real
+time by default and holds only one unacknowledged frame. Interruption discards the remaining
+encoder generation. STT preserves state across arbitrary binary chunks, including a split PCM
+sample, and emits a final turn only after its trailing gap or an explicit valid flush.
+
+The deterministic integration proof is:
+
+```shell
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/provider/morse_code/room_round_trip_test.exs
+```
+
+That test compiles a real call plan, injects independently chunked linear16 `SOS`, observes an
+attributed transcript, runs a local model response, collects real TTS output, and independently
+decodes it. It requires no speech credential or network access. Browser microphone audio is
+currently Opus and is outside this decoder's direct-PCM contract; no lossy-codec, acoustic echo,
+ordinary microphone, or general noise-robustness claim is made. The Console's opt-in `morse`
+development profile therefore uses typed input and 48 kHz Morse TTS only.
+
 ## Embedded telemetry consumer
 
 An application embedding the engine can attach its own collector directly, without
