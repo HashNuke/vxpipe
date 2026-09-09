@@ -4,11 +4,16 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.Encoder do
   alias Vxpipe.CallEngine.Provider.MorseCode.{Alphabet, Config}
 
   @type error ::
-          :empty_text | :input_too_large | :output_too_large | :unsupported_character
+          :empty_text
+          | :input_too_large
+          | :invalid_text
+          | :output_too_large
+          | :unsupported_character
 
   @spec encode(Config.t(), String.t()) :: {:ok, binary()} | {:error, error()}
   def encode(%Config{} = config, text) when is_binary(text) do
-    with :ok <- input_size(text, config),
+    with :ok <- valid_text(text),
+         :ok <- input_size(text, config),
          {:ok, words} <- normalize_words(text),
          {:ok, runs} <- encode_words(words),
          runs = runs ++ [{:silence, config.end_gap_units}],
@@ -17,7 +22,11 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.Encoder do
     end
   end
 
-  def encode(%Config{}, _text), do: {:error, :empty_text}
+  def encode(%Config{}, _text), do: {:error, :invalid_text}
+
+  defp valid_text(text) do
+    if String.valid?(text), do: :ok, else: {:error, :invalid_text}
+  end
 
   defp input_size(text, config) do
     if byte_size(text) <= config.maximum_text_bytes,

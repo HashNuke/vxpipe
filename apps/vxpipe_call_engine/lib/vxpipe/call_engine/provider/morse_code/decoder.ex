@@ -28,6 +28,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.Decoder do
   @type event :: :started | {:partial, String.t()} | {:final, String.t()}
   @type error ::
           :incomplete_sample
+          | :invalid_audio
           | :invalid_timing
           | :signal_too_long
           | :transcript_too_large
@@ -71,6 +72,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.Decoder do
   def push(%__MODULE__{} = decoder, pcm) when is_binary(pcm) do
     process_windows(decoder.carry <> pcm, %{decoder | carry: <<>>}, [])
   end
+
+  def push(%__MODULE__{}, _pcm), do: {:error, :invalid_audio}
 
   @spec flush(t()) :: {:ok, t(), [event()]} | {:error, error()}
   def flush(%__MODULE__{carry: carry}) when byte_size(carry) > 0,

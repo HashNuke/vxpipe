@@ -43,3 +43,21 @@ compiler warning in `Config.new/1`; a function header removed that warning, and
 `mix compile --warnings-as-errors` from the owning child now passes. Full alphabet, invalid input,
 size, flush, silence and tolerance tests remain before transport integration. The complete owning
 child suite passes `119 tests, 0 failures (1 excluded)`.
+
+## Checkpoint 2: complete codec boundary cases
+
+The next test expansion enumerated every directly represented ASCII letter, figure and punctuation
+signal from the ITU table, then exercised invalid configuration, text/audio types, UTF-8, unsupported
+characters/signals, input/output limits, silence, explicit/repeated flush, a split final PCM sample,
+wrong frequency, invalid mark timing, a one-window timing tolerance and the 60-second undecided-
+signal bound. The first run had two failures: a non-binary decoder input raised a function-clause
+error, and invalid UTF-8 reached the alphabet lookup and returned the less accurate unsupported-
+character error. The public codec boundary now maps those cases to `:invalid_audio` and
+`:invalid_text` without raising.
+
+The expanded focused suite passes `8 tests, 0 failures`, and the owning child compiles with warnings
+as errors. The complete owning child suite passes `125 tests, 0 failures (1 excluded)`. This
+completes the independent known-signal and arbitrary-chunk/tail test requirements.
+The encoder remains bounded but materializes one complete request; incremental transport emission
+and pending-output bounds will be addressed with the local provider adapters rather than claimed
+here.

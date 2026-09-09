@@ -21,7 +21,7 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 
 ## Implementation checklist
 
-- [ ] Write failing independent known-signal decode tests and expected tone/silence encode tests before implementing the codec.
+- [x] Write failing independent known-signal decode tests and expected tone/silence encode tests before implementing the codec.
 - [ ] Implement bounded incremental Morse encoding/decoding with documented normalization and invalid-input behavior.
 - [ ] Add local STT/TTS provider/transport adapters and closed-registry configuration, preserving current hosted adapters.
 - [ ] Drive an actual room audio ingress-to-transcript and text-to-audio egress path using a deterministic reply fixture.
@@ -29,8 +29,8 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 
 ## Acceptance and failure checks
 
-- [ ] Known external/reference-derived signal fixtures decode correctly; expected sample runs verify encoding independently. A same-codec round trip alone is insufficient.
-- [ ] Arbitrary chunk boundaries, split PCM samples, word gaps, trailing flush, empty input and incomplete final symbols have documented deterministic outcomes.
+- [x] Known external/reference-derived signal fixtures decode correctly; expected sample runs verify encoding independently. A same-codec round trip alone is insufficient.
+- [x] Arbitrary chunk boundaries, split PCM samples, word gaps, trailing flush, empty input and incomplete final symbols have documented deterministic outcomes.
 - [ ] Invalid alphabet/configuration and bounded buffer/oversized input failures are explicit; no silent truncation or unlimited queue growth.
 - [ ] Long output drains fully; an interruption drops only unplayed prior-generation output and a subsequent utterance still works.
 - [ ] Turn/participant attribution and final transcript boundaries remain correct across repeated messages; timing, if emitted, follows generated audio samples.
@@ -68,6 +68,17 @@ tests: an expected-run assertion for normalized `ET A`, and a hand-authored squa
 fixture split at odd byte boundaries so the decoder is not validated by its own encoder. A
 warnings-as-errors child compile also passes. Exhaustive alphabet, malformed/bounded input,
 flush and timing-tolerance checks remain pending before the codec checklist items are complete.
+
+Implementation evidence, checkpoint 2 (2026-09-09): expanded the codec contract to the complete
+documented ASCII subset of the ITU table and explicit boundary outcomes. The new red run exposed
+two gaps: non-binary PCM raised a function-clause error, and invalid UTF-8 was misclassified as an
+unsupported character. Both now return `:invalid_audio` and `:invalid_text` respectively. The
+eight-test focused suite also covers invalid sampling/frequency/amplitude/timing/size settings,
+empty and unsupported text, encoded-output limits, explicit tail flush, repeated flush, silence-
+only input, an incomplete PCM sample, invalid mark length, wrong frequency, unsupported signal,
+the undecided-signal time bound, and the documented one-window timing tolerance. These checks
+complete the independent-fixture and chunk/tail acceptance items; streaming encoder output and
+transport queue bounds remain pending.
 
 ## Specification review
 
