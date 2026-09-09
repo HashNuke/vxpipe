@@ -232,3 +232,36 @@
 
 The milestone remains in progress. Controlled delayed-storage/tool fixtures and the
 remaining end-to-end failure checks have not been demonstrated yet.
+
+## 2026-09-09 — live-only inspection during repository outage
+
+- Persisted list/detail reads and the engine-owned live projection now load independently.
+  An unavailable repository no longer prevents an authorized direct call-detail request
+  from reading the bounded live source.
+- The resulting page labels persisted fields unavailable instead of inventing archived
+  state. It continues to show the permitted live timeline, live variable revision and loss,
+  and an unknown tool outcome; its status explains that calls in progress are unaffected.
+- Red evidence: the new repository-unavailable endpoint fixture rendered only the
+  unavailable state and never issued the live inspection read.
+- Green evidence: the focused endpoint file passes 14 tests, and the complete Console
+  suite passes 50 tests.
+- Rendered `agent-browser` verification at 390px showed the live-only/tool-failure state,
+  retained a 390px document width, and reported no browser errors.
+- This checkpoint is commit `669f14d`. It covers honest live-only presentation during a
+  repository outage.
+
+### End-to-end outage verification
+
+- The existing definition-driven archive-recovery test already runs a real call while its
+  bounded writer repeatedly raises: the host tool completes, model response continues, and
+  a Call Variables update is accepted/read locally before storage recovers.
+- Extended that scenario to read the actual room-owned live inspection buffer at the outage
+  point. It contains the completed tool and variable snapshot at global revision 1 with the
+  original participant, turn, and tool-call identities. No polling sleep was added; the
+  inspection buffer's own GenServer acknowledgement orders earlier offers before the read.
+- Storage recovery still drains retained facts exactly once and writes the archive closure.
+  Focused evidence: the definition-driven archive-recovery test passes with 1 test and no
+  failures. The verification-only checkpoint is commit `6c6b66f`.
+- Together with the independently tested Console live-only state, this proves the storage-
+  outage acceptance path across the owning boundaries. The remaining milestone failure and
+  lifecycle checks are still pending.

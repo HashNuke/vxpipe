@@ -2,8 +2,9 @@
 
 Status: in progress. Persisted inspection reads, the engine-owned bounded live
 projection, and the Console's authenticated list/detail workflow are implemented and
-browser-verified. Deterministic storage/tool failure fixtures and the remaining
-end-to-end acceptance checks are pending. Scope requested by the user; specification
+browser-verified. A deterministic end-to-end call proves conversation, tools, variables,
+live inspection, and later archive drain through a storage outage; the remaining failure
+and lifecycle acceptance checks are pending. Scope requested by the user; specification
 reviewed locally on 2026-09-08.
 Prerequisites: [Observable sample call](observable-sample-call.md);
 [Asynchronous history](asynchronous-call-history.md), including its tenant admission,
@@ -92,7 +93,7 @@ call ends, the same page remains useful from stored history without a live room 
   invocation timeline with the correct snapshot revision and observed outcome.
 - [x] An ended call is inspectable with no room PID; absent timing/history is explicitly
   unavailable/incomplete rather than invented from current state or aggregates.
-- [ ] Delay/fail storage during a live call: ongoing conversation and variable acceptance
+- [x] Delay/fail storage during a live call: ongoing conversation and variable acceptance
   continue; live and persisted revisions/lag are distinguishable in the page.
 - [ ] Another tenant, ordinary caller or forged call identifier cannot read or subscribe
   to private data. Hidden caller events remain hidden while authorized operator history works.
@@ -177,13 +178,28 @@ Implementation evidence to date:
   correlation/provenance fields, preserves inert remote payload rendering, compares the
   latest comparable permitted variable snapshots, and keeps archive gaps, live loss and
   unavailable timing distinct rather than implying continuity.
+- Persisted list/detail reads and the live projection now load independently. When the
+  repository is unavailable, an authorized direct call-detail request can still render
+  its bounded live-only evidence while labeling persisted fields unavailable and keeping
+  live revision/loss and an unknown tool outcome explicit. A focused endpoint test first
+  failed because the unavailable persisted read prevented any live read; the corrected
+  endpoint file passes 14 tests and the complete Console suite passes 50 tests.
+- The existing definition-driven archive-recovery scenario now also reads the real room's
+  live-inspection buffer while the writer is repeatedly failing. It verifies the completed
+  host tool and accepted variable revision with their original participant/turn/tool
+  correlation, after conversation already continued. Recovery still drains each retained
+  fact once and closes the archive. This supplies the end-to-end outage half of the
+  independently tested Console live-only presentation boundary.
 - Rendered review at 1440px and 390px verified the list/detail workflow, event selection,
   call/history pagination, variable diff, mobile reading order and zero horizontal overflow.
   The approved screenshots are `.impeccable/review/desktop.png` and
   `.impeccable/review/mobile.png`; the final UI review disposition was `ship`.
+- A rendered 390px repository-outage check retained a 390px document width, showed the
+  live-only/tool-failure evidence, and produced no browser errors.
 
-Deterministic end-to-end fault fixtures and the remaining acceptance checks are still
-incomplete; this evidence does not complete the milestone.
+Failed/unknown outcome presentation, terminated-room lifecycle, reconnect/bounded-history,
+and safe missing/denied/purged behavior still need consolidated verification. This evidence
+does not complete the milestone.
 
 ## Specification review
 
