@@ -84,10 +84,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     monitor = Process.monitor(capability)
     TestSpeechToTextTransport.disconnect(transport, :closed)
 
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :transport_closed}
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :transport_closed}, 500
 
     assert_receive {:telemetry_event, @provider_failure_event, %{count: 1},
-                    %{capability: :stt} = metadata}
+                    %{capability: :stt} = metadata},
+                   500
 
     assert metadata == %{capability: :stt, provider: :deepgram, category: :unavailable}
 
@@ -99,7 +100,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     monitor = Process.monitor(capability)
     TestSpeechToTextTransport.deliver(transport, ~s({"type":"TurnInfo"}))
 
-    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :invalid_provider_message}
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :invalid_provider_message}, 500
     assert_receive {:DOWN, ^monitor, :process, ^capability, :invalid_provider_message}, 500
     refute_receive {:vxpipe_stt_signal, ^capability, _, _}
   end
