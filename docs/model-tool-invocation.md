@@ -128,5 +128,5 @@ reporting levels, and HTTP/webhook tools remain later slices.
 - ReqLLM tests cover tool schema translation, assistant/tool continuation
   messages, and opaque provider metadata preservation.
 - Gateway codec tests cover successful and cancelled RTVI lifecycle payloads.
-- Manual samples steps are maintained in `samples/README.md` and the associated
-  implementation labnote.
+- Manual sample steps are maintained in `apps/vxpipe_console/assets/README.md` and
+  the associated implementation labnote.

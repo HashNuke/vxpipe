@@ -334,3 +334,40 @@ The focused embedded consumer and speech-capability run passed `10 tests, 0 fail
 subsequent root format, warnings-as-errors compile, default suite and unused-lock gates passed:
 call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
 and Console `12 tests, 0 failures`.
+
+## Checkpoint 11: Console-owned sample assets
+
+The release asset slice started with two endpoint expectations: the Console root must serve a
+configured Vite index with no-store caching, and a missing index must return an explicit 503.
+The first test draft had an unqualified response-header helper and did not compile. After fixing
+the test itself, the intended red run passed three existing cases and failed both new cases
+because the root still returned the placeholder with status 200.
+
+The React/Vite source, package manifest, lockfile and manual instructions now live under the
+Console application. Goreman calls the relocated package as the `assets` process, while the same
+development ports and Caddy routing remain in place. The Vite production target is Console
+`priv/static`. The Console root reads the built index, applies no-store caching, and returns 503
+when it is absent; `Plug.Static` serves only the generated `/assets/*` files with immutable
+caching. This route work adds no authentication. API-key and join-token responsibilities remain
+unchanged. A byte comparison against the pre-move Git objects confirmed that all HTML,
+TypeScript, TSX, CSS, test setup and environment-example content moved unchanged; only the
+package name, build target, development port variable and path-specific documentation changed.
+
+The endpoint green run passed `5 tests, 0 failures`. The root `assets.test` alias passed the
+three existing frontend tests, and the Goreman shell contract passed with the renamed process.
+The first root asset alias failed because umbrella `mix cmd` recursively changed into each child
+directory; reading `mix help cmd` led to targeting the Console child explicitly with `mix do`.
+The corrected alias built 1,902 modules into one index and six generated asset files. Vite warned
+that its main bundle exceeds the default chunk-size suggestion; this is unchanged sample code and
+does not prevent the release asset outcome.
+
+Local HTTP checks verified a 200 HTML index with no-store caching and a hashed JavaScript asset
+with immutable caching. Chromium rendered the unchanged create-room screen through the public
+Vite HTTPS origin and through Console's built-asset endpoint at 1440x900; the built endpoint also
+rendered at 390x844 with no page errors or horizontal overflow. The initial umbrella-root release
+command failed because no umbrella release is defined. Running the release from the Console child
+then succeeded, and inspection found the packaged index plus all six generated assets. The docs
+now use that verified release command rather than selecting an umbrella release policy here.
+The complete root format, warnings-as-errors compile, default suite and unused-lock gates passed:
+call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
+and Console `13 tests, 0 failures`.

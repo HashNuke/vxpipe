@@ -20,7 +20,7 @@ uv tool install pywatchman
 Install the sample frontend dependencies once:
 
 ```shell
-npm install --prefix samples
+npm install --prefix apps/vxpipe_console/assets
 ```
 
 Then start the Vxpipe umbrella and sample frontend together:
@@ -50,8 +50,8 @@ Goreman loads the credentials into its child processes, including Watchman
 restarts. Reusable call-engine code receives provider options through the OTP
 application environment and does not read these environment variables directly.
 
-Goreman runs the `vxpipe_call_engine` and `vxpipe_gateway` applications in one
-BEAM instance, serves the Vite playground on loopback port 5174, and runs Caddy
+Goreman runs the call engine, gateway, and Console applications in one BEAM
+instance, serves the Vite playground on loopback port 5174, and runs Caddy
 as the tailnet-only HTTPS ingress at `https://<machine-fqdn>:5173/`. The machine
 FQDN and Tailscale IPv4 address are discovered automatically. Caddy sends
 `/api/*`, `/healthz`, and `/diagnostics*` to the Console endpoint on loopback
@@ -132,6 +132,19 @@ The development agent also exposes the engine-owned `get_current_time` tool.
 Asking for the current UTC time exercises a model/tool/model loop inside the
 original supervised turn and produces standard RTVI function-call lifecycle
 events before the streamed spoken answer. Exact browser verification steps are
-in [`samples/README.md`](samples/README.md#manual-tool-call-test).
-Set `VITE_VXPIPE_RTVI_OFFER_URL` in `samples/.env.local` to test a different
-offer endpoint.
+in the [Console asset README](apps/vxpipe_console/assets/README.md#manual-tool-call-test).
+Set `VITE_VXPIPE_RTVI_OFFER_URL` in `apps/vxpipe_console/assets/.env.local` to
+test a different offer endpoint.
+
+For release assets, build the unchanged Vite application into the Console's
+`priv/static` directory before assembling the release:
+
+```shell
+mix assets.build
+cd apps/vxpipe_console
+MIX_ENV=prod mix release
+```
+
+The generated bundle is ignored by Git and packaged with `vxpipe_console` by Mix.
+At runtime, the Console serves the SPA index with no-store caching and its hashed
+assets with immutable caching. A missing bundle returns 503 instead of a placeholder.

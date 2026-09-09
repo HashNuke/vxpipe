@@ -6,7 +6,8 @@ defmodule Vxpipe.MixProject do
       apps_path: "apps",
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases()
     ]
   end
 
@@ -17,5 +18,12 @@ defmodule Vxpipe.MixProject do
   # Run "mix help deps" for examples and options.
   defp deps do
     []
+  end
+
+  defp aliases do
+    [
+      "assets.build": ["do --app vxpipe_console cmd --cd assets npm run build"],
+      "assets.test": ["do --app vxpipe_console cmd --cd assets npm test"]
+    ]
   end
 end

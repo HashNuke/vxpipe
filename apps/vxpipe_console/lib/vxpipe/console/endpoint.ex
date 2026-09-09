@@ -11,6 +11,14 @@ defmodule Vxpipe.Console.Endpoint do
     websocket: [connect_info: [session: @session_options]]
 
   plug Vxpipe.Console.GatewayMount
+
+  plug Plug.Static,
+    at: "/",
+    from: :vxpipe_console,
+    gzip: false,
+    only: ["assets"],
+    cache_control_for_etags: "public, max-age=31536000, immutable"
+
   plug Plug.Session, @session_options
   plug Vxpipe.Console.Router
 end

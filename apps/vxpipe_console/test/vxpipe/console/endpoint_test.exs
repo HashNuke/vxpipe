@@ -7,10 +7,13 @@ defmodule Vxpipe.Console.EndpointTest do
 
   @endpoint Vxpipe.Console.Endpoint
 
-  test "serves a console page and mounted gateway routes through one endpoint" do
+  test "serves the configured sample index and mounted gateway routes through one endpoint" do
+    configure_sample_index(Path.expand("../../../assets/index.html", __DIR__))
+
     console_conn = get(build_conn(), "/")
 
-    assert html_response(console_conn, 200) =~ "Vxpipe Console"
+    assert html_response(console_conn, 200) =~ "Vxpipe RTVI Playground"
+    assert Plug.Conn.get_resp_header(console_conn, "cache-control") == ["no-store"]
 
     gateway_conn = get(build_conn(), "/healthz")
 
@@ -18,6 +21,14 @@ defmodule Vxpipe.Console.EndpointTest do
     assert Process.whereis(HTTP.Supervisor) == nil
     assert is_pid(Process.whereis(Vxpipe.Gateway.SessionSupervisor))
     assert is_pid(Process.whereis(Vxpipe.Gateway.WebRTC.ConnectionSupervisor))
+  end
+
+  test "reports unavailable sample assets without hiding the release error" do
+    configure_sample_index(Path.join(System.tmp_dir!(), "missing-vxpipe-sample-index.html"))
+
+    conn = get(build_conn(), "/")
+
+    assert response(conn, 503) == "Vxpipe Console assets are not built"
   end
 
   test "mounted gateway API paths do not fall through to console routing" do
@@ -54,5 +65,18 @@ defmodule Vxpipe.Console.EndpointTest do
     remote_diagnostics_conn = get(remote_conn, "/diagnostics")
 
     assert html_response(remote_diagnostics_conn, 200) =~ "Vxpipe diagnostics"
+  end
+
+  defp configure_sample_index(index_path) do
+    original = Application.get_env(:vxpipe_console, :sample_assets, :not_configured)
+
+    on_exit(fn ->
+      case original do
+        :not_configured -> Application.delete_env(:vxpipe_console, :sample_assets)
+        settings -> Application.put_env(:vxpipe_console, :sample_assets, settings)
+      end
+    end)
+
+    Application.put_env(:vxpipe_console, :sample_assets, index_path: index_path)
   end
 end

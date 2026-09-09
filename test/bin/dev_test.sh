@@ -77,7 +77,7 @@ PATH="$fake_bin" \
 
 assert_file_has_line "$goreman_args" "start"
 assert_file_has_line "$goreman_args" "vxpipe"
-assert_file_has_line "$goreman_args" "samples"
+assert_file_has_line "$goreman_args" "assets"
 assert_file_has_line "$goreman_args" "reloader"
 
 assert_file_has_line "$repo_root/Procfile" "reloader: bin/watch-vxpipe"

@@ -11,10 +11,17 @@ configure `Vxpipe.Gateway.Application` with `http: [enabled: false, ...]` so the
 gateway runtime starts without its standalone Bandit listener. The Console
 endpoint is then the only listener.
 
-The current root page is the initial shell. The observable-sample milestone
-will move the existing React/Vite sample assets here; its separate bounded
-diagnostics surface is available at `/diagnostics`. This application does not
-own Ecto or call protocol implementations.
+The existing React/Vite voice playground source lives under `assets/`. `bin/dev`
+runs it through a separate Vite process for hot reload, while `mix assets.build`
+writes a release bundle into the application's ignored `priv/static` directory.
+The Console root serves that built index and `Plug.Static` serves only its hashed
+`/assets/*` files. If the bundle is absent, the root returns 503 rather than a
+placeholder shell. The separate bounded diagnostics surface remains available
+at `/diagnostics`. This application does not own Ecto or call protocol implementations.
+
+No route in this asset path adds authentication. API keys remain scoped to
+call-management endpoints and join tokens to call admission; Console and
+LiveDashboard pages receive no additional login layer in this milestone.
 
 ## Development diagnostics
 

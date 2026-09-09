@@ -2,9 +2,9 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-processes=(vxpipe samples reloader)
+processes=(vxpipe assets reloader)
 dev_mode="https"
-export VXPIPE_SAMPLES_PORT="5173"
+export VXPIPE_CONSOLE_ASSETS_PORT="5173"
 export VXPIPE_DEV_TLS="http"
 goreman_args=(
   -basedir "$repo_root"
@@ -82,7 +82,7 @@ if [[ "$dev_mode" == "https" ]]; then
 
   export APP_HOST="$tailscale_host"
   export VXPIPE_TAILSCALE_IP="$tailscale_ip"
-  export VXPIPE_SAMPLES_PORT="5174"
+  export VXPIPE_CONSOLE_ASSETS_PORT="5174"
   export VXPIPE_DEV_TLS="caddy"
 
   caddy_runtime_dir="$repo_root/tmp/caddy"

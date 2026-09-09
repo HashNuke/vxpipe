@@ -1,7 +1,8 @@
 # Reusable gateway and Phoenix console
 
-Status: implementation in progress (2026-09-08). The reusable gateway mount and Phoenix
-console shell are implemented; asset/dashboard integration remains pending.
+Status: implemented through the observable-sample milestone (2026-09-09). The reusable
+gateway mount, Phoenix console shell, operational dashboard and release asset integration
+are complete.
 
 ## Decision
 
@@ -12,8 +13,9 @@ conversion, rename or regeneration of the gateway or call engine.
 
 The console includes the gateway as an umbrella dependency. Endpoint and router
 modules can be named `Vxpipe.Console.Endpoint` and `Vxpipe.Console.Router`;
-console code must not claim the generic `Vxpipe.Web` namespace. No application
-or asset files move as part of this documentation checkpoint.
+console code must not claim the generic `Vxpipe.Web` namespace. The original decision-only
+checkpoint moved no application or asset files; later implementation moved the unchanged
+playground source under Console ownership as approved.
 
 | Owner | Responsibility |
 | --- | --- |
@@ -129,4 +131,6 @@ The subsequent access correction keeps diagnostics disabled by default but adds 
 authentication when enabled. The project-owned Plug now checks only the enabled setting, and
 Caddy routes `/diagnostics*` to the shared Console endpoint for repository development. API keys
 and join tokens retain only their API/admission meanings. Rendered desktop/mobile checks verify
-the LiveDashboard surface; Vxpipe telemetry and final sample asset integration remain pending.
+the LiveDashboard surface. The React/Vite playground source is now Console-owned: development
+still uses a separate Vite process, while release builds place the bundle in Console
+`priv/static` for direct serving.

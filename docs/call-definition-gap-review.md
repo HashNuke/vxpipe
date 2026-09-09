@@ -941,7 +941,7 @@ Expose reception's lookup at metadata-only detail while billing's stays hidden.
 Those are separate targets even if both bindings select the same remote operation;
 changing one visibility override must not expose the other's events or payloads.
 
-**Approved sample configuration:** calls created for `samples/` explicitly select
+**Approved sample configuration:** calls created for the Console playground explicitly select
 full tool visibility for the debug UI through effective `{"tool_visibility":"full"}`
 with no overrides, using the same trusted call-creation mechanism. Replace the
 policy pair so restrictive definition overrides are not accidentally inherited;

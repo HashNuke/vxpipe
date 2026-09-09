@@ -19,11 +19,12 @@ erl_crash.dump
 # Also ignore archive artifacts (built via "mix archive.build").
 *.ez
 
-# Frontend dependencies and build output.
-/samples/node_modules/
-/samples/dist/
-/samples/*.tsbuildinfo
-/samples/.env*
-!/samples/.env.example
+# Console frontend dependencies and build output.
+/apps/vxpipe_console/assets/node_modules/
+/apps/vxpipe_console/assets/*.tsbuildinfo
+/apps/vxpipe_console/assets/.env*
+!/apps/vxpipe_console/assets/.env.example
+/apps/vxpipe_console/priv/static/assets/
+/apps/vxpipe_console/priv/static/index.html
 
 .env

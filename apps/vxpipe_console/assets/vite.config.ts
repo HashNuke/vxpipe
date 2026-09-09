@@ -5,14 +5,18 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
   const appHost = env.APP_HOST?.trim();
   const bindHost = env.VXPIPE_DEV_TLS === "caddy" ? "127.0.0.1" : appHost;
-  const samplesPort = Number(env.VXPIPE_SAMPLES_PORT?.trim() || "5173");
+  const assetsPort = Number(env.VXPIPE_CONSOLE_ASSETS_PORT?.trim() || "5173");
 
   return {
     plugins: [react()],
+    build: {
+      outDir: "../priv/static",
+      emptyOutDir: true,
+    },
     server: {
       host: bindHost || "0.0.0.0",
       allowedHosts: appHost ? [appHost] : [],
-      port: samplesPort,
+      port: assetsPort,
       strictPort: true,
       proxy: {
         "/api": {

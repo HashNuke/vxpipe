@@ -1,8 +1,10 @@
-# Vxpipe samples
+# Vxpipe Console assets
 
-This Vite application is a frontend-only playground for exercising Vxpipe
-gateway endpoints. It does not host a Pipecat server or duplicate call-engine
-behavior in the browser.
+This Console-owned Vite application is a frontend-only playground for exercising
+Vxpipe gateway endpoints. It does not host a Pipecat server or duplicate call-engine
+behavior in the browser. Development runs it as a separate Vite process for hot
+reload; `mix assets.build` writes its release bundle to the Console application's
+ignored `priv/static` directory.
 
 The initial screen uses `ConsoleTemplate` from
 `@pipecat-ai/voice-ui-kit`. It pulls in `@pipecat-ai/client-react` and the core
@@ -64,14 +66,14 @@ room creation or RTVI payloads.
 From the repository root:
 
 ```shell
-npm install --prefix samples
+npm install --prefix apps/vxpipe_console/assets
 bin/dev
 ```
 
 To run only the frontend:
 
 ```shell
-npm run dev --prefix samples
+npm run dev --prefix apps/vxpipe_console/assets
 ```
 
 Copy `.env.example` to `.env.local` when an endpoint differs from the defaults.
@@ -86,9 +88,9 @@ Vite bind host. Without `APP_HOST`, Vite binds to `0.0.0.0`. The proxy uses
 
 By default, `bin/dev` uses trusted HTTPS within the tailnet. Vite listens only on
 loopback port 5174 and Goreman runs Caddy on HTTPS port 5173. Caddy routes
-`/api/*` directly to the gateway and sends other paths, including Vite's hot
-module replacement connection, to the frontend. The machine FQDN and Tailscale
-address are discovered automatically. Run `bin/dev --http` to omit Caddy for
-local troubleshooting. The HTTPS path may ask for sudo once so only Caddy can
-run as root and obtain the Tailscale certificate; the application processes stay
-unprivileged.
+`/api/*` to the shared Console endpoint, where the mounted gateway handles it,
+and sends other paths, including Vite's hot module replacement connection, to
+the frontend. The machine FQDN and Tailscale address are discovered automatically.
+Run `bin/dev --http` to omit Caddy for local troubleshooting. The HTTPS path may
+ask for sudo once so only Caddy can run as root and obtain the Tailscale certificate;
+the application processes stay unprivileged.

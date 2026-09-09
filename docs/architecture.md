@@ -1210,7 +1210,7 @@ selection replaces this effective policy pair from the definition; omitting
 the creation policy inherits the definition. This is not a deep-merge/patch API.
 Within the selected pair, a binding override still wins over the default.
 
-Calls created for the `samples/` playground explicitly select full tool
+Calls created for the Console playground explicitly select full tool
 visibility using effective `{"tool_visibility":"full"}` with no overrides.
 An inherited restrictive binding override would still win, so the trusted sample
 creation replaces the policy pair rather than changing only its default. This
@@ -1665,7 +1665,7 @@ secret-safe, and exportable without a local interactive login.
 The repository development stack uses Caddy as its single tailnet HTTPS ingress.
 Caddy binds to the discovered Tailscale address, routes `/api/*`, `/healthz`, and
 `/diagnostics*` to the shared Console endpoint over loopback, and routes remaining
-paths to the Vite samples application over loopback. This supplies one
+paths to the Console-owned Vite assets application over loopback. This supplies one
 stable secure browser origin and leaves room for additional development
 applications without making Caddy part of the product protocol model.
 
