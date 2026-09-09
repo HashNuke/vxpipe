@@ -31,10 +31,10 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 
 - [x] Known external/reference-derived signal fixtures decode correctly; expected sample runs verify encoding independently. A same-codec round trip alone is insufficient.
 - [x] Arbitrary chunk boundaries, split PCM samples, word gaps, trailing flush, empty input and incomplete final symbols have documented deterministic outcomes.
-- [ ] Invalid alphabet/configuration and bounded buffer/oversized input failures are explicit; no silent truncation or unlimited queue growth.
-- [ ] Long output drains fully; an interruption drops only unplayed prior-generation output and a subsequent utterance still works.
-- [ ] Turn/participant attribution and final transcript boundaries remain correct across repeated messages; timing, if emitted, follows generated audio samples.
-- [ ] End-to-end local fixture succeeds without speech credentials or network access; no provider-default change or ordinary-speech-recognition claim.
+- [x] Invalid alphabet/configuration and bounded buffer/oversized input failures are explicit; no silent truncation or unlimited queue growth.
+- [x] Long output drains fully; an interruption drops only unplayed prior-generation output and a subsequent utterance still works.
+- [x] Turn/participant attribution and final transcript boundaries remain correct across repeated messages; timing, if emitted, follows generated audio samples.
+- [x] End-to-end local fixture succeeds without speech credentials or network access; no provider-default change or ordinary-speech-recognition claim.
 - [ ] Direct PCM tests and any claimed codec/browser integration run separately; microphone DSP/echo limitations are recorded, not concealed by loopback success.
 
 ## Manual verification
@@ -153,6 +153,21 @@ speech settings are disabled and no speech secret or network transport is presen
 long-output, explicit failure and runnable sample/documentation checks remain pending. A
 warnings-as-errors compile and the complete owning child suite pass with `133 tests, 0 failures
 (1 excluded)`.
+
+Implementation evidence, checkpoint 8 (2026-09-09): hardened the real local transports with
+behavior-level acceptance checks. STT now proves two back-to-back encoded inputs become distinct
+provider turn indexes and full transcripts. TTS drains `PACK MY BOX WITH FIVE DOZEN JUGS` in more
+than 100 bounded frames, emits no second frame while the first remains unacknowledged, and fully
+finishes an `E` replacement after interrupting a longer prior generation. Unsupported TTS text
+and an STT tone outside configured frequency tolerance produce explicit provider failures,
+terminate only their capability processes, and emit no fabricated audio.
+
+The local transport suite passes `6 tests, 0 failures`; together with the independent codec and
+repeated whole-room proof, this closes invalid/bounded input, output backpressure, long drain,
+interruption recovery and repeated attribution checks. No word timing is emitted, so no estimated
+timing is claimed. Documentation/sample selection and direct-PCM limitation disclosure remain
+before milestone completion. A warnings-as-errors compile and the complete owning child suite
+pass with `136 tests, 0 failures (1 excluded)`.
 
 ## Specification review
 

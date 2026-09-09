@@ -100,32 +100,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
              )
 
     assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
-    assert {:ok, input_config} = MorseCodeSTT.new(sample_rate: 16_000, unit_duration_ms: 20)
-    assert {:ok, input_pcm} = Encoder.encode(input_config, "SOS")
-
-    input_pcm
-    |> split_repeatedly([2_001, 4_093, 811])
-    |> Enum.with_index(1)
-    |> Enum.each(fn {payload, sequence} ->
-      frame =
-        %AudioFrame{
-          tenant_id: plan.tenant_id,
-          room_id: plan.room_id,
-          incarnation_id: room.incarnation_id,
-          participant_id: caller.participant_id,
-          connection_id: connection_id,
-          track_id: "track-morse",
-          codec: :linear16,
-          sample_rate: 16_000,
-          channels: 1,
-          sequence_number: sequence,
-          timestamp: sequence * 320,
-          payload: payload,
-          received_at: System.monotonic_time(:millisecond)
-        }
-
-      assert :ok = CallEngine.push_audio(attachment, frame)
-    end)
+    push_text(attachment, plan, room, caller, connection_id, "SOS", 1)
 
     assert_receive {:vxpipe_event,
                     %ParticipantTurnStarted{
@@ -188,6 +163,59 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
                       participant_id: ^receiver_id,
                       source_participant_id: ^caller_id,
                       correlation_id: ^correlation_id
+                    }},
+                   1_000
+
+    push_text(attachment, plan, room, caller, connection_id, "ET", 100)
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnStarted{
+                      participant_id: ^caller_id,
+                      connection_id: ^connection_id,
+                      modality: :audio,
+                      correlation_id: second_correlation_id
+                    }},
+                   1_000
+
+    refute second_correlation_id == correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTranscription{
+                      participant_id: ^caller_id,
+                      correlation_id: ^second_correlation_id,
+                      text: "ET",
+                      final: true,
+                      provider_turn_index: 1
+                    }},
+                   1_000
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnCompleted{
+                      participant_id: ^caller_id,
+                      correlation_id: ^second_correlation_id,
+                      modality: :audio
+                    }},
+                   1_000
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      participant_id: ^receiver_id,
+                      source_participant_id: ^caller_id,
+                      correlation_id: ^second_correlation_id,
+                      text: "OK",
+                      will_be_spoken: true
+                    }},
+                   2_000
+
+    second_frames = collect_output(sink, second_correlation_id, [])
+    assert_decodes_to(second_frames, "OK")
+    :ok = TestAudioOutputSink.playback_completed(sink)
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnCompleted{
+                      participant_id: ^receiver_id,
+                      source_participant_id: ^caller_id,
+                      correlation_id: ^second_correlation_id
                     }},
                    1_000
   end
@@ -277,6 +305,43 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     after
       3_000 -> flunk("timed out waiting for the complete Morse room output")
     end
+  end
+
+  defp push_text(attachment, plan, room, caller, connection_id, text, first_sequence) do
+    assert {:ok, input_config} = MorseCodeSTT.new(sample_rate: 16_000, unit_duration_ms: 20)
+    assert {:ok, input_pcm} = Encoder.encode(input_config, text)
+
+    input_pcm
+    |> split_repeatedly([2_001, 4_093, 811])
+    |> Enum.with_index(first_sequence)
+    |> Enum.each(fn {payload, sequence} ->
+      frame = %AudioFrame{
+        tenant_id: plan.tenant_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: connection_id,
+        track_id: "track-morse",
+        codec: :linear16,
+        sample_rate: 16_000,
+        channels: 1,
+        sequence_number: sequence,
+        timestamp: sequence * 320,
+        payload: payload,
+        received_at: System.monotonic_time(:millisecond)
+      }
+
+      assert :ok = CallEngine.push_audio(attachment, frame)
+    end)
+  end
+
+  defp assert_decodes_to(frames, expected_text) do
+    output_pcm = frames |> Enum.map(& &1.payload) |> IO.iodata_to_binary()
+    assert {:ok, output_config} = MorseCodeTTS.new(sample_rate: 16_000, unit_duration_ms: 20)
+    assert {:ok, output_decoder} = Decoder.new(output_config)
+    assert {:ok, output_decoder, output_events} = Decoder.push(output_decoder, output_pcm)
+    assert {:ok, _output_decoder, []} = Decoder.flush(output_decoder)
+    assert List.last(output_events) == {:final, expected_text}
   end
 
   defp media_ingress_options do

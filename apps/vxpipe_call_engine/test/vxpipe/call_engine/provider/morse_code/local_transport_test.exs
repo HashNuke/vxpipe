@@ -10,7 +10,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.CallEngine.TextToSpeechRequest
 
-  test "local STT decodes chunked PCM through the existing capability boundary" do
+  test "local STT keeps repeated turns separate across arbitrary chunk boundaries" do
     assert {:ok, config} = MorseCodeSTT.new(unit_duration_ms: 20)
     identity = identity()
 
@@ -59,9 +59,35 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
                       text: "SOS",
                       trigger: "morse_end_gap"
                     }}
+
+    assert {:ok, second_pcm} = Encoder.encode(config, "ET")
+
+    second_pcm
+    |> split_repeatedly([911, 2_009, 3])
+    |> Enum.with_index(100)
+    |> Enum.each(fn {payload, sequence} ->
+      assert :ok = SpeechToText.push_audio(capability, audio_frame(identity, sequence, payload))
+    end)
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :turn_started, provider_turn_index: 1}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, provider_turn_index: 1, text: "E"}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :transcript_updated, provider_turn_index: 1, text: "ET"}}
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{
+                      kind: :turn_ended,
+                      provider_turn_index: 1,
+                      text: "ET",
+                      trigger: "morse_end_gap"
+                    }}
   end
 
-  test "local TTS incrementally drains through the existing output sink" do
+  test "local TTS drains a long request completely through bounded output frames" do
     assert {:ok, config} = MorseCodeTTS.new(unit_duration_ms: 20)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     participant_id = unique_id("agent")
@@ -80,21 +106,46 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
          task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor}
       )
 
-    request = request(participant_id, "turn-one", "ET", sink)
+    text = "PACK MY BOX WITH FIVE DOZEN JUGS"
+    request = request(participant_id, "turn-one", text, sink)
     assert :ok = TextToSpeech.synthesize(capability, request)
 
     frames = collect_output(sink, request.correlation_id, [])
-    assert length(frames) > 10
+    assert length(frames) > 100
     assert Enum.all?(frames, &(byte_size(&1.payload) <= 640))
 
     pcm = frames |> Enum.map(& &1.payload) |> IO.iodata_to_binary()
     assert {:ok, decoder} = Decoder.new(config)
     assert {:ok, decoder, events} = Decoder.push(decoder, pcm)
     assert {:ok, _decoder, []} = Decoder.flush(decoder)
-    assert List.last(events) == {:final, "ET"}
+    assert List.last(events) == {:final, text}
 
     :ok = TestAudioOutputSink.playback_completed(sink)
     assert_receive {:vxpipe_tts_playback, ^capability, ^request, :completed}
+  end
+
+  test "local TTS holds at most one unacknowledged output frame" do
+    assert {:ok, config} = MorseCodeTTS.new(unit_duration_ms: 20)
+    sink = start_supervised!({TestAudioOutputSink, observer: self(), block_output: true})
+    participant_id = unique_id("agent")
+
+    capability =
+      start_supervised!(
+        {TextToSpeech,
+         owner: self(),
+         participant_id: participant_id,
+         provider: {MorseCodeTTS, config},
+         transport: {MorseCodeTTS.Transport, [emit_interval_ms: 0]},
+         maximum_requests: 1,
+         task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor}
+      )
+
+    request = request(participant_id, "turn-blocked", "ET", sink)
+    assert :ok = TextToSpeech.synthesize(capability, request)
+    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: "turn-blocked"}}
+
+    refute_receive {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: "turn-blocked"}},
+                   100
   end
 
   test "local TTS interruption discards stale output and starts a replacement" do
@@ -128,11 +179,74 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
     assert {:ok, [{^current, 20}]} = TextToSpeech.interrupt(capability)
     assert :ok = TextToSpeech.synthesize(capability, replacement)
 
-    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: "turn-new"}},
+    assert_receive {:test_audio_output, ^sink,
+                    %AudioOutputFrame{correlation_id: "turn-new"} = first_replacement},
                    500
 
     refute_receive {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: "turn-old"}},
                    100
+
+    replacement_frames = [first_replacement | collect_output(sink, "turn-new", [])]
+    replacement_pcm = replacement_frames |> Enum.map(& &1.payload) |> IO.iodata_to_binary()
+    assert {:ok, decoder} = Decoder.new(config)
+    assert {:ok, decoder, replacement_events} = Decoder.push(decoder, replacement_pcm)
+    assert {:ok, _decoder, []} = Decoder.flush(decoder)
+    assert List.last(replacement_events) == {:final, "E"}
+
+    :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^replacement, :completed}
+  end
+
+  test "local TTS reports unsupported text instead of truncating or inventing audio" do
+    assert {:ok, config} = MorseCodeTTS.new(unit_duration_ms: 20)
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    participant_id = unique_id("agent")
+
+    capability =
+      start_supervised!(
+        {TextToSpeech,
+         owner: self(),
+         participant_id: participant_id,
+         provider: {MorseCodeTTS, config},
+         transport: {MorseCodeTTS.Transport, [emit_interval_ms: 0]},
+         maximum_requests: 1,
+         task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor}
+      )
+
+    monitor = Process.monitor(capability)
+    invalid = request(participant_id, "turn-invalid", "NOT SUPPORTED %", sink)
+    assert :ok = TextToSpeech.synthesize(capability, invalid)
+    assert_receive {:vxpipe_tts_unavailable, ^capability, :provider_failed}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
+    refute_receive {:test_audio_output, ^sink, %AudioOutputFrame{}}
+  end
+
+  test "local STT reports an unsupported tone and terminates its failed capability" do
+    assert {:ok, config} = MorseCodeSTT.new(unit_duration_ms: 20)
+    identity = identity()
+
+    capability =
+      start_supervised!(
+        {SpeechToText,
+         identity ++
+           [
+             owner: self(),
+             provider: {MorseCodeSTT, config},
+             transport: {MorseCodeSTT.Transport, []}
+           ]}
+      )
+
+    monitor = Process.monitor(capability)
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert {:ok, wrong_config} = MorseCodeSTT.new(unit_duration_ms: 20, frequency_hz: 1_200)
+    assert {:ok, wrong_tone} = Encoder.encode(wrong_config, "E")
+    assert :ok = SpeechToText.push_audio(capability, audio_frame(identity, 1, wrong_tone))
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :failed, provider_code: "UNSUPPORTED_FREQUENCY"}}
+
+    assert_receive {:vxpipe_stt_unavailable, ^capability, _, :provider_failed}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}
   end
 
   defp collect_output(sink, correlation_id, frames) do

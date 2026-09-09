@@ -163,3 +163,24 @@ focused test pass (`1 test, 0 failures`). The remaining proof work is repeated t
 explicit provider failures, opt-in sample configuration, documentation and milestone-wide gates.
 A warnings-as-errors compile and the complete owning child suite pass with `133 tests, 0 failures
 (1 excluded)`.
+
+## Checkpoint 8: repeated, long, backpressured and invalid boundaries
+
+The transport acceptance tests now send `SOS` and `ET` consecutively through one STT capability.
+They observe exactly one start/final boundary per input, monotonically increasing provider turn
+indexes (`0`, then `1`), and no text carried into the next utterance. The whole-room test likewise
+runs a second audio input after completing the first output and proves a fresh correlation ID,
+provider turn index `1`, preserved caller/agent attribution, and a second completed local reply.
+
+The prior short TTS drain was strengthened to `PACK MY BOX WITH FIVE DOZEN JUGS`; it finishes in
+more than 100 frames, every frame remains at or below the configured 20 ms/640-byte bound, and the
+concatenated signal decodes without truncation. A blocked sink observes one frame and no second
+frame before acknowledgement. The interruption test now collects the entire replacement, decodes
+it as `E`, and completes its normal playback lifecycle after proving no stale prior frame arrived.
+
+Finally, unsupported `%` text and a 1,200 Hz tone sent to the 700 Hz STT configuration produce
+explicit local provider errors. The owning capability reports failure and terminates while no
+invalid TTS audio is emitted. The local transport suite passes `6 tests, 0 failures`; the combined
+transport/room run passes `7 tests, 0 failures`. Full child and umbrella gates will be rerun after
+the remaining configuration and documentation work. The current warnings-as-errors compile and
+complete owning child suite pass with `136 tests, 0 failures (1 excluded)`.
