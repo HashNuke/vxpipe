@@ -24,7 +24,7 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 - [x] Write failing independent known-signal decode tests and expected tone/silence encode tests before implementing the codec.
 - [x] Implement bounded incremental Morse encoding/decoding with documented normalization and invalid-input behavior.
 - [x] Add local STT/TTS provider/transport adapters and closed-registry configuration, preserving current hosted adapters.
-- [ ] Drive an actual room audio ingress-to-transcript and text-to-audio egress path using a deterministic reply fixture.
+- [x] Drive an actual room audio ingress-to-transcript and text-to-audio egress path using a deterministic reply fixture.
 - [ ] Document an opt-in sample/embedded profile, encoded input method, audio safety settings and supported transport limitations.
 
 ## Acceptance and failure checks
@@ -137,6 +137,22 @@ select the existing hosted profiles by default. The definition-driven file passe
 0 failures`; a development-config probe confirms both registry entries load, and the complete
 owning child passes `132 tests, 0 failures (1 excluded)`. Credential-free sample selection and
 the complete room audio loop remain pending.
+
+Implementation evidence, checkpoint 7 (2026-09-09): a definition-driven test now compiles a
+Morse-selected plan, starts its real room and participant/agent trees, attaches the caller with
+the ordinary output sink, and injects `SOS` as arbitrarily chunked linear16 audio. The local STT
+provider emits an attributed audio turn and final transcript; the configured local model fixture
+answers `OK`; local TTS emits bounded audio frames; and an independent decoder verifies their
+concatenation before sink playout completes the agent turn.
+
+The first run reached and completed TTS but failed because the test initially reversed the
+existing output-event identities. Correcting the expectation confirms `participant_id` is the
+producing agent and `source_participant_id` is the originating caller. The focused room test
+passes `1 test, 0 failures` using only local provider registrations—both top-level hosted
+speech settings are disabled and no speech secret or network transport is present. Repeated-turn,
+long-output, explicit failure and runnable sample/documentation checks remain pending. A
+warnings-as-errors compile and the complete owning child suite pass with `133 tests, 0 failures
+(1 excluded)`.
 
 ## Specification review
 

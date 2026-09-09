@@ -139,3 +139,27 @@ development-config probe with placeholder secrets confirms both registry entries
 complete owning child passes `132 tests, 0 failures (1 excluded)`. A later checkpoint must make
 the trusted sample opt into both Morse profiles without demanding a Deepgram credential, then
 prove the room audio loop.
+
+## Checkpoint 7: definition-driven room audio loop
+
+The room acceptance test builds the schema-versioned call definition and invocation through the
+real compiler, with only the Morse profiles and the existing local model fixture in its closed
+registries. Application configuration disables both hosted defaults and exposes only local
+alternate runtimes. It starts the resulting call, attaches its entry caller, pushes `SOS` PCM
+through `CallEngine.push_audio/2`, and observes the normal audio-turn start, final transcription
+and completion events with the caller/connection correlation intact.
+
+The fixture response `OK` then reaches the real local TTS capability and ordinary acknowledged
+output sink. The test collects more than ten bounded frames, concatenates them, and decodes the
+audio with a separate decoder instance before reporting playout complete and observing the
+correlated agent-turn completion. No speech API key, socket module or network listener appears
+in this setup.
+
+The initial run failed after audio output had already completed because the test expected
+`TextOutput.participant_id` to name the caller. Inspection of the owning room constructor
+confirmed the established contract: output `participant_id` is the producing agent and
+`source_participant_id` is the originating human. Updating only that expectation made the
+focused test pass (`1 test, 0 failures`). The remaining proof work is repeated turns, long output,
+explicit provider failures, opt-in sample configuration, documentation and milestone-wide gates.
+A warnings-as-errors compile and the complete owning child suite pass with `133 tests, 0 failures
+(1 excluded)`.
