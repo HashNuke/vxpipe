@@ -1,6 +1,6 @@
 # Asynchronous call history and variable snapshots
 
-Status: in progress. Specification review: approved (2026-09-08).
+Status: complete (2026-09-09). Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Background tools](background-tool-conversation.md).
 Sources: [Incremental facts](../../labnotes/20260905-0405-call-definition-design.md#persist-facts-incrementally-and-derive-the-transcript); [variable snapshots](../../labnotes/20260905-0405-call-definition-design.md#variable-history-snapshots-and-the-latest-pointer--approved-g5-decision); [asynchronous consistency](../../labnotes/20260905-0405-call-definition-design.md#persistence-consistency-levels).
 
@@ -61,14 +61,14 @@ finished. It is a structural gate for this milestone, not deferred cleanup:
 
 ## Acceptance and failure checks
 
-- [ ] Stop/delay PostgreSQL after admission: room speech, tools and variables continue without SQL waits; resume only retained facts, with no lossless claim.
+- [x] Stop/delay PostgreSQL after admission: room speech, tools and variables continue without SQL waits; resume only retained facts, with no lossless claim.
 - [x] Reorder/duplicate snapshots: correct history and latest pointer, no cross-call reference or rollback of newer local state.
 - [x] Hidden tool calls still have permitted private args/results; no secrets or denied transcripts enter queues, logs or archives.
 - [x] Compare typed input, final STT, generated output and actual delivery/interruption facts; preserve modality/source distinctions.
 - [x] End room while storage work drains; no ordinary history depends on a live room PID. Simulated process loss is reported as unavailable/incomplete data, not invented history.
-- [ ] Crash EctoStorage and saturate its bounded queue: room/variables continue, no accepted update becomes a database failure, and retained/lost facts are distinguished.
+- [x] Crash EctoStorage and saturate its bounded queue: room/variables continue, no accepted update becomes a database failure, and retained/lost facts are distinguished.
 - [x] Rejected updates create no successful snapshot; late baseline, wrong call/incarnation, and stale delivery cannot corrupt or regress latest state.
-- [ ] Bounded draining never treats the later publication reporting window as cancellation of pending archive/upload work or proof of successful completion after loss.
+- [x] Bounded draining never treats the later publication reporting window as cancellation of pending archive/upload work or proof of successful completion after loss.
 
 ## Manual verification
 
@@ -83,9 +83,9 @@ No SQS/Oban dependency, synchronous runtime writes, automatic post-incident repa
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation checkpoint 1 adds the database-neutral `ArchiveRepository` and Calls workflows
@@ -152,6 +152,30 @@ count remains exact. A database-backed integration exercised the actual subscrib
 Ecto transaction, closure, and authorized history against an empty, disposable
 PostgreSQL cluster. Presence-driven media policy, recording, retention cleanup and
 public inspection remain later milestones.
+
+The final acceptance checkpoint drives a definition-based Jido tool conversation and
+a Call Variables update while the injected archive adapter repeatedly raises. Public
+tool/output/turn events and local variable reads remain responsive; the bounded handoff
+reports retained work and retries. After recovery, the room is stopped and the subscriber
+drains to an explicit closure. Every retained snapshot/fact ID is written once, including
+accepted input, tool completion and the variable update. A persistence-owned companion
+test runs an engine fact through `EctoStorage` while its repository raises, then proves
+retry, recovery, ordered storage and clean closure. Real Ecto migration, transaction,
+deduplication and latest-pointer behavior remain covered against PostgreSQL separately.
+
+The queue-saturation test proves newest-item loss does not change locally accepted Call
+Variables, and the closure tests distinguish that known loss from a clean drain. The drain
+deadline owns only the archive subscriber and its current writer task; it neither creates
+nor controls the later call-details publication window. A timed-out/failed closure therefore
+leaves history unconfirmed rather than claiming completion or cancelling unrelated future
+publication/upload work.
+
+Final root verification passed `mix format --check-formatted`, `mix credo --strict`
+(239 source files, no issues), `mix compile --warnings-as-errors`, `mix test`, and
+`mix deps.unlock --check-unused`. The 317-test umbrella run passed with Call Engine 179,
+Calls 24, Persistence 23, Gateway 66, and Console 25 tests; six network/provider
+integration cases remained explicitly excluded. The database was a disposable PostgreSQL
+18 cluster created empty, migrated through all five migrations, and removed afterward.
 
 ## Specification review
 

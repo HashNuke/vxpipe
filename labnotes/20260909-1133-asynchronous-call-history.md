@@ -306,3 +306,44 @@ The remaining milestone work is the broad outage/saturation acceptance audit and
 final documentation/index completion. No lossless durability, S3 repair, audio
 storage, presence-policy engine, retention sweep, or public history endpoint is
 claimed by this checkpoint.
+
+## Checkpoint 6: live outage and recovery acceptance
+
+The final live-room acceptance test uses a controllable archive adapter in crash
+mode. Its first two retained-write attempts raise inside the writer boundary, which
+the subscriber converts into bounded retries. While that outage remains active, a
+definition-based Jido turn executes the configured host tool, returns text and
+completes; a direct authorized Call Variables update also succeeds and is immediately
+readable from the room-owned variables process. The handoff reports both pending work
+and retries, proving neither operation waited for storage.
+
+After switching the adapter to available, the test stops the room authority and waits
+on the archive subscriber monitor rather than sleeping. The subscriber drains all
+retained facts/snapshots and its closure before terminating normally. The stored IDs
+are unique and include the baseline, accepted update, accepted input, completed tool,
+and `archive_stream_closed` marker.
+
+A separate persistence-owned test sends a real engine fact through `EctoStorage` with
+an `ArchiveRepository` test boundary that raises. It observes two attempts (therefore
+one completed retry), restores the repository, and verifies exactly the room-open and
+closure facts in order. This directly covers an `EctoStorage` crash/recovery while the
+existing PostgreSQL tests cover the real schema, transaction, idempotency, ordering and
+latest-snapshot pointer. The existing one-slot queue test covers saturation: the local
+update succeeds, the newest snapshot is rejected, and loss remains explicit.
+
+No publication reporting timer exists in this milestone. The subscriber drain deadline
+terminates only its own active writer and retained queue; a failed/timed-out final marker
+leaves the archive unconfirmed. It does not address or cancel the independent publication,
+upload, or billing lifecycles introduced by later milestones.
+
+This completes the milestone's automated runnable outcome. The development-database
+pause steps remain useful operator exercises, but no developer database or credentials
+were modified during the automated simulation.
+
+Final milestone gates passed at the umbrella root: formatting, strict Credo (239 source
+files, no issues), warnings-as-errors compilation, unused-lock validation, and 317 tests
+with zero failures. The per-application counts were Call Engine 179, Calls 24,
+Persistence 23, Gateway 66, and Console 25; six tagged network/provider integration tests
+were excluded. The run used an empty disposable PostgreSQL 18 cluster migrated through
+all five migrations and removed it afterward. Milestone 8 and its index entry are now
+complete; call inspection/debugging is next.

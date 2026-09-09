@@ -50,6 +50,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     TestArchiveWriter,
     TestCollectingArchiveWriter,
     TestFailingTextToSpeechTransport,
+    TestRecoveringArchiveWriter,
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
   }
@@ -378,6 +379,122 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                    2_000
 
     assert participant_id == caller.participant_id
+  end
+
+  test "keeps tools and variables live while archival crashes, then drains retained facts" do
+    room_id = unique_id("room-archive-recovery")
+    plan = compile_variables_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    writer =
+      start_supervised!({TestRecoveringArchiveWriter, mode: :raise, observer: self()})
+
+    script =
+      expect_react do
+        user("Can you check the time?")
+        call("get_current_time", %{}, id: "tool-during-archive-outage")
+        answer("The tool still completed.")
+      end
+
+    archive =
+      archive_options(
+        writer: {TestRecoveringArchiveWriter, writer},
+        maximum_pending_facts: 64,
+        retry_delay_ms: 5
+      )
+
+    assert {:ok, handoff} = ArchiveSupervisor.open(archive)
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               agent_request_options: Jido.AI.Test.react_opts(script),
+               archive_handoff: handoff
+             )
+
+    assert_receive {:test_archive_attempt, _first_retained, :raise}, 1_000
+    assert_receive {:test_archive_attempt, _retried_retained, :raise}, 1_000
+    attach_caller(plan, room, caller, "conn-archive-recovery")
+
+    command =
+      send_command(
+        plan,
+        room,
+        caller,
+        "conn-archive-recovery",
+        "Can you check the time?"
+      )
+
+    assert :ok = CallEngine.send_text(command)
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{tool_call_id: "tool-during-archive-outage"}},
+                   2_000
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "The tool still completed."}}, 2_000
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{}}, 2_000
+
+    variables = CallVariables.whereis(room.incarnation_id)
+
+    assert {:ok, update} =
+             UpdateCallVariables.new(
+               tenant_id: plan.tenant_id,
+               room_id: room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: receiver.participant_id,
+               activation_id: receiver.activation_id,
+               source_participant_id: caller.participant_id,
+               correlation_id: command.correlation_id,
+               tool_call_id: "tool-variable-during-archive-outage",
+               section: "intake",
+               expected_revision: 0,
+               operation: {:put, "summary", "accepted locally"},
+               deadline: future_deadline()
+             )
+
+    assert {:ok, %{"global_revision" => 1, "revision" => 1}} =
+             CallVariables.update(variables, update)
+
+    assert {:ok, read} =
+             ReadCallVariables.new(
+               tenant_id: plan.tenant_id,
+               room_id: room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: receiver.participant_id,
+               sections: ["intake"],
+               deadline: future_deadline()
+             )
+
+    assert {:ok,
+            %{
+              "sections" => %{
+                "intake" => %{"value" => %{"summary" => "accepted locally"}}
+              }
+            }} = CallVariables.read(variables, read)
+
+    assert %{pending: pending, retries: retries} = Handoff.stats(handoff)
+    assert pending > 0
+    assert retries > 0
+
+    TestRecoveringArchiveWriter.recover(writer)
+
+    assert [{authority, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
+
+    subscriber_monitor = Process.monitor(handoff.subscriber)
+    GenServer.stop(authority)
+    assert_receive {:DOWN, ^subscriber_monitor, :process, _subscriber, :normal}, 2_000
+    assert %{pending: 0} = Handoff.stats(handoff)
+
+    archived = TestRecoveringArchiveWriter.facts(writer)
+    ids = Enum.map(archived, & &1.id)
+
+    assert length(ids) == length(Enum.uniq(ids))
+    assert Enum.any?(archived, &match?(%BaselineSnapshot{}, &1))
+    assert Enum.any?(archived, &match?(%UpdateSnapshot{global_revision: 1}, &1))
+    assert Enum.any?(archived, &match?(%Fact{kind: :accepted_input}, &1))
+    assert Enum.any?(archived, &match?(%Fact{kind: :tool_call_completed}, &1))
+    assert Enum.any?(archived, &match?(%Fact{kind: :archive_stream_closed}, &1))
   end
 
   test "starts only entry participants and routes an attached caller through Jido" do
