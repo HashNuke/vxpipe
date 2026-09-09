@@ -351,6 +351,35 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     refute html =~ "Not projected"
   end
 
+  test "shows bounded persisted duplicate and missing-sequence provenance" do
+    call = %{call_summary() | state: :ended, ended_at: ~U[2026-09-09 16:31:00Z]}
+
+    archive_status = %{
+      ArchiveStatus.from_facts([])
+      | state: :incomplete,
+        missing_sequence_count: 2,
+        missing_sequences: [4, 5],
+        duplicate_id_count: 1,
+        duplicate_ids: ["event-duplicate"],
+        duplicate_sequence_count: 1,
+        duplicate_sequences: [8]
+    }
+
+    persisted = %{persisted_detail(call) | archive_status: archive_status}
+
+    configure_backend(%{
+      list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
+      inspect_call: {:ok, persisted}
+    })
+
+    conn = sign_in()
+    html = html_response(conn |> recycle() |> get("/calls/#{call.id}"), 200)
+
+    assert html =~ "Archive gap: 2 missing sequences"
+    assert html =~ "1 duplicate ID"
+    assert html =~ "1 duplicate sequence"
+  end
+
   test "changes selected evidence without reloading bounded call sources" do
     call = call_summary()
 

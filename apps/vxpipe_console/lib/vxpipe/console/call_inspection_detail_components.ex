@@ -234,16 +234,27 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
     end
   end
 
-  defp archive_gap(%{archive_status: %{missing_sequence_count: 0}}), do: nil
-
-  defp archive_gap(%{archive_status: %{missing_sequence_count: count}}),
-    do: "Archive gap: #{count} missing"
-
   defp archive_gap(nil), do: nil
+
+  defp archive_gap(%{archive_status: status}) do
+    details =
+      [
+        count_label(status.missing_sequence_count, "missing sequence"),
+        count_label(status.duplicate_id_count, "duplicate ID"),
+        count_label(status.duplicate_sequence_count, "duplicate sequence")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    if details == [], do: nil, else: "Archive gap: " <> Enum.join(details, " · ")
+  end
 
   defp live_gap(nil), do: nil
   defp live_gap(%{dropped_records: 0, rejected_records: 0}), do: nil
   defp live_gap(live), do: "Live projection gap: #{loss_label(live)}"
+
+  defp count_label(0, _label), do: nil
+  defp count_label(1, label), do: "1 #{label}"
+  defp count_label(count, label), do: "#{count} #{label}s"
 
   defp kind_label(kind), do: kind |> Atom.to_string() |> String.replace("_", " ")
   defp participant_label(nil), do: "Call-wide"
