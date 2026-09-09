@@ -64,6 +64,26 @@ configured application and tenant integrations and must be resolved at the depen
 public boundary without weakening credential-origin binding. Loopback tests are not
 evidence that this production concern is solved.
 
+## 2026-09-09 — pinned dependency and client profile
+
+- Added the `vxpipe_mcp` umbrella child with direct, exact `ex_mcp == 1.3.0`
+  ownership and a direct JSV dependency for the forthcoming outgoing-argument
+  validation boundary. The child has no Jido, call-engine, database, gateway, or
+  Console dependency.
+- Red: the focused client-profile test first failed because `ClientOptions.build/1`
+  did not exist. A second test then demonstrated that an HTTP remote endpoint was
+  incorrectly accepted.
+- Green: `ClientOptions` now pins HTTP transport mechanics to the legacy-only
+  `2025-11-25` revision, keeps generic retry disabled, enables reconnect without
+  replay, and rejects plaintext production endpoints.
+- Verification: the focused child suite passes with 2 tests and 0 failures. Root
+  formatting, warnings-as-errors compilation, strict Credo (280 files, no issues),
+  and unused-dependency checks pass.
+- A root `mix test` attempt reached the existing PostgreSQL setup alias and could not
+  authenticate against the local server. No database is required by this child; the
+  focused test was rerun from its owning application. The complete umbrella suite will
+  use the established isolated PostgreSQL setup at the milestone completion gate.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)
