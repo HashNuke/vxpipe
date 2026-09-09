@@ -9,7 +9,14 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     activation = start_supervised!({AgentActivationSupervisor, options(activation_id)})
 
     first = AgentActivationSupervisor.children(activation)
-    assert Map.keys(first) |> Enum.sort() == [:agent_server, :coordinator, :tool_dispatcher]
+
+    assert Map.keys(first) |> Enum.sort() == [
+             :agent_server,
+             :background_tools,
+             :coordinator,
+             :tool_dispatcher
+           ]
+
     assert Enum.all?(first, fn {_role, pid} -> is_pid(pid) end)
 
     assert {:ok, state} = Jido.AgentServer.state(Map.fetch!(first, :agent_server))
@@ -61,7 +68,9 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
       owner: self(),
       system_prompt: "Use only the selected action.",
       tools: [TestAgentTool],
+      background_tool_timeout_ms: 1_000,
       maximum_completed_requests: 4,
+      maximum_background_tools: 2,
       maximum_output_bytes: 65_536,
       maximum_pending_requests: 2,
       maximum_tool_result_bytes: 4_096,

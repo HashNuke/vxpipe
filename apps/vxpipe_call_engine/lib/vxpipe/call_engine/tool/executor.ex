@@ -28,6 +28,14 @@ defmodule Vxpipe.CallEngine.Tool.Executor do
     |> Enum.sort_by(& &1.name)
   end
 
+  @spec background?(t(), String.t()) :: boolean()
+  def background?(%__MODULE__{} = executor, name) when is_binary(name) do
+    case Map.get(executor.tools, name) do
+      %{definition: %Definition{execution: :background}} -> true
+      _other -> false
+    end
+  end
+
   @spec execute(t(), Call.t(), Context.t()) ::
           {:ok, term()}
           | {:error, :invalid_arguments | :invalid_result | :tool_failed | :unknown_tool}
@@ -59,7 +67,7 @@ defmodule Vxpipe.CallEngine.Tool.Executor do
   defp valid_definition?(definition) do
     is_binary(definition.name) and String.trim(definition.name) != "" and
       is_binary(definition.description) and String.trim(definition.description) != "" and
-      is_map(definition.parameters)
+      is_map(definition.parameters) and definition.execution in [:inline, :background]
   end
 
   defp execute_tool(module, arguments, context, maximum_result_bytes) when is_map(arguments) do

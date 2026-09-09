@@ -11,6 +11,8 @@ import Config
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [
+    background_tool_timeout_ms: 30_000,
+    maximum_background_tools: 4,
     maximum_completed_requests: 32,
     maximum_pending_requests: 4,
     maximum_output_bytes: 65_536,

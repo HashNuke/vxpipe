@@ -4,9 +4,9 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
   use Supervisor
 
   alias Vxpipe.CallEngine.{Agent, AgentCoordinator, JidoAgentRuntime}
-  alias Vxpipe.CallEngine.Tool.Dispatcher
+  alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Dispatcher}
 
-  @roles [:agent_server, :coordinator, :tool_dispatcher]
+  @roles [:agent_server, :background_tools, :coordinator, :tool_dispatcher]
 
   def start_link(options) do
     activation_id = Keyword.fetch!(options, :activation_id)
@@ -46,15 +46,31 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
   def init(options) do
     activation_id = Keyword.fetch!(options, :activation_id)
     agent_server = via(activation_id, :agent_server)
+    background_tools = via(activation_id, :background_tools)
+    coordinator = via(activation_id, :coordinator)
     tool_dispatcher = via(activation_id, :tool_dispatcher)
+
+    background_tools_child =
+      Supervisor.child_spec(
+        {BackgroundSupervisor,
+         activation_id: activation_id,
+         maximum_children: Keyword.get(options, :maximum_background_tools, 4),
+         name: background_tools},
+        id: :background_tools,
+        restart: :permanent
+      )
 
     dispatcher_child =
       Supervisor.child_spec(
         {Dispatcher,
          activation_id: activation_id,
+         background_supervisor: background_tools,
+         background_tool_timeout_ms: Keyword.get(options, :background_tool_timeout_ms, 30_000),
+         completion_target: coordinator,
          name: tool_dispatcher,
          tools: Keyword.fetch!(options, :tools),
          variable_binding: Keyword.get(options, :variable_binding),
+         maximum_background_tools: Keyword.get(options, :maximum_background_tools, 4),
          maximum_result_bytes: Keyword.fetch!(options, :maximum_tool_result_bytes)},
         id: :tool_dispatcher,
         restart: :permanent
@@ -91,13 +107,13 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
            system_prompt: Keyword.fetch!(options, :system_prompt),
            tools: Keyword.fetch!(options, :tools)
          ],
-         name: via(activation_id, :coordinator)},
+         name: coordinator},
         id: :coordinator,
         restart: :permanent
       )
 
     Supervisor.init(
-      [dispatcher_child, agent_server_child, coordinator_child],
+      [background_tools_child, dispatcher_child, agent_server_child, coordinator_child],
       strategy: :one_for_all,
       max_restarts: 1,
       max_seconds: 5

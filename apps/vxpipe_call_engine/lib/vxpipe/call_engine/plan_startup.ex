@@ -199,6 +199,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          [
            activation_id: receiver.activation_id,
            agent_participant_id: receiver.participant_id,
+           background_tool_timeout_ms: Keyword.fetch!(settings, :background_tool_timeout_ms),
+           maximum_background_tools: Keyword.fetch!(settings, :maximum_background_tools),
            owner: owner,
            provider: if(model_fixture, do: :local_fixture, else: :req_llm),
            system_prompt: receiver.prompt,
