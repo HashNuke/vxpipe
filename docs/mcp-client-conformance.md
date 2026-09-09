@@ -35,6 +35,10 @@ starting unrelated development voice-provider configuration. The task itself sta
 - Invocation maps JSON-RPC error objects to `:remote_error`; malformed payloads and mismatched
   response IDs become `:outcome_unknown` after submission. These categories do not include
   remote messages, and the effective wire tests observe exactly one `tools/call` per case.
+- The same wire fixture verifies the configured 1 KiB response boundary: content-encoded
+  responses are rejected, and oversized chunked JSON and POST SSE responses fail with the
+  dependency's incremental `:response_too_large` cause. Vxpipe reports `:outcome_unknown`
+  after timeout, disconnect, or these post-submission failures and never resubmits the call.
 - `Vxpipe.MCP.ReferenceProbe.run/2` is the fixture-facing boundary that discovers and calls
   Everything's `echo` tool while preserving the remote definition and result as data.
 

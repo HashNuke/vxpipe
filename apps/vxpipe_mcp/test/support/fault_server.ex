@@ -23,6 +23,12 @@ defmodule Vxpipe.MCP.FaultServer do
     "http://127.0.0.1:#{port}/mcp"
   end
 
+  def request_count(method) when is_binary(method) do
+    method
+    |> collect_requests(0)
+    |> tap(fn _count -> drain_other_requests() end)
+  end
+
   def init(opts), do: opts
 
   def call(%{method: "GET"} = conn, {_fault, owner}) do
@@ -103,9 +109,85 @@ defmodule Vxpipe.MCP.FaultServer do
     })
   end
 
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :compressed) do
+    payload = success_payload(id, "compressed")
+
+    conn
+    |> put_resp_header("content-encoding", "gzip")
+    |> json_response(200, payload)
+  end
+
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :chunked_oversized) do
+    id
+    |> success_payload(String.duplicate("x", 1_500))
+    |> Jason.encode!()
+    |> then(&send_chunked_payload(conn, "application/json", &1))
+  end
+
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :sse_oversized) do
+    event =
+      "event: message\ndata: #{Jason.encode!(success_payload(id, String.duplicate("x", 1_500)))}\n\n"
+
+    send_chunked_payload(conn, "text/event-stream", event)
+  end
+
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :slow) do
+    receive do
+      :release_fault_response -> json_response(conn, 200, success_payload(id, "late"))
+    after
+      500 -> json_response(conn, 200, success_payload(id, "late"))
+    end
+  end
+
+  defp respond(_conn, %{"method" => "tools/call"}, :disconnect), do: exit(:shutdown)
+
   defp json_response(conn, status, payload) do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(status, Jason.encode!(payload))
+  end
+
+  defp send_chunked_payload(conn, content_type, payload) do
+    {first, second} = String.split_at(payload, 700)
+
+    conn =
+      conn
+      |> put_resp_content_type(content_type)
+      |> send_chunked(200)
+      |> send_chunk(first)
+
+    send_chunk(conn, second)
+  end
+
+  defp send_chunk(conn, data) do
+    case chunk(conn, data) do
+      {:ok, next_conn} -> next_conn
+      {:error, _reason} -> conn
+    end
+  end
+
+  defp success_payload(id, text) do
+    %{
+      "jsonrpc" => "2.0",
+      "id" => id,
+      "result" => %{"content" => [%{"type" => "text", "text" => text}]}
+    }
+  end
+
+  defp collect_requests(method, count) do
+    receive do
+      {:fault_server_request, ^method} -> collect_requests(method, count + 1)
+      {:fault_server_request, _other} -> collect_requests(method, count)
+    after
+      0 -> count
+    end
+  end
+
+  defp drain_other_requests do
+    receive do
+      {:fault_server_request, _method} -> drain_other_requests()
+    after
+      0 -> :ok
+    end
   end
 end

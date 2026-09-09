@@ -97,7 +97,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   trigger hidden fetches.
 - [x] Repeated cursors, endless pages and aggregate discovery limits stop without an
   unbounded loop or falsely complete catalog; partial bindings cannot be invoked.
-- [ ] Oversized compressed/chunked/SSE responses stop incrementally at the configured limit;
+- [x] Oversized compressed/chunked/SSE responses stop incrementally at the configured limit;
   timeout/disconnect retains an honest unknown outcome after submission.
 - [ ] Credentials are absent from diagnostics/status; redirects, changed DNS/private
   addresses and credential forwarding obey production policy.
@@ -163,6 +163,11 @@ Implementation evidence:
   malformed JSON, and wrong correlation IDs through the supervised ExMCP client. Remote and
   unsupported errors become `:remote_error`; malformed and mismatched responses preserve the
   honest `:outcome_unknown` state. Every case emits exactly one `tools/call`.
+- Effective 1 KiB response-limit tests reject content encoding entirely and observe
+  `:response_too_large` for oversized chunked JSON and POST SSE bodies. A delayed response
+  beyond a 100 ms deadline and a server-side disconnect both return `:outcome_unknown`.
+  All five post-submission failures emit one tool call and no retry. Cumulative accounting
+  across resumed streams remains a separate unchecked gate.
 - `Vxpipe.MCP.Invocation` selects only from that complete catalog and delegates schema work
   to `Vxpipe.MCP.ArgumentValidator`. Default/explicit JSON Schema 2020-12 and canonical
   explicit Draft 7 arguments are checked without casts or remote resolvers before submission;
@@ -185,7 +190,7 @@ Implementation evidence:
   discovered/validated `tools/call`; the full scenario matrix and internal API are recorded in
   [MCP client conformance profile](../mcp-client-conformance.md).
 - The focused behavior test was observed red before implementation and is green with the
-  default child suite (23 tests, 0 failures, three integration tests excluded). The opt-in
+  default child suite (25 tests, 0 failures, three integration tests excluded). The opt-in
   lane passes all three wrapper tests: the two unmodified harness scenarios each score 1/1,
   the corrected recovery fixture scores 3/3, and the Everything probe returns its expected
   tool and result. This is partial conformance evidence, not a blanket claim.

@@ -305,6 +305,26 @@ evidence that this production concern is solved.
   opt-in lane passes all three tests. Warnings-as-errors compilation, root formatting,
   strict Credo across 299 files, and the unused-dependency check pass.
 
+## 2026-09-09 — effective response limits
+
+- Extracted `FaultClient` as the single test-driver owner for connection, discovery,
+  invocation, deadline, and cleanup. `FaultServer` remains responsible only for serving and
+  observing wire cases; both wire test modules now use those shared boundaries.
+- Red: the response-limit tests initially had neither a fault client nor fixture responses
+  for encoded, chunked, SSE, delayed, or disconnected calls.
+- Green: with a 1 KiB configured response cap, a response declaring `Content-Encoding: gzip`
+  is rejected as `:compressed_response`; 1.5 KiB chunked JSON and POST SSE payloads are
+  rejected as `:response_too_large`. Vxpipe exposes the honest `:outcome_unknown` category
+  because each tool request was already submitted.
+- A fixture delayed beyond a 100 ms invocation deadline and a connection closed without a
+  response also return `:outcome_unknown`. Every size, timeout, and disconnect case records
+  exactly one `tools/call`, so no invocation is speculatively repeated.
+- These checks prove per-response incremental bounds. They do not prove cumulative byte or
+  deadline accounting across a broken and resumed stream; that acceptance gate remains open.
+- Verification: the default MCP suite passes 25 tests with three integrations excluded;
+  warnings-as-errors compilation, root formatting, strict Credo across 299 files, and the
+  unused-dependency check pass.
+
 ## Sources
 
 - [ExMCP 1.3.0 package](https://hex.pm/packages/ex_mcp/1.3.0)
