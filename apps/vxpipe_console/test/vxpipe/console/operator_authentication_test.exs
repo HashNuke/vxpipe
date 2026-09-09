@@ -88,6 +88,22 @@ defmodule Vxpipe.Console.OperatorAuthenticationTest do
     assert Plug.Conn.get_session(conn, "vxpipe_operator") == nil
   end
 
+  test "carries the same expiring identity into a LiveView session" do
+    now_unix = 1_788_883_200
+
+    conn =
+      build_conn()
+      |> Plug.Test.init_test_session(%{})
+      |> OperatorSession.put(principal(), now_unix: now_unix, max_age_seconds: 60)
+
+    live_session = OperatorSession.live_session(conn)
+
+    assert {:ok, %Principal{tenant_key: @tenant_key}} =
+             OperatorSession.fetch_live(live_session, now_unix: now_unix + 59)
+
+    assert :error = OperatorSession.fetch_live(live_session, now_unix: now_unix + 60)
+  end
+
   defp principal do
     %Principal{
       tenant_key: @tenant_key,

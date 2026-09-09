@@ -5,6 +5,7 @@ defmodule Vxpipe.Console.OperatorSession do
   alias Vxpipe.Calls.Principal
 
   @session_key "vxpipe_operator"
+  @live_session_key "vxpipe_operator_session"
   @known_scopes [:admin, :calls]
   @api_key_id_pattern ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
 
@@ -29,6 +30,18 @@ defmodule Vxpipe.Console.OperatorSession do
 
   @spec clear(Conn.t()) :: Conn.t()
   def clear(%Conn{} = conn), do: Conn.delete_session(conn, @session_key)
+
+  @spec live_session(Conn.t()) :: map()
+  def live_session(%Conn{} = conn) do
+    %{@live_session_key => Conn.get_session(conn, @session_key)}
+  end
+
+  @spec fetch_live(map(), keyword()) :: {:ok, Principal.t()} | :error
+  def fetch_live(session, options \\ []) when is_map(session) do
+    session
+    |> Map.get(@live_session_key)
+    |> decode(now_unix(options))
+  end
 
   defp decode(
          %{
