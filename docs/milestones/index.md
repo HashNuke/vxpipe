@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestones 1 through 7 are complete and milestone 8 is next. The earlier
+Status: 23 milestone specifications; milestones 1 through 7 are complete and milestone 8 is in progress. The earlier
 behavior contracts have completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.

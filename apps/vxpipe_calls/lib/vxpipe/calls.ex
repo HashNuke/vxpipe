@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
-  alias Vxpipe.Calls.{Administration, Admissions, Definitions}
+  alias Vxpipe.Calls.{Administration, Admissions, Archives, Definitions}
 
   def bootstrap_tenant(name, scopes, options \\ []),
     do: Administration.bootstrap_tenant(name, scopes, options)
@@ -44,4 +44,10 @@ defmodule Vxpipe.Calls do
 
   def mark_call_failed(claim, reason, options \\ []),
     do: Admissions.mark_failed(claim, reason, options)
+
+  def archive_variable_snapshot(snapshot, options \\ []),
+    do: Archives.store_variable_snapshot(snapshot, options)
+
+  def fetch_variable_snapshots(principal, call_id, options \\ []),
+    do: Archives.fetch_variable_snapshots(principal, call_id, options)
 end

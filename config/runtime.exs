@@ -10,6 +10,7 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
   config :vxpipe_persistence, Vxpipe.Persistence.Repo, url: database_url, pool_size: pool_size
 
   config :vxpipe_calls, Vxpipe.Calls,
+    archive_repository: {Vxpipe.Persistence.ArchiveStore, Vxpipe.Persistence.Repo},
     credential_repository: {Vxpipe.Persistence.CredentialStore, Vxpipe.Persistence.Repo},
     definition_repository: {Vxpipe.Persistence.DefinitionStore, Vxpipe.Persistence.Repo},
     call_repository: {Vxpipe.Persistence.CallStore, Vxpipe.Persistence.Repo}

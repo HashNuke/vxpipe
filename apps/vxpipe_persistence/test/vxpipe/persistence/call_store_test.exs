@@ -4,11 +4,12 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   import Ecto.Query
 
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.Administration
-  alias Vxpipe.Persistence.{CallStore, CredentialStore, DefinitionStore, Repo}
+  alias Vxpipe.Calls.{Administration, VariableSnapshot}
+  alias Vxpipe.Persistence.{ArchiveStore, CallStore, CredentialStore, DefinitionStore, Repo}
   alias Vxpipe.Persistence.Schema.Admission, as: StoredAdmission
   alias Vxpipe.Persistence.Schema.Call, as: StoredCall
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredJoinToken
+  alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredVariableSnapshot
 
   @tenant_key "AAAAAAAAAAAAAAAA"
   @key_id "11111111-1111-4111-8111-111111111111"
@@ -28,6 +29,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       credential_repository: {CredentialStore, Repo},
       definition_repository: {DefinitionStore, Repo},
       call_repository: {CallStore, Repo},
+      archive_repository: {ArchiveStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
       uuid_generator: sequence([@key_id, @definition_id, @route_id, @support_route_id]),
       api_key_generator: fn -> @api_key end,
@@ -341,6 +343,66 @@ defmodule Vxpipe.Persistence.CallStoreTest do
            } = Repo.get_by!(StoredCall, public_id: call.id)
   end
 
+  test "persists exact variable history without regressing the latest pointer", context do
+    {call, incarnation_id} = running_call(context)
+
+    second = variable_snapshot(call, incarnation_id, 2, "snapshot-2")
+    baseline = variable_snapshot(call, incarnation_id, 0, "snapshot-0")
+    first = variable_snapshot(call, incarnation_id, 1, "snapshot-1")
+
+    assert {:ok, ^second} = Calls.archive_variable_snapshot(second, context.options)
+    assert {:ok, ^baseline} = Calls.archive_variable_snapshot(baseline, context.options)
+    assert {:ok, ^first} = Calls.archive_variable_snapshot(first, context.options)
+    assert {:ok, ^second} = Calls.archive_variable_snapshot(second, context.options)
+
+    assert {:ok, history} =
+             Calls.fetch_variable_snapshots(context.principal, call.id, context.options)
+
+    assert Enum.map(history.snapshots, & &1.global_revision) == [0, 1, 2]
+    assert history.latest.id == second.id
+    assert history.latest.sections == second.sections
+    assert Repo.aggregate(StoredVariableSnapshot, :count) == 3
+
+    stored_call = Repo.get_by!(StoredCall, public_id: call.id)
+
+    assert stored_call.latest_variables_snapshot_id ==
+             Repo.get_by!(StoredVariableSnapshot, public_id: second.id).id
+  end
+
+  test "rejects wrong scope and conflicting variable revisions atomically", context do
+    {call, incarnation_id} = running_call(context)
+    accepted = variable_snapshot(call, incarnation_id, 1, "snapshot-accepted")
+
+    assert {:ok, ^accepted} = Calls.archive_variable_snapshot(accepted, context.options)
+
+    wrong_incarnation =
+      variable_snapshot(call, "rinc_another", 2, "snapshot-wrong-incarnation")
+
+    assert {:error, :call_incarnation_mismatch} =
+             Calls.archive_variable_snapshot(wrong_incarnation, context.options)
+
+    wrong_call =
+      %{
+        variable_snapshot(call, incarnation_id, 2, "snapshot-wrong-call")
+        | call_id: Ecto.UUID.generate()
+      }
+
+    assert {:error, :call_not_found} =
+             Calls.archive_variable_snapshot(wrong_call, context.options)
+
+    conflicting = variable_snapshot(call, incarnation_id, 1, "snapshot-conflicting")
+
+    assert {:error, :variable_snapshot_revision_conflict} =
+             Calls.archive_variable_snapshot(conflicting, context.options)
+
+    assert {:ok, history} =
+             Calls.fetch_variable_snapshots(context.principal, call.id, context.options)
+
+    assert Enum.map(history.snapshots, & &1.id) == [accepted.id]
+    assert history.latest.id == accepted.id
+    assert Repo.aggregate(StoredVariableSnapshot, :count) == 1
+  end
+
   defp prepare(context) do
     Calls.prepare_call(
       context.principal,
@@ -348,6 +410,67 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       %{"order" => %{"id" => "ORD-2048"}},
       context.options
     )
+  end
+
+  defp running_call(context) do
+    assert {:ok, call, token} = prepare(context)
+
+    assert {:ok, claim} =
+             Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    incarnation_id = "rinc_variable-history"
+
+    assert {:ok, running} =
+             Calls.mark_call_started(
+               claim,
+               incarnation_id,
+               DateTime.add(@now, 1),
+               context.options
+             )
+
+    {running, incarnation_id}
+  end
+
+  defp variable_snapshot(call, incarnation_id, global_revision, id) do
+    kind = if global_revision == 0, do: :baseline, else: :update
+
+    attributes = [
+      id: id,
+      kind: kind,
+      tenant_key: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: incarnation_id,
+      global_revision: global_revision,
+      sections: %{
+        "order" => %{
+          revision: global_revision,
+          value: %{"id" => "ORD-#{global_revision}"}
+        }
+      },
+      source_policy: %{"revision" => 0, "save_transcripts" => true},
+      occurred_at: DateTime.add(@now, global_revision, :second)
+    ]
+
+    attributes =
+      if kind == :update do
+        attributes ++
+          [
+            command_id: "command-#{global_revision}",
+            participant_id: "participant-#{global_revision}",
+            activation_id: "activation-#{global_revision}",
+            source_participant_id: "source-#{global_revision}",
+            correlation_id: "correlation-#{global_revision}",
+            tool_call_id: "tool-#{global_revision}",
+            section: "order",
+            section_revision: global_revision
+          ]
+      else
+        attributes
+      end
+
+    assert {:ok, snapshot} = VariableSnapshot.new(attributes)
+    snapshot
   end
 
   defp scope(context, call) do

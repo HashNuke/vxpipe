@@ -1,7 +1,10 @@
 defmodule Vxpipe.Calls.Repositories do
   @moduledoc false
 
-  @spec fetch(keyword(), :credential_repository | :definition_repository | :call_repository) ::
+  @spec fetch(
+          keyword(),
+          :archive_repository | :credential_repository | :definition_repository | :call_repository
+        ) ::
           {:ok, {module(), term()}} | {:error, :repository_unavailable}
   def fetch(options, key) do
     configured = Application.get_env(:vxpipe_calls, Vxpipe.Calls, [])

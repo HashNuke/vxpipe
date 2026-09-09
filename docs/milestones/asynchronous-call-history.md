@@ -1,6 +1,6 @@
 # Asynchronous call history and variable snapshots
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: in progress. Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Background tools](background-tool-conversation.md).
 Sources: [Incremental facts](../../labnotes/20260905-0405-call-definition-design.md#persist-facts-incrementally-and-derive-the-transcript); [variable snapshots](../../labnotes/20260905-0405-call-definition-design.md#variable-history-snapshots-and-the-latest-pointer--approved-g5-decision); [asynchronous consistency](../../labnotes/20260905-0405-call-definition-design.md#persistence-consistency-levels).
 
@@ -54,8 +54,21 @@ No SQS/Oban dependency, synchronous runtime writes, automatic post-incident repa
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation checkpoint 1 adds the database-neutral `ArchiveRepository` and Calls workflows
+for private variable-snapshot writes and calls-scoped, tenant-bound reads. A new immutable
+snapshot contract distinguishes unattributed revision-zero baselines from fully attributed
+accepted updates and excludes its private sections from inspection.
+
+The Ecto adapter and fourth migration store exact full snapshots, deduplicate identical
+delivery, reject conflicting identities/revisions and wrong call incarnations, and update
+`calls.latest_variables_snapshot_id` in the same transaction only when the incoming global
+revision is newer. Archival JSON is canonicalized before identity/deduplication comparisons.
+Older and late-baseline facts remain queryable history without regressing that pointer.
+Focused red evidence was 11 call-store tests with 2 expected failures at the missing
+snapshot/archive APIs, followed by one focused JSON-canonicalization failure. Green evidence
+is 20 Calls and 19 persistence tests, plus an empty-database four-migration run and 11 focused
+adapter tests, all with 0 failures. Runtime subscriber wiring and non-variable call facts
+remain open, so no implementation checklist or acceptance box is complete yet.
 
 ## Specification review
 

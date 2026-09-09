@@ -2,7 +2,13 @@ defmodule Vxpipe.Persistence.Schema.Call do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Vxpipe.Persistence.Schema.{Admission, DefinitionRevision, JoinToken, Tenant}
+  alias Vxpipe.Persistence.Schema.{
+    Admission,
+    DefinitionRevision,
+    JoinToken,
+    Tenant,
+    VariableSnapshot
+  }
 
   @derive {Inspect, except: [:initial_variables, :resolved_plan]}
 
@@ -31,6 +37,8 @@ defmodule Vxpipe.Persistence.Schema.Call do
     belongs_to :definition_revision, DefinitionRevision
     has_many :join_tokens, JoinToken
     has_many :admissions, Admission
+    has_many :variable_snapshots, VariableSnapshot
+    belongs_to :latest_variables_snapshot, VariableSnapshot
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -99,6 +107,10 @@ defmodule Vxpipe.Persistence.Schema.Call do
     |> change(state: :failed, terminal_reason: reason, ended_at: failed_at)
     |> check_constraint(:state, name: :calls_state)
     |> check_constraint(:terminal_reason, name: :calls_terminal_reason)
+  end
+
+  def latest_variables_snapshot_changeset(call, snapshot_id) do
+    change(call, latest_variables_snapshot_id: snapshot_id)
   end
 
   defp validate_binary_size(changeset, field, expected_size) do

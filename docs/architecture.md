@@ -1309,6 +1309,17 @@ turn, tool, usage/cost, and full variable-snapshot facts for PostgreSQL.
 PostgreSQL holds history and artifact metadata/references, not duplicate audio bytes.
 Existing call-details publication remains a separate post-call workflow.
 
+The first archive implementation checkpoint establishes the database side of exact Call
+Variables history without putting it on the live path yet. Calls owns an
+`ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped
+calls-authorized read workflow. Persistence stores each full snapshot and conditionally
+advances `calls.latest_variables_snapshot_id` in one transaction. An identical delivery is
+idempotent; a different snapshot claiming the same call/incarnation/global revision fails;
+older valid history and a late revision-zero baseline persist without moving the pointer
+backward. Call, room, and established incarnation checks prevent cross-call linkage. The
+bounded asynchronous subscriber, source handoff, and broader event archive are subsequent
+checkpoints; until those land, no room process calls this SQL adapter.
+
 Subscribers may persist directly or publish to a future queue, such as SQS;
 no queue dependency is selected. Database/storage failures must not themselves
 fail/stop the room, undo accepted variables, or backpressure media/`RoomAuthority`.
