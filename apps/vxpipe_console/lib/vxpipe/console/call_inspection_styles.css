@@ -449,7 +449,7 @@ button { cursor: pointer; }
 .call-context dt {
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -513,7 +513,7 @@ button { cursor: pointer; }
   background: var(--coral-soft);
   color: var(--ink);
   font-family: var(--mono);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 
 .event-list {
@@ -632,6 +632,7 @@ button { cursor: pointer; }
 .variable-diff > pre { margin: 0; padding: 10px 16px; }
 
 .variable-diff > div { border-right: 1px solid var(--divider); }
+.variable-diff .readout-label { color: var(--muted); }
 
 .variable-diff strong {
   display: block;
@@ -868,7 +869,7 @@ button { cursor: pointer; }
   .event-evidence { border-top: 1px solid var(--divider); border-left: 0; }
   .event-list { max-height: none; overflow: visible; }
   .event-list li > a { grid-template-columns: 1fr 1fr; }
-  .event-list strong { font-size: 0.8125rem; }
+  .event-list strong { font-size: 0.875rem; }
   .ledger-footer { align-items: flex-start; flex-direction: column; }
   .variable-diff { grid-template-columns: 1fr; }
   .variable-diff > div { border-right: 0; border-bottom: 1px solid var(--divider); }
