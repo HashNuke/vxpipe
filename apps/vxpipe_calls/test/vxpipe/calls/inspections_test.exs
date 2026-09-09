@@ -83,6 +83,8 @@ defmodule Vxpipe.Calls.InspectionsTest do
 
     assert {:ok, first_page} = Calls.inspect_call(principal, call.id, options)
     assert first_page.call == call
+    assert first_page.archive_status.state == :unconfirmed
+    assert first_page.persisted_variable_revision == 1
     assert Enum.map(first_page.timeline, & &1.kind) == [:tool_call_completed, :variable_snapshot]
     assert hd(first_page.timeline).observed_duration_ms == nil
     assert is_binary(first_page.next_cursor)
@@ -99,8 +101,10 @@ defmodule Vxpipe.Calls.InspectionsTest do
 
     assert TestInspectionRepository.operations(repository) == [
              {:fetch_call, call.tenant_key, call.id},
+             {:fetch_archive_status, call.tenant_key, call.id},
              {:list_history, call.tenant_key, call.id, 3, nil},
              {:fetch_call, call.tenant_key, call.id},
+             {:fetch_archive_status, call.tenant_key, call.id},
              {:list_history, call.tenant_key, call.id, 3,
               {snapshot.occurred_at, 1, snapshot.global_revision, snapshot.id}}
            ]
@@ -146,7 +150,8 @@ defmodule Vxpipe.Calls.InspectionsTest do
       created_at: created_at,
       started_at: DateTime.add(created_at, 1, :second),
       ended_at: nil,
-      terminal_reason: nil
+      terminal_reason: nil,
+      latest_variable_revision: 1
     }
   end
 

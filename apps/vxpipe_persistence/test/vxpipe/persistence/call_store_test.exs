@@ -618,6 +618,11 @@ defmodule Vxpipe.Persistence.CallStoreTest do
              Calls.inspect_call(context.principal, call.id, context.options ++ [limit: 2])
 
     assert first_page.call.id == call.id
+    assert first_page.call.latest_variable_revision == 1
+    assert first_page.persisted_variable_revision == 1
+    assert first_page.archive_status.state == :unconfirmed
+    assert first_page.archive_status.last_sequence == 3
+    assert first_page.archive_status.missing_sequences == [2]
 
     assert Enum.map(first_page.timeline, & &1.kind) == [
              :tool_call_completed,

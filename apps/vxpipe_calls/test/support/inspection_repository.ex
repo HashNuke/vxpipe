@@ -59,6 +59,20 @@ defmodule Vxpipe.Calls.TestInspectionRepository do
     end)
   end
 
+  @impl true
+  def fetch_archive_status(server, tenant_key, call_id) do
+    Agent.get_and_update(server, fn state ->
+      facts =
+        state.history
+        |> Map.get({tenant_key, call_id}, [])
+        |> Enum.filter(&match?(%Vxpipe.Calls.CallFact{}, &1))
+
+      result = {:ok, Vxpipe.Calls.ArchiveStatus.from_facts(facts)}
+      operation = {:fetch_archive_status, tenant_key, call_id}
+      {result, %{state | operations: [operation | state.operations]}}
+    end)
+  end
+
   defp after_cursor(calls, nil), do: calls
 
   defp after_cursor(calls, cursor) do

@@ -78,3 +78,23 @@
   Root format, warnings-as-errors compile, strict Credo (250 files / 2,401 functions),
   unused-dependency validation, and the full migrated umbrella suite passed with
   324 tests, 0 failures, and 6 integration exclusions.
+
+## 2026-09-09 — archive completeness metadata
+
+- Detail pages now include the latest persisted Call Variables revision plus archive
+  closure state, last source sequence, bounded missing-sequence samples and duplicate
+  provenance. The in-memory projection detects duplicate IDs and source sequences.
+- PostgreSQL computes the last/distinct sequence metadata with aggregates and fetches
+  at most 100 missing sequence samples with `generate_series`; it does not load the
+  entire history to describe gaps. Stored duplicate IDs/sequences are prevented by the
+  archive constraints and therefore report zero at this boundary.
+- Reproducing the full suite under load exposed two unrelated timing-sensitive tests.
+  The Call Variables queued-call test now observes the actual GenServer call send via
+  tracing rather than exhausting a scheduler-yield loop. The real Jido fixture and the
+  blocked archive-writer assertion now share the existing five-second bounded operation
+  window instead of racing a two-second assertion.
+- Red evidence: new tests failed on absent archive fields/callbacks; full-suite runs also
+  reproduced the two timing failures before their synchronization/timeout corrections.
+- Green evidence: 13 focused Calls tests, the focused Ecto inspection test, and the three
+  affected engine tests passed. A full migrated umbrella run passed with 325 tests,
+  0 failures, and 6 integration exclusions.

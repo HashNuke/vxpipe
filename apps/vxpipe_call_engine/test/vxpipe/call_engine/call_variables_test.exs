@@ -361,14 +361,26 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
 
     :ok = :sys.suspend(server)
     task_supervisor = start_supervised!(Task.Supervisor)
+    test_process = self()
 
     task =
       Task.Supervisor.async_nolink(task_supervisor, fn ->
-        CallVariables.update(server, command)
+        send(test_process, {:call_variables_update_ready, self()})
+
+        receive do
+          :begin_call_variables_update -> CallVariables.update(server, command)
+        end
       end)
 
+    assert_receive {:call_variables_update_ready, task_pid}
+    assert :erlang.trace(task_pid, true, [:send]) == 1
+    send(task_pid, :begin_call_variables_update)
+
+    assert_receive {:trace, ^task_pid, :send,
+                    {:"$gen_call", {_caller, _tag}, {:update, ^command}}, ^server},
+                   5_000
+
     try do
-      wait_until_queued(server)
       monitor = Process.monitor(task.pid)
       Process.exit(task.pid, :kill)
       assert_receive {:DOWN, ^monitor, :process, _pid, :killed}
@@ -574,19 +586,4 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
   end
 
   defp eventually(_predicate, 0), do: false
-
-  defp wait_until_queued(server, attempts \\ 10_000)
-
-  defp wait_until_queued(_server, 0), do: flunk("Call Variables command was not queued")
-
-  defp wait_until_queued(server, attempts) do
-    case Process.info(server, :message_queue_len) do
-      {:message_queue_len, length} when length > 0 ->
-        :ok
-
-      _other ->
-        :erlang.yield()
-        wait_until_queued(server, attempts - 1)
-    end
-  end
 end

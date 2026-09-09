@@ -10,7 +10,8 @@ defmodule Vxpipe.Calls.CallSummary do
     :created_at,
     :started_at,
     :ended_at,
-    :terminal_reason
+    :terminal_reason,
+    :latest_variable_revision
   ]
   defstruct @enforce_keys
 
@@ -23,6 +24,7 @@ defmodule Vxpipe.Calls.CallSummary do
           created_at: DateTime.t(),
           started_at: DateTime.t() | nil,
           ended_at: DateTime.t() | nil,
-          terminal_reason: atom() | nil
+          terminal_reason: atom() | nil,
+          latest_variable_revision: non_neg_integer() | nil
         }
 end

@@ -5,7 +5,7 @@ defmodule Vxpipe.Persistence.InspectionStore do
 
   import Ecto.Query
 
-  alias Vxpipe.Calls.{CallListCursor, CallSummary, HistoryCursor}
+  alias Vxpipe.Calls.{ArchiveStatus, CallListCursor, CallSummary, HistoryCursor}
   alias Vxpipe.Persistence.ArchiveRecordCodec
   alias Vxpipe.Persistence.Schema.{Call, CallDefinition, DefinitionRevision, Tenant}
   alias Vxpipe.Persistence.Schema.CallFact, as: StoredFact
@@ -21,10 +21,12 @@ defmodule Vxpipe.Persistence.InspectionStore do
         on: revision.id == call.definition_revision_id,
         join: definition in CallDefinition,
         on: definition.id == revision.call_definition_id,
+        left_join: latest_snapshot in StoredSnapshot,
+        on: latest_snapshot.id == call.latest_variables_snapshot_id,
         where: tenant.key == ^tenant_key,
         order_by: [desc: call.created_at, desc: call.public_id],
         limit: ^limit,
-        select: {call, definition.public_id, revision.revision}
+        select: {call, definition.public_id, revision.revision, latest_snapshot.global_revision}
       )
 
     calls =
@@ -46,8 +48,10 @@ defmodule Vxpipe.Persistence.InspectionStore do
         on: revision.id == call.definition_revision_id,
         join: definition in CallDefinition,
         on: definition.id == revision.call_definition_id,
+        left_join: latest_snapshot in StoredSnapshot,
+        on: latest_snapshot.id == call.latest_variables_snapshot_id,
         where: tenant.key == ^tenant_key and call.public_id == ^call_id,
-        select: {call, definition.public_id, revision.revision}
+        select: {call, definition.public_id, revision.revision, latest_snapshot.global_revision}
       )
 
     case repo.one(query) do
@@ -71,10 +75,27 @@ defmodule Vxpipe.Persistence.InspectionStore do
     end
   end
 
+  @impl true
+  def fetch_archive_status(repo, tenant_key, call_id) do
+    with {:ok, call_key} <- fetch_call_key(repo, tenant_key, call_id),
+         %{last_sequence: last_sequence, present_sequence_count: present_sequence_count} <-
+           archive_sequence_metadata(repo, call_key),
+         {:ok, missing_sequences} <- missing_sequences(repo, call_key, last_sequence),
+         {:ok, closure} <- latest_closure(repo, call_key, tenant_key, call_id) do
+      {:ok,
+       ArchiveStatus.from_metadata(
+         last_sequence,
+         present_sequence_count,
+         missing_sequences,
+         closure
+       )}
+    end
+  end
+
   defp after_cursor(query, nil), do: query
 
   defp after_cursor(query, %CallListCursor{} = cursor) do
-    from([call, _tenant, _revision, _definition] in query,
+    from([call, _tenant, _revision, _definition, _latest_snapshot] in query,
       where:
         call.created_at < ^cursor.created_at or
           (call.created_at == ^cursor.created_at and call.public_id < ^cursor.call_id)
@@ -161,7 +182,55 @@ defmodule Vxpipe.Persistence.InspectionStore do
     )
   end
 
-  defp to_summary({call, definition_id, definition_revision}, tenant_key) do
+  defp archive_sequence_metadata(repo, call_key) do
+    repo.one(
+      from(fact in StoredFact,
+        where: fact.call_id == ^call_key,
+        select: %{
+          last_sequence: max(fact.sequence),
+          present_sequence_count: count(fact.sequence, :distinct)
+        }
+      )
+    )
+  end
+
+  defp missing_sequences(_repo, _call_key, nil), do: {:ok, []}
+
+  defp missing_sequences(repo, call_key, last_sequence) do
+    statement = """
+    SELECT candidate.sequence
+    FROM generate_series(1, $2) AS candidate(sequence)
+    LEFT JOIN call_facts AS fact
+      ON fact.call_id = $1 AND fact.sequence = candidate.sequence
+    WHERE fact.id IS NULL
+    ORDER BY candidate.sequence
+    LIMIT 100
+    """
+
+    case Ecto.Adapters.SQL.query(repo, statement, [call_key, last_sequence]) do
+      {:ok, %{rows: rows}} -> {:ok, Enum.map(rows, &hd/1)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp latest_closure(repo, call_key, tenant_key, call_id) do
+    query =
+      from(fact in StoredFact,
+        where: fact.call_id == ^call_key and fact.kind == "archive_stream_closed",
+        order_by: [desc: fact.sequence, desc: fact.id],
+        limit: 1
+      )
+
+    case repo.one(query) do
+      nil -> {:ok, nil}
+      stored -> ArchiveRecordCodec.call_fact(stored, tenant_key, call_id)
+    end
+  end
+
+  defp to_summary(
+         {call, definition_id, definition_revision, latest_variable_revision},
+         tenant_key
+       ) do
     %CallSummary{
       id: call.public_id,
       tenant_key: tenant_key,
@@ -171,7 +240,8 @@ defmodule Vxpipe.Persistence.InspectionStore do
       created_at: call.created_at,
       started_at: call.started_at,
       ended_at: call.ended_at,
-      terminal_reason: call.terminal_reason
+      terminal_reason: call.terminal_reason,
+      latest_variable_revision: latest_variable_revision
     }
   end
 end

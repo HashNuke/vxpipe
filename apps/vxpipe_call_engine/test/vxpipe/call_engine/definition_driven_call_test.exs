@@ -648,7 +648,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                         "intake" => %{value: %{"summary" => "ready"}}
                       }
                     }},
-                   2_000
+                   5_000
 
     assert [{activation, _value}] =
              Registry.lookup(

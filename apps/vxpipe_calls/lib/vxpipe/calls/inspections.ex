@@ -44,6 +44,8 @@ defmodule Vxpipe.Calls.Inspections do
          {:ok, repository} <- Repositories.fetch(options, :inspection_repository),
          {:ok, call} <-
            Repositories.call(repository, :fetch_call, [principal.tenant_key, call_id]),
+         {:ok, archive_status} <-
+           Repositories.call(repository, :fetch_archive_status, [principal.tenant_key, call_id]),
          {:ok, candidates} <-
            Repositories.call(repository, :list_history_records, [
              principal.tenant_key,
@@ -51,7 +53,7 @@ defmodule Vxpipe.Calls.Inspections do
              limit + 1,
              cursor
            ]) do
-      {:ok, detail_page(call, candidates, limit)}
+      {:ok, detail_page(call, archive_status, candidates, limit)}
     end
   end
 
@@ -101,14 +103,16 @@ defmodule Vxpipe.Calls.Inspections do
     CallListCursor.encode(%CallListCursor{created_at: call.created_at, call_id: call.id})
   end
 
-  defp detail_page(call, candidates, limit) do
+  defp detail_page(call, archive_status, candidates, limit) do
     {records, overflow} = Enum.split(candidates, limit)
     {facts, snapshots} = Enum.split_with(records, &match?(%CallFact{}, &1))
 
     %CallDetailPage{
       call: call,
       timeline: CallTimeline.project(facts, snapshots, order: :desc),
-      next_cursor: next_history_cursor(records, overflow)
+      next_cursor: next_history_cursor(records, overflow),
+      archive_status: archive_status,
+      persisted_variable_revision: call.latest_variable_revision
     }
   end
 

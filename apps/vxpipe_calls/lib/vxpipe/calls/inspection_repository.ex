@@ -1,7 +1,14 @@
 defmodule Vxpipe.Calls.InspectionRepository do
   @moduledoc "Persistence port for bounded, tenant-scoped call inspection reads."
 
-  alias Vxpipe.Calls.{CallFact, CallListCursor, CallSummary, HistoryCursor, VariableSnapshot}
+  alias Vxpipe.Calls.{
+    ArchiveStatus,
+    CallFact,
+    CallListCursor,
+    CallSummary,
+    HistoryCursor,
+    VariableSnapshot
+  }
 
   @type context :: term()
 
@@ -18,4 +25,7 @@ defmodule Vxpipe.Calls.InspectionRepository do
               pos_integer(),
               HistoryCursor.t() | nil
             ) :: {:ok, [CallFact.t() | VariableSnapshot.t()]} | {:error, term()}
+
+  @callback fetch_archive_status(context(), String.t(), String.t()) ::
+              {:ok, ArchiveStatus.t()} | {:error, term()}
 end

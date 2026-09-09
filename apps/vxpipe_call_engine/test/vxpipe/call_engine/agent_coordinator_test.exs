@@ -453,7 +453,7 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
          maximum_output_bytes: 65_536,
          maximum_pending_requests: 2,
          request_options: Jido.AI.Test.react_opts(script),
-         request_timeout_ms: 2_000}
+         request_timeout_ms: 5_000}
       )
 
     command = command("real-jido", "check it")
@@ -461,17 +461,17 @@ defmodule Vxpipe.CallEngine.AgentCoordinatorTest do
 
     assert_receive {:vxpipe_capability_tool_started, ^coordinator, ^command,
                     %Call{id: "tool-real", name: "test_agent_tool"} = call},
-                   2_000
+                   5_000
 
     assert_receive {:vxpipe_capability_tool_completed, ^coordinator, ^command, ^call,
                     %{"value" => "checked"}},
-                   2_000
+                   5_000
 
     assert_receive {:vxpipe_capability_text, ^coordinator, ^command,
                     "The host action completed."},
-                   2_000
+                   5_000
 
-    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}, 2_000
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}, 5_000
 
     completed_identity = {command.connection_id, command.correlation_id, command.id}
     assert {:ok, []} = AgentCoordinator.interrupt(coordinator, [completed_identity])

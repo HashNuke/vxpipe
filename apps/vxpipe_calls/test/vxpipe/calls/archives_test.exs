@@ -242,6 +242,20 @@ defmodule Vxpipe.Calls.ArchivesTest do
     assert incomplete_history.archive_status.missing_sequences == [2, 3]
   end
 
+  test "reports duplicate archive provenance explicitly" do
+    first = call_fact(:accepted_input, 1, %{"content" => "Hello", "modality" => "text"})
+    duplicate_id = %{first | sequence: 2}
+    duplicate_sequence = %{first | id: "another-event"}
+
+    status = Vxpipe.Calls.ArchiveStatus.from_facts([first, duplicate_id, duplicate_sequence])
+
+    assert status.duplicate_id_count == 1
+    assert status.duplicate_ids == [first.id]
+    assert status.duplicate_sequence_count == 1
+    assert status.duplicate_sequences == [1]
+    assert status.state == :unconfirmed
+  end
+
   test "omits policy-redacted text facts from the transcript projection" do
     snapshot_history = %Vxpipe.Calls.VariableSnapshotHistory{snapshots: [], latest: nil}
 
