@@ -61,3 +61,18 @@ completes the independent known-signal and arbitrary-chunk/tail test requirement
 The encoder remains bounded but materializes one complete request; incremental transport emission
 and pending-output bounds will be addressed with the local provider adapters rather than claimed
 here.
+
+## Checkpoint 3: resumable encoder output
+
+Inspection of the gateway's real audio egress showed a bounded packet queue. Sending one complete
+Morse reply at provider speed would either fill that queue for long replies or require synthesis to
+block before an interruption can be observed. The next red test therefore required a resumable
+encoder state; it failed because `Encoder.start/2` and `Encoder.next/2` were absent.
+
+The encoder now validates and plans a bounded request once, then renders at most the caller's
+requested sample count while preserving its current tone/silence run and sine phase. The one-shot
+helper drains this same path in fixed internal chunks. The test cuts `ET A` every 137 samples and
+proves more than ten bounded chunks concatenate byte-for-byte to the existing expected signal,
+then observes stable exhaustion. This gives the upcoming transport a discardable state rather than
+an 8 MiB PCM allocation. The focused suite passes `9 tests, 0 failures`; warnings-as-errors compile
+and the full owning child suite pass with `126 tests, 0 failures (1 excluded)`.

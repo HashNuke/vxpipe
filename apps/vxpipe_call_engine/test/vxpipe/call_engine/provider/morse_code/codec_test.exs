@@ -216,6 +216,19 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.CodecTest do
     assert {:error, :invalid_timing} = Decoder.flush(decoder)
   end
 
+  test "resumes bounded encoding across chunks without changing the signal" do
+    assert {:ok, config} = Config.new()
+    assert {:ok, expected} = Encoder.encode(config, "ET A")
+    assert {:ok, encoder} = Encoder.start(config, "ET A")
+
+    {chunks, encoder} = drain_encoder(encoder, 137, [])
+
+    assert length(chunks) > 10
+    assert Enum.all?(chunks, &(byte_size(&1) <= 274))
+    assert IO.iodata_to_binary(chunks) == expected
+    assert :done = Encoder.next(encoder, 137)
+  end
+
   defp pcm_runs(pcm, config) do
     bytes_per_unit = unit_samples(config) * 2
 
@@ -280,4 +293,11 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.CodecTest do
     do: Enum.reverse([binary | chunks])
 
   defp unit_samples(config), do: div(config.sample_rate * config.unit_duration_ms, 1_000)
+
+  defp drain_encoder(encoder, maximum_samples, chunks) do
+    case Encoder.next(encoder, maximum_samples) do
+      {:ok, chunk, encoder} -> drain_encoder(encoder, maximum_samples, [chunk | chunks])
+      :done -> {Enum.reverse(chunks), encoder}
+    end
+  end
 end

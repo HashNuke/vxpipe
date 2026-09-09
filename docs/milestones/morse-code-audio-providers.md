@@ -22,7 +22,7 @@ A developer selects `MorseCodeTTS` and `MorseCodeSTT` through ordinary capabilit
 ## Implementation checklist
 
 - [x] Write failing independent known-signal decode tests and expected tone/silence encode tests before implementing the codec.
-- [ ] Implement bounded incremental Morse encoding/decoding with documented normalization and invalid-input behavior.
+- [x] Implement bounded incremental Morse encoding/decoding with documented normalization and invalid-input behavior.
 - [ ] Add local STT/TTS provider/transport adapters and closed-registry configuration, preserving current hosted adapters.
 - [ ] Drive an actual room audio ingress-to-transcript and text-to-audio egress path using a deterministic reply fixture.
 - [ ] Document an opt-in sample/embedded profile, encoded input method, audio safety settings and supported transport limitations.
@@ -79,6 +79,17 @@ only input, an incomplete PCM sample, invalid mark length, wrong frequency, unsu
 the undecided-signal time bound, and the documented one-window timing tolerance. These checks
 complete the independent-fixture and chunk/tail acceptance items; streaming encoder output and
 transport queue bounds remain pending.
+
+Implementation evidence, checkpoint 3 (2026-09-09): replaced whole-request generation as the
+only encoder interface with resumable bounded state. `Encoder.start/2` validates and plans one
+bounded request; `Encoder.next/2` renders at most the requested sample count while retaining the
+current run and tone phase. The existing convenience `encode/2` now drains that same interface in
+bounded chunks. The red test failed because those stateful functions were absent. The green test
+cuts `ET A` every 137 samples—including within tone and silence runs—and proves the concatenated
+chunks exactly equal the one-shot signal, every returned chunk respects its bound, and exhausted
+state remains complete. The focused suite passes `9 tests, 0 failures`; warnings-as-errors compile
+and the complete owning child suite pass with `126 tests, 0 failures (1 excluded)`. This completes
+the bounded incremental codec checklist item before transport integration.
 
 ## Specification review
 
