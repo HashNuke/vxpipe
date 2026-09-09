@@ -61,7 +61,9 @@ Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
 Mix manifests, or runtime configuration ask Goreman to restart only the
 `vxpipe` process. A reload therefore starts a fresh BEAM instance and discards
 development rooms, sessions, and WebRTC connections. Test changes do not
-restart the development server.
+restart the development server. The Console asset watcher consumes its Phoenix
+parent's stdin and closes Vite before that BEAM process exits, so a reload does
+not leave the development port owned by an orphaned frontend process.
 
 Caddy automatically obtains a certificate for the `.ts.net` hostname from the
 local Tailscale daemon. MagicDNS and HTTPS certificates must be enabled for the

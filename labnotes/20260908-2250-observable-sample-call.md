@@ -412,3 +412,33 @@ through the new socket, showed `Collecting`, and produced no browser errors. Roo
 warnings-as-errors compile, default suite and unused-lock gates passed with call engine
 `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`, and Console
 `14 tests, 0 failures`.
+
+## Checkpoint 14: Vite watcher restart ownership
+
+A live `vxpipe` restart after checkpoint 12 exposed a process-lifecycle gap. Phoenix supervised
+the watcher task, but its `npm run dev` child survived BEAM termination and retained port 5174.
+Launching the Vite CLI directly removed the npm intermediary but reproduced the orphan because
+Vite did not consume the Erlang port's stdin. The replacement watcher then failed and retried
+with `Port 5174 is already in use`.
+
+The first Node lifecycle test failed because the expected module was absent. The new
+`vite-dev.mjs` entrypoint creates Vite through its programmatic API, consumes stdin, and closes
+the server exactly once when stdin ends or the process receives an interrupt/termination signal.
+The package's direct development command uses the same entrypoint. A second focused shell test
+failed because `bin/dev` did not yet reject a missing `node` executable; the dependency check
+now matches the Phoenix watcher command.
+
+After removing the one orphan produced by the superseded implementation, a fresh default-HTTPS
+stack started Vite as PID `1966646`. Restarting only Goreman's `vxpipe` process removed that PID;
+PID `1966898` then became the sole listener on loopback port 5174 without a port-conflict retry.
+This preserves Phoenix ownership across the existing Watchman restart workflow rather than using
+process-name cleanup.
+
+The combined asset command initially failed after the Node test passed because Vitest also
+discovered the `.test.mjs` file and expected a Vitest suite. Renaming it outside Vitest's default
+pattern kept the explicit Node runner without weakening either lane. The final asset suite passes
+one Node lifecycle test and three Vitest interface tests, the production bundle completes, and the
+shell development contract passes. Chromium reopened the HTTPS voice entry after the restart with
+no page errors or horizontal overflow. Root format, warnings-as-errors compile, default suite and
+unused-lock gates passed with call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests,
+0 failures (3 excluded)`, and Console `14 tests, 0 failures`.

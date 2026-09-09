@@ -23,6 +23,11 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v node >/dev/null 2>&1; then
+  echo "Error: bin/dev requires Node.js on PATH." >&2
+  exit 1
+fi
+
 if ! command -v watchman >/dev/null 2>&1; then
   echo "Error: bin/dev requires watchman on PATH." >&2
   exit 1

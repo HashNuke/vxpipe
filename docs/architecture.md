@@ -1674,7 +1674,9 @@ applications without making Caddy part of the product protocol model.
 The Console Phoenix endpoint supervises Vite as a development asset watcher. Goreman
 does not model the playground as a separate application; it starts the shared BEAM
 runtime, reload helper and optional Caddy ingress. Vite remains the React development
-and build tool and is not replaced by LiveView.
+and build tool and is not replaced by LiveView. The watcher entrypoint consumes the
+Phoenix parent port's stdin and closes Vite when that input ends; a Watchman BEAM restart
+therefore releases the asset listener before its replacement starts.
 
 `bin/dev` resolves the tailnet hostname and address, renders a complete Caddy
 JSON configuration as the invoking user, and then asks Goreman to run only the

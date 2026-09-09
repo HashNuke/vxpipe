@@ -15,6 +15,9 @@ The existing React/Vite voice playground source lives under `assets/`. In
 development, the Phoenix endpoint supervises Vite as its asset watcher for hot
 reload; it is not a separate Goreman application. `mix assets.build` writes a
 release bundle into the application's ignored `priv/static` directory.
+The development entrypoint observes its Phoenix parent's stdin and closes Vite
+on EOF or termination, allowing Watchman to replace the BEAM without leaving the
+asset port occupied.
 The Console root serves that built index and `Plug.Static` serves only its hashed
 `/assets/*` files. If the bundle is absent, the root returns 503 rather than a
 placeholder shell. The separate bounded diagnostics surface remains available

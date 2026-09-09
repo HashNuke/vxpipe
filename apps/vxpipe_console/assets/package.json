@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
-    "dev": "vite",
-    "test": "vitest run"
+    "dev": "node vite-dev.mjs",
+    "test": "node --test vite-dev-lifecycle.node.mjs && vitest run"
   },
   "dependencies": {
     "@pipecat-ai/client-js": "^1.13.0",

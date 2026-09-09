@@ -5,6 +5,9 @@ Vxpipe gateway endpoints. It does not host a Pipecat server or duplicate call-en
 behavior in the browser. The Console's Phoenix endpoint supervises Vite as its
 development asset watcher for hot reload; `mix assets.build` writes the release
 bundle to the Console application's ignored `priv/static` directory.
+The `vite-dev.mjs` entrypoint consumes the parent port's stdin and closes the
+Vite server once Phoenix exits. Use that entrypoint rather than invoking the Vite
+CLI directly so umbrella reloads do not orphan the configured listener.
 
 The initial screen uses `ConsoleTemplate` from
 `@pipecat-ai/voice-ui-kit`. It pulls in `@pipecat-ai/client-react` and the core

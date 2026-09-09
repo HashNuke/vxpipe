@@ -67,6 +67,14 @@ make_executable goreman 'exit 0'
 make_executable npm 'exit 0'
 
 if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --http 2>&1)"; then
+  fail "expected bin/dev to reject a missing node executable"
+fi
+
+assert_output_contains "$output" "Error: bin/dev requires Node.js on PATH."
+
+make_executable node 'exit 0'
+
+if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --http 2>&1)"; then
   fail "expected bin/dev to reject a missing watchman executable"
 fi
 

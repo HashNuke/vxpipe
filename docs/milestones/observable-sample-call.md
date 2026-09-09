@@ -299,6 +299,21 @@ reported `Collecting`, and produced no browser errors. The complete umbrella gat
 call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests, 0 failures (3 excluded)`,
 and Console `14 tests, 0 failures`.
 
+Implementation evidence, checkpoint 14 (2026-09-09): a live Watchman-equivalent restart
+exposed that both the initial `npm` watcher and a direct Vite CLI watcher survived their
+Phoenix parent and retained port 5174. The Console asset entrypoint now creates Vite through
+its programmatic API, consumes the parent port's stdin, closes the server once on EOF or
+termination and then exits. The Node lifecycle test first failed because that module was
+absent and now proves idempotent close/exit behavior. The shell contract also failed first
+for the newly explicit missing-Node requirement and now passes. In a fresh default-HTTPS
+run, restarting only `vxpipe` removed old Vite PID `1966646`; replacement PID `1966898`
+became the sole listener on 5174 without a port-conflict retry.
+The combined asset suite passes one Node lifecycle test and three Vitest interface tests;
+the production bundle and shell development contract also pass. Chromium reopened the HTTPS
+voice entry after the restart with no browser errors or horizontal overflow. The complete
+umbrella gates pass with call engine `116 tests, 0 failures (1 excluded)`, gateway `45 tests,
+0 failures (3 excluded)`, and Console `14 tests, 0 failures`.
+
 ## Specification review
 
 Local design review on 2026-09-08 checked the early prerequisite, observable browser
