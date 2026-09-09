@@ -113,6 +113,34 @@ defmodule Vxpipe.Persistence.CallStore do
     end)
   end
 
+  @impl true
+  def mark_call_started(repo, claim, incarnation_id, started_at) do
+    project_lifecycle(repo, claim, fn
+      %Call{state: :admitting} = call ->
+        repo.update(Call.start_changeset(call, incarnation_id, started_at))
+
+      %Call{state: :running} = call ->
+        {:ok, call}
+
+      _call ->
+        {:error, :call_unavailable}
+    end)
+  end
+
+  @impl true
+  def mark_call_failed(repo, claim, reason, failed_at) do
+    project_lifecycle(repo, claim, fn
+      %Call{state: :admitting} = call ->
+        repo.update(Call.failure_changeset(call, reason, failed_at))
+
+      %Call{state: :failed} = call ->
+        {:ok, call}
+
+      _call ->
+        {:error, :call_unavailable}
+    end)
+  end
+
   defp fetch_selection(repo, tenant_key, definition_id, revision_number) do
     query =
       from revision in StoredRevision,
@@ -183,7 +211,9 @@ defmodule Vxpipe.Persistence.CallStore do
       room_id: call.room_id,
       created_at: call.created_at,
       started_at: call.started_at,
-      ended_at: call.ended_at
+      ended_at: call.ended_at,
+      incarnation_id: call.incarnation_id,
+      terminal_reason: call.terminal_reason
     })
   end
 
@@ -236,7 +266,9 @@ defmodule Vxpipe.Persistence.CallStore do
          room_id: call.room_id,
          created_at: call.created_at,
          started_at: call.started_at,
-         ended_at: call.ended_at
+         ended_at: call.ended_at,
+         incarnation_id: call.incarnation_id,
+         terminal_reason: call.terminal_reason
        }}
     end
   end
@@ -306,6 +338,40 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   defp selection_tenant({tenant, _definition, _revision}), do: tenant
+
+  defp project_lifecycle(repo, claim, transition) do
+    repo.transaction(fn ->
+      with {call, selection} <-
+             fetch_stored_call(
+               repo,
+               claim.call.tenant_key,
+               claim.call.id,
+               lock: "FOR UPDATE"
+             ),
+           true <- matching_admission?(repo, call, claim),
+           {:ok, call} <- transition.(call),
+           {:ok, prepared_call} <- to_prepared_call(call, selection) do
+        prepared_call
+      else
+        nil -> repo.rollback(:not_found)
+        false -> repo.rollback(:admission_not_found)
+        {:error, %Ecto.Changeset{}} -> repo.rollback(:call_projection_failed)
+        {:error, reason} -> repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp matching_admission?(repo, call, claim) do
+    repo.exists?(
+      from admission in Admission,
+        join: token in StoredToken,
+        on: token.id == admission.join_token_id,
+        where:
+          admission.call_id == ^call.id and
+            admission.participant_ref == ^claim.participant_ref and
+            token.public_id == ^claim.token_id
+    )
+  end
 
   defp unique_error?(changeset) do
     Enum.any?(changeset.errors, fn {_field, {_message, metadata}} ->

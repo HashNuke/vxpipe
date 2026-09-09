@@ -22,6 +22,10 @@ defmodule Vxpipe.Persistence.Schema.Call do
     field :created_at, :utc_datetime_usec
     field :started_at, :utc_datetime_usec
     field :ended_at, :utc_datetime_usec
+    field :incarnation_id, :string
+
+    field :terminal_reason, Ecto.Enum,
+      values: [:room_start_failed, :session_start_failed, :startup_unknown]
 
     belongs_to :tenant, Tenant
     belongs_to :definition_revision, DefinitionRevision
@@ -46,6 +50,8 @@ defmodule Vxpipe.Persistence.Schema.Call do
       :created_at,
       :started_at,
       :ended_at,
+      :incarnation_id,
+      :terminal_reason,
       :tenant_id,
       :definition_revision_id
     ])
@@ -75,6 +81,24 @@ defmodule Vxpipe.Persistence.Schema.Call do
     call
     |> change(state: state)
     |> check_constraint(:state, name: :calls_state)
+  end
+
+  def start_changeset(call, incarnation_id, started_at) do
+    call
+    |> change(
+      state: :running,
+      incarnation_id: incarnation_id,
+      started_at: started_at,
+      terminal_reason: nil
+    )
+    |> check_constraint(:state, name: :calls_state)
+  end
+
+  def failure_changeset(call, reason, failed_at) do
+    call
+    |> change(state: :failed, terminal_reason: reason, ended_at: failed_at)
+    |> check_constraint(:state, name: :calls_state)
+    |> check_constraint(:terminal_reason, name: :calls_terminal_reason)
   end
 
   defp validate_binary_size(changeset, field, expected_size) do

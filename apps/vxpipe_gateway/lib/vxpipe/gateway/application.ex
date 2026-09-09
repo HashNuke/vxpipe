@@ -12,6 +12,7 @@ defmodule Vxpipe.Gateway.Application do
     settings = Application.fetch_env!(:vxpipe_gateway, __MODULE__)
 
     children = [
+      {Task.Supervisor, name: Vxpipe.Gateway.AdmissionTaskSupervisor},
       {Registry, keys: :unique, name: Vxpipe.Gateway.SessionRegistry},
       SessionSupervisor,
       {Registry, keys: :unique, name: Vxpipe.Gateway.WebRTC.Registry},

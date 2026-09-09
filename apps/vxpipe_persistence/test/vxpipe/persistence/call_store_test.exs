@@ -206,6 +206,49 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert claim.call.id == call.id
   end
 
+  test "persists the first live-start occurrence idempotently", context do
+    assert {:ok, call, token} = prepare(context)
+    assert {:ok, claim} = Calls.claim_join_token(token.secret, scope(context, call), context.options)
+    started_at = DateTime.add(@now, 12, :second)
+
+    assert {:ok, running} =
+             Calls.mark_call_started(claim, "rinc_persisted", started_at, context.options)
+
+    assert running.state == :running
+    assert running.started_at == started_at
+    assert running.incarnation_id == "rinc_persisted"
+
+    assert {:ok, duplicate} =
+             Calls.mark_call_started(
+               claim,
+               "rinc_not_replacement",
+               DateTime.add(started_at, 20, :second),
+               context.options
+             )
+
+    assert duplicate.started_at == started_at
+    assert duplicate.incarnation_id == "rinc_persisted"
+  end
+
+  test "persists a terminal pre-live failure with no start time", context do
+    assert {:ok, call, token} = prepare(context)
+    assert {:ok, claim} = Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    assert {:ok, failed} =
+             Calls.mark_call_failed(claim, :room_start_failed, context.options)
+
+    assert failed.state == :failed
+    assert failed.started_at == nil
+    assert failed.ended_at == @now
+    assert failed.terminal_reason == :room_start_failed
+
+    assert %StoredCall{
+             state: :failed,
+             started_at: nil,
+             terminal_reason: :room_start_failed
+           } = Repo.get_by!(StoredCall, public_id: call.id)
+  end
+
   defp prepare(context) do
     Calls.prepare_call(
       context.principal,

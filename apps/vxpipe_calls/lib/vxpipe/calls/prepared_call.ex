@@ -20,7 +20,9 @@ defmodule Vxpipe.Calls.PreparedCall do
     :room_id,
     :created_at,
     :started_at,
-    :ended_at
+    :ended_at,
+    :incarnation_id,
+    :terminal_reason
   ]
   defstruct @enforce_keys
 
@@ -42,6 +44,8 @@ defmodule Vxpipe.Calls.PreparedCall do
           room_id: String.t(),
           created_at: DateTime.t(),
           started_at: nil | DateTime.t(),
-          ended_at: nil | DateTime.t()
+          ended_at: nil | DateTime.t(),
+          incarnation_id: nil | String.t(),
+          terminal_reason: nil | :room_start_failed | :session_start_failed | :startup_unknown
         }
 end

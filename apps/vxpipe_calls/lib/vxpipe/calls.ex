@@ -38,4 +38,10 @@ defmodule Vxpipe.Calls do
 
   def claim_join_token(secret, expected_scope, options \\ []),
     do: Admissions.claim_token(secret, expected_scope, options)
+
+  def mark_call_started(claim, incarnation_id, started_at, options \\ []),
+    do: Admissions.mark_started(claim, incarnation_id, started_at, options)
+
+  def mark_call_failed(claim, reason, options \\ []),
+    do: Admissions.mark_failed(claim, reason, options)
 end

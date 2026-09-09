@@ -239,6 +239,34 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
 
   def admissions(agent), do: Agent.get(agent, &Map.values(&1.admissions))
 
+  def mark_call_started(agent, claim, incarnation_id, started_at) do
+    Agent.get_and_update(agent, fn state ->
+      with {:ok, call} <- Map.fetch(state.calls, {claim.call.tenant_key, claim.call.id}),
+           :ok <- matching_admission(state, claim),
+           {:ok, updated} <- start_call(call, incarnation_id, started_at) do
+        {{:ok, updated},
+         %{state | calls: Map.put(state.calls, {updated.tenant_key, updated.id}, updated)}}
+      else
+        :error -> {{:error, :not_found}, state}
+        {:error, _reason} = error -> {error, state}
+      end
+    end)
+  end
+
+  def mark_call_failed(agent, claim, reason, failed_at) do
+    Agent.get_and_update(agent, fn state ->
+      with {:ok, call} <- Map.fetch(state.calls, {claim.call.tenant_key, claim.call.id}),
+           :ok <- matching_admission(state, claim),
+           {:ok, updated} <- fail_call(call, reason, failed_at) do
+        {{:ok, updated},
+         %{state | calls: Map.put(state.calls, {updated.tenant_key, updated.id}, updated)}}
+      else
+        :error -> {{:error, :not_found}, state}
+        {:error, _reason} = error -> {error, state}
+      end
+    end)
+  end
+
   defp routes_for(state, tenant_key, definition_id, revision_number) do
     state.routes
     |> Map.values()
@@ -288,4 +316,32 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
         :ok
     end
   end
+
+  defp matching_admission(state, claim) do
+    case Map.fetch(state.admissions, {claim.call.id, claim.participant_ref}) do
+      {:ok, %{token_id: token_id}} when token_id == claim.token_id -> :ok
+      _missing_or_other -> {:error, :admission_not_found}
+    end
+  end
+
+  defp start_call(%{state: :admitting} = call, incarnation_id, started_at) do
+    {:ok,
+     %{
+       call
+       | state: :running,
+         incarnation_id: incarnation_id,
+         started_at: started_at,
+         terminal_reason: nil
+     }}
+  end
+
+  defp start_call(%{state: :running} = call, _incarnation_id, _started_at), do: {:ok, call}
+  defp start_call(_call, _incarnation_id, _started_at), do: {:error, :call_unavailable}
+
+  defp fail_call(%{state: :admitting} = call, reason, failed_at) do
+    {:ok, %{call | state: :failed, terminal_reason: reason, ended_at: failed_at}}
+  end
+
+  defp fail_call(%{state: :failed} = call, _reason, _failed_at), do: {:ok, call}
+  defp fail_call(_call, _reason, _failed_at), do: {:error, :call_unavailable}
 end

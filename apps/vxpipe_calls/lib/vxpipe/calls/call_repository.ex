@@ -21,4 +21,10 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @callback claim_join_token(context(), binary(), map(), DateTime.t()) ::
               {:ok, AdmissionClaim.t()} | {:error, term()}
+
+  @callback mark_call_started(context(), AdmissionClaim.t(), String.t(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
+
+  @callback mark_call_failed(context(), AdmissionClaim.t(), atom(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
 end

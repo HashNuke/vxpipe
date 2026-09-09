@@ -5,11 +5,12 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   import Plug.Conn
 
-  alias Vxpipe.Gateway.HTTP.{RTVI, Rooms}
+  alias Vxpipe.Gateway.HTTP.{CallAdmissions, RTVI, Rooms}
 
   @impl true
   def init(options) do
     %{
+      call_admission: options |> Keyword.get(:call_admission, []) |> CallAdmissions.init(),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       rtvi: options |> Keyword.get(:webrtc, []) |> RTVI.init()
     }
@@ -22,6 +23,71 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   def call(%Plug.Conn{method: "POST", path_info: ["api", "rooms"]} = conn, options) do
     Rooms.create(conn, options.rooms)
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: ["api", "tenants", tenant_key, "participants", participant_key, "calls"]
+        } = conn,
+        options
+      ) do
+    CallAdmissions.prepare(
+      conn,
+      options.call_admission,
+      tenant_key,
+      participant_key
+    )
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: [
+            "api",
+            "tenants",
+            tenant_key,
+            "calls",
+            call_id,
+            "participants",
+            participant_key,
+            "sessions"
+          ]
+        } = conn,
+        options
+      ) do
+    CallAdmissions.create_session(
+      conn,
+      options.call_admission,
+      tenant_key,
+      call_id,
+      participant_key
+    )
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: [
+            "api",
+            "tenants",
+            tenant_key,
+            "calls",
+            call_id,
+            "participants",
+            participant_key,
+            "join-tokens"
+          ]
+        } = conn,
+        options
+      ) do
+    CallAdmissions.issue_token(
+      conn,
+      options.call_admission,
+      tenant_key,
+      call_id,
+      participant_key
+    )
   end
 
   def call(

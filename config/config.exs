@@ -38,6 +38,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     enabled: false,
     ip: :loopback,
     port: 4000,
+    call_admission: [enabled: false],
     webrtc: [
       ice_servers: [],
       candidate_gathering_timeout_ms: 1_000,

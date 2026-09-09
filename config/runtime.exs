@@ -205,6 +205,13 @@ if config_env() == :dev do
     |> Keyword.put(:port, port)
     |> Keyword.update!(:cors, &Keyword.put(&1, :allowed_origins, allowed_origins))
 
+  gateway_http =
+    if database_url do
+      Keyword.put(gateway_http, :call_admission, enabled: true)
+    else
+      gateway_http
+    end
+
   config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
   console_listener =

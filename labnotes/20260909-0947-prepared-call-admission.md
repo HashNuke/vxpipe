@@ -122,3 +122,69 @@ The managed runtime now configures `Vxpipe.Persistence.CallStore` as the Calls
 repository whenever `VXPIPE_DATABASE_URL` enables persistence. The first two
 milestone implementation checklist items are complete. Gateway authentication,
 session translation, live-start bookkeeping, and browser verification remain.
+
+## Checkpoint 3: authenticated routes and live startup handoff
+
+The reusable gateway now mounts the three approved routes:
+
+- backend-only API-key preparation;
+- backend-only existing-call token issuance;
+- CORS-enabled browser session admission with the single-use token.
+
+Preparation accepts only `initial_variables` and an optional token lifetime of at
+least the five-minute default. Token issuance accepts only that lifetime. Session
+admission accepts no body fields, so a browser cannot replace variables or tool
+visibility. Both credential types use the `Authorization: Bearer` header; query
+credentials are rejected. Safe responses omit initial variables, plan data, token
+digests, API keys, and the consumed token from the live session response.
+
+The CORS Plug recognizes backend-only route shapes before applying CORS. Their
+preflights fall through to a normal 404 with no access-control grant, while the
+participant session and RTVI signaling routes retain configured-origin handling.
+CORS remains independent of authentication.
+
+After the short database claim returns, `Vxpipe.Gateway.CallAdmission` starts the
+already-pinned plan through the call engine and obtains the existing entry-caller
+participant. The handler then issues the established in-memory Small WebRTC
+session. It hands the authoritative post-start occurrence timestamp to a named
+supervised task for lifecycle projection. Projection failure does not change the
+successful session response or tear down the room. A known pre-live startup
+failure is projected as a bounded internal reason and returns a generic error;
+the consumed token is not restored.
+
+Starting the room and obtaining participant/session metadata are separate
+boundaries. A focused regression exposed that collapsing both failures would
+incorrectly mark an already-live room as a failed call start. The production
+adapter now returns an explicit post-start outcome when participant lookup
+fails. The handler projects the authoritative room incarnation and start
+occurrence, returns a generic session-start error, and never projects a terminal
+failure for that live call.
+
+Lifecycle projection added after the storage checkpoint is deliberately separate:
+an additional migration stores room incarnation and bounded terminal reason.
+`mark_call_started` preserves the first occurrence timestamp and incarnation on
+duplicate delivery, while `mark_call_failed` retains a null start time and records
+the logical failure end. Both verify the accepted admission and use their own
+short row-locking transactions.
+
+Red/green evidence:
+
+- Red: the Calls lifecycle test had 2 expected failures at the missing
+  `mark_call_started` / `mark_call_failed` facade.
+- Green: the Calls admission suite — 8 tests, 0 failures.
+- Red: the gateway route suite first failed at the absent Calls dependency and
+  route implementation.
+- Red: the post-start participant/session regression failed with an unhandled
+  `{:started, room}` outcome after the fake backend made the live boundary
+  observable.
+- Green: the focused gateway admission suite — 10 tests, 0 failures.
+- Green: full suites: Calls 15, Persistence 15, Gateway 62 (4 integration tests
+  excluded), Console 20; all had 0 failures.
+- `mix format --check-formatted` and `mix compile --warnings-as-errors` passed.
+- A new disposable PostgreSQL database migrated through all three migrations
+  and ran the 7 focused call-store tests with 0 failures; it was then removed.
+
+Managed development configuration enables these routes when
+`VXPIPE_DATABASE_URL` is present; otherwise the existing database-free trusted
+sample remains available. The sample itself still uses the older trusted route
+and is the final implementation checkpoint for this milestone.

@@ -4,6 +4,7 @@ defmodule Vxpipe.Calls.Admissions do
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, ResolvedCallPlan}
 
   alias Vxpipe.Calls.{
+    AdmissionClaim,
     IssuedJoinToken,
     JoinToken,
     PreparedCall,
@@ -102,6 +103,33 @@ defmodule Vxpipe.Calls.Admissions do
 
   def claim_token(_secret, _expected_scope, _options), do: {:error, :invalid_join_token}
 
+  @spec mark_started(AdmissionClaim.t(), String.t(), DateTime.t(), keyword()) ::
+          {:ok, PreparedCall.t()} | {:error, term()}
+  def mark_started(claim, incarnation_id, started_at, options \\ [])
+
+  def mark_started(%AdmissionClaim{} = claim, incarnation_id, %DateTime{} = started_at, options)
+      when is_binary(incarnation_id) and byte_size(incarnation_id) > 0 do
+    with {:ok, repository} <- Repositories.fetch(options, :call_repository) do
+      Repositories.call(repository, :mark_call_started, [claim, incarnation_id, started_at])
+    end
+  end
+
+  def mark_started(_claim, _incarnation_id, _started_at, _options),
+    do: {:error, :invalid_call_start}
+
+  @spec mark_failed(AdmissionClaim.t(), atom(), keyword()) ::
+          {:ok, PreparedCall.t()} | {:error, term()}
+  def mark_failed(claim, reason, options \\ [])
+
+  def mark_failed(%AdmissionClaim{} = claim, reason, options)
+      when reason in [:room_start_failed, :session_start_failed, :startup_unknown] do
+    with {:ok, repository} <- Repositories.fetch(options, :call_repository) do
+      Repositories.call(repository, :mark_call_failed, [claim, reason, now(options)])
+    end
+  end
+
+  def mark_failed(_claim, _reason, _options), do: {:error, :invalid_call_failure}
+
   defp compile_plan(definition, principal, initial_variables, options) do
     invocation_input = %{
       call_definition: %{id: definition.resource_id, revision: definition.revision},
@@ -138,7 +166,9 @@ defmodule Vxpipe.Calls.Admissions do
       room_id: plan.room_id,
       created_at: now(options),
       started_at: nil,
-      ended_at: nil
+      ended_at: nil,
+      incarnation_id: nil,
+      terminal_reason: nil
     }
   end
 

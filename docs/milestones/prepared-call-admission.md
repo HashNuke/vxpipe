@@ -28,8 +28,8 @@ failure to mark an already-running call must not tear it down or start another r
 
 - [x] Red-test preparation/token/claim workflows through ports and real adapter transaction integration.
 - [x] Add prepared call, token and admission claim persistence with safe public IDs and independent lifetimes.
-- [ ] Implement authenticated routes, safe response envelopes, CORS separation, and WebRTC session translation.
-- [ ] Coordinate room startup and bookkeeping without spanning network work with SQL transactions.
+- [x] Implement authenticated routes, safe response envelopes, CORS separation, and WebRTC session translation.
+- [x] Coordinate room startup and bookkeeping without spanning network work with SQL transactions.
 - [ ] Update trusted samples backend setup to prepare then join; never ship its API key or initial variables to the browser.
 
 ## Acceptance and failure checks
@@ -71,8 +71,14 @@ landed in `69019a9`. The PostgreSQL adapter adds transactional prepared-call/fir
 insertion, immutable resolved-plan reconstruction, independently expiring digest-only tokens,
 and one admission per call/participant. Focused real-adapter coverage includes transaction
 rollback, expired-token non-consumption, API-key revocation independence, and concurrent same-
-and distinct-token claims. Gateway routes, live startup/bookkeeping, browser verification, and
-the remaining failure matrix are still open; this slice is not complete.
+and distinct-token claims. The gateway now exposes all three tenant routes, excludes backend
+preparation/token issuance from CORS, admits browser sessions by bearer token, starts the pinned
+plan, and hands lifecycle projection to a supervised task after runtime startup. Route tests
+prove private input/credentials stay out of responses, browser overrides/query credentials are
+rejected, pre-live startup failure is safe, post-start session setup failure remains recorded as
+live, and projection failure cannot tear down a live session.
+Trusted sample migration, browser verification, and the remaining failure matrix are still open;
+this slice is not complete.
 
 ## Specification review
 

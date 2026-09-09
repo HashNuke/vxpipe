@@ -209,6 +209,59 @@ defmodule Vxpipe.Calls.AdmissionsTest do
              Calls.claim_join_token(first.secret, scope, context.options)
   end
 
+  test "projects the first actual live-start occurrence without resetting it", context do
+    assert {:ok, call, token} = prepare(context)
+    assert {:ok, claim} = Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    started_at = DateTime.add(@now, 10, :second)
+
+    assert {:ok, running} =
+             Calls.mark_call_started(
+               claim,
+               "rinc_accepted-runtime",
+               started_at,
+               context.options
+             )
+
+    assert running.state == :running
+    assert running.started_at == started_at
+    assert running.incarnation_id == "rinc_accepted-runtime"
+    assert running.ended_at == nil
+
+    assert {:ok, duplicate} =
+             Calls.mark_call_started(
+               claim,
+               "rinc_should-not-replace",
+               DateTime.add(started_at, 30, :second),
+               context.options
+             )
+
+    assert duplicate.started_at == started_at
+    assert duplicate.incarnation_id == "rinc_accepted-runtime"
+  end
+
+  test "records a bounded pre-live failure without inventing a start time", context do
+    assert {:ok, call, token} = prepare(context)
+    assert {:ok, claim} = Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    assert {:ok, failed} =
+             Calls.mark_call_failed(claim, :room_start_failed, context.options)
+
+    assert failed.state == :failed
+    assert failed.started_at == nil
+    assert failed.ended_at == @now
+    assert failed.incarnation_id == nil
+    assert failed.terminal_reason == :room_start_failed
+
+    assert {:error, :call_unavailable} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.caller_route.key,
+               context.options
+             )
+  end
+
   defp prepare(context) do
     Calls.prepare_call(
       context.principal,
@@ -216,6 +269,14 @@ defmodule Vxpipe.Calls.AdmissionsTest do
       %{"order" => %{"id" => "ORD-1042"}},
       context.options
     )
+  end
+
+  defp scope(context, call) do
+    %{
+      tenant_key: context.tenant.key,
+      call_id: call.id,
+      participant_key: context.caller_route.key
+    }
   end
 
   defp registries do

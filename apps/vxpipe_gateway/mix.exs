@@ -38,7 +38,8 @@ defmodule Vxpipe.Gateway.MixProject do
       {:numbers, "== 5.2.4", override: true},
       {:plug, "~> 1.20"},
       {:telemetry, "~> 1.3"},
-      {:vxpipe_call_engine, in_umbrella: true}
+      {:vxpipe_call_engine, in_umbrella: true},
+      {:vxpipe_calls, in_umbrella: true}
     ]
   end
 end

@@ -44,6 +44,42 @@ defmodule Vxpipe.Gateway.Telemetry do
 
   defp operation(%Plug.Conn{
          method: "POST",
+         path_info: ["api", "tenants", _tenant, "participants", _participant, "calls"]
+       }),
+       do: :call_prepare
+
+  defp operation(%Plug.Conn{
+         method: "POST",
+         path_info: [
+           "api",
+           "tenants",
+           _tenant,
+           "calls",
+           _call,
+           "participants",
+           _participant,
+           "sessions"
+         ]
+       }),
+       do: :call_session_create
+
+  defp operation(%Plug.Conn{
+         method: "POST",
+         path_info: [
+           "api",
+           "tenants",
+           _tenant,
+           "calls",
+           _call,
+           "participants",
+           _participant,
+           "join-tokens"
+         ]
+       }),
+       do: :call_join_token_issue
+
+  defp operation(%Plug.Conn{
+         method: "POST",
          path_info: ["api", "rooms", _room_id, "sessions"]
        }),
        do: :session_create
