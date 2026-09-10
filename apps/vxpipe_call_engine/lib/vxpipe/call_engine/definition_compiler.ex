@@ -165,6 +165,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          capabilities: capabilities,
          tools: tools,
          transfers: participant.transfers,
+         transfer_history: participant.transfer_history,
          variable_permissions: participant.variable_permissions
        }}
     end

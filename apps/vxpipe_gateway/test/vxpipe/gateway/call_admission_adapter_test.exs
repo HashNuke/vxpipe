@@ -87,13 +87,14 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       capabilities: %Capabilities{},
       tools: %{},
       transfers: [],
+      transfer_history: nil,
       variable_permissions: %VariablePermissions{}
     }
 
     %ResolvedCallPlan{
       definition_id: unique_id("definition"),
       definition_revision: 1,
-      schema_version: "20260910.05",
+      schema_version: "20260910.06",
       tenant_id: tenant_id,
       actor_id: unique_id("actor"),
       call_id: unique_id("call"),

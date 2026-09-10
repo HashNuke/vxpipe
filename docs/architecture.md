@@ -931,6 +931,15 @@ the room control loop available while provider or child startup is pending. Fail
 terminates the task and exact destination resources while leaving source responsibility unchanged.
 Clearing the pending attempt before replying makes late task results non-authoritative.
 
+Schema `20260910.06` puts the inbound history policy on the destination agent as
+`transfer_history`, leaving each source's `transfers` value as the approved simple participant-ref
+list. Omission resolves to the privacy-safe `fresh` mode. The closed alternatives are
+`all_spoken`, `last_n_spoken` with a required positive `turns` value, and `selected`; no other mode
+or mode-specific field is silently accepted. This placement prevents a source model from choosing
+how much prior conversation another participant may receive. The compiler pins the policy into the
+destination participant in the immutable call plan. This schema checkpoint does not yet claim that
+the non-fresh projections are supplied at runtime.
+
 The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
 activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
 reauthorizes the room/incarnation, caller connection, current source participant and activation,

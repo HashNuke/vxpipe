@@ -131,6 +131,59 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
     end
   end
 
+  test "pins each destination agent's inbound transfer history policy" do
+    assert {:ok, default_definition} =
+             transfer_definition()
+             |> CallDefinition.new(resource_id: "support", revision: 7)
+
+    assert default_definition.participants["billing"].transfer_history.mode == :fresh
+    assert default_definition.participants["billing"].transfer_history.turns == nil
+
+    cases = [
+      {%{mode: "fresh"}, %{mode: :fresh, turns: nil}},
+      {%{mode: "all_spoken"}, %{mode: :all_spoken, turns: nil}},
+      {%{mode: "last_n_spoken", turns: 6}, %{mode: :last_n_spoken, turns: 6}},
+      {%{mode: "selected"}, %{mode: :selected, turns: nil}}
+    ]
+
+    for {authored, expected} <- cases do
+      input =
+        put_in(transfer_definition(), [:participants, "billing", :transfer_history], authored)
+
+      assert {:ok, definition} =
+               CallDefinition.new(input, resource_id: "support", revision: 7)
+
+      assert Map.take(definition.participants["billing"].transfer_history, [:mode, :turns]) ==
+               expected
+
+      assert {:ok, plan} =
+               DefinitionCompiler.compile(definition, invocation(), registries())
+
+      assert Map.take(plan.participants["billing"].transfer_history, [:mode, :turns]) == expected
+    end
+  end
+
+  test "rejects malformed destination transfer history policies at their exact path" do
+    cases = [
+      {%{mode: "last_n_spoken"}, ["participants", "billing", "transfer_history", "turns"]},
+      {%{mode: "last_n_spoken", turns: 0},
+       ["participants", "billing", "transfer_history", "turns"]},
+      {%{mode: "fresh", turns: 4}, ["participants", "billing", "transfer_history", "turns"]},
+      {%{mode: "everything"}, ["participants", "billing", "transfer_history", "mode"]}
+    ]
+
+    for {authored, path} <- cases do
+      input =
+        put_in(transfer_definition(), [:participants, "billing", :transfer_history], authored)
+
+      assert {:error,
+              %Error{
+                code: :invalid_call_definition,
+                details: %{"path" => ^path}
+              }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+    end
+  end
+
   test "the supervised invocation timeout encloses the total transfer budget" do
     input =
       transfer_definition()

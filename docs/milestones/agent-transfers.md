@@ -111,6 +111,14 @@ of destination registration, duplicate-attempt rejection, and no completion afte
 setup. The four focused room tests pass. The combined restoration/history/re-entry checklist items
 remain open; this checkpoint does not claim those behaviors.
 
+Schema `20260910.06` adds the destination-owned inbound `transfer_history` contract while keeping
+source allowlists as simple participant-ref arrays. Omission pins `fresh`; the other closed modes are
+`all_spoken`, `last_n_spoken` with a positive required `turns` value, and `selected`. Unsupported
+modes, missing/invalid `turns`, and a `turns` value on another mode fail at the exact definition
+path. The focused compiler file passes eight tests and the complete Call Engine suite passes 271
+tests with one tagged integration exclusion. Runtime projection remains open, so the combined
+history checklist item is not checked.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

@@ -127,3 +127,18 @@
   because this shell has no PostgreSQL password; no credential content was inspected or logged.
   Alternate history projections, re-entry, private transfer history, and any applicable source-
   capability restoration evidence remain pending.
+
+## 2026-09-10 — destination history policy schema
+
+- Added the definition/compiler test first. It failed because agent participants had no inbound
+  history policy and rejected `transfer_history` as an unknown field.
+- Chose destination ownership so a source keeps the approved simple `transfers: [participant refs]`
+  allowlist and cannot decide how much private history another agent receives.
+- Released schema `20260910.06`. Every agent defaults to `%{mode: :fresh, turns: nil}`. The closed
+  authored modes are `fresh`, `all_spoken`, `last_n_spoken`, and `selected`; only
+  `last_n_spoken` accepts and requires a positive `turns` value.
+- The compiler copies the validated policy into the immutable resolved destination participant.
+  Human participants still reject the field through their existing type-specific field boundary.
+- The eight focused transfer compiler tests and complete 271-test Call Engine suite pass, with one
+  tagged integration exclusion. This checkpoint pins policy only; it does not yet seed destination
+  model history or claim privacy projection at runtime.

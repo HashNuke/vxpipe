@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
+  alias Vxpipe.CallEngine.CallDefinition.TransferHistory
   alias Vxpipe.CallEngine.CallDefinition.VariablePermissions
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, ToolBinding}
 
@@ -18,6 +19,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
     :capabilities,
     :tools,
     :transfers,
+    :transfer_history,
     :variable_permissions
   ]
   defstruct @enforce_keys
@@ -35,6 +37,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.Participant do
           capabilities: Capabilities.t(),
           tools: %{optional(String.t()) => ToolBinding.t()},
           transfers: [String.t()],
+          transfer_history: nil | TransferHistory.t(),
           variable_permissions: VariablePermissions.t()
         }
 end

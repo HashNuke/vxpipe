@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     Capabilities,
     ConnectionIntent,
     ToolSelection,
+    TransferHistory,
     VariablePermissions
   }
 
@@ -19,6 +20,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :capabilities,
     :tools,
     :transfers,
+    :transfer_history,
     :variable_permissions
   ]
   @human_fields [:type, :description, :connection, :capabilities]
@@ -30,6 +32,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :capabilities,
     :tools,
     :transfers,
+    :transfer_history,
     :variable_permissions
   ]
 
@@ -44,6 +47,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :capabilities,
     :tools,
     :transfers,
+    :transfer_history,
     :variable_permissions
   ]
   defstruct @enforce_keys
@@ -59,6 +63,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
           capabilities: Capabilities.t(),
           tools: %{optional(String.t()) => ToolSelection.t()},
           transfers: [String.t()],
+          transfer_history: nil | TransferHistory.t(),
           variable_permissions: VariablePermissions.t()
         }
 
@@ -137,6 +142,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
          first_message_text: nil,
          tools: %{},
          transfers: [],
+         transfer_history: nil,
          variable_permissions: %VariablePermissions{}
        }}
     end
@@ -157,6 +163,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
            ),
          {:ok, tools} <- tools(Map.get(input, :tools, %{}), code, message, path),
          {:ok, transfers} <- transfers(Map.get(input, :transfers, []), code, message, path),
+         {:ok, transfer_history} <-
+           TransferHistory.new(Map.get(input, :transfer_history), path ++ ["transfer_history"]),
          {:ok, variable_permissions} <-
            VariablePermissions.new(
              Map.get(input, :variable_permissions, %{}),
@@ -170,6 +178,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
          first_message_text: first_message_text,
          tools: tools,
          transfers: transfers,
+         transfer_history: transfer_history,
          variable_permissions: variable_permissions
        }}
     end
