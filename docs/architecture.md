@@ -720,13 +720,19 @@ completion or receiver activation; the notice does not reset the clock. This is
 playback ordering, not mandatory disclosure or a promise of consent/compliance.
 
 Each agent participant chooses its first-message behavior: wait for input, speak
-fixed greeting text, or generate a greeting. Apply that choice on its first
-activation in a call, after any configured startup notice and once required
-connections/capabilities are ready. Reconnect
-and later reactivation of the same participant do not replay its startup greeting.
-A new call has its own first activation. Greetings use normal authorized output;
-this does not bypass current privacy permissions. Exact encoding remains an
-implementation detail; the approved startup/idle/duration boundaries follow below.
+fixed greeting text, or generate a greeting. For the initial receiver, the runtime
+starts that behavior only after the entry caller has attached and configured opening
+playout has actually completed. Wait mode emits nothing. Fixed mode records the exact
+configured text as assistant history and sends it through normal authorized text/TTS
+output. Generated mode submits a private engine-origin model request, then routes its
+answer through that same output path. Startup is marked once before asynchronous output
+can complete, preventing duplicate attachment or completion signals from replaying it.
+
+Apply the same choice on an agent's first activation in a call. Reconnect and later
+reactivation of the same participant do not replay its startup greeting; transfer/re-entry
+integration remains pending. A new call has its own first activation. Greetings use normal
+authorized output and do not bypass current privacy permissions. The approved
+startup/idle/duration boundaries follow below.
 
 Required provider/connection startup readiness has a configurable 30-second
 deadline, starting with the actual post-join admission/startup attempt, not

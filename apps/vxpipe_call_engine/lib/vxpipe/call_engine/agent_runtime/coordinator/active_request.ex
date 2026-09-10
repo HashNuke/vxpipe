@@ -11,7 +11,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
   @enforce_keys [:command, :correlation, :kind, :output, :started_at, :task]
   defstruct @enforce_keys ++ [first_output_observed?: false, continuation_started?: false]
 
-  @type kind :: :caller | {:completion, CompletionContinuation.t()}
+  @type kind :: :caller | :greeting | {:completion, CompletionContinuation.t()}
   @type t :: %__MODULE__{
           command: SendText.t() | ContinueAgent.t(),
           correlation: Correlation.t(),
@@ -40,6 +40,30 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
     _exception -> {:error, :unavailable}
   catch
     :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec start_greeting(SendText.t(), keyword()) :: {:ok, t()} | {:error, :unavailable}
+  def start_greeting(%SendText{} = command, options) do
+    correlation = correlation(command, options)
+    session = Keyword.fetch!(options, :session)
+
+    task =
+      Task.Supervisor.async_nolink(Keyword.fetch!(options, :request_supervisor), fn ->
+        Session.continue(session, command.content, correlation, :infinity)
+      end)
+
+    new(command, correlation, :greeting, task, options)
+  rescue
+    _exception -> {:error, :unavailable}
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec correlation(SendText.t(), keyword()) :: Correlation.t()
+  def correlation(%SendText{} = command, options) do
+    request_id = Id.generate(:agent_request)
+    context = tool_context(command, request_id, Keyword.fetch!(options, :agent_participant_id))
+    Correlation.new(Keyword.fetch!(options, :invocation_registry), context)
   end
 
   @spec start_completion(CompletionContinuation.t(), keyword()) ::

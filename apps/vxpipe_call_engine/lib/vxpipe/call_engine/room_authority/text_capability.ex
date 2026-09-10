@@ -25,6 +25,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TextCapability do
     module.respond(capability, command)
   end
 
+  @spec fixed_greeting(map(), struct(), String.t()) :: :ok | {:error, term()}
+  def fixed_greeting(%{module: AgentRuntimeCoordinator, pid: capability}, command, text) do
+    AgentRuntimeCoordinator.fixed_greeting(capability, command, text)
+  end
+
+  @spec generated_greeting(map(), struct()) :: :ok | {:error, term()}
+  def generated_greeting(%{module: AgentRuntimeCoordinator, pid: capability}, command) do
+    AgentRuntimeCoordinator.generated_greeting(capability, command)
+  end
+
   @spec stop(State.t()) :: :ok | {:error, term()}
   def stop(%State{text_capability: %{module: AgentRuntimeCoordinator}}), do: :ok
 

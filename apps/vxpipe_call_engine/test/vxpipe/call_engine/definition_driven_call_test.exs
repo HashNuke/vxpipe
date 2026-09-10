@@ -1224,34 +1224,6 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert AgentActivationSupervisor.whereis_child(receiver.activation_id, :session) == nil
   end
 
-  test "rejects enabled later-slice features before registering a room" do
-    cases = [
-      {fn input ->
-         put_in(
-           input,
-           [:participants, "receiver", :first_message],
-           %{mode: "generated"}
-         )
-       end, ["participants", "receiver", "first_message", "mode"]}
-    ]
-
-    for {transform, expected_path} <- cases do
-      room_id = unique_id("room-unsupported")
-      plan = compile_plan(room_id, definition_transform: transform)
-
-      assert {:error,
-              %Error{
-                code: :unsupported_call_plan,
-                details: %{"path" => ^expected_path}
-              }} = CallEngine.start_call(plan)
-
-      assert Registry.lookup(
-               Vxpipe.CallEngine.RoomRegistry,
-               {plan.tenant_id, room_id}
-             ) == []
-    end
-  end
-
   test "rejects an unsupported model provider before registering a room" do
     room_id = unique_id("room-unsupported-provider")
     plan = compile_plan(room_id, model_provider: :unsupported_model_provider)

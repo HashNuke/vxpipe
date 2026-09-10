@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   use GenServer
 
-  alias Vxpipe.AgentRuntime.Event
+  alias Vxpipe.AgentRuntime.{Event, Session}
 
   alias Vxpipe.CallEngine.AgentRuntime.{
     CompletionContinuation,
@@ -43,6 +43,22 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
           :ok | {:error, :queue_full | :unavailable}
   def respond(coordinator, %SendText{} = command) do
     GenServer.call(coordinator, {:respond, command}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec generated_greeting(GenServer.server(), SendText.t()) ::
+          :ok | {:error, :busy | :unavailable}
+  def generated_greeting(coordinator, %SendText{} = command) do
+    GenServer.call(coordinator, {:generated_greeting, command}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec fixed_greeting(GenServer.server(), SendText.t(), String.t()) ::
+          :ok | {:error, :busy | :unavailable}
+  def fixed_greeting(coordinator, %SendText{} = command, text) when is_binary(text) do
+    GenServer.call(coordinator, {:fixed_greeting, command, text}, @call_timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -97,6 +113,36 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   def handle_call({:respond, command}, _from, %State{} = state) do
     respond_while_current(command, state)
+  end
+
+  def handle_call({:generated_greeting, command}, _from, %State{current: nil} = state) do
+    case ActiveRequest.start_greeting(command, request_options(state)) do
+      {:ok, current} -> {:reply, :ok, %{state | current: current}}
+      {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
+    end
+  end
+
+  def handle_call({:generated_greeting, _command}, _from, %State{} = state) do
+    {:reply, {:error, :busy}, state}
+  end
+
+  def handle_call({:fixed_greeting, command, text}, _from, %State{current: nil} = state) do
+    correlation = ActiveRequest.correlation(command, request_options(state))
+
+    case Session.record_assistant(state.session, text, correlation) do
+      :ok ->
+        send(state.owner, {:vxpipe_capability_text, self(), command, text})
+        send(state.owner, {:vxpipe_capability_text_complete, self(), command})
+        history = History.record(state.history, command, correlation)
+        {:reply, :ok, %{state | history: history}}
+
+      {:error, _reason} ->
+        {:reply, {:error, :unavailable}, state}
+    end
+  end
+
+  def handle_call({:fixed_greeting, _command, _text}, _from, %State{} = state) do
+    {:reply, {:error, :busy}, state}
   end
 
   def handle_call({:interrupt, completed_turn_ids}, _from, %State{} = state) do

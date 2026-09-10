@@ -15,13 +15,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
 
-  alias Vxpipe.CallEngine.{ResolvedCallPlan, TextToSpeechRequest}
+  alias Vxpipe.CallEngine.{Error, ResolvedCallPlan, TextToSpeechRequest}
 
   alias Vxpipe.CallEngine.Room.Snapshot
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
     ConnectionLifecycle,
+    FirstMessage,
     InputTurns,
     OpeningAudio,
     ParticipantLifecycle,
@@ -98,7 +99,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         ArchiveRecorder.new(room_source, incarnation_id, options),
         build_snapshot(room_source, incarnation_id, options),
         initial_speech_to_text_runtime(room_source),
-        OpeningAudio.new(room_source)
+        OpeningAudio.new(room_source),
+        FirstMessage.new(room_source)
       )
 
     case Startup.start_agent(room_source, options, state) do
@@ -129,20 +131,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       ) do
     case ConnectionLifecycle.attach(command, caller, subscriber, output_sink, state) do
       {:reply, {:ok, _role, _runtime} = reply, state} ->
-        connection = Map.fetch!(state.connections, command.connection_id)
+        case begin_connection_startup(command, state) do
+          {:ok, state} ->
+            {:reply, reply, state}
 
-        case OpeningAudio.start(
-               state.opening_audio,
-               command,
-               connection,
-               state.text_to_speech_capability,
-               state.snapshot
-             ) do
-          {:ok, opening_audio} ->
-            {:reply, reply, %{state | opening_audio: opening_audio}}
-
-          {:error, error} ->
-            {:stop, :opening_audio_unavailable, {:error, error}, state}
+          {:error, %Error{code: code} = error} ->
+            {:stop, code, {:error, error}, state}
         end
 
       other ->
@@ -321,10 +315,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
             state
           end
 
-        {:noreply, state}
+        case FirstMessage.start(state) do
+          {:ok, state} -> {:noreply, state}
+          {:error, %Error{code: code}} -> {:stop, code, state}
+        end
 
       :unrelated ->
         {:noreply, AgentOutput.playback(capability, request, status, state)}
+    end
+  end
+
+  defp begin_connection_startup(command, state) do
+    connection = Map.fetch!(state.connections, command.connection_id)
+
+    with {:ok, opening_audio} <-
+           OpeningAudio.start(
+             state.opening_audio,
+             command,
+             connection,
+             state.text_to_speech_capability,
+             state.snapshot
+           ),
+         {:ok, state} <- FirstMessage.start(%{state | opening_audio: opening_audio}) do
+      {:ok, state}
     end
   end
 

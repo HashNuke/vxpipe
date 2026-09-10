@@ -20,11 +20,13 @@ A caller hears optional configured opening audio before normal conversation. The
 ## Implementation checklist
 
 - [x] Red-test fixed-text input gating and actual playout completion with controllable media fakes.
-- [ ] Red-test file playback, first-message modes, and readiness/idle/duration clocks with controllable time/media fakes.
+- [x] Red-test wait/fixed/generated first-message modes with controllable model/media fakes.
+- [ ] Red-test file playback and readiness/idle/duration clocks with controllable time/media fakes.
 - [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
 - [ ] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
-- [ ] Integrate opening gate, greeting modes, existing current-time tool and permitted hangup binding.
+- [x] Integrate the opening gate with wait/fixed/generated greeting modes for the initial receiver.
+- [ ] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
 - [ ] Implement pinned duration and correctly scoped readiness/idle events; keep timing/technical errors safe.
 
 ## Acceptance and failure checks
@@ -71,7 +73,15 @@ test proves that early audio never reaches STT, early text is rejected, provider
 progress do not release input, actual sink completion releases both paths, and provider failure
 ends the room. It also proves unsupported file playback and text without TTS fail before room
 registration. The focused file passed with 3 tests; the broader Call Engine suite passed with
-234 tests and 1 integration exclusion. File playback, greetings, and lifecycle clocks remain.
+234 tests and 1 integration exclusion.
+
+Initial-receiver greeting coverage now proves all three modes. `wait_for_input` emits nothing;
+fixed text is recorded as the exact assistant message and follows the normal text/TTS output
+path; generated mode submits a private engine-origin request to the model. Neither fixed nor
+generated greeting starts before the entry caller attaches, and both remain behind configured
+opening playout. The focused file passed with 5 tests and the complete Call Engine suite passed
+with 236 tests and 1 integration exclusion. Transfer/re-entry greeting semantics, file playback,
+the immediate-hangup binding, and lifecycle clocks remain.
 
 ## Specification review
 

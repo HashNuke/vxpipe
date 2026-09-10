@@ -114,15 +114,23 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp supported_first_message(%ResolvedCallPlan.Participant{
-         first_message: :wait_for_input,
+         first_message: mode,
          first_message_text: nil
-       }),
+       })
+       when mode in [:wait_for_input, :generated],
+       do: :ok
+
+  defp supported_first_message(%ResolvedCallPlan.Participant{
+         first_message: :fixed,
+         first_message_text: text
+       })
+       when is_binary(text),
        do: :ok
 
   defp supported_first_message(receiver) do
     unsupported(
       ["participants", receiver.definition_key, "first_message", "mode"],
-      "only wait_for_input is supported"
+      "must be a supported first-message mode"
     )
   end
 

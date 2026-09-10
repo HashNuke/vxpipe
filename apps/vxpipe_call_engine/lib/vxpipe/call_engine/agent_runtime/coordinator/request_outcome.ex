@@ -59,7 +59,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
     report_failure(request, reason, options)
 
     case request.kind do
-      :caller ->
+      kind when kind in [:caller, :greeting] ->
         :advance
 
       {:completion, continuation} ->
@@ -70,7 +70,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
     end
   end
 
-  defp commit_completion(%ActiveRequest{kind: :caller}, _options), do: :advance
+  defp commit_completion(%ActiveRequest{kind: kind}, _options)
+       when kind in [:caller, :greeting],
+       do: :advance
 
   defp commit_completion(
          %ActiveRequest{kind: {:completion, continuation}},
@@ -86,7 +88,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
     report_failure(request, reason, options)
 
     case request.kind do
-      :caller ->
+      kind when kind in [:caller, :greeting] ->
         :advance
 
       {:completion, continuation} ->

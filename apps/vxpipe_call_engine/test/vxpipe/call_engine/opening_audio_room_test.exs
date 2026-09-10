@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     DefinitionCompiler,
     Error,
     RoomAuthority,
+    TestAgentRuntimeModelProvider,
     TestAudioOutputSink,
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
@@ -18,6 +19,8 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine.CallDefinition.OpeningAudio, as: OpeningSource
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
+  alias Vxpipe.AgentRuntime.ModelResponse
 
   test "admits no caller input until configured text finishes actual playout" do
     configure_speech_runtime()
@@ -139,12 +142,98 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
            ) == []
   end
 
-  defp compile_plan do
+  test "emits one fixed greeting after opening playout and retains it as assistant history" do
+    configure_speech_runtime()
+    configure_agent_runtime_provider()
+    plan = compile_plan(first_message: %{mode: "fixed", text: "Welcome."})
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-fixed-greeting")
+    assert {:ok, _attachment} = CallEngine.attach_connection(command, sink)
+    assert_receive {:test_stt_transport_started, _stt_transport, _connection}
+
+    assert_receive {:test_tts_control, ^tts_transport, opening_speak}
+
+    assert JSON.decode!(opening_speak) == %{
+             "text" => "This call may be recorded.",
+             "type" => "Speak"
+           }
+
+    assert_receive {:test_tts_control, ^tts_transport, _opening_flush}
+    refute_receive {:vxpipe_event, %TextOutput{text: "Welcome."}}
+
+    complete_speech(tts_transport, sink, "opening-fixed")
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "Welcome."}}
+    assert_receive {:test_tts_control, ^tts_transport, greeting_speak}
+    assert JSON.decode!(greeting_speak) == %{"text" => "Welcome.", "type" => "Speak"}
+    assert_receive {:test_tts_control, ^tts_transport, _greeting_flush}
+    complete_speech(tts_transport, sink, "fixed-greeting")
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{}}
+
+    assert :ok =
+             CallEngine.send_text(
+               send_command(plan, room, caller, "conn-fixed-greeting", "Hello")
+             )
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+
+    assert Enum.map(request.messages, &{&1.role, &1.content}) == [
+             {:system, "Answer clearly."},
+             {:assistant, "Welcome."},
+             {:user, "Hello"}
+           ]
+
+    assert {:ok, response} = ModelResponse.new(text: "Hello back.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  test "asks the model for a generated greeting only after the caller attaches" do
+    configure_speech_runtime()
+    configure_agent_runtime_provider()
+    plan = compile_plan(opening_audio: nil, first_message: %{mode: "generated"})
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+    refute_receive {:test_agent_runtime_stream, _provider, _request}
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-generated-greeting")
+    assert {:ok, _attachment} = CallEngine.attach_connection(command, sink)
+    assert_receive {:test_stt_transport_started, _stt_transport, _connection}
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    prompt = List.last(request.messages)
+    assert prompt.role == :user
+    assert prompt.origin == :engine
+
+    assert {:ok, response} = ModelResponse.new(text: "Welcome from the model.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "Welcome from the model."}}
+    assert_receive {:test_tts_control, ^tts_transport, greeting_speak}
+
+    assert JSON.decode!(greeting_speak) == %{
+             "text" => "Welcome from the model.",
+             "type" => "Speak"
+           }
+  end
+
+  defp compile_plan(options \\ []) do
     definition_input = %{
       schema_version: CallDefinition.schema_version(),
       entry_caller: "caller",
       entry_receiver: "receiver",
-      opening_audio: %{type: "text", text: "This call may be recorded."},
+      opening_audio:
+        Keyword.get(options, :opening_audio, %{
+          type: "text",
+          text: "This call may be recorded."
+        }),
       defaults: %{capabilities: %{}},
       call_variables: %{sections: %{}},
       participants: %{
@@ -156,7 +245,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         "receiver" => %{
           type: "agent",
           prompt: "Answer clearly.",
-          first_message: %{mode: "wait_for_input"},
+          first_message: Keyword.get(options, :first_message, %{mode: "wait_for_input"}),
           capabilities: %{model_inference: "test-model", text_to_speech: "plan-tts"},
           tools: %{},
           transfers: []
@@ -271,6 +360,29 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     end
   end
 
+  defp complete_speech(tts_transport, sink, speech_id) do
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      JSON.encode!(%{"type" => "SpeechStarted", "request_id" => "req", "speech_id" => speech_id})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(tts_transport, <<1, 0, 2, 0>>)
+    assert_receive {:test_audio_output, ^sink, _frame}
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      JSON.encode!(%{
+        "type" => "SpeechMetadata",
+        "request_id" => "req",
+        "speech_id" => speech_id
+      })
+    )
+
+    assert_receive {:test_audio_output_finish, ^sink, _turn_id}
+    :ok = TestAudioOutputSink.playback_started(sink)
+    :ok = TestAudioOutputSink.playback_completed(sink)
+  end
+
   defp configure_speech_runtime do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
@@ -311,6 +423,27 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       original
       |> Keyword.put(:speech_to_text, speech_to_text)
       |> Keyword.put(:text_to_speech, text_to_speech)
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+  end
+
+  defp configure_agent_runtime_provider do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      original
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:implementation, :agent_runtime)
+      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, owner: self())
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(original, :agent_runtime, agent_runtime)
     )
 
     on_exit(fn ->

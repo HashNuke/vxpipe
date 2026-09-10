@@ -30,16 +30,23 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
     pending = :queue.to_list(state.pending)
 
     case state.current do
-      %ActiveRequest{kind: :caller, command: %SendText{} = command} -> [command | pending]
-      %ActiveRequest{kind: {:completion, _continuation}} -> pending
-      nil -> pending
+      %ActiveRequest{kind: kind, command: %SendText{} = command}
+      when kind in [:caller, :greeting] ->
+        [command | pending]
+
+      %ActiveRequest{kind: {:completion, _continuation}} ->
+        pending
+
+      nil ->
+        pending
     end
   end
 
   defp report_interruption(
-         %ActiveRequest{kind: :caller, command: %SendText{} = command} = current,
+         %ActiveRequest{kind: kind, command: %SendText{} = command} = current,
          state
-       ) do
+       )
+       when kind in [:caller, :greeting] do
     send(state.owner, {:vxpipe_capability_failed, self(), command, :interrupted})
 
     Telemetry.model_request_stop(
@@ -61,6 +68,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
 
   defp settle_completion(nil, state, _timeout), do: {:ok, state}
   defp settle_completion(%ActiveRequest{kind: :caller}, state, _timeout), do: {:ok, state}
+  defp settle_completion(%ActiveRequest{kind: :greeting}, state, _timeout), do: {:ok, state}
 
   defp settle_completion(
          %ActiveRequest{kind: {:completion, continuation}, correlation: correlation},

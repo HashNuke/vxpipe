@@ -56,3 +56,30 @@
 - The focused session test failed first because `record_assistant/3` did not exist, then passed
   with 6 tests in the file. The stored message is bounded, validated, and discardable by its
   correlation so later interruption handling can remove an interrupted greeting.
+
+## 2026-09-10 — initial-receiver greeting modes
+
+- Added a focused first-message coordinator under Room Authority rather than adding greeting
+  policy to connection or media modules. It tracks one pending/started/completed decision for
+  the initial receiver and starts only when the entry caller is attached and opening admission
+  is open.
+- `wait_for_input` remains silent. Fixed mode records the configured text as an assistant
+  message and uses ordinary room text/TTS output. Generated mode asks the model with private
+  engine provenance and uses the same output path for its response.
+- The initial red run failed at the intended plan boundary because fixed and generated modes
+  were still rejected as unsupported. Focused room coverage then exposed and fixed a history
+  ordering race by waiting for the greeting's normal completion event before admitting the
+  next caller turn.
+- Focused evidence: from `apps/vxpipe_call_engine`,
+  `mix test test/vxpipe/call_engine/opening_audio_room_test.exs --seed 238092` passed with
+  5 tests and 0 failures.
+- The first complete Call Engine run exposed two unrelated short-deadline timing failures in
+  archive and legacy model-inference tests; both passed when rerun at their focused boundaries.
+  A second complete Call Engine run passed with 236 tests and 0 failures, with 1 integration
+  test excluded.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+  The root test command reached Persistence but could not create its database because the
+  current shell still has no PostgreSQL test password; no credential value was inspected or
+  logged.
+- Transfer/re-entry greeting activation, file opening playback/cache, immediate hangup, and
+  readiness/idle/duration clocks remain pending.
