@@ -15,6 +15,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.OpeningAudio.{CachedPlaybackRequest, FilePlaybackRequest}
+  alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request, as: TransferRequest
 
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan, TextToSpeechRequest}
 
@@ -22,6 +24,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
+    AgentTransfer,
     CallerIdle,
     ConnectionLifecycle,
     EndCall,
@@ -36,6 +39,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   }
 
   @call_timeout 5_000
+  @transfer_timeout 30_000
 
   def start_link(options) do
     {tenant_id, room_id} = room_identity(options)
@@ -71,6 +75,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def send_text(room_authority, %SendText{} = command) do
     GenServer.call(room_authority, {:send_text, command}, @call_timeout)
+  end
+
+  @spec transfer(TransferRequest.t()) ::
+          {:ok, map()} | {:error, :rejected | :unavailable}
+  def transfer(%TransferRequest{} = request) do
+    GenServer.call(
+      via(request.tenant_id, request.room_id),
+      {:transfer_agent, request},
+      @transfer_timeout
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
   end
 
   def bind_speech_to_text(
@@ -187,6 +203,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     InputTurns.accept_text(command, caller, state)
   end
 
+  def handle_call({:transfer_agent, %TransferRequest{} = request}, _from, state) do
+    AgentTransfer.commit(request, state)
+  end
+
   @impl true
   def handle_info(
         {:vxpipe_capability_continuation_started, capability, %ContinueAgent{} = command},
@@ -234,6 +254,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       :ok -> {:stop, {:shutdown, :agent_hangup}, state}
       {:error, %Error{}} -> {:noreply, state}
     end
+  end
+
+  def handle_info(
+        {:vxpipe_platform_effect, capability, %ToolContext{} = context,
+         :participant_transfer_committed},
+        state
+      ) do
+    {:noreply, AgentTransfer.teardown_source(state, capability, context)}
   end
 
   def handle_info(

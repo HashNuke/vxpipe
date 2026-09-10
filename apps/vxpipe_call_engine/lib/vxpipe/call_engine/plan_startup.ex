@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.CallDefinition.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
+  alias Vxpipe.CallEngine.PlanStartup.AgentDestination
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
@@ -77,6 +78,42 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
+  @spec agent_destination(
+          ResolvedCallPlan.t(),
+          ResolvedCallPlan.Participant.t(),
+          keyword()
+        ) :: {:ok, AgentDestination.t()} | {:error, Error.t()}
+  def agent_destination(
+        %ResolvedCallPlan{} = plan,
+        %ResolvedCallPlan.Participant{kind: :agent} = participant,
+        options
+      )
+      when is_list(options) do
+    with {:ok, activation_options} <- agent_activation_options(plan, participant, options),
+         {:ok, text_to_speech} <- text_to_speech_runtime(participant, options),
+         {:ok, command} <- participant_command(plan, participant) do
+      {:ok,
+       %AgentDestination{
+         participant: participant,
+         command: command,
+         agent_activation: activation_options,
+         text_to_speech: text_to_speech
+       }}
+    end
+  end
+
+  def agent_destination(
+        %ResolvedCallPlan{},
+        %ResolvedCallPlan.Participant{} = participant,
+        options
+      )
+      when is_list(options) do
+    unsupported(
+      ["participants", participant.definition_key, "type"],
+      "must be an agent participant"
+    )
+  end
+
   defp entry_participant(plan, field, definition_key, kind) do
     case Map.fetch(plan.participants, definition_key) do
       {:ok, %ResolvedCallPlan.Participant{kind: ^kind} = participant} ->
@@ -91,7 +128,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     with :ok <- supported_transport(plan),
          :ok <- supported_connection(caller),
          :ok <- supported_first_message(receiver),
-         :ok <- supported_transfers(plan),
          :ok <- supported_tools(plan) do
       :ok
     end
@@ -136,16 +172,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     )
   end
 
-  defp supported_transfers(plan) do
-    case Enum.find(plan.participants, fn {_key, participant} -> participant.transfers != [] end) do
-      nil ->
-        :ok
-
-      {key, _participant} ->
-        unsupported(["participants", key, "transfers"], "participant transfers are not supported")
-    end
-  end
-
   defp supported_tools(plan) do
     Enum.reduce_while(plan.participants, :ok, fn {participant_key, participant}, :ok ->
       case Enum.find(participant.tools, fn {_name, binding} ->
@@ -174,6 +200,12 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp supported_tool_binding?(%ResolvedCallPlan.ToolBinding{
          type: :mcp,
          remote: %ResolvedTool{}
+       }),
+       do: true
+
+  defp supported_tool_binding?(%ResolvedCallPlan.ToolBinding{
+         type: :participant_transfer,
+         transfer: %Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding{}
        }),
        do: true
 

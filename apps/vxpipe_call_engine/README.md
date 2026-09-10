@@ -53,10 +53,14 @@ that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
 The definition-driven compiler's current schema is `20260910.04`; it accepts validated
-definition-local agent transfer allowlists and derives one private, default-blocking transfer
-binding for each non-empty list. Transfer startup remains rejected until the room prepare/commit
-runtime is implemented. Schema `20260910.03` added explicitly selected platform tools to the
-participant's unified `tools` map. The fixed initial catalog contains `get_current_time` and
+definition-local agent transfer allowlists, derives one private default-blocking transfer binding
+for each non-empty list, and runs the initial agent-to-agent prepare/commit path with fresh
+destination history. Room Authority reauthorizes the source and destination, retains the source
+through preparation, then routes later turns through the committed destination and tears the source
+subtree down. Transfer deadlines, alternate history projections, re-entry, and restoration after
+failed preparation remain unsupported. Schema `20260910.03` added explicitly selected platform
+tools to the participant's unified `tools` map. The fixed initial catalog contains
+`get_current_time` and
 immediate `hangup`; local aliases and conversation mode are pinned into the resolved plan without
 accepting modules from definition input. Schema `20260910.02` added
 an optional, closed `opening_audio` source that is pinned into the resolved call plan. A text

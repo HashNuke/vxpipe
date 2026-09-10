@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, RoomParticipantSupervisor}
-  alias Vxpipe.CallEngine.RoomAuthority.{State, TextCapability}
+  alias Vxpipe.CallEngine.RoomAuthority.{ParticipantPreparation, State, TextCapability}
 
   @spec join(struct(), State.t()) :: {:reply, {:ok, struct()} | {:error, Error.t()}, State.t()}
   def join(command, %State{} = state) do
@@ -17,31 +17,64 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   @spec start(struct(), State.t(), keyword()) ::
           {:ok, struct(), State.t()} | {:error, term()}
   def start(command, %State{} = state, options \\ []) do
+    with {:ok, preparation} <- prepare(command, state, options) do
+      commit(preparation, state)
+    end
+  end
+
+  @spec prepare(struct(), State.t(), keyword()) ::
+          {:ok, ParticipantPreparation.t()} | {:error, term()}
+  def prepare(command, %State{} = state, options \\ []) do
     case RoomParticipantSupervisor.start_participant(
            state.snapshot.incarnation_id,
            command,
            options
          ) do
       {:ok, participant_supervisor, participant} ->
-        monitor = Process.monitor(participant_supervisor)
-
-        state = %{
-          state
-          | participant_monitors:
-              Map.put(state.participant_monitors, monitor, command.participant_id),
-            participant_ids: MapSet.put(state.participant_ids, command.participant_id),
-            participant_roles:
-              Map.put(state.participant_roles, command.participant_id, participant.role)
-        }
-
-        archive_recorder =
-          ArchiveRecorder.participant_joined(state.archive_recorder, participant)
-
-        {:ok, participant, %{state | archive_recorder: archive_recorder}}
+        {:ok,
+         %ParticipantPreparation{
+           participant_supervisor: participant_supervisor,
+           snapshot: participant
+         }}
 
       error ->
         error
     end
+  end
+
+  @spec commit(ParticipantPreparation.t(), State.t()) ::
+          {:ok, struct(), State.t()}
+  def commit(%ParticipantPreparation{} = preparation, %State{} = state) do
+    participant = preparation.snapshot
+    participant_supervisor = preparation.participant_supervisor
+    monitor = Process.monitor(participant_supervisor)
+
+    state = %{
+      state
+      | participant_monitors:
+          Map.put(state.participant_monitors, monitor, participant.participant_id),
+        participant_supervisors:
+          Map.put(
+            state.participant_supervisors,
+            participant.participant_id,
+            participant_supervisor
+          ),
+        participant_ids: MapSet.put(state.participant_ids, participant.participant_id),
+        participant_roles:
+          Map.put(state.participant_roles, participant.participant_id, participant.role)
+    }
+
+    archive_recorder = ArchiveRecorder.participant_joined(state.archive_recorder, participant)
+
+    {:ok, participant, %{state | archive_recorder: archive_recorder}}
+  end
+
+  @spec discard(ParticipantPreparation.t(), State.t()) :: :ok | {:error, term()}
+  def discard(%ParticipantPreparation{} = preparation, %State{} = state) do
+    RoomParticipantSupervisor.stop_participant(
+      state.snapshot.incarnation_id,
+      preparation.participant_supervisor
+    )
   end
 
   @spec remove(reference(), term(), State.t()) :: State.t()
@@ -73,6 +106,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
     state = %{
       state
       | participant_monitors: participant_monitors,
+        participant_supervisors: Map.delete(state.participant_supervisors, participant_id),
         participant_ids: MapSet.delete(state.participant_ids, participant_id),
         participant_roles: Map.delete(state.participant_roles, participant_id)
     }

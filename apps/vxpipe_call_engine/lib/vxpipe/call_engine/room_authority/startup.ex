@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   }
 
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, State}
+  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime, as: AgentTransferRuntime
 
   @spec start_agent(CreateRoom.t() | ResolvedCallPlan.t(), keyword(), State.t()) ::
           {:ok, State.t()} | {:error, :agent_start_failed}
@@ -35,6 +36,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
          {:ok, module, capability} <-
            start_text_capability(command.agent, participant.participant_id, state) do
       text_capability = %{
+        activation_id: nil,
         module: module,
         monitor: Process.monitor(capability),
         participant_id: participant.participant_id,
@@ -78,6 +80,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         AgentActivationSupervisor.child_ref(startup.receiver.activation_id, :coordinator)
 
       text_capability = %{
+        activation_id: startup.receiver.activation_id,
         module: AgentRuntimeCoordinator,
         monitor: nil,
         participant_id: receiver_snapshot.participant_id,
@@ -92,11 +95,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
           text_capability: text_capability
       }
 
-      start_selected_text_to_speech(
-        startup.text_to_speech,
-        receiver_snapshot.participant_id,
-        state
-      )
+      with {:ok, state} <-
+             start_selected_text_to_speech(
+               startup.text_to_speech,
+               receiver_snapshot.participant_id,
+               state
+             ) do
+        runtime = %AgentTransferRuntime{plan: plan, startup_options: startup_options}
+        {:ok, %{state | agent_transfer_runtime: runtime}}
+      end
     else
       _error -> {:error, :agent_start_failed}
     end
@@ -170,13 +177,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
     end
   end
 
-  defp start_selected_text_to_speech(nil, _participant_id, state), do: {:ok, state}
+  @spec prepare_text_to_speech(nil | TextToSpeechRuntime.t(), String.t(), State.t()) ::
+          {:ok, nil | map()} | {:error, :text_to_speech_start_failed}
+  def prepare_text_to_speech(nil, _participant_id, %State{}), do: {:ok, nil}
 
-  defp start_selected_text_to_speech(
-         %TextToSpeechRuntime{} = runtime,
-         participant_id,
-         state
-       ) do
+  def prepare_text_to_speech(
+        %TextToSpeechRuntime{} = runtime,
+        participant_id,
+        %State{} = state
+      ) do
     case RoomCapabilitySupervisor.start_text_to_speech(
            state.snapshot.incarnation_id,
            self(),
@@ -193,10 +202,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
           pid: capability
         }
 
-        {:ok, %{state | text_to_speech_capability: text_to_speech_capability}}
+        {:ok, text_to_speech_capability}
 
       {:error, _reason} ->
         {:error, :text_to_speech_start_failed}
+    end
+  end
+
+  @spec discard_text_to_speech(nil | map(), State.t()) :: :ok | {:error, term()}
+  def discard_text_to_speech(nil, %State{}), do: :ok
+
+  def discard_text_to_speech(capability, %State{} = state) when is_map(capability) do
+    Process.demonitor(capability.monitor, [:flush])
+
+    RoomCapabilitySupervisor.stop_capability(
+      state.snapshot.incarnation_id,
+      capability.pid
+    )
+  end
+
+  defp start_selected_text_to_speech(runtime, participant_id, state) do
+    with {:ok, capability} <- prepare_text_to_speech(runtime, participant_id, state) do
+      {:ok, %{state | text_to_speech_capability: capability}}
     end
   end
 end

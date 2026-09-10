@@ -26,8 +26,8 @@ commit, while the source retains conversation.
 
 ## Implementation checklist
 
-- [ ] Red-test compiler-derived transfer schema/aliases and runtime source/target authorization.
-- [ ] Implement room prepare/commit lifecycle, distinct participant/activation identities, and supervised destination/source ownership.
+- [x] Red-test compiler-derived transfer schema/aliases and runtime source/target authorization.
+- [x] Implement room prepare/commit lifecycle, distinct participant/activation identities, and supervised destination/source ownership.
 - [ ] Integrate private destination history/variable projection and source termination after commit.
 - [ ] Implement total deadline, late-result exclusion, typed failures and single restoration budget.
 - [ ] Emit private transfer history and safe client outcomes without adding new RTVI-core messages.
@@ -78,6 +78,18 @@ still rejects all transfer-enabled plans, so this checkpoint cannot start a dest
 room control before the prepare/commit implementation exists. Four focused transfer compiler tests,
 the 18-test compiler/descriptor/startup group, and the complete 263-test Call Engine suite passed;
 Calls, Gateway, and Console passed 36, 66, and 57 tests respectively.
+
+The next red/green checkpoint added the first runnable fresh-history transfer. A model-issued
+`transfer(destination)` runs in the ordinary activation-owned invocation worker. Room Authority
+then reauthorizes the exact room/incarnation, attached caller, current source participant and
+activation, immutable allowlist, and pinned destination identity. It prepares the destination
+participant/runtime and selected TTS before changing active routing; after commit it emits one safe
+completion using the existing tool event, tears down the complete source participant subtree, and
+routes the next caller turn through the destination prompt. The same room and Call Variables
+process survive. A focused stale-source case proves rejection before destination startup. The two
+focused room tests and the complete 265-test Call Engine suite passed with one tagged integration
+exclusion. This does not yet prove preparation failure/timeout, restoration, late exclusion,
+re-entry, or the non-fresh history projections.
 
 ## Specification review
 

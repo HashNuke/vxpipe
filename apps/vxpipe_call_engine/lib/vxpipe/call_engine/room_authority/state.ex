@@ -18,10 +18,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
               [
                 connection_monitors: %{},
                 connections: %{},
+                agent_transfer_runtime: nil,
                 agent_turns: %{},
                 background_tool_calls: %{},
+                pending_agent_teardowns: %{},
                 next_sequence: 1,
                 participant_monitors: %{},
+                participant_supervisors: %{},
                 participant_ids: MapSet.new(),
                 participant_roles: %{},
                 speech_to_text_monitors: %{},
@@ -31,6 +34,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
 
   @type t :: %__MODULE__{
           archive_recorder: Recorder.t(),
+          agent_transfer_runtime: nil | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime.t(),
           call_lifecycle: nil | pid(),
           connection_monitors: %{optional(reference()) => String.t()},
           connections: map(),
@@ -39,7 +43,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           background_tool_calls: map(),
           next_sequence: pos_integer(),
           opening_audio: OpeningAudio.t(),
+          pending_agent_teardowns: %{optional(pid()) => map()},
           participant_monitors: %{optional(reference()) => String.t()},
+          participant_supervisors: %{optional(String.t()) => pid()},
           participant_ids: MapSet.t(String.t()),
           participant_roles: %{optional(String.t()) => atom()},
           snapshot: Snapshot.t(),

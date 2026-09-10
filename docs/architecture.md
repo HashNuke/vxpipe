@@ -921,10 +921,21 @@ safe descriptions in a closed input schema. The generated binding uses the ordin
 policy and defaults to blocking later caller conversation. It still executes through the same
 activation-owned supervised worker path; blocking does not mean inline execution.
 
-This is not yet a runnable transfer. `PlanStartup` continues to reject every plan with a non-empty
-transfer allowlist until destination preparation, current-source reauthorization, room commit, and
-source teardown are implemented. That fail-closed startup boundary prevents the compiler release
-from silently enabling an incomplete control mutation.
+The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
+activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
+reauthorizes the room/incarnation, caller connection, current source participant and activation,
+immutable source allowlist, and pinned destination identity before starting anything. It prepares
+the destination participant, agent runtime, and selected TTS capability without changing the active
+text capability. Only successful preparation commits the new text/TTS routing, preserves the room
+and Call Variables process, emits one safe completion through the existing tool-event contract, and
+then terminates the source participant subtree. A stale source is rejected before destination
+startup. Runtime configuration retained for later participant materialization has a redacted
+inspection surface.
+
+This checkpoint supports the initial destination's fresh private model history. Total transfer
+deadlines, preparation failure/restoration behavior, other approved history projections, re-entry
+with a fresh activation, and late-result exclusion remain fail-closed follow-up work; their
+milestone checks are not satisfied by the basic control commit.
 
 ### Presence-driven media and transcript policy — approved R38
 

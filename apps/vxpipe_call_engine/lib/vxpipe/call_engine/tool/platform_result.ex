@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Tool.PlatformResult do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          effect: :hangup,
+          effect: :hangup | :participant_transfer_committed,
           result: term()
         }
 end

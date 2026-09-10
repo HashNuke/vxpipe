@@ -3,8 +3,9 @@
 Status: 24 milestone specifications: 13 complete and 11 incomplete. Milestone 13, opening audio
 and call lifecycle, is complete. Milestone 14, allowlisted agent-to-agent transfers, is the current
 implementation slice. Its definition parser and compiler now derive a private default-blocking
-transfer binding from validated agent-local allowlists; live startup remains fail-closed while the
-room prepare/commit lifecycle is pending.
+transfer binding from validated agent-local allowlists. Its first runnable checkpoint commits a
+fresh-history agent destination, preserves room variables, and tears down the source only after
+commit; failure/deadline, re-entry, and alternate-history checks remain pending.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

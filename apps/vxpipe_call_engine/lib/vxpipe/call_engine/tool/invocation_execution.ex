@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
   alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
   alias Vxpipe.CallEngine.Tool.{Context, InvocationBinding, PlatformResult}
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer
 
   @spec run(InvocationBinding.t(), map(), Context.t(), pos_integer()) ::
           {:ok, term()} | {:error, :invalid_result | :tool_failed}
@@ -44,6 +45,18 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
     binding
     |> VariablesBinding.execute(name, arguments, context)
     |> normalize(maximum_result_bytes)
+  end
+
+  def run(
+        %InvocationBinding{handler: {:participant_transfer, binding}},
+        arguments,
+        %Context{} = context,
+        maximum_result_bytes
+      )
+      when is_map(arguments) and is_integer(maximum_result_bytes) and maximum_result_bytes > 0 do
+    binding
+    |> ParticipantTransfer.execute(arguments, context)
+    |> normalize_platform(maximum_result_bytes)
   end
 
   def run(
@@ -92,7 +105,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
          {:ok, %PlatformResult{effect: effect, result: result} = platform_result},
          maximum_result_bytes
        )
-       when effect in [:hangup] do
+       when effect in [:hangup, :participant_transfer_committed] do
     case normalize({:ok, result}, maximum_result_bytes) do
       {:ok, _result} -> {:ok, platform_result}
       {:error, reason} -> {:error, reason}

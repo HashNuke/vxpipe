@@ -43,3 +43,38 @@
 - Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks
   passed. Umbrella tests remain blocked at Persistence database creation because this shell has no
   PostgreSQL password; no credential value was inspected or logged.
+
+## 2026-09-10 — first runnable room transfer
+
+- Added the end-to-end room test before runtime support. It failed at `start_call/2` with the
+  expected `unsupported_call_plan` transfer rejection.
+- Added a narrow participant-preparation value and split prepare/commit/discard operations from
+  participant lifecycle admission. Prepared destination processes are not added to authoritative
+  room state or archival history until commit.
+- Room Authority retains a redacted transfer-runtime value containing the pinned plan and runtime
+  settings needed to materialize a later agent. Runtime settings can include provider secrets, so
+  their `Inspect` implementation exposes no fields.
+- A transfer invocation still runs in the activation-owned supervised invocation worker. The worker
+  resolves its private binding into a bounded request; Room Authority independently checks the
+  room/incarnation, attached caller, current source participant/activation/coordinator, immutable
+  allowlist, and destination participant identity.
+- Successful preparation starts the destination participant, Agent Runtime graph, and selected TTS
+  before swapping the active text/TTS routing. The same room and Call Variables process survive.
+  Room Authority emits one `ToolCallCompleted` only after commit, using the existing client
+  visibility path rather than adding an RTVI message, and the resulting private platform effect
+  tears down the source participant subtree.
+- Clearing the old room turn at commit prevents a later caller turn from being misattributed as an
+  interruption of the destination. Late source output is rejected by the existing current-text-
+  capability checks.
+- A second focused test forges a stale source activation at the room boundary and confirms it is
+  rejected before the destination activation or participant starts.
+- The two focused transfer-room tests passed. The complete Call Engine suite passed 265 tests with
+  one tagged integration exclusion. Calls, Gateway, and Console passed 36, 66, and 57 tests;
+  Gateway retained four tagged exclusions. Root format checking, warnings-as-errors compilation,
+  strict Credo, and unused-dependency checks passed.
+- The umbrella test command was attempted again and remained blocked at Persistence database
+  creation because the shell has no PostgreSQL password. No credential content was inspected or
+  logged.
+- This checkpoint implements fresh destination history only. Total deadline handling, controlled
+  preparation failure/restoration, late completion exclusion, re-entry identity/activation rules,
+  and alternate approved history projections remain pending.

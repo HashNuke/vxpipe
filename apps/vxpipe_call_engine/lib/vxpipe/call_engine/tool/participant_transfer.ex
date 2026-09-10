@@ -2,7 +2,8 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Tool.Definition
-  alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding
+  alias Vxpipe.CallEngine.Tool.{Context, PlatformResult}
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer.{Binding, Request}
 
   @spec definition(Binding.t()) :: Definition.t()
   def definition(%Binding{} = binding) do
@@ -33,5 +34,16 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
         "additionalProperties" => false
       }
     }
+  end
+
+  @spec execute(Binding.t(), map(), Context.t()) ::
+          {:ok, PlatformResult.t()} | {:error, :tool_failed}
+  def execute(%Binding{} = binding, arguments, %Context{} = context) when is_map(arguments) do
+    with {:ok, request} <- Request.new(binding, arguments, context),
+         {:ok, result} <- Vxpipe.CallEngine.RoomAuthority.transfer(request) do
+      {:ok, %PlatformResult{effect: :participant_transfer_committed, result: result}}
+    else
+      _rejected_or_unavailable -> {:error, :tool_failed}
+    end
   end
 end
