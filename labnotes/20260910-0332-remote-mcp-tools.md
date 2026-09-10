@@ -152,3 +152,31 @@ the pinned remote operation under its absolute deadline and byte limit.
 Next: wire the owner beneath the agent-activation supervisor and extend the dispatcher/executor
 boundary so remote tools use the existing bounded background lifecycle. The model projection and
 Jido continuation remain gated on a supported public runtime data-tool interface.
+
+## 2026-09-10 — bounded remote background execution
+
+- Extracted the deterministic MCP integration fixture from the owner test so activation and
+  dispatcher lifecycle tests can use one pinned tenant binding without duplicating private
+  setup. The fake protocol can hold a submitted invocation until the test explicitly releases
+  its worker; it uses messages rather than timing sleeps.
+- Red: configured a dispatcher with the valid activation-local owner and `customer_lookup`
+  alias, registered the corresponding tool call, and submitted it. The dispatcher returned
+  `{:error, :unknown_tool}` because its executor knew only static host modules.
+- Green: `Tool.Executor` now accepts an explicit remote owner and closed alias set. Remote aliases
+  are background-only, cannot be duplicated or collide with host names, and are deliberately
+  omitted from the static model-definition projection. The dispatcher passes those bindings into
+  the existing background worker path; `RemoteMCP.IntegrationOwner` remains the only component
+  that selects and invokes the private pinned remote operation.
+- A controlled test proves submission returns `running`, the dispatcher answers another request
+  while the MCP invocation waits, completion is emitted once under the local alias, and the fake
+  protocol receives `lookup_customer` rather than `customer_lookup`. This checkpoint adds no
+  retries, implicit variable mutation, second LLM loop, or Jido-private integration.
+- Focused executor/dispatcher/owner verification passes 12 tests. The complete call-engine child
+  passes 190 tests with zero failures and two tagged integrations excluded.
+- Root format, warnings-as-errors compilation, strict Credo, unused-dependency detection, and the
+  full umbrella suite pass with all default-lane tests green; nine tagged network integrations
+  are excluded. The umbrella suite used an isolated temporary PostgreSQL instance that was
+  stopped after the run.
+
+Next: attach the integration owner to the one-for-all agent-activation subtree and prove its
+authorization bindings end with that activation. The Jido projection blocker remains separate.

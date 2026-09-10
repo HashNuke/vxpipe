@@ -1,14 +1,15 @@
 defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.RemoteMCP.{Integration, IntegrationCatalog, IntegrationOwner}
-  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.MCP.Catalog
+  alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
+  alias Vxpipe.CallEngine.RemoteMCPFixture
 
   test "opens the scoped generation and invokes the pinned remote operation" do
     client = client!([{:ok, %{"content" => [%{"type" => "text", "text" => "found"}]}}])
     private_value = "private-runtime-sentinel"
-    {catalog, binding} = binding!(client, private_value, maximum_result_bytes: 65_536)
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(client, self(), private_value, maximum_result_bytes: 65_536)
 
     owner =
       start_supervised!(
@@ -50,7 +51,9 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
 
   test "withholds a remote response beyond the pinned result limit" do
     client = client!([{:ok, %{"content" => [String.duplicate("x", 100)]}}])
-    {catalog, binding} = binding!(client, "private", maximum_result_bytes: 32)
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(client, self(), "private", maximum_result_bytes: 32)
 
     owner =
       start_supervised!(
@@ -72,58 +75,6 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
              )
 
     assert length(invocations(client)) == 1
-  end
-
-  defp binding!(client, private_value, overrides) do
-    {:ok, remote_catalog} =
-      Catalog.new([
-        %{
-          "name" => "lookup_customer",
-          "description" => "Looks up one customer.",
-          "inputSchema" => %{
-            "type" => "object",
-            "properties" => %{"customer_id" => %{"type" => "string"}},
-            "required" => ["customer_id"],
-            "additionalProperties" => false
-          }
-        }
-      ])
-
-    defaults = [
-      integration_id: "records",
-      configuration_generation: "configuration-1",
-      credential_generation: "credential-1",
-      catalog_generation: "catalog-1",
-      catalog: remote_catalog,
-      allowed_tools: ["lookup_customer"],
-      client_config: [test_client: client, test_observer: self(), private: private_value],
-      invocation_deadline_ms: 12_000
-    ]
-
-    {:ok, integration} = Integration.new(Keyword.merge(defaults, overrides))
-
-    {:ok, integrations} =
-      IntegrationCatalog.new(
-        application: %{},
-        tenants: %{"tenant-demo" => %{"records" => integration}}
-      )
-
-    {:ok, remote} =
-      IntegrationCatalog.resolve(
-        integrations,
-        "tenant-demo",
-        "records",
-        "lookup_customer"
-      )
-
-    binding = %ToolBinding{
-      name: "customer_lookup",
-      type: :mcp,
-      action: nil,
-      remote: remote
-    }
-
-    {integrations, binding}
   end
 
   defp client!(responses) do

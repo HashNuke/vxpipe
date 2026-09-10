@@ -8,7 +8,8 @@ defmodule Vxpipe.CallEngine.TestRemoteMCPProtocolClient do
 
   @impl true
   def call_tool(client, name, arguments, timeout) do
-    Agent.get_and_update(client, fn state ->
+    client
+    |> Agent.get_and_update(fn state ->
       case state.responses do
         [response | responses] ->
           invocation = %{name: name, arguments: arguments, timeout: timeout}
@@ -20,5 +21,16 @@ defmodule Vxpipe.CallEngine.TestRemoteMCPProtocolClient do
           {{:error, :not_submitted}, state}
       end
     end)
+    |> await()
   end
+
+  defp await({:wait, observer, response}) do
+    send(observer, {:test_remote_mcp_invocation_started, self()})
+
+    receive do
+      :release_test_remote_mcp -> response
+    end
+  end
+
+  defp await(response), do: response
 end

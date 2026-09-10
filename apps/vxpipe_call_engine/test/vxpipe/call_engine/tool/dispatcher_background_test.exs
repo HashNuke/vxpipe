@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
   use ExUnit.Case, async: false
 
+  alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
+  alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.CallEngine.TestBlockingTool
   alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Context, Dispatcher}
 
@@ -90,6 +92,84 @@ defmodule Vxpipe.CallEngine.Tool.DispatcherBackgroundTest do
 
     assert {:ok, %{"invocation_id" => "tool-two", "status" => "running"}} =
              Dispatcher.submit(dispatcher, "wait_for_test", %{}, second)
+  end
+
+  test "runs a pinned remote MCP tool in the bounded background lifecycle" do
+    activation_id = "act-remote-background-#{System.unique_integer([:positive])}"
+    result = %{"content" => [%{"type" => "text", "text" => "found"}]}
+    observer = self()
+
+    client =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{
+             responses: [{:wait, observer, {:ok, result}}],
+             invocations: []
+           }
+         end}
+      )
+
+    {integrations, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+
+    owner =
+      start_supervised!(
+        {IntegrationOwner,
+         activation_id: activation_id,
+         tools: %{"customer_lookup" => binding},
+         integrations: integrations,
+         connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+         protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+      )
+
+    assert_receive {:test_remote_mcp_opened, _key, _config}
+
+    supervisor =
+      start_supervised!({BackgroundSupervisor, activation_id: activation_id, maximum_children: 1})
+
+    dispatcher =
+      start_supervised!(
+        {Dispatcher,
+         activation_id: activation_id,
+         tools: [],
+         remote_mcp: owner,
+         remote_tools: ["customer_lookup"],
+         maximum_result_bytes: 4_096,
+         maximum_background_tools: 1,
+         background_tool_timeout_ms: 1_000,
+         background_supervisor: supervisor,
+         completion_target: self()}
+      )
+
+    call_context = context("request-remote", "command-remote")
+
+    assert :ok =
+             Dispatcher.register_tool_call(dispatcher, call_context.agent_request_id, %{
+               tool_call_id: "tool-remote",
+               tool_name: "customer_lookup",
+               arguments: %{"customer_id" => "customer-42"}
+             })
+
+    assert {:ok, %{"invocation_id" => "tool-remote", "status" => "running"}} =
+             Dispatcher.submit(
+               dispatcher,
+               "customer_lookup",
+               %{"customer_id" => "customer-42"},
+               call_context
+             )
+
+    assert_receive {:test_remote_mcp_invocation_started, worker}
+    assert {:ok, nil} = Dispatcher.variable_projection(dispatcher)
+    send(worker, :release_test_remote_mcp)
+
+    assert_receive {:vxpipe_background_tool_finished, ^dispatcher, invocation}, 1_000
+    assert invocation.call.id == "tool-remote"
+    assert invocation.call.name == "customer_lookup"
+    assert invocation.outcome == {:ok, result}
+
+    assert [remote_invocation] = Agent.get(client, & &1.invocations)
+    assert remote_invocation.name == "lookup_customer"
+    assert remote_invocation.arguments == %{"customer_id" => "customer-42"}
   end
 
   test "reports an accepted timeout as unknown without resubmitting it" do

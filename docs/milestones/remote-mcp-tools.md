@@ -130,6 +130,13 @@ definition boundary has started or its specification has been reviewed.
   excessive or ambiguous outcomes without retry. Its inspectable state retains no private client
   configuration. Focused tests pass 3 tests and the call-engine child passes 188 tests with two
   tagged integrations excluded. The owner is not yet wired into agent activation or Jido.
+- [x] The tool executor and dispatcher accept an explicit activation-local remote owner plus a
+  closed set of local aliases. Every remote alias is background-only, participates in the same
+  admission/timeout/completion lifecycle as a background host tool, and cannot collide with a
+  host tool. A controlled invocation proves the dispatcher remains responsive while the remote
+  request waits, completion retains the local alias, and only the pinned remote operation reaches
+  the protocol client. This runtime path is not yet attached to the agent-activation supervisor
+  or exposed through Jido's model-visible definitions.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

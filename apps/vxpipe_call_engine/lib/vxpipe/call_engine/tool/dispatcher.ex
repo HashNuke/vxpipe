@@ -77,7 +77,9 @@ defmodule Vxpipe.CallEngine.Tool.Dispatcher do
     with {:ok, executor} <-
            Executor.new(
              Keyword.fetch!(options, :tools),
-             Keyword.fetch!(options, :maximum_result_bytes)
+             Keyword.fetch!(options, :maximum_result_bytes),
+             remote_mcp: Keyword.get(options, :remote_mcp),
+             remote_tools: Keyword.get(options, :remote_tools, [])
            ) do
       {:ok,
        %State{

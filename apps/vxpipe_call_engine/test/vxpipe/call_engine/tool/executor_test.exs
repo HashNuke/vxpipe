@@ -56,6 +56,35 @@ defmodule Vxpipe.CallEngine.Tool.ExecutorTest do
            }
   end
 
+  test "keeps remote aliases background-only and rejects ambiguous configuration" do
+    assert {:ok, registry} =
+             Executor.new([], 4_096,
+               remote_mcp: self(),
+               remote_tools: ["customer_lookup"]
+             )
+
+    assert Executor.background?(registry, "customer_lookup")
+    assert Executor.definitions(registry) == []
+
+    assert {:error, :invalid_configuration} =
+             Executor.new([], 4_096, remote_tools: ["customer_lookup"])
+
+    assert {:error, :invalid_configuration} =
+             Executor.new([], 4_096, remote_mcp: self())
+
+    assert {:error, :invalid_configuration} =
+             Executor.new([], 4_096,
+               remote_mcp: self(),
+               remote_tools: ["customer_lookup", "customer_lookup"]
+             )
+
+    assert {:error, :invalid_configuration} =
+             Executor.new([CurrentTime], 4_096,
+               remote_mcp: self(),
+               remote_tools: ["get_current_time"]
+             )
+  end
+
   defp context do
     %Context{
       tenant_id: "tenant-test",
