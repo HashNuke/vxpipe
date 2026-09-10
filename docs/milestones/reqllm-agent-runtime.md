@@ -187,7 +187,7 @@ process or dependency is used.
   oversized input/result/text, submission failure, worker failure, and provider failure
   produce the specified bounded model-error or terminal outcome with no unauthorized
   execution, public internal explanation, or retry.
-- [ ] Multiple tool calls are submitted and acknowledged in provider-required model order.
+- [x] Multiple tool calls are submitted and acknowledged in provider-required model order.
   Partial submission preserves already-started work; a missing or duplicate acknowledgement
   cannot advance the model loop.
 - [ ] Cancelling an active streamed request closes it, suppresses later deltas, discards only

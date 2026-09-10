@@ -1402,3 +1402,17 @@ the existing sentence accumulator's streaming boundary. It failed without any te
 the fixture delta and matching aggregate response to include that boundary made the intended
 integration scenario accurate; no production behavior changed. The focused room file passes 3
 tests, and the complete Call Engine suite passes 217 tests with 1 tagged integration exclusion.
+
+## Acceptance checkpoint: ordered multi-tool acknowledgement
+
+Added a deterministic Agent Runtime round in which the provider returns two valid tool calls. The
+single session executor receives both exact private bindings and invocation IDs, and the next model
+request contains two correlated running results in provider order. The already-covered mixed batch
+retains its accepted first worker when a later sibling is rejected. A separate duplicate-call-ID
+case proves the entire batch is rejected before submission, so duplicate provider acknowledgements
+cannot enter conversation state. Because each normalized submission outcome is converted into one
+matched result by the runtime, a missing acknowledgement cannot advance the next model round.
+
+Both new cases passed immediately against the existing ordered batch implementation; this was an
+acceptance-evidence checkpoint with no production behavior change. The focused tool-round and
+request-bounds run passes 8 tests.

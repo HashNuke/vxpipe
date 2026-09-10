@@ -21,6 +21,23 @@ defmodule Vxpipe.AgentRuntime.RequestBoundsTest do
     refute_receive {:tool_submitted, _executor, _identity, _arguments, _context, _call_id}
   end
 
+  test "rejects duplicate provider call IDs before submitting any work" do
+    session =
+      start_session(
+        tools: [tool_descriptor()],
+        executor: Vxpipe.AgentRuntime.TestExecutor
+      )
+
+    caller = request(session, "Check both accounts", "req_duplicate_tool_call")
+    release_pending_context("req_duplicate_tool_call")
+    assert_receive {:model_provider_process, provider, _request}
+
+    reply_with_tools(provider, [tool_call("duplicate"), tool_call("duplicate")])
+
+    assert {:ok, %Result{status: :failed, reason: :duplicate_tool_call}} = Task.await(caller)
+    refute_receive {:tool_submitted, _executor, _identity, _arguments, _context, _call_id}
+  end
+
   test "rejects mixed output that exceeds the accumulated bound before tool submission" do
     session =
       start_session(

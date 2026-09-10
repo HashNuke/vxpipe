@@ -79,6 +79,52 @@ defmodule Vxpipe.AgentRuntime.ToolRoundTest do
     assert {:ok, %Result{status: :completed}} = Task.await(caller)
   end
 
+  test "commits multiple accepted running results in provider order" do
+    session =
+      start_session([
+        tool_descriptor("check_balance", :balance, :blocking),
+        tool_descriptor("check_credit", :credit, :blocking)
+      ])
+
+    caller = request(session, "Check both", "req_tool_multiple")
+    release_pending_context("req_tool_multiple", [])
+
+    assert_receive {:model_provider_process, provider, _request}
+
+    reply_with_tools(provider, "I will check both. ", [
+      tool_call("tool_call_balance", "check_balance"),
+      tool_call("tool_call_credit", "check_credit")
+    ])
+
+    assert_submission(:balance, "tool_call_balance", "req_tool_multiple")
+    assert_submission(:credit, "tool_call_credit", "req_tool_multiple")
+
+    pending_invocations = [
+      pending_invocation("tool_call_balance", "check_balance", :blocking),
+      pending_invocation("tool_call_credit", "check_credit", :blocking)
+    ]
+
+    release_pending_context("req_tool_multiple", pending_invocations)
+
+    assert_receive {:model_provider_process, second_provider, second_request}
+    assert second_request.tools == []
+
+    result_messages = Enum.filter(second_request.messages, &(&1.role == :tool))
+
+    assert Enum.map(result_messages, &{&1.tool_call_id, &1.name}) == [
+             {"tool_call_balance", "check_balance"},
+             {"tool_call_credit", "check_credit"}
+           ]
+
+    assert Enum.map(result_messages, &JSON.decode!(&1.content)) == [
+             %{"invocation_id" => "tool_call_balance", "status" => "running"},
+             %{"invocation_id" => "tool_call_credit", "status" => "running"}
+           ]
+
+    reply_with_text(second_provider, "Both checks are running.")
+    assert {:ok, %Result{status: :completed}} = Task.await(caller)
+  end
+
   test "keeps tools available after an explicitly non-blocking submission" do
     session = start_session([tool_descriptor("check_balance", :balance, :non_blocking)])
     caller = request(session, "Check it", "req_tool_3")
