@@ -226,6 +226,12 @@ Provider-returned reasons and exceptions collapse to a bounded `provider_unavail
 A later request in the same Session receives the one committed tool-call/running pair plus the
 current pending projection; the invocation is not resubmitted or duplicated.
 
+Session cancellation now distinguishes provisional model work from an in-flight submission.
+It terminates provisional provider work immediately and leaves the Session usable. Once a
+submission critical section begins, cancellation waits until the complete running/rejection
+exchange commits, then terminates only the model request task. This closes the acceptance race:
+accepted external work cannot be erased by speech/model cancellation.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

@@ -22,4 +22,9 @@ defmodule Vxpipe.AgentRuntime.Result do
   def failed(reason, correlation) when is_atom(reason) and is_map(correlation) do
     %__MODULE__{status: :failed, reason: reason, correlation: correlation}
   end
+
+  @spec cancelled(map()) :: t()
+  def cancelled(correlation) when is_map(correlation) do
+    %__MODULE__{status: :cancelled, correlation: correlation}
+  end
 end

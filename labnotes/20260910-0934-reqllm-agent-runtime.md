@@ -282,3 +282,37 @@ Verification:
   absent from this shell.
 - Cooperative request cancellation, remaining bounds, streaming, ReqLLM projection, and Call
   Engine adoption remain pending.
+
+## Implementation checkpoint 2e: cancellation commit barrier
+
+Added two cancellation scenarios first; both failed because Session exposed no cancellation
+operation. The first requires cancellation to terminate provisional provider work, return a
+cancelled result to the admitted request, discard that uncommitted user turn, and leave the
+same Session usable.
+
+The second targets the submission race. The test executor announces entry and deliberately
+blocks before returning acceptance. Session cancellation must remain pending during that
+interval. `RequestRunner` now enters a Session-owned submission critical section only after all
+call IDs, names, and arguments validate and before invoking the host. When the host finishes,
+the runner builds the complete ordered results and asks Session to commit them. If cancellation
+is waiting, Session stores that conversation first and then terminates the request task without
+starting the acknowledgement provider round.
+
+This is not inline tool execution: the guarded operation is only the host's submit/admission
+callback. Accepted business work is already in a separate host-owned worker. Cancellation kills
+the Agent Runtime request/provider work, not that worker. A later request in the test sees the
+single committed running exchange, proving the race cannot create accepted-but-forgotten work.
+
+Added `Result.cancelled/1`, a payload-safe `request_cancelled` event, and an idle cancellation
+error. Cancellation callers are replied only after the barrier is safe. Session shutdown still
+owns hard teardown of its request subtree separately.
+
+Verification:
+
+- Focused cancellation suite: 2 tests, 0 failures after the expected 2-test red run.
+- Complete `vxpipe_agent_runtime` suite: 21 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell has no local PostgreSQL
+  password.
+- Remaining request/response/round deadlines and sizes, streaming, production ReqLLM mapping,
+  Call Engine worker/admission migration, and private completion consumption remain pending.

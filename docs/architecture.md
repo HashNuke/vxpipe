@@ -157,6 +157,11 @@ combine it with the current engine-owned pending projection; a provider failure 
 resubmission or erase accepted work. Call Engine adoption is still required before this affects
 live calls.
 
+Session cancellation also respects that barrier. It may terminate provisional provider work
+immediately, but cancellation arriving during host submission is deferred until the complete
+running/rejection exchange commits. The request task is then terminated without touching the
+Call Engine-owned invocation worker. This package behavior still awaits Call Engine migration.
+
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current

@@ -60,9 +60,13 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
 
   def new(_options), do: {:error, :invalid_configuration}
 
-  @spec runner_options(t(), (Vxpipe.AgentRuntime.Conversation.t() -> :ok | {:error, atom()})) ::
-          map()
-  def runner_options(%__MODULE__{} = config, commit) when is_function(commit, 1) do
+  @spec runner_options(
+          t(),
+          (-> :ok | {:error, atom()}),
+          (Vxpipe.AgentRuntime.Conversation.t() -> :ok | {:error, atom()})
+        ) :: map()
+  def runner_options(%__MODULE__{} = config, begin_submission, commit)
+      when is_function(begin_submission, 0) and is_function(commit, 1) do
     %{
       model_provider: config.model_provider,
       model: config.model,
@@ -72,6 +76,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       pending_context_source: config.pending_context_source,
       pending_context_timeout_ms: config.pending_context_timeout_ms,
       maximum_pending_invocations: config.maximum_pending_invocations,
+      begin_submission: begin_submission,
       commit: commit
     }
   end

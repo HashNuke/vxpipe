@@ -94,7 +94,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
 
   defp submit_calls(calls, request, config) do
     with :ok <- validate_unique_call_ids(calls),
-         {:ok, resolved_calls} <- resolve_calls(calls, config.tool_registry) do
+         {:ok, resolved_calls} <- resolve_calls(calls, config.tool_registry),
+         :ok <- config.begin_submission.() do
       submit_resolved_calls(resolved_calls, request, config)
     end
   end

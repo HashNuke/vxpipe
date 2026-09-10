@@ -20,7 +20,9 @@ defmodule Vxpipe.AgentRuntime.Session do
     :active_token,
     :caller,
     :correlation,
-    status: :idle
+    status: :idle,
+    submission_phase: :idle,
+    cancel_callers: []
   ]
 
   @type server :: GenServer.server()
@@ -35,6 +37,9 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   @spec status(server()) :: :idle | :busy
   def status(server), do: GenServer.call(server, :status)
+
+  @spec cancel(server(), timeout()) :: :ok | {:error, :idle}
+  def cancel(server, timeout \\ 5_000), do: GenServer.call(server, :cancel, timeout)
 
   @impl true
   def init(options) do
@@ -58,11 +63,16 @@ defmodule Vxpipe.AgentRuntime.Session do
       session = self()
       token = make_ref()
 
+      begin_submission = fn ->
+        begin_submission(session, token, state.configuration.commit_timeout_ms)
+      end
+
       commit = fn conversation ->
         commit_conversation(session, token, conversation, state.configuration.commit_timeout_ms)
       end
 
-      runner_options = SessionConfiguration.runner_options(state.configuration, commit)
+      runner_options =
+        SessionConfiguration.runner_options(state.configuration, begin_submission, commit)
 
       task =
         Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
@@ -89,13 +99,42 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   def handle_call(:status, _caller, state), do: {:reply, state.status, state}
 
+  def handle_call(:cancel, _caller, %{status: :idle} = state),
+    do: {:reply, {:error, :idle}, state}
+
+  def handle_call(:cancel, caller, %{submission_phase: :submitting} = state) do
+    {:noreply, %{state | cancel_callers: [caller | state.cancel_callers]}}
+  end
+
+  def handle_call(:cancel, _caller, state) do
+    {:reply, :ok, cancel_active_request(state)}
+  end
+
   @impl true
+  def handle_info(
+        {:agent_runtime_begin_submission, worker, token},
+        %{active_task: %{pid: worker}, active_token: token, submission_phase: :idle} = state
+      ) do
+    send(worker, {:agent_runtime_submission_begun, token})
+    {:noreply, %{state | submission_phase: :submitting}}
+  end
+
   def handle_info(
         {:agent_runtime_commit, worker, token, %Conversation{} = conversation},
         %{active_task: %{pid: worker}, active_token: token} = state
       ) do
-    send(worker, {:agent_runtime_committed, token})
-    {:noreply, %{state | conversation: conversation}}
+    state = %{state | conversation: conversation, submission_phase: :idle}
+
+    case state.cancel_callers do
+      [] ->
+        send(worker, {:agent_runtime_committed, token})
+        {:noreply, state}
+
+      cancel_callers ->
+        state = cancel_active_request(state)
+        reply_cancel_callers(cancel_callers)
+        {:noreply, state}
+    end
   end
 
   def handle_info({reference, run_result}, %{active_task: %{ref: reference}} = state) do
@@ -110,15 +149,23 @@ defmodule Vxpipe.AgentRuntime.Session do
         {:DOWN, reference, :process, _pid, _reason},
         %{active_task: %{ref: reference}} = state
       ) do
-    result = Result.failed(:provider_unavailable, state.correlation)
+    if state.cancel_callers == [] do
+      result = Result.failed(:provider_unavailable, state.correlation)
 
-    emit(
-      state.configuration.event_destination,
-      Event.new(:request_failed, state.correlation)
-    )
+      emit(
+        state.configuration.event_destination,
+        Event.new(:request_failed, state.correlation)
+      )
 
-    GenServer.reply(state.caller, {:ok, result})
-    {:noreply, clear_request(state)}
+      GenServer.reply(state.caller, {:ok, result})
+      {:noreply, clear_request(state)}
+    else
+      result = Result.cancelled(state.correlation)
+      emit_cancelled(state)
+      GenServer.reply(state.caller, {:ok, result})
+      reply_cancel_callers(state.cancel_callers)
+      {:noreply, clear_request(state)}
+    end
   end
 
   def handle_info(_message, state), do: {:noreply, state}
@@ -148,8 +195,20 @@ defmodule Vxpipe.AgentRuntime.Session do
         active_task: nil,
         active_token: nil,
         caller: nil,
-        correlation: nil
+        correlation: nil,
+        submission_phase: :idle,
+        cancel_callers: []
     }
+  end
+
+  defp begin_submission(session, token, timeout_ms) do
+    send(session, {:agent_runtime_begin_submission, self(), token})
+
+    receive do
+      {:agent_runtime_submission_begun, ^token} -> :ok
+    after
+      timeout_ms -> {:error, :commit_unavailable}
+    end
   end
 
   defp commit_conversation(session, token, conversation, timeout_ms) do
@@ -160,6 +219,27 @@ defmodule Vxpipe.AgentRuntime.Session do
     after
       timeout_ms -> {:error, :commit_unavailable}
     end
+  end
+
+  defp cancel_active_request(state) do
+    _ = Task.shutdown(state.active_task, :brutal_kill)
+    Process.demonitor(state.active_task.ref, [:flush])
+
+    result = Result.cancelled(state.correlation)
+    emit_cancelled(state)
+    GenServer.reply(state.caller, {:ok, result})
+    clear_request(state)
+  end
+
+  defp emit_cancelled(state) do
+    emit(
+      state.configuration.event_destination,
+      Event.new(:request_cancelled, state.correlation)
+    )
+  end
+
+  defp reply_cancel_callers(callers) do
+    Enum.each(callers, &GenServer.reply(&1, :ok))
   end
 
   defp emit(destination, event), do: send(destination, {:agent_runtime_event, event})

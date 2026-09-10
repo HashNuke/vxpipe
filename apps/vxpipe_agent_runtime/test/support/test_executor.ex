@@ -12,6 +12,15 @@ defmodule Vxpipe.AgentRuntime.TestExecutor do
       invocation_id
     })
 
-    binding.submission
+    case binding.submission do
+      {:await_release, submission} -> await_release(submission)
+      submission -> submission
+    end
+  end
+
+  defp await_release(submission) do
+    receive do
+      :release_submission -> submission
+    end
   end
 end

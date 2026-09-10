@@ -101,8 +101,8 @@ process or dependency is used.
    model order, mixed text/tool output, commit barriers, bounded failure, and cancellation.
    Normalized response/tool-call values, the exact private registry, accepted/rejected ordered
    submission batches, blocking/non-blocking acknowledgement rounds, and accepted-work
-   recovery after provider failure are complete. Remaining failure bounds, streaming, and
-   cancellation remain pending.
+   recovery after provider failure or cancellation are complete. Remaining bounds, streaming,
+   and production adapter behavior remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -274,6 +274,17 @@ Implementation evidence:
   recovery test and full package suite are green at 19 tests, 0 failures. Umbrella format,
   warnings-as-errors, strict Credo, and unused-lock checks pass; umbrella tests remain blocked
   before execution by absent PostgreSQL authentication.
+- Checkpoint 2e adds explicit Session cancellation without cancelling an accepted tool worker.
+  Provisional provider work is terminated immediately and its staged input is discarded. A
+  Session-owned submission barrier defers cancellation while the host submission is in flight;
+  after acceptance/rejection, the complete matched exchange commits before the request task is
+  terminated. The Session emits a bounded cancelled result/event and remains usable.
+- Checkpoint 2e red evidence reported 2 focused failures because `Session.cancel/1` did not
+  exist. Tests prove cancellation terminates active provider work, drops an uncommitted user
+  turn, preserves an accepted running exchange across the submission race, and admits a clean
+  later request. Full package suite: 21 tests, 0 failures. Umbrella format,
+  warnings-as-errors, strict Credo, and unused-lock checks pass; umbrella tests stop before
+  execution because the local PostgreSQL password is absent.
 
 ## Specification review
 
