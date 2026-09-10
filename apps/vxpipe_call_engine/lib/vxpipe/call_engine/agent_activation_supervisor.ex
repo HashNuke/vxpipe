@@ -3,11 +3,19 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
 
   use Supervisor
 
-  alias Vxpipe.CallEngine.{Agent, AgentCoordinator, JidoAgentRuntime}
-  alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
-  alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Dispatcher}
+  alias Vxpipe.CallEngine.AgentActivation.{JidoGraph, RuntimeGraph}
 
-  @roles [:agent_server, :background_tools, :coordinator, :remote_mcp, :tool_dispatcher]
+  @roles [
+    :agent_server,
+    :background_tools,
+    :coordinator,
+    :invocation_registry,
+    :invocation_supervisor,
+    :remote_mcp,
+    :request_supervisor,
+    :session,
+    :tool_dispatcher
+  ]
 
   def start_link(options) do
     activation_id = Keyword.fetch!(options, :activation_id)
@@ -45,123 +53,27 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
 
   @impl true
   def init(options) do
-    activation_id = Keyword.fetch!(options, :activation_id)
-    agent_server = via(activation_id, :agent_server)
-    background_tools = via(activation_id, :background_tools)
-    coordinator = via(activation_id, :coordinator)
-    tool_dispatcher = via(activation_id, :tool_dispatcher)
-    {remote_mcp, remote_tools, remote_mcp_children} = remote_mcp_runtime(activation_id, options)
-
-    background_tools_child =
-      Supervisor.child_spec(
-        {BackgroundSupervisor,
-         activation_id: activation_id,
-         maximum_children: Keyword.get(options, :maximum_background_tools, 4),
-         name: background_tools},
-        id: :background_tools,
-        restart: :permanent
+    with {:ok, children} <- graph_children(options) do
+      Supervisor.init(
+        children,
+        strategy: :one_for_all,
+        max_restarts: 1,
+        max_seconds: 5
       )
-
-    dispatcher_child =
-      Supervisor.child_spec(
-        {Dispatcher,
-         activation_id: activation_id,
-         background_supervisor: background_tools,
-         background_tool_timeout_ms: Keyword.get(options, :background_tool_timeout_ms, 30_000),
-         completion_target: coordinator,
-         name: tool_dispatcher,
-         remote_mcp: remote_mcp,
-         remote_tools: Map.keys(remote_tools),
-         tools: Keyword.fetch!(options, :tools),
-         variable_binding: Keyword.get(options, :variable_binding),
-         maximum_background_tools: Keyword.get(options, :maximum_background_tools, 4),
-         maximum_result_bytes: Keyword.fetch!(options, :maximum_tool_result_bytes)},
-        id: :tool_dispatcher,
-        restart: :permanent
-      )
-
-    agent_server_child =
-      Supervisor.child_spec(
-        {Jido.AgentServer,
-         agent: Agent,
-         id: activation_id,
-         jido: Vxpipe.CallEngine.Jido,
-         name: agent_server,
-         register_global: false},
-        id: :agent_server,
-        restart: :permanent
-      )
-
-    coordinator_child =
-      Supervisor.child_spec(
-        {AgentCoordinator,
-         activation_id: activation_id,
-         agent_participant_id: Keyword.fetch!(options, :agent_participant_id),
-         agent_server: agent_server,
-         agent_runtime: JidoAgentRuntime,
-         owner: Keyword.fetch!(options, :owner),
-         provider: Keyword.get(options, :provider, :other),
-         tool_dispatcher: tool_dispatcher,
-         maximum_background_completions: Keyword.get(options, :maximum_background_tools, 4),
-         maximum_completed_requests: Keyword.fetch!(options, :maximum_completed_requests),
-         maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
-         maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
-         request_options: Keyword.fetch!(options, :request_options),
-         request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
-         agent_configuration: [
-           system_prompt: Keyword.fetch!(options, :system_prompt),
-           tools: Keyword.fetch!(options, :tools)
-         ],
-         name: coordinator},
-        id: :coordinator,
-        restart: :permanent
-      )
-
-    children =
-      [background_tools_child] ++
-        remote_mcp_children ++ [dispatcher_child, agent_server_child, coordinator_child]
-
-    Supervisor.init(
-      children,
-      strategy: :one_for_all,
-      max_restarts: 1,
-      max_seconds: 5
-    )
-  end
-
-  defp remote_mcp_runtime(activation_id, options) do
-    tools = Keyword.get(options, :remote_tools, %{})
-
-    if map_size(tools) == 0 do
-      {nil, tools, []}
     else
-      owner = via(activation_id, :remote_mcp)
-
-      owner_options =
-        [
-          activation_id: activation_id,
-          integrations: Keyword.get(options, :mcp_integrations),
-          name: owner,
-          tools: tools
-        ]
-        |> maybe_put(
-          :connection_provider,
-          Keyword.fetch(options, :remote_mcp_connection_provider)
-        )
-        |> maybe_put(:protocol, Keyword.fetch(options, :remote_mcp_protocol))
-
-      child =
-        Supervisor.child_spec({IntegrationOwner, owner_options},
-          id: :remote_mcp,
-          restart: :permanent
-        )
-
-      {owner, tools, [child]}
+      {:error, reason} -> {:stop, reason}
     end
   end
 
-  defp maybe_put(options, key, {:ok, value}), do: Keyword.put(options, key, value)
-  defp maybe_put(options, _key, :error), do: options
+  defp graph_children(options) do
+    case Keyword.get(options, :runtime, :jido) do
+      :jido -> {:ok, JidoGraph.children(options)}
+      :agent_runtime -> RuntimeGraph.children(options)
+      _invalid -> {:error, :invalid_configuration}
+    end
+  rescue
+    _exception -> {:error, :invalid_configuration}
+  end
 
   defp via(activation_id, role) do
     {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, registry_key(activation_id, role)}}

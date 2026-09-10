@@ -112,6 +112,15 @@ blocking work produces the deterministic hold and then retries. If the continuat
 committed a nested tool exchange, Call Engine acknowledges the original completion instead of
 replaying it; the nested worker remains authoritative and continues independently.
 
+An explicit Agent Runtime activation now owns the complete process graph required by that
+coordinator: an activation-local request supervisor, the coordinator, an invocation supervisor,
+the authoritative invocation registry, and one Session. The graph retains the participant
+activation's `:one_for_all` strategy and single-restart budget, so replacement cannot retain a
+Session, invocation registry, or worker from the failed activation generation. The coordinator is
+started first and the registry and Session resolve its registered reference to the current PID at
+their own startup boundaries. Plan startup still selects the temporary Jido compatibility graph;
+live selection and parity are the next migration step.
+
 For every submitted tool, the single correlated running acknowledgement stays in that
 committed conversation and is therefore supplied with every later model request while the
 invocation remains pending. This is retained context, not polling: the runtime does not append

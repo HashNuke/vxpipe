@@ -236,8 +236,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
          invocation_supervisor when not is_nil(invocation_supervisor) <-
            Keyword.get(options, :invocation_supervisor),
          true <- server_available?(invocation_supervisor),
-         completion_target when is_pid(completion_target) <-
-           Keyword.get(options, :completion_target),
+         {:ok, completion_target} <-
+           server_pid(Keyword.get(options, :completion_target)),
          maximum_invocations when is_integer(maximum_invocations) and maximum_invocations > 0 <-
            Keyword.get(options, :maximum_invocations),
          maximum_consumed when is_integer(maximum_consumed) and maximum_consumed > 0 <-
@@ -292,5 +292,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     is_pid(GenServer.whereis(server))
   rescue
     _exception -> false
+  end
+
+  defp server_pid(server) do
+    case GenServer.whereis(server) do
+      pid when is_pid(pid) -> {:ok, pid}
+      _missing -> {:error, :unavailable}
+    end
+  rescue
+    _exception -> {:error, :unavailable}
   end
 end

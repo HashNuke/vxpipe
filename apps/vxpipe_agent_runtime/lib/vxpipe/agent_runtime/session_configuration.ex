@@ -52,8 +52,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          {:ok, commit_timeout_ms} <- positive(Keyword.get(options, :commit_timeout_ms, 1_000)),
          {:ok, request_timeout_ms} <-
            positive(Keyword.get(options, :request_timeout_ms, 30_000)),
-         event_destination when is_pid(event_destination) <-
-           Keyword.get(options, :event_destination) do
+         {:ok, event_destination} <-
+           resolve_event_destination(Keyword.get(options, :event_destination)) do
       {:ok,
        %__MODULE__{
          instructions: instructions,
@@ -165,6 +165,15 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
 
   defp validate_pending_context_source(_context_source),
     do: {:error, :invalid_pending_context_source}
+
+  defp resolve_event_destination(destination) do
+    case GenServer.whereis(destination) do
+      pid when is_pid(pid) -> {:ok, pid}
+      _missing -> {:error, :invalid_event_destination}
+    end
+  rescue
+    _exception -> {:error, :invalid_event_destination}
+  end
 
   defp positive(value) when is_integer(value) and value > 0, do: {:ok, value}
   defp positive(_value), do: {:error, :invalid_limit}

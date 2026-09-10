@@ -2,7 +2,8 @@
 
 Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
 the production ReqLLM boundary with tagged-provider interoperability are implemented. Call Engine
-migration and final evidence remain pending.
+migration now includes an activation-owned runtime graph; live call selection and final evidence
+remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -144,8 +145,13 @@ process or dependency is used.
    generation, drops queued caller commands, reconciles exact completed turns, and leaves accepted
    tool workers running. It also settles interrupted private completions from durable Session state:
    uncommitted observations are released and deferred across replacement admission, while a
-   completion that committed a nested tool is acknowledged without replay. Activation selection
-   remains. Preserve completion and interruption behavior.
+   completion that committed a nested tool is acknowledged without replay. An explicit
+   `:agent_runtime` activation now owns one request supervisor, coordinator, invocation supervisor,
+   invocation registry, and Session under the existing one-for-all restart budget. Its deterministic
+   activation test reaches the new provider boundary and proves complete graph replacement after a
+   Session failure. Plan startup still selects the temporary Jido compatibility graph; switching
+   that live selection and preserving room behavior are next. Preserve completion and interruption
+   behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -498,6 +504,24 @@ Implementation evidence:
   unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
   Activation selection remains pending.
+- Checkpoint 4n adds the activation-owned Agent Runtime process graph without changing plan startup
+  or room contracts. A new activation test was written first and failed in the old Jido-only graph
+  at its missing `request_options`. The explicit `:agent_runtime` graph then projected the selected
+  prompt and host descriptor through the new Session/provider path and emitted output through the
+  existing capability contract.
+- The graph contains one activation-local request `Task.Supervisor`, coordinator, invocation
+  `DynamicSupervisor`, authoritative invocation registry, and Agent Runtime Session. The coordinator
+  starts before the registry and Session; those children resolve its registered reference to the
+  current PID during startup. Killing the Session replaces the complete graph once, and a second
+  Session failure exhausts the unchanged activation restart budget. `AgentActivationSupervisor`
+  now selects topology only; legacy Jido child construction and new runtime child construction live
+  in separate graph modules.
+- Focused activation verification passes 4 tests. The complete Agent Runtime suite passes 41 tests
+  with 1 integration exclusion, and the complete Call Engine suite passes 239 tests with 2
+  integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+  unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected. Plan
+  startup and room authority do not select this graph yet.
 
 ## Specification review
 

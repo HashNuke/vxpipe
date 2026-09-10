@@ -886,3 +886,33 @@ with 2 integration exclusions. Umbrella format, warnings-as-errors compilation, 
 unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
 authentication needs a password absent from this shell; no credential source was inspected.
 Activation selection is the next migration step.
+
+## Implementation checkpoint 4n: activation-owned runtime graph
+
+Added an activation-boundary test before implementation. It requested the Agent Runtime topology,
+submitted a normal caller command to its coordinator, checked the pinned system instruction and
+host tool projected to the deterministic provider, and exercised the existing capability text
+contract. The red run failed in the old Jido-only graph because it tried to fetch the absent legacy
+`request_options` value.
+
+The explicit `:agent_runtime` topology now starts an activation-local request `Task.Supervisor`,
+the migration coordinator, an invocation `DynamicSupervisor`, the authoritative invocation
+registry, and one `Vxpipe.AgentRuntime.Session`. The registry and Session resolve the already-started
+coordinator's registered reference to its current PID during their startup; the coordinator refers
+to its later children by registered name. This breaks the startup dependency cycle without a
+synchronous process cycle at runtime.
+
+The activation keeps its existing `:one_for_all` policy and one-restart budget. The test kills the
+Session and observes every graph child stop and be replaced; killing the replacement Session then
+terminates the activation. No tool can survive as stale state from an earlier graph generation.
+`AgentActivationSupervisor` now selects a graph and owns naming/restart policy only. The legacy Jido
+and new Agent Runtime child specifications are isolated in separate modules rather than enlarging
+the supervisor.
+
+Focused activation verification passes 4 tests. The complete Agent Runtime suite passes 41 tests
+with 1 integration exclusion, and the complete Call Engine suite passes 239 tests with 2 integration
+exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
+pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM authentication needs
+a password absent from this shell; no credential source was inspected. Plan startup is deliberately
+unchanged in this checkpoint, so live rooms still select the compatibility graph; that selection
+and room-level parity are next.
