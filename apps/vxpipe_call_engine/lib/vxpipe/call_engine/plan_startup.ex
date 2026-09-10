@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
+  alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -136,10 +137,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp supported_tools(plan) do
     Enum.reduce_while(plan.participants, :ok, fn {participant_key, participant}, :ok ->
       case Enum.find(participant.tools, fn {_name, binding} ->
-             not match?(
-               %ResolvedCallPlan.ToolBinding{type: :host, action: action} when is_atom(action),
-               binding
-             )
+             not supported_tool_binding?(binding)
            end) do
         nil ->
           {:cont, :ok}
@@ -148,11 +146,23 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           {:halt,
            unsupported(
              ["participants", participant_key, "tools", name],
-             "only resolved host tools are supported"
+             "must be a resolved host or remote MCP tool"
            )}
       end
     end)
   end
+
+  defp supported_tool_binding?(%ResolvedCallPlan.ToolBinding{type: :host, action: action})
+       when is_atom(action),
+       do: true
+
+  defp supported_tool_binding?(%ResolvedCallPlan.ToolBinding{
+         type: :mcp,
+         remote: %ResolvedTool{}
+       }),
+       do: true
+
+  defp supported_tool_binding?(_binding), do: false
 
   defp participant_command(plan, participant) do
     case JoinParticipant.new(

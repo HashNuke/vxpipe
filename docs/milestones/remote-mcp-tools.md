@@ -2,8 +2,9 @@
 
 Status: implementation in progress. Protocol, configuration, catalog, binding, security and
 activation foundations are implemented. The completed
-[ReqLLM agent runtime](reqllm-agent-runtime.md) now projects exact remote descriptors and delegates
-their private handlers; live room startup and end-to-end conversation remain.
+[ReqLLM agent runtime](reqllm-agent-runtime.md) now projects exact remote descriptors, delegates
+their private handlers, and runs the deterministic non-blocking live-room conversation. Remaining
+acceptance covers mixed tools, visibility/archive evidence, failure matrix, and churn.
 Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its
 background-tool and tenant admission prerequisites; [MCP client integration and
 conformance](mcp-client-library.md); [ReqLLM agent runtime](reqllm-agent-runtime.md).
@@ -264,8 +265,23 @@ definition boundary has started or its specification has been reviewed.
   tagged integration exclusion. All 495 default umbrella tests pass with ten tagged integration
   exclusions. Plan/room startup still needs to supply the pinned catalog before this is a live-call
   path.
-- [ ] Expose and execute the pinned runtime binding through the adopted
+- [x] Expose and execute the pinned runtime binding through the adopted
   `Vxpipe.AgentRuntime` loop.
+
+- [x] Public call startup now obtains one authoritative integration snapshot from its configured
+  catalog store, validates each remote generation during plan startup, and passes it privately into
+  the activation. A new full-room test compiles a tenant MCP alias, starts and attaches a caller,
+  submits the exact remote operation in the common worker, completes the running acknowledgement,
+  admits an unrelated caller turn because the binding is explicitly `non_blocking`, preserves the
+  same pending invocation in that request, and consumes the terminal result through one private
+  continuation. A second test replaces the catalog after plan compilation and proves startup fails
+  at the exact participant/tool path without creating a room or falling back. The first red run
+  failed at the former host-only plan gate; the stale-generation test first received an unrelated
+  model-profile error until startup preserved the tool-specific failure. The focused live tests and
+  complete 227-test Call Engine suite pass with one tagged integration exclusion. Root formatting,
+  warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. A deterministic
+  umbrella run against isolated PostgreSQL 18 passes all 497 default-lane tests with ten tagged
+  integration exclusions.
 
 ## Specification review
 
@@ -280,4 +296,5 @@ in model projection. The 2026-09-10 runtime decision moved that generic loop wor
 own intermediate ReqLLM milestone; this slice consumes the resulting interface. The ExMCP
 library checkpoint remains independent. No protocol/security or model-schema requirement
 was waived.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+The implementation evidence above is current; milestone-wide completion and remaining runtime
+checks remain unchecked.

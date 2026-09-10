@@ -658,3 +658,43 @@ temporary trust-authenticated PostgreSQL 18 instance passes all 495 default test
 integration exclusions; the server was stopped and its temporary data moved to trash. This
 checkpoint does not yet make a room start resolve and supply the pinned integration catalog; that
 is the next red/green boundary.
+
+## 2026-09-10 — non-blocking remote MCP in a live room
+
+Added a full-room red test around the approved runtime contract. It compiles an explicitly
+non-blocking tenant MCP binding, starts the planned room, attaches its caller, and initially fails
+with the path-specific host-only runtime rejection. The test then requires the exact local alias in
+the model tool list, execution in a process distinct from the provider request, one correlated
+running acknowledgement, an unrelated caller turn carrying current pending state, and one private
+completion continuation after the remote response.
+
+`CallEngine.start_call/2` now obtains the current integration snapshot from the configured catalog
+store only when the pinned plan contains MCP tools. A caller-supplied `mcp_integrations` option is
+not an authority: it is discarded for host-only plans and replaced by the store snapshot for remote
+plans. Room validation and startup receive the same snapshot. `PlanStartup.AgentActivation` verifies
+every pinned resolved tool still checks out from it before passing the redacted catalog into the
+activation graph. A replaced generation therefore fails closed before room startup; an owner that
+has already started retains the exact checked-out generation as designed.
+
+The live test uses a controlled slow protocol call. While it remains pending, the explicitly
+non-blocking second caller turn reaches Agent Runtime with the existing running result and current
+safe pending projection. No tool is run in the request process, and no endpoint, remote operation,
+credential, or private owner appears in model inspection. The terminal result enters the existing
+room lifecycle event and one private engine-origin continuation.
+
+The focused live-room test passes. The complete Call Engine suite passes 227 tests with one tagged
+integration exclusion. Test teardown can log the expected owner `connection_lost` when ExUnit stops
+the controlled protocol client before the room subtree; the assertions and room behavior are green.
+
+A second red test compiles against one catalog generation, atomically replaces the store with an
+empty snapshot, and attempts room startup. The runtime initially returned the generic model-profile
+error because `PlanStartup.AgentActivation` flattened its internal MCP failure. It now retains the
+first unavailable local alias and returns a bounded `unsupported_call_plan` at that exact
+participant/tool path. No room process starts and there is no application-scope fallback.
+
+Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+The complete umbrella suite was rerun with seed `238092` against an isolated, trust-authenticated
+PostgreSQL 18 instance: all 497 default-lane tests pass with ten tagged integration exclusions. The
+temporary server was stopped and its data moved to trash. The ordinary local database path could
+not authenticate because it supplied no password; this was an environment limitation rather than
+a project failure.

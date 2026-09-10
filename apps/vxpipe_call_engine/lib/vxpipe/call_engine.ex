@@ -10,7 +10,7 @@ defmodule Vxpipe.CallEngine do
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
-  alias Vxpipe.CallEngine.RemoteMCP.CatalogStore
+  alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.RoomSupervisor
 
@@ -37,7 +37,9 @@ defmodule Vxpipe.CallEngine do
   @spec start_call(ResolvedCallPlan.t(), keyword()) ::
           {:ok, Vxpipe.CallEngine.Room.Snapshot.t()} | {:error, Error.t()}
   def start_call(%ResolvedCallPlan{} = plan, options \\ []) when is_list(options) do
-    RoomSupervisor.start_call(plan, options)
+    with {:ok, runtime_options} <- runtime_options(plan, options) do
+      RoomSupervisor.start_call(plan, runtime_options)
+    end
   end
 
   @spec create_room(CreateRoom.t()) ::
@@ -143,14 +145,41 @@ defmodule Vxpipe.CallEngine do
   end
 
   defp catalog_snapshot(catalog_store) do
-    CatalogStore.snapshot(catalog_store)
+    case CatalogStore.snapshot(catalog_store) do
+      {:ok, %IntegrationCatalog{}} = result -> result
+      _unavailable -> unavailable_catalog()
+    end
   catch
-    :exit, _reason ->
-      DefinitionValidation.invalid(
-        :call_definition_resolution_failed,
-        "The call definition could not be resolved.",
-        ["registries", "mcp_integrations"],
-        "is unavailable"
-      )
+    :exit, _reason -> unavailable_catalog()
+  end
+
+  defp runtime_options(plan, options) do
+    if remote_tools?(plan) do
+      {catalog_store, options} = Keyword.pop(options, :mcp_catalog_store, CatalogStore)
+
+      with {:ok, integrations} <- catalog_snapshot(catalog_store) do
+        {:ok, Keyword.put(options, :mcp_integrations, integrations)}
+      end
+    else
+      {:ok, Keyword.delete(options, :mcp_integrations)}
+    end
+  end
+
+  defp remote_tools?(plan) do
+    Enum.any?(plan.participants, fn {_key, participant} ->
+      Enum.any?(participant.tools, fn
+        {_name, %ResolvedCallPlan.ToolBinding{type: :mcp}} -> true
+        _binding -> false
+      end)
+    end)
+  end
+
+  defp unavailable_catalog do
+    DefinitionValidation.invalid(
+      :call_definition_resolution_failed,
+      "The call definition could not be resolved.",
+      ["registries", "mcp_integrations"],
+      "is unavailable"
+    )
   end
 end

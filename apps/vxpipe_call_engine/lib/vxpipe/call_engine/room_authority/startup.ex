@@ -57,6 +57,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       incarnation_id: state.snapshot.incarnation_id,
       agent_runtime: Keyword.fetch!(settings, :agent_runtime),
       agent_request_options: Keyword.get(options, :agent_request_options, []),
+      mcp_integrations: Keyword.get(options, :mcp_integrations),
+      remote_mcp_connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
+      remote_mcp_protocol_client: Keyword.get(options, :remote_mcp_protocol_client),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]

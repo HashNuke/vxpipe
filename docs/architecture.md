@@ -568,9 +568,9 @@ tombstones. A worker is prepared dormant, monitored, recorded, and only then exp
 a fast completion cannot overtake its authoritative running record. Only acknowledgement frees
 capacity. Thin Call Engine adapters now implement Agent Runtime's submit and pending-context
 contracts: submission can only delegate to this registry, and pending projection maps only safe
-status values after verifying the request correlation belongs to the same registry. Host and Call
-Variables handlers plus definition-driven activation wiring select this substrate in live calls;
-the remote MCP binding is the next integration checkpoint.
+status values after verifying the request correlation belongs to the same registry. Host, Call
+Variables, and remote MCP handlers plus definition-driven activation wiring select this substrate
+in live calls.
 
 For each resolved host-tool map, Call Engine compiles a deterministic name-ordered Agent Runtime
 descriptor list. Each descriptor copies only the host definition's exact name, description, and
@@ -586,6 +586,18 @@ map, the current schema gives each one the default `blocking` conversation mode.
 binding contains only the scoped room-variables handle and authorization identity. Invocation
 workers call that binding by its exact generated name; Agent Runtime never receives the handle or
 calls the room-scoped variables process itself.
+
+For a plan containing remote MCP tools, `CallEngine.start_call/2` reads one complete current
+integration-catalog snapshot from the configured catalog store and does not accept an injected
+catalog as an authority. Plan startup verifies every pinned remote generation against that snapshot
+before creating the room. It then passes the snapshot privately through room startup to the agent
+activation. The activation conditionally starts one `RemoteMCP.IntegrationOwner` in the same
+one-for-all generation as the Session, coordinator, invocation registry, and invocation supervisor.
+Each model descriptor carries only its local alias, public description, and pinned schema; its
+opaque handler points to that owner. The common invocation worker calls the owner, which resolves
+the exact pinned remote operation and scoped connection. A catalog change before activation can
+therefore reject the stale plan; an owner that has started retains its checked-out generation until
+activation shutdown or explicit credential revocation.
 
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the

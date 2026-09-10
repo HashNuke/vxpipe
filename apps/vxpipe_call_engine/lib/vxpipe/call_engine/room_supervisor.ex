@@ -239,7 +239,11 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
       archive_handoff: archive.handoff,
       archive_source_policy: archive.source_policy,
-      live_inspection: live_inspection_options()
+      live_inspection: live_inspection_options(),
+      mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
+      remote_mcp_connection_provider:
+        Keyword.get(runtime_options, :remote_mcp_connection_provider),
+      remote_mcp_protocol_client: Keyword.get(runtime_options, :remote_mcp_protocol_client)
     ]
 
     case DynamicSupervisor.start_child(__MODULE__, {RoomIncarnationSupervisor, options}) do
@@ -308,6 +312,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       owner: self(),
       agent_runtime: Keyword.fetch!(settings, :agent_runtime),
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
+      mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
