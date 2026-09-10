@@ -1,14 +1,14 @@
 # ReqLLM agent runtime
 
-Date: 2026-09-10. Status: implementation in progress; package contracts and lifecycle complete.
+Date: 2026-09-10. Status: implemented and adopted by Call Engine.
 
 ## Decision
 
-Build Vxpipe's model/tool-loop primitives directly on ReqLLM in a separate internal
-umbrella child named `vxpipe_agent_runtime`, under the `Vxpipe.AgentRuntime` namespace.
-Migrate the existing agent activation to that package before exposing live remote MCP
-tools. Remove Jido AI and Jido Action only after the replacement passes the existing
-behavioral and provider checks.
+Vxpipe's model/tool-loop primitives are built directly on ReqLLM in the separate internal
+umbrella child `vxpipe_agent_runtime`, under the `Vxpipe.AgentRuntime` namespace. The existing
+agent activation has migrated to that package before live remote MCP exposure. Jido AI and
+Jido Action were removed only after the replacement passed the existing behavioral and
+provider checks.
 
 The package is an internal agent-inference runtime, not another room authority or a
 general workflow framework. It owns conversation/model state and repeated model/tool
@@ -125,11 +125,10 @@ setting. Plan Startup validates and pins the selected provider configuration, ca
 model and prompt, resolved host-tool map, Call Variables binding, and runtime limits. Room Authority
 stores the selected coordinator module behind its existing text-capability boundary, so response,
 interruption, and participant-owned shutdown require no room-protocol change. Application and
-development configuration select Agent Runtime by default. Hosted development constructs the
-activation-pinned ReqLLM config from its runtime-only API key; local-fixture development selects a
-bounded Agent Runtime fixture adapter. Only the test environment temporarily selects the Jido
-compatibility graph while its scripted scenarios move to a neutral test provider; it is not a
-second intended production loop.
+development and test configuration select Agent Runtime. Hosted development constructs the
+activation-pinned ReqLLM config from its runtime-only API key; local-fixture development and the
+test environment select bounded neutral Agent Runtime fixture adapters. There is no compatibility
+production loop.
 
 For every submitted tool, the single correlated running acknowledgement stays in that
 committed conversation and is therefore supplied with every later model request while the
@@ -228,11 +227,10 @@ local tool remains a distinct model-visible descriptor backed by a private bindi
 
 ## Implications and migration
 
-The [ReqLLM agent-runtime milestone](milestones/reqllm-agent-runtime.md) is inserted after
-the standalone MCP client milestone and before live MCP tools. It first proves the package
-in isolation, then migrates the existing Jido-backed activation while retaining the current
-Call Engine coordinator and domain contracts where they remain cohesive. Jido dependencies
-are removed only when no production or test references remain and parity is demonstrated.
+The completed [ReqLLM agent-runtime milestone](milestones/reqllm-agent-runtime.md) sits after
+the standalone MCP client milestone and before live MCP tools. It proved the package in isolation,
+migrated the former Jido-backed activation while retaining cohesive Call Engine domain contracts,
+and removed Jido after production/test references were gone and parity was demonstrated.
 
 Completed Jido-backed milestone evidence remains factual history. Forward milestones refer
 to `Vxpipe.AgentRuntime`. The live-MCP milestone no longer waits for an upstream Jido API;
@@ -244,21 +242,23 @@ pinned remote bindings through the executor contract.
 Planning inspected the umbrella's locked ReqLLM 1.22.0 public tool, response, context,
 streaming, cancellation, and existing adapter surfaces; Jido AI 2.3.0's Action-only tool
 projection; and Legion 0.5.0's agent, executor, prompt, tool, sandbox, and supervision
-contracts. This establishes API shape, not implementation correctness. The milestone's
-deterministic, tagged-provider, umbrella, and rendered-call gates remain unchecked.
+contracts. Implementation evidence now includes deterministic package/Call Engine suites,
+responsive rendered-call inspection, 491 passing default umbrella tests with ten tagged
+integration exclusions, and a tagged two-test Gemini lane covering exact schema continuation,
+usage, cancellation cleanup, and Session reuse.
 
-The first implementation checkpoint adds the standalone package values and session lifecycle.
+The first implementation checkpoint added the standalone package values and session lifecycle.
 Its corrected executor exposes only `submit/4`; no runtime API can execute a tool inline.
 Before each currently implemented provider generation, the session retrieves a validated,
 unique, payload-free pending-invocation list through a timeout-enforced host source outside the
-session GenServer. The focused package suite has 12 tests and 0 failures. Repeated tool rounds,
-ReqLLM projection, and Call Engine adoption remain pending, so this is not runtime parity yet.
+session GenServer. The focused package suite had 12 tests and 0 failures. Repeated tool rounds,
+ReqLLM projection and Call Engine adoption followed in the later checkpoints below.
 
-The next package-local slice adds normalized, inspection-safe model responses and complete
+The next package-local slice added normalized, inspection-safe model responses and complete
 tool calls plus the activation-pinned registry. The registry rejects duplicate names, projects
 only name/description/schema to providers, resolves exact strings, and validates arguments
 against the compiled schema before returning a private descriptor. Submission and repeated
-rounds remain pending.
+rounds followed in the subsequent slices.
 
 The first repeated-round slice now handles one accepted call end to end within the package.
 It commits the assistant tool request and correlated running acknowledgement before the next
@@ -302,13 +302,13 @@ arrive after the nominal deadline only for that bounded safety handoff; the exte
 not cancelled. The Call Engine host adapter supplies the separately bounded admission described
 above.
 
-`Session.continue/4` now gives Call Engine a separate admission path for a private tool-completion
+`Session.continue/4` gives Call Engine a separate admission path for a private tool-completion
 observation. The input keeps `origin: :engine` in normalized runtime history but projects as an
 ordinary provider `user` role, matching providers that reject a conversation ending with an
 assistant message. It does not manufacture caller speech. The continuation is committed only
 with a successful terminal model response; failure leaves it uncommitted so Call Engine can keep
-the authoritative completion lease. Wiring lease acknowledgement to this result remains part of
-the Call Engine migration.
+the authoritative completion lease. The selected coordinator acknowledges that lease only after
+the continuation commits and releases an uncommitted lease without rerunning the tool.
 
 The provider boundary now optionally streams text through a callback while returning the same
 canonical `ModelResponse` as buffered generation. A package-owned `StreamBudget` limits text bytes

@@ -143,24 +143,22 @@ persistence. Those remain Call Engine concerns. See the
 [runtime decision](reqllm-agent-runtime.md), [tool execution model](tool-execution-model.md),
 and [intermediate milestone](milestones/reqllm-agent-runtime.md).
 
-The package foundation now implements the submit-only executor behavior and the bounded,
-timeout-enforced pending-invocation context-source boundary. Its package-local loop resolves
-and validates complete ordered batches, submits each call, commits a matched running or safe
-rejection result, refreshes pending state, and performs the correctly gated acknowledgement
-round outside the Session GenServer. Remaining failure paths, streaming, cancellation, ReqLLM
-projection, and Call Engine adoption remain pending; the running call path below still uses
-Jido until those checkpoints are green.
+The package implements the submit-only executor behavior and the bounded, timeout-enforced
+pending-invocation context-source boundary. Its package-local loop resolves and validates complete
+ordered batches, submits each call, commits a matched running or safe rejection result, refreshes
+pending state, and performs the correctly gated acknowledgement round outside the Session
+GenServer. Streaming, cancellation, bounded failure, ReqLLM projection, and Call Engine adoption
+are implemented; Jido is no longer a runtime or dependency.
 
-Within the package loop, an accepted running exchange is now durable for the Session lifetime
+Within the package loop, an accepted running exchange is durable for the Session lifetime
 even if the following provider generation fails. Later turns retain that exchange once and
 combine it with the current engine-owned pending projection; a provider failure cannot trigger
-resubmission or erase accepted work. Call Engine adoption is still required before this affects
-live calls.
+resubmission or erase accepted work. Definition-driven live calls use this path.
 
-Session cancellation also respects that barrier. It may terminate provisional provider work
+Session cancellation respects that barrier. It may terminate provisional provider work
 immediately, but cancellation arriving during host submission is deferred until the complete
 running/rejection exchange commits. The request task is then terminated without touching the
-Call Engine-owned invocation worker. This package behavior still awaits Call Engine migration.
+Call Engine-owned invocation worker.
 
 Agent Runtime enforces its configured per-round tool-call count and per-request accumulated
 assistant-output size before host submission. These bounds keep one model response from
@@ -192,7 +190,7 @@ ReqLLM context/tool/response/stream APIs, injects the current pending-invocation
 into the outgoing request, and attaches no engine binding to a ReqLLM tool. Buffered and streamed
 responses yield the same runtime value. Usage plus ReqLLM-redacted provider call identity crosses
 the token-correlated Session event boundary; prompts, private bindings, raw provider failures, and
-authorization values do not. Call Engine has not yet selected this adapter for live activations.
+authorization values do not. Call Engine selects this adapter for hosted-model live activations.
 Session startup also separates its optional OTP process name from immutable runtime configuration,
 allowing the activation supervisor to use a stable registry reference without making topology part
 of model state.
@@ -203,8 +201,8 @@ supervised task, so provider work and streamed-event handling never run in the c
 GenServer callback. A dedicated output buffer projects complete sentence segments through the
 existing capability-message contract without replaying the final response after streamed deltas.
 If streamed output violates the engine bound, the coordinator cancels that runtime request before
-admitting queued caller work. This coordinator is not yet selected by the activation supervisor;
-interruption and live-path replacement remain subsequent parts of the migration.
+admitting queued caller work. The activation supervisor selects this coordinator, and room
+interruption routes through its correlation-safe cancellation path.
 
 Before it admits a caller command, the migration coordinator now asks a separate conversation-
 admission boundary to inspect the authoritative invocation-registry snapshot. Any unconsumed
@@ -233,43 +231,13 @@ admission, and scheduling.
 
 Tagged production evidence confirms Gemini accepts this adapter's exact tool schema and a
 subsequent canonical running-acknowledgement round with ephemeral pending state and tools withheld.
-That verifies provider interoperability only; live Vxpipe calls continue through the existing
-Call Engine runtime until the migration checkpoint.
+It also reports usage and verifies public Session cancellation cleanup plus immediate Session reuse.
+The deterministic room and rendered sample checks separately prove the selected Call Engine path.
 
-Until that milestone completes, the running agent-loop implementation places one
-`Jido.AI.Agent`/AgentServer under each
-active agent participant's Vxpipe-owned supervision subtree. It replaces the current
-custom model/tool-loop capability process; it does not become a second room or participant
-authority. Jido owns that activation's conversation projection, ordinary ReAct request
-lifecycle, registered Jido Actions, and internal request tasks, using ReqLLM for provider
-access. Vxpipe owns participant/activation identity, serialized voice turns, output pacing,
-interruption, authorization, transfers, authoritative Call Variables, persistence and
-client projections. The participant supervisor starts, gates readiness for, and terminates
-the Jido child. Standalone ReAct is useful for focused adapter tests, not a parallel
-production loop.
-
-The engine-owned `AgentCoordinator` now maps Jido request handles/events to the existing
-capability stream, tool, terminal, timeout and interruption contracts and permits only one
-external or internal request in flight. It supplies private Vxpipe command/request refs and
-the authorized tool context at the request boundary, bounds pending requests and output,
-ignores stale events after cancellation, and removes explicitly interrupted completed turns
-from later model projections through an engine-owned request transformer. It also requests
-physical cleanup through Jido's public context-replacement signal, but does not mistake
-signal acceptance for immediate application: Jido may defer it behind worker lifecycle
-work. The projection filter is the behavioral guarantee. Jido still owns the ReAct loop;
-the coordinator neither invokes providers nor executes a replacement model/tool loop.
-The definition-driven text subset attaches this coordinator to its participant and routes
-room turns through it; plan-selected speech routing remains in progress.
-
-The intermediate migration replaces only the Jido-specific runtime child and adapter. It
-retains the coordinator's call-domain queueing, correlation, background-completion, output,
-and interruption responsibilities where they remain cohesive. Jido dependencies are removed
-only after the existing behavior and provider lanes pass through the new package; there is no
-long-lived second production loop.
-
-The implemented `AgentActivationSupervisor` groups the selected Action dispatcher,
-AgentServer and coordinator under a one-for-all policy. The coordinator synchronously
-configures the running AgentServer before the activation supervisor can finish starting.
+The implemented `AgentActivationSupervisor` groups the request supervisor, coordinator,
+invocation supervisor, invocation registry, and Agent Runtime Session under a one-for-all
+policy. Each child resolves only the registered references it needs, and the graph is ready
+only after all components have started successfully.
 One abnormal child failure restarts the whole configured set once; another within the
 restart window terminates the activation and its children. The activation supervisor is
 temporary to its participant owner, so deliberate participant shutdown does not
@@ -282,16 +250,12 @@ owned coordinator is implemented through a stable Registry reference instead of 
 PID. Requests therefore reach a replacement coordinator after the allowed restart, while
 events from a stale child cannot pass the room's current-capability check.
 
-Submitted long-running actions return a correlated running
-acknowledgement and continue under Vxpipe-owned supervision. Their later results enter a
-bounded Vxpipe mailbox. Once the Jido agent is idle, the coordinator supplies the result in
-an engine-origin continuation request that is never projected as caller speech. The Jido
-context retains `vxpipe_origin: :engine`; a chat provider may still require the final
-non-model input to use its ordinary user wire role. Provider role is therefore not Vxpipe
-participant attribution. RoomAuthority creates only the agent turn and no participant or
-caller-transcript event for this request. Do not use Jido `inject`/`steer` as the delivery
-guarantee: those controls apply only to an active run and queued input can be dropped when
-that run terminates.
+Submitted actions return a correlated running acknowledgement and continue under the
+activation-owned invocation supervisor. Their later results enter a bounded Vxpipe mailbox.
+When Agent Runtime is idle, the coordinator supplies the result through a private engine-origin
+continuation that is never projected as caller speech. A chat provider may still require this
+non-model input to use its ordinary user wire role; provider role is not Vxpipe participant
+attribution. Room Authority creates no participant or caller-transcript event for this request.
 
 The released definition uses `call_variables.sections`, invocation values use
 `initial_variables`, and per-agent section grants use `variable_permissions`.
@@ -585,9 +549,10 @@ not a second ordinary result for the acknowledged call or a replay of its old
 model turn. The agent coordinates subsequent speech with the current conversation.
 Adapters must preserve accompanying text and tool calls and encode these updates
 for their provider; result data remains untrusted tool output. One application
-contract avoids provider-specific lifecycle branches. This requires implementation
-and per-provider interoperability checks; it is not guaranteed by context encoding
-alone. Explicit cancellation is deferred as noted above. Existing interruption,
+contract avoids provider-specific lifecycle branches. Agent Runtime and Call Engine
+implement this contract; each added provider still requires interoperability checks
+because context encoding alone does not guarantee it. Explicit cancellation is deferred
+as noted above. Existing interruption,
 timeout, transfer/shutdown, and variable-update rules still apply, without a
 durable operation worker or post-shutdown recovery requirement.
 
@@ -603,9 +568,9 @@ tombstones. A worker is prepared dormant, monitored, recorded, and only then exp
 a fast completion cannot overtake its authoritative running record. Only acknowledgement frees
 capacity. Thin Call Engine adapters now implement Agent Runtime's submit and pending-context
 contracts: submission can only delegate to this registry, and pending projection maps only safe
-status values after verifying the request correlation belongs to the same registry. Remote MCP/Call
-Variables handlers and activation wiring remain subsequent checkpoints; this substrate is not yet
-selected by live calls.
+status values after verifying the request correlation belongs to the same registry. Host and Call
+Variables handlers plus definition-driven activation wiring select this substrate in live calls;
+the remote MCP binding is the next integration checkpoint.
 
 For each resolved host-tool map, Call Engine compiles a deterministic name-ordered Agent Runtime
 descriptor list. Each descriptor copies only the host definition's exact name, description, and
@@ -1956,7 +1921,7 @@ deterministic. It is disabled in base application configuration and may be enabl
 through trusted application/runtime settings; no call definition, invocation, browser
 room-creation body, or RTVI command can select a fixture result. The supervised fixture
 atomically supplies one fixed success, delayed success, provider failure, or invalid empty
-result to the next Jido request, then resets to its configured default. Deliberate delay runs
+result to the next Agent Runtime request, then resets to its configured default. Deliberate delay runs
 in the model worker, not the room authority. The coordinator therefore emits the normal
 payload-free model timing/outcome events under the bounded `:local_fixture` provider label,
 and successful text continues through the ordinary optional TTS and gateway paths. Console

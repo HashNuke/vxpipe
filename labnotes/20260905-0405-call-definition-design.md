@@ -136,10 +136,9 @@ archival needs do not start STT or bypass capability permissions.
 R17 defines `tool_visibility` and participant/local-tool `tool_visibility_overrides`,
 including trusted full-visibility sample policy replacement with no overrides.
 R22 now selects ExMCP directly through a thin internal policy wrapper, with `2025-11-25`
-Streamable HTTP as the target tested Vxpipe profile. This supersedes direct Jido MCP
-selection without changing Jido AI's ownership of the LLM/tool loop. The standalone
-protocol milestone is independent; live tenant tools require a supported public Jido
-runtime-binding interface with exact local names/schemas and private execution.
+Streamable HTTP as the target tested Vxpipe profile. The standalone protocol milestone is
+independent. The selected Agent Runtime owns the LLM/tool loop and exact data-backed tool
+descriptors; live tenant tools next require its private binding to the scoped remote client.
 R23 requires validated outgoing MCP arguments.
 R24 result/document inspection and R25 server-requested interactions
 are deferred to separate issues while observed response storage remains mandatory.
@@ -1878,16 +1877,13 @@ decompressed byte budget across stream resumption, progress and reconnects;
 do not reset either per HTTP response.
 No dependency or runtime implementation is added by this decision.
 
-Jido AI continues to own the LLM/tool loop; switching protocol clients does not require
-a replacement loop. Its current Action-module tool registry cannot expose arbitrary
-runtime schemas/private bindings and loses aliases during model projection. The live-MCP
-milestone owns the public data-tool interface extension gate; standalone ExMCP conformance
-can proceed independently. Early static tools accept only local keys matching their Action
-names until that interface is available, rejecting unsupported aliases before startup.
-This is a rollout subset, not a change to the final local-alias definition contract.
-Direct Jido MCP and unreleased Jido Connect selection are superseded/not required.
-See [the decision](../docs/jido-tool-execution.md) for exact source/probe evidence and
-rejected workarounds; no generated tenant modules or generic model-visible dispatcher.
+The selected `Vxpipe.AgentRuntime` owns the model/tool loop and projects exact runtime string
+names, schemas, and private bindings without generated tenant modules or a generic model-visible
+dispatcher. The live-MCP milestone binds those descriptors to the scoped ExMCP client through the
+submit-only Call Engine executor. Standalone ExMCP conformance remains independent of that live
+binding. Direct Jido MCP and unreleased Jido Connect selection are superseded/not required; the
+earlier investigation remains historical evidence in
+[the prior decision](../docs/jido-tool-execution.md).
 
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 as the source of truth and pin matching versions of the
@@ -2074,12 +2070,10 @@ documented below. External recovery notifications after timeout or shutdown are
 deferred to the future event mechanism.
 No new operation ledger or durable worker design is approved by this decision.
 
-The runtime does not implement this separation yet. `ModelInference` currently
-executes tools inside its model request task, and `cancel_current/1` kills that
-task on interruption. Implementation must separate the lifetime of a submitted
-MCP invocation from the interrupted model/output turn while retaining its agent
-ownership and existing timeout. Do not describe this as current playground
-behavior.
+The selected definition-driven runtime implements this separation for host and Call Variables
+tools: all accepted work is handed to an activation-owned invocation worker, while interruption
+only cancels the correlated model/output request. The same executor contract is ready for the
+next milestone's remote MCP binding. The legacy text-only `CreateRoom` preset advertises no tools.
 
 #### Provider-independent asynchronous tools — approved G4 decision
 
@@ -2087,8 +2081,8 @@ Use application-level asynchronous tool orchestration for every model provider
 and every tool, including fast platform operations and remote MCP invocations.
 Do not execute tools inline or select a different workflow when a provider offers
 native asynchronous function calls. Provider adapters translate messages; Vxpipe
-owns invocation lifetime and conversation ordering. This is a design decision,
-not an implemented runtime feature.
+owns invocation lifetime and conversation ordering. This is implemented for host and Call
+Variables tools; remote MCP tools adopt the same path in the next milestone.
 
 For every invocation:
 
@@ -7510,7 +7504,7 @@ not the current dependency instruction.
 
 Historical boundary checkpoint: the later integration decisions retain the internal
 library identity and forbid implementing missing protocol pieces. The current selection
-is direct ExMCP, with Jido model-tool integration in the engine rather than this library.
+is direct ExMCP, with Agent Runtime model-tool integration in the engine rather than this library.
 
 - Added the separate `vxpipe_mcp` protocol-library boundary and official
   specification/conformance/reference-server validation sources. Domain grants,

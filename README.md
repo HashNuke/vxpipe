@@ -144,7 +144,7 @@ targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and perform
 the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming Opus audio is routed
 through a bounded, protocol-neutral media ingress to Deepgram Flux. Flux turn
 signals become RTVI speaking and replacement-transcription messages; a committed
-turn is sent through the room's participant-owned Jido agent using the pinned Gemini
+turn is sent through the room's participant-owned Agent Runtime session using the pinned Gemini
 model profile. Its
 complete text response is streamed through Flux TTS as 48 kHz linear16, encoded
 to 20 ms Opus packets, and paced onto the negotiated browser audio track. RTVI

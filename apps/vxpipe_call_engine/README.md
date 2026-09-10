@@ -123,7 +123,7 @@ Runtime request cancellation is reported as a terminal `:cancelled` model outcom
 first-output observation preserved; it is not counted as provider unavailability.
 
 The optional `Vxpipe.CallEngine.Diagnostics.ModelFixture` is an application-configured
-development boundary for exercising the same Jido coordinator, room events, optional
+development boundary for exercising the same Agent Runtime coordinator, room events, optional
 TTS, gateway projection, and Telemetry paths without a hosted model request. It supports
 a fixed set of success, delayed success, provider failure, and invalid no-output outcomes.
 An armed outcome is consumed atomically by one request and resets to the configured

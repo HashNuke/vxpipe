@@ -100,8 +100,8 @@ reads, and iterative population without required-variable checks are
 resolved within G3. The read-only/read+write decision removes the write-only error
 question. Naming and agent-mediated MCP result updates are also resolved;
 dedicated variable ownership and submitted-write lifetime are approved, and
-additional schema-complexity caps are not adopted now. G3 is closed in
-documentation; implementation remains pending.
+additional schema-complexity caps are not adopted now. G3 is closed and its Call Variables
+runtime behavior is implemented by the completed variables and Agent Runtime milestones.
 MCP interruption, timeout-outcome reporting, no automatic executor retry, and
 exclusion of generic platform confirmation settle G4's initial-scope choices.
 Late notifications remain deferred rather than current MCP prerequisites.
@@ -806,9 +806,9 @@ generated-tool proposal is recorded there for review, not adopted. Automatic
 retry/idempotency enhancements are deferred; generic platform confirmation is
 excluded for now and late recovery notifications are deferred below.
 No durable operation worker or ledger is approved by the ordinary-interruption
-decision. Today's
-model request task still contains tool execution and is killed by interruption;
-the approved separation needs implementation.
+decision. The selected Agent Runtime and Call Engine invocation substrate implement the approved
+lifetime separation: interruption can end model/output work without executing or cancelling an
+already accepted tool inline.
 
 **Approved provider-independent asynchronous execution:** Vxpipe owns every tool
 invocation for every model provider, rather than executing fast operations inline or
@@ -826,10 +826,10 @@ Completion is a separate invocation-linked update to the latest conversation,
 not a second ordinary result for an already-acknowledged tool call. The agent
 coordinates any new speech with the current conversation. An acknowledgement is
 not business success; tool results remain untrusted data. Provider encodings and
-interoperability need verification. The original labnote includes planned tests
-for both admission modes, result ordering, and mixed text/tool output. This does
-not approve explicit cancellation policy, durable execution,
-or the deferred external-notification mechanism. Implementation remains pending.
+interoperability need verification for each added provider. The selected ReqLLM path now has
+tests for both admission modes, result ordering, and mixed text/tool output. This does not approve
+explicit cancellation policy, durable execution, or the deferred external-notification mechanism.
+Remote MCP binding and its interoperability evidence remain in the next milestone.
 
 **Approved timeout-outcome reporting:** when a submitted MCP request reaches its
 timeout without a definitive remote result, report outcome `unknown`. The timeout

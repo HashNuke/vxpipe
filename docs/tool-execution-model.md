@@ -271,7 +271,8 @@ activation results, and no execution inside Agent Runtime or any GenServer callb
 
 An independent read-only review compared this target with the existing dispatcher,
 invocation worker, coordinator, request transformer, tool definition/selection, and activation
-supervision. It identified the inline/background split, missing per-binding conversation mode,
-duplicated coordinator/dispatcher state, destructive early completion acknowledgement, caller-
-first scheduling, and absent pending-context source as migration gaps. These are planned gaps,
-not claims about implemented behavior.
+supervision. It identified the former inline/background split, missing per-binding conversation
+mode, duplicated coordinator/dispatcher state, destructive early completion acknowledgement,
+caller-first scheduling, and absent pending-context source as migration gaps. The completed
+Agent Runtime migration closes those gaps for host and Call Variables tools; remote MCP bindings
+use the same model in the next milestone.

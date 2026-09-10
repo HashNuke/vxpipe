@@ -1,9 +1,9 @@
 # ReqLLM agent runtime
 
-Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
-the production ReqLLM boundary with tagged-provider interoperability are implemented. Call Engine
-uses the activation-owned Agent Runtime graph and no longer depends on Jido. The rendered sample
-now demonstrates the non-blocking flow; the final acceptance audit remains pending.
+Status: complete. The standalone package, provider-neutral loop, production ReqLLM boundary,
+activation-owned Call Engine integration, supervised tool execution, blocking/non-blocking
+conversation policy, Jido removal, rendered sample, and tagged-provider lane are implemented and
+verified.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -105,22 +105,22 @@ process or dependency is used.
 1. [Complete 2026-09-10] Add the child application and red-test its public descriptor,
    request, result, event, submit-only executor, pending-context source, and session contracts
    with a deterministic model driver.
-2. [In progress 2026-09-10] Implement the submit-only model/tool state machine: final
+2. [Complete 2026-09-10] Implement the submit-only model/tool state machine: final
    response, accepted running acknowledgements, definite non-submission, multiple calls in
    model order, mixed text/tool output, commit barriers, bounded failure, and cancellation.
    Normalized response/tool-call values, the exact private registry, accepted/rejected ordered
    submission batches, blocking/non-blocking acknowledgement rounds, and accepted-work
    recovery after provider failure or cancellation are complete. Per-session tool-batch and
    accumulated-output bounds, the request deadline, and private engine-origin continuation
-   admission are also implemented. Provider-neutral bounded text streaming is complete.
-   Remaining submit callback bounds, production ReqLLM adapter behavior, and Call Engine lease
-   integration remain pending.
+   admission are also implemented. Provider-neutral bounded text streaming, the production ReqLLM
+   adapter, bounded Call Engine submission/reconciliation, and completion lease integration are
+   complete.
 3. [Complete 2026-09-10] Add the ReqLLM adapter by moving/refining the existing Call Engine
    projection. Raw JSON Schema aliases, canonical exchanges, deterministic streaming collection,
    usage, safe call metadata, cleanup, and live-provider interoperability are covered. The live
    check remains tagged and excluded from default tests. Call Engine selection belongs to the next
    checkpoint.
-4. [In progress 2026-09-10] Replace the Jido AgentServer child in an activation with
+4. [Complete 2026-09-10] Replace the Jido AgentServer child in an activation with
    `Vxpipe.AgentRuntime`; migrate
    the coordinator/dispatcher to one worker-submission path and compile default-blocking /
    explicit-non-blocking binding policy. The schema/compiler portion is complete in
@@ -132,13 +132,12 @@ process or dependency is used.
    deterministic descriptors with model-visible schema separated from the private action and
    conversation mode. Permission-derived Call Variables tools now compile as default-blocking
    private bindings and execute through the same worker. Remote MCP handling belongs to the next
-   milestone; activation integration remains. Agent Runtime sessions now accept an OTP process name
+   milestone; activation integration is complete. Agent Runtime sessions now accept an OTP process name
    outside their immutable model configuration, enabling the activation graph. The migration
    coordinator now projects ordinary streamed Session output through the existing capability
    contract from a separately supervised request task, bounds its queue/output, avoids replaying
-   final text, and cancels a rejected stream before advancing queued work. It is not
-   activation-selected yet;
-   its registry-backed admission gate now holds caller turns for any unconsumed blocking invocation
+   final text, and cancels a rejected stream before advancing queued work. Its registry-backed
+   admission gate now holds caller turns for any unconsumed blocking invocation
    and admits turns when every pending invocation is explicitly non-blocking. Completion leasing and
    private continuation consumption are now integrated with completion priority and a commit-time
    acknowledgement. Agent Runtime history now distinguishes discardable final conversation from
@@ -157,22 +156,23 @@ process or dependency is used.
    prove that an omitted tool policy blocks later caller
    model admission, an explicit `non_blocking` policy admits it, and both modes use the same
    activation-owned invocation worker/lifecycle path. Preserve completion and interruption behavior.
-5. [In progress 2026-09-10] Run parity and churn checks, inspect the rendered sample, and remove
+5. [Complete 2026-09-10] Run parity and churn checks, inspect the rendered sample, and remove
    unused Jido AI, Jido Action, Jido, and related lock entries. Dependency and fallback-loop
-   removal and rendered sample inspection are complete; the final acceptance audit remains.
+   removal, rendered sample inspection, exact-alias churn, failure/lifecycle coverage, live-provider
+   verification, and the final umbrella audit are complete.
 
 ## Implementation checklist
 
 - [x] Finalize the standalone submit-only package contracts and supervised lifecycle.
-- [ ] Implement deterministic submit-only rounds, exact runtime-tool resolution, canonical
+- [x] Implement deterministic submit-only rounds, exact runtime-tool resolution, canonical
   running exchanges, streaming events, cancellation/commit barriers, and all declared bounds.
 - [x] Move/refine the existing ReqLLM projection behind the new package and add focused plus
   tagged-provider interoperability evidence.
 - [x] Migrate the agent activation/coordinator and all tools to supervised submission without
   changing room authority, client visibility, or archive contracts.
-- [ ] Remove Jido dependencies and obsolete adapters only after behavioral parity, full
+- [x] Remove Jido dependencies and obsolete adapters only after behavioral parity, full
   umbrella verification, and rendered sample verification are green.
-- [ ] Update architecture, package API documentation, milestone evidence, and the labnote
+- [x] Update architecture, package API documentation, milestone evidence, and the labnote
   in each coherent checkpoint.
 
 ## Acceptance and failure checks
@@ -240,9 +240,9 @@ single matching completion has been consumed.
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, architecture/API docs, and implementation
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, architecture/API docs, and implementation
   labnote with actual test/browser/provider evidence in the implementation commits.
 
 Implementation evidence:
@@ -796,5 +796,6 @@ Implementation evidence:
 ## Specification review
 
 Locally reviewed during planning for dependency direction, SRP, supervision ownership,
-tool/privacy authority, failure bounds, migration safety, and a runnable vertical outcome.
-No independent review or implementation evidence is claimed.
+tool/privacy authority, failure bounds, migration safety, and a runnable vertical outcome. The
+implemented result is evidenced above by focused red/green checkpoints, complete child and umbrella
+suites, responsive rendered-browser inspection, and the tagged Gemini interoperability lane.

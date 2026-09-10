@@ -1,9 +1,9 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 10 complete and 14 incomplete. Milestone 11, the
-internal ReqLLM agent runtime, is the next implementation slice. Milestone 12,
-remote MCP tools in a live call, has substantial enabling work but cannot complete until
-that runtime is adopted. The earlier behavior contracts have completed focused review.
+Status: 24 milestone specifications: 11 complete and 13 incomplete. Milestone 12, remote MCP
+tools in a live call, is the next implementation slice. Its protocol, policy, catalog, and binding
+foundations exist; the completed ReqLLM runtime now supplies the model/tool execution prerequisite.
+The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
 2026-09-08. The 2026-09-10 [runtime decision](../reqllm-agent-runtime.md) inserts a separate
@@ -32,7 +32,7 @@ progress without claiming the entire milestone is complete.
 
 ## Ordered implementation checklist
 
-1. [x] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through Jido AI.
+1. [x] [Definition-driven one-agent call](definition-driven-call.md) — Compile a typed, pinned plan and run its text/audio and host-tool conversation through the selected agent runtime.
 2. [x] [Observable sample call](observable-sample-call.md) — Run a sample conversation and inspect live timing, provider failures and VM health on a separate dashboard.
 3. [x] [Local Morse-code audio providers](morse-code-audio-providers.md) — Exercise real audio ingress/egress with deterministic text-to-tones and tones-to-text providers.
 4. [x] [Call Variables and private tool projections](call-variables-and-tool-visibility.md) — Read/update sectioned variables through tools without exposing private data.
@@ -42,7 +42,7 @@ progress without claiming the entire milestone is complete.
 8. [x] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
 9. [x] [Call inspection and debugging](call-inspection-and-debugging.md) — Inspect an authorized live or ended call's timeline, permitted snapshots, timings and archival gaps.
 10. [x] [MCP client integration and conformance](mcp-client-library.md) — Verify ExMCP through a thin policy adapter and version-pinned reference/conformance server, independently of Jido.
-11. [ ] [ReqLLM agent runtime](reqllm-agent-runtime.md) — Build and adopt the reusable streamed model/tool loop without Jido.
+11. [x] [ReqLLM agent runtime](reqllm-agent-runtime.md) — Build and adopt the reusable streamed model/tool loop without Jido.
 12. [ ] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
 13. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
 14. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
@@ -92,11 +92,12 @@ owns ordering; insert or move entries here without renaming milestone files.
 
 ## Scope and dependency rules
 
-The current playground already creates rooms and supports a single human/agent text/audio
-path, streaming model output, hosted speech services, engine-owned tool execution, and
-room-scoped Call Variables with private model/client projections. It does not implement
-durable admission, remote MCP, multi-party mixer, telephony, or storage. Reuse working code; do not
-recreate applications or label existing primitives as newly implemented.
+The current playground already creates rooms and supports durable admission, a single human/agent
+text/audio path, streaming model output, hosted speech services, engine-owned tool execution,
+room-scoped Call Variables with private model/client projections, asynchronous call history, and
+call inspection. It does not implement live remote MCP, a multi-party mixer, telephony, streaming
+recordings, billing enrichment, or whole-call retention. Reuse working code; do not recreate
+applications or label existing primitives as newly implemented.
 
 Early milestones expose only their implemented subset. Reject unsupported enabled features
 explicitly; never silently ignore a presence/privacy rule, auth requirement, or provider
@@ -130,8 +131,8 @@ pending invocations. The model receives only exact local string names, permitted
 and pinned JSON schemas. Endpoint, credential and remote-operation selectors remain private.
 No externally driven atom/module generation, private dependency APIs, or generic model-visible
 endpoint/tool dispatcher is an acceptable workaround. Preserve dependency direction in child
-`mix.exs` files. The completed Jido-backed slices are historical evidence; milestone 11 must
-prove parity before removing Jido and must leave no second production loop behind.
+`mix.exs` files. The completed Jido-backed slices remain historical evidence; milestone 11
+proved parity, removed Jido, and left no second production loop behind.
 
 The two observability slices deliver separate operator interfaces without expanding the
 voice console. The early slice introduces the approved Phoenix shell, `vxpipe_console` /
@@ -224,7 +225,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
 | [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | Complete; locally reviewed | Calls-owned bounded persisted/live projections and the Console-owned authenticated list/detail workflow are implemented and browser-verified. Storage outage, tool failure, authorization, disclosure, archive-gap, lifecycle and reconnection checks pass with the common implementation gates. |
 | [MCP client integration and conformance](mcp-client-library.md#specification-review) | Complete; independently reviewed | The maintained ExMCP fork, protocol/policy boundary, official/reference interoperability, security limits and operational visibility are implemented and verified without model exposure. |
-| [ReqLLM agent runtime](reqllm-agent-runtime.md#specification-review) | Planned; local review only | New intermediate slice owns the internal package, exact runtime-tool loop and Jido migration parity. Deterministic, provider, umbrella and rendered-call evidence remain pending. |
+| [ReqLLM agent runtime](reqllm-agent-runtime.md#specification-review) | Complete; locally reviewed | The standalone package, exact submit-only loop, activation migration, default-blocking/explicit-non-blocking policy, Jido removal, deterministic failure/lifecycle matrix, responsive rendered call, full umbrella suite and tagged Gemini lane are implemented and verified. |
 | [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Revised; partially implemented | Its protocol, configuration, catalog and activation-binding foundations exist. Final model exposure now depends on the ReqLLM agent-runtime milestone instead of a missing Jido extension. |
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
 | [Allowlisted agent-to-agent transfers](agent-transfers.md#specification-review) | Approved | milestone_review_c; Specified history modes, precommit destination silence/source continuity, empty-list and total-deadline races; re-review approved. |

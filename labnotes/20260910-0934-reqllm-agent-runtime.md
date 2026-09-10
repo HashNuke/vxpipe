@@ -1510,3 +1510,26 @@ package tests with two integration exclusions. A fresh root run used a temporary
 trust-authenticated PostgreSQL 18 instance, required no external database credential, and passed
 all 491 tests with ten tagged integration exclusions. The temporary server was stopped and its data
 directory moved to trash after the run.
+
+## Milestone completion audit
+
+Reconfirmed the final conversation contract before closing the milestone. Every platform,
+Call Variables, host, and eventual remote MCP invocation is delegated to the same bounded,
+independently supervised Call Engine worker path. `conversation_mode` is only the subsequent
+caller-turn admission policy on a participant's local tool binding: omission and `blocking` hold
+later caller turns outside the LLM, while explicit `non_blocking` admits unrelated turns. Every
+admitted provider request receives the single committed running acknowledgement and the current
+bounded pending-state projection, so non-blocking conversation cannot make the model forget the
+outstanding operation.
+
+The durable architecture, decision register, package/readme documentation, milestone index, and
+original call-definition labnote were reconciled with the selected runtime. Stale current-tense
+descriptions of the retired Jido graph and inline tool path were removed while historical evidence
+was retained as history. The index now records 11 complete and 13 incomplete milestones, with live
+remote MCP tools next.
+
+Final implementation evidence is the 491-test umbrella run with ten tagged integration exclusions,
+the two-test live Gemini lane, focused activation/participant and submission-race checks, and the
+previous responsive desktop/mobile rendered sample inspection. Root formatting,
+warnings-as-errors compilation, strict Credo, unused-lock, and documentation diff checks complete
+the milestone verification.
