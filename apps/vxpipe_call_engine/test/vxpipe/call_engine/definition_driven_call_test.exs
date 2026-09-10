@@ -57,20 +57,14 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     TestTextToSpeechTransport
   }
 
-  alias Vxpipe.AgentRuntime.{Message, ModelResponse}
+  alias Vxpipe.AgentRuntime.{Message, ModelResponse, ToolCall}
 
   test "archives private lifecycle, accepted input, tool, and generated-output facts" do
+    configure_agent_runtime_provider(self())
     room_id = unique_id("room-private-history")
     plan = compile_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
-
-    script =
-      expect_react do
-        user("What time is it?")
-        call("get_current_time", %{}, id: "tool-private-history")
-        answer("The host action completed.")
-      end
 
     archive =
       archive_options(
@@ -79,10 +73,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       )
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
-               agent_request_options: Jido.AI.Test.react_opts(script),
-               archive: Keyword.put(archive, :enabled, true)
-             )
+             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
 
     attach_caller(plan, room, caller, "conn-private-history")
 
@@ -97,7 +88,29 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert :ok = CallEngine.send_text(command)
 
-    facts = collect_archive_facts_through(:agent_turn_completed)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "tool-private-history",
+               name: "get_current_time",
+               arguments: %{}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, acknowledgement_request}
+    assert acknowledgement_request.tools == []
+    assert {:ok, response} = ModelResponse.new(text: "The host action started.")
+    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
+    assert List.last(completion_request.messages).origin == :engine
+    assert {:ok, response} = ModelResponse.new(text: "The host action completed.")
+    send(completion_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    facts = collect_archive_facts_through(:agent_turn_completed, 2)
 
     assert Enum.map(facts, & &1.sequence) == Enum.to_list(1..length(facts))
 
@@ -195,13 +208,27 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              public_sequence: 5,
              payload: %{
                "aggregated_by" => "sentence",
-               "text" => "The host action completed.",
+               "text" => "The host action started.",
                "will_be_spoken" => false
              }
            } = fact!(facts, :agent_output_generated)
 
     assert %Fact{kind: :agent_turn_completed, public_sequence: 6} =
              fact!(facts, :agent_turn_completed)
+
+    assert Enum.any?(facts, fn
+             %Fact{
+               kind: :agent_output_generated,
+               public_sequence: 7,
+               payload: %{"text" => "The host action completed."}
+             } ->
+               true
+
+             _other ->
+               false
+           end)
+
+    assert Enum.any?(facts, &match?(%Fact{kind: :agent_turn_completed, public_sequence: 8}, &1))
   end
 
   test "archives final audio input and distinguishes generated from delivered output" do
@@ -536,24 +563,15 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert Enum.any?(archived, &match?(%Fact{kind: :archive_stream_closed}, &1))
   end
 
-  test "starts only entry participants and routes an attached caller through Jido" do
+  test "starts only entry participants and routes an attached caller through Agent Runtime" do
+    configure_agent_runtime_provider(self())
     room_id = unique_id("room")
     plan = compile_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     unused = Map.fetch!(plan.participants, "unused-agent")
 
-    script =
-      expect_react do
-        user("What time is it?")
-        call("get_current_time", %{}, id: "tool-clock")
-        answer("The host action completed.")
-      end
-
-    assert {:ok, room} =
-             CallEngine.start_call(plan,
-               agent_request_options: Jido.AI.Test.react_opts(script)
-             )
+    assert {:ok, room} = CallEngine.start_call(plan)
 
     assert room.room_id == room_id
 
@@ -590,6 +608,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert :ok = CallEngine.send_text(command)
 
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert List.last(request.messages).content == "What time is it?"
+    assert {:ok, call} = ToolCall.new(id: "tool-clock", name: "get_current_time", arguments: %{})
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
 
@@ -611,9 +635,22 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                       result: %{"timezone" => "UTC"}
                     }}
 
-    assert_receive {:vxpipe_event, %TextOutput{sequence: 5, text: "The host action completed."}}
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, acknowledgement_request}
+    assert acknowledgement_request.tools == []
+    assert {:ok, response} = ModelResponse.new(text: "The host action started.")
+    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %TextOutput{sequence: 5, text: "The host action started."}}
 
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 6}}
+
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
+    assert List.last(completion_request.messages).origin == :engine
+    assert {:ok, response} = ModelResponse.new(text: "The host action completed.")
+    send(completion_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %TextOutput{sequence: 7, text: "The host action completed."}}
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 8}}
   end
 
   test "starts a room-owned Call Variables process independently of RoomAuthority" do
@@ -1233,16 +1270,22 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     )
   end
 
-  defp collect_archive_facts_through(kind, facts \\ []) do
+  defp collect_archive_facts_through(kind, count \\ 1, facts \\ [])
+
+  defp collect_archive_facts_through(kind, count, facts) when count > 0 do
     receive do
       {:test_archive_fact, %Fact{kind: ^kind} = fact} ->
-        Enum.reverse([fact | facts])
+        if count == 1 do
+          Enum.reverse([fact | facts])
+        else
+          collect_archive_facts_through(kind, count - 1, [fact | facts])
+        end
 
       {:test_archive_fact, %Fact{} = fact} ->
-        collect_archive_facts_through(kind, [fact | facts])
+        collect_archive_facts_through(kind, count, [fact | facts])
 
       {:test_archive_fact, _other_archive_value} ->
-        collect_archive_facts_through(kind, facts)
+        collect_archive_facts_through(kind, count, facts)
     after
       2_000 -> flunk("timed out waiting for archived #{kind}")
     end

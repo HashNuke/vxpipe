@@ -579,6 +579,20 @@ Implementation evidence:
   2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
   unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
+- Checkpoint 4r migrates the entry-participant/tool-ordering scenario and the private archive
+  scenario from Jido's scripted ReAct helper to the neutral Agent Runtime test provider. Both now
+  express the two real phases explicitly: a default-blocking submission produces a safe
+  acknowledgement turn, then its already-executed result enters a distinct private engine-origin
+  continuation. Exact room sequence assertions now cover tool start/completion, acknowledgement
+  output/completion, and final result output/completion. The archive assertion similarly retains
+  both agent turns plus complete private input and tool facts.
+- This is test-parity migration only; no runtime behavior changed after checkpoint 4q. The complete
+  Call Engine suite remains green at 244 tests with 2 integration exclusions. Remaining speech,
+  failure/restart, Call Variables, unit, and tagged-provider Jido fixtures still prevent removal of
+  the compatibility graph and dependencies. Umbrella format, warnings-as-errors compilation,
+  strict Credo, and unused-lock checks pass. Umbrella `mix test` again stops before test execution
+  because PostgreSQL SCRAM authentication needs a password absent from this shell; no credential
+  source was inspected.
 
 ## Specification review
 

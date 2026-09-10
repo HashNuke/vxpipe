@@ -1010,3 +1010,25 @@ definition-driven suite passes 18 tests, and the complete Call Engine suite pass
 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
 unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
 authentication needs a password absent from this shell; no credential source was inspected.
+
+## Implementation checkpoint 4r: tool and archive test parity
+
+Migrated two remaining definition-driven Jido scripts to the neutral Agent Runtime provider without
+changing production code. The entry-participant scenario still proves that only caller/receiver
+participants start and that an unused agent has no activation. Its exact event sequence now records
+the actual asynchronous protocol: participant input, tool accepted and completed, a default-blocking
+running acknowledgement turn, then a private engine-origin result turn.
+
+The private archive scenario uses the same three deterministic provider responses. Its collector can
+now wait for a specified number of matching facts, allowing it to retain both agent completions while
+preserving globally ordered private fact sequence. Assertions distinguish the acknowledgement text
+from the completion-derived text and retain the existing accepted-input, participant attribution,
+tool arguments, and tool result evidence.
+
+Both focused tests pass, and the complete Call Engine suite remains green at 244 tests with 2 tagged
+integration exclusions. This checkpoint changes only migration tests and documentation. Remaining
+Jido-scripted speech, archive-outage, Call Variables, restart, pinned-speech, unit, and integration
+scenarios still need neutral equivalents before the test default and dependency graph can be
+switched completely. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock
+checks pass. Umbrella `mix test` again stops before test execution because PostgreSQL SCRAM
+authentication needs a password absent from this shell; no credential source was inspected.
