@@ -225,3 +225,34 @@ Verification:
   password absent from this shell.
 - Streaming, ordered multiple calls/partial rejection, cancellation, provider failure after
   acceptance, and production ReqLLM encoding remain pending.
+
+## Implementation checkpoint 2c: ordered submission batches
+
+Replaced the temporary fail-closed multiple-call guard. The red batch test expected two
+provider-ordered submissions but received the earlier `multiple_tool_calls_unsupported`
+failure before either was attempted.
+
+The runner now performs two phases. It first rejects duplicate provider call IDs and resolves
+every exact local name plus JSON Schema before any work begins. It then invokes only the
+submit-only host callback in provider order and builds one matched result per call. An accepted
+call receives the correlated `running` result. A definite host rejection receives a bounded
+`{"status":"rejected","reason":...}` result. Already accepted workers remain represented when
+a later submission rejects; no rollback or retry occurs.
+
+The batch's conversation gate is the strict union of accepted modes: one blocking acceptance
+withholds all tools from the next acknowledgement round, while an explicitly non-blocking
+acceptance keeps the authorized tool projection. Rejected calls do not create pending state or
+change the gate. Tests cover a mixed accepted/rejected batch and an explicitly non-blocking
+call.
+
+As a hygiene refactor after green, moved tool-loop scenarios into `ToolRoundTest`; Session tests
+now cover only session lifecycle and pending-context integration. No production behavior moved.
+
+Verification:
+
+- Complete `vxpipe_agent_runtime` suite: 18 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell still lacks the local
+  PostgreSQL password.
+- Provider failure after acceptance, conversation recovery, cancellation, stream events,
+  explicit per-round limits, and production ReqLLM mapping remain pending.

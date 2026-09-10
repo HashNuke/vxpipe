@@ -99,9 +99,9 @@ process or dependency is used.
 2. [In progress 2026-09-10] Implement the submit-only model/tool state machine: final
    response, accepted running acknowledgements, definite non-submission, multiple calls in
    model order, mixed text/tool output, commit barriers, bounded failure, and cancellation.
-   Normalized response/tool-call values, the exact private registry, and one accepted
-   submission/acknowledgement round are complete. Ordered batches, failure paths, streaming,
-   and cancellation remain pending.
+   Normalized response/tool-call values, the exact private registry, accepted/rejected ordered
+   submission batches, and blocking/non-blocking acknowledgement rounds are complete. Failure
+   recovery, streaming, and cancellation remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -246,15 +246,24 @@ Implementation evidence:
   that acknowledgement round while preserving the mixed response text once.
 - Session configuration validation/projection lives in `SessionConfiguration`; Session itself
   continues to own only lifecycle, admission, committed conversation, task correlation, and
-  commit acknowledgement. Multiple calls are temporarily rejected before any submission
-  rather than risk losing partially accepted work; ordered batch semantics are the next
-  checkpoint.
+  commit acknowledgement.
 - Checkpoint 2b red evidence: the focused Session suite reported 5 tests with 4 failures under
   the old string-only provider path. The new single-call flow then passed, and a separate
   multiple-call test failed because the unfinished loop submitted work; the fail-closed guard
   made the complete package suite green at 17 tests, 0 failures. Umbrella format,
   warnings-as-errors, strict Credo, and unused-lock checks pass; umbrella tests remain blocked
   before execution by absent PostgreSQL authentication.
+- Checkpoint 2c replaces the temporary multiple-call rejection with ordered batch handling.
+  All names and schemas resolve before any submission; duplicate call IDs fail before work.
+  The runner then submits in provider order and commits one matched result per call. Accepted
+  calls receive `running`; definite host rejection receives a bounded `rejected` result.
+  Accepted work is retained when a later call rejects, and any blocking acceptance withholds
+  tools from the next round. An all-non-blocking batch keeps the authorized projection.
+- The tool-round tests are separated from Session lifecycle tests. Checkpoint 2c red evidence
+  showed the old temporary guard returning before the first expected submission. The complete
+  package suite is green at 18 tests, 0 failures. Umbrella format, warnings-as-errors, strict
+  Credo, and unused-lock checks pass; umbrella tests again stop before execution because the
+  local PostgreSQL password is absent.
 
 ## Specification review
 

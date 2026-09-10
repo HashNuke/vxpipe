@@ -213,8 +213,13 @@ The first repeated-round slice now handles one accepted call end to end within t
 It commits the assistant tool request and correlated running acknowledgement before the next
 provider generation, refreshes authoritative pending context, and withholds tools when the
 host reports the binding as blocking. Session option validation is isolated from lifecycle,
-and the request runner owns model/tool sequencing. Multiple calls currently fail closed before
-submission until ordered partial-submission semantics are implemented.
+and the request runner owns model/tool sequencing.
+
+Ordered batches are now supported. The runner resolves every exact name and validates every
+schema before work begins, rejects duplicate provider call IDs, then submits in provider order.
+It commits a matched running or safe rejection result for each call, retaining accepted work
+when a later submission rejects. Any accepted blocking call withholds tools from the next
+round; explicitly non-blocking calls do not.
 
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and

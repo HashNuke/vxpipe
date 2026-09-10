@@ -1,6 +1,6 @@
 # Tool execution model
 
-Date: 2026-09-10. Status: selected target; single-call agent-runtime loop implemented.
+Date: 2026-09-10. Status: selected target; ordered agent-runtime submission loop implemented.
 
 ## Decision
 

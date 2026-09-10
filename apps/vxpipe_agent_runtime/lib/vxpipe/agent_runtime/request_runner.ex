@@ -70,17 +70,6 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     {:ok, complete_output(response.text, output), conversation}
   end
 
-  defp handle_response(
-         %ModelResponse{tool_calls: [_first, _second | _rest]},
-         _conversation,
-         _staged_messages,
-         _output,
-         _round,
-         _request,
-         _config
-       ),
-       do: {:error, :multiple_tool_calls_unsupported}
-
   defp handle_response(response, conversation, staged_messages, output, round, request, config) do
     if round >= config.maximum_model_rounds do
       {:error, :model_round_limit}
@@ -106,27 +95,54 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   end
 
   defp submit_calls(calls, request, config) do
-    Enum.reduce_while(calls, {:ok, [], false}, fn call, {:ok, submissions, blocking?} ->
-      with {:ok, descriptor} <-
-             ToolRegistry.resolve(config.tool_registry, call.name, call.arguments),
-           {:accepted, mode} <-
-             Executor.submit(
+    with :ok <- validate_unique_call_ids(calls),
+         {:ok, resolved_calls} <- resolve_calls(calls, config.tool_registry) do
+      submit_resolved_calls(resolved_calls, request, config)
+    end
+  end
+
+  defp validate_unique_call_ids(calls) do
+    call_ids = Enum.map(calls, & &1.id)
+
+    if length(call_ids) == MapSet.size(MapSet.new(call_ids)) do
+      :ok
+    else
+      {:error, :duplicate_tool_call}
+    end
+  end
+
+  defp resolve_calls(calls, registry) do
+    Enum.reduce_while(calls, {:ok, []}, fn call, {:ok, resolved} ->
+      case ToolRegistry.resolve(registry, call.name, call.arguments) do
+        {:ok, descriptor} -> {:cont, {:ok, [{call, descriptor} | resolved]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, resolved} -> {:ok, Enum.reverse(resolved)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp submit_resolved_calls(resolved_calls, request, config) do
+    {submissions, blocking?} =
+      Enum.reduce(resolved_calls, {[], false}, fn {call, descriptor}, {submissions, blocking?} ->
+        case Executor.submit(
                config.executor,
                descriptor.binding,
                call.arguments,
                request.correlation,
                call.id
              ) do
-        submission = {call, running_result(call)}
-        {:cont, {:ok, [submission | submissions], blocking? or mode == :blocking}}
-      else
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:ok, submissions, blocking?} -> {:ok, Enum.reverse(submissions), blocking?}
-      {:error, reason} -> {:error, reason}
-    end
+          {:accepted, mode} ->
+            {[{call, running_result(call)} | submissions], blocking? or mode == :blocking}
+
+          {:error, reason} ->
+            {[{call, rejected_result(reason)} | submissions], blocking?}
+        end
+      end)
+
+    {:ok, Enum.reverse(submissions), blocking?}
   end
 
   defp commit_tool_exchange(response, submissions, conversation, staged_messages) do
@@ -151,6 +167,9 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
 
   defp running_result(call),
     do: %{"invocation_id" => call.id, "status" => "running"}
+
+  defp rejected_result(reason),
+    do: %{"reason" => Atom.to_string(reason), "status" => "rejected"}
 
   defp append_output("", output), do: output
   defp append_output(text, output), do: [text | output]
