@@ -46,15 +46,15 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
 
 ## Implementation checklist
 
-- [ ] Red-test a controlled remote MCP fixture for discovery, valid tool invocation, slow result, schema failure, auth and response-size limits.
+- [x] Red-test a controlled remote MCP fixture for discovery, valid tool invocation, slow result, schema failure, auth and response-size limits.
 - [ ] Prove the public Jido AI runtime-binding extension in a deterministic mixed-tool run;
   record the exact supported release/API before claiming dynamic catalog support.
-- [ ] Wire the verified ExMCP adapter through the integration owner; preserve its pinned
+- [x] Wire the verified ExMCP adapter through the integration owner; preserve its pinned
   profile/conformance evidence and enforce dependency direction.
 - [x] Implement private scoped integration resolution/cache/discovery and data-backed binding
   validation without unbounded external atom/module creation.
 - [ ] Connect tools/call to background workers, complete private history, and safe model/client projections.
-- [ ] Test security at the effective network client, not only a configured URL string; isolate real network interoperability tests.
+- [x] Test security at the effective network client, not only a configured URL string; isolate real network interoperability tests.
 
 ## Acceptance and failure checks
 
@@ -221,6 +221,16 @@ definition boundary has started or its specification has been reviewed.
   Credo, and dependency checks pass; the serialized umbrella suite passes all 424 default-lane
   tests with nine tagged integrations excluded. This proves the engine-owned data path through
   runtime execution; the separate Jido model-projection acceptance check remains blocked.
+- [x] A controlled loopback server now proves `CatalogLoader` and `IntegrationOwner` use the real
+  `vxpipe_mcp`/ExMCP client for authenticated discovery and exact pinned invocation. Five focused
+  engine tests cover success, authentication rejection, schema rejection before submission,
+  submitted slow/oversized outcomes with exactly one request, and redirect refusal without
+  forwarding credentials. A separate MCP-child wire test injects a mixed loopback/public DNS
+  answer and proves the effective client rejects it before connecting. Plaintext remains available
+  only through a test-only provider. The MCP child passes 34 tests and the Call Engine child passes
+  214 tests, with their tagged integrations excluded. Root formatting, warnings-as-errors, strict
+  Credo, and dependency gates pass; the serialized umbrella suite passes all 430 default-lane tests
+  with nine tagged integrations excluded. This does not expose remote bindings to Jido.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

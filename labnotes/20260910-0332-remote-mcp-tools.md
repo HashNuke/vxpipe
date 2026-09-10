@@ -534,3 +534,33 @@ runtime data-tool interface.
 
 Next: commit this independent acceptance checkpoint, then continue the milestone audit without
 crossing the unresolved Jido runtime data-tool boundary.
+
+## 2026-09-10 — engine-to-wire acceptance
+
+- The audit found protocol wire/limit fixtures in `vxpipe_mcp` and fake-protocol engine tests, but
+  no acceptance path joining engine configuration/discovery/activation to the actual ExMCP client.
+- Red: five engine tests failed because the controlled wire server and explicit loopback connection
+  provider did not exist. This was the expected boundary failure. The first green attempt also
+  caught a bad dependency declaration: test-only Plug conflicted with ExMCP's runtime Plug
+  requirement. The redundant declaration was removed; Call Engine owns only Bandit as a test
+  fixture dependency.
+- Green: the test-only provider calls `Connections.open_loopback_test/3`; production configuration
+  still calls `Connections.open/3`, requires HTTPS, and cannot enable plaintext. The controlled
+  server implements only initialize, initialized notification, tools/list and tools/call behavior.
+- The full path now proves the configured authorization header reaches authenticated discovery and
+  the exact pinned remote operation. Invalid typed arguments produce no `tools/call`. Slow and
+  oversized submitted calls return the engine's `:unknown` outcome after exactly one request.
+  Rejected authentication prevents discovery, and an initialization redirect is not followed or
+  given the credential.
+- A separate MCP-child wire check injects a mixed loopback/public DNS result and observes that the
+  effective ExMCP network client rejects it before the controlled server sees a request. This tests
+  Vxpipe's actual runtime option path rather than merely inspecting a URL or policy value.
+- The five focused engine checks pass under seeds 0, 17 and 103. The MCP child passes 34 tests and
+  the Call Engine child passes 214 tests, with three and two tagged integrations excluded
+  respectively. Root formatting, warnings-as-errors compilation, strict Credo over 320 source
+  files, and unused-dependency checks pass. The serialized umbrella suite passes all 430
+  default-lane tests with nine tagged integrations excluded. The Jido model-tool interface remains
+  deliberately untouched.
+
+Next: commit the engine-to-wire checkpoint, then audit the remaining history/client-projection work
+that can proceed without the unresolved Jido data-tool interface.

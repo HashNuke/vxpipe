@@ -336,8 +336,9 @@ Stream/session recovery must never silently resubmit `tools/call` or bypass invo
 deadlines. The same invocation retains one absolute deadline and cumulative decoded/
 decompressed response budget across stream resumption, progress and reconnects;
 neither resets for a new HTTP response. Verify initialization with and without a
-server-issued session ID. No dependency or runtime adapter has been installed by this
-design decision.
+server-issued session ID. The pinned `vxpipe_mcp` adapter owns those wire semantics;
+Call Engine reaches it through the same scoped connection and protocol boundaries for
+catalog discovery and activation-local invocation.
 
 All remotely supplied integration, tenant, endpoint, generation, operation, alias, and schema
 identities remain binaries throughout configuration, discovery, plan resolution, exact activation
@@ -345,6 +346,13 @@ checkout, argument validation, and invocation. None selects a BEAM module. Repea
 churn must therefore remain data churn: it may replace catalog values and supervised clients but
 must not create atoms or modules. Private endpoint selectors remain behind the integration boundary
 and are absent from resolved plans and inspectable activation state.
+
+A controlled loopback acceptance fixture exercises the engine's `CatalogLoader` and
+`IntegrationOwner` through the real `vxpipe_mcp`/ExMCP client. It verifies authenticated discovery,
+exact pinned invocation, schema rejection before submission, one-shot timeout/oversize ambiguity,
+redirect refusal without credential forwarding, and mixed DNS-answer rejection at the effective
+network client. Plaintext transport is available only through the explicit test connection provider;
+production integration configuration still requires HTTPS and cannot select that escape hatch.
 
 Jido AI's current public tool registry expects Action modules and regenerates model
 schemas from them after request transformation. It also loses configured registry aliases
