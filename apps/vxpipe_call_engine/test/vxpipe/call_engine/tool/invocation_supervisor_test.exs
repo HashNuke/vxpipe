@@ -101,6 +101,58 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
     refute_receive {:vxpipe_tool_invocation_finished, ^worker, _duplicate}
   end
 
+  test "bounds a successful worker result before terminal handoff" do
+    supervisor = start_invocation_supervisor(1)
+
+    assert {:ok, worker} =
+             InvocationSupervisor.start_invocation(supervisor,
+               invocation_id: "invocation-large-result",
+               binding: host_binding(:blocking),
+               arguments: %{"value" => "larger-than-eight-bytes"},
+               context: context(),
+               reply_to: self(),
+               timeout_ms: 1_000,
+               maximum_result_bytes: 8
+             )
+
+    assert_receive {:submitted_inline_tool_started, execution, "larger-than-eight-bytes"}
+    send(execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_tool_invocation_finished, ^worker,
+                    %InvocationCompletion{
+                      invocation_id: "invocation-large-result",
+                      outcome: {:error, :invalid_result}
+                    }}
+
+    refute inspect(:sys.get_state(supervisor)) =~ "larger-than-eight-bytes"
+  end
+
+  test "maps an abnormal execution exit to one bounded worker failure" do
+    supervisor = start_invocation_supervisor(1)
+
+    assert {:ok, worker} =
+             InvocationSupervisor.start_invocation(supervisor,
+               invocation_id: "invocation-worker-failure",
+               binding: host_binding(:blocking),
+               arguments: %{"value" => "private-failure-input"},
+               context: context(),
+               reply_to: self(),
+               timeout_ms: 1_000,
+               maximum_result_bytes: 4_096
+             )
+
+    assert_receive {:submitted_inline_tool_started, execution, "private-failure-input"}
+    Process.exit(execution, :kill)
+
+    assert_receive {:vxpipe_tool_invocation_finished, ^worker,
+                    %InvocationCompletion{
+                      invocation_id: "invocation-worker-failure",
+                      outcome: {:error, :tool_failed}
+                    }}
+
+    refute_receive {:vxpipe_tool_invocation_finished, ^worker, _duplicate}
+  end
+
   test "keeps a prepared invocation dormant until its owner explicitly begins it" do
     supervisor = start_invocation_supervisor(1)
 

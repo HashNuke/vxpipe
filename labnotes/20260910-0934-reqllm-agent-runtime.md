@@ -1416,3 +1416,19 @@ matched result by the runtime, a missing acknowledgement cannot advance the next
 Both new cases passed immediately against the existing ordered batch implementation; this was an
 acceptance-evidence checkpoint with no production behavior change. The focused tool-round and
 request-bounds run passes 8 tests.
+
+## Acceptance checkpoint: bounded runtime and worker failures
+
+Expanded session-level boundary coverage for oversized caller input, unknown tool names,
+schema-invalid arguments, the configured model-round ceiling, and malformed normalized provider
+responses. Oversized input stops before pending-context/provider work; invalid tool requests and a
+round-limit response stop before the executor; all expose only the existing bounded failure atoms.
+Together with the existing excessive-call, duplicate-call, output/stream limits, rejected
+submission, and arbitrary provider-error cases, these tests cover the runtime half of the declared
+failure matrix without automatic retry.
+
+Added worker-boundary cases proving that an otherwise successful result exceeding the configured
+JSON byte limit becomes `invalid_result`, while an abnormal execution-process exit becomes one
+`tool_failed` terminal outcome. Neither case retries. The expanded request-bounds file passes 9
+tests, and the invocation-supervisor file passes 6 tests. These are acceptance tests over existing
+behavior; no production change was required.

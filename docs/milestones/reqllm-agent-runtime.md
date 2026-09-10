@@ -183,7 +183,7 @@ process or dependency is used.
 - [x] Two local aliases share one executor implementation while retaining distinct exact
   descriptions, schemas, binding identities, and attribution. Repeated unique aliases and
   schemas do not cause proportional atom/module growth.
-- [ ] Unknown/duplicate tools, malformed calls, invalid arguments, excessive calls/rounds,
+- [x] Unknown/duplicate tools, malformed calls, invalid arguments, excessive calls/rounds,
   oversized input/result/text, submission failure, worker failure, and provider failure
   produce the specified bounded model-error or terminal outcome with no unauthorized
   execution, public internal explanation, or retry.
