@@ -12,5 +12,7 @@ defmodule Vxpipe.AgentRuntime.ModelProvider do
               emit :: (String.t() -> :ok | {:error, atom()})
             ) :: {:ok, ModelResponse.t()} | {:error, atom()}
 
-  @optional_callbacks stream: 3
+  @callback streaming?(model :: term()) :: boolean()
+
+  @optional_callbacks stream: 3, streaming?: 1
 end

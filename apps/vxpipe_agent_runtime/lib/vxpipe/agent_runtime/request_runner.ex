@@ -38,7 +38,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              pending_invocations,
              request.correlation
            ),
-         {:ok, response} <- generate_response(config, model_request, output) do
+         {:ok, response} <- generate_response(config, model_request, output),
+         :ok <- emit_model_usage(response, config) do
       handle_response(
         response,
         conversation,
@@ -205,11 +206,17 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   end
 
   defp provider_response(config, model_request, output) do
-    if function_exported?(config.model_provider, :stream, 3) do
+    if streaming_provider?(config) do
       stream_response(config, model_request, output)
     else
       config.model_provider.generate(config.model, model_request)
     end
+  end
+
+  defp streaming_provider?(config) do
+    function_exported?(config.model_provider, :stream, 3) and
+      (not function_exported?(config.model_provider, :streaming?, 1) or
+         config.model_provider.streaming?(config.model))
   end
 
   defp stream_response(config, model_request, output) do
@@ -228,6 +235,14 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     case StreamBudget.outcome(budget) do
       :ok -> response
       {:error, reason} -> {:runtime_error, reason}
+    end
+  end
+
+  defp emit_model_usage(%ModelResponse{} = response, config) do
+    if response.usage == %{} and response.provider_metadata == %{} do
+      :ok
+    else
+      config.emit_model_usage.(response.usage, response.provider_metadata)
     end
   end
 

@@ -434,3 +434,43 @@ Verification:
   password.
 - Production ReqLLM stream creation/materialization, usage projection, transport cleanup,
   submit-admission reconciliation, and Call Engine integration remain pending.
+
+## Implementation checkpoint 3a: production ReqLLM boundary
+
+Started with four deterministic adapter tests. They require configuration to resolve a real
+ReqLLM model without exposing or accepting API-key overrides; projection of normalized messages,
+tool schemas, tool-call continuation metadata, engine-origin input, and pending invocation state;
+normalization of a mixed ReqLLM response with usage and redacted call metadata; and materializing a
+ReqLLM `StreamResponse` while emitting ordered text and invoking its cancellation/close handle.
+The initial run failed at compile time because `ModelResponse` did not retain usage or provider
+metadata.
+
+Extended `ModelResponse` with separately bounded usage and provider-metadata maps, both excluded
+from inspection. Added `Provider.ReqLLM.Config`, `RequestProjection`, and `ResponseNormalizer` so
+credential validation, wire projection, and dependency output classification have separate
+reasons to change. The top-level provider owns only buffered/stream calls, normalization dispatch,
+and best-effort stream closure. The deterministic adapter suite then passed.
+
+Added a separate runtime usage-event test before implementing event delivery. It failed because a
+valid normalized response completed without publishing its metadata. Generalized the Session's
+token-correlated stream event handshake into a bounded request-event handoff and added
+`model_usage`. `RequestRunner` emits one observation for every provider round with non-empty usage
+or safe call metadata before processing its text/tool response. Event inspection excludes the
+payload. ReqLLM's `Response.call_metadata/1` redaction was verified against an authorization value.
+
+Pending invocation context is rendered from the already validated payload-free values and added
+only to the projected leading system message. Engine-origin and caller-origin messages both map to
+ReqLLM user messages, matching the provider compatibility already observed in the existing Call
+Engine implementation. ReqLLM tools contain only name, description, schema, and a callback that
+returns `runtime_owned_tool`; execution bindings remain exclusively in Agent Runtime's registry.
+
+Verification:
+
+- Focused ReqLLM adapter plus usage-event tests: 5 tests, 0 failures after the expected compile
+  failure and 1-test event red run.
+- Complete `vxpipe_agent_runtime` suite: 37 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell has no local PostgreSQL
+  password.
+- No network/provider interoperability is claimed. Tagged provider validation, Call Engine
+  selection, submit-admission reconciliation, and end-to-end sample verification remain pending.

@@ -14,7 +14,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
     :maximum_tool_calls_per_round,
     :maximum_output_bytes,
     :maximum_stream_events_per_round,
-    :stream_event_timeout_ms,
+    :event_handoff_timeout_ms,
     :pending_context_source,
     :pending_context_timeout_ms,
     :maximum_pending_invocations,
@@ -41,8 +41,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
            positive(Keyword.get(options, :maximum_output_bytes, 256 * 1_024)),
          {:ok, maximum_stream_events_per_round} <-
            positive(Keyword.get(options, :maximum_stream_events_per_round, 4_096)),
-         {:ok, stream_event_timeout_ms} <-
-           positive(Keyword.get(options, :stream_event_timeout_ms, 1_000)),
+         {:ok, event_handoff_timeout_ms} <-
+           positive(Keyword.get(options, :event_handoff_timeout_ms, 1_000)),
          {:ok, pending_context_source} <-
            validate_pending_context_source(Keyword.get(options, :pending_context_source)),
          {:ok, pending_context_timeout_ms} <-
@@ -65,7 +65,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          maximum_tool_calls_per_round: maximum_tool_calls_per_round,
          maximum_output_bytes: maximum_output_bytes,
          maximum_stream_events_per_round: maximum_stream_events_per_round,
-         stream_event_timeout_ms: stream_event_timeout_ms,
+         event_handoff_timeout_ms: event_handoff_timeout_ms,
          pending_context_source: pending_context_source,
          pending_context_timeout_ms: pending_context_timeout_ms,
          maximum_pending_invocations: maximum_pending_invocations,
@@ -80,15 +80,18 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
 
   def new(_options), do: {:error, :invalid_configuration}
 
-  @spec runner_options(
-          t(),
-          (-> :ok | {:error, atom()}),
-          (Vxpipe.AgentRuntime.Conversation.t() -> :ok | {:error, atom()}),
-          (String.t() -> :ok | {:error, atom()})
-        ) :: map()
-  def runner_options(%__MODULE__{} = config, begin_submission, commit, emit_text_delta)
+  @spec runner_options(t(), map()) :: map()
+  def runner_options(
+        %__MODULE__{} = config,
+        %{
+          begin_submission: begin_submission,
+          commit: commit,
+          emit_model_usage: emit_model_usage,
+          emit_text_delta: emit_text_delta
+        }
+      )
       when is_function(begin_submission, 0) and is_function(commit, 1) and
-             is_function(emit_text_delta, 1) do
+             is_function(emit_model_usage, 2) and is_function(emit_text_delta, 1) do
     %{
       model_provider: config.model_provider,
       model: config.model,
@@ -103,6 +106,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       maximum_pending_invocations: config.maximum_pending_invocations,
       begin_submission: begin_submission,
       commit: commit,
+      emit_model_usage: emit_model_usage,
       emit_text_delta: emit_text_delta
     }
   end
@@ -118,7 +122,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       :maximum_tool_calls_per_round,
       :maximum_output_bytes,
       :maximum_stream_events_per_round,
-      :stream_event_timeout_ms,
+      :event_handoff_timeout_ms,
       :pending_context_source,
       :pending_context_timeout_ms,
       :maximum_pending_invocations,

@@ -8,6 +8,7 @@ defmodule Vxpipe.AgentRuntime.Event do
   @type kind ::
           :request_started
           | :text_delta
+          | :model_usage
           | :response_completed
           | :request_failed
           | :request_cancelled
@@ -18,6 +19,7 @@ defmodule Vxpipe.AgentRuntime.Event do
       when kind in [
              :request_started,
              :text_delta,
+             :model_usage,
              :response_completed,
              :request_failed,
              :request_cancelled

@@ -1,7 +1,8 @@
 # ReqLLM agent runtime
 
-Status: implementation in progress. Package contracts and lifecycle are complete. Loop,
-provider adapter, Call Engine migration, and final evidence remain pending.
+Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
+the production ReqLLM projection/normalization boundary are implemented. Call Engine migration,
+tagged-provider interoperability, and final evidence remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -106,9 +107,10 @@ process or dependency is used.
    admission are also implemented. Provider-neutral bounded text streaming is complete.
    Remaining submit callback bounds, production ReqLLM adapter behavior, and Call Engine lease
    integration remain pending.
-3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
-   JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
-   that boundary. Keep live-provider checks tagged.
+3. [In progress 2026-09-10] Add the ReqLLM adapter by moving/refining the existing Call Engine
+   projection. Raw JSON Schema aliases, canonical exchanges, deterministic streaming collection,
+   usage, safe call metadata, and cleanup are covered locally. Live-provider interoperability
+   and Call Engine selection remain pending; keep live-provider checks tagged.
 4. Replace the Jido AgentServer child in an activation with `Vxpipe.AgentRuntime`; migrate
    the coordinator/dispatcher to one worker-submission path and compile default-blocking /
    explicit-non-blocking binding policy. Preserve completion and interruption behavior.
@@ -325,6 +327,20 @@ Implementation evidence:
   green at 32 tests, 0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock
   checks pass; umbrella tests stop before execution because the local PostgreSQL password is
   absent. ReqLLM stream construction/materialization and transport cleanup remain checkpoint 3.
+- Checkpoint 3a adds the production `Provider.ReqLLM` boundary split into credential-safe
+  configuration, request projection, and response normalization modules. It maps caller and
+  engine-origin messages to provider-compatible roles, projects exact JSON Schema tools with a
+  non-executing callback, injects the bounded pending-invocation snapshot into ephemeral system
+  context, and preserves canonical tool-call metadata needed for subsequent provider turns.
+- Buffered responses and materialized streams normalize into the same bounded `ModelResponse`,
+  including usage and ReqLLM's redacted call metadata. Every non-empty usage/metadata observation
+  is handed to Session as an inspection-safe `model_usage` event before response handling. The
+  deterministic stream fixture proves ordered text callbacks and explicit ReqLLM handle closure.
+- Checkpoint 3a red evidence first failed to compile because normalized responses lacked usage and
+  provider metadata. A subsequent focused usage-event test failed because the loop discarded
+  those values. The adapter/usage tests and complete package suite are green at 37 tests,
+  0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks pass;
+  umbrella tests stop before execution because the local PostgreSQL password is absent.
 
 ## Specification review
 

@@ -80,16 +80,33 @@ defmodule Vxpipe.AgentRuntime.Session do
       end
 
       emit_text_delta = fn text ->
-        emit_text_delta(session, token, text, state.configuration.stream_event_timeout_ms)
+        emit_request_event(
+          session,
+          token,
+          :text_delta,
+          %{text: text},
+          state.configuration.event_handoff_timeout_ms
+        )
       end
 
-      runner_options =
-        SessionConfiguration.runner_options(
-          state.configuration,
-          begin_submission,
-          commit,
-          emit_text_delta
+      emit_model_usage = fn usage, provider_metadata ->
+        emit_request_event(
+          session,
+          token,
+          :model_usage,
+          %{usage: usage, provider_metadata: provider_metadata},
+          state.configuration.event_handoff_timeout_ms
         )
+      end
+
+      callbacks = %{
+        begin_submission: begin_submission,
+        commit: commit,
+        emit_model_usage: emit_model_usage,
+        emit_text_delta: emit_text_delta
+      }
+
+      runner_options = SessionConfiguration.runner_options(state.configuration, callbacks)
 
       task =
         Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
@@ -142,16 +159,13 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   @impl true
   def handle_info(
-        {:agent_runtime_text_delta, worker, token, text},
+        {:agent_runtime_request_event, worker, token, event_ref, kind, data},
         %{active_task: %{pid: worker}, active_token: token} = state
       )
-      when is_binary(text) do
-    emit(
-      state.configuration.event_destination,
-      Event.new(:text_delta, state.correlation, %{text: text})
-    )
+      when kind in [:text_delta, :model_usage] and is_map(data) do
+    emit(state.configuration.event_destination, Event.new(kind, state.correlation, data))
 
-    send(worker, {:agent_runtime_text_delta_emitted, token})
+    send(worker, {:agent_runtime_request_event_emitted, token, event_ref})
     {:noreply, state}
   end
 
@@ -279,11 +293,12 @@ defmodule Vxpipe.AgentRuntime.Session do
     end
   end
 
-  defp emit_text_delta(session, token, text, timeout_ms) do
-    send(session, {:agent_runtime_text_delta, self(), token, text})
+  defp emit_request_event(session, token, kind, data, timeout_ms) do
+    event_ref = make_ref()
+    send(session, {:agent_runtime_request_event, self(), token, event_ref, kind, data})
 
     receive do
-      {:agent_runtime_text_delta_emitted, ^token} -> :ok
+      {:agent_runtime_request_event_emitted, ^token, ^event_ref} -> :ok
     after
       timeout_ms -> {:error, :event_unavailable}
     end

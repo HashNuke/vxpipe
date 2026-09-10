@@ -4,21 +4,47 @@ defmodule Vxpipe.AgentRuntime.ModelResponse do
   alias Vxpipe.AgentRuntime.ToolCall
 
   @derive {Inspect, only: []}
-  @enforce_keys [:text, :tool_calls]
+  @enforce_keys [:text, :tool_calls, :usage, :provider_metadata]
   defstruct @enforce_keys
 
-  @type t :: %__MODULE__{text: String.t(), tool_calls: [ToolCall.t()]}
+  @type t :: %__MODULE__{
+          text: String.t(),
+          tool_calls: [ToolCall.t()],
+          usage: map(),
+          provider_metadata: map()
+        }
 
   @maximum_text_bytes 256 * 1_024
   @maximum_tool_calls 32
+  @maximum_usage_bytes 16 * 1_024
+  @maximum_provider_metadata_bytes 64 * 1_024
 
   @spec new(keyword()) :: {:ok, t()} | {:error, atom()}
   def new(attributes) when is_list(attributes) do
-    with {:ok, attributes} <- Keyword.validate(attributes, [:text, tool_calls: []]),
+    with {:ok, attributes} <-
+           Keyword.validate(attributes, [
+             :text,
+             tool_calls: [],
+             usage: %{},
+             provider_metadata: %{}
+           ]),
          {:ok, text} <- validate_text(Keyword.get(attributes, :text)),
          {:ok, tool_calls} <- validate_tool_calls(Keyword.fetch!(attributes, :tool_calls)),
+         {:ok, usage} <-
+           validate_metadata(Keyword.fetch!(attributes, :usage), @maximum_usage_bytes),
+         {:ok, provider_metadata} <-
+           validate_metadata(
+             Keyword.fetch!(attributes, :provider_metadata),
+             @maximum_provider_metadata_bytes
+           ),
          false <- text == "" and tool_calls == [] do
-      {:ok, %__MODULE__{text: text, tool_calls: tool_calls}}
+      {:ok,
+       %__MODULE__{
+         text: text,
+         tool_calls: tool_calls,
+         usage: usage,
+         provider_metadata: provider_metadata
+       }}
     else
       true -> {:error, :empty_response}
       {:error, _reason} = error -> error
@@ -29,9 +55,17 @@ defmodule Vxpipe.AgentRuntime.ModelResponse do
   def new(_attributes), do: {:error, :invalid_response}
 
   @spec valid?(term()) :: boolean()
-  def valid?(%__MODULE__{text: text, tool_calls: tool_calls}) do
+  def valid?(%__MODULE__{
+        text: text,
+        tool_calls: tool_calls,
+        usage: usage,
+        provider_metadata: provider_metadata
+      }) do
     with {:ok, _text} <- validate_text(text),
-         {:ok, _tool_calls} <- validate_tool_calls(tool_calls) do
+         {:ok, _tool_calls} <- validate_tool_calls(tool_calls),
+         {:ok, _usage} <- validate_metadata(usage, @maximum_usage_bytes),
+         {:ok, _provider_metadata} <-
+           validate_metadata(provider_metadata, @maximum_provider_metadata_bytes) do
       text != "" or tool_calls != []
     else
       _invalid -> false
@@ -56,4 +90,14 @@ defmodule Vxpipe.AgentRuntime.ModelResponse do
   end
 
   defp validate_tool_calls(_tool_calls), do: {:error, :invalid_response}
+
+  defp validate_metadata(metadata, maximum_bytes) when is_map(metadata) do
+    if :erlang.external_size(metadata) <= maximum_bytes do
+      {:ok, metadata}
+    else
+      {:error, :metadata_too_large}
+    end
+  end
+
+  defp validate_metadata(_metadata, _maximum_bytes), do: {:error, :invalid_response}
 end

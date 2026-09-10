@@ -186,6 +186,14 @@ response can commit conversation. Request cancellation terminates the streaming 
 the Session ignores stale-token messages. ReqLLM-specific stream lifecycle/cleanup belongs to the
 production provider adapter rather than this provider-neutral loop.
 
+The production ReqLLM adapter is now package-owned and split by responsibility: secret-safe model
+configuration, normalized request projection, and bounded response normalization. It uses public
+ReqLLM context/tool/response/stream APIs, injects the current pending-invocation projection only
+into the outgoing request, and attaches no engine binding to a ReqLLM tool. Buffered and streamed
+responses yield the same runtime value. Usage plus ReqLLM-redacted provider call identity crosses
+the token-correlated Session event boundary; prompts, private bindings, raw provider failures, and
+authorization values do not. Call Engine has not yet selected this adapter for live activations.
+
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current

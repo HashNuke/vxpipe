@@ -258,7 +258,23 @@ and event count for each provider round before forwarding a delta. The runner ha
 its Session with token correlation and a bounded acknowledgement, so cancellation cannot attach
 later output to a reused Session. Deltas are provisional and never mutate conversation; the final
 validated response alone enters the existing output and commit path. Event inspection hides text.
-The production ReqLLM adapter still needs to materialize its stream and prove transport cleanup.
+Dependency-specific stream materialization and cleanup stay outside this provider-neutral loop.
+
+The production ReqLLM adapter now consists of three narrow collaborators. `Config` resolves the
+model and streaming support while keeping API keys and generation options out of inspection.
+`RequestProjection` maps normalized conversation/tool values to public ReqLLM context and tool
+APIs; its tool callback can only reject accidental dependency-owned execution. Current pending
+invocations are serialized into an ephemeral addition to the leading system message and never
+written back to Conversation. Both caller and engine-origin inputs use the provider-compatible
+user role while their runtime provenance remains intact.
+
+`ResponseNormalizer` uses ReqLLM's public classification and redacted call-metadata APIs. It
+returns one bounded `ModelResponse` for buffered and streamed calls, retaining mixed text,
+actionable tool calls, provider continuation metadata, usage, response/model/request identity,
+and safe provider metadata. Provider-executed built-ins/provider-native calls are not submitted
+as Vxpipe tools. ReqLLM stream materialization invokes the runtime delta callback and always
+closes the stream handle. Session receives non-empty usage/call metadata as a payload-hidden
+`model_usage` event before the response is handled. A tagged live-provider run remains pending.
 
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
