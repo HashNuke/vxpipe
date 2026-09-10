@@ -194,6 +194,11 @@ responses yield the same runtime value. Usage plus ReqLLM-redacted provider call
 the token-correlated Session event boundary; prompts, private bindings, raw provider failures, and
 authorization values do not. Call Engine has not yet selected this adapter for live activations.
 
+Tagged production evidence confirms Gemini accepts this adapter's exact tool schema and a
+subsequent canonical running-acknowledgement round with ephemeral pending state and tools withheld.
+That verifies provider interoperability only; live Vxpipe calls continue through the existing
+Call Engine runtime until the migration checkpoint.
+
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current

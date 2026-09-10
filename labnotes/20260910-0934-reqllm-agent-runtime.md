@@ -474,3 +474,28 @@ Verification:
   password.
 - No network/provider interoperability is claimed. Tagged provider validation, Call Engine
   selection, submit-admission reconciliation, and end-to-end sample verification remain pending.
+
+## Implementation checkpoint 3b: tagged Gemini interoperability
+
+The shell exposed `GEMINI_API_KEY`; only presence was checked, never its value. Added an explicitly
+tagged integration test for the production `Provider.ReqLLM` streaming path. The first live model
+request supplies one exact `vxpipe_interop_value` tool with a raw JSON Schema constrained to the
+fixture value. Gemini returned that exact call and argument. The second request supplies the
+assistant call, its correlated ordinary `running` result, the matching bounded pending projection,
+and no tools because this fixture binding is blocking. Gemini accepted the exchange and streamed a
+non-empty acknowledgement.
+
+The live command passed 1 test with 0 failures. ReqLLM debug logging rendered the request URL with
+the API key as `[REDACTED]`. The new package's test helper initially did not exclude integration
+tests, so the ordinary child suite reran the network check. Aligned it with the other umbrella apps
+using `exclude: [:integration]`; the default suite now remains offline.
+
+Verification:
+
+- Tagged Gemini provider run: 1 test, 0 failures.
+- Default `vxpipe_agent_runtime` suite: 37 tests, 0 failures, 1 excluded.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell has no local PostgreSQL
+  password.
+- Call Engine selection/admission reconciliation and end-to-end sample verification remain
+  pending. The tagged test does not claim browser or live-room integration.

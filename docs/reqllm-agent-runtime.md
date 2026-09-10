@@ -274,7 +274,13 @@ actionable tool calls, provider continuation metadata, usage, response/model/req
 and safe provider metadata. Provider-executed built-ins/provider-native calls are not submitted
 as Vxpipe tools. ReqLLM stream materialization invokes the runtime delta callback and always
 closes the stream handle. Session receives non-empty usage/call metadata as a payload-hidden
-`model_usage` event before the response is handled. A tagged live-provider run remains pending.
+`model_usage` event before the response is handled.
+
+A tagged Gemini run now exercises the production streaming path across two provider interactions.
+The first response selects an exact raw-JSON-Schema alias with its required argument. The second
+request contains that assistant call, the ordinary correlated `running` tool result, the current
+pending projection, and no available tools; Gemini accepts it and streams a non-empty
+acknowledgement. Integration tests are excluded by default and require an explicit include flag.
 
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and

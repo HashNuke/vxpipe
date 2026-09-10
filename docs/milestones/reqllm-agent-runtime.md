@@ -1,8 +1,8 @@
 # ReqLLM agent runtime
 
 Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
-the production ReqLLM projection/normalization boundary are implemented. Call Engine migration,
-tagged-provider interoperability, and final evidence remain pending.
+the production ReqLLM boundary with tagged-provider interoperability are implemented. Call Engine
+migration and final evidence remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -107,10 +107,11 @@ process or dependency is used.
    admission are also implemented. Provider-neutral bounded text streaming is complete.
    Remaining submit callback bounds, production ReqLLM adapter behavior, and Call Engine lease
    integration remain pending.
-3. [In progress 2026-09-10] Add the ReqLLM adapter by moving/refining the existing Call Engine
+3. [Complete 2026-09-10] Add the ReqLLM adapter by moving/refining the existing Call Engine
    projection. Raw JSON Schema aliases, canonical exchanges, deterministic streaming collection,
-   usage, safe call metadata, and cleanup are covered locally. Live-provider interoperability
-   and Call Engine selection remain pending; keep live-provider checks tagged.
+   usage, safe call metadata, cleanup, and live-provider interoperability are covered. The live
+   check remains tagged and excluded from default tests. Call Engine selection belongs to the next
+   checkpoint.
 4. Replace the Jido AgentServer child in an activation with `Vxpipe.AgentRuntime`; migrate
    the coordinator/dispatcher to one worker-submission path and compile default-blocking /
    explicit-non-blocking binding policy. Preserve completion and interruption behavior.
@@ -123,7 +124,7 @@ process or dependency is used.
 - [x] Finalize the standalone submit-only package contracts and supervised lifecycle.
 - [ ] Implement deterministic submit-only rounds, exact runtime-tool resolution, canonical
   running exchanges, streaming events, cancellation/commit barriers, and all declared bounds.
-- [ ] Move/refine the existing ReqLLM projection behind the new package and add focused plus
+- [x] Move/refine the existing ReqLLM projection behind the new package and add focused plus
   tagged-provider interoperability evidence.
 - [ ] Migrate the agent activation/coordinator and all tools to supervised submission without
   changing room authority, client visibility, or archive contracts.
@@ -341,6 +342,15 @@ Implementation evidence:
   those values. The adapter/usage tests and complete package suite are green at 37 tests,
   0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks pass;
   umbrella tests stop before execution because the local PostgreSQL password is absent.
+- Checkpoint 3b adds a tagged Gemini interoperability test using the production streaming path.
+  Gemini accepted the exact `vxpipe_interop_value` JSON Schema alias, returned the expected call,
+  then accepted the canonical assistant-call/running-result exchange plus the current pending
+  projection with tools withheld. The second provider round streamed non-empty conversational
+  text. The tagged run passed 1 test with 0 failures; ReqLLM's debug URL redacted the credential.
+- The default package suite now explicitly excludes integration tests and passes 37 tests with
+  0 failures and 1 excluded. Umbrella format, warnings-as-errors, strict Credo, and unused-lock
+  checks pass; umbrella tests stop before execution because the local PostgreSQL password is
+  absent.
 
 ## Specification review
 
