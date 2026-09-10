@@ -5,9 +5,13 @@ Jido ReAct/Action follow-up (2026-09-08).
 Forward-runtime note (2026-09-10): Jido-specific mechanisms below remain historical
 implementation evidence. The [ReqLLM agent-runtime milestone](reqllm-agent-runtime.md)
 must reproduce the approved acknowledgement, cancellation, completion-mailbox and private
-continuation behavior before Jido is removed.
+continuation behavior before Jido is removed. The subsequently selected
+[tool execution model](../tool-execution-model.md) generalizes supervised submission to every
+tool. This milestone's runnable conversation behavior becomes the explicit `non_blocking`
+mode; bindings otherwise default to blocking later caller turns. The completed evidence below
+still describes the implementation at the time it was collected.
 Prerequisites: [Variables and tool projections](call-variables-and-tool-visibility.md).
-Sources: [Background tools](../../labnotes/20260905-0405-call-definition-design.md#provider-independent-background-tools--approved-g4-decision); [timeouts](../../labnotes/20260905-0405-call-definition-design.md#mcp-timeouts-with-unconfirmed-outcomes--approved-g4-decision).
+Sources: [Asynchronous tools](../../labnotes/20260905-0405-call-definition-design.md#provider-independent-asynchronous-tools--approved-g4-decision); [timeouts](../../labnotes/20260905-0405-call-definition-design.md#mcp-timeouts-with-unconfirmed-outcomes--approved-g4-decision).
 
 ## Runnable outcome
 

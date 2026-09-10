@@ -37,8 +37,10 @@ finish within their existing timeout because interrupting speech does not imply
 intent to cancel a tool. A submitted MCP request that times out without a
 definitive remote result reports outcome `unknown`, without automatic executor
 retry; a later agent-requested tool call is a separate invocation.
-Background execution uses one application-level running acknowledgement and
-later conversation update for every model provider, not native async branches.
+Every tool uses one application-level supervised submission, running acknowledgement, and
+later conversation update for every model provider, not inline execution or native async
+branches. Local tool bindings default to blocking later caller conversation and may explicitly
+select `non_blocking`; see the [tool execution model](tool-execution-model.md).
 Late confirmations are deferred as external events that a future gateway
 mechanism could route to an active call room/agent, not current MCP reconciliation.
 Generic platform confirmation is excluded for now: agent instructions handle
@@ -808,20 +810,25 @@ decision. Today's
 model request task still contains tool execution and is killed by interruption;
 the approved separation needs implementation.
 
-**Approved provider-independent background execution:** Vxpipe owns background
-invocations for every model provider, rather than switching to native async-tool
-semantics where available. Start supervised execution within the agent lifecycle,
-acknowledge accepted work with a correlated running tool response, and allow
-further conversation/TTS while it runs. Accompanying model text and tool calls
-must both survive the adapter boundary.
+**Approved provider-independent asynchronous execution:** Vxpipe owns every tool
+invocation for every model provider, rather than executing fast operations inline or
+switching to native async-tool semantics where available. Start supervised execution
+within the agent lifecycle and acknowledge accepted work with a correlated running tool
+response. Accompanying model text and tool calls must both survive the adapter boundary.
+
+Whether further caller conversation enters the LLM is a separate per-binding policy.
+Bindings default to `blocking`; `conversation_mode: "non_blocking"` explicitly permits
+unrelated caller turns while execution continues. The current post-submission
+acknowledgement response may finish in either mode. Call Engine, not the prompt, enforces
+the blocking gate and deterministic hold response.
 
 Completion is a separate invocation-linked update to the latest conversation,
 not a second ordinary result for an already-acknowledged tool call. The agent
 coordinates any new speech with the current conversation. An acknowledgement is
 not business success; tool results remain untrusted data. Provider encodings and
 interoperability need verification. The original labnote includes planned tests
-for conversation during blocked execution, result ordering, and mixed text/tool
-output. This does not approve explicit cancellation policy, durable execution,
+for both admission modes, result ordering, and mixed text/tool output. This does
+not approve explicit cancellation policy, durable execution,
 or the deferred external-notification mechanism. Implementation remains pending.
 
 **Approved timeout-outcome reporting:** when a submitted MCP request reaches its

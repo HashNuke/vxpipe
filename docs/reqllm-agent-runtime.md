@@ -18,8 +18,8 @@ authoritative for remote MCP transport and protocol policy.
 ```text
 Vxpipe.CallEngine
   |-- starts/configures --> Vxpipe.AgentRuntime --> ReqLLM --> model provider
-  |-- executes bindings --> platform tools / Call Variables / background workers
-  `-- executes bindings --> Vxpipe.MCP --> ExMCP --> remote MCP server
+  |-- submits workers --> platform tools / Call Variables / host tools
+  `-- submits workers --> Vxpipe.MCP --> ExMCP --> remote MCP server
 ```
 
 ## Package boundary
@@ -35,14 +35,15 @@ Vxpipe.CallEngine
 - ReqLLM request construction, streamed and buffered response normalization, provisional
   text events, complete tool-call collection, canonical tool-result continuation, repeated
   rounds, usage observations, deadlines, iteration limits, response limits, and cancellation;
-- a supervised session boundary that keeps blocking provider work outside GenServer
+- a supervised session boundary that keeps provider work outside GenServer
   callbacks and terminates active request workers with the session.
 
-The package accepts a narrow executor contract. The executor receives the already resolved
-private binding, validated arguments, opaque request context, and invocation identity. It
-returns a bounded ordinary result or error. For a long-running operation, Call Engine's
-executor submits its independently supervised worker and immediately returns the existing
-running acknowledgement; later completion remains a separate engine-origin turn.
+The package accepts a narrow submit-only executor contract. It supplies the already resolved
+private binding, validated arguments, opaque request context, and invocation identity. Call
+Engine starts every tool in an independently supervised worker and returns either definite
+non-submission or one bounded running acknowledgement. Agent Runtime never executes an
+operation inline. The acknowledgement is the invocation's only ordinary tool result; later
+completion remains a separate private engine-origin turn with the same invocation ID.
 
 ReqLLM requires a callback on its tool value, but provider generation does not execute that
 callback. The projection therefore uses one package-owned static callback with no captured
@@ -58,8 +59,9 @@ Call Engine owns:
 
 - participant and activation supervision, room authority, turn admission and queueing;
 - trusted plan resolution, tool grants, private binding construction and authorization;
-- tool execution, background worker lifetime, variables, transfers, interruption policy,
-  TTS/audio delivery, client visibility, transcript rules, and archive publication;
+- tool-worker lifetime, blocking/non-blocking conversation admission, variables, transfers,
+  interruption policy, TTS/audio delivery, client visibility, transcript rules, and archive
+  publication;
 - mapping neutral runtime events onto call/participant/turn identities.
 
 `vxpipe_mcp` continues to own ExMCP client supervision, remote protocol negotiation,
@@ -75,22 +77,46 @@ binding identities. Duplicate names, invalid schemas, unknown returned names, or
 that fail the pinned schema are rejected without execution. Externally supplied identifiers
 remain strings; the runtime never generates modules or atoms from them.
 
-Rejected or failed tool calls become bounded model-only tool-error results when the model can
-safely recover; they are not public failure explanations. Corrupt conversation state, an
-unmatched result, exhausted bounds, or a failed provider request terminates the current turn
-without fabricating a successful tool exchange. Neither path retries execution automatically.
+Rejected calls for which no worker started become bounded model-only tool-error results when
+the model can safely recover; they are not public failure explanations. Once accepted, worker
+success, definite failure, and timeout with an unknown remote outcome arrive through the later
+private completion path. Corrupt conversation state, an unmatched result, exhausted bounds,
+or a failed provider request terminates the current turn without fabricating a successful tool
+exchange. Neither path retries execution automatically.
 
 Only one model request is active in a session. Call Engine decides how caller input and
 private completion observations queue around it. Response content stays provisional until
-the corresponding round is accepted. Cancelling a round stops its stream and suppresses its
-uncommitted content, but cannot roll back a background invocation that Call Engine already
-accepted. A final answer commits the accepted assistant response. A tool response commits
-the assistant tool-call message and every matched result before the next model request.
+the corresponding round is accepted. Successful tool submission is a commit barrier: its
+assistant tool call and running result remain committed even if later generated speech is
+cancelled, because cancellation cannot roll back real work. A final answer commits the
+accepted assistant response.
+
+For every submitted tool, the single correlated running acknowledgement stays in that
+committed conversation and is therefore supplied with every later model request while the
+invocation remains pending. This is retained context, not polling: the runtime does not append
+another acknowledgement or generate periodic status messages. Completion arrives once as a
+private engine-origin observation carrying the same invocation ID; it does not replace the
+acknowledgement or become a second result in the old tool exchange.
+
+Conversation history is not the authority for current liveness. Before every provider
+generation, the runtime obtains a bounded payload-free pending-invocation projection through
+a Call Engine context-source contract. The adapter supplies it ephemerally without appending
+another message to committed history. Arguments, results, bindings, credentials, endpoints,
+and raw errors are excluded.
+
+Context compaction is future work. Any compactor must preserve pending invocation state,
+including the committed acknowledgement and invocation correlation, until the matching
+completion is consumed; it must not make pending work disappear or cause completion to be
+delivered twice.
 
 Text deltas can be delivered promptly to the owner, but tool calls execute only after their
 complete identifiers and arguments have been assembled and validated. Mixed text/tool
 responses must not double-deliver text. Tool results retain provider-required call IDs and
 ordering. Provider-native built-ins remain distinguishable from Vxpipe-executed tools.
+
+Each pinned binding defaults to blocking later caller conversation and may explicitly select
+non-blocking behavior in the call definition. This policy never changes worker placement.
+See the complete [tool execution model](tool-execution-model.md).
 
 The runtime records observed model/provider/usage metadata without interpreting tenant
 permissions, prices, or public visibility. Errors crossing the public package boundary are
@@ -137,6 +163,11 @@ structured generation and module/source-oriented tools. That model is useful for
 multi-step application work, but adds sandbox, prompt, latency, and tool-surface semantics
 that do not match low-latency streamed voice conversation or data-backed per-call tools.
 Legion can be reconsidered independently for future background agents.
+
+### Execute fast tools inline
+
+Rejected. A latency-based split creates two execution and cancellation models. Even fast
+platform and Call Variables operations use the same supervised submission/completion path.
 
 ### Expose one generic model-visible dispatcher
 

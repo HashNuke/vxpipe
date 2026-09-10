@@ -137,10 +137,11 @@ The selected target places one `Vxpipe.AgentRuntime` session under each active a
 participant's Vxpipe-owned supervision subtree. The separate `vxpipe_agent_runtime`
 umbrella child owns ReqLLM conversation state, exact data-backed tool projection, repeated
 model/tool rounds, streamed response normalization, cancellation and neutral runtime events.
-It does not own room/participant authority, tool authorization or execution, background
-workers, MCP transport, variables, transfers, TTS, client visibility, or persistence. Those
-remain Call Engine concerns. See the [runtime decision](reqllm-agent-runtime.md) and
-[intermediate milestone](milestones/reqllm-agent-runtime.md).
+It does not own room/participant authority, tool authorization or worker execution,
+conversation admission, MCP transport, variables, transfers, TTS, client visibility, or
+persistence. Those remain Call Engine concerns. See the
+[runtime decision](reqllm-agent-runtime.md), [tool execution model](tool-execution-model.md),
+and [intermediate milestone](milestones/reqllm-agent-runtime.md).
 
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
@@ -464,12 +465,27 @@ required for the current slice; its opt-in policy is not approved.
 This is planned behavior, not the current model-task cancellation behavior
 described in the implemented slices below.
 
-Background tools use application-level orchestration for every model provider;
+All tools use application-level asynchronous orchestration for every model provider;
 native async-tool support does not select a separate workflow. Vxpipe accepts and
 starts an independently supervised invocation within the agent's execution
-subtree, then returns a correlated running acknowledgement as the model's tool
-response. The same agent can continue conversation and feed TTS while that work
-runs. The acknowledgement is not a successful business result.
+subtree, then returns a correlated running acknowledgement as the model's only
+ordinary tool response. Agent Runtime never executes even a fast platform or Call
+Variables operation inline. The acknowledgement is not a successful business result.
+
+The agent's local call-definition binding defaults to blocking later caller
+conversation and may explicitly select `non_blocking`. A non-blocking invocation
+allows unrelated model turns while pending, each retaining the committed running
+acknowledgement. A blocking invocation allows its current acknowledgement response
+to finish, then Call Engine answers later caller turns with deterministic hold output
+without admitting them to the LLM. Admission reopens only after the terminal private
+continuation is consumed. See the [tool execution model](tool-execution-model.md).
+
+Committed running results record what the model was told, but Call Engine remains
+authoritative for current invocation liveness. Before every provider generation it supplies
+Agent Runtime a bounded ephemeral projection of pending and terminal-unconsumed invocation
+IDs, tool names, source-turn identities, modes, and safe states. It excludes arguments,
+results, bindings, endpoints, credentials, and raw errors and is not repeatedly appended to
+conversation history.
 
 Completion becomes a separate invocation-linked update to the latest conversation,
 not a second ordinary result for the acknowledged call or a replay of its old

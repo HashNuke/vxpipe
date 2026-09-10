@@ -65,11 +65,11 @@ existing datatype and value-size limits without required-variable completeness.
 G3 is resolved in documentation. G4's conversational-interruption rule is now
 approved: interrupting speech does not express intent to cancel a submitted MCP
 tool call, so let that call finish within its existing timeout without reviving
-the interrupted output. Background tool execution uses the same application-level
-acknowledgement and later-result approach for every model provider, rather than
-selecting a provider-native async-tool workflow. A submitted MCP request that
-times out without a definitive remote result is reported as outcome `unknown`,
-not confirmed failure.
+the interrupted output. Every tool uses the same application-level supervised
+submission, acknowledgement, and later-result approach for every model provider,
+rather than inline execution or a provider-native async-tool workflow. A submitted
+MCP request that times out without a definitive remote result is reported as outcome
+`unknown`, not confirmed failure.
 The tool executor must not automatically retry any failed invocation, including
 known non-submission failures. For an ambiguous timeout, return the unknown
 outcome to the agent. A later agent-requested call is a separate invocation,
@@ -1974,7 +1974,8 @@ Each agent uses the same `tools` map for built-in and remote MCP bindings:
         "current_time": {
           "type": "mcp",
           "integration": "utilities",
-          "tool": "get_current_time"
+          "tool": "get_current_time",
+          "conversation_mode": "non_blocking"
         },
         "end_call": {
           "type": "platform",
@@ -1993,6 +1994,12 @@ resolution, while `tool` names the remote operation. The model sees the map key
 `tools.end_call` exposes the built-in `hangup` operation under the local name
 `end_call`. Multiple entries can select different tools from the same MCP
 integration without repeating its configuration or adding another grant.
+
+Every selected tool is executed in a separate activation-owned worker. A binding's optional
+`conversation_mode` is `blocking` or `non_blocking`; omission resolves to `blocking`.
+Blocking governs later caller-turn admission while the worker is pending, not worker placement.
+The value is pinned per local binding and is not a model argument or client override. See the
+durable [tool execution model](../docs/tool-execution-model.md).
 
 Transfer remains derived from `transfers`, and variable tools remain derived from
 variable permissions; neither needs a duplicate entry in `tools`. Tool aliases
@@ -2074,15 +2081,16 @@ MCP invocation from the interrupted model/output turn while retaining its agent
 ownership and existing timeout. Do not describe this as current playground
 behavior.
 
-#### Provider-independent background tools — approved G4 decision
+#### Provider-independent asynchronous tools — approved G4 decision
 
-Use application-level background tool orchestration for every model provider,
-including remote MCP invocations. Do not select a different conversation
-workflow when a provider offers native asynchronous function calls. Provider
-adapters translate messages; Vxpipe owns invocation lifetime and conversation
-ordering. This is a design decision, not an implemented runtime feature.
+Use application-level asynchronous tool orchestration for every model provider
+and every tool, including fast platform operations and remote MCP invocations.
+Do not execute tools inline or select a different workflow when a provider offers
+native asynchronous function calls. Provider adapters translate messages; Vxpipe
+owns invocation lifetime and conversation ordering. This is a design decision,
+not an implemented runtime feature.
 
-For a background invocation:
+For every invocation:
 
 1. Validate and accept the enabled tool call under the existing trusted agent
    identity and tool-access rules, and start independently supervised local
@@ -2090,8 +2098,10 @@ For a background invocation:
 2. Return a prompt tool acknowledgement indicating that the invocation is
    running, correlated with the original tool-call ID. This acknowledges accepted
    work, not business success. Do not acknowledge work that failed to start.
-3. Let the same agent handle further conversation and send text to TTS while
-   execution continues. Preserve text accompanying a model's tool calls; an
+3. Finish the current post-submission acknowledgement response. Then enforce the
+   binding's conversation mode while execution continues: omitted policy is
+   `blocking`, while `conversation_mode: "non_blocking"` permits later caller
+   turns to reach the LLM. Preserve text accompanying a model's tool calls; an
    optional kickoff utterance is distinct from the eventual result.
 4. Deliver the result to the latest conversation as a separate, invocation-linked
    update. Do not append a second ordinary tool response for the already
@@ -2099,11 +2109,13 @@ For a background invocation:
    any subsequent response with current user/bot speech rather than creating a
    competing voice. Result data remains untrusted tool output, not instructions.
 
-For example, a report request starts in the background; the agent can acknowledge
-it and answer another question while it runs. When the report finishes within
-its deadline, the agent receives the result against the same invocation and can
+For example, a non-blocking report request starts in its worker; the agent can
+acknowledge it and answer another question while it runs. A blocking balance
+request uses the same worker path, but later caller turns receive deterministic
+hold output without entering the LLM. When either operation finishes within its
+deadline, the agent receives the result against the same invocation and can
 discuss it in the current conversation. The acknowledgement must not cause a
-second report request or imply that a report already exists.
+second request or imply that the result already exists.
 
 This approach is preferred over provider-native async branches because it keeps
 one conversation and lifecycle contract across model providers. No native async

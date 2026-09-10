@@ -11,7 +11,9 @@ Sources: [Configured integrations](../../labnotes/20260905-0405-call-definition-
 
 ## Runnable outcome
 
-A call's reception agent invokes one tenant-configured remote tool, continues speaking while it runs, receives the result, and explicitly updates permitted variables. Another agent/tenant cannot use that binding or its credentials.
+A call's reception agent invokes one tenant-configured remote tool through an explicitly
+non-blocking binding, continues speaking while it runs, receives the result, and explicitly
+updates permitted variables. Another agent/tenant cannot use that binding or its credentials.
 
 ## Specification
 
@@ -43,7 +45,12 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
   to application credentials.
 - Use a real JSON Schema 2020-12 validator for actual outgoing tool arguments against pinned inputSchema, including required values; reject unsupported dialect/features/bindings before exposure and never fetch external refs automatically. Variable partial-population rules do not weaken MCP schemas.
 - Enforce a configurable 1 MiB (1,048,576-byte) cumulative decoded/decompressed response limit incrementally, including streamed responses and resumption across HTTP responses. Preserve the invocation's absolute deadline and byte budget across progress/reconnects. Stop excessive receipt without asserting remote action failure or full archival. Accepted permitted responses archive fully; if too large for model context, return explicit projection omission, not chopped JSON or automatic summarization/retry.
-- Reuse the application-level background execution contract. Results/linked resources are untrusted; preserve observed outcomes/descriptors, do not auto-fetch attachments or auto-map variables. Submitted timeout is unknown unless definitive evidence exists; no executor retries.
+- Reuse the application-level submit-only [tool execution contract](../tool-execution-model.md).
+  Every remote call runs in an independently supervised worker; its local binding blocks later
+  caller conversation unless it explicitly selects `non_blocking`. Results/linked resources
+  are untrusted; preserve observed outcomes/descriptors, do not auto-fetch attachments or
+  auto-map variables. Submitted timeout is unknown unless definitive evidence exists; no
+  executor retries.
 
 ## Implementation checklist
 

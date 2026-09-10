@@ -59,8 +59,8 @@ or client protocols.
 - A tagged provider lane will prove streamed text and a multi-round tool continuation
   through the production adapter.
 - Existing Call Engine behavior tests and the rendered sample call will prove migration
-  parity for ordinary speech, a synchronous platform tool, a submitted background tool,
-  interruption, and later private completion.
+  parity for ordinary speech, externally submitted fast and slow tools, blocking and
+  non-blocking admission, interruption, and later private completion.
 - Atom/module churn checks will use many unique string-backed aliases and schemas.
 
 ## Documentation checkpoint
@@ -104,3 +104,30 @@ Verification after formatting:
 - Umbrella `mix test` did not execute because the test alias could not create the PostgreSQL
   database without a password in this shell. This package does not use the database; the
   limitation remains recorded rather than treating a later command's exit status as proof.
+
+## Execution-model correction before checkpoint 2
+
+An initial uncommitted checkpoint-2 prototype treated fast tools as synchronous executor
+results and slow tools as submitted work. Review with the user rejected that split before it
+was committed. The prototype was removed and the checkpoint-1 application suite remained
+green with 5 tests and 0 failures.
+
+The selected target now submits every platform, Call Variables, host, and MCP tool to a
+separate bounded worker owned by the active agent's Call Engine subtree. A tool binding's
+conversation mode is a separate concern: omission defaults to `blocking`, while
+`conversation_mode: "non_blocking"` explicitly allows unrelated caller/model turns during
+execution. Blocking never authorizes inline execution.
+
+Every accepted submission produces one correlated running tool result. That committed
+exchange survives later speech/model cancellation because real work has started. Completion
+arrives once as a private engine-origin observation with the same invocation ID. Call Engine
+owns authoritative invocation state and supplies a bounded payload-free pending projection
+before every provider generation; this is ephemeral model context, not repeated polling or
+another committed tool result.
+
+The plan also fixes admission sequencing: the current post-submission acknowledgement round
+may finish, a blocking invocation then prevents later caller turns from entering the model,
+and deterministic hold output is used until its terminal observation has been consumed.
+Non-blocking invocations retain the approved unrelated-conversation behavior. See
+`docs/tool-execution-model.md` for states, races, cancellation, partial submission, multiple
+calls, transfer/shutdown, ownership, and migration checks.

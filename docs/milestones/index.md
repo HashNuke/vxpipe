@@ -109,7 +109,7 @@ the inference child of each active agent participant. The separate `vxpipe_agent
 child owns ReqLLM conversation state, exact data-backed tool projection, repeated model/tool
 rounds, streaming/cancellation and neutral runtime events. Call Engine owns identities, turn
 serialization and queueing, authorization, private tool execution, stream/TTS projection,
-interruption policy, submitted background workers, transfers, variables and room lifecycle.
+interruption policy, submitted tool workers, transfers, variables and room lifecycle.
 The package neither becomes a participant authority nor gains room, tenant, MCP, persistence,
 gateway, or client-protocol dependencies.
 Introduce `vxpipe_calls` for application workflows, `vxpipe_persistence` for Ecto/Repo,
@@ -122,7 +122,11 @@ and result mapping without room, tenant-selection, Repo or gateway dependencies.
 standalone integration/conformance checkpoint targets MCP `2025-11-25`, replacing the
 earlier `2026-07-28` profile. No custom-client fallback.
 Call Engine connects an activation's immutable private bindings to the agent runtime's narrow
-executor contract. The model receives only exact local string names, permitted descriptions,
+submit-only executor contract. Every tool operation runs in an independently supervised
+Call Engine worker. Local bindings default to blocking later caller conversation and may
+explicitly select `non_blocking`; this admission policy never changes worker placement. Before
+each model generation the runtime receives a bounded payload-free projection of authoritative
+pending invocations. The model receives only exact local string names, permitted descriptions,
 and pinned JSON schemas. Endpoint, credential and remote-operation selectors remain private.
 No externally driven atom/module generation, private dependency APIs, or generic model-visible
 endpoint/tool dispatcher is an acceptable workaround. Preserve dependency direction in child

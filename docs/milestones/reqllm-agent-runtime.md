@@ -1,7 +1,8 @@
 # ReqLLM agent runtime
 
-Status: not implemented. Specification planned on 2026-09-10; implementation review and
-evidence remain pending.
+Status: implementation in progress. Package/lifecycle foundation complete; its provisional
+executor contract is reopened for the selected submit-only model. Loop, provider adapter,
+Call Engine migration, and final evidence remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -12,10 +13,11 @@ Sources: [runtime decision](../reqllm-agent-runtime.md),
 ## Runnable outcome
 
 The existing sample call runs through the separate `vxpipe_agent_runtime` internal package
-instead of Jido. It streams an ordinary answer, invokes an exact data-backed platform-tool
-alias, submits a background tool, remains conversational while that tool runs, and consumes
-its later private completion. The same package can project a second alias sharing the same
-executor while preserving a different pinned schema. No Jido process or dependency is used.
+instead of Jido. It streams an ordinary answer, submits exact data-backed tool aliases to
+external workers, remains conversational for a non-blocking binding, enforces the default
+blocking binding, and consumes its later private completion. The same package can project a
+second alias sharing the same executor while preserving a different pinned schema. No Jido
+process or dependency is used.
 
 ## Package and dependency boundary
 
@@ -42,7 +44,7 @@ executor while preserving a different pinned schema. No Jido process or dependen
   Project a package-owned static callback into ReqLLM tools and keep every actual private
   binding in the runtime registry; provider generation must never receive or execute it.
 - Start one runtime session through the participant activation's owning supervisor. Its
-  supervised request workers perform provider and executor work outside GenServer callbacks.
+  supervised request workers perform provider work and submit tools outside GenServer callbacks.
   Terminating the session subtree terminates active request workers and closes an active
   ReqLLM stream. Define explicit names for package-owned supervisors/registries and avoid
   cyclic synchronous calls.
@@ -59,18 +61,28 @@ executor while preserving a different pinned schema. No Jido process or dependen
   round. Cancellation discards staged input/output and closes provider work without deleting
   earlier committed exchanges.
 - On tool calls, resolve names only in the request's pinned registry, validate complete
-  arguments, call the engine-owned executor with opaque correlation context, and append the
-  assistant tool-call message plus matched results through canonical ReqLLM conversation
-  semantics. Preserve call IDs, model order, provider metadata, and error results, then run
-  the next model round until final output or the bounded iteration/deadline limit. A rejected
-  or failed tool becomes a bounded model-only error result when recovery is safe; it does not
-  expose an internal failure reason to the caller. Corrupt exchanges and exhausted bounds fail
-  the current turn instead of inventing a result.
-- A submitted background executor returns the existing bounded running acknowledgement
-  immediately. Its work and completion mailbox remain Call Engine-owned and outlive later
-  speech cancellation as already specified. A later private completion enters as a new
-  engine-origin request; it is not a second result attached to an old tool exchange and does
-  not create public caller speech.
+  arguments, and ask the engine-owned submit-only executor to start independently supervised
+  work. Agent Runtime never executes an operation inline. Preserve call IDs, model order,
+  provider metadata, and definite non-submission errors. Corrupt exchanges and exhausted
+  bounds fail the current turn instead of inventing a result.
+- Every accepted submission returns the existing bounded running acknowledgement
+  immediately. That single correlated acknowledgement is committed as the invocation's tool
+  result and remains in model conversation, so every later model request includes it while
+  the work is pending. The runtime does not repeat the acknowledgement or synthesize polling
+  or status messages. The work and completion mailbox remain Call Engine-owned and outlive
+  later speech cancellation as already specified. Completion enters once as a private
+  engine-origin observation carrying the same invocation ID; it is not a second result
+  attached to the old tool exchange and does not create public caller speech.
+- Tool bindings default to blocking later caller conversation and may opt into
+  `non_blocking` in the call definition. Blocking is Call Engine admission policy, never
+  inline execution: the current acknowledgement round may finish, then caller turns receive
+  a deterministic holding response without entering the LLM until the terminal private
+  continuation is consumed. Non-blocking turns retain all pending running acknowledgements.
+  Follow the [tool execution model](../tool-execution-model.md).
+- Before every provider generation, obtain a bounded payload-free pending-invocation snapshot
+  from a Call Engine context-source contract. Supply it as trusted ephemeral model context,
+  never as another committed tool result. Conversation history records what was said; Call
+  Engine remains authoritative for what is currently running or awaiting consumption.
 - Normalize runtime events for request start, text delta, complete tool request, executor
   outcome, usage, terminal answer, cancellation, and safe failure. Events carry opaque
   correlation supplied by Call Engine, but the runtime does not assign call/participant/turn
@@ -82,29 +94,32 @@ executor while preserving a different pinned schema. No Jido process or dependen
 
 ## Migration checkpoints
 
-1. [Complete 2026-09-10] Add the child application and red-test its public descriptor, request, result, event,
-   executor, and session contracts with a deterministic model driver.
-2. Implement the smallest repeated model/tool state machine: final response, one tool
-   continuation, multiple calls with ordered results, mixed text/tool output, bounded
-   failure, and cancellation.
+1. [Partial 2026-09-10] Add the child application and red-test its public descriptor, request,
+   result, event, executor, and session contracts with a deterministic model driver. Package,
+   values, provider seam, and lifecycle are complete; replace the provisional executor with
+   submit-only and pending-context-source contracts under the approved execution model.
+2. Implement the submit-only model/tool state machine: final response, accepted running
+   acknowledgements, definite non-submission, multiple calls in model order, mixed text/tool
+   output, commit barriers, bounded failure, and cancellation.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
-4. Replace the Jido AgentServer child in an activation with `Vxpipe.AgentRuntime` and adapt
-   the existing coordinator/dispatcher without moving room policy into the package. Preserve
-   current background completion and interruption behavior.
+4. Replace the Jido AgentServer child in an activation with `Vxpipe.AgentRuntime`; migrate
+   the coordinator/dispatcher to one worker-submission path and compile default-blocking /
+   explicit-non-blocking binding policy. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
 
 ## Implementation checklist
 
-- [x] Red-test and add the standalone package contracts and supervised lifecycle.
-- [ ] Implement deterministic repeated rounds, exact runtime-tool resolution, canonical
-  tool exchanges, streaming events, cancellation, and all declared bounds.
+- [ ] Finalize the standalone submit-only package contracts and supervised lifecycle. The
+  package/lifecycle subset is green; executor and context-source contracts remain pending.
+- [ ] Implement deterministic submit-only rounds, exact runtime-tool resolution, canonical
+  running exchanges, streaming events, cancellation/commit barriers, and all declared bounds.
 - [ ] Move/refine the existing ReqLLM projection behind the new package and add focused plus
   tagged-provider interoperability evidence.
-- [ ] Migrate the agent activation/coordinator and all platform/background tools without
+- [ ] Migrate the agent activation/coordinator and all tools to supervised submission without
   changing room authority, client visibility, or archive contracts.
 - [ ] Remove Jido dependencies and obsolete adapters only after behavioral parity, full
   umbrella verification, and rendered sample verification are green.
@@ -113,27 +128,35 @@ executor while preserving a different pinned schema. No Jido process or dependen
 
 ## Acceptance and failure checks
 
-- [ ] A deterministic run streams text, requests a tool, receives its result, performs a
-  second model round, and answers once. Mixed text/tool output is neither dropped nor
-  delivered twice.
+- [ ] A deterministic run streams text, requests a tool, starts one external worker, commits
+  its running result, performs an acknowledgement round, and later consumes its private
+  completion once. Mixed text/tool output is neither dropped nor delivered twice.
 - [ ] Two local aliases share one executor implementation while retaining distinct exact
   descriptions, schemas, binding identities, and attribution. Repeated unique aliases and
   schemas do not cause proportional atom/module growth.
 - [ ] Unknown/duplicate tools, malformed calls, invalid arguments, excessive calls/rounds,
-  oversized input/result/text, executor failure, and provider failure produce the specified
-  bounded model-error or terminal outcome with no unauthorized execution, public internal
-  explanation, or retry.
-- [ ] Multiple tool calls are executed and returned in provider-required model order. A missing
-  or duplicate result cannot advance the model loop.
-- [ ] Cancelling an active streamed request closes it, suppresses later deltas, discards its
-  uncommitted exchange, and leaves the session usable. It does not terminate an already
-  accepted Call Engine background invocation.
+  oversized input/result/text, submission failure, worker failure, and provider failure
+  produce the specified bounded model-error or terminal outcome with no unauthorized
+  execution, public internal explanation, or retry.
+- [ ] Multiple tool calls are submitted and acknowledged in provider-required model order.
+  Partial submission preserves already-started work; a missing or duplicate acknowledgement
+  cannot advance the model loop.
+- [ ] Cancelling an active streamed request closes it, suppresses later deltas, discards only
+  uncommitted exchange data, and leaves the session usable. It neither terminates an accepted
+  worker nor removes its committed tool-call/running-result pair.
 - [ ] Killing the runtime session terminates request workers without ending the room. Killing
   the participant activation cleans up the complete runtime subtree and stale results cannot
   attach to a replacement activation.
-- [ ] A background acknowledgement, unrelated caller turn, and later engine-origin completion
-  reproduce the completed milestone's ordering and visibility behavior with no fake public
-  user message or competing TTS stream.
+- [ ] A non-blocking acknowledgement, unrelated caller turn, and later engine-origin completion
+  reproduce the completed milestone's ordering and visibility behavior. The single correlated
+  running acknowledgement is committed once and appears in every later model request while
+  pending, with no repeated polling or status message. The private completion carries the same
+  invocation ID and is consumed once, with no fake public user message or competing TTS stream.
+- [ ] Every provider generation receives the current bounded pending projection without tool
+  arguments/results or private routing data; it is not appended repeatedly to conversation.
+- [ ] Omitted binding policy blocks later caller model admission by default; an explicit
+  `non_blocking` binding permits the unrelated-turn sequence. Blocking turns receive bounded
+  deterministic hold output, and a completion is consumed before admission reopens.
 - [ ] Process inspection, telemetry, errors, and public events contain no prompts, raw tool
   arguments/results, private bindings, credentials, or provider authorization values.
 - [ ] A tagged supported-provider run accepts the exact tool schema, streams conversational
@@ -142,22 +165,28 @@ executor while preserving a different pinned schema. No Jido process or dependen
 
 ## Manual verification
 
-1. Run the sample call with full debug tool visibility and confirm ordinary streamed text,
-   one synchronous platform tool, and one submitted background tool.
-2. Speak/type another turn while the background operation runs, interrupt only active speech,
-   then confirm its private completion is consumed once.
-3. Inspect diagnostics and call history for request/tool/usage correlation and confirm public
+1. Run the sample call with full debug tool visibility and confirm ordinary streamed text and
+   that both a fast platform tool and a slow tool execute in external workers.
+2. With a non-blocking binding, speak/type another turn while the operation runs, interrupt
+   only active speech, then confirm its private completion is consumed once.
+3. With the default blocking binding, send another caller turn and confirm deterministic hold
+   output without model admission; confirm completion is consumed before conversation resumes.
+4. Inspect diagnostics and call history for request/tool/usage correlation and confirm public
    visibility settings still hide tool events by default.
-4. Repeat a controlled provider failure and mid-stream cancellation, then start another turn
+5. Repeat a controlled provider failure and mid-stream cancellation, then start another turn
    in the same session. Inspect desktop and mobile sample states in Chromium.
 
 ## Scope boundaries
 
-No remote MCP network call, Legion integration, call-definition change, transfer, media
+No remote MCP network call, Legion integration, transfer, media
 mixing, recording, storage migration, context compaction, Vxpipe-managed provider fallback,
 automatic tool retry, durable runtime session, or new client protocol. This milestone builds
 and adopts the model/tool-loop substrate; the next milestone connects its private executor
 contract to the already implemented MCP bindings.
+
+Context compaction remains future work, but it must preserve pending invocation state,
+including the committed running acknowledgement and its invocation correlation, until the
+single matching completion has been consumed.
 
 ## Completion and evidence
 
@@ -168,7 +197,7 @@ contract to the already implemented MCP bindings.
 
 Implementation evidence:
 
-- Checkpoint 1 adds the standalone `vxpipe_agent_runtime` child with no Call Engine,
+- Checkpoint 1 foundation adds the standalone `vxpipe_agent_runtime` child with no Call Engine,
   MCP, persistence, gateway, console, or Jido dependency. It defines bounded request,
   result, safe event, model-provider, private executor, and tool-descriptor contracts.
 - A deterministic test-only model provider proves provider work runs outside the session
@@ -182,6 +211,11 @@ Implementation evidence:
   and `mix deps.unlock --check-unused` pass at the umbrella root. The umbrella `mix test`
   alias could not create `vxpipe_test` because this shell has no PostgreSQL password; it
   stopped before executing tests. No database is used by this package checkpoint.
+- The later execution-model decision supersedes the provisional `Executor.execute/4`
+  contract: all tools must be submitted to external Call Engine workers, bindings default to
+  blocking caller conversation, and Agent Runtime needs a pending-context source. The
+  package/lifecycle evidence remains valid, but checkpoint 1 is partial until those public
+  contracts are replaced and red/green verified.
 
 ## Specification review
 
