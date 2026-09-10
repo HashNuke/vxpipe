@@ -124,9 +124,12 @@ Plan Startup and Room Authority can select this graph through an internal applic
 setting. Plan Startup validates and pins the selected provider configuration, call-definition
 model and prompt, resolved host-tool map, Call Variables binding, and runtime limits. Room Authority
 stores the selected coordinator module behind its existing text-capability boundary, so response,
-interruption, and participant-owned shutdown require no room-protocol change. The temporary default
-still selects the Jido compatibility graph while its scripted parity scenarios are moved to the
-neutral test provider; it is not a second intended production loop.
+interruption, and participant-owned shutdown require no room-protocol change. Application and
+development configuration select Agent Runtime by default. Hosted development constructs the
+activation-pinned ReqLLM config from its runtime-only API key; local-fixture development selects a
+bounded Agent Runtime fixture adapter. Only the test environment temporarily selects the Jido
+compatibility graph while its scripted scenarios move to a neutral test provider; it is not a
+second intended production loop.
 
 For every submitted tool, the single correlated running acknowledgement stays in that
 committed conversation and is therefore supplied with every later model request while the

@@ -29,6 +29,16 @@ config :vxpipe_persistence,
          ]
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+  agent_runtime: [
+    implementation: :jido,
+    background_tool_timeout_ms: 30_000,
+    maximum_background_tools: 4,
+    maximum_completed_requests: 32,
+    maximum_pending_requests: 4,
+    maximum_output_bytes: 65_536,
+    maximum_tool_result_bytes: 16_384,
+    request_timeout_ms: 30_000
+  ],
   telemetry: [sample_interval_ms: 3_600_000]
 
 config :vxpipe_console, Vxpipe.Console.Endpoint,

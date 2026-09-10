@@ -23,6 +23,10 @@ config :vxpipe_calls, Vxpipe.Calls,
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [
+    implementation: :agent_runtime,
+    model_provider: Vxpipe.AgentRuntime.Provider.ReqLLM,
+    model_provider_options: [],
+    model_provider_label: :req_llm,
     background_tool_timeout_ms: 30_000,
     maximum_background_tools: 4,
     maximum_completed_requests: 32,

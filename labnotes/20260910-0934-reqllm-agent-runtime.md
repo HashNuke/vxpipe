@@ -947,3 +947,28 @@ provider; this setting is a migration seam, not two intended production loops. U
 warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops
 before test execution because the local PostgreSQL SCRAM password is absent; no credential source
 was inspected.
+
+## Implementation checkpoint 4p: application default and local fixture adapter
+
+Added focused tests for an Agent Runtime adapter around the existing local model fixture before
+implementation. The red run reported the missing adapter module. The implemented provider resolves
+the fixture server during configuration, keeps only the selected model in `Inspect`, obtains the
+latest caller/engine input from the neutral model request, and streams one successful fixture
+answer. Fixture failure returns `provider_unavailable`; intentionally missing output returns
+`invalid_provider_response`. Neither case invents assistant text. The focused suite passes 2 tests.
+
+Base application configuration now selects `Vxpipe.AgentRuntime.Provider.ReqLLM` and the Agent
+Runtime activation graph. Development runtime injects the already-required Gemini key directly into
+that activation-pinned provider config. When the local fixture is enabled, it instead selects the
+new fixture adapter and its supervised fixture process. No-start development configuration checks
+verified both selections; the output contained only implementation, provider module, and provider
+label, not provider options or credentials.
+
+The test environment temporarily overrides only the activation implementation to Jido and repeats
+the existing runtime limits. This keeps the remaining legacy `expect_react` scenarios green while
+they are migrated to neutral scripted provider data; the explicit Agent Runtime room-path test still
+selects and proves the new graph. The complete Call Engine suite passes 242 tests with 2 integration
+exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
+pass. Umbrella `mix test` stops before execution because the local PostgreSQL SCRAM password is
+absent; no credential source was inspected. This compatibility setting is test migration scaffolding
+and must disappear with the Jido graph and dependencies before the milestone completes.

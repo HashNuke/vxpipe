@@ -3,7 +3,7 @@
 Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
 the production ReqLLM boundary with tagged-provider interoperability are implemented. Call Engine
 migration now includes an activation-owned runtime graph and application-selected room path;
-default selection, behavioral parity, and final evidence remain pending.
+legacy scripted-test parity and final evidence remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -150,8 +150,9 @@ process or dependency is used.
    invocation registry, and Session under the existing one-for-all restart budget. Its deterministic
    activation test reaches the new provider boundary and proves complete graph replacement after a
    Session failure. Plan startup and room authority can now select that graph through the internal
-   application runtime setting while preserving the existing capability contract. The temporary
-   default remains the Jido compatibility graph until its scripted parity scenarios move to the
+   application runtime setting while preserving the existing capability contract. Application and
+   development configuration now select Agent Runtime by default; only the test environment
+   temporarily selects the Jido compatibility graph until its scripted parity scenarios move to a
    neutral test provider. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
@@ -540,6 +541,21 @@ Implementation evidence:
   Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution because the
   local PostgreSQL SCRAM password is absent; no credential source was inspected. Default selection
   and remaining scripted tool parity still need migration before the Jido graph can be removed.
+- Checkpoint 4p makes Agent Runtime the application and development default. Hosted development
+  constructs the activation-pinned production ReqLLM provider with the runtime-only API key, while
+  local-fixture development selects a dedicated neutral model-provider adapter. No-start runtime
+  configuration checks verified both selections without printing provider options or credentials.
+- The fixture adapter was red-tested before implementation. It resolves the configured fixture
+  process once, retains only its model in inspection, streams successful fixture output through the
+  Agent Runtime provider contract, and maps fixture failure or missing content to bounded provider
+  errors without fabricating an answer. Its focused suite passes 2 tests.
+- The test environment explicitly retains the Jido graph for the remaining legacy `expect_react`
+  scenarios; the earlier definition-driven Agent Runtime room test continues to override that seam
+  and exercise the new path. The complete Call Engine suite passes 242 tests with 2 integration
+  exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
+  pass. Umbrella `mix test` stops before execution because the local PostgreSQL SCRAM password is
+  absent; no credential source was inspected. This is temporary test migration scaffolding, not a
+  supported production fallback.
 
 ## Specification review
 
