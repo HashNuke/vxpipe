@@ -134,8 +134,9 @@ process or dependency is used.
    now projects ordinary streamed Session output through the existing capability contract from a
    separately supervised request task, bounds its queue/output, avoids replaying final text, and
    cancels a rejected stream before advancing queued work. It is not activation-selected yet;
-   blocking/non-blocking admission, completion leasing, and interruption remain. Preserve
-   completion and interruption behavior.
+   its registry-backed admission gate now holds caller turns for any unconsumed blocking invocation
+   and admits turns when every pending invocation is explicitly non-blocking. Completion leasing and
+   interruption remain. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -415,6 +416,18 @@ Implementation evidence:
   claim tool admission/completion behavior.
 - Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
   checkpoint 4h. Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.
+- Checkpoint 4i adds the Call Engine conversation-admission boundary. It derives `admit` or `hold`
+  only from the authoritative registry snapshot and treats every unconsumed blocking phase as a
+  hold. The coordinator emits one fixed bounded hold response and completion through the existing
+  capability contract without model admission; a snapshot containing only non-blocking work admits
+  the caller and reaches Agent Runtime with that safe pending context.
+- Checkpoint 4i red evidence showed the blocking caller reaching the deterministic model provider.
+  After the gate was connected, the focused coordinator suite passes 4 tests and the complete Call
+  Engine suite passes 229 tests with 2 integration exclusions. Completion leasing, interruption,
+  activation selection, and live-path parity remain pending.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
+  checkpoint 4i. Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
 
 ## Specification review

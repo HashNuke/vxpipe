@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   use GenServer
 
   alias Vxpipe.AgentRuntime.{Event, Result, Session}
-  alias Vxpipe.CallEngine.AgentRuntime.{Correlation, OutputBuffer}
+  alias Vxpipe.CallEngine.AgentRuntime.{ConversationAdmission, Correlation, OutputBuffer}
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.State
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Tool.Context
@@ -45,8 +45,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   @impl true
   def handle_call({:respond, command}, _from, %State{current: nil} = state) do
-    case start_request(command, state) do
+    case admit(command, state) do
       {:ok, state} -> {:reply, :ok, state}
+      {:held, state} -> {:reply, :ok, state}
       {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
     end
   end
@@ -167,9 +168,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       {{:value, command}, pending} ->
         state = %{state | pending: pending}
 
-        case start_request(command, state) do
+        case admit(command, state) do
           {:ok, state} ->
             state
+
+          {:held, state} ->
+            start_next(state)
 
           {:error, :unavailable} ->
             send(state.owner, {:vxpipe_capability_failed, self(), command, :provider_unavailable})
@@ -179,6 +183,29 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       {:empty, _pending} ->
         state
     end
+  end
+
+  defp admit(command, state) do
+    case ConversationAdmission.decide(state.invocation_registry) do
+      :admit ->
+        start_request(command, state)
+
+      :hold ->
+        emit_holding_response(command, state)
+        {:held, state}
+
+      {:error, :unavailable} ->
+        {:error, :unavailable}
+    end
+  end
+
+  defp emit_holding_response(command, state) do
+    send(
+      state.owner,
+      {:vxpipe_capability_text, self(), command, ConversationAdmission.holding_response()}
+    )
+
+    send(state.owner, {:vxpipe_capability_text_complete, self(), command})
   end
 
   defp observe_first_output(text, state)

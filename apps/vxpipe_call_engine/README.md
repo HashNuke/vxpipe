@@ -129,8 +129,14 @@ A narrow migration coordinator can now issue an ordinary Agent Runtime request f
 supervised task while continuing to receive and project streamed sentence output through the
 existing capability contract. It bounds queued caller work, avoids replaying already-streamed text
 from the canonical final response, and cancels a rejected stream before advancing its queue. The
-activation supervisor does not select this coordinator yet; blocking/non-blocking admission,
-completion leasing, interruption, and removal of the live Jido path remain pending.
+activation supervisor does not select this coordinator yet; completion leasing, interruption, and
+removal of the live Jido path remain pending.
+
+The coordinator's conversation-admission boundary now consults the invocation registry before
+starting caller work. Any unconsumed default-blocking invocation returns the fixed bounded holding
+response through the normal capability text contract without entering the model. Explicitly
+non-blocking pending work leaves admission open and appears in Agent Runtime's existing safe pending
+projection. Completion consumption and live activation selection remain pending.
 
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,

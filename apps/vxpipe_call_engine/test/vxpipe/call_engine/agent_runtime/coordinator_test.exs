@@ -1,11 +1,27 @@
 defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.AgentRuntime.{ModelResponse, Session}
+  alias Vxpipe.AgentRuntime.{ModelResponse, PendingInvocation, Session}
   alias Vxpipe.CallEngine.AgentRuntime.{Coordinator, PendingContextSource}
   alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
-  alias Vxpipe.CallEngine.Tool.{InvocationRegistry, InvocationSupervisor}
+  alias Vxpipe.CallEngine.TestSubmittedInlineTool
+
+  alias Vxpipe.CallEngine.Tool.{
+    Context,
+    InvocationBinding,
+    InvocationRegistry,
+    InvocationSupervisor
+  }
+
+  setup do
+    Application.put_env(:vxpipe_call_engine, :submitted_inline_tool_observer, self())
+
+    on_exit(fn ->
+      Application.delete_env(:vxpipe_call_engine, :submitted_inline_tool_observer)
+    end)
+  end
 
   test "projects a streamed Agent Runtime response through the existing capability contract" do
     runtime = start_runtime()
@@ -53,6 +69,66 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^queued}
   end
 
+  test "holds caller turns outside the model while a blocking invocation is unconsumed" do
+    runtime = start_runtime(completion_target: self())
+    command = command("blocked-runtime", "Can we discuss something else?")
+
+    assert {:accepted, :blocking} = submit_invocation(runtime, :blocking, "blocking-call")
+    assert_receive {:submitted_inline_tool_started, execution, "blocking-call"}
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+
+    assert_receive {:vxpipe_capability_text, coordinator, ^command,
+                    "Please hold while I finish the current request."}
+
+    assert coordinator == runtime.coordinator
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
+    refute_receive {:test_agent_runtime_stream, _provider, _request}
+
+    send(execution, :release_submitted_inline_tool)
+    assert_receive {:vxpipe_tool_completion_available, registry, "blocking-call"}
+    assert registry == GenServer.whereis(runtime.registry)
+
+    terminal_command = command("blocked-terminal", "Is it ready now?")
+    assert :ok = Coordinator.respond(runtime.coordinator, terminal_command)
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^terminal_command,
+                    "Please hold while I finish the current request."}
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^terminal_command}
+    refute_receive {:test_agent_runtime_stream, _provider, _request}
+  end
+
+  test "admits unrelated caller turns with non-blocking pending context" do
+    runtime = start_runtime()
+    command = command("non-blocking-runtime", "What are the usage rules?")
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "non-blocking-call")
+
+    assert_receive {:submitted_inline_tool_started, execution, "non-blocking-call"}
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+
+    assert [
+             %PendingInvocation{
+               invocation_id: "non-blocking-call",
+               conversation_mode: :non_blocking,
+               status: :running
+             }
+           ] = request.pending_invocations
+
+    assert {:ok, response} = ModelResponse.new(text: "The usual rules apply.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_capability_text, coordinator, ^command, "The usual rules apply."}
+    assert coordinator == runtime.coordinator
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
+
+    send(execution, :release_submitted_inline_tool)
+  end
+
   defp start_runtime(options \\ []) do
     suffix = System.unique_integer([:positive])
     activation_id = "act-runtime-coordinator-#{suffix}"
@@ -86,7 +162,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          activation_id: activation_id,
          name: registry_name,
          invocation_supervisor: invocation_supervisor,
-         completion_target: coordinator,
+         completion_target: Keyword.get(options, :completion_target, coordinator),
          maximum_invocations: 2,
          maximum_consumed_invocations: 4,
          invocation_timeout_ms: 1_000,
@@ -108,7 +184,42 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          request_timeout_ms: 1_000}
       )
 
-    %{coordinator: coordinator}
+    %{coordinator: coordinator, registry: registry_name}
+  end
+
+  defp submit_invocation(runtime, conversation_mode, invocation_id) do
+    resolved = %ToolBinding{
+      name: "submitted_inline_tool",
+      type: :host,
+      conversation_mode: conversation_mode,
+      action: TestSubmittedInlineTool,
+      remote: nil
+    }
+
+    assert {:ok, binding} = InvocationBinding.from_resolved(resolved)
+
+    InvocationRegistry.submit(
+      runtime.registry,
+      binding,
+      %{"value" => invocation_id},
+      invocation_context(invocation_id),
+      invocation_id
+    )
+  end
+
+  defp invocation_context(invocation_id) do
+    %Context{
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "incarnation-demo",
+      agent_participant_id: "participant-agent",
+      source_participant_id: "participant-caller",
+      connection_id: "connection-caller",
+      command_id: "command-#{invocation_id}",
+      correlation_id: "turn-#{invocation_id}",
+      agent_request_id: "request-#{invocation_id}",
+      tool_call_id: nil
+    }
   end
 
   defp command(seed, content) do

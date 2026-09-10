@@ -739,3 +739,27 @@ Verification so far:
   password absent from this shell; no credential source was inspected.
 - This checkpoint does not wire the coordinator into an activation and does not claim tool
   admission, blocking/non-blocking gate, completion leasing, or interruption behavior.
+
+## Implementation checkpoint 4i: registry-backed conversation admission
+
+Added coordinator tests for both tool conversation modes before implementation. The red run had one
+failure: a caller turn entered the deterministic model provider while a blocking invocation was
+running. The new `AgentRuntime.ConversationAdmission` module reads only the authoritative
+invocation-registry snapshot. Any blocking record holds admission across running,
+terminal-unconsumed, and leased phases; a list containing only non-blocking records admits the turn.
+Invalid or unavailable state fails closed.
+
+The coordinator now sends one fixed bounded holding sentence plus the normal text-complete message
+without putting held caller content in Agent Runtime conversation. In the non-blocking case the
+ordinary request proceeds and its provider request contains the existing payload-free pending
+invocation projection. The gate is independent of worker execution: it neither runs a tool inline
+nor waits for or cancels the worker.
+
+Focused coordinator verification passes 4 tests. The test keeps a blocking record through worker
+completion and proves the terminal-unconsumed record still holds a later caller turn. Completion
+leasing/consumption, interruption, activation selection, and live-path parity remain pending.
+
+The complete Call Engine suite passes 229 tests with 2 integration exclusions. Umbrella format,
+warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
+stops before test execution because PostgreSQL SCRAM authentication needs a password absent from
+this shell; no credential source was inspected.

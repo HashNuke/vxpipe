@@ -204,8 +204,16 @@ GenServer callback. A dedicated output buffer projects complete sentence segment
 existing capability-message contract without replaying the final response after streamed deltas.
 If streamed output violates the engine bound, the coordinator cancels that runtime request before
 admitting queued caller work. This coordinator is not yet selected by the activation supervisor;
-tool admission, completion leasing, interruption, and live-path replacement remain subsequent
-parts of the migration.
+tool completion leasing, interruption, and live-path replacement remain subsequent parts of the
+migration.
+
+Before it admits a caller command, the migration coordinator now asks a separate conversation-
+admission boundary to inspect the authoritative invocation-registry snapshot. Any unconsumed
+`blocking` record—whether running, terminal-queued, or already leased—returns one bounded platform
+holding response and never sends that caller text to the model. A snapshot containing only
+`non_blocking` records remains admissible, and Agent Runtime independently includes those records
+in the request's payload-free pending projection. Registry unavailability fails admission closed.
+This gate never executes, waits for, or cancels the tool worker.
 
 Tagged production evidence confirms Gemini accepts this adapter's exact tool schema and a
 subsequent canonical running-acknowledgement round with ephemeral pending state and tools withheld.
