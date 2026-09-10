@@ -5,8 +5,9 @@ bounded all-or-nothing discovery, pre-submission validated invocation, scoped su
 connections, official/reference interoperability, corrected recovery fixture, and bounded
 operational visibility are implemented and verified. Separate published fork branches
 address ExMCP 1.3.0's cumulative SSE budget, per-client credential-origin trust,
-fragmented-event parsing, and raw client diagnostics. The umbrella locks the `vxp`
-integration branch at `2d31d26`. The separate Jido runtime-tool interface blocker belongs
+fragmented-event parsing, synchronous response correlation, and raw client diagnostics.
+The umbrella locks the `vxp` integration branch at `0bfd0ae`. The separate Jido
+runtime-tool interface blocker belongs
 to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
@@ -146,7 +147,7 @@ milestone. Passing this checkpoint does not resolve Jido AI's runtime-tool inter
 Implementation evidence:
 
 - The `vxpipe_mcp` child pins the maintained `HashNuke/ex_mcp` `vxp` branch at
-  `2d31d26` and owns no Jido/domain dependency. Its fixed
+  `0bfd0ae` and owns no Jido/domain dependency. Its fixed
   production client profile accepts verified HTTPS only and selects MCP `2025-11-25`.
 - `Vxpipe.MCP.Discovery` obtains every page through the narrow protocol boundary under one
   absolute deadline and aggregate decoded-JSON budget. It rejects repeated cursors and

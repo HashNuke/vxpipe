@@ -7,7 +7,7 @@ MCP client certification.
 
 - Protocol: MCP `2025-11-25`, selected through ExMCP's `:legacy_only` profile.
 - Client dependency: the maintained `HashNuke/ex_mcp` `vxp` branch, locked by the
-  umbrella at `2d31d26270024c123de8b7c80833fcf4d089e3a5`. The branch is based on
+  umbrella at `0bfd0aeb49043063571c132bc3c78b6dfd449c9b`. The branch is based on
   upstream `master` at `56880c686404082d5340ff42d5295f12e08eff73`.
 - Official client harness: `@modelcontextprotocol/conformance@0.1.16`, tag commit
   `21a9a2febd7100d7c17ac1021ee7f2ed9f66a1e0`.
@@ -171,10 +171,11 @@ must associate complete response events with their JSON-RPC request IDs and prog
 with request-scoped progress tokens, retain those budgets across reconnects, and close the
 affected work when its budget is exhausted.
 
-The published `vxp` integration branch at `2d31d26` implements those boundaries,
-including a separate allowance for traffic that cannot be correlated safely. The umbrella
-now pins that exact commit. Vxpipe supplies each client with only its endpoint's canonical
-origin and supplies each tool request with a progress token. The dependency's focused
-security/privacy/parser/budget suites and Vxpipe's wrapper, official-scenario, reference
-server, and resumed-budget gates pass. This is maintained-fork evidence for Vxpipe's selected
-profile, not a claim that upstream ExMCP 1.3.0 contains the fixes.
+The published `vxp` integration branch at `0bfd0ae` implements those boundaries,
+including a separate allowance for traffic that cannot be correlated safely and rejection
+of synchronous result/error envelopes carrying another request ID. The umbrella now pins
+that exact commit. Vxpipe supplies each client with only its endpoint's canonical origin and
+supplies each tool request with a progress token. The dependency's focused
+security/privacy/correlation/parser/budget suites and Vxpipe's wrapper, official-scenario,
+reference-server, and resumed-budget gates pass. This is maintained-fork evidence for
+Vxpipe's selected profile, not a claim that upstream ExMCP 1.3.0 contains the fixes.
