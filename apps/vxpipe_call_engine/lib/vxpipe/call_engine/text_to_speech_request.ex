@@ -14,7 +14,20 @@ defmodule Vxpipe.CallEngine.TextToSpeechRequest do
     :text,
     :output_sink
   ]
-  defstruct @enforce_keys
+  @derive {Inspect,
+           only: [
+             :tenant_id,
+             :room_id,
+             :incarnation_id,
+             :participant_id,
+             :source_participant_id,
+             :connection_id,
+             :command_id,
+             :correlation_id,
+             :output_id,
+             :purpose
+           ]}
+  defstruct @enforce_keys ++ [purpose: :agent_turn]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -27,6 +40,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRequest do
           correlation_id: String.t(),
           output_id: String.t(),
           text: String.t(),
-          output_sink: pid()
+          output_sink: pid(),
+          purpose: :agent_turn | :opening_audio
         }
 end

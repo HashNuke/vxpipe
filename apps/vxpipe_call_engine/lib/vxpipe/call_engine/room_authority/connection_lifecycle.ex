@@ -2,8 +2,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
+  alias Vxpipe.CallEngine.Media.Ingress
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor}
-  alias Vxpipe.CallEngine.RoomAuthority.{State, TextCapability}
+  alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, State, TextCapability}
 
   @spec attach(struct(), pid(), pid(), pid() | nil, State.t()) ::
           {:reply, {:ok, atom(), term()} | {:error, Error.t()}, State.t()}
@@ -47,6 +48,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       connection == nil or connection.pid != caller or
           connection.participant_id != command.participant_id ->
         {:error, not_attached(command.connection_id)}
+
+      OpeningAudio.admission(state.opening_audio) != :open ->
+        {:error, opening_audio_in_progress()}
 
       not TextCapability.ready?(state) ->
         {:error, agent_not_ready()}
@@ -102,6 +106,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     Enum.each(connections, fn {_connection_id, connection} ->
       send(connection.pid, {:vxpipe_connection_unavailable, reason})
     end)
+  end
+
+  @spec open_inputs(State.t()) :: State.t()
+  def open_inputs(%State{} = state) do
+    Enum.each(state.connections, fn {_connection_id, connection} ->
+      open_connection_input(connection)
+    end)
+
+    state
   end
 
   defp authorize_attachment(command, caller, subscriber, state) do
@@ -225,6 +238,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       | connections: Map.put(state.connections, command.connection_id, connection),
         speech_to_text_monitors: speech_to_text_monitors
     }
+
+    if OpeningAudio.admission(state.opening_audio) == :open do
+      :ok = Ingress.open(ingress)
+    end
 
     {:reply, :ok, state}
   end
@@ -350,4 +367,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   defp agent_not_ready do
     Error.new(:agent_not_ready, "The room agent is not ready.", retryable: true)
   end
+
+  defp opening_audio_in_progress do
+    Error.new(
+      :opening_audio_in_progress,
+      "Caller input is not admitted until the opening audio finishes.",
+      retryable: true
+    )
+  end
+
+  defp open_connection_input(%{speech_to_text: %{ingress: ingress}}) do
+    _ = Ingress.open(ingress)
+    :ok
+  end
+
+  defp open_connection_input(_connection), do: :ok
 end

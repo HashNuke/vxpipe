@@ -35,6 +35,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     end
   end
 
+  @spec open(pid()) :: :ok | {:error, :unavailable}
+  def open(ingress) when is_pid(ingress) do
+    try do
+      GenServer.call(ingress, :open, @call_timeout)
+    catch
+      :exit, _reason -> {:error, :unavailable}
+    end
+  end
+
   @impl true
   def init(options) do
     capability = Keyword.fetch!(options, :capability)
@@ -52,6 +61,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
          participant_id: Keyword.fetch!(options, :participant_id),
          connection_id: Keyword.fetch!(options, :connection_id)
        },
+       input_admission: Keyword.get(options, :input_admission, :open),
        in_flight: nil,
        maximum_age_ms: Keyword.fetch!(options, :maximum_age_ms),
        maximum_bytes: Keyword.fetch!(options, :maximum_bytes),
@@ -65,10 +75,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   @impl true
+  def handle_call(:open, _from, state), do: {:reply, :ok, %{state | input_admission: :open}}
+
   def handle_call({:push, frame}, _from, state) do
     cond do
       not same_connection?(frame, state.identity) ->
         {:reply, {:error, :wrong_connection}, state}
+
+      state.input_admission != :open ->
+        {:reply, :ok, state}
 
       not accepted_track?(frame, state.track_id) ->
         {:reply, {:error, :wrong_track}, state}

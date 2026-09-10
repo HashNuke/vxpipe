@@ -680,13 +680,14 @@ remain separate from runtime implementation.
 ### First messages and transfer responsibility
 
 Optional call-level `opening_audio` plays to `entry_caller` before
-`entry_receiver` begins the normal conversation. Its source may be an audio-file
-URL (WAV or another supported format) or fixed configured text. For text, render and cache
+`entry_receiver` begins the normal conversation. Schema `20260910.02` represents its source
+as the closed tagged object documented in [the opening-audio contract](opening-audio-contract.md):
+fixed text or an HTTPS file URL. For text, render and eventually cache
 audio using the initial receiving agent's resolved TTS service and voice,
 including configured defaults. Do not generate its text through an LLM, choose
 an arbitrary first participant, or start a later transfer agent to supply a voice.
-Without an initial agent/usable TTS profile, text-source applicability remains
-open rather than silently inventing one.
+Without an initial agent/usable TTS profile, startup fails before registering a room rather
+than silently inventing one.
 
 Room and participant capabilities may start and warm up while opening audio
 plays. The gate controls media delivery, not process startup: do not route user
@@ -708,10 +709,13 @@ does not acquire per-call retention. Render timing, cache storage/eviction, and
 source fetching are not selected. Asset preparation itself starts no call tree
 and does not set `started_at`.
 
+The fixed-text runtime now starts synthesis when the entry caller's output sink attaches,
+keeps both text and STT ingress closed, and releases them only on that sink's actual completion
+acknowledgement. Provider or playback failure stops the room. File fetch/format/cache behavior
+remains unavailable and is rejected before room registration until its bounded policy lands.
+
 This is an initial-call barrier, separate from each agent's greeting and from
-transfer behavior. Required transport-specific completion evidence, failure
-handling, source configuration/formats, and notices for later joiners are not
-selected here. Record `started_at` at actual live-call start, not at notice
+transfer behavior. Notices for later joiners are not selected here. Record `started_at` at actual live-call start, not at notice
 completion or receiver activation; the notice does not reset the clock. This is
 playback ordering, not mandatory disclosure or a promise of consent/compliance.
 

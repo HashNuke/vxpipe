@@ -1,6 +1,6 @@
 # Opening audio contract
 
-Status: accepted source contract; runtime playback is in progress.
+Status: fixed-text playback and input gate implemented; file playback remains in progress.
 
 ## Decision
 
@@ -25,12 +25,13 @@ URLs into definitions. The typed source is copied into the immutable resolved pl
 room starts and its routine inspection exposes only the source type.
 
 Omission means there is no opening-audio phase. It does not insert silence or delay startup.
-The runtime will target only the entry caller. Text uses the initially resolved receiving
+The runtime targets only the entry caller. Text uses the initially resolved receiving
 agent's TTS binding. Normal text and media input remain closed until the output sink reports
 actual playout completion; preparation, synthesis completion, enqueueing, or provider
 readiness do not open the gate. Input received while the gate is closed is discarded rather
-than buffered or replayed. A preparation or playback failure ends startup explicitly and
-must never silently open normal conversation.
+than buffered or replayed. A preparation or playback failure ends the room explicitly and
+never silently opens normal conversation. A text source without a resolved TTS binding and
+the not-yet-supported file source fail validation before a room is registered.
 
 ## Remaining runtime choices
 
@@ -58,7 +59,9 @@ it must not absorb fetching, decoding, caching, or lifecycle timer callback fami
 
 ## Verification
 
-The compiler contract is covered by
-`opening_audio_compiler_test.exs`: missing runtime type and schema-version assertions were
-observed red first, then 2 focused tests passed. Runtime playout, gate, and failure evidence
-will be appended as those checkpoints land.
+The compiler contract is covered by `opening_audio_compiler_test.exs`: missing runtime type and
+schema-version assertions were observed red first, then 2 focused tests passed. The fixed-text
+runtime is covered by `opening_audio_room_test.exs`: its first run failed because no synthesis was
+started, then 3 tests passed for real playout gating, required-playback failure, and pre-room
+rejection of unsupported sources/configuration. File playback and lifecycle evidence remain
+pending.

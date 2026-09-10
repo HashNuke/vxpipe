@@ -23,6 +23,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     AgentOutput,
     ConnectionLifecycle,
     InputTurns,
+    OpeningAudio,
     ParticipantLifecycle,
     State,
     Startup,
@@ -39,6 +40,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def snapshot(tenant_id, room_id) do
     GenServer.call(via(tenant_id, room_id), :snapshot, @call_timeout)
+  end
+
+  def input_admission(tenant_id, room_id) do
+    GenServer.call(via(tenant_id, room_id), :input_admission, @call_timeout)
   end
 
   def join_participant(room_authority, %JoinParticipant{} = command) do
@@ -92,7 +97,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       State.new(
         ArchiveRecorder.new(room_source, incarnation_id, options),
         build_snapshot(room_source, incarnation_id, options),
-        initial_speech_to_text_runtime(room_source)
+        initial_speech_to_text_runtime(room_source),
+        OpeningAudio.new(room_source)
       )
 
     case Startup.start_agent(room_source, options, state) do
@@ -108,6 +114,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 
+  def handle_call(:input_admission, _from, state) do
+    {:reply, OpeningAudio.admission(state.opening_audio), state}
+  end
+
   def handle_call({:join_participant, command}, _from, state) do
     ParticipantLifecycle.join(command, state)
   end
@@ -117,7 +127,27 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {caller, _tag},
         state
       ) do
-    ConnectionLifecycle.attach(command, caller, subscriber, output_sink, state)
+    case ConnectionLifecycle.attach(command, caller, subscriber, output_sink, state) do
+      {:reply, {:ok, _role, _runtime} = reply, state} ->
+        connection = Map.fetch!(state.connections, command.connection_id)
+
+        case OpeningAudio.start(
+               state.opening_audio,
+               command,
+               connection,
+               state.text_to_speech_capability,
+               state.snapshot
+             ) do
+          {:ok, opening_audio} ->
+            {:reply, reply, %{state | opening_audio: opening_audio}}
+
+          {:error, error} ->
+            {:stop, :opening_audio_unavailable, {:error, error}, state}
+        end
+
+      other ->
+        other
+    end
   end
 
   def handle_call(
@@ -190,7 +220,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         state
       )
       when status in [:started, :completed] do
-    {:noreply, AgentOutput.playback(capability, request, status, state)}
+    handle_text_to_speech_playback(capability, request, status, state)
   end
 
   def handle_info(
@@ -200,11 +230,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       )
       when is_integer(played_ms) and played_ms > 0 and is_integer(total_ms) and
              total_ms > played_ms do
-    {:noreply, AgentOutput.playback(capability, request, {:progress, played_ms, total_ms}, state)}
+    handle_text_to_speech_playback(
+      capability,
+      request,
+      {:progress, played_ms, total_ms},
+      state
+    )
   end
 
   def handle_info({:vxpipe_tts_unavailable, capability, _reason}, state) do
-    {:noreply, AgentOutput.unavailable(capability, state)}
+    if OpeningAudio.awaiting_playback?(state.opening_audio) do
+      {:stop, :opening_audio_unavailable, state}
+    else
+      {:noreply, AgentOutput.unavailable(capability, state)}
+    end
   end
 
   def handle_info({:vxpipe_stt_signal, capability, identity, %Signal{} = signal}, state) do
@@ -214,6 +253,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({:vxpipe_stt_unavailable, capability, identity, _reason}, state) do
     state = ConnectionLifecycle.speech_to_text_unavailable(capability, identity, state)
     {:noreply, state}
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{text_to_speech_capability: %{monitor: monitor}} = state
+      ) do
+    if OpeningAudio.awaiting_playback?(state.opening_audio) do
+      {:stop, :opening_audio_unavailable, state}
+    else
+      ConnectionLifecycle.notify(state.connections, :agent_unavailable)
+      {:noreply, %{state | text_to_speech_capability: nil}}
+    end
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
@@ -233,11 +284,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           ConnectionLifecycle.notify(state.connections, :agent_unavailable)
           %{state | text_capability: nil}
 
-        state.text_to_speech_capability != nil and
-            state.text_to_speech_capability.monitor == monitor ->
-          ConnectionLifecycle.notify(state.connections, :agent_unavailable)
-          %{state | text_to_speech_capability: nil}
-
         true ->
           state
       end
@@ -254,6 +300,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp initial_speech_to_text_runtime(%CreateRoom{}), do: :application
   defp initial_speech_to_text_runtime(%ResolvedCallPlan{}), do: %{}
+
+  defp handle_text_to_speech_playback(capability, request, status, state) do
+    opening_result =
+      if state.text_to_speech_capability != nil and
+           state.text_to_speech_capability.pid == capability do
+        OpeningAudio.playback(state.opening_audio, request, status)
+      else
+        :unrelated
+      end
+
+    case opening_result do
+      {:handled, opening_audio} ->
+        state = %{state | opening_audio: opening_audio}
+
+        state =
+          if OpeningAudio.admission(opening_audio) == :open do
+            ConnectionLifecycle.open_inputs(state)
+          else
+            state
+          end
+
+        {:noreply, state}
+
+      :unrelated ->
+        {:noreply, AgentOutput.playback(capability, request, status, state)}
+    end
+  end
 
   defp room_identity(options) do
     source = room_source(options)

@@ -19,7 +19,8 @@ A caller hears optional configured opening audio before normal conversation. The
 
 ## Implementation checklist
 
-- [ ] Red-test opening input gating and playout completion, first-message modes, readiness/idle/duration clocks with controllable time/media fakes.
+- [x] Red-test fixed-text input gating and actual playout completion with controllable media fakes.
+- [ ] Red-test file playback, first-message modes, and readiness/idle/duration clocks with controllable time/media fakes.
 - [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
 - [ ] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
@@ -64,6 +65,13 @@ rejects mixed/unknown/unsafe forms at their exact path, omits sensitive source v
 routine inspection, and pins the typed value into `ResolvedCallPlan`. The focused compiler
 test passed with 2 tests and 0 failures after the expected missing-struct and schema-version
 red runs. The runtime outcome is not complete.
+
+The fixed-text runtime starts only after the entry caller attaches an output sink. Its focused
+test proves that early audio never reaches STT, early text is rejected, provider/enqueue/start/
+progress do not release input, actual sink completion releases both paths, and provider failure
+ends the room. It also proves unsupported file playback and text without TTS fail before room
+registration. The focused file passed with 3 tests; the broader Call Engine suite passed with
+234 tests and 1 integration exclusion. File playback, greetings, and lifecycle clocks remain.
 
 ## Specification review
 

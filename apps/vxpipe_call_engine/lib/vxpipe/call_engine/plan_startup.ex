@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
+  alias Vxpipe.CallEngine.CallDefinition.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
@@ -56,8 +57,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
            entry_participant(plan, :entry_receiver, plan.entry_receiver, :agent),
          :ok <- supported_features(plan, caller, receiver),
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
-         {:ok, speech_to_text} <- speech_to_text_runtime(caller, options),
+         {:ok, speech_to_text} <- speech_to_text_runtime(caller, plan.opening_audio, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(receiver, options),
+         :ok <- supported_opening_audio(plan.opening_audio, text_to_speech),
          {:ok, caller_command} <- participant_command(plan, caller),
          {:ok, receiver_command} <- participant_command(plan, receiver) do
       {:ok,
@@ -190,7 +192,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     AgentActivationOptions.new(plan, receiver, options)
   end
 
-  defp speech_to_text_runtime(caller, options) do
+  defp speech_to_text_runtime(caller, opening_audio, options) do
     case resolve_provider(caller.capabilities.speech_to_text, options, :speech_to_text) do
       {:ok, nil} ->
         {:ok, nil}
@@ -205,7 +207,12 @@ defmodule Vxpipe.CallEngine.PlanStartup do
            %SpeechToTextRuntime{
              provider: provider,
              transport: {transport, transport_options},
-             media_ingress: media_ingress
+             media_ingress:
+               Keyword.put(
+                 media_ingress,
+                 :input_admission,
+                 if(opening_audio == nil, do: :open, else: :closed)
+               )
            }}
         else
           _invalid_runtime -> unsupported_speech_configuration(caller, :speech_to_text)
@@ -214,6 +221,22 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       {:error, _reason} ->
         unsupported_speech_configuration(caller, :speech_to_text)
     end
+  end
+
+  defp supported_opening_audio(nil, _text_to_speech), do: :ok
+
+  defp supported_opening_audio(
+         %OpeningAudio{type: :text},
+         %TextToSpeechRuntime{}
+       ),
+       do: :ok
+
+  defp supported_opening_audio(%OpeningAudio{type: :text}, nil) do
+    unsupported(["opening_audio"], "text opening audio requires text-to-speech")
+  end
+
+  defp supported_opening_audio(%OpeningAudio{type: :file_url}, _text_to_speech) do
+    unsupported(["opening_audio", "type"], "file opening audio is not supported yet")
   end
 
   defp text_to_speech_runtime(receiver, options) do

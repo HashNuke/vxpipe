@@ -3,8 +3,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
 
   alias Vxpipe.CallEngine.Archive.Recorder
   alias Vxpipe.CallEngine.Room.Snapshot
+  alias Vxpipe.CallEngine.RoomAuthority.OpeningAudio
 
-  @enforce_keys [:archive_recorder, :snapshot, :speech_to_text_runtime]
+  @enforce_keys [:archive_recorder, :opening_audio, :snapshot, :speech_to_text_runtime]
   defstruct @enforce_keys ++
               [
                 connection_monitors: %{},
@@ -27,6 +28,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           agent_turns: map(),
           background_tool_calls: map(),
           next_sequence: pos_integer(),
+          opening_audio: OpeningAudio.t(),
           participant_monitors: %{optional(reference()) => String.t()},
           participant_ids: MapSet.t(String.t()),
           participant_roles: %{optional(String.t()) => atom()},
@@ -37,10 +39,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           text_to_speech_capability: nil | map()
         }
 
-  @spec new(Recorder.t(), Snapshot.t(), :application | map()) :: t()
-  def new(%Recorder{} = archive_recorder, %Snapshot{} = snapshot, speech_to_text_runtime) do
+  @spec new(Recorder.t(), Snapshot.t(), :application | map(), OpeningAudio.t()) :: t()
+  def new(
+        %Recorder{} = archive_recorder,
+        %Snapshot{} = snapshot,
+        speech_to_text_runtime,
+        %OpeningAudio{} = opening_audio \\ OpeningAudio.open()
+      ) do
     %__MODULE__{
       archive_recorder: archive_recorder,
+      opening_audio: opening_audio,
       snapshot: snapshot,
       speech_to_text_runtime: speech_to_text_runtime
     }

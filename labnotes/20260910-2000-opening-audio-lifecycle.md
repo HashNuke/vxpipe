@@ -25,3 +25,25 @@
   not presented as passing umbrella evidence. Root formatting completed before that failure.
 - Runtime fetch/format/cache policy, playback completion gating, greeting modes, and lifecycle
   clocks remain pending.
+
+## 2026-09-10 — fixed-text playback gate
+
+- Added one focused room test before runtime work. Its first run failed at the expected boundary:
+  attaching the caller emitted no opening TTS request.
+- Kept gate state and opening-request construction in the focused
+  `RoomAuthority.OpeningAudio` module. `RoomAuthority` dispatches connection and TTS callbacks;
+  it does not fetch, decode, cache, or own provider transport behavior.
+- Selected speech processes may warm normally. A planned STT ingress starts closed, discards
+  frames without buffering, and is opened once after actual output-sink completion. Text
+  admission reports retryable `opening_audio_in_progress` during the same interval.
+- TTS provider completion, audio enqueue, playback start, and playback progress do not open the
+  gate. A configured opening failure stops the room with `opening_audio_unavailable`.
+- Unsupported file playback and fixed text without a resolved TTS binding fail plan validation
+  before the room is registered.
+- Reduced routine crash-log exposure by giving `TextToSpeechRequest` a bounded inspection that
+  excludes the text and output-sink fields.
+- Focused evidence:
+  `mix test test/vxpipe/call_engine/opening_audio_room_test.exs --seed 238092` passed with
+  3 tests and 0 failures. The complete Call Engine suite passed with 234 tests and 0 failures,
+  with 1 integration test excluded. Formatting and warnings-as-errors compilation passed.
+- File fetching/decoding/caching, first-message behavior, and lifecycle clocks remain pending.
