@@ -392,3 +392,38 @@ giving Calls or Gateway access to private MCP configuration.
 
 Next: inspect and connect the room-start private-binding acquisition boundary without putting the
 catalog or credentials in Calls, Gateway, the prepared-call record, or the safe plan.
+
+## 2026-09-10 — all-or-nothing catalog refresh operation
+
+- The live-start audit confirmed that acquiring a private MCP client before `PlanStartup` can
+  expose the matching tool through Jido would open credentials for a call that is then rejected.
+  No placeholder startup path was added. The exact runtime handoff remains sequenced after the
+  supported Jido data-tool interface.
+- Picked the independent refresh boundary instead. Red: focused tests required a complete mixed
+  application/tenant snapshot to become visible after discovery and required a later failed load
+  to leave the preceding snapshot unchanged. Both failed because `CatalogRefresh` did not exist.
+- Green: `RemoteMCP.CatalogRefresh.run/2` validates a list of existing
+  `ConfiguredIntegration` values, rejects duplicate scope/integration identities, loads through
+  `CatalogLoader` using `Task.async_stream/3` with bounded concurrency and an explicit infinite
+  task timeout, assembles one `IntegrationCatalog`, and then performs one atomic store publish.
+  Individual loader deadlines remain the work bounds; refresh does not invent a second protocol
+  timeout.
+- The first green run showed that the lower discovery boundary intentionally normalizes the fake
+  protocol's `:remote_error` to `:discovery_failed`. The test expectation was corrected to the
+  owned public error while retaining the failed scoped connection key.
+- A failed load returns the failing non-secret `ConnectionKey` and normalized reason. Exceptions
+  and exits are collapsed to `:load_failed`; private client configuration remains behind the
+  redacted configured/integration values and is never included in the result.
+- The operation is deliberately not a GenServer or scheduler. It neither retrieves application/
+  tenant configuration nor defines TTL expiry, retry, revocation, or removal behavior. A future
+  configuration owner can run it outside the catalog store, whose callbacks remain network-free.
+- Focused verification passes 3 tests, including duplicate-identity and bounded-concurrency
+  rejection before discovery. The complete Call Engine child passes 200 tests with two tagged
+  integrations excluded. Root formatting, warnings-as-errors compilation, and strict Credo over
+  314 files plus unused-dependency detection pass. The deterministic umbrella suite passes all 415
+  default-lane tests against disposable PostgreSQL: MCP 33, Call Engine 200, Calls 35, Persistence
+  25, Gateway 66, and Console 56; nine tagged network integrations are excluded. The temporary
+  database was stopped and removed after the run.
+
+Next: add the configuration-source/scheduler and stale-catalog expiry semantics before enabling
+automatic refresh; the Jido interface remains the prerequisite for private live-start handoff.

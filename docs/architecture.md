@@ -284,6 +284,15 @@ stale caller-supplied MCP registry. Live room startup must obtain exact private 
 inside Call Engine; it must not route a private catalog through a prepared-call or gateway
 record.
 
+`RemoteMCP.CatalogRefresh` is the one-shot refresh operation used by a future configuration
+owner. It accepts only validated configured integrations, rejects duplicate scope/integration
+identities before discovery, and loads them with explicitly bounded concurrency. It constructs
+and atomically publishes one complete application/tenant snapshot only when every load succeeds;
+otherwise the last published snapshot remains unchanged. The operation does not fetch source
+configuration, schedule itself, own TTL expiry, or perform protocol work outside
+`CatalogLoader`. Configuration removal/revocation and stale-snapshot expiry therefore remain
+required before this becomes an automatic production refresh loop.
+
 Reusable protocol connections are keyed by application/tenant scope, integration ID,
 and credential generation. An agent activation acquires a monitored, non-secret lease
 for every exact generation used by its resolved bindings; the lease grants access to the

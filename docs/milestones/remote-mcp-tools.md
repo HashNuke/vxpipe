@@ -182,6 +182,16 @@ definition boundary has started or its specification has been reviewed.
   suite passes 197 tests, the Calls suite passes 35 tests, and the deterministic umbrella suite
   passes 412 tests with nine tagged integrations excluded. Live room startup, configuration
   source/refresh orchestration, and Jido projection remain pending.
+- [x] A one-shot `CatalogRefresh` operation now validates a bounded set of scoped integration
+  identities, discovers them with explicitly bounded concurrency, assembles one complete
+  application/tenant snapshot, and publishes it atomically. A controlled failure after loading a
+  replacement proves no partial catalog becomes visible and the prior snapshot remains current.
+  Duplicate identities and concurrency beyond the configured bound fail before discovery.
+  Focused verification passes 3 tests and the Call Engine suite passes 200 tests with two tagged
+  integrations excluded; the deterministic umbrella suite passes 415 tests with nine tagged
+  integrations excluded. Configuration retrieval, periodic scheduling, TTL expiry, and generation
+  removal/revocation remain separate pending work; this checkpoint does not claim automatic
+  production refresh.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review
