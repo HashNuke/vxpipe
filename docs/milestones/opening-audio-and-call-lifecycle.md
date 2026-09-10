@@ -29,8 +29,8 @@ A caller hears optional configured opening audio before normal conversation. The
 - [x] Integrate the opening gate with wait/fixed/generated greeting modes for the initial receiver.
 - [x] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
 - [x] Implement planned-call startup readiness and pinned maximum-duration enforcement.
-- [ ] Implement correctly scoped caller-idle notification and early terminal startup failure;
-  keep timing/technical errors safe.
+- [x] End planned-call startup immediately after a definitive selected-provider start failure.
+- [ ] Implement correctly scoped caller-idle notification; keep timing/technical errors safe.
 
 ## Acceptance and failure checks
 
@@ -105,9 +105,18 @@ only the immutable plan value and ends the entire room with a typed internal rea
 
 The focused lifecycle files passed with 3 tests and 0 failures after their expected red runs.
 The complete Call Engine suite passed with 240 tests and 1 integration exclusion; Calls,
-Gateway, and Console passed with 35, 66, and 56 tests respectively. Caller-idle notification,
-early termination on definitive provider startup failure, the tenant/application duration
-precedence source, and file playback remain pending, so the milestone is still in progress.
+Gateway, and Console passed with 35, 66, and 56 tests respectively. At that checkpoint,
+caller-idle notification, early termination on definitive provider startup failure, the
+tenant/application duration precedence source, and file playback remained pending.
+
+Selected STT startup/binding failure now reports a terminal readiness failure through the same
+lifecycle owner, cancels the readiness clock, and ends the attempted planned room immediately.
+The caller receives the bounded `speech_to_text_unavailable` attachment error while connection
+events receive only the safe call-start failure reason. A lifecycle status check preserves the
+legacy ad-hoc room behavior, where a failed optional attachment is detached without ending the
+room. The new focused test failed first because readiness remained armed, then passed; the
+complete Call Engine suite passed with 241 tests and 1 integration exclusion. Calls, Gateway,
+and Console remained green with 35, 66, and 56 tests respectively.
 
 ## Specification review
 

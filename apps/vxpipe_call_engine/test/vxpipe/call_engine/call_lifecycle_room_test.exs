@@ -7,11 +7,14 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     CallDefinition,
     CallInvocation,
     DefinitionCompiler,
+    Error,
     TestAgentRuntimeModelProvider,
-    TestCallLifecycleTimer
+    TestCallLifecycleTimer,
+    TestFailingSpeechToTextTransport
   }
 
   alias Vxpipe.CallEngine.Command.AttachConnection
+  alias Vxpipe.CallEngine.Provider.Deepgram.Flux
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -74,6 +77,28 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert monitor == attachment.room_monitor
   end
 
+  test "ends startup immediately when the selected speech provider cannot start" do
+    configure_failing_speech_to_text()
+    plan = compile_plan(60_000, speech_to_text?: true)
+    assert {:ok, room} = start_call(plan)
+    authority = room_authority(plan)
+    monitor = Process.monitor(authority)
+
+    assert_receive {:test_call_lifecycle_timer_scheduled, _maximum_timer, 60_000}
+    assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:error, %Error{code: :speech_to_text_unavailable}} =
+             attach(plan, room, caller)
+
+    assert_receive :test_failing_stt_start_attempted
+    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+
+    assert_receive {:DOWN, ^monitor, :process, ^authority,
+                    {:shutdown, {:startup_failure, :speech_to_text_unavailable}}}
+  end
+
   defp start_call(plan) do
     CallEngine.start_call(plan,
       call_lifecycle: [
@@ -83,7 +108,14 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     )
   end
 
-  defp compile_plan(max_duration_ms) do
+  defp compile_plan(max_duration_ms, options \\ []) do
+    caller_capabilities =
+      if Keyword.get(options, :speech_to_text?, false) do
+        %{speech_to_text: "test-stt"}
+      else
+        %{}
+      end
+
     input = %{
       schema_version: CallDefinition.schema_version(),
       entry_caller: "caller",
@@ -94,7 +126,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
         "caller" => %{
           type: "human",
           connection: %{service: "web", mode: "receive", admission: "start_call"},
-          capabilities: %{}
+          capabilities: caller_capabilities
         },
         "receiver" => %{
           type: "agent",
@@ -130,6 +162,11 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
           kind: :model_inference,
           provider: :req_llm,
           options: %{model: "test:scripted"}
+        },
+        "test-stt" => %{
+          kind: :speech_to_text,
+          provider: Flux,
+          options: %{model: "flux-general-multi", encoding: :opus, sample_rate: 48_000}
         }
       },
       host_tools: %{}
@@ -159,6 +196,34 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
       Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
     authority
+  end
+
+  defp configure_failing_speech_to_text do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    speech_to_text = [
+      enabled: true,
+      provider: Flux,
+      provider_options: [
+        api_key: "test-runtime-secret",
+        model: "flux-general-en",
+        encoding: :opus,
+        sample_rate: 48_000
+      ],
+      transport: {TestFailingSpeechToTextTransport, [observer: self()]},
+      media_ingress: [
+        maximum_frames: 8,
+        maximum_bytes: 1_024,
+        maximum_age_ms: 1_000,
+        maximum_consecutive_overflows: 2
+      ]
+    ]
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(settings, :speech_to_text, speech_to_text)
+    )
   end
 
   defp unique_id(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"

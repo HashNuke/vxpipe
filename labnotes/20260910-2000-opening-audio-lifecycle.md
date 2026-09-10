@@ -142,3 +142,24 @@
   shell has no PostgreSQL password; no credential value was inspected or logged.
 - Caller-idle notification, early failure on definitive provider startup failure, duration-setting
   precedence before plan compilation, and file opening playback/cache remain pending.
+
+## 2026-09-10 — terminal STT startup failure
+
+- Added a failing STT transport fixture and a room-boundary test for a caller whose plan selects
+  STT. The red run returned `speech_to_text_unavailable` but left the readiness timer armed and
+  the planned room alive.
+- Added a narrow lifecycle startup-failure operation. While readiness is pending, it cancels that
+  timer, records a terminal lifecycle status, and delivers the safe internal reason to Room
+  Authority. Authority notifies attached connections of call-start failure and stops the entire
+  attempted room subtree immediately.
+- Kept legacy room behavior distinct: when no planned lifecycle exists, a failed optional STT
+  attachment is detached and the room remains available. A failure after lifecycle readiness is
+  likewise attachment-local rather than retroactively failing call startup.
+- Focused lifecycle coverage passed with 4 tests and 0 failures. The complete Call Engine suite
+  passed with 241 tests and 1 integration exclusion; Calls passed 35 tests, Gateway passed 66
+  tests with 4 integration exclusions, and Console passed 56 tests.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+  Root tests again stopped at Persistence database creation because this shell has no PostgreSQL
+  password; no credential value was inspected or logged.
+- Caller-idle notification, duration-setting precedence before plan compilation, and file opening
+  playback/cache remain pending.

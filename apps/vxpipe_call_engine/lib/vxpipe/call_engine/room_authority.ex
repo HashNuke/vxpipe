@@ -237,6 +237,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info(
+        {:vxpipe_call_lifecycle, lifecycle, {:startup_failure, reason}},
+        %{call_lifecycle: lifecycle, startup_ready?: false} = state
+      ) do
+    ConnectionLifecycle.notify(state.connections, :call_start_failed)
+    {:stop, {:shutdown, {:startup_failure, reason}}, state}
+  end
+
+  def handle_info(
         {:vxpipe_call_lifecycle, lifecycle, :max_duration},
         %{call_lifecycle: lifecycle} = state
       ) do

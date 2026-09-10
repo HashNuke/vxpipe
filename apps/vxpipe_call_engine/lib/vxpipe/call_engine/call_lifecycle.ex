@@ -40,6 +40,17 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     end
   end
 
+  @spec startup_failed(String.t(), atom()) ::
+          :ok | {:ignored, :expired | :failed | :ready} | {:error, :unavailable}
+  def startup_failed(incarnation_id, reason)
+      when is_binary(incarnation_id) and is_atom(reason) do
+    case safe_call(via(incarnation_id), {:startup_failed, reason}) do
+      :ok -> :ok
+      {:ignored, status} when status in [:expired, :failed, :ready] -> {:ignored, status}
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
   @impl true
   def init(options) do
     with %ResolvedCallPlan{} = plan <- Keyword.get(options, :plan),
@@ -85,6 +96,20 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
 
   def handle_call(:ready, _from, state), do: {:reply, :ok, state}
 
+  def handle_call({:startup_failed, reason}, _from, %{readiness: :pending} = state) do
+    state =
+      state
+      |> cancel(:readiness)
+      |> Map.put(:readiness, :failed)
+      |> deliver({:startup_failure, reason})
+
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:startup_failed, _reason}, _from, state) do
+    {:reply, {:ignored, state.readiness}, state}
+  end
+
   @impl true
   def handle_info({:vxpipe_call_lifecycle_timer, token, event}, state) do
     case Map.get(state.timers, event) do
@@ -124,9 +149,16 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     timer_module.cancel(timer.handle, timer_options)
   end
 
-  defp fire(event, state) do
-    state = %{state | timers: Map.delete(state.timers, event)}
+  defp fire(:readiness, state) do
+    state
+    |> Map.put(:readiness, :expired)
+    |> remove_timer(:readiness)
+    |> deliver(:readiness)
+  end
 
+  defp fire(event, state), do: state |> remove_timer(event) |> deliver(event)
+
+  defp deliver(state, event) do
     if is_pid(state.authority) do
       notify(state.authority, event)
       state
@@ -134,6 +166,8 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
       %{state | unbound_events: [event | state.unbound_events]}
     end
   end
+
+  defp remove_timer(state, event), do: %{state | timers: Map.delete(state.timers, event)}
 
   defp notify(authority, event), do: send(authority, {:vxpipe_call_lifecycle, self(), event})
 

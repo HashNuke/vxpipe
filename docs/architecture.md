@@ -764,7 +764,10 @@ STT is selected, its capability and ingress must start and bind before readiness
 readiness timer is then cancelled once, and the initial receiver's greeting remains gated behind
 both readiness and completed opening playout. Readiness expiry and maximum duration notify
 attached connections with safe reasons and terminate the room. Early shutdown on a definitive
-provider startup failure and deeper provider-specific ready handshakes remain to be implemented.
+selected-STT startup/binding failure follows the same lifecycle path: it cancels readiness and
+ends the attempted planned room immediately while returning a bounded attachment error. Legacy
+ad-hoc rooms preserve their detach-only behavior. Deeper provider-specific ready handshakes remain
+to be implemented where a transport's successful start does not already establish readiness.
 
 When an agent genuinely waits for caller input, a configurable 15-second idle
 notification lets its instructions decide whether to nudge, wait, or use a

@@ -4,7 +4,8 @@ Status: 24 milestone specifications: 12 complete and 12 incomplete. Milestone 13
 and call lifecycle, is the current implementation slice. Its public opening-source contract is
 pinned; fixed-text playback gating, greetings, startup readiness, and maximum-duration
 enforcement are implemented. File playback, caller-idle handling, and the remaining lifecycle
-failure/precedence boundaries are still in progress.
+precedence boundaries are still in progress; definitive selected-STT startup failure now ends
+the attempted room immediately.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

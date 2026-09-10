@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
 
   alias Vxpipe.CallEngine.{
+    CallLifecycle,
     Error,
     Id,
     ParticipantAuthority,
@@ -191,7 +192,12 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   end
 
   defp attachment_speech_to_text_failed(room_authority, command) do
-    :ok = RoomAuthority.detach_connection(room_authority, command, self())
+    case CallLifecycle.startup_failed(command.incarnation_id, :speech_to_text_unavailable) do
+      :ok -> :ok
+      {:ignored, status} when status in [:expired, :failed] -> :ok
+      {:ignored, :ready} -> RoomAuthority.detach_connection(room_authority, command, self())
+      {:error, :unavailable} -> RoomAuthority.detach_connection(room_authority, command, self())
+    end
 
     {:error,
      Error.new(
