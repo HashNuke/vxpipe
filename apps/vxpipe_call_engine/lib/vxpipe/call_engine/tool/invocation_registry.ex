@@ -39,10 +39,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     end
   end
 
-  @spec snapshot(GenServer.server()) ::
+  @spec snapshot(GenServer.server(), timeout()) ::
           {:ok, [Vxpipe.CallEngine.Tool.InvocationStatus.t()]} | {:error, :unavailable}
-  def snapshot(registry) do
-    safe_call(registry, :snapshot)
+  def snapshot(registry, timeout \\ @call_timeout) do
+    safe_call(registry, :snapshot, timeout)
   end
 
   @spec lease_next(GenServer.server(), String.t()) ::
@@ -275,7 +275,11 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   end
 
   defp safe_call(registry, message) do
-    GenServer.call(registry, message, @call_timeout)
+    safe_call(registry, message, @call_timeout)
+  end
+
+  defp safe_call(registry, message, timeout) do
+    GenServer.call(registry, message, timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
   end

@@ -599,3 +599,34 @@ Verification:
 The registry currently accepts host invocation bindings and a PID completion target. Remote MCP
 and Call Variables runtime bindings, the Agent Runtime submit/pending adapters, activation
 supervision, coordinator admission, and submit-timeout reconciliation fault injection remain.
+
+## Implementation checkpoint 4d: Call Engine package adapters
+
+Added a focused test through `Vxpipe.AgentRuntime.Executor.submit/5` and
+`Vxpipe.AgentRuntime.PendingContext.fetch/3` before adding the umbrella dependency. It failed at
+compile time because Call Engine did not depend on `vxpipe_agent_runtime` and none of its bridge
+values existed.
+
+Call Engine now depends directly on the lower-level standalone package. An inspection-safe
+`AgentRuntime.Correlation` carries the private invocation registry and trusted `Tool.Context` for
+one request while exposing only command/turn correlation in inspection. `InvocationExecutor`
+implements the package's submit-only callback by delegating directly to `InvocationRegistry`; it
+has no execution fallback. `PendingContextSource` verifies that the correlation names the same
+activation registry, obtains a bounded snapshot with the package-provided timeout, and converts
+each safe status to a validated `Vxpipe.AgentRuntime.PendingInvocation`.
+
+The focused test submits an explicitly non-blocking legacy-inline host binding, observes execution
+in the external worker, and sees `running` followed by `terminal_queued` through the public pending
+context contract without exposing its private result through inspection.
+
+Verification:
+
+- Focused package-adapter suite: 1 test, 0 failures after the expected missing-dependency/module red
+  compile.
+- Complete Call Engine suite: 221 tests, 0 failures, 2 integration exclusions.
+- Umbrella format, warnings-as-errors compilation, Credo strict, and unused-lock checks passed.
+- Umbrella `mix test` stopped before tests because local PostgreSQL SCRAM authentication requires a
+  password unavailable in this shell; no credential source was inspected.
+
+Remote MCP and Call Variables handlers, descriptor compilation, activation-owned Session startup,
+coordinator admission/completion leasing, and submit-timeout reconciliation fault injection remain.

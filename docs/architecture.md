@@ -564,8 +564,11 @@ completion, idempotent submission reconciliation, worker identity, terminal race
 ordered snapshots, completion lease/release, explicit acknowledgement, and bounded consumed-ID
 tombstones. A worker is prepared dormant, monitored, recorded, and only then explicitly begun, so
 a fast completion cannot overtake its authoritative running record. Only acknowledgement frees
-capacity. Remote MCP/Call Variables handlers, Agent Runtime adapters, and activation wiring remain
-subsequent checkpoints; this substrate is not yet selected by live calls.
+capacity. Thin Call Engine adapters now implement Agent Runtime's submit and pending-context
+contracts: submission can only delegate to this registry, and pending projection maps only safe
+status values after verifying the request correlation belongs to the same registry. Remote MCP/Call
+Variables handlers and activation wiring remain subsequent checkpoints; this substrate is not yet
+selected by live calls.
 
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the

@@ -36,6 +36,7 @@ defmodule Vxpipe.CallEngine.MixProject do
       {:jsv, "~> 0.22"},
       {:req_llm, "~> 1.22"},
       {:telemetry, "~> 1.3"},
+      {:vxpipe_agent_runtime, in_umbrella: true},
       {:vxpipe_mcp, in_umbrella: true},
       {:websockex, "~> 0.5.1"}
     ]
