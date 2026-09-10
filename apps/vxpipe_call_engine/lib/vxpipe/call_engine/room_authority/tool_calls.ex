@@ -8,7 +8,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ToolCalls do
     ToolCallStarted
   }
 
-  alias Vxpipe.CallEngine.{Id, Tool.Call}
+  alias Vxpipe.CallEngine.Id
+  alias Vxpipe.CallEngine.Tool.{Call, Context}
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     EventPublisher,
@@ -18,6 +19,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ToolCalls do
   }
 
   @spec started(State.t(), pid(), struct(), Call.t()) :: State.t()
+  def started(%State{} = state, capability, %Context{} = context, %Call{} = call) do
+    if invocation_authorized?(state, capability, context) and
+         not Map.has_key?(state.background_tool_calls, call.id) do
+      connection = Map.fetch!(state.connections, context.connection_id)
+
+      event =
+        struct!(
+          ToolCallStarted,
+          Map.merge(event_fields(context, call, state), %{arguments: call.arguments})
+        )
+
+      background_tool_calls =
+        Map.put(state.background_tool_calls, call.id, %{
+          call: call,
+          capability: capability,
+          command: context
+        })
+
+      state
+      |> EventPublisher.publish(connection.pid, event)
+      |> Map.put(:background_tool_calls, background_tool_calls)
+      |> Map.update!(:next_sequence, &(&1 + 1))
+    else
+      state
+    end
+  end
+
   def started(%State{} = state, capability, command, %Call{} = call) do
     if authorized?(state, capability, command) do
       connection = Map.fetch!(state.connections, command.connection_id)
@@ -136,13 +164,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ToolCalls do
 
   defp background_stopped(state, command, call, outcome, build_event) do
     case Map.get(state.connections, command.connection_id) do
-      %{participant_id: participant_id} = connection
-      when participant_id == command.participant_id ->
-        event = build_event.(event_fields(command, call, state), outcome)
+      %{participant_id: participant_id} = connection ->
+        if participant_id == source_participant_id(command) do
+          event = build_event.(event_fields(command, call, state), outcome)
 
-        state
-        |> EventPublisher.publish(connection.pid, event)
-        |> Map.update!(:next_sequence, &(&1 + 1))
+          state
+          |> EventPublisher.publish(connection.pid, event)
+          |> Map.update!(:next_sequence, &(&1 + 1))
+        else
+          state
+        end
 
       _missing_connection ->
         state
@@ -153,7 +184,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ToolCalls do
     connection = Map.get(state.connections, command.connection_id)
 
     TurnState.active?(state, command) and TextCapability.current?(state, capability) and
-      connection != nil and connection.participant_id == command.participant_id
+      connection != nil and connection.participant_id == source_participant_id(command)
+  end
+
+  defp invocation_authorized?(state, capability, context) do
+    connection = Map.get(state.connections, context.connection_id)
+
+    TextCapability.current?(state, capability) and
+      state.snapshot.tenant_id == context.tenant_id and
+      state.snapshot.room_id == context.room_id and
+      state.snapshot.incarnation_id == context.incarnation_id and
+      state.text_capability.participant_id == context.agent_participant_id and
+      connection != nil and connection.participant_id == context.source_participant_id
   end
 
   defp event_fields(command, call, state) do
@@ -164,13 +206,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ToolCalls do
       room_id: state.snapshot.room_id,
       incarnation_id: state.snapshot.incarnation_id,
       participant_id: state.text_capability.participant_id,
-      source_participant_id: command.participant_id,
+      source_participant_id: source_participant_id(command),
       connection_id: command.connection_id,
-      command_id: command.id,
+      command_id: command_id(command),
       correlation_id: command.correlation_id,
       tool_call_id: call.id,
       name: call.name,
       occurred_at: DateTime.utc_now(:millisecond)
     }
   end
+
+  defp source_participant_id(%Context{} = context), do: context.source_participant_id
+  defp source_participant_id(command), do: command.participant_id
+
+  defp command_id(%Context{} = context), do: context.command_id
+  defp command_id(command), do: command.id
 end

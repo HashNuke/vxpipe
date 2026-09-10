@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TurnState do
   alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
   alias Vxpipe.CallEngine.RoomAuthority.State
   alias Vxpipe.CallEngine.TextToSpeechRequest
+  alias Vxpipe.CallEngine.Tool.Context
 
   @spec put(State.t(), SendText.t() | ContinueAgent.t()) :: State.t()
   def put(%State{} = state, command) do
@@ -55,4 +56,5 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TurnState do
   defp command_id(%SendText{} = command), do: command.id
   defp command_id(%ContinueAgent{} = command), do: command.id
   defp command_id(%TextToSpeechRequest{} = request), do: request.command_id
+  defp command_id(%Context{} = context), do: context.command_id
 end

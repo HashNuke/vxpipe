@@ -972,3 +972,41 @@ exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and u
 pass. Umbrella `mix test` stops before execution because the local PostgreSQL SCRAM password is
 absent; no credential source was inspected. This compatibility setting is test migration scaffolding
 and must disappear with the Jido graph and dependencies before the milestone completes.
+
+## Implementation checkpoint 4q: room-level tool conversation modes
+
+Added two focused full-room tests before implementation. Each call definition enables the same
+controlled host tool, whose execution waits for an explicit test release. The omitted policy case
+expects default blocking; the second authors `conversation_mode: "non_blocking"`. Both tests assert
+that the tool process differs from the model request process, so neither mode can regress to inline
+execution.
+
+The red run started both independent tool workers and reached the Agent Runtime acknowledgement
+round, but timed out waiting for the existing public `ToolCallStarted` event. This exposed a room
+contract gap in the new activation path rather than an execution-policy failure: the authoritative
+invocation registry had not projected accepted or settled work back through Room Authority.
+
+Added the cohesive `Tool.InvocationLifecycle` adapter. After successful worker startup, the registry
+emits the accepted invocation to the room lifecycle target; when its monitored worker settles, it
+emits the correlated success or bounded error before notifying the coordinator that a private
+completion is available. Room Authority authorizes a trusted invocation context against the current
+room incarnation, agent activation, source participant, and attached connection, then retains the
+call as pending independently of the original turn. That distinction matters for fast model output:
+the submitted worker and its tool event do not disappear when the originating turn completes or is
+interrupted.
+
+The default-blocking scenario proves that the post-submission acknowledgement receives no tools,
+that current pending state contains one blocking invocation and one committed running result, and
+that later caller input receives the platform hold without reaching the model. After worker release,
+the room publishes completion, the agent consumes the private engine observation once, and a new
+caller turn reaches the model. The explicit non-blocking scenario proves that the acknowledgement
+retains the tool surface, unrelated caller input reaches the model while execution is pending, and
+that request contains the same single running result plus the authoritative non-blocking pending
+projection before the private completion is consumed.
+
+The two focused scenarios pass. The refactor moved them out of the already-large general
+definition-driven test module into a single-purpose Agent Runtime room test. The complete
+definition-driven suite passes 18 tests, and the complete Call Engine suite passes 244 tests with 2
+integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+authentication needs a password absent from this shell; no credential source was inspected.

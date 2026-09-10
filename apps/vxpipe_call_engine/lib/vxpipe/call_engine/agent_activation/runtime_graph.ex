@@ -113,6 +113,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
        activation_id: activation_id,
        invocation_supervisor: invocation_supervisor,
        completion_target: coordinator,
+       lifecycle_target: Keyword.fetch!(options, :owner),
        maximum_invocations: Keyword.fetch!(options, :maximum_background_tools),
        maximum_consumed_invocations: Keyword.fetch!(options, :maximum_completed_requests),
        invocation_timeout_ms: Keyword.fetch!(options, :background_tool_timeout_ms),

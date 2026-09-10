@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
   @enforce_keys [
     :invocation_supervisor,
     :completion_target,
+    :lifecycle_target,
     :maximum_invocations,
     :maximum_consumed_invocations,
     :invocation_timeout_ms,

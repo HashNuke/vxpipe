@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     Context,
     InvocationBinding,
     InvocationCompletion,
+    InvocationLifecycle,
     InvocationRecord,
     InvocationSubmission,
     InvocationSupervisor
@@ -149,6 +150,13 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         case InvocationRecord.finish(record, completion) do
           {:ok, record} ->
             state = State.replace(state, record)
+
+            InvocationLifecycle.settled(
+              state.lifecycle_target,
+              state.completion_target,
+              record
+            )
+
             notify_completion(state, record.invocation_id)
             {:noreply, state}
 
@@ -167,6 +175,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         completion = InvocationRecord.failed_completion(record)
         {:ok, record} = InvocationRecord.finish(record, completion)
         state = State.replace(state, record)
+        InvocationLifecycle.settled(state.lifecycle_target, state.completion_target, record)
         notify_completion(state, record.invocation_id)
         {:noreply, state}
 
@@ -203,7 +212,15 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
         case InvocationSupervisor.begin_invocation(worker) do
           :ok ->
-            {:reply, {:accepted, submission.conversation_mode}, State.add(state, record)}
+            state = State.add(state, record)
+
+            InvocationLifecycle.accepted(
+              state.lifecycle_target,
+              state.completion_target,
+              submission
+            )
+
+            {:reply, {:accepted, submission.conversation_mode}, state}
 
           {:error, _reason} ->
             Process.demonitor(monitor, [:flush])
@@ -226,6 +243,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
              :name,
              :invocation_supervisor,
              :completion_target,
+             :lifecycle_target,
              :maximum_invocations,
              :maximum_consumed_invocations,
              :invocation_timeout_ms,
@@ -238,6 +256,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
          true <- server_available?(invocation_supervisor),
          {:ok, completion_target} <-
            server_pid(Keyword.get(options, :completion_target)),
+         lifecycle_target when is_nil(lifecycle_target) or is_pid(lifecycle_target) <-
+           Keyword.get(options, :lifecycle_target),
          maximum_invocations when is_integer(maximum_invocations) and maximum_invocations > 0 <-
            Keyword.get(options, :maximum_invocations),
          maximum_consumed when is_integer(maximum_consumed) and maximum_consumed > 0 <-
@@ -252,6 +272,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
        %State{
          invocation_supervisor: invocation_supervisor,
          completion_target: completion_target,
+         lifecycle_target: lifecycle_target,
          maximum_invocations: maximum_invocations,
          maximum_consumed_invocations: maximum_consumed,
          invocation_timeout_ms: invocation_timeout_ms,

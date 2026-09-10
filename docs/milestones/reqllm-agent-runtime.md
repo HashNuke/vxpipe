@@ -153,7 +153,9 @@ process or dependency is used.
    application runtime setting while preserving the existing capability contract. Application and
    development configuration now select Agent Runtime by default; only the test environment
    temporarily selects the Jido compatibility graph until its scripted parity scenarios move to a
-   neutral test provider. Preserve completion and interruption behavior.
+   neutral test provider. Full room tests now prove that an omitted tool policy blocks later caller
+   model admission, an explicit `non_blocking` policy admits it, and both modes use the same
+   activation-owned invocation worker/lifecycle path. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -193,14 +195,14 @@ process or dependency is used.
 - [ ] Killing the runtime session terminates request workers without ending the room. Killing
   the participant activation cleans up the complete runtime subtree and stale results cannot
   attach to a replacement activation.
-- [ ] A non-blocking acknowledgement, unrelated caller turn, and later engine-origin completion
+- [x] A non-blocking acknowledgement, unrelated caller turn, and later engine-origin completion
   reproduce the completed milestone's ordering and visibility behavior. The single correlated
   running acknowledgement is committed once and appears in every later model request while
   pending, with no repeated polling or status message. The private completion carries the same
   invocation ID and is consumed once, with no fake public user message or competing TTS stream.
-- [ ] Every provider generation receives the current bounded pending projection without tool
+- [x] Every provider generation receives the current bounded pending projection without tool
   arguments/results or private routing data; it is not appended repeatedly to conversation.
-- [ ] Omitted binding policy blocks later caller model admission by default; an explicit
+- [x] Omitted binding policy blocks later caller model admission by default; an explicit
   `non_blocking` binding permits the unrelated-turn sequence. Blocking turns receive bounded
   deterministic hold output, and a completion is consumed before admission reopens.
 - [ ] Process inspection, telemetry, errors, and public events contain no prompts, raw tool
@@ -556,6 +558,27 @@ Implementation evidence:
   pass. Umbrella `mix test` stops before execution because the local PostgreSQL SCRAM password is
   absent; no credential source was inspected. This is temporary test migration scaffolding, not a
   supported production fallback.
+- Checkpoint 4q adds focused room-level acceptance for the two conversation modes. Both scenarios
+  compile the same deliberately blocked host operation from the participant's call-definition
+  `tools` map and observe execution in a process distinct from the model request. Omission resolves
+  to blocking: the acknowledgement round receives no tool surface, later caller input receives the
+  deterministic hold without model admission, and admission reopens only after the private terminal
+  continuation is consumed. An explicit `conversation_mode: "non_blocking"` retains the tool
+  surface, admits unrelated caller input, and supplies its one correlated running acknowledgement
+  plus current pending projection to that model request.
+- The new invocation path now projects accepted and settled work through the existing room-owned
+  `ToolCallStarted`/`ToolCallCompleted` boundary. `InvocationLifecycle` owns that translation, while
+  the registry remains authoritative for start, terminal state, and completion availability. A
+  trusted invocation context is authorized against the current incarnation, activation, source
+  connection, and agent participant before Room Authority records it as pending. This preserves
+  client visibility and archive routing without treating external work as part of the original
+  turn's process lifetime.
+- Checkpoint 4q red evidence was two room tests timing out on the absent `ToolCallStarted` event even
+  though both independent workers had started. The focused two-scenario suite passes, the complete
+  definition-driven suite passes 18 tests, and the complete Call Engine suite passes 244 tests with
+  2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+  unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.
 
 ## Specification review
 
