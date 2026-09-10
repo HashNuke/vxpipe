@@ -93,7 +93,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     %ResolvedCallPlan{
       definition_id: unique_id("definition"),
       definition_revision: 1,
-      schema_version: "20260910.04",
+      schema_version: "20260910.05",
       tenant_id: tenant_id,
       actor_id: unique_id("actor"),
       call_id: unique_id("call"),
@@ -103,6 +103,9 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       entry_receiver: "assistant",
       opening_audio: nil,
       participants: %{"support" => participant},
+      transfer_policy: %Vxpipe.CallEngine.CallDefinition.TransferPolicy{
+        attempt_timeout_ms: 30_000
+      },
       call_variables: %CallVariables{},
       tool_visibility: ToolVisibility.hidden(),
       max_duration_ms: 60_000

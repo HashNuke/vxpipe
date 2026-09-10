@@ -36,7 +36,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleTest do
     %ResolvedCallPlan{
       definition_id: "definition-lifecycle",
       definition_revision: 1,
-      schema_version: "20260910.04",
+      schema_version: "20260910.05",
       tenant_id: "tenant-lifecycle",
       actor_id: "actor-lifecycle",
       call_id: unique_id("call"),
@@ -46,6 +46,9 @@ defmodule Vxpipe.CallEngine.CallLifecycleTest do
       entry_receiver: "receiver",
       opening_audio: nil,
       participants: %{},
+      transfer_policy: %Vxpipe.CallEngine.CallDefinition.TransferPolicy{
+        attempt_timeout_ms: 30_000
+      },
       call_variables: nil,
       tool_visibility: nil,
       max_duration_ms: 60_000

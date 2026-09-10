@@ -78,3 +78,14 @@
 - This checkpoint implements fresh destination history only. Total deadline handling, controlled
   preparation failure/restoration, late completion exclusion, re-entry identity/activation rules,
   and alternate approved history projections remain pending.
+
+## 2026-09-10 — total-attempt policy schema
+
+- Released schema `20260910.05` with the closed call-level
+  `transfer_policy.attempt_timeout_ms`. Omission selects 30 seconds; accepted authored values are
+  bounded from 1 to 120 seconds and are pinned in `ResolvedCallPlan`.
+- Transfer-capable activations set their supervised invocation timeout to at least the call's total
+  transfer budget plus one second. This prevents the general 30-second worker default from racing a
+  longer valid transfer policy; it does not add an inline or second execution path.
+- The policy/compiler/startup group passes six focused tests. Runtime enforcement, failure cleanup,
+  and late-result exclusion remain the next red-green checkpoint.

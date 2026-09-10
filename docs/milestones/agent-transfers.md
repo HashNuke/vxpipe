@@ -1,6 +1,6 @@
 # Allowlisted agent-to-agent transfers
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: partially implemented. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP tools](remote-mcp-tools.md); [Call lifecycle](opening-audio-and-call-lifecycle.md).
 Sources: [Transfer identities](../../labnotes/20260905-0405-call-definition-design.md#runtime-participant-and-transfer-identities); [transfer success/failure](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [history policies](../../labnotes/20260905-0405-call-definition-design.md#initial-agent-transfer-history-policies).
 
@@ -90,6 +90,12 @@ process survive. A focused stale-source case proves rejection before destination
 focused room tests and the complete 265-test Call Engine suite passed with one tagged integration
 exclusion. This does not yet prove preparation failure/timeout, restoration, late exclusion,
 re-entry, or the non-fresh history projections.
+
+Schema `20260910.05` adds a closed call-level `transfer_policy.attempt_timeout_ms`, defaults it to
+30 seconds, validates 1–120 seconds, and pins it into the immutable plan. Transfer-capable
+activations enlarge the ordinary supervised invocation timeout only when needed so it encloses the
+pinned transfer budget by one second; execution remains in the same activation-owned tool worker.
+Six focused compiler tests pass. Runtime enforcement and cleanup remain the next checkpoint.
 
 ## Specification review
 

@@ -72,6 +72,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          entry_receiver: definition.entry_receiver,
          opening_audio: definition.opening_audio,
          participants: participants,
+         transfer_policy: definition.transfer_policy,
          call_variables: call_variables,
          tool_visibility: tool_visibility,
          max_duration_ms: max_duration_ms

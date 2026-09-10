@@ -52,13 +52,14 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260910.04`; it accepts validated
+The definition-driven compiler's current schema is `20260910.05`; it accepts validated
 definition-local agent transfer allowlists, derives one private default-blocking transfer binding
-for each non-empty list, and runs the initial agent-to-agent prepare/commit path with fresh
-destination history. Room Authority reauthorizes the source and destination, retains the source
-through preparation, then routes later turns through the committed destination and tears the source
-subtree down. Transfer deadlines, alternate history projections, re-entry, and restoration after
-failed preparation remain unsupported. Schema `20260910.03` added explicitly selected platform
+for each non-empty list, and pins the call-level total transfer-attempt deadline. Transfer-capable
+activations ensure their supervised tool timeout encloses that configured budget. The runnable
+fresh-history prepare/commit path does not yet enforce the deadline. Failure/expiry cleanup,
+alternate history projections, re-entry, and source-capability restoration remain unsupported.
+Schema `20260910.04` added the transfer allowlists and generated binding. Schema `20260910.03`
+added explicitly selected platform
 tools to the participant's unified `tools` map. The fixed initial catalog contains
 `get_current_time` and
 immediate `hangup`; local aliases and conversation mode are pinned into the resolved plan without

@@ -921,6 +921,12 @@ safe descriptions in a closed input schema. The generated binding uses the ordin
 policy and defaults to blocking later caller conversation. It still executes through the same
 activation-owned supervised worker path; blocking does not mean inline execution.
 
+Schema `20260910.05` adds the closed call-level `transfer_policy.attempt_timeout_ms`, with a
+30-second default and a bounded 1–120-second range, and pins it into the resolved plan. The
+activation-owned outer invocation timeout encloses the selected attempt budget rather than imposing
+the ordinary 30-second tool limit on a longer configured transfer. Runtime deadline enforcement and
+cleanup remain a separate checkpoint.
+
 The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
 activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
 reauthorizes the room/incarnation, caller connection, current source participant and activation,
@@ -932,10 +938,10 @@ then terminates the source participant subtree. A stale source is rejected befor
 startup. Runtime configuration retained for later participant materialization has a redacted
 inspection surface.
 
-This checkpoint supports the initial destination's fresh private model history. Total transfer
-deadlines, preparation failure/restoration behavior, other approved history projections, re-entry
-with a fresh activation, and late-result exclusion remain fail-closed follow-up work; their
-milestone checks are not satisfied by the basic control commit.
+This checkpoint supports the initial destination's fresh private model history. Preparation
+failure, total-deadline cleanup, duplicate-attempt rejection, late-result exclusion, other approved
+history projections, re-entry with a fresh activation, and the bounded source-capability restoration
+rule remain follow-up work.
 
 ### Presence-driven media and transcript policy — approved R38
 

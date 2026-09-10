@@ -8,12 +8,13 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     Capabilities,
     OpeningAudio,
     Participant,
+    TransferPolicy,
     ToolVisibility
   }
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260910.04"
+  @schema_version "20260910.05"
   @fields [
     :schema_version,
     :name,
@@ -23,6 +24,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :opening_audio,
     :call_variables,
     :participants,
+    :transfer_policy,
     :tool_visibility,
     :tool_visibility_overrides,
     :limits
@@ -39,6 +41,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :opening_audio,
     :call_variables,
     :participants,
+    :transfer_policy,
     :tool_visibility,
     :max_duration_ms
   ]
@@ -55,6 +58,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           opening_audio: nil | OpeningAudio.t(),
           call_variables: CallVariables.t(),
           participants: %{String.t() => Participant.t()},
+          transfer_policy: TransferPolicy.t(),
           tool_visibility: ToolVisibility.t(),
           max_duration_ms: nil | pos_integer()
         }
@@ -94,6 +98,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, participants} <- participants(participants_input, code, message),
          :ok <- validate_entries(entry_caller, entry_receiver, participants, code, message),
          :ok <- validate_transfers(participants, code, message),
+         {:ok, transfer_policy} <- TransferPolicy.new(Map.get(input, :transfer_policy)),
          :ok <- validate_variable_permissions(participants, call_variables, code, message),
          {:ok, tool_visibility} <-
            ToolVisibility.new(
@@ -114,6 +119,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          opening_audio: opening_audio,
          call_variables: call_variables,
          participants: participants,
+         transfer_policy: transfer_policy,
          tool_visibility: tool_visibility,
          max_duration_ms: max_duration_ms
        }}

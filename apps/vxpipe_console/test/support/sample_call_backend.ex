@@ -115,7 +115,7 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
       tenant_key: @tenant_key,
       definition_id: @definition_id,
       revision: 1,
-      schema_version: "20260910.04",
+      schema_version: "20260910.05",
       source: source,
       source_digest: "test-digest",
       compiled_metadata: %{"entry_caller" => "caller"},

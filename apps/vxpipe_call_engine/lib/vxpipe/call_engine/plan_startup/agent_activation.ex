@@ -24,6 +24,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
          {:ok, activation_options} <-
            activation_options(
              Keyword.get(settings, :implementation, :agent_runtime),
+             plan,
              receiver,
              model,
              variable_binding,
@@ -43,6 +44,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
 
   defp activation_options(
          :agent_runtime,
+         plan,
          receiver,
          model,
          variable_binding,
@@ -61,7 +63,15 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
          {:ok, provider_config} <-
            provider_module.new(Keyword.put(provider_options, :model, model)) do
       {:ok,
-       common_options(receiver, variable_binding, mcp_integrations, owner, options, settings) ++
+       common_options(
+         plan,
+         receiver,
+         variable_binding,
+         mcp_integrations,
+         owner,
+         options,
+         settings
+       ) ++
          [
            runtime: :agent_runtime,
            model_provider: provider_module,
@@ -76,6 +86,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
 
   defp activation_options(
          _implementation,
+         _plan,
          _receiver,
          _model,
          _variable_binding,
@@ -86,11 +97,19 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
        ),
        do: {:error, :unsupported_agent_runtime}
 
-  defp common_options(receiver, variable_binding, mcp_integrations, owner, options, settings) do
+  defp common_options(
+         plan,
+         receiver,
+         variable_binding,
+         mcp_integrations,
+         owner,
+         options,
+         settings
+       ) do
     base = [
       activation_id: receiver.activation_id,
       agent_participant_id: receiver.participant_id,
-      tool_invocation_timeout_ms: Keyword.fetch!(settings, :tool_invocation_timeout_ms),
+      tool_invocation_timeout_ms: tool_invocation_timeout(plan, receiver, settings),
       maximum_tool_invocations: Keyword.fetch!(settings, :maximum_tool_invocations),
       owner: owner,
       system_prompt: receiver.prompt,
@@ -112,6 +131,23 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       :remote_mcp_protocol_client,
       Keyword.get(options, :remote_mcp_protocol_client)
     )
+  end
+
+  defp tool_invocation_timeout(plan, receiver, settings) do
+    configured = Keyword.fetch!(settings, :tool_invocation_timeout_ms)
+
+    if transfer_tool?(receiver) do
+      max(configured, plan.transfer_policy.attempt_timeout_ms + 1_000)
+    else
+      configured
+    end
+  end
+
+  defp transfer_tool?(receiver) do
+    Enum.any?(receiver.tools, fn
+      {_name, %ToolBinding{type: :participant_transfer}} -> true
+      _binding -> false
+    end)
   end
 
   defp mcp_integrations(receiver, options) do

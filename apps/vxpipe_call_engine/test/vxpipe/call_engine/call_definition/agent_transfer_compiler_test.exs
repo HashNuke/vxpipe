@@ -8,7 +8,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
   alias Vxpipe.CallEngine.CallInvocation
   alias Vxpipe.CallEngine.DefinitionCompiler
   alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.PlanStartup
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
   alias Vxpipe.CallEngine.Tool.InvocationBinding
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding
 
@@ -95,6 +97,73 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
     assert plan.participants["reception"].tools == %{}
     assert {:ok, []} = ToolDescriptors.compile(plan.participants["reception"].tools)
+  end
+
+  test "pins a call-level total transfer attempt timeout" do
+    assert {:ok, default_definition} =
+             transfer_definition()
+             |> CallDefinition.new(resource_id: "support", revision: 7)
+
+    assert default_definition.transfer_policy.attempt_timeout_ms == 30_000
+
+    input = Map.put(transfer_definition(), :transfer_policy, %{attempt_timeout_ms: 12_000})
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "support", revision: 7)
+
+    assert definition.transfer_policy.attempt_timeout_ms == 12_000
+
+    assert {:ok, plan} =
+             DefinitionCompiler.compile(definition, invocation(), registries())
+
+    assert plan.transfer_policy.attempt_timeout_ms == 12_000
+
+    for invalid <- [0, 999, 120_001, "30000"] do
+      input = Map.put(transfer_definition(), :transfer_policy, %{attempt_timeout_ms: invalid})
+
+      assert {:error,
+              %Error{
+                code: :invalid_call_definition,
+                details: %{
+                  "path" => ["transfer_policy", "attempt_timeout_ms"]
+                }
+              }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+    end
+  end
+
+  test "the supervised invocation timeout encloses the total transfer budget" do
+    input =
+      transfer_definition()
+      |> put_in([:defaults, :capabilities], %{model_inference: "default-model"})
+      |> Map.put(:transfer_policy, %{attempt_timeout_ms: 120_000})
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "support", revision: 7)
+
+    registries =
+      put_in(registries(), [:capability_profiles, "default-model", :provider], :req_llm)
+
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation(), registries)
+
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      settings
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, owner: self())
+      |> Keyword.put(:tool_invocation_timeout_ms, 30_000)
+
+    assert {:ok, startup} =
+             PlanStartup.new(plan,
+               owner: self(),
+               agent_runtime: agent_runtime,
+               agent_request_options: [],
+               speech_to_text: [enabled: false],
+               text_to_speech: [enabled: false]
+             )
+
+    assert startup.agent_activation[:tool_invocation_timeout_ms] == 121_000
   end
 
   test "a generated transfer tool accepts the ordinary participant-local visibility override" do

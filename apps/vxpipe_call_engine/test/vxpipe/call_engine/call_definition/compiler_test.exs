@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.CurrentTime
 
-  @schema_version "20260910.04"
+  @schema_version "20260910.05"
 
   test "Elixir and JSON inputs produce the same typed definition" do
     input = definition_input()

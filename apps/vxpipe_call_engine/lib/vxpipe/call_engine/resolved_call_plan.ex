@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   A self-contained immutable call plan pinned before live room startup.
   """
 
+  alias Vxpipe.CallEngine.CallDefinition.TransferPolicy
   alias Vxpipe.CallEngine.ResolvedCallPlan.{CallVariables, Participant, ToolVisibility}
 
   @enforce_keys [
@@ -18,6 +19,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
     :entry_receiver,
     :opening_audio,
     :participants,
+    :transfer_policy,
     :call_variables,
     :tool_visibility,
     :max_duration_ms
@@ -37,6 +39,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           entry_receiver: String.t(),
           opening_audio: nil | Vxpipe.CallEngine.CallDefinition.OpeningAudio.t(),
           participants: %{String.t() => Participant.t()},
+          transfer_policy: TransferPolicy.t(),
           call_variables: CallVariables.t(),
           tool_visibility: ToolVisibility.t(),
           max_duration_ms: pos_integer()

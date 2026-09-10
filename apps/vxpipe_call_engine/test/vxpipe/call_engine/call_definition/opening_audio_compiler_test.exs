@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudioCompilerTest do
   alias Vxpipe.CallEngine.CallDefinition.OpeningAudio
 
   test "pins supported text and HTTPS file sources into the resolved plan" do
-    assert CallDefinition.schema_version() == "20260910.04"
+    assert CallDefinition.schema_version() == "20260910.05"
 
     for {input, expected} <- [
           {%{type: "text", text: "This call may be recorded."},
