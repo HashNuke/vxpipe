@@ -3,8 +3,9 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.Command.JoinParticipant
+  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.RoomParticipantSupervisor
-  alias Vxpipe.CallEngine.TestAgentTool
+  alias Vxpipe.CallEngine.{TestAgentRuntimeModelProvider, TestAgentTool}
 
   test "an agent participant owns its configured activation subtree" do
     incarnation_id = unique_id("rinc")
@@ -45,7 +46,7 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
                {:agent_activation, activation_id, :supervisor}
              )
 
-    assert is_pid(AgentActivationSupervisor.whereis_child(activation_id, :agent_server))
+    assert is_pid(AgentActivationSupervisor.whereis_child(activation_id, :session))
 
     authority_monitor = Process.monitor(participant_authority)
     activation_monitor = Process.monitor(activation_supervisor)
@@ -98,7 +99,7 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
 
     first = AgentActivationSupervisor.children(activation_supervisor)
     first_monitors = monitor_children(first)
-    Process.exit(Map.fetch!(first, :agent_server), :kill)
+    Process.exit(Map.fetch!(first, :session), :kill)
     assert_children_stopped(first_monitors)
 
     _ = :sys.get_state(activation_supervisor)
@@ -110,7 +111,7 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
            end)
 
     participant_monitor = Process.monitor(participant_supervisor)
-    Process.exit(Map.fetch!(second, :agent_server), :kill)
+    Process.exit(Map.fetch!(second, :session), :kill)
 
     assert_receive {:DOWN, ^participant_monitor, :process, ^participant_supervisor, _reason},
                    1_000
@@ -123,16 +124,30 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
 
   defp activation_options(activation_id, participant_id) do
     [
+      runtime: :agent_runtime,
       activation_id: activation_id,
       agent_participant_id: participant_id,
       owner: self(),
       system_prompt: "Use the selected action.",
-      tools: [TestAgentTool],
+      tools: %{
+        "test_agent_tool" => %ToolBinding{
+          name: "test_agent_tool",
+          type: :host,
+          conversation_mode: :blocking,
+          action: TestAgentTool,
+          remote: nil
+        }
+      },
+      variable_binding: nil,
+      model_provider: TestAgentRuntimeModelProvider,
+      model: %{model: "test:scripted", owner: self()},
+      provider: :test,
+      background_tool_timeout_ms: 1_000,
+      maximum_background_tools: 2,
       maximum_completed_requests: 4,
       maximum_output_bytes: 65_536,
       maximum_pending_requests: 2,
       maximum_tool_result_bytes: 4_096,
-      request_options: [],
       request_timeout_ms: 1_000
     ]
   end

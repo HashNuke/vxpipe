@@ -70,61 +70,27 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     assert_children_stopped(restarted_monitors)
   end
 
-  test "starts a configured activation before readiness and restarts it only once" do
-    activation_id = unique_activation_id()
-    activation = start_supervised!({AgentActivationSupervisor, options(activation_id)})
-
-    first = AgentActivationSupervisor.children(activation)
-
-    assert Map.keys(first) |> Enum.sort() == [
-             :agent_server,
-             :background_tools,
-             :coordinator,
-             :tool_dispatcher
-           ]
-
-    assert Enum.all?(first, fn {_role, pid} -> is_pid(pid) end)
-
-    assert {:ok, state} = Jido.AgentServer.state(Map.fetch!(first, :agent_server))
-    config = Jido.AI.get_strategy_config(state.agent)
-    assert config.system_prompt == "Use only the selected action."
-    assert Enum.map(config.tools, & &1.name()) == ["test_agent_tool"]
-
-    monitors = monitor_children(first)
-    Process.exit(Map.fetch!(first, :agent_server), :kill)
-    assert_children_stopped(monitors)
-
-    _ = :sys.get_state(activation)
-    second = AgentActivationSupervisor.children(activation)
-
-    assert Enum.all?(second, fn {role, pid} ->
-             is_pid(pid) and pid != Map.fetch!(first, role)
-           end)
-
-    assert {:ok, restarted_state} =
-             Jido.AgentServer.state(Map.fetch!(second, :agent_server))
-
-    restarted_config = Jido.AI.get_strategy_config(restarted_state.agent)
-    assert restarted_config.system_prompt == "Use only the selected action."
-    assert Enum.map(restarted_config.tools, & &1.name()) == ["test_agent_tool"]
-
-    restarted_monitors = monitor_children(second)
-    activation_monitor = Process.monitor(activation)
-    Process.exit(Map.fetch!(second, :agent_server), :kill)
-
-    assert_receive {:DOWN, ^activation_monitor, :process, ^activation, _reason}, 1_000
-    assert_children_stopped(restarted_monitors)
-  end
-
   test "a failed readiness configuration leaves no registered activation children" do
     activation_id = unique_activation_id()
-    invalid = Keyword.put(options(activation_id), :tools, [String])
+
+    invalid_tool = %ToolBinding{
+      name: "test_agent_tool",
+      type: :host,
+      conversation_mode: :blocking,
+      action: String,
+      remote: nil
+    }
+
+    invalid =
+      Keyword.put(agent_runtime_options(activation_id), :tools, %{
+        "test_agent_tool" => invalid_tool
+      })
 
     assert {:error, _reason} = start_supervised({AgentActivationSupervisor, invalid})
 
-    assert AgentActivationSupervisor.whereis_child(activation_id, :agent_server) == nil
     assert AgentActivationSupervisor.whereis_child(activation_id, :coordinator) == nil
-    assert AgentActivationSupervisor.whereis_child(activation_id, :tool_dispatcher) == nil
+    assert AgentActivationSupervisor.whereis_child(activation_id, :session) == nil
+    assert AgentActivationSupervisor.whereis_child(activation_id, :invocation_supervisor) == nil
   end
 
   test "owns remote MCP authorization for exactly the activation subtree" do

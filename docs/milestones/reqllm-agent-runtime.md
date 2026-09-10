@@ -628,6 +628,17 @@ Implementation evidence:
   removed yet. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
   pass. Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM
   password; no credential source was inspected.
+- Checkpoint 4v migrates participant-owned activation lifecycle tests to the Agent Runtime graph and
+  removes the duplicate Jido activation restart scenario. The participant boundary now proves that
+  its `:session` child is owned, stopped with the participant, replaced once as part of the complete
+  one-for-all graph, and ends only that participant subtree when the restart budget is exhausted.
+  Invalid readiness also checks only the new coordinator/session/invocation roles.
+- The focused activation/participant suite passes 5 tests and the complete Call Engine suite passes
+  238 tests with 2 integration exclusions at seed `365486`. The activation's isolated remote-MCP
+  ownership scenario remains on the compatibility graph pending its next-milestone runtime adapter.
+  Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass.
+  Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM password;
+  no credential source was inspected.
 
 ## Specification review
 

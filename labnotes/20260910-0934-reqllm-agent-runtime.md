@@ -1090,3 +1090,21 @@ its coordinator event fixture, the request transformer, and a tagged provider te
 warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops
 before test execution at the unchanged absent PostgreSQL SCRAM password; no credential source was
 inspected.
+
+## Implementation checkpoint 4v: participant activation ownership parity
+
+Changed the participant-supervisor lifecycle tests to provide the real Agent Runtime activation
+options and to observe the `:session` child instead of a Jido `:agent_server`. The tests retain both
+important boundaries: stopping a participant stops its complete activation, and exhausting the
+activation's single restart ends only that participant while the room participant supervisor can
+still start a human.
+
+Removed the duplicate Jido activation restart scenario because the Agent Runtime activation test
+already proves instruction/tool pinning and complete one-for-all replacement. Invalid readiness now
+uses a malformed host descriptor and verifies that the new coordinator, Session, and invocation
+supervisor registrations never survive failed startup. The focused activation/participant suite
+passes 5 tests, and the complete Call Engine suite passes 238 tests with 2 tagged integration
+exclusions at seed `365486`. Remote MCP activation ownership remains the only direct supervisor test
+that still selects the compatibility graph. Umbrella format, warnings-as-errors compilation, strict
+Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the unchanged
+absent PostgreSQL SCRAM password; no credential source was inspected.
