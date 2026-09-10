@@ -2,8 +2,8 @@
 
 Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
 the production ReqLLM boundary with tagged-provider interoperability are implemented. Call Engine
-migration now includes an activation-owned runtime graph and application-selected room path;
-legacy scripted-test parity and final evidence remain pending.
+uses the activation-owned Agent Runtime graph and no longer depends on Jido; final acceptance and
+rendered-sample evidence remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -157,9 +157,9 @@ process or dependency is used.
    prove that an omitted tool policy blocks later caller
    model admission, an explicit `non_blocking` policy admits it, and both modes use the same
    activation-owned invocation worker/lifecycle path. Preserve completion and interruption behavior.
-5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
-   Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
-   unused fallback loop after migration.
+5. [In progress 2026-09-10] Run parity and churn checks, inspect the rendered sample, and remove
+   unused Jido AI, Jido Action, Jido, and related lock entries. Dependency and fallback-loop
+   removal is complete; rendered sample inspection and the final acceptance audit remain.
 
 ## Implementation checklist
 
@@ -168,7 +168,7 @@ process or dependency is used.
   running exchanges, streaming events, cancellation/commit barriers, and all declared bounds.
 - [x] Move/refine the existing ReqLLM projection behind the new package and add focused plus
   tagged-provider interoperability evidence.
-- [ ] Migrate the agent activation/coordinator and all tools to supervised submission without
+- [x] Migrate the agent activation/coordinator and all tools to supervised submission without
   changing room authority, client visibility, or archive contracts.
 - [ ] Remove Jido dependencies and obsolete adapters only after behavioral parity, full
   umbrella verification, and rendered sample verification are green.
@@ -754,6 +754,15 @@ Implementation evidence:
   format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
   `mix test` stops before execution at the unchanged absent PostgreSQL SCRAM password; no credential
   source was inspected.
+- Checkpoint 4ah removes direct `jido_ai` and `jido_action` dependencies from Call Engine and prunes
+  Jido plus eleven other now-unreachable lock entries. Dependency resolution retains ReqLLM in
+  the standalone Agent Runtime and the legacy text-only provider adapter without reintroducing Jido.
+  Agent Runtime passes 42 tests with 1 integration exclusion. After one 25 ms compatibility timeout
+  observation raced the test process, its focused rerun and the complete Call Engine rerun passed;
+  the latter reports 215 tests with 1 integration exclusion at seed `981844`. Umbrella format,
+  warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
+  stops before execution at the unchanged absent PostgreSQL SCRAM password; no credential source
+  was inspected. Rendered sample and final acceptance evidence remain before milestone completion.
 
 ## Specification review
 

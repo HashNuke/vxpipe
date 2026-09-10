@@ -31,8 +31,6 @@ defmodule Vxpipe.CallEngine.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.12", only: :test},
-      {:jido_action, "~> 2.3.2"},
-      {:jido_ai, "~> 2.3.0"},
       {:jsv, "~> 0.22"},
       {:req_llm, "~> 1.22"},
       {:telemetry, "~> 1.3"},

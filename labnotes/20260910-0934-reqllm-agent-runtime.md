@@ -1313,3 +1313,19 @@ README, durable tool-execution decision, and architecture's old tool slice to de
 superseded behavior accurately. Umbrella format, warnings-as-errors compilation, strict Credo, and
 unused-lock checks pass. Umbrella `mix test` stops before test execution at the unchanged absent
 PostgreSQL SCRAM password; no credential source was inspected.
+
+## Implementation checkpoint 4ah: Jido dependency removal
+
+Removed the direct `jido_ai` and `jido_action` dependencies from Call Engine after their runtime,
+adapter, macro, and test consumers were gone. `mix deps.unlock --unused` pruned `jido`,
+`jido_action`, `jido_ai`, `jido_signal`, and eight now-unreachable transitive lock entries. A fresh
+dependency resolution retained ReqLLM and the MCP stack but no Jido package.
+
+Agent Runtime passes 42 tests with 1 tagged integration exclusion. The first complete Call Engine
+run after dependency resolution hit the existing compatibility provider-timeout test's 25 ms race:
+the deadline fired before the test process observed the provider request. Its focused rerun passed,
+and the complete Call Engine rerun passed 215 tests with 1 tagged integration exclusion at seed
+`981844` without changing production code. Umbrella format, warnings-as-errors compilation, strict
+Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the unchanged
+absent PostgreSQL SCRAM password; no credential source was inspected. Rendered sample inspection
+and the final milestone acceptance audit remain.
