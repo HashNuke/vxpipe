@@ -1387,3 +1387,18 @@ binding IDs. None of those external strings became atoms, and atom/module growth
 fixed non-proportional allowance. The focused registry and churn run passed 4 tests. This checkpoint
 adds acceptance coverage only; existing production behavior already satisfied the contract, so no
 red implementation phase or production change was appropriate.
+
+## Acceptance checkpoint: complete mixed tool round
+
+Added one room-level deterministic run that sends streamed text alongside a tool request, observes
+the independently supervised invocation and public started event, verifies the single correlated
+running acknowledgement in the follow-up model request, completes that acknowledgement round, and
+then releases the worker. Its terminal result enters one private engine-origin continuation and is
+consumed once. Both the mixed initial text and completion text are emitted exactly once despite
+also appearing in each provider's aggregate final response.
+
+The first draft expected a sentence event before the fixture had supplied the separator required by
+the existing sentence accumulator's streaming boundary. It failed without any text event. Updating
+the fixture delta and matching aggregate response to include that boundary made the intended
+integration scenario accurate; no production behavior changed. The focused room file passes 3
+tests, and the complete Call Engine suite passes 217 tests with 1 tagged integration exclusion.

@@ -181,6 +181,70 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^completion_correlation}}
   end
 
+  test "delivers mixed tool text once and consumes its private completion once" do
+    plan = compile_plan("non_blocking")
+    connection_id = "conn-agent-runtime-mixed-tool"
+    {room, caller} = start_room(plan, connection_id)
+
+    initial = send_text(plan, room, caller, connection_id, "Start the check.")
+
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_delta, "I will check now. "})
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: initial_correlation,
+                      text: "I will check now."
+                    }}
+
+    assert initial_correlation == initial.correlation_id
+    reply_with_tool(provider, "mixed-tool-call", "I will check now. ")
+
+    assert_receive {:test_blocking_tool_started, invocation}
+    assert_receive {:vxpipe_event, %ToolCallStarted{tool_call_id: "mixed-tool-call"}}
+
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, acknowledgement_request}
+    assert_running_invocation(acknowledgement_request, "mixed-tool-call", :non_blocking)
+    reply_with_text(acknowledgement_provider, "The check is running.")
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: ^initial_correlation,
+                      text: "The check is running."
+                    }}
+
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^initial_correlation}}
+
+    refute_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: ^initial_correlation,
+                      text: "I will check now."
+                    }}
+
+    send(invocation, :release_test_tool)
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "mixed-tool-call"}}
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
+    completion_correlation = completion_request.correlation.correlation_id
+
+    send(completion_provider, {:test_agent_runtime_delta, "The check completed. "})
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: ^completion_correlation,
+                      text: "The check completed."
+                    }}
+
+    reply_with_text(completion_provider, "The check completed. ")
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^completion_correlation}}
+
+    refute_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: ^completion_correlation,
+                      text: "The check completed."
+                    }}
+  end
+
   defp compile_plan(conversation_mode \\ nil) do
     tool = %{type: "host", tool: "wait_for_test"}
 
@@ -281,9 +345,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     command
   end
 
-  defp reply_with_tool(provider, id) do
+  defp reply_with_tool(provider, id, text \\ "") do
     assert {:ok, call} = ToolCall.new(id: id, name: "wait_for_test", arguments: %{})
-    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    assert {:ok, response} = ModelResponse.new(text: text, tool_calls: [call])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
   end
 

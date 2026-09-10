@@ -177,7 +177,7 @@ process or dependency is used.
 
 ## Acceptance and failure checks
 
-- [ ] A deterministic run streams text, requests a tool, starts one external worker, commits
+- [x] A deterministic run streams text, requests a tool, starts one external worker, commits
   its running result, performs an acknowledgement round, and later consumes its private
   completion once. Mixed text/tool output is neither dropped nor delivered twice.
 - [x] Two local aliases share one executor implementation while retaining distinct exact
