@@ -1,7 +1,7 @@
 # Opening audio contract
 
-Status: fixed-text and HTTPS-file playback/input gating are implemented; reusable generated-text
-audio caching remains in progress.
+Status: fixed-text and HTTPS-file playback, bounded reusable-asset caching, and input gating are
+implemented.
 
 ## Decision
 
@@ -61,6 +61,15 @@ digests over the public tenant key, exact URL, and fixed media-profile revision;
 credentials are retained in keys or routine inspection. A different tenant, URL, or profile
 cannot reuse the entry. Download/preparation failures are not cached.
 
+Fixed-text synthesis uses the same bounded cache and asset-size/duration limits. Its digest covers
+the public tenant key, exact text, provider identity, voice/model, encoding, sample rate, and a
+render-profile revision. Provider implementations expose only output-affecting identity; API keys
+and transport credentials are excluded. On a miss, a temporary supervised sink forwards provider
+PCM to the caller while collecting at most the configured bounds, then inserts only a complete,
+supported linear16 asset. On a hit, the ordinary temporary playback worker supplies that asset to
+the caller without another synthesis request. Cache insertion still does not open caller input;
+only the destination sink's correlated playout-completion acknowledgement does that.
+
 ## Alternatives rejected
 
 - A single untagged string is ambiguous between fixed text and a URL and cannot evolve safely.
@@ -76,8 +85,9 @@ cannot reuse the entry. Download/preparation failures are not cached.
 The definition parser owns syntax and source safety. The implemented asset layer separates DNS
 resolution/address policy, bounded HTTP fetching, WAV decoding, and cache ownership. A temporary
 worker under the room capability supervisor owns file preparation, bounded output, and playback
-tracking. `RoomAuthority` owns only the opening gate and correlated outcome decision; it does not
-fetch, decode, cache, or push file media.
+tracking. A separate text-preparation boundary owns rendered-asset lookup and synthesis submission,
+while a temporary sink owns bounded collection. `RoomAuthority` owns only the opening gate and
+correlated outcome decision; it does not fetch, decode, cache, synthesize, or push opening media.
 
 ## Verification
 
@@ -91,6 +101,10 @@ from an unrelated TTS failure, caller input suppression through actual sink comp
 controlled preparation failure. The asset-pipeline tests first failed because no typed asset
 existed, then passed with 5 tests covering strict decode/
 duration checks, public-address policy, bounded LRU/tenant keys, invalid cache limits, and fetch-
-validate-cache reuse. The complete Call Engine suite passed with 256 tests and one
+validate-cache reuse. Generated-text cache coverage first failed because a second call submitted
+another TTS request. It now proves that the first call renders normally and a later same-tenant,
+same-text, same-voice call reuses the bounded PCM asset, while digest tests distinguish tenant,
+text, and output identity and retain none of their source values. The focused opening/asset files
+passed 16 tests. The complete Call Engine suite passed with 258 tests and one
 integration exclusion. The production HTTPS fetch path has no live-network assertion in the
 default suite; interoperability belongs in an explicitly tagged integration lane.

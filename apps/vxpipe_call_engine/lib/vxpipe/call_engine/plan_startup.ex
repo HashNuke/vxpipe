@@ -261,14 +261,17 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       {:ok, nil} ->
         {:ok, nil}
 
-      {:ok, provider, settings} ->
+      {:ok, {provider_module, provider_config} = provider, settings} ->
         with {transport, transport_options}
              when is_atom(transport) and is_list(transport_options) <-
                Keyword.get(settings, :transport),
              maximum_requests when is_integer(maximum_requests) and maximum_requests > 0 <-
-               Keyword.get(settings, :maximum_requests) do
+               Keyword.get(settings, :maximum_requests),
+             asset_cache_identity when is_map(asset_cache_identity) <-
+               provider_module.asset_cache_identity(provider_config) do
           {:ok,
            %TextToSpeechRuntime{
+             asset_cache_identity: asset_cache_identity,
              provider: provider,
              transport: {transport, transport_options},
              maximum_requests: maximum_requests

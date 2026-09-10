@@ -691,7 +691,7 @@ remain separate from runtime implementation.
 Optional call-level `opening_audio` plays to `entry_caller` before
 `entry_receiver` begins the normal conversation. Schema `20260910.02` represents its source
 as the closed tagged object documented in [the opening-audio contract](opening-audio-contract.md):
-fixed text or an HTTPS file URL. For text, render and eventually cache
+fixed text or an HTTPS file URL. For text, render and cache
 audio using the initial receiving agent's resolved TTS service and voice,
 including configured defaults. Do not generate its text through an LLM, choose
 an arbitrary first participant, or start a later transfer agent to supply a voice.
@@ -714,11 +714,15 @@ Cache reusable generated audio by exact text, resolved TTS provider/model/voice,
 and output-affecting settings, scoped to the tenant/configured binding. Changed
 text or voice must not reuse stale audio; secrets belong in neither cache keys
 nor logs. The configured reusable asset is not a per-call recording/export, and
-does not acquire per-call retention. Render timing, cache storage/eviction, and
-source fetching are not selected. Asset preparation itself starts no call tree
+does not acquire per-call retention. The application owns one bounded in-memory LRU for file and
+generated-text assets. File keys hash tenant, exact URL, and a media profile. Text keys hash tenant,
+exact text, provider/model/voice, output-affecting settings, and a render profile. A supervised
+forwarding sink collects only bounded complete provider PCM on a text miss; a hit uses the ordinary
+temporary asset player without a new TTS request. Asset preparation itself starts no call tree
 and does not set `started_at`.
 
-The fixed-text runtime starts synthesis when the entry caller's output sink attaches. HTTPS-file
+The fixed-text runtime starts cache lookup and, on a miss, synthesis when the entry caller's output
+sink attaches. HTTPS-file
 sources instead start a temporary worker under the room capability supervisor, independent of TTS.
 That worker performs the bounded tenant-scoped load and supplies PCM chunks of at most 20
 milliseconds through the existing output backpressure boundary. Both forms keep text and STT

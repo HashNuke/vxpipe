@@ -187,6 +187,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
          ) do
       {:ok, capability} ->
         text_to_speech_capability = %{
+          asset_cache_identity: runtime.asset_cache_identity,
           monitor: Process.monitor(capability),
           participant_id: participant_id,
           pid: capability

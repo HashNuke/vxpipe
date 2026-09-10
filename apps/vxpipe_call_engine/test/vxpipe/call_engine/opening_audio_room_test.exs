@@ -102,6 +102,47 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert room_monitor == attachment.room_monitor
   end
 
+  test "reuses bounded rendered text for the same tenant and text-to-speech identity" do
+    configure_speech_runtime()
+    configure_opening_audio({:error, :unexpected_file_fetch})
+
+    first_plan = compile_plan()
+    first_caller = Map.fetch!(first_plan.participants, first_plan.entry_caller)
+    assert {:ok, first_room} = CallEngine.start_call(first_plan)
+    assert_receive {:test_tts_transport_started, first_tts, _connection}
+
+    first_sink =
+      start_supervised!({TestAudioOutputSink, observer: self()}, id: :first_text_cache_sink)
+
+    first_command = attach_command(first_plan, first_room, first_caller, "conn-text-cache-first")
+    assert {:ok, _attachment} = CallEngine.attach_connection(first_command, first_sink)
+    assert_receive {:test_tts_control, ^first_tts, _speak}
+    assert_receive {:test_tts_control, ^first_tts, _flush}
+    complete_speech(first_tts, first_sink, "text-cache-first")
+    assert_eventually_open(first_plan)
+
+    second_plan = compile_plan()
+    second_caller = Map.fetch!(second_plan.participants, second_plan.entry_caller)
+    assert {:ok, second_room} = CallEngine.start_call(second_plan)
+    assert_receive {:test_tts_transport_started, second_tts, _connection}
+
+    second_sink =
+      start_supervised!({TestAudioOutputSink, observer: self()}, id: :second_text_cache_sink)
+
+    second_command =
+      attach_command(second_plan, second_room, second_caller, "conn-text-cache-second")
+
+    assert {:ok, _attachment} = CallEngine.attach_connection(second_command, second_sink)
+    assert_receive {:test_audio_output, ^second_sink, frame}
+    assert frame.payload == <<1, 0, 2, 0>>
+    assert_receive {:test_audio_output_finish, ^second_sink, _correlation_id}
+    refute_receive {:test_tts_control, ^second_tts, _payload}
+
+    assert :ok = TestAudioOutputSink.playback_started(second_sink)
+    assert :ok = TestAudioOutputSink.playback_completed(second_sink)
+    assert_eventually_open(second_plan)
+  end
+
   test "starts caller-idle timing only after opening playout completes" do
     configure_speech_runtime()
     plan = compile_plan()
@@ -577,6 +618,12 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   defp configure_speech_runtime do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
+    opening_audio_cache =
+      start_supervised!(
+        {AssetCache, maximum_entries: 8, maximum_bytes: 1_024},
+        id: :speech_runtime_opening_audio_cache
+      )
+
     speech_to_text = [
       enabled: true,
       provider: Flux,
@@ -612,6 +659,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       :vxpipe_call_engine,
       Vxpipe.CallEngine.Application,
       original
+      |> Keyword.update!(:opening_audio, &Keyword.put(&1, :cache, opening_audio_cache))
       |> Keyword.put(:speech_to_text, speech_to_text)
       |> Keyword.put(:text_to_speech, text_to_speech)
     )

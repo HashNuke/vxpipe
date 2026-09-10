@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   }
 
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
-  alias Vxpipe.CallEngine.OpeningAudio.FilePlaybackRequest
+  alias Vxpipe.CallEngine.OpeningAudio.{CachedPlaybackRequest, FilePlaybackRequest}
 
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan, TextToSpeechRequest}
 
@@ -298,21 +298,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info(
-        {:vxpipe_opening_audio_playback, worker, %FilePlaybackRequest{} = request, status},
+        {:vxpipe_opening_audio_playback, worker, request, status},
         state
       )
-      when status in [:started, :completed] do
-    handle_file_opening_audio_playback(worker, request, status, state)
+      when (is_struct(request, FilePlaybackRequest) or
+              is_struct(request, CachedPlaybackRequest)) and
+             status in [:started, :completed] do
+    handle_asset_opening_audio_playback(worker, request, status, state)
   end
 
   def handle_info(
-        {:vxpipe_opening_audio_playback, worker, %FilePlaybackRequest{} = request,
-         {:progress, played_ms, total_ms}},
+        {:vxpipe_opening_audio_playback, worker, request, {:progress, played_ms, total_ms}},
         state
       )
-      when is_integer(played_ms) and played_ms > 0 and is_integer(total_ms) and
+      when (is_struct(request, FilePlaybackRequest) or
+              is_struct(request, CachedPlaybackRequest)) and
+             is_integer(played_ms) and played_ms > 0 and is_integer(total_ms) and
              total_ms > played_ms do
-    handle_file_opening_audio_playback(
+    handle_asset_opening_audio_playback(
       worker,
       request,
       {:progress, played_ms, total_ms},
@@ -321,10 +324,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info(
-        {:vxpipe_opening_audio_unavailable, worker, %FilePlaybackRequest{} = request, _reason},
+        {:vxpipe_opening_audio_unavailable, worker, request, _reason},
         state
-      ) do
-    if OpeningAudio.file_failure?(state.opening_audio, worker, request) do
+      )
+      when is_struct(request, FilePlaybackRequest) or
+             is_struct(request, CachedPlaybackRequest) do
+    if OpeningAudio.asset_failure?(state.opening_audio, worker, request) do
       {:stop, :opening_audio_unavailable, state}
     else
       {:noreply, state}
@@ -423,8 +428,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     end
   end
 
-  defp handle_file_opening_audio_playback(worker, request, status, state) do
-    case OpeningAudio.file_playback(state.opening_audio, worker, request, status) do
+  defp handle_asset_opening_audio_playback(worker, request, status, state) do
+    case OpeningAudio.asset_playback(state.opening_audio, worker, request, status) do
       {:handled, opening_audio} -> continue_after_opening_audio(opening_audio, state)
       :unrelated -> {:noreply, state}
     end

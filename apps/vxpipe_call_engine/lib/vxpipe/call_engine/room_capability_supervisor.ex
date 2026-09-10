@@ -12,7 +12,15 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Media.Ingress
-  alias Vxpipe.CallEngine.OpeningAudio.{FilePlaybackRequest, Player, Settings}
+
+  alias Vxpipe.CallEngine.OpeningAudio.{
+    Asset,
+    CachedPlaybackRequest,
+    FilePlaybackRequest,
+    Player,
+    Settings,
+    TextCacheSink
+  }
 
   def start_link(options) do
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
@@ -136,6 +144,20 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
       ) do
     options = [owner: room_authority, request: request, settings: settings]
     DynamicSupervisor.start_child(via(incarnation_id), {Player, options})
+  end
+
+  def start_cached_opening_audio(
+        incarnation_id,
+        room_authority,
+        %CachedPlaybackRequest{} = request,
+        %Asset{} = asset
+      ) do
+    options = [owner: room_authority, request: request, asset: asset]
+    DynamicSupervisor.start_child(via(incarnation_id), {Player, options})
+  end
+
+  def start_opening_audio_text_cache(incarnation_id, options) when is_list(options) do
+    DynamicSupervisor.start_child(via(incarnation_id), {TextCacheSink, options})
   end
 
   def stop_capability(incarnation_id, capability) do

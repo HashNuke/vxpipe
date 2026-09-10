@@ -24,6 +24,18 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeTTS do
   end
 
   @impl true
+  def asset_cache_identity(%Config{} = config) do
+    %{
+      "provider" => "morse_code",
+      "amplitude" => config.amplitude,
+      "end_gap_units" => config.end_gap_units,
+      "frequency_hz" => config.frequency_hz,
+      "sample_rate" => config.sample_rate,
+      "unit_duration_ms" => config.unit_duration_ms
+    }
+  end
+
+  @impl true
   def encode_speak(text) when is_binary(text) do
     JSON.encode!(%{"type" => "Speak", "text" => text})
   end

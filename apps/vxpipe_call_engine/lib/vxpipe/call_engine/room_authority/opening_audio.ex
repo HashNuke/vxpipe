@@ -2,9 +2,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallDefinition.OpeningAudio, as: OpeningSource
-  alias Vxpipe.CallEngine.Capability.TextToSpeech
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom}
-  alias Vxpipe.CallEngine.OpeningAudio.{FilePlaybackRequest, Settings}
+
+  alias Vxpipe.CallEngine.OpeningAudio.{
+    CachedPlaybackRequest,
+    FilePlaybackRequest,
+    Settings,
+    TextPreparation
+  }
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -19,7 +24,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   defstruct @enforce_keys ++ [monitor: nil, request: nil, worker: nil]
 
   @type phase :: :open | :awaiting_connection | :playing
-  @type request :: nil | TextToSpeechRequest.t() | FilePlaybackRequest.t()
+  @type request ::
+          nil | TextToSpeechRequest.t() | FilePlaybackRequest.t() | CachedPlaybackRequest.t()
   @type t :: %__MODULE__{
           phase: phase(),
           source: nil | OpeningSource.t(),
@@ -93,33 +99,45 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
         %__MODULE__{
           participant_id: agent_participant_id,
           phase: :awaiting_connection,
+          settings: %Settings{},
           source: %OpeningSource{type: :text, text: text}
         } = opening,
         %AttachConnection{} = command,
         %{output_sink: output_sink},
-        %{pid: capability},
+        %{asset_cache_identity: cache_identity, pid: capability},
         snapshot,
-        _owner
+        owner
       )
-      when is_pid(output_sink) and is_pid(capability) and is_binary(text) do
-    request = %TextToSpeechRequest{
-      tenant_id: snapshot.tenant_id,
-      room_id: snapshot.room_id,
-      incarnation_id: snapshot.incarnation_id,
-      participant_id: agent_participant_id,
-      source_participant_id: command.participant_id,
-      connection_id: command.connection_id,
-      command_id: Id.generate(:command),
-      correlation_id: Id.generate(:turn),
-      output_id: Id.generate(:event),
+      when is_pid(output_sink) and is_pid(capability) and is_pid(owner) and is_binary(text) and
+             is_map(cache_identity) do
+    options = [
       text: text,
+      command: command,
       output_sink: output_sink,
-      purpose: :opening_audio
-    }
+      capability: capability,
+      cache_identity: cache_identity,
+      snapshot: snapshot,
+      participant_id: agent_participant_id,
+      owner: owner,
+      settings: opening.settings
+    ]
 
-    case TextToSpeech.synthesize(capability, request) do
-      :ok -> {:ok, %{opening | phase: :playing, request: request}}
-      {:error, _reason} -> {:error, unavailable()}
+    case TextPreparation.start(options) do
+      {:ok, request, nil} ->
+        {:ok, %{opening | phase: :playing, request: request}}
+
+      {:ok, request, worker} when is_pid(worker) ->
+        {:ok,
+         %{
+           opening
+           | monitor: Process.monitor(worker),
+             phase: :playing,
+             request: request,
+             worker: worker
+         }}
+
+      {:error, :unavailable} ->
+        {:error, unavailable()}
     end
   end
 
@@ -210,15 +228,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
 
   def playback(%__MODULE__{}, %TextToSpeechRequest{}, _status), do: :unrelated
 
-  @spec file_playback(t(), pid(), FilePlaybackRequest.t(), :started | :completed | tuple()) ::
+  @spec asset_playback(
+          t(),
+          pid(),
+          FilePlaybackRequest.t() | CachedPlaybackRequest.t(),
+          :started | :completed | tuple()
+        ) ::
           :unrelated | {:handled, t()}
-  def file_playback(
+  def asset_playback(
         %__MODULE__{phase: :playing, request: expected, worker: worker} = opening,
         worker,
-        %FilePlaybackRequest{} = request,
+        request,
         status
       ) do
-    if matching_file_request?(expected, request) do
+    if matching_asset_request?(expected, request) do
       case status do
         :completed ->
           Process.demonitor(opening.monitor, [:flush])
@@ -232,18 +255,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
     end
   end
 
-  def file_playback(%__MODULE__{}, _worker, %FilePlaybackRequest{}, _status), do: :unrelated
+  def asset_playback(%__MODULE__{}, _worker, _request, _status), do: :unrelated
 
-  @spec file_failure?(t(), pid(), FilePlaybackRequest.t()) :: boolean()
-  def file_failure?(
+  @spec asset_failure?(t(), pid(), FilePlaybackRequest.t() | CachedPlaybackRequest.t()) ::
+          boolean()
+  def asset_failure?(
         %__MODULE__{phase: :playing, request: expected, worker: worker},
         worker,
-        %FilePlaybackRequest{} = request
+        request
       ) do
-    matching_file_request?(expected, request)
+    matching_asset_request?(expected, request)
   end
 
-  def file_failure?(%__MODULE__{}, _worker, %FilePlaybackRequest{}), do: false
+  def asset_failure?(%__MODULE__{}, _worker, _request), do: false
 
   @spec worker_monitor?(t(), reference()) :: boolean()
   def worker_monitor?(%__MODULE__{phase: :playing, monitor: monitor}, monitor)
@@ -276,6 +300,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   end
 
   defp matching_file_request?(_expected, _request), do: false
+
+  defp matching_asset_request?(
+         %FilePlaybackRequest{} = expected,
+         %FilePlaybackRequest{} = request
+       ),
+       do: matching_file_request?(expected, request)
+
+  defp matching_asset_request?(
+         %CachedPlaybackRequest{} = expected,
+         %CachedPlaybackRequest{} = request
+       ) do
+    expected.correlation_id == request.correlation_id and
+      expected.connection_id == request.connection_id and
+      expected.output_sink == request.output_sink
+  end
+
+  defp matching_asset_request?(_expected, _request), do: false
 
   defp opened(opening) do
     %{opening | monitor: nil, phase: :open, request: nil, worker: nil}

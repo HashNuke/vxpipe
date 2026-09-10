@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.OpeningAudio.AssetCache do
   alias Vxpipe.CallEngine.OpeningAudio.Asset
 
   @profile "wav-pcm-s16le-48000-mono-v1"
+  @text_profile "rendered-text-linear16-v1"
 
   def start_link(options) do
     case Keyword.get(options, :name) do
@@ -17,6 +18,13 @@ defmodule Vxpipe.CallEngine.OpeningAudio.AssetCache do
   @spec key(String.t(), String.t()) :: binary()
   def key(tenant_id, url) when is_binary(tenant_id) and is_binary(url) do
     :crypto.hash(:sha256, [tenant_id, 0, url, 0, @profile])
+  end
+
+  @spec text_key(String.t(), String.t(), map()) :: binary()
+  def text_key(tenant_id, text, identity)
+      when is_binary(tenant_id) and is_binary(text) and is_map(identity) do
+    encoded_identity = :erlang.term_to_binary(identity, [:deterministic])
+    :crypto.hash(:sha256, [tenant_id, 0, text, 0, encoded_identity, 0, @text_profile])
   end
 
   @spec fetch(GenServer.server(), binary()) :: :miss | {:ok, Asset.t()}

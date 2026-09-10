@@ -4,12 +4,19 @@ defmodule Vxpipe.CallEngine.OpeningAudio.Player do
   use GenServer
 
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
-  alias Vxpipe.CallEngine.OpeningAudio.{Asset, AssetLoader, FilePlaybackRequest, Settings}
+
+  alias Vxpipe.CallEngine.OpeningAudio.{
+    Asset,
+    AssetLoader,
+    CachedPlaybackRequest,
+    FilePlaybackRequest,
+    Settings
+  }
 
   @frame_bytes 1_920
 
   @derive {Inspect, only: [:phase, :request]}
-  @enforce_keys [:owner, :phase, :request, :settings]
+  @enforce_keys [:owner, :phase, :request, :source]
   defstruct @enforce_keys
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
@@ -28,15 +35,15 @@ defmodule Vxpipe.CallEngine.OpeningAudio.Player do
   def init(options) do
     owner = Keyword.get(options, :owner)
     request = Keyword.get(options, :request)
-    settings = Keyword.get(options, :settings)
+    source = source(options, request)
 
-    if is_pid(owner) and FilePlaybackRequest.valid?(request) and match?(%Settings{}, settings) do
+    if is_pid(owner) and source != :error do
       {:ok,
        %__MODULE__{
          owner: owner,
          phase: :preparing,
          request: request,
-         settings: settings
+         source: source
        }, {:continue, :prepare}}
     else
       {:stop, :invalid_configuration}
@@ -45,8 +52,7 @@ defmodule Vxpipe.CallEngine.OpeningAudio.Player do
 
   @impl true
   def handle_continue(:prepare, state) do
-    with {:ok, %Asset{} = asset} <-
-           AssetLoader.load(state.request.tenant_id, state.request.url, state.settings),
+    with {:ok, %Asset{} = asset} <- prepare_asset(state.source),
          :ok <- push_audio(asset, state.request),
          :ok <-
            OutputSink.finish(
@@ -139,4 +145,34 @@ defmodule Vxpipe.CallEngine.OpeningAudio.Player do
   defp notify(state, status) do
     send(state.owner, {:vxpipe_opening_audio_playback, self(), state.request, status})
   end
+
+  defp source(options, %FilePlaybackRequest{} = request) do
+    case Keyword.get(options, :settings) do
+      %Settings{} = settings ->
+        if FilePlaybackRequest.valid?(request),
+          do: {:url, request.tenant_id, request.url, settings},
+          else: :error
+
+      _invalid ->
+        :error
+    end
+  end
+
+  defp source(options, %CachedPlaybackRequest{} = request) do
+    case Keyword.get(options, :asset) do
+      %Asset{} = asset ->
+        if CachedPlaybackRequest.valid?(request), do: {:asset, asset}, else: :error
+
+      _invalid ->
+        :error
+    end
+  end
+
+  defp source(_options, _request), do: :error
+
+  defp prepare_asset({:url, tenant_id, url, settings}) do
+    AssetLoader.load(tenant_id, url, settings)
+  end
+
+  defp prepare_asset({:asset, %Asset{} = asset}), do: {:ok, asset}
 end

@@ -83,6 +83,29 @@ defmodule Vxpipe.CallEngine.OpeningAudio.AssetPipelineTest do
     refute inspect(:sys.get_state(cache)) =~ "assets.example.test"
   end
 
+  test "keys rendered text by tenant and output-affecting text-to-speech identity" do
+    identity = %{
+      provider: "deepgram_flux",
+      model: "voice-one",
+      encoding: "linear16",
+      sample_rate: 48_000
+    }
+
+    key = AssetCache.text_key("tenant-one", "A fixed opening.", identity)
+
+    refute key == AssetCache.text_key("tenant-two", "A fixed opening.", identity)
+    refute key == AssetCache.text_key("tenant-one", "A different opening.", identity)
+
+    refute key ==
+             AssetCache.text_key("tenant-one", "A fixed opening.", %{
+               identity
+               | model: "voice-two"
+             })
+
+    refute inspect(key) =~ "A fixed opening."
+    refute inspect(key) =~ "voice-one"
+  end
+
   test "rejects an unbounded or empty cache configuration" do
     assert {:error, {:invalid_cache_configuration, _child}} =
              start_supervised({AssetCache, maximum_entries: 0, maximum_bytes: 32})

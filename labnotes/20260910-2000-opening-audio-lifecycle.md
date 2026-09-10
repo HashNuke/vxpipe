@@ -268,3 +268,28 @@
   56 tests. Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency
   checks passed. The root test command again stopped while creating the Persistence test database
   because this shell has no PostgreSQL password; no credential value was inspected or logged.
+
+## 2026-09-10 — reusable generated-text assets
+
+- The first two-call integration test failed because a second room with the same tenant, text, and
+  selected TTS identity still emitted speak/flush commands. A focused cache-key test also failed
+  because the rendered-text digest did not exist.
+- Each TTS provider now projects only output-affecting cache identity. Deepgram includes provider,
+  model, encoding, and sample rate; Morse includes its tone/render parameters. Neither includes an
+  API key, endpoint credential, or raw transport option.
+- On a miss, a temporary process under the room capability supervisor acts as a bounded forwarding
+  output sink. It relays PCM and playout acknowledgements between TTS and the caller sink while
+  collecting no more than the configured byte and duration limits. Only a complete supported
+  linear16 rendering is offered to the existing bounded application cache.
+- On a hit, a typed redacted request starts the same temporary asset player used by file playback.
+  No new TTS request is issued. The room gate still waits for the caller sink's correlated actual
+  completion rather than cache lookup, generation, insertion, or enqueue completion.
+- Text preparation and collection live in dedicated modules. Room Authority retains only the
+  correlated opening state transition and failure decision. Tests use isolated caches so one test
+  cannot accidentally satisfy another test's opening from application-wide cached state.
+- The focused opening/asset files passed 16 tests and strict Credo reported no issues. The seeded
+  complete Call Engine suite passed 258 tests with 1 integration exclusion. Calls, Gateway, and
+  Console passed 36, 66, and 56 tests respectively.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks
+  passed. The root test command again stopped while creating the Persistence test database because
+  this shell has no PostgreSQL password; no credential value was inspected or logged.

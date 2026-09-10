@@ -26,7 +26,7 @@ A caller hears optional configured opening audio before normal conversation. The
 - [x] Red-test file playback with controllable time/media fakes.
 - [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
 - [x] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
-- [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
+- [x] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
 - [x] Integrate the opening gate with wait/fixed/generated greeting modes for the initial receiver.
 - [x] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
 - [x] Implement planned-call startup readiness and pinned maximum-duration enforcement.
@@ -173,7 +173,17 @@ The new room test first failed at the runtime's explicit `file_url` rejection. T
 room file then passed 9 tests, including caller input suppression, sink-completion gating, the
 no-TTS path, independence from an unrelated TTS failure, and a controllable asynchronous load
 failure. A seeded complete Call Engine run passed 256 tests with 1 integration exclusion. Cached
-generated text/TTS assets and the remaining acceptance checks are still pending.
+generated text/TTS assets and the remaining acceptance checks were still pending.
+
+Generated text now passes through a temporary supervised cache sink. The sink forwards PCM through
+the existing live output boundary while collecting no more than the configured asset byte/duration
+limits, then stores the completed rendering in the application-owned bounded LRU cache. Cache
+identity hashes the tenant, exact text, provider/model/voice and output-affecting settings without
+including credentials. A hit starts the ordinary temporary asset player and makes no new TTS
+request; actual destination playout completion remains the only event that releases caller input.
+The first two-call test failed because the second room synthesized again. The completed focused
+opening/asset files passed 16 tests, and the complete Call Engine suite passed 258 tests with 1
+integration exclusion. Calls, Gateway and Console passed 36, 66 and 56 tests respectively.
 
 ## Specification review
 

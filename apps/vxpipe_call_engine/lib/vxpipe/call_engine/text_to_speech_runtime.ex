@@ -1,12 +1,13 @@
 defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   @moduledoc false
 
-  @enforce_keys [:provider, :transport, :maximum_requests]
+  @enforce_keys [:provider, :transport, :maximum_requests, :asset_cache_identity]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
           provider: {module(), term()},
           transport: {module(), keyword()},
-          maximum_requests: pos_integer()
+          maximum_requests: pos_integer(),
+          asset_cache_identity: map()
         }
 end

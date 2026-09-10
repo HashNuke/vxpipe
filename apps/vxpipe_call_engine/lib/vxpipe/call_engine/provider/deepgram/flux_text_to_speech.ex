@@ -74,6 +74,16 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
   end
 
   @impl true
+  def asset_cache_identity(%__MODULE__{} = config) do
+    %{
+      "provider" => "deepgram_flux",
+      "model" => config.model,
+      "encoding" => Atom.to_string(config.encoding),
+      "sample_rate" => config.sample_rate
+    }
+  end
+
+  @impl true
   def encode_speak(text) when is_binary(text) and byte_size(text) <= @maximum_text_bytes do
     JSON.encode!(%{"type" => "Speak", "text" => text})
   end
