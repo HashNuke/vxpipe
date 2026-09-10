@@ -251,6 +251,18 @@ a second client path or replacement protocol support. No public MCP
 server is in scope. Dependency selection does not prove security, response limits,
 timeouts or conformance: test the effective public ExMCP path before enabling it.
 
+Call Engine keeps configured infrastructure distinct from a discovered integration
+snapshot. `RemoteMCP.ConfiguredIntegration` validates one application- or tenant-scoped
+credential generation, allowed-operation set, private client settings, and bounded
+discovery/invocation policy; its inspection omits the private settings. The separate
+`RemoteMCP.CatalogLoader` opens the exact scoped reusable `vxpipe_mcp` connection and
+publishes an integration snapshot only after complete bounded `tools/list` discovery and
+allowed-operation validation. It does not compile a call or expose model tools. Definition
+compilation then resolves from those snapshots and copies only the selected public schema
+and generation identity into the immutable plan. Catalog TTL/refresh orchestration and the
+configuration source remain outside the loader rather than becoming another concern of an
+agent activation.
+
 Reusable protocol connections are keyed by application/tenant scope, integration ID,
 and credential generation. An agent activation acquires a monitored, non-secret lease
 for every exact generation used by its resolved bindings; the lease grants access to the

@@ -155,6 +155,16 @@ definition boundary has started or its specification has been reviewed.
   closing a connection shared by another authorized activation. Focused lifecycle tests prove
   existing and subsequent use fail closed, and the configured credential source—not this runtime
   lease registry—remains responsible for durable revocation across application restarts.
+- [x] Configured infrastructure and discovered snapshots now have a narrow engine-owned boundary.
+  A private `ConfiguredIntegration` value validates exact application/tenant scope, generations,
+  allowed operations and bounded discovery/invocation policy without exposing client settings in
+  inspection. `CatalogLoader` opens the same scoped reusable Vxpipe MCP connection used later by
+  activations, enforces the result cap before discovery, and publishes an `Integration` only after
+  complete bounded discovery proves every configured allowed operation exists. Focused tests pass
+  3/3; the Call Engine suite passes 196 tests and the deterministic umbrella suite passes 411,
+  with nine tagged network integrations excluded. Catalog TTL/refresh orchestration and the
+  configuration source remain pending; this does not claim the broader
+  resolution/cache/discovery checklist or Jido exposure complete.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

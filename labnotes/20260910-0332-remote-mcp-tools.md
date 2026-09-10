@@ -294,3 +294,40 @@ Next: commit the separately verified protocol-client lifecycle checkpoint.
 
 Next: commit and publish this checkpoint. The supported Jido runtime-binding interface remains the
 only model-loop blocker.
+
+## 2026-09-10 — scoped catalog loading
+
+- Audited the live-MCP path after the credential-lease checkpoint. The compiler could consume a
+  manually assembled `IntegrationCatalog`, but no engine-owned boundary could turn private scoped
+  infrastructure configuration into a complete discovered integration snapshot.
+- Kept responsibilities separate: `ConfiguredIntegration` validates one application/tenant
+  connection identity, generations, allowed operation names, private connection settings, and
+  discovery/invocation limits. `CatalogLoader` alone opens the exact scoped connection, performs
+  bounded discovery, and constructs the existing private `Integration` snapshot. Neither module
+  compiles calls, owns an activation, or projects tools to Jido.
+- Red: the focused loader tests failed with undefined `ConfiguredIntegration.new/1` and
+  `CatalogLoader.load/2` calls.
+- Green: the loader uses the shared Vxpipe MCP connection boundary, forces the configured result
+  limit into response and streaming-frame receipt before `tools/list`, preserves the configured
+  discovery deadline/page/decoded-byte bounds, and rejects a snapshot when any configured allowed
+  operation is absent. Private client settings are omitted from inspection of both configuration
+  and the resulting integration record.
+- Focused verification passes 3 tests. The combined loader/catalog/runtime-owner check passes 9
+  tests. The child-level Credo task is intentionally unavailable; the repository owns Credo at the
+  umbrella root, where the strict gate is run for the checkpoint.
+- The complete Call Engine child passes 196 tests with two tagged integrations excluded. Root
+  formatting, warnings-as-errors compilation, strict Credo over 311 files, and unused-dependency
+  detection pass. The deterministic umbrella run against isolated temporary PostgreSQL passes all
+  411 default-lane tests: MCP 33, Call Engine 196, Calls 35, Persistence 25, Gateway 66, and Console
+  56; nine tagged network integrations are excluded.
+- The first umbrella attempt observed the pre-existing definition-driven archive case missing one
+  expected `tool_call_started` fact under full-suite load. The exact unchanged case then passed 20
+  consecutive deterministic isolated runs, and the complete deterministic umbrella rerun passed.
+  No archive implementation or test was changed in this checkpoint.
+- This is the load boundary, not catalog TTL/refresh orchestration or the application/tenant
+  configuration source. It does not lift the Jido runtime data-tool blocker or make live MCP calls
+  runnable from `PlanStartup`.
+
+Next: add bounded current-snapshot publication/refresh around this loader and prove an active
+activation retains its pinned schema while a later compilation sees the replacement snapshot.
+The supported Jido runtime-tool interface remains required before the vertical outcome can run.
