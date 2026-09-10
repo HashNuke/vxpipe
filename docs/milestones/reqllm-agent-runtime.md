@@ -112,11 +112,14 @@ process or dependency is used.
    usage, safe call metadata, cleanup, and live-provider interoperability are covered. The live
    check remains tagged and excluded from default tests. Call Engine selection belongs to the next
    checkpoint.
-4. Replace the Jido AgentServer child in an activation with `Vxpipe.AgentRuntime`; migrate
+4. [In progress 2026-09-10] Replace the Jido AgentServer child in an activation with
+   `Vxpipe.AgentRuntime`; migrate
    the coordinator/dispatcher to one worker-submission path and compile default-blocking /
    explicit-non-blocking binding policy. The schema/compiler portion is complete in
-   `20260910.01`; runtime admission and worker integration remain. Preserve completion and
-   interruption behavior.
+   `20260910.01`. The neutral capacity-bounded host invocation supervisor/worker is complete and
+   proves that a legacy-inline operation executes out of process with one bounded terminal
+   outcome. Registry authority, remote MCP/Variables handlers, runtime admission, and activation
+   integration remain. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.

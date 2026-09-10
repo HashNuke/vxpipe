@@ -523,3 +523,40 @@ Verification:
   password.
 - Call Engine selection/admission reconciliation and end-to-end sample verification remain
   pending. The tagged test does not claim browser or live-room integration.
+
+## Implementation checkpoint 4b: neutral supervised host invocation
+
+Added the Call Engine worker substrate alongside the still-live Jido path. The focused red test
+failed because `InvocationBinding`, `InvocationCompletion`, and `InvocationSupervisor` did not
+exist. The implementation keeps responsibilities separate:
+
+- `InvocationBinding` converts an immutable resolved host binding into an inspection-safe runtime
+  target while preserving its conversation mode.
+- `InvocationSupervisor` owns capacity-bounded temporary children.
+- `Invocation` owns one attempt, its linked execution task, deadline, cleanup, and exactly one
+  correlated completion.
+- `InvocationExecution` owns exception containment, JSON result validation, and the configured
+  result-size bound.
+
+The test uses a host tool whose legacy definition retains the default `execution: :inline`. Starting
+it returns a supervised invocation worker while the actual operation is still waiting in another
+process, proving that the old label no longer chooses execution placement in this path. A second
+worker is rejected at supervisor capacity. Release produces one correlated result and normal worker
+termination; a separate explicit-non-blocking invocation reaches its deadline, kills its execution,
+and reports `unknown` once. The focused suite passed 2 tests.
+
+This checkpoint supports resolved host bindings only and is not wired into an activation. Remote
+MCP and Call Variables handlers, registry lifecycle/leases/pending projection, Agent Runtime
+adapters, and coordinator admission remain explicit follow-up work.
+
+Verification:
+
+- Focused invocation supervisor suite: 2 tests, 0 failures after the expected missing-module red
+  compile.
+- Complete Call Engine suite: 218 tests, 0 failures, 2 integration exclusions.
+- Two consecutive earlier full-suite runs exposed different MCP-owner monitor assertions using
+  ExUnit's implicit 100 ms receive timeout. Both passed focused. Test-hygiene commit `ac33562`
+  published explicit one-second bounds before the clean complete run.
+- Umbrella format, warnings-as-errors compilation, Credo strict, and unused-lock checks passed.
+- Umbrella `mix test` stopped before tests because local PostgreSQL SCRAM authentication requires a
+  password unavailable in this shell; no credential source was inspected.

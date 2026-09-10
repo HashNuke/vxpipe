@@ -109,6 +109,13 @@ terminates its local workers. A submitted timeout is reported as an unknown outc
 never retried automatically. The development definition exposes the deterministic
 `prepare_background_report` Action for exercising this lifecycle.
 
+Migration to the standalone Agent Runtime has begun behind that live Jido path. The neutral
+`Tool.InvocationSupervisor` owns capacity-bounded temporary workers, and each
+`Tool.Invocation` owns one attempt, result bound, and deadline. Even a host tool whose legacy
+definition says `inline` executes in this worker path. The authoritative invocation registry,
+remote MCP/Call Variables handlers, and activation selection remain pending, so live calls do not
+use this substrate yet.
+
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,
 terminal duration, completion handoff, and bounded worker/mailbox pressure. Its explicitly named

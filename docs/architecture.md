@@ -554,6 +554,14 @@ alone. Explicit cancellation is deferred as noted above. Existing interruption,
 timeout, transfer/shutdown, and variable-update rules still apply, without a
 durable operation worker or post-shutdown recovery requirement.
 
+The first Call Engine migration checkpoint implements the neutral host-tool worker substrate:
+`Tool.InvocationSupervisor` owns capacity-bounded temporary children, while each
+`Tool.Invocation` owns one execution attempt and deadline. It deliberately ignores the legacy
+Action definition's `inline`/`background` distinction. An operation whose old definition says
+`inline` therefore still runs outside the submitting process and reports one correlated terminal
+outcome. Registry authority, remote MCP/Call Variables handlers, delivery leases, and activation
+wiring remain subsequent checkpoints; this substrate is not yet selected by live calls.
+
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the
 relevant room/agent if the room is still active—for example, a booking success
