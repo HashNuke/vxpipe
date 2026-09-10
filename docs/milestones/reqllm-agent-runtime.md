@@ -120,8 +120,10 @@ process or dependency is used.
    proves that a legacy-inline operation executes out of process with one bounded terminal
    outcome. The authoritative registry now retains idempotent submissions, payload-free pending
    phases, leased terminal outcomes, explicit consumption, and bounded tombstones. Its narrow Agent
-   Runtime submit and pending-context adapters are complete. Remote MCP/Variables handlers, runtime
-   admission, and activation integration remain. Preserve completion and interruption behavior.
+   Runtime submit and pending-context adapters are complete. Resolved host bindings now compile to
+   deterministic descriptors with model-visible schema separated from the private action and
+   conversation mode. Remote MCP/Variables handlers, runtime admission, and activation integration
+   remain. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -358,6 +360,18 @@ Implementation evidence:
   0 failures and 1 excluded. Umbrella format, warnings-as-errors, strict Credo, and unused-lock
   checks pass; umbrella tests stop before execution because the local PostgreSQL password is
   absent.
+- Checkpoint 4e compiles a resolved host-tool map into exact name-ordered Agent Runtime
+  descriptors. The model projection receives only each host definition's name, description, and
+  raw JSON input schema. The opaque binding separately pins the host action and its default-blocking
+  or explicit-non-blocking conversation mode; neither appears in descriptor inspection. Map-key,
+  resolved-name, and host-definition-name agreement is required, so routing cannot drift silently.
+- Checkpoint 4e red evidence reported 2 expected failures because the descriptor compiler did not
+  exist. The focused suite then passed 2 tests and the complete Call Engine suite passed 223 tests
+  with 2 integration exclusions. Both modes still compile to the one submit-only invocation path;
+  this checkpoint adds no inline executor and does not yet select Agent Runtime in live calls.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
+  checkpoint 4e. Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM needs a
+  password absent from this shell; no credential source was inspected.
 
 ## Specification review
 

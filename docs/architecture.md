@@ -570,6 +570,14 @@ status values after verifying the request correlation belongs to the same regist
 Variables handlers and activation wiring remain subsequent checkpoints; this substrate is not yet
 selected by live calls.
 
+For each resolved host-tool map, Call Engine compiles a deterministic name-ordered Agent Runtime
+descriptor list. Each descriptor copies only the host definition's exact name, description, and
+JSON input schema into the model-visible projection. Its opaque invocation binding privately pins
+the host action and the call definition's conversation mode. A map key that differs from the
+resolved binding or host definition name is rejected rather than silently changing routing. This
+compilation does not create an inline path: both conversation modes submit through the same
+invocation registry and supervised worker boundary.
+
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the
 relevant room/agent if the room is still active—for example, a booking success

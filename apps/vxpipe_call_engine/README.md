@@ -118,7 +118,10 @@ payload-free pending statuses, reconciles identical submissions by invocation ID
 active capacity and consumed-ID tombstones. Thin package adapters delegate submission to that
 registry and translate only its safe statuses into Agent Runtime pending context. Remote MCP/Call
 Variables handlers and activation selection remain pending, so live calls do not use this
-substrate yet.
+substrate yet. Resolved host bindings now compile into deterministic Agent Runtime descriptors:
+only the exact name, description, and JSON input schema are model-visible, while the host action
+and default-blocking or explicit-non-blocking conversation mode remain in the private invocation
+binding. Both modes still use the same supervised submission path.
 
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,

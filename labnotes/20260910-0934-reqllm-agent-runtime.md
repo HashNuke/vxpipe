@@ -630,3 +630,30 @@ Verification:
 
 Remote MCP and Call Variables handlers, descriptor compilation, activation-owned Session startup,
 coordinator admission/completion leasing, and submit-timeout reconciliation fault injection remain.
+
+## Implementation checkpoint 4e: resolved host descriptors
+
+Added a focused compiler boundary between resolved call-plan host bindings and the standalone Agent
+Runtime. Its initial two-test run failed for the expected reason: the
+`AgentRuntime.ToolDescriptors` module and `compile/1` entry point did not exist.
+
+The compiler now orders the resolved tool map by exact local name, reads the already-registered host
+definition, creates the model-visible name/description/raw JSON Schema descriptor, and stores the
+host action plus `blocking` or `non_blocking` conversation mode only in the opaque
+`InvocationBinding`. Descriptor inspection does not expose that binding. The map key, resolved
+binding name, and host definition name must agree or the entire compilation fails with a bounded
+error.
+
+This checkpoint preserves the execution/admission distinction. A descriptor's conversation mode
+controls later caller-turn admission only. It does not choose execution placement: every compiled
+host descriptor points at the same invocation registry and independently supervised worker path.
+
+Verification:
+
+- Focused descriptor compiler suite: 2 tests, 0 failures after the expected missing-module red run.
+- Complete Call Engine suite: 223 tests, 0 failures, 2 integration exclusions.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+- Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM authentication needs a
+  password absent from this shell; no credential source was inspected.
+- Remote MCP and Call Variables descriptors, activation-owned Session startup, coordinator
+  admission/completion leasing, and submit-timeout reconciliation fault injection remain pending.
