@@ -1126,3 +1126,17 @@ Agent Runtime suite passes 42 tests with 1 tagged exclusion, and the Call Engine
 tests with 2 tagged exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation,
 strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
 unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
+
+## Implementation checkpoint 4x: test-default cutover
+
+Changed `config/test.exs` from the Jido compatibility graph to Agent Runtime. The Call Engine
+application now supervises a named deterministic model fixture in tests, and the configured neutral
+fixture provider makes every ordinary plan startup valid without a provider credential or test PID.
+Scenarios that inspect model requests continue to override the provider with their explicit
+observer, while diagnostic and Morse scenarios use their own fixture instances.
+
+The complete Call Engine suite passes 238 tests with 2 tagged integration exclusions at seed
+`365486`. The test environment no longer exercises Jido implicitly; any remaining Jido process must
+come from an explicitly constructed compatibility test. Umbrella format, warnings-as-errors
+compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test
+execution at the unchanged absent PostgreSQL SCRAM password; no credential source was inspected.

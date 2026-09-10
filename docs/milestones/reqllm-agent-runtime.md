@@ -150,10 +150,9 @@ process or dependency is used.
    invocation registry, and Session under the existing one-for-all restart budget. Its deterministic
    activation test reaches the new provider boundary and proves complete graph replacement after a
    Session failure. Plan startup and room authority can now select that graph through the internal
-   application runtime setting while preserving the existing capability contract. Application and
-   development configuration now select Agent Runtime by default; only the test environment
-   temporarily selects the Jido compatibility graph until its scripted parity scenarios move to a
-   neutral test provider. Full room tests now prove that an omitted tool policy blocks later caller
+   application runtime setting while preserving the existing capability contract. Application,
+   development, and test configuration now select Agent Runtime by default. Full room tests now
+   prove that an omitted tool policy blocks later caller
    model admission, an explicit `non_blocking` policy admits it, and both modes use the same
    activation-owned invocation worker/lifecycle path. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
@@ -651,6 +650,15 @@ Implementation evidence:
   passes 238 tests with 2 exclusions at seed `365486`. Umbrella format, warnings-as-errors
   compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test
   execution at the unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
+- Checkpoint 4x switches the test environment's application-selected implementation from Jido to
+  Agent Runtime. Its named diagnostic fixture is supervised by the Call Engine application and is
+  supplied through the neutral provider configuration, so non-inference room tests can start a
+  valid activation while tests that exercise inference still select an explicit observer/fixture.
+  The complete Call Engine suite passes 238 tests with 2 integration exclusions at seed `365486`.
+  Only explicitly constructed compatibility tests can now start Jido. Umbrella format,
+  warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
+  stops before test execution at the unchanged absent PostgreSQL SCRAM password; no credential
+  source was inspected.
 
 ## Specification review
 

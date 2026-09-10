@@ -30,7 +30,10 @@ config :vxpipe_persistence,
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   agent_runtime: [
-    implementation: :jido,
+    implementation: :agent_runtime,
+    model_provider: Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider,
+    model_provider_options: [fixture: Vxpipe.CallEngine.Diagnostics.ModelFixture],
+    model_provider_label: :local_fixture,
     background_tool_timeout_ms: 30_000,
     maximum_background_tools: 4,
     maximum_completed_requests: 32,
@@ -38,6 +41,12 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     maximum_output_bytes: 65_536,
     maximum_tool_result_bytes: 16_384,
     request_timeout_ms: 30_000
+  ],
+  model_fixture: [
+    enabled: true,
+    default_scenario: :success,
+    delay_ms: 0,
+    response: "Local fixture response."
   ],
   telemetry: [sample_interval_ms: 3_600_000]
 
