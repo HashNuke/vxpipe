@@ -142,3 +142,18 @@
 - The eight focused transfer compiler tests and complete 271-test Call Engine suite pass, with one
   tagged integration exclusion. This checkpoint pins policy only; it does not yet seed destination
   model history or claim privacy projection at runtime.
+
+## 2026-09-10 — vetted Agent Runtime history seed
+
+- Added the Session test first. The positive case failed with `invalid_configuration` because the
+  runtime had no initial-message option.
+- Agent Runtime can now build a session conversation from its own system instructions followed by
+  internal initial messages. The validator accepts only non-empty, bounded plain caller-user and
+  tool-free assistant messages.
+- It rejects replacement system instructions, engine-origin messages, tool messages, assistant
+  tool calls, and tool-correlation metadata. This gives Call Engine a narrow privacy boundary rather
+  than relying only on the future room projector to behave correctly.
+- Seeded messages are committed history and are never accepted from the browser/client protocol.
+  Call Engine does not yet supply the option, so this checkpoint alone does not change a transfer.
+- The focused Session file passes seven tests; the complete Agent Runtime suite passes 53 tests with
+  two tagged integration exclusions.

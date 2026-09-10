@@ -1,11 +1,12 @@
 defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   @moduledoc false
 
-  alias Vxpipe.AgentRuntime.ToolRegistry
+  alias Vxpipe.AgentRuntime.{Message, ToolRegistry}
 
   @derive {Inspect, only: []}
   @enforce_keys [
     :instructions,
+    :initial_messages,
     :model_provider,
     :model,
     :tool_registry,
@@ -30,6 +31,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   def new(options) when is_list(options) do
     with {:ok, options} <- validate_options(options),
          instructions when is_binary(instructions) <- Keyword.get(options, :instructions),
+         {:ok, initial_messages} <-
+           validate_initial_messages(Keyword.get(options, :initial_messages, [])),
          {:ok, model_provider} <- validate_provider(Keyword.get(options, :model_provider)),
          {:ok, tool_registry} <- ToolRegistry.new(Keyword.get(options, :tools, [])),
          {:ok, executor} <- validate_executor(Keyword.get(options, :executor), tool_registry),
@@ -57,6 +60,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       {:ok,
        %__MODULE__{
          instructions: instructions,
+         initial_messages: initial_messages,
          model_provider: model_provider,
          model: Keyword.get(options, :model),
          tool_registry: tool_registry,
@@ -114,6 +118,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   defp validate_options(options) do
     Keyword.validate(options, [
       :instructions,
+      :initial_messages,
       :model_provider,
       :model,
       :tools,
@@ -141,6 +146,44 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   end
 
   defp validate_provider(_model_provider), do: {:error, :invalid_provider}
+
+  defp validate_initial_messages(messages) when is_list(messages) do
+    if Enum.all?(messages, &valid_initial_message?/1) do
+      {:ok, messages}
+    else
+      {:error, :invalid_initial_messages}
+    end
+  end
+
+  defp validate_initial_messages(_messages), do: {:error, :invalid_initial_messages}
+
+  defp valid_initial_message?(%Message{
+         role: :user,
+         content: content,
+         origin: :caller,
+         name: nil,
+         tool_call_id: nil,
+         tool_calls: []
+       }),
+       do: valid_initial_content?(content)
+
+  defp valid_initial_message?(%Message{
+         role: :assistant,
+         content: content,
+         origin: nil,
+         name: nil,
+         tool_call_id: nil,
+         tool_calls: []
+       }),
+       do: valid_initial_content?(content)
+
+  defp valid_initial_message?(_message), do: false
+
+  defp valid_initial_content?(content) when is_binary(content) do
+    content != "" and byte_size(content) <= 64 * 1_024
+  end
+
+  defp valid_initial_content?(_content), do: false
 
   defp validate_executor(nil, %ToolRegistry{size: 0}), do: {:ok, nil}
 

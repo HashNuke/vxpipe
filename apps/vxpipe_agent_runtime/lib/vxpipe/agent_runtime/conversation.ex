@@ -14,10 +14,21 @@ defmodule Vxpipe.AgentRuntime.Conversation do
           size: non_neg_integer()
         }
 
-  @spec new(String.t()) :: t()
-  def new(instructions) when is_binary(instructions) do
-    entry = Entry.new([Message.system(instructions)], :permanent)
-    rebuild([entry])
+  @spec new(String.t(), [Message.t()]) :: t()
+  def new(instructions, initial_messages \\ [])
+
+  def new(instructions, initial_messages)
+      when is_binary(instructions) and is_list(initial_messages) do
+    entries = [Entry.new([Message.system(instructions)], :permanent)]
+
+    entries =
+      if initial_messages == [] do
+        entries
+      else
+        entries ++ [Entry.new(initial_messages, :permanent)]
+      end
+
+    rebuild(entries)
   end
 
   @spec append_exchange(t(), [Message.t()], map(), Entry.retention()) :: t()

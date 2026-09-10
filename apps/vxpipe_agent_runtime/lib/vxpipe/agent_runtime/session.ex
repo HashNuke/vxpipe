@@ -99,7 +99,8 @@ defmodule Vxpipe.AgentRuntime.Session do
       {:ok,
        %__MODULE__{
          configuration: configuration,
-         conversation: Conversation.new(configuration.instructions)
+         conversation:
+           Conversation.new(configuration.instructions, configuration.initial_messages)
        }}
     else
       _invalid -> {:stop, :invalid_configuration}

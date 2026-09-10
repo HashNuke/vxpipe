@@ -940,6 +940,14 @@ how much prior conversation another participant may receive. The compiler pins t
 destination participant in the immutable call plan. This schema checkpoint does not yet claim that
 the non-fresh projections are supplied at runtime.
 
+Agent Runtime accepts an internal initial-conversation seed for activation construction. That
+boundary retains the destination's independently configured system prompt and accepts only plain
+caller-origin user messages and tool-free assistant messages. It rejects system messages, engine
+messages, tool messages, tool calls, and tool correlation metadata rather than trusting a caller to
+pre-filter them. These messages are committed history, not a client-facing session-initialization
+input. Call Engine remains responsible for deriving the list from confirmed room delivery facts and
+the pinned destination policy before it can use this boundary.
+
 The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
 activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
 reauthorizes the room/incarnation, caller connection, current source participant and activation,

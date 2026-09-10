@@ -119,6 +119,13 @@ path. The focused compiler file passes eight tests and the complete Call Engine 
 tests with one tagged integration exclusion. Runtime projection remains open, so the combined
 history checklist item is not checked.
 
+Agent Runtime now has the narrow seed boundary needed by the runtime projection checkpoint. A
+session may start with validated plain caller-user and tool-free assistant messages after its own
+system prompt; injected system/engine/tool messages, tool calls, and tool metadata are rejected.
+The focused seven-test Session file and complete 53-test Agent Runtime suite pass with two tagged
+integration exclusions. Call Engine does not yet populate this option, so no transfer-history
+acceptance item is claimed by this internal prerequisite.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,
