@@ -1372,3 +1372,18 @@ Verification after stopping the development server:
 - Umbrella `mix test` still stops before test execution because PostgreSQL SCRAM authentication
   requires a password absent from this non-interactive shell. An attempt to reuse Goreman's env
   loader without starting its RPC server was unavailable; no credential source was inspected.
+
+## Acceptance checkpoint: exact aliases without identity churn
+
+The final acceptance audit found that arbitrary string-backed aliases were implemented but lacked
+direct evidence for the complete contract. Added a focused registry test with two aliases using the
+same fixed executor module while retaining different descriptions, schemas, private binding IDs,
+arguments, and resolved descriptors. The model projections remain exact and contain no private
+binding.
+
+Added an isolated peer-node churn probe that constructs and resolves 1,000 descriptors across the
+warm-up and measured passes, covering 500 measured aliases with unique field names, schemas, and
+binding IDs. None of those external strings became atoms, and atom/module growth stayed within the
+fixed non-proportional allowance. The focused registry and churn run passed 4 tests. This checkpoint
+adds acceptance coverage only; existing production behavior already satisfied the contract, so no
+red implementation phase or production change was appropriate.

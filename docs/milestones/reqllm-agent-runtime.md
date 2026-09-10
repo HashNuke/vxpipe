@@ -180,7 +180,7 @@ process or dependency is used.
 - [ ] A deterministic run streams text, requests a tool, starts one external worker, commits
   its running result, performs an acknowledgement round, and later consumes its private
   completion once. Mixed text/tool output is neither dropped nor delivered twice.
-- [ ] Two local aliases share one executor implementation while retaining distinct exact
+- [x] Two local aliases share one executor implementation while retaining distinct exact
   descriptions, schemas, binding identities, and attribution. Repeated unique aliases and
   schemas do not cause proportional atom/module growth.
 - [ ] Unknown/duplicate tools, malformed calls, invalid arguments, excessive calls/rounds,

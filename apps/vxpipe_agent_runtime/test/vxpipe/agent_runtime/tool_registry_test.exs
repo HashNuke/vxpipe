@@ -28,15 +28,60 @@ defmodule Vxpipe.AgentRuntime.ToolRegistryTest do
              ])
   end
 
-  defp descriptor(name, binding) do
+  test "keeps aliases for one session executor exact and independently attributed" do
+    first =
+      descriptor(
+        "lookup_order",
+        %{handler: Vxpipe.AgentRuntime.TestExecutor, binding_id: "orders-primary"},
+        "Look up an order",
+        "order_id"
+      )
+
+    second =
+      descriptor(
+        "find_purchase",
+        %{handler: Vxpipe.AgentRuntime.TestExecutor, binding_id: "orders-secondary"},
+        "Find a purchase",
+        "purchase_id"
+      )
+
+    assert {:ok, registry} = ToolRegistry.new([first, second])
+
+    assert [
+             %ModelTool{
+               name: "lookup_order",
+               description: "Look up an order",
+               input_schema: first_schema
+             },
+             %ModelTool{
+               name: "find_purchase",
+               description: "Find a purchase",
+               input_schema: second_schema
+             }
+           ] = ToolRegistry.model_tools(registry)
+
+    assert first_schema == first.input_schema
+    assert second_schema == second.input_schema
+
+    assert {:ok, ^first} =
+             ToolRegistry.resolve(registry, "lookup_order", %{"order_id" => "order-1"})
+
+    assert {:ok, ^second} =
+             ToolRegistry.resolve(registry, "find_purchase", %{"purchase_id" => "purchase-1"})
+
+    assert first.binding.handler == second.binding.handler
+    refute first.binding.binding_id == second.binding.binding_id
+  end
+
+  defp descriptor(name, binding, description \\ "Look up an order", field \\ "order_id") do
     {:ok, descriptor} =
       ToolDescriptor.new(
         name: name,
-        description: "Look up an order",
+        description: description,
         input_schema: %{
           "type" => "object",
-          "properties" => %{"order_id" => %{"type" => "string"}},
-          "required" => ["order_id"],
+          "properties" => %{field => %{"type" => "string"}},
+          "required" => [field],
           "additionalProperties" => false
         },
         binding: binding
