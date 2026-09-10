@@ -1032,3 +1032,20 @@ scenarios still need neutral equivalents before the test default and dependency 
 switched completely. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock
 checks pass. Umbrella `mix test` again stops before test execution because PostgreSQL SCRAM
 authentication needs a password absent from this shell; no credential source was inspected.
+
+## Implementation checkpoint 4s: ordinary room test parity
+
+Migrated four more definition-driven scenarios away from Jido's scripted test surface without
+changing production code. The audio/archive test now sends its final STT text to the neutral model
+provider and retains the existing TTS, playback, and private archival assertions. The activation
+restart test kills the Agent Runtime Session, observes the complete one-for-all child replacement,
+then proves the replacement provider serves the next room turn. The selected speech configuration
+test only needs a valid Agent Runtime graph and continues to inspect application-owned secret and
+transport construction. The source-mutation test now observes the pinned system instruction in an
+actual provider request rather than introspecting a Jido agent struct.
+
+All four focused tests pass. Two random-seed complete suite runs then exposed the unchanged legacy
+Jido successive-tool test intermittently collecting only one of two completion events. Its isolated
+run passed. A complete rerun at seed `365486` passed 244 tests with 2 tagged integration exclusions.
+This flaky compatibility-only observation reinforces the planned removal order; it was not weakened
+or attributed to the neutral tests.

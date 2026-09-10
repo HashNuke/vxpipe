@@ -593,6 +593,16 @@ Implementation evidence:
   strict Credo, and unused-lock checks pass. Umbrella `mix test` again stops before test execution
   because PostgreSQL SCRAM authentication needs a password absent from this shell; no credential
   source was inspected.
+- Checkpoint 4s migrates four ordinary room scenarios to Agent Runtime: final speech input through
+  archived TTS delivery, activation restart, selected speech-provider pinning, and immutable
+  prompt/profile behavior after source maps change. The tests now drive the neutral provider at the
+  model boundary and, for restart, kill the Agent Runtime Session so the existing one-for-all graph
+  replacement is exercised. No production behavior changed.
+- The four focused scenarios pass. Two random-seed complete runs exposed the remaining legacy Jido
+  successive-tool test intermittently observing only one of two completion events; that unchanged
+  test passed in isolation, and the complete Call Engine suite passed at seed `365486` with 244 tests
+  and 2 integration exclusions. Removing that obsolete compatibility surface remains part of this
+  milestone rather than masking it in the new runtime tests.
 
 ## Specification review
 

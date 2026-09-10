@@ -232,16 +232,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   test "archives final audio input and distinguishes generated from delivered output" do
+    configure_agent_runtime_provider(self())
     configure_speech_runtime()
     room_id = unique_id("room-private-audio-history")
     plan = compile_plan(room_id, speech?: true)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-
-    script =
-      expect_react do
-        user("Hello there")
-        answer("Hello back.")
-      end
 
     archive =
       archive_options(
@@ -251,7 +246,6 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert {:ok, room} =
              CallEngine.start_call(plan,
-               agent_request_options: Jido.AI.Test.react_opts(script),
                archive: Keyword.put(archive, :enabled, true)
              )
 
@@ -272,6 +266,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       stt_transport,
       stt_turn_message("EndOfTurn", 2, "Hello there", "model")
     )
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert List.last(request.messages).content == "Hello there"
+    assert {:ok, response} = ModelResponse.new(text: "Hello back.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:test_tts_control, ^tts_transport, speak}, 2_000
     assert JSON.decode!(speak) == %{"text" => "Hello back.", "type" => "Speak"}
@@ -837,21 +836,13 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   test "routes the next room turn through a restarted agent activation" do
+    configure_agent_runtime_provider(self())
     room_id = unique_id("room")
     plan = compile_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    script =
-      expect_react do
-        user("Are you ready?")
-        answer("Ready after restart.")
-      end
-
-    assert {:ok, room} =
-             CallEngine.start_call(plan,
-               agent_request_options: Jido.AI.Test.react_opts(script)
-             )
+    assert {:ok, room} = CallEngine.start_call(plan)
 
     assert [{activation_supervisor, _value}] =
              Registry.lookup(
@@ -861,7 +852,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     first = AgentActivationSupervisor.children(activation_supervisor)
     monitors = monitor_children(first)
-    Process.exit(Map.fetch!(first, :agent_server), :kill)
+    Process.exit(Map.fetch!(first, :session), :kill)
     assert_children_stopped(monitors)
     _ = :sys.get_state(activation_supervisor)
 
@@ -875,6 +866,10 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     command = send_command(plan, room, caller, "conn-restarted", "Are you ready?")
 
     assert :ok = CallEngine.send_text(command)
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert List.last(request.messages).content == "Are you ready?"
+    assert {:ok, response} = ModelResponse.new(text: "Ready after restart.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
     assert_receive {:vxpipe_event, %TextOutput{sequence: 3, text: "Ready after restart."}}
@@ -882,21 +877,13 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   test "pins selected speech options while using application-owned secrets and transports" do
+    configure_agent_runtime_provider(self())
     configure_speech_runtime()
     room_id = unique_id("room")
     plan = compile_plan(room_id, speech?: true)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    script =
-      expect_react do
-        user("Hello")
-        answer("Hello back.")
-      end
-
-    assert {:ok, room} =
-             CallEngine.start_call(plan,
-               agent_request_options: Jido.AI.Test.react_opts(script)
-             )
+    assert {:ok, room} = CallEngine.start_call(plan)
 
     assert_receive {:test_tts_transport_started, _tts_transport,
                     %{url: tts_url, headers: [{"Authorization", "Token runtime-secret"}]}}
@@ -975,6 +962,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   test "keeps the active agent pinned after source definition and profile maps change" do
+    configure_agent_runtime_provider(self())
     room_id = unique_id("room-pinned-source")
     input = definition_input([])
     profiles = capability_profiles([])
@@ -995,14 +983,20 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert get_in(changed_profiles, ["test-model", :options, :model]) == "replacement:model"
     assert room.room_id == room_id
 
-    agent_server =
-      AgentActivationSupervisor.whereis_child(receiver.activation_id, :agent_server)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    attach_caller(plan, room, caller, "conn-pinned-source")
+    command = send_command(plan, room, caller, "conn-pinned-source", "Check the pinned agent.")
+    assert :ok = CallEngine.send_text(command)
 
-    assert {:ok, agent_state} = Jido.AgentServer.state(agent_server)
-    agent_config = Jido.AI.get_strategy_config(agent_state.agent)
+    assert_receive {:test_agent_runtime_stream, provider, request}
 
-    assert agent_config.system_prompt == "Use the available host action."
+    assert [%Message{role: :system, content: "Use the available host action."} | _messages] =
+             request.messages
+
     assert receiver.capabilities.model_inference.options == %{model: "test:scripted"}
+
+    assert {:ok, response} = ModelResponse.new(text: "Pinned configuration retained.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
   end
 
   test "projects an application-configured local model fixture into agent startup" do
