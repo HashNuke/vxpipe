@@ -35,7 +35,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
           | {:error, :rejected | :saturated | :unavailable}
   def submit(registry, binding, arguments, context, invocation_id) do
     with {:ok, submission} <- InvocationSubmission.new(binding, arguments, context, invocation_id) do
-      call_with_reconciliation(registry, submission)
+      admission_deadline = System.monotonic_time(:millisecond) + @call_timeout
+      call_with_reconciliation(registry, submission, admission_deadline)
     else
       {:error, _reason} -> {:error, :rejected}
     end
@@ -85,7 +86,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   end
 
   @impl true
-  def handle_call({:submit, %InvocationSubmission{} = submission}, _from, state) do
+  def handle_call(
+        {:submit, %InvocationSubmission{} = submission, admission_deadline},
+        _from,
+        state
+      )
+      when is_integer(admission_deadline) do
     case State.submission_outcome(state, submission) do
       {:accepted, mode} ->
         {:reply, {:accepted, mode}, state}
@@ -94,7 +100,17 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         {:reply, {:error, :rejected}, state}
 
       {:error, :unavailable} ->
-        start_invocation(submission, state)
+        if admission_open?(admission_deadline) do
+          start_invocation(submission, state)
+        else
+          InvocationTelemetry.admission(
+            :unavailable,
+            State.size(state),
+            state.maximum_invocations
+          )
+
+          {:reply, {:error, :unavailable}, state}
+        end
     end
   end
 
@@ -346,10 +362,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     end
   end
 
-  defp call_with_reconciliation(registry, submission) do
-    GenServer.call(registry, {:submit, submission}, @call_timeout)
+  defp call_with_reconciliation(registry, submission, admission_deadline) do
+    GenServer.call(registry, {:submit, submission, admission_deadline}, @call_timeout)
   catch
     :exit, _reason -> safe_reconcile(registry, submission)
+  end
+
+  defp admission_open?(deadline) do
+    System.monotonic_time(:millisecond) < deadline
   end
 
   defp safe_reconcile(registry, submission) do

@@ -83,7 +83,10 @@ tools through that entry still requires a later compiler checkpoint.
    submit it with the provider call ID as its invocation ID.
 2. Call Engine performs authorization and capacity checks, then starts a temporary worker
    under the active agent's bounded invocation supervisor. Only successful worker startup
-   returns an accepted submission.
+   returns an accepted submission. The admission request carries an absolute local deadline:
+   if a busy registry handles it after the caller's bounded wait has expired, it rejects the
+   queued request without starting work. If startup committed before the reply was lost, one
+   bounded reconciliation reads that existing invocation instead of submitting it again.
 3. Agent Runtime commits the assistant tool-call message and exactly one ordinary tool result:
 
    ```json

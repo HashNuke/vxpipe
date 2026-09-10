@@ -1448,3 +1448,21 @@ activation's one allowed restart creates entirely new children. Injecting the ol
 message into the replacement registry leaves its snapshot empty, proving a stale completion cannot
 attach to the new generation. The focused activation-supervisor suite passes 3 tests. Existing
 behavior satisfied the requirement, so this checkpoint required no production change.
+
+## Final audit: bounded submission cannot start late
+
+The final milestone audit challenged the earlier claim that the Call Engine submit callback was
+bounded. Its two `GenServer.call/3` waits were time-bounded, but a timed-out call message remains in
+the server mailbox. If the invocation registry was busy for both waits, `submit/5` returned
+`unavailable`; once the registry resumed, the original queued request could still start a worker.
+Agent Runtime would already have committed a rejection, so that real external work would have no
+running acknowledgement in model history.
+
+A focused test suspended the registry, submitted a host tool, observed the bounded unavailable
+result, resumed the registry, and initially found a running record. It failed at the empty-snapshot
+assertion exactly as expected. Each new submit message now carries the first call's absolute
+monotonic admission deadline. An unknown submission handled after that deadline returns unavailable
+without starting a worker; a submission committed before a lost reply is still returned by the
+existing invocation-ID reconciliation. The focused registry file then passed 3 tests in 2.3
+seconds, and the complete Call Engine suite passed 221 tests with one tagged integration
+exclusion. No polling, inline execution, or automatic retry was added.

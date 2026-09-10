@@ -763,6 +763,14 @@ Implementation evidence:
   warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
   stops before execution at the unchanged absent PostgreSQL SCRAM password; no credential source
   was inspected. Rendered sample and final acceptance evidence remain before milestone completion.
+- The final bound audit exposed a late-start race in the host submission callback: both bounded
+  registry calls could time out while their messages remained queued, after which the first message
+  could still start external work even though Agent Runtime had received `unavailable`. A focused
+  test suspended the registry, observed that exact failure, and passed after submission admission
+  gained an absolute monotonic deadline. Expired queued submissions now start no worker; committed
+  submissions remain discoverable by the existing one-shot reconciliation. The focused registry
+  file passes 3 tests in 2.3 seconds; the complete Call Engine suite passes 221 tests with one
+  tagged integration exclusion.
 
 ## Specification review
 

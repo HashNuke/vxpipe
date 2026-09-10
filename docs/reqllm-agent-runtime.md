@@ -283,6 +283,12 @@ submission critical section begins, cancellation waits until the complete runnin
 exchange commits, then terminates only the model request task. This closes the acceptance race:
 accepted external work cannot be erased by speech/model cancellation.
 
+The selected Call Engine executor bounds admission with a one-second registry call followed by
+at most one one-second outcome reconciliation. Each new submission carries the first call's
+absolute monotonic deadline. A registry that was unavailable until after that deadline must not
+start the queued operation after returning `unavailable`; an operation committed before a lost
+reply remains discoverable by invocation ID during reconciliation.
+
 The Session also carries positive limits for tool calls in one provider round and assistant
 output accumulated across one admitted request. The runner checks both before external
 submission, preventing an oversized mixed response from starting work that cannot be safely
@@ -293,7 +299,8 @@ request call does not time out independently and leave provider work running. Ex
 provisional work and returns `request_timeout`. When expiry races with host submission, Session
 records it and completes the submission commit barrier first. The terminal response can therefore
 arrive after the nominal deadline only for that bounded safety handoff; the external invocation is
-not cancelled. A separately bounded host submission callback remains required.
+not cancelled. The Call Engine host adapter supplies the separately bounded admission described
+above.
 
 `Session.continue/4` now gives Call Engine a separate admission path for a private tool-completion
 observation. The input keeps `origin: :engine` in normalized runtime history but projects as an

@@ -164,6 +164,36 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
     send(second_execution, :release_submitted_inline_tool)
   end
 
+  test "does not start work after bounded submission reports unavailable" do
+    {registry, _supervisor} = start_registry(maximum_invocations: 1)
+    :ok = :sys.suspend(registry)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(registry)
+      catch
+        :exit, _reason -> :ok
+      end
+    end)
+
+    submission =
+      Task.async(fn ->
+        InvocationRegistry.submit(
+          registry,
+          host_binding(:blocking),
+          %{"value" => "must-not-start"},
+          context(),
+          "expired-submission"
+        )
+      end)
+
+    assert {:error, :unavailable} = Task.await(submission, 3_000)
+
+    :ok = :sys.resume(registry)
+    assert {:ok, []} = InvocationRegistry.snapshot(registry)
+    refute_receive {:submitted_inline_tool_started, _execution, "must-not-start"}
+  end
+
   test "emits bounded telemetry as submitted work is admitted, settled, and consumed" do
     attach_telemetry()
     {registry, _supervisor} = start_registry(maximum_invocations: 1)
