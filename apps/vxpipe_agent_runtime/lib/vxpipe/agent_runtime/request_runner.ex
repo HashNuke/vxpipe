@@ -61,16 +61,13 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          staged_messages,
          output,
          _round,
-         _request,
+         request,
          config
        ) do
     with {:ok, complete_output} <-
            complete_output(response.text, output, config.maximum_output_bytes) do
       conversation =
-        Conversation.append(
-          conversation,
-          staged_messages ++ [Message.assistant(response.text, [])]
-        )
+        commit_final_exchange(response, conversation, staged_messages, request)
 
       {:ok, complete_output, conversation}
     end
@@ -84,7 +81,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              append_output(response.text, output, config.maximum_output_bytes),
            {:ok, submissions, blocking?} <- submit_calls(response.tool_calls, request, config),
            conversation <-
-             commit_tool_exchange(response, submissions, conversation, staged_messages),
+             commit_tool_exchange(response, submissions, conversation, staged_messages, request),
            :ok <- config.commit.(conversation) do
         generate(
           conversation,
@@ -159,14 +156,35 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     {:ok, Enum.reverse(submissions), blocking?}
   end
 
-  defp commit_tool_exchange(response, submissions, conversation, staged_messages) do
+  defp commit_tool_exchange(response, submissions, conversation, staged_messages, request) do
     result_messages = Enum.map(submissions, fn {call, result} -> Message.tool(call, result) end)
 
-    Conversation.append(
+    Conversation.append_exchange(
       conversation,
       staged_messages ++
-        [Message.assistant(response.text, response.tool_calls)] ++ result_messages
+        [Message.assistant(response.text, response.tool_calls)] ++ result_messages,
+      request.correlation,
+      :durable
     )
+  end
+
+  defp commit_final_exchange(response, conversation, staged_messages, request) do
+    assistant = Message.assistant(response.text, [])
+
+    case {request.origin, staged_messages} do
+      {:engine, [_message | _remaining] = messages} ->
+        conversation
+        |> Conversation.append_exchange(messages, request.correlation, :durable)
+        |> Conversation.append_exchange([assistant], request.correlation, :discardable)
+
+      _caller_or_already_committed ->
+        Conversation.append_exchange(
+          conversation,
+          staged_messages ++ [assistant],
+          request.correlation,
+          :discardable
+        )
+    end
   end
 
   defp pending_context(config, correlation) do

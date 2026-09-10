@@ -797,3 +797,29 @@ Focused coordinator verification passes 8 tests. The complete Call Engine suite 
 with 2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
 unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
 authentication needs a password absent from this shell; no credential source was inspected.
+
+## Implementation checkpoint 4k: interruption-safe conversation history
+
+Added three Agent Runtime tests before implementation. The red run failed because
+`Session.discard/2` did not exist. The covered cases select an ordinary completed exchange for
+removal, retain an accepted tool-call/running-result exchange while removing its later answer, and
+retain a private engine completion observation while removing the assistant speech generated from
+it.
+
+Conversation now owns explicit entries rather than inferring retention from a flat list. The
+system instruction is permanent; accepted tool exchanges are durable; ordinary final conversation
+is discardable by its opaque request correlation. Engine-origin input is durable because it can
+carry the one consumed terminal tool outcome, while its assistant answer remains discardable. The
+public provider projection remains the same flattened message sequence and never receives the
+correlation or retention metadata.
+
+`Session.discard/3` accepts only a list of correlation maps and operates only while the Session is
+idle. The Call Engine interruption path must first cancel and receive the request's terminal result,
+then reconcile any completed turns. This checkpoint changes no worker lifecycle: an accepted tool
+continues in its independently supervised process.
+
+Focused and complete Agent Runtime verification passes 41 tests with 1 integration exclusion.
+Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass.
+Umbrella `mix test` stops before test execution because PostgreSQL SCRAM authentication needs a
+password absent from this shell; no credential source was inspected. Coordinator interruption and
+activation selection remain pending.

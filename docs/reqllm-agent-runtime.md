@@ -92,6 +92,15 @@ assistant tool call and running result remain committed even if later generated 
 cancelled, because cancellation cannot roll back real work. A final answer commits the
 accepted assistant response.
 
+Committed history records request-correlated entries with separate retention semantics. The
+system instruction is permanent. A caller's ordinary input/final-answer pair is discardable
+after room authority reports that its generated turn was interrupted. An accepted tool-call /
+running-result exchange is durable even when later speech from the same request is interrupted.
+A private engine-origin completion observation is likewise durable, while the assistant answer
+generated from it remains discardable. Correlations remain opaque to the package and are never
+projected into model messages. History can be discarded only while the Session is idle, after
+active cancellation has reached its terminal acknowledgement.
+
 For every submitted tool, the single correlated running acknowledgement stays in that
 committed conversation and is therefore supplied with every later model request while the
 invocation remains pending. This is retained context, not polling: the runtime does not append

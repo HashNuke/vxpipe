@@ -53,6 +53,20 @@ defmodule Vxpipe.AgentRuntime.Session do
   @spec cancel(server(), timeout()) :: :ok | {:error, :idle}
   def cancel(server, timeout \\ 5_000), do: GenServer.call(server, :cancel, timeout)
 
+  @spec discard(server(), [map()], timeout()) ::
+          :ok | {:error, :busy | :invalid_correlations}
+  def discard(server, correlations, timeout \\ 5_000)
+
+  def discard(server, correlations, timeout) when is_list(correlations) do
+    if Enum.all?(correlations, &is_map/1) do
+      GenServer.call(server, {:discard, correlations}, timeout)
+    else
+      {:error, :invalid_correlations}
+    end
+  end
+
+  def discard(_server, _correlations, _timeout), do: {:error, :invalid_correlations}
+
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
@@ -144,6 +158,15 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   def handle_call(:status, _caller, state), do: {:reply, state.status, state}
+
+  def handle_call({:discard, correlations}, _caller, %{status: :idle} = state) do
+    conversation = Conversation.discard(state.conversation, correlations)
+    {:reply, :ok, %{state | conversation: conversation}}
+  end
+
+  def handle_call({:discard, _correlations}, _caller, state) do
+    {:reply, {:error, :busy}, state}
+  end
 
   def handle_call(:cancel, _caller, %{status: :idle} = state),
     do: {:reply, {:error, :idle}, state}

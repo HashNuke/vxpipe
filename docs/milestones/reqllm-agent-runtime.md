@@ -138,7 +138,10 @@ process or dependency is used.
    its registry-backed admission gate now holds caller turns for any unconsumed blocking invocation
    and admits turns when every pending invocation is explicitly non-blocking. Completion leasing and
    private continuation consumption are now integrated with completion priority and a commit-time
-   acknowledgement. Interruption remains. Preserve completion and interruption behavior.
+   acknowledgement. Agent Runtime history now distinguishes discardable final conversation from
+   durable accepted-tool and private-completion facts, and exposes idle-only correlation-based
+   discard for the room interruption path. Coordinator interruption remains. Preserve completion
+   and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -448,6 +451,18 @@ Implementation evidence:
   warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
   stops before test execution because PostgreSQL SCRAM authentication needs a password absent from
   this shell; no credential source was inspected.
+- Checkpoint 4k adds request-correlated conversation entries and an idle-only `Session.discard/3`
+  boundary for conservative interruption reconciliation. Ordinary caller input/final-answer pairs
+  are discardable. Accepted tool-call/running-result exchanges remain durable, and a private
+  engine-origin completion observation remains durable while its generated assistant answer is
+  discardable. Correlations stay opaque and are not projected to the provider.
+- Checkpoint 4k red evidence reported three missing-function failures before `Session.discard/2`
+  existed. Its focused tests prove ordinary removal, accepted-tool preservation, and private
+  completion preservation; the complete Agent Runtime suite passes 41 tests with 1 integration
+  exclusion. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
+  pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM authentication
+  needs a password absent from this shell; no credential source was inspected. Coordinator
+  interruption and activation selection remain pending.
 
 ## Specification review
 
