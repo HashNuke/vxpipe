@@ -11,7 +11,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
   @enforce_keys [:command, :correlation, :kind, :output, :started_at, :task]
   defstruct @enforce_keys ++ [first_output_observed?: false, continuation_started?: false]
 
-  @type kind :: :caller | :greeting | {:completion, CompletionContinuation.t()}
+  @type kind :: :caller | :caller_idle | :greeting | {:completion, CompletionContinuation.t()}
   @type t :: %__MODULE__{
           command: SendText.t() | ContinueAgent.t(),
           correlation: Correlation.t(),
@@ -53,6 +53,23 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
       end)
 
     new(command, correlation, :greeting, task, options)
+  rescue
+    _exception -> {:error, :unavailable}
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec start_caller_idle(SendText.t(), keyword()) :: {:ok, t()} | {:error, :unavailable}
+  def start_caller_idle(%SendText{} = command, options) do
+    correlation = correlation(command, options)
+    session = Keyword.fetch!(options, :session)
+
+    task =
+      Task.Supervisor.async_nolink(Keyword.fetch!(options, :request_supervisor), fn ->
+        Session.continue(session, command.content, correlation, :infinity)
+      end)
+
+    new(command, correlation, :caller_idle, task, options)
   rescue
     _exception -> {:error, :unavailable}
   catch

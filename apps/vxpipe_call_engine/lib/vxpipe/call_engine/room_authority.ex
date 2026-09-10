@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
+    CallerIdle,
     ConnectionLifecycle,
     EndCall,
     FirstMessage,
@@ -140,7 +141,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       {:reply, {:ok, _role, _runtime} = reply, state} ->
         case begin_connection_startup(command, state) do
           {:ok, state} ->
-            {:reply, reply, state}
+            {:reply, reply, CallerIdle.reconcile(state)}
 
           {:error, %Error{code: code} = error} ->
             {:stop, code, {:error, error}, state}
@@ -166,7 +167,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
          ) do
       {:reply, :ok, state} ->
         case StartupReadiness.ready(state) do
-          {:ok, state} -> {:reply, :ok, state}
+          {:ok, state} -> {:reply, :ok, CallerIdle.reconcile(state)}
           {:error, %Error{code: code} = error} -> {:stop, code, {:error, error}, state}
         end
 
@@ -176,7 +177,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_call({:detach_connection, command, subscriber}, {caller, _tag}, state) do
-    ConnectionLifecycle.detach(command, caller, subscriber, state)
+    case ConnectionLifecycle.detach(command, caller, subscriber, state) do
+      {:reply, reply, state} -> {:reply, reply, CallerIdle.reconcile(state)}
+    end
   end
 
   def handle_call({:send_text, command}, {caller, _tag}, state) do
@@ -188,7 +191,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {:vxpipe_capability_continuation_started, capability, %ContinueAgent{} = command},
         state
       ) do
-    {:noreply, AgentOutput.continuation_started(capability, command, state)}
+    state = AgentOutput.continuation_started(capability, command, state)
+    {:noreply, CallerIdle.reconcile(state)}
   end
 
   def handle_info({:vxpipe_capability_text, capability, command, text}, state) do
@@ -196,18 +200,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info({:vxpipe_capability_text_complete, capability, command}, state) do
-    {:noreply, AgentOutput.text_complete(capability, command, state)}
+    state = AgentOutput.text_complete(capability, command, state)
+    {:noreply, CallerIdle.reconcile(state)}
   end
 
   def handle_info({:vxpipe_capability_tool_started, capability, command, call}, state) do
-    {:noreply, ToolCalls.started(state, capability, command, call)}
+    state = ToolCalls.started(state, capability, command, call)
+    {:noreply, CallerIdle.reconcile(state)}
   end
 
   def handle_info(
         {:vxpipe_capability_tool_accepted, capability, command, call, _acknowledgement},
         state
       ) do
-    {:noreply, ToolCalls.accepted_background(state, capability, command, call)}
+    state = ToolCalls.accepted_background(state, capability, command, call)
+    {:noreply, CallerIdle.reconcile(state)}
   end
 
   def handle_info(
@@ -245,6 +252,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info(
+        {:vxpipe_call_lifecycle, lifecycle, {:idle, token}},
+        %{call_lifecycle: lifecycle} = state
+      ) do
+    {:noreply, CallerIdle.notify(token, state)}
+  end
+
+  def handle_info(
         {:vxpipe_call_lifecycle, lifecycle, :max_duration},
         %{call_lifecycle: lifecycle} = state
       ) do
@@ -255,7 +269,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({:vxpipe_call_lifecycle, _lifecycle, _event}, state), do: {:noreply, state}
 
   def handle_info({:vxpipe_capability_failed, capability, command, reason}, state) do
-    {:noreply, AgentOutput.failed(capability, command, reason, state)}
+    state = AgentOutput.failed(capability, command, reason, state)
+    {:noreply, CallerIdle.reconcile(state)}
   end
 
   def handle_info(
@@ -285,7 +300,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     if OpeningAudio.awaiting_playback?(state.opening_audio) do
       {:stop, :opening_audio_unavailable, state}
     else
-      {:noreply, AgentOutput.unavailable(capability, state)}
+      state = AgentOutput.unavailable(capability, state)
+      {:noreply, CallerIdle.reconcile(state)}
     end
   end
 
@@ -295,7 +311,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({:vxpipe_stt_unavailable, capability, identity, _reason}, state) do
     state = ConnectionLifecycle.speech_to_text_unavailable(capability, identity, state)
-    {:noreply, state}
+    {:noreply, CallerIdle.reconcile(state)}
   end
 
   def handle_info(
@@ -331,7 +347,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           state
       end
 
-    {:noreply, state}
+    {:noreply, CallerIdle.reconcile(state)}
   end
 
   defp room_source(options) do
@@ -365,12 +381,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           end
 
         case FirstMessage.start(state) do
-          {:ok, state} -> {:noreply, state}
+          {:ok, state} -> {:noreply, CallerIdle.reconcile(state)}
           {:error, %Error{code: code}} -> {:stop, code, state}
         end
 
       :unrelated ->
-        {:noreply, AgentOutput.playback(capability, request, status, state)}
+        state = AgentOutput.playback(capability, request, status, state)
+
+        if status == :completed do
+          {:noreply, CallerIdle.reconcile(state)}
+        else
+          {:noreply, state}
+        end
     end
   end
 

@@ -22,7 +22,8 @@ A caller hears optional configured opening audio before normal conversation. The
 - [x] Red-test fixed-text input gating and actual playout completion with controllable media fakes.
 - [x] Red-test wait/fixed/generated first-message modes with controllable model/media fakes.
 - [x] Red-test readiness and maximum-duration clocks with a controllable timer fake.
-- [ ] Red-test file playback and caller-idle clocks with controllable time/media fakes.
+- [x] Red-test caller-idle clocks and suppression with a controllable timer fake.
+- [ ] Red-test file playback with controllable time/media fakes.
 - [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
 - [ ] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
@@ -30,7 +31,7 @@ A caller hears optional configured opening audio before normal conversation. The
 - [x] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
 - [x] Implement planned-call startup readiness and pinned maximum-duration enforcement.
 - [x] End planned-call startup immediately after a definitive selected-provider start failure.
-- [ ] Implement correctly scoped caller-idle notification; keep timing/technical errors safe.
+- [x] Implement correctly scoped caller-idle notification; keep timing/technical errors safe.
 
 ## Acceptance and failure checks
 
@@ -42,9 +43,10 @@ A caller hears optional configured opening audio before normal conversation. The
 - [ ] Opening targets entry_caller only; unrelated participants/entry_receiver do not hear it.
 - [ ] Terminal readiness failure and deadline expiry release attempted resources; deliberate
   opening playback is not mistaken for failed readiness. Duplicate readiness never repeats a greeting.
-- [ ] Idle excludes opening/output/hold/dial/tool wait and only notifies instructions; it does
-  not automatically nudge or hang up. Duration precedence is pinned and invocation overrides fail;
-  later definition/tenant/application edits cannot reset the running call's deadline.
+- [x] Idle excludes opening/output/hold/dial/tool wait and only notifies instructions; it does
+  not automatically nudge or hang up.
+- [ ] Duration precedence is pinned and invocation overrides fail; later definition/tenant/
+  application edits cannot reset the running call's deadline.
 
 ## Manual verification
 
@@ -117,6 +119,21 @@ legacy ad-hoc room behavior, where a failed optional attachment is detached with
 room. The new focused test failed first because readiness remained armed, then passed; the
 complete Call Engine suite passed with 241 tests and 1 integration exclusion. Calls, Gateway,
 and Console remained green with 35, 66, and 56 tests respectively.
+
+The lifecycle owner now arms the configurable 15-second idle clock only while the initial agent
+is genuinely waiting on an attached caller. Real text or speech-start activity cancels and resets
+the clock. Opening playout, generated/fixed agent output, deterministic holding, and pending tool
+execution suspend it. A token claim rejects stale deliveries. Expiry starts one private
+engine-origin model turn describing the idle condition; the agent's instructions may choose
+speech, silence, or a permitted tool. Completing that idle turn does not rearm another nudge—only
+later caller activity permits a new idle interval. No automatic hangup or polling cadence exists.
+
+The initial idle test failed red because no timer was armed. Focused lifecycle/opening coverage
+passed with 14 tests and 0 failures, including opening completion, generated greeting, stale timer,
+long-tool wait, and speech-start boundaries. The complete Call Engine suite passed with 246 tests
+and 1 integration exclusion; Calls, Gateway, and Console remained green with 35, 66, and 56 tests.
+Dialing is not available in this milestone; its later implementation must use the same suspension
+boundary rather than treating transfer setup as caller silence.
 
 ## Specification review
 

@@ -776,6 +776,22 @@ cadence is added. Opening playback, agent output, holding, dialing, and tool-wai
 are not caller silence. Use actual conversation/media evidence without new local
 VAD/models; human-only calls must not depend on a nonexistent agent.
 
+The current planned-room lifecycle implements this as an explicit arm/suspend/activity state
+machine rather than elapsed wall time inferred by Room Authority. It arms only after readiness,
+an attached entry caller, an open opening-audio gate, completed first-message admission, no active
+caller speech or agent turn, and no pending tool invocation. Text acceptance and STT speech-start
+signals are real caller activity and cancel/reset the interval. Opening/output/tool work merely
+suspends the clock; it does not fabricate caller activity.
+
+Idle expiry carries a one-use timer token. Room Authority claims it before asking the active agent
+runtime to process a private engine-origin notification, so a cancelled/stale timer cannot become
+a caller-visible message or a competing model request. The notification explains only that no new
+caller input arrived and asks the agent to follow its instructions; it invents neither a caller
+utterance nor a disconnection. Once delivered, the lifecycle does not arm another idle interval
+until actual caller activity occurs. The agent can remain silent, speak through its ordinary
+output path, or invoke a tool it already has permission to use. Later dialing/transfer work must
+explicitly suspend the same lifecycle state before waiting on a destination.
+
 Long tools do not cause automatic periodic progress speech. Agent instructions
 control kickoff/results through the same agent and one coordinated voice while
 the approved background-tool conversation can continue. Possible music during

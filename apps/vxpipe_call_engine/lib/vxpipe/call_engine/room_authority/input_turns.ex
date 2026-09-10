@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
+    CallerIdle,
     ConnectionLifecycle,
     EventPublisher,
     State,
@@ -28,6 +29,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   def accept_text(command, caller, %State{} = state) do
     case ConnectionLifecycle.authorize_text(command, caller, state) do
       {:ok, capability} ->
+        state = CallerIdle.activity(state)
+
         case AgentOutput.interrupt(command, state) do
           {:ok, state} ->
             case TextCapability.respond(capability, command) do
@@ -90,6 +93,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
   defp begin_audio_turn(signal, connection_id, connection, state) do
     if connection.speech_to_text.turn == nil and is_binary(signal.text) do
+      state = CallerIdle.activity(state)
+
       turn = %{
         command_id: Id.generate(:command),
         id: Id.generate(:turn),

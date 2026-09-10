@@ -163,3 +163,30 @@
   password; no credential value was inspected or logged.
 - Caller-idle notification, duration-setting precedence before plan compilation, and file opening
   playback/cache remain pending.
+
+## 2026-09-10 — caller-idle notification
+
+- Added an explicit idle state machine to the existing `CallLifecycle` process. A 15-second timer
+  is armed only when Room Authority's focused `CallerIdle` policy reports a ready agent waiting on
+  an attached entry caller with no opening, active speech/output, or pending tool.
+- Real accepted text and STT `StartOfTurn` signals call the lifecycle activity boundary. Other
+  work suspends an armed interval without pretending the caller spoke. Timer tokens are claimed
+  once, so a cancelled timer delivered late is ignored.
+- Expiry submits a private engine-origin request to the active Agent Runtime. Its bounded prompt
+  states that no new caller input arrived and directs the agent to follow its configured
+  instructions. No participant turn is fabricated. Any reply follows ordinary text/TTS and tool
+  paths.
+- The lifecycle retains a delivered state after the idle-origin turn finishes, preventing an
+  automatic nudge loop. A new interval becomes possible only after real caller activity and the
+  resulting conversation returns to a waiting state.
+- The first wait-mode test failed red because attachment never armed an idle timer. The green
+  focused set then covered cancellation/rearm from text, stale delivery, one-shot notification,
+  generated greeting output, a handed-off blocking tool and its private completion, STT speech
+  start, and opening playout. The lifecycle/opening files passed 14 tests with 0 failures.
+- The complete Call Engine suite passed with 246 tests and 1 integration exclusion. Calls passed
+  35 tests, Gateway passed 66 tests with 4 integration exclusions, and Console passed 56 tests.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+  Root tests again stopped at Persistence database creation because this shell has no PostgreSQL
+  password; no credential value was inspected or logged.
+- Dialing/transfer does not exist yet; that later path must suspend idle timing while it waits.
+  Duration-setting precedence before plan compilation and file opening playback/cache remain.

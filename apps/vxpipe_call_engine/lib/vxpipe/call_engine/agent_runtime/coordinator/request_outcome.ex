@@ -6,6 +6,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest
   alias Vxpipe.CallEngine.Telemetry
 
+  @ordinary_request_kinds [:caller, :caller_idle, :greeting]
+
   @type completed_request ::
           {:completed, struct(), Vxpipe.CallEngine.AgentRuntime.Correlation.t()}
   @type outcome :: :advance | {:advance, completed_request()} | {:stop, atom()}
@@ -59,7 +61,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
     report_failure(request, reason, options)
 
     case request.kind do
-      kind when kind in [:caller, :greeting] ->
+      kind when kind in @ordinary_request_kinds ->
         :advance
 
       {:completion, continuation} ->
@@ -71,7 +73,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
   end
 
   defp commit_completion(%ActiveRequest{kind: kind}, _options)
-       when kind in [:caller, :greeting],
+       when kind in @ordinary_request_kinds,
        do: :advance
 
   defp commit_completion(
@@ -88,7 +90,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
     report_failure(request, reason, options)
 
     case request.kind do
-      kind when kind in [:caller, :greeting] ->
+      kind when kind in @ordinary_request_kinds ->
         :advance
 
       {:completion, continuation} ->

@@ -40,6 +40,48 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     end
   end
 
+  @spec waiting(pid()) :: :ok | {:error, :unavailable}
+  def waiting(lifecycle) when is_pid(lifecycle) do
+    case safe_call(lifecycle, :waiting) do
+      :ok -> :ok
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
+  @spec activity(pid()) :: :ok | {:error, :unavailable}
+  def activity(lifecycle) when is_pid(lifecycle) do
+    case safe_call(lifecycle, :activity) do
+      :ok -> :ok
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
+  @spec suspend(pid()) :: :ok | {:error, :unavailable}
+  def suspend(lifecycle) when is_pid(lifecycle) do
+    case safe_call(lifecycle, :suspend) do
+      :ok -> :ok
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
+  @spec claim_idle(pid(), reference()) :: :ok | {:error, :stale | :unavailable}
+  def claim_idle(lifecycle, token) when is_pid(lifecycle) and is_reference(token) do
+    case safe_call(lifecycle, {:claim_idle, token}) do
+      :ok -> :ok
+      {:error, :stale} -> {:error, :stale}
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
+  @spec dismiss_idle(pid(), reference()) :: :ok | {:error, :stale | :unavailable}
+  def dismiss_idle(lifecycle, token) when is_pid(lifecycle) and is_reference(token) do
+    case safe_call(lifecycle, {:dismiss_idle, token}) do
+      :ok -> :ok
+      {:error, :stale} -> {:error, :stale}
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
   @spec startup_failed(String.t(), atom()) ::
           :ok | {:ignored, :expired | :failed | :ready} | {:error, :unavailable}
   def startup_failed(incarnation_id, reason)
@@ -59,10 +101,14 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
          when is_integer(readiness_timeout_ms) and
                 readiness_timeout_ms > 0 <-
            Keyword.get(settings, :readiness_timeout_ms),
+         idle_timeout_ms when is_integer(idle_timeout_ms) and idle_timeout_ms > 0 <-
+           Keyword.get(settings, :idle_timeout_ms),
          {timer_module, timer_options} <- Keyword.get(settings, :timer, {ProcessTimer, []}),
          true <- timer?(timer_module, timer_options) do
       state = %{
         authority: nil,
+        idle: :inactive,
+        idle_timeout_ms: idle_timeout_ms,
         readiness: :pending,
         timer: {timer_module, timer_options},
         timers: %{},
@@ -96,6 +142,40 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
 
   def handle_call(:ready, _from, state), do: {:reply, :ok, state}
 
+  def handle_call(:waiting, _from, %{readiness: :ready, idle: :inactive} = state) do
+    state = state |> schedule(:idle, state.idle_timeout_ms) |> Map.put(:idle, :armed)
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:waiting, _from, state), do: {:reply, :ok, state}
+
+  def handle_call(:activity, _from, state) do
+    {:reply, :ok, state |> cancel(:idle) |> Map.put(:idle, :inactive)}
+  end
+
+  def handle_call(:suspend, _from, %{idle: :armed} = state) do
+    {:reply, :ok, state |> cancel(:idle) |> Map.put(:idle, :inactive)}
+  end
+
+  def handle_call(:suspend, _from, state), do: {:reply, :ok, state}
+
+  def handle_call({:claim_idle, token}, _from, %{idle: {:notified, token}} = state) do
+    {:reply, :ok, %{state | idle: {:delivered, token}}}
+  end
+
+  def handle_call({:claim_idle, _token}, _from, state) do
+    {:reply, {:error, :stale}, state}
+  end
+
+  def handle_call({:dismiss_idle, token}, _from, %{idle: {phase, token}} = state)
+      when phase in [:notified, :delivered] do
+    {:reply, :ok, %{state | idle: :inactive}}
+  end
+
+  def handle_call({:dismiss_idle, _token}, _from, state) do
+    {:reply, {:error, :stale}, state}
+  end
+
   def handle_call({:startup_failed, reason}, _from, %{readiness: :pending} = state) do
     state =
       state
@@ -113,7 +193,7 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   @impl true
   def handle_info({:vxpipe_call_lifecycle_timer, token, event}, state) do
     case Map.get(state.timers, event) do
-      %{token: ^token} -> {:noreply, fire(event, state)}
+      %{token: ^token} -> {:noreply, fire(event, token, state)}
       _missing_or_stale -> {:noreply, state}
     end
   end
@@ -149,14 +229,21 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     timer_module.cancel(timer.handle, timer_options)
   end
 
-  defp fire(:readiness, state) do
+  defp fire(:readiness, _token, state) do
     state
     |> Map.put(:readiness, :expired)
     |> remove_timer(:readiness)
     |> deliver(:readiness)
   end
 
-  defp fire(event, state), do: state |> remove_timer(event) |> deliver(event)
+  defp fire(:idle, token, state) do
+    state
+    |> Map.put(:idle, {:notified, token})
+    |> remove_timer(:idle)
+    |> deliver({:idle, token})
+  end
+
+  defp fire(event, _token, state), do: state |> remove_timer(event) |> deliver(event)
 
   defp deliver(state, event) do
     if is_pid(state.authority) do

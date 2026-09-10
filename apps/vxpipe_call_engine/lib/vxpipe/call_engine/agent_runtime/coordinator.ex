@@ -63,6 +63,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec caller_idle(GenServer.server(), SendText.t()) ::
+          :ok | {:error, :busy | :unavailable}
+  def caller_idle(coordinator, %SendText{} = command) do
+    GenServer.call(coordinator, {:caller_idle, command}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @spec interrupt(GenServer.server(), [History.identity()]) ::
           {:ok, [SendText.t()]} | {:error, :unavailable}
   def interrupt(coordinator, completed_turn_ids) when is_list(completed_turn_ids) do
@@ -142,6 +150,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   def handle_call({:fixed_greeting, _command, _text}, _from, %State{} = state) do
+    {:reply, {:error, :busy}, state}
+  end
+
+  def handle_call({:caller_idle, command}, _from, %State{current: nil} = state) do
+    case ActiveRequest.start_caller_idle(command, request_options(state)) do
+      {:ok, current} -> {:reply, :ok, %{state | current: current}}
+      {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
+    end
+  end
+
+  def handle_call({:caller_idle, _command}, _from, %State{} = state) do
     {:reply, {:error, :busy}, state}
   end
 

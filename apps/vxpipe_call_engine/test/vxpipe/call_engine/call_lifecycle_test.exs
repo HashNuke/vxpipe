@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleTest do
       incarnation_id: incarnation_id,
       call_lifecycle: [
         readiness_timeout_ms: 30_000,
+        idle_timeout_ms: 15_000,
         timer: {TestCallLifecycleTimer, [observer: self()]}
       ]
     ]

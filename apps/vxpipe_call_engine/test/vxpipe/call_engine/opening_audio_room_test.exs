@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     RoomAuthority,
     TestAgentRuntimeModelProvider,
     TestAudioOutputSink,
+    TestCallLifecycleTimer,
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
   }
@@ -98,6 +99,38 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     assert_receive {:DOWN, room_monitor, :process, _room_authority, :opening_audio_unavailable}
     assert room_monitor == attachment.room_monitor
+  end
+
+  test "starts caller-idle timing only after opening playout completes" do
+    configure_speech_runtime()
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               call_lifecycle: [
+                 readiness_timeout_ms: 30_000,
+                 idle_timeout_ms: 15_000,
+                 timer: {TestCallLifecycleTimer, [observer: self()]}
+               ]
+             )
+
+    assert_receive {:test_call_lifecycle_timer_scheduled, _maximum_timer, 60_000}
+    assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-opening-idle")
+    assert {:ok, _attachment} = CallEngine.attach_connection(command, sink)
+    assert_receive {:test_stt_transport_started, _stt_transport, _connection}
+    assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
+    assert_receive {:test_tts_control, ^tts_transport, _speak}
+    assert_receive {:test_tts_control, ^tts_transport, _flush}
+    refute_receive {:test_call_lifecycle_timer_scheduled, _idle_timer, 15_000}
+
+    complete_speech(tts_transport, sink, "opening-idle")
+    assert_eventually_open(plan)
+    assert_receive {:test_call_lifecycle_timer_scheduled, _idle_timer, 15_000}
   end
 
   test "rejects unsupported opening playback before registering a room" do

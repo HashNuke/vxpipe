@@ -24,6 +24,7 @@ config :vxpipe_calls, Vxpipe.Calls,
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   call_lifecycle: [
     readiness_timeout_ms: 30_000,
+    idle_timeout_ms: 15_000,
     timer: {Vxpipe.CallEngine.CallLifecycle.ProcessTimer, []}
   ],
   agent_runtime: [

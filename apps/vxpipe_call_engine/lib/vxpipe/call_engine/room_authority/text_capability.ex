@@ -35,6 +35,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TextCapability do
     AgentRuntimeCoordinator.generated_greeting(capability, command)
   end
 
+  @spec caller_idle(map(), struct()) :: :ok | {:error, term()}
+  def caller_idle(%{module: AgentRuntimeCoordinator, pid: capability}, command) do
+    AgentRuntimeCoordinator.caller_idle(capability, command)
+  end
+
+  def caller_idle(_capability, _command), do: {:error, :unavailable}
+
   @spec stop(State.t()) :: :ok | {:error, term()}
   def stop(%State{text_capability: %{module: AgentRuntimeCoordinator}}), do: :ok
 

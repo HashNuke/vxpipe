@@ -7,6 +7,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Telemetry
 
+  @ordinary_request_kinds [:caller, :caller_idle, :greeting]
+
   @spec apply(State.t(), [History.identity()], timeout()) ::
           {:ok, [SendText.t()], State.t()} | {:error, :unavailable, State.t()}
   def apply(%State{} = state, completed_turn_ids, timeout) when is_list(completed_turn_ids) do
@@ -31,7 +33,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
 
     case state.current do
       %ActiveRequest{kind: kind, command: %SendText{} = command}
-      when kind in [:caller, :greeting] ->
+      when kind in @ordinary_request_kinds ->
         [command | pending]
 
       %ActiveRequest{kind: {:completion, _continuation}} ->
@@ -46,7 +48,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
          %ActiveRequest{kind: kind, command: %SendText{} = command} = current,
          state
        )
-       when kind in [:caller, :greeting] do
+       when kind in @ordinary_request_kinds do
     send(state.owner, {:vxpipe_capability_failed, self(), command, :interrupted})
 
     Telemetry.model_request_stop(
@@ -68,6 +70,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
 
   defp settle_completion(nil, state, _timeout), do: {:ok, state}
   defp settle_completion(%ActiveRequest{kind: :caller}, state, _timeout), do: {:ok, state}
+  defp settle_completion(%ActiveRequest{kind: :caller_idle}, state, _timeout), do: {:ok, state}
   defp settle_completion(%ActiveRequest{kind: :greeting}, state, _timeout), do: {:ok, state}
 
   defp settle_completion(
