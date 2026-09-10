@@ -51,7 +51,7 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
   record the exact supported release/API before claiming dynamic catalog support.
 - [ ] Wire the verified ExMCP adapter through the integration owner; preserve its pinned
   profile/conformance evidence and enforce dependency direction.
-- [ ] Implement private scoped integration resolution/cache/discovery and data-backed binding
+- [x] Implement private scoped integration resolution/cache/discovery and data-backed binding
   validation without unbounded external atom/module creation.
 - [ ] Connect tools/call to background workers, complete private history, and safe model/client projections.
 - [ ] Test security at the effective network client, not only a configured URL string; isolate real network interoperability tests.
@@ -212,6 +212,15 @@ definition boundary has started or its specification has been reviewed.
   deterministic umbrella suite passes all 423 default-lane tests with one test case scheduled at a
   time and nine tagged network integrations excluded. Snapshot replacement/removal still does not
   revoke an active pinned credential generation.
+- [x] An isolated-BEAM churn probe now runs 100 unique tenant, endpoint, integration, generation,
+  remote-operation, local-alias, and schema-field identities through configuration, discovery,
+  catalog resolution, exact activation checkout, argument validation, and invocation. After an
+  equal warm-up it measures zero atom growth, zero module growth, and no external identity
+  convertible through `String.to_existing_atom/1`. The private endpoint is absent from inspected
+  configuration/catalog/plan/binding/owner values. Root formatting, warnings-as-errors, strict
+  Credo, and dependency checks pass; the serialized umbrella suite passes all 424 default-lane
+  tests with nine tagged integrations excluded. This proves the engine-owned data path through
+  runtime execution; the separate Jido model-projection acceptance check remains blocked.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

@@ -339,6 +339,13 @@ neither resets for a new HTTP response. Verify initialization with and without a
 server-issued session ID. No dependency or runtime adapter has been installed by this
 design decision.
 
+All remotely supplied integration, tenant, endpoint, generation, operation, alias, and schema
+identities remain binaries throughout configuration, discovery, plan resolution, exact activation
+checkout, argument validation, and invocation. None selects a BEAM module. Repeated infrastructure
+churn must therefore remain data churn: it may replace catalog values and supervised clients but
+must not create atoms or modules. Private endpoint selectors remain behind the integration boundary
+and are absent from resolved plans and inspectable activation state.
+
 Jido AI's current public tool registry expects Action modules and regenerates model
 schemas from them after request transformation. It also loses configured registry aliases
 in model projection. Direct ExMCP does not fix this separate model-tool interface gap.

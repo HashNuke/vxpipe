@@ -507,3 +507,30 @@ catalog store or retaining private configuration in inspectable scheduler state.
 
 Next: commit this catalog-lifecycle checkpoint. Live MCP use remains blocked on the supported Jido
 runtime data-tool interface.
+
+## 2026-09-10 — engine runtime identity churn
+
+- Audited existing evidence and found `vxpipe_mcp` already measured protocol catalog/connection
+  identity churn, while the Call Engine path had no equivalent proof across configured
+  integrations, discovery, resolved bindings, and activation-local invocation.
+- Red: the isolated-peer acceptance test failed because the engine probe did not exist. The first
+  probe attempt then exposed an invalid test assumption: a clean peer does not inherit umbrella
+  Mix configuration, so starting the complete Call Engine application correctly rejected its
+  missing application settings.
+- Green: the probe starts only the MCP runtime dependency it needs, owns test clients and
+  integration owners through a local `DynamicSupervisor`, and exercises 100 unique tenant,
+  endpoint, integration, configuration/credential/catalog generation, remote operation, local
+  alias, and schema-field strings. Each cycle discovers, resolves, checks out, validates, and
+  invokes the exact binding before supervised teardown.
+- An equal warm-up precedes measurement in the isolated BEAM. The measured pass reports exactly
+  zero atom growth, zero module growth, and no generated external value accepted by
+  `String.to_existing_atom/1`. A private endpoint selector is absent from inspection of the
+  configured integration, discovered catalog, resolved descriptor, tool binding, and owner state.
+- Focused verification passes 1 test; the complete Call Engine suite passes 209 tests with two
+  tagged integrations excluded. Root formatting, warnings-as-errors compilation, strict Credo,
+  and unused-dependency checks pass. The serialized umbrella suite passes all 424 default-lane
+  tests with nine tagged integrations excluded. This does not claim Jido model-tool projection:
+  that public API blocker remains unchanged.
+
+Next: commit this independent acceptance checkpoint, then continue the milestone audit without
+crossing the unresolved Jido runtime data-tool boundary.
