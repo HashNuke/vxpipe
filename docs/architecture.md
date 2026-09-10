@@ -179,6 +179,13 @@ observation and answer together; a failed one commits neither. Call Engine remai
 for retaining the completion lease until that successful result and for suppressing public
 caller/transcript projection.
 
+The package's model-provider boundary supports buffered generation and optional text streaming.
+Each streamed delta is size/count checked before a token-correlated, timeout-bounded handoff
+through the owning Session. Deltas remain provisional output; only the assembled normalized model
+response can commit conversation. Request cancellation terminates the streaming request worker and
+the Session ignores stale-token messages. ReqLLM-specific stream lifecycle/cleanup belongs to the
+production provider adapter rather than this provider-neutral loop.
+
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current

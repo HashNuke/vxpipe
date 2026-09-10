@@ -5,4 +5,12 @@ defmodule Vxpipe.AgentRuntime.ModelProvider do
 
   @callback generate(model :: term(), ModelRequest.t()) ::
               {:ok, ModelResponse.t()} | {:error, atom()}
+
+  @callback stream(
+              model :: term(),
+              ModelRequest.t(),
+              emit :: (String.t() -> :ok | {:error, atom()})
+            ) :: {:ok, ModelResponse.t()} | {:error, atom()}
+
+  @optional_callbacks stream: 3
 end

@@ -103,8 +103,9 @@ process or dependency is used.
    submission batches, blocking/non-blocking acknowledgement rounds, and accepted-work
    recovery after provider failure or cancellation are complete. Per-session tool-batch and
    accumulated-output bounds, the request deadline, and private engine-origin continuation
-   admission are also implemented. Remaining submit callback bounds, streaming, production
-   adapter behavior, and Call Engine lease integration remain pending.
+   admission are also implemented. Provider-neutral bounded text streaming is complete.
+   Remaining submit callback bounds, production ReqLLM adapter behavior, and Call Engine lease
+   integration remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -315,6 +316,15 @@ Implementation evidence:
   exist. Continuation tests and the complete package suite are green at 28 tests, 0 failures.
   Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks pass; umbrella tests
   stop before execution because the local PostgreSQL password is absent.
+- Checkpoint 2i adds an optional provider-neutral `stream/3` callback. It forwards only non-empty
+  text deltas through a token-correlated Session handoff, bounds bytes and event count before
+  forwarding, and treats all deltas as provisional. Only the final validated `ModelResponse`
+  enters the existing output/commit loop. Delta event inspection excludes text payloads.
+- Checkpoint 2i red evidence reported 4 focused failures: buffered generation was still selected
+  and the event-count setting was invalid. Streaming tests and the complete package suite are
+  green at 32 tests, 0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock
+  checks pass; umbrella tests stop before execution because the local PostgreSQL password is
+  absent. ReqLLM stream construction/materialization and transport cleanup remain checkpoint 3.
 
 ## Specification review
 

@@ -9,6 +9,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     ModelResponse,
     PendingContext,
     Request,
+    StreamBudget,
     ToolRegistry
   }
 
@@ -37,7 +38,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              pending_invocations,
              request.correlation
            ),
-         {:ok, response} <- generate_response(config.model_provider, config.model, model_request) do
+         {:ok, response} <- generate_response(config, model_request, output) do
       handle_response(
         response,
         conversation,
@@ -177,9 +178,12 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp model_tools(_registry, false), do: []
   defp model_tools(registry, true), do: ToolRegistry.model_tools(registry)
 
-  defp generate_response(model_provider, model, model_request) do
+  defp generate_response(config, model_request, output) do
     try do
-      case model_provider.generate(model, model_request) do
+      case provider_response(config, model_request, output) do
+        {:runtime_error, reason} ->
+          {:error, reason}
+
         {:ok, %ModelResponse{} = response} ->
           if ModelResponse.valid?(response) do
             {:ok, response}
@@ -197,6 +201,33 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
       _error -> {:error, :provider_unavailable}
     catch
       _kind, _reason -> {:error, :provider_unavailable}
+    end
+  end
+
+  defp provider_response(config, model_request, output) do
+    if function_exported?(config.model_provider, :stream, 3) do
+      stream_response(config, model_request, output)
+    else
+      config.model_provider.generate(config.model, model_request)
+    end
+  end
+
+  defp stream_response(config, model_request, output) do
+    remaining_output_bytes = config.maximum_output_bytes - IO.iodata_length(output)
+
+    budget =
+      StreamBudget.new(
+        remaining_output_bytes,
+        config.maximum_stream_events_per_round,
+        config.emit_text_delta
+      )
+
+    response =
+      config.model_provider.stream(config.model, model_request, &StreamBudget.emit(budget, &1))
+
+    case StreamBudget.outcome(budget) do
+      :ok -> response
+      {:error, reason} -> {:runtime_error, reason}
     end
   end
 

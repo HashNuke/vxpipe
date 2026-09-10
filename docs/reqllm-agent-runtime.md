@@ -252,6 +252,14 @@ with a successful terminal model response; failure leaves it uncommitted so Call
 the authoritative completion lease. Wiring lease acknowledgement to this result remains part of
 the Call Engine migration.
 
+The provider boundary now optionally streams text through a callback while returning the same
+canonical `ModelResponse` as buffered generation. A package-owned `StreamBudget` limits text bytes
+and event count for each provider round before forwarding a delta. The runner hands each delta to
+its Session with token correlation and a bounded acknowledgement, so cancellation cannot attach
+later output to a reused Session. Deltas are provisional and never mutate conversation; the final
+validated response alone enters the existing output and commit path. Event inspection hides text.
+The production ReqLLM adapter still needs to materialize its stream and prove transport cleanup.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

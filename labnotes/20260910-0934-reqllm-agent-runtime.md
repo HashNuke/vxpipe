@@ -403,3 +403,34 @@ Verification:
   password.
 - Submit admission reconciliation, streaming, production ReqLLM mapping, and Call Engine lease
   integration remain pending.
+
+## Implementation checkpoint 2i: bounded provider-neutral streaming
+
+Added a deterministic streaming provider and four tests before implementation. They require
+ordered provisional delta delivery followed by one canonical terminal response, no delta after
+request cancellation, rejection before forwarding a delta that exceeds the remaining output-byte
+budget, and rejection before forwarding beyond the configured per-round event count. The first
+run failed all four tests because RequestRunner selected buffered generation and Session rejected
+the new event-count setting.
+
+Added optional `ModelProvider.stream/3` without importing ReqLLM values into the loop contract.
+The callback receives a runtime emitter and must return the same normalized `ModelResponse` used by
+buffered providers. `StreamBudget` owns mutable byte/event counters through an isolated atomics
+reference, normalizes malformed callbacks/handoff failures, and prevents the offending delta from
+being emitted. It is recreated for each model round using the request's remaining output budget.
+
+Session supplies a token-correlated delta callback with a configurable bounded acknowledgement.
+It forwards active deltas as `text_delta` events and ignores stale messages after cancellation or
+request replacement. These events carry the required output text but their `Inspect` projection
+shows only kind and correlation. Deltas never update Conversation; `RequestRunner` still validates
+and commits only the final normalized response.
+
+Verification:
+
+- Focused streaming suite: 4 tests, 0 failures after the expected 4-test red run.
+- Complete `vxpipe_agent_runtime` suite: 32 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell has no local PostgreSQL
+  password.
+- Production ReqLLM stream creation/materialization, usage projection, transport cleanup,
+  submit-admission reconciliation, and Call Engine integration remain pending.

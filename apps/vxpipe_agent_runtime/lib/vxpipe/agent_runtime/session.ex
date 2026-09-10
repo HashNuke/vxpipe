@@ -79,8 +79,17 @@ defmodule Vxpipe.AgentRuntime.Session do
         commit_conversation(session, token, conversation, state.configuration.commit_timeout_ms)
       end
 
+      emit_text_delta = fn text ->
+        emit_text_delta(session, token, text, state.configuration.stream_event_timeout_ms)
+      end
+
       runner_options =
-        SessionConfiguration.runner_options(state.configuration, begin_submission, commit)
+        SessionConfiguration.runner_options(
+          state.configuration,
+          begin_submission,
+          commit,
+          emit_text_delta
+        )
 
       task =
         Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
@@ -132,6 +141,20 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   @impl true
+  def handle_info(
+        {:agent_runtime_text_delta, worker, token, text},
+        %{active_task: %{pid: worker}, active_token: token} = state
+      )
+      when is_binary(text) do
+    emit(
+      state.configuration.event_destination,
+      Event.new(:text_delta, state.correlation, %{text: text})
+    )
+
+    send(worker, {:agent_runtime_text_delta_emitted, token})
+    {:noreply, state}
+  end
+
   def handle_info(
         {:agent_runtime_begin_submission, worker, token},
         %{active_task: %{pid: worker}, active_token: token, submission_phase: :idle} = state
@@ -253,6 +276,16 @@ defmodule Vxpipe.AgentRuntime.Session do
       {:agent_runtime_committed, ^token} -> :ok
     after
       timeout_ms -> {:error, :commit_unavailable}
+    end
+  end
+
+  defp emit_text_delta(session, token, text, timeout_ms) do
+    send(session, {:agent_runtime_text_delta, self(), token, text})
+
+    receive do
+      {:agent_runtime_text_delta_emitted, ^token} -> :ok
+    after
+      timeout_ms -> {:error, :event_unavailable}
     end
   end
 
