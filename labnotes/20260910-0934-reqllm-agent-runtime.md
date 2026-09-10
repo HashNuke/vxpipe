@@ -131,3 +131,34 @@ and deterministic hold output is used until its terminal observation has been co
 Non-blocking invocations retain the approved unrelated-conversation behavior. See
 `docs/tool-execution-model.md` for states, races, cancellation, partial submission, multiple
 calls, transfer/shutdown, ownership, and migration checks.
+
+## Implementation checkpoint 1b: submit-only and pending-context contracts
+
+Reopened the provisional executor contract before beginning the loop. The focused red suite
+reported 11 tests with 8 expected failures: the old `execute/4` callback remained, pending
+invocation/context-source modules did not exist, and Session rejected the new source options.
+The replacement behavior exposes only `submit/4`, whose successful result confirms that the
+host started independent work; it cannot return an inline business result.
+
+Added a payload-free `PendingInvocation` value and `PendingContextSource.snapshot/3` host
+boundary. `PendingContext` invokes the source outside the Session GenServer, passes the source
+a timeout, enforces that timeout itself, and validates a bounded unique list before provider
+generation. Its projection cannot carry arguments, results, bindings, endpoints, credentials,
+or arbitrary maps. Source errors and malformed results are collapsed to safe runtime errors,
+and the provider is not called when authoritative pending state is unavailable.
+
+The first green implementation exposed that merely passing a timeout did not stop a stalled
+source callback. A focused regression test reported 3 tests with 1 expected failure; moving the
+source call into a linked temporary task with timeout shutdown made it green. Session shutdown
+also terminates this nested source work through the request-worker link.
+
+Verification:
+
+- `cd apps/vxpipe_agent_runtime && mix test`: 12 tests, 0 failures.
+- Umbrella `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+  `mix credo --strict`, and `mix deps.unlock --check-unused`: pass.
+- Umbrella `mix test`: stopped before test execution because PostgreSQL authentication needs a
+  password that is absent from this shell. No database is used by this package; the focused
+  owning-app suite is the available runtime evidence.
+- Repeated model/tool rounds, ReqLLM encoding, invocation workers, blocking admission, and
+  Call Engine migration remain deliberately outside this checkpoint.

@@ -1,10 +1,12 @@
 defmodule Vxpipe.AgentRuntime.Executor do
-  @moduledoc "The private tool-execution boundary implemented by a runtime host."
+  @moduledoc "The private submit-only tool boundary implemented by a runtime host."
 
-  @callback execute(
+  @type submission_error :: :rejected | :saturated | :unavailable
+
+  @callback submit(
               binding :: term(),
               arguments :: map(),
               context :: map(),
               invocation_id :: String.t()
-            ) :: {:ok, term()} | {:error, atom()}
+            ) :: :accepted | {:error, submission_error()}
 end

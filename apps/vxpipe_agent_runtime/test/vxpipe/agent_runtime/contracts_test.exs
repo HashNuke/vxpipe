@@ -1,7 +1,37 @@
 defmodule Vxpipe.AgentRuntime.ContractsTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.AgentRuntime.{Event, Request, Result, ToolDescriptor}
+  alias Vxpipe.AgentRuntime.{Event, Executor, PendingInvocation, Request, Result, ToolDescriptor}
+
+  test "defines a submit-only host executor contract" do
+    callbacks = Executor.behaviour_info(:callbacks)
+
+    assert {:submit, 4} in callbacks
+    refute {:execute, 4} in callbacks
+  end
+
+  test "constructs a payload-free pending invocation projection" do
+    assert {:ok, invocation} =
+             PendingInvocation.new(
+               invocation_id: "tool_call_1",
+               tool_name: "check_balance",
+               status: :running,
+               conversation_mode: :non_blocking,
+               source_turn_id: "turn_1"
+             )
+
+    assert invocation.invocation_id == "tool_call_1"
+    assert invocation.conversation_mode == :non_blocking
+
+    assert {:error, :invalid_status} =
+             PendingInvocation.new(
+               invocation_id: "tool_call_1",
+               tool_name: "check_balance",
+               status: :completed,
+               conversation_mode: :blocking,
+               source_turn_id: "turn_1"
+             )
+  end
 
   test "builds a tool descriptor while keeping its private binding out of inspection" do
     binding = %{credential: "not-model-visible", operation: "lookup_order"}

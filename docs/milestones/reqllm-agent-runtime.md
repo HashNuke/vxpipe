@@ -1,8 +1,7 @@
 # ReqLLM agent runtime
 
-Status: implementation in progress. Package/lifecycle foundation complete; its provisional
-executor contract is reopened for the selected submit-only model. Loop, provider adapter,
-Call Engine migration, and final evidence remain pending.
+Status: implementation in progress. Package contracts and lifecycle are complete. Loop,
+provider adapter, Call Engine migration, and final evidence remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -94,10 +93,9 @@ process or dependency is used.
 
 ## Migration checkpoints
 
-1. [Partial 2026-09-10] Add the child application and red-test its public descriptor, request,
-   result, event, executor, and session contracts with a deterministic model driver. Package,
-   values, provider seam, and lifecycle are complete; replace the provisional executor with
-   submit-only and pending-context-source contracts under the approved execution model.
+1. [Complete 2026-09-10] Add the child application and red-test its public descriptor,
+   request, result, event, submit-only executor, pending-context source, and session contracts
+   with a deterministic model driver.
 2. Implement the submit-only model/tool state machine: final response, accepted running
    acknowledgements, definite non-submission, multiple calls in model order, mixed text/tool
    output, commit barriers, bounded failure, and cancellation.
@@ -113,8 +111,7 @@ process or dependency is used.
 
 ## Implementation checklist
 
-- [ ] Finalize the standalone submit-only package contracts and supervised lifecycle. The
-  package/lifecycle subset is green; executor and context-source contracts remain pending.
+- [x] Finalize the standalone submit-only package contracts and supervised lifecycle.
 - [ ] Implement deterministic submit-only rounds, exact runtime-tool resolution, canonical
   running exchanges, streaming events, cancellation/commit barriers, and all declared bounds.
 - [ ] Move/refine the existing ReqLLM projection behind the new package and add focused plus
@@ -211,11 +208,23 @@ Implementation evidence:
   and `mix deps.unlock --check-unused` pass at the umbrella root. The umbrella `mix test`
   alias could not create `vxpipe_test` because this shell has no PostgreSQL password; it
   stopped before executing tests. No database is used by this package checkpoint.
-- The later execution-model decision supersedes the provisional `Executor.execute/4`
-  contract: all tools must be submitted to external Call Engine workers, bindings default to
-  blocking caller conversation, and Agent Runtime needs a pending-context source. The
-  package/lifecycle evidence remains valid, but checkpoint 1 is partial until those public
-  contracts are replaced and red/green verified.
+- The completed contract correction replaces provisional `Executor.execute/4` with
+  submit-only `Executor.submit/4`. The callback can only confirm acceptance or return a
+  bounded rejection category; it cannot return an inline business result.
+- `PendingContextSource.snapshot/3` supplies the host state, safe correlation, and a bounded
+  timeout. `PendingContext` runs the callback outside the session process, enforces that
+  timeout, rejects excessive/duplicate/invalid projections, and passes only validated
+  `PendingInvocation` values to the provider request. A source error, exception, exit, or
+  timeout fails safely without calling the model.
+- Red evidence: the expanded package suite initially reported 11 tests with 8 expected
+  failures because `submit/4`, pending values/source, and session configuration did not
+  exist. A separate timeout test then reported 3 tests with 1 expected failure while a
+  stalled callback was still unbounded. Green focused suite: 12 tests, 0 failures.
+- After the correction, umbrella `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix credo --strict`, and
+  `mix deps.unlock --check-unused` pass. Umbrella `mix test` again stopped before executing
+  tests because PostgreSQL authentication requires a password absent from this shell; the
+  database-free owning application suite is green.
 
 ## Specification review
 

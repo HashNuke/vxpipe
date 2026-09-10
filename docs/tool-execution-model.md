@@ -1,6 +1,6 @@
 # Tool execution model
 
-Date: 2026-09-10. Status: selected target; implementation pending.
+Date: 2026-09-10. Status: selected target; agent-runtime boundary implementation begun.
 
 ## Decision
 

@@ -1,6 +1,6 @@
 # ReqLLM agent runtime
 
-Date: 2026-09-10. Status: selected for an intermediate implementation milestone.
+Date: 2026-09-10. Status: implementation in progress; package contracts and lifecycle complete.
 
 ## Decision
 
@@ -195,6 +195,13 @@ streaming, cancellation, and existing adapter surfaces; Jido AI 2.3.0's Action-o
 projection; and Legion 0.5.0's agent, executor, prompt, tool, sandbox, and supervision
 contracts. This establishes API shape, not implementation correctness. The milestone's
 deterministic, tagged-provider, umbrella, and rendered-call gates remain unchecked.
+
+The first implementation checkpoint adds the standalone package values and session lifecycle.
+Its corrected executor exposes only `submit/4`; no runtime API can execute a tool inline.
+Before each currently implemented provider generation, the session retrieves a validated,
+unique, payload-free pending-invocation list through a timeout-enforced host source outside the
+session GenServer. The focused package suite has 12 tests and 0 failures. Repeated tool rounds,
+ReqLLM projection, and Call Engine adoption remain pending, so this is not runtime parity yet.
 
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
