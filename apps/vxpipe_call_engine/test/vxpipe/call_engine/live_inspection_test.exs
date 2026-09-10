@@ -176,7 +176,7 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
     resource_id = "inspection-definition-#{suffix}"
 
     definition_input = %{
-      schema_version: "20260910.01",
+      schema_version: "20260910.02",
       entry_caller: "caller",
       entry_receiver: "assistant",
       defaults: %{capabilities: %{model_inference: "test-model"}},

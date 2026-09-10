@@ -1,6 +1,6 @@
 # Opening audio and call lifecycle
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: in progress. Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Background tools](background-tool-conversation.md).
 Sources: [Opening audio](../../labnotes/20260905-0405-call-definition-design.md#optional-opening-audio-before-entry-reception--approved-startup-decision); [greetings](../../labnotes/20260905-0405-call-definition-design.md#first-message-behavior--approved-g7-decision); [timers](../../labnotes/20260905-0405-call-definition-design.md#startup-idle-tool-waiting-and-duration--approved-r27r30).
 
@@ -20,7 +20,8 @@ A caller hears optional configured opening audio before normal conversation. The
 ## Implementation checklist
 
 - [ ] Red-test opening input gating and playout completion, first-message modes, readiness/idle/duration clocks with controllable time/media fakes.
-- [ ] Define/validate the supported opening source encoding, allowed fetches/formats and safe failure behavior; record any required unresolved product choice before implementing it.
+- [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
+- [ ] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
 - [ ] Integrate opening gate, greeting modes, existing current-time tool and permitted hangup binding.
 - [ ] Implement pinned duration and correctly scoped readiness/idle events; keep timing/technical errors safe.
@@ -57,8 +58,12 @@ No wait music, voicemail speech, local VAD/models, mandatory notice/legal-compli
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Partial implementation evidence (2026-09-10): schema `20260910.02` accepts exactly
+`{"type":"text","text":"..."}` or `{"type":"file_url","url":"https://..."}`,
+rejects mixed/unknown/unsafe forms at their exact path, omits sensitive source values from
+routine inspection, and pins the typed value into `ResolvedCallPlan`. The focused compiler
+test passed with 2 tests and 0 failures after the expected missing-struct and schema-version
+red runs. The runtime outcome is not complete.
 
 ## Specification review
 

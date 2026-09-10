@@ -52,8 +52,11 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260910.01`; it adds a
-default-blocking conversation-admission policy to every tool binding. Only an explicit
+The definition-driven compiler's current schema is `20260910.02`; it adds an optional,
+closed `opening_audio` source that is pinned into the resolved call plan. A text source carries
+fixed text and a file source carries an HTTPS URL without embedded credentials or a fragment;
+configured values are omitted from routine struct inspection. The preceding `20260910.01`
+schema added a default-blocking conversation-admission policy to every tool binding. Only an explicit
 `"conversation_mode":"non_blocking"` permits later caller turns while the submitted
 operation remains pending. This is independent of execution placement: every operation is
 handed to an independently supervised Call Engine worker. The schema retains the pinned

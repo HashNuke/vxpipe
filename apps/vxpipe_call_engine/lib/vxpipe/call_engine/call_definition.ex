@@ -6,19 +6,21 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   alias Vxpipe.CallEngine.CallDefinition.{
     CallVariables,
     Capabilities,
+    OpeningAudio,
     Participant,
     ToolVisibility
   }
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260910.01"
+  @schema_version "20260910.02"
   @fields [
     :schema_version,
     :name,
     :entry_caller,
     :entry_receiver,
     :defaults,
+    :opening_audio,
     :call_variables,
     :participants,
     :tool_visibility,
@@ -34,6 +36,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :entry_caller,
     :entry_receiver,
     :default_capabilities,
+    :opening_audio,
     :call_variables,
     :participants,
     :tool_visibility,
@@ -49,6 +52,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           entry_caller: String.t(),
           entry_receiver: String.t(),
           default_capabilities: Capabilities.t(),
+          opening_audio: nil | OpeningAudio.t(),
           call_variables: CallVariables.t(),
           participants: %{String.t() => Participant.t()},
           tool_visibility: ToolVisibility.t(),
@@ -83,6 +87,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, entry_receiver} <-
            DefinitionValidation.identifier(receiver_input, code, message, ["entry_receiver"]),
          {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
+         {:ok, opening_audio} <- OpeningAudio.new(Map.get(input, :opening_audio)),
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
            DefinitionValidation.fetch(input, :participants, code, message, []),
@@ -105,6 +110,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          entry_caller: entry_caller,
          entry_receiver: entry_receiver,
          default_capabilities: defaults,
+         opening_audio: opening_audio,
          call_variables: call_variables,
          participants: participants,
          tool_visibility: tool_visibility,

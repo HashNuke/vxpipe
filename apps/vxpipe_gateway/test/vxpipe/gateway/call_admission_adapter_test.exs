@@ -93,7 +93,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     %ResolvedCallPlan{
       definition_id: unique_id("definition"),
       definition_revision: 1,
-      schema_version: "20260910.01",
+      schema_version: "20260910.02",
       tenant_id: tenant_id,
       actor_id: unique_id("actor"),
       call_id: unique_id("call"),
@@ -101,6 +101,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       transport: :web,
       entry_caller: "caller",
       entry_receiver: "assistant",
+      opening_audio: nil,
       participants: %{"support" => participant},
       call_variables: %CallVariables{},
       tool_visibility: ToolVisibility.hidden(),

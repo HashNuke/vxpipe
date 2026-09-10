@@ -1,8 +1,8 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 11 complete and 13 incomplete. Milestone 12, remote MCP
-tools in a live call, is the next implementation slice. Its protocol, policy, catalog, and binding
-foundations exist; the completed ReqLLM runtime now supplies the model/tool execution prerequisite.
+Status: 24 milestone specifications: 12 complete and 12 incomplete. Milestone 13, opening audio
+and call lifecycle, is the current implementation slice. Its public opening-source contract is
+pinned; playback gating, greetings, and lifecycle timers remain in progress.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

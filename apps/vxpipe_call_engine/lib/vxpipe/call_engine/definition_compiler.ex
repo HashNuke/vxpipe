@@ -59,6 +59,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          transport: invocation.transport,
          entry_caller: definition.entry_caller,
          entry_receiver: definition.entry_receiver,
+         opening_audio: definition.opening_audio,
          participants: participants,
          call_variables: call_variables,
          tool_visibility: tool_visibility,

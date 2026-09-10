@@ -122,7 +122,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           "order" => %{"id" => "order-demo-1001"}
         },
         definition: %{
-          schema_version: "20260910.01",
+          schema_version: "20260910.02",
           name: "Development sample",
           entry_caller: "caller",
           entry_receiver: "assistant",
