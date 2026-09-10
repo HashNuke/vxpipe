@@ -2385,7 +2385,13 @@ Provider-driven spoken barge-in is implemented by the later checkpoint below.
 The detailed decision and verification evidence are in
 [`model-inference-turn.md`](model-inference-turn.md).
 
-### Implemented model tool-invocation slice
+### Superseded model tool-invocation slice
+
+This historical slice executed tools inside the old model request task. It has been superseded:
+definition-driven agents now use Agent Runtime and independently supervised invocation workers.
+The optional legacy `CreateRoom` model-inference preset remains text-only, advertises no tools,
+and rejects unsolicited provider tool calls without execution or public tool lifecycle events.
+The numbered behavior below records the removed slice and is not current runtime behavior.
 
 The next slice closes the first model/action/model loop without moving tool
 execution into RTVI or a provider adapter:

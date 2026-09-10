@@ -77,66 +77,32 @@ Public tool events are hidden by default and are filtered to configured metadata
 detail at the gateway before delivery. The trusted Console sample selects full visibility and
 prefills a synthetic read-only order so this path can be exercised on the shared Phoenix port.
 
-The runtime foundation now includes an application-owned Jido instance, a finite
-Jido AI agent module, synchronous prompt/Action configuration before readiness, and
-a serialized Vxpipe host-Action dispatcher. An engine-owned coordinator now admits
-one request at a time, bounds queued turns and output, translates Jido stream/tool/
-terminal events onto the existing capability contract, and excludes selected
-interrupted turns from later model projections while requesting physical Jido-context
-cleanup. Deterministic tests cover both a controllable runtime boundary and a real Jido
-Action round. An activation supervisor
-starts the dispatcher, AgentServer, and coordinator as one configured readiness unit,
-restarts that set together once after an abnormal child failure, and leaves no child
-running after its retry budget is exhausted. A participant supervisor now owns each
-participant authority and, for an agent, that activation unit; either deliberate participant
-shutdown or an exhausted activation ends the whole participant subtree without restarting
-the room. Trusted hosts can now call `Vxpipe.CallEngine.start_call/2` with a compiled plan;
-the initial subset starts only the entry caller and receiver, routes ordinary
-turns and host Actions through the receiver's owned coordinator, and follows coordinator
-restarts through a stable activation reference. Plan-selected speech combines public profile
-options with application-owned secrets, transports, and bounds before startup. The repository
-sample exercises this path; legacy `CreateRoom` presets remain available to embedded hosts.
+Definition-driven agent participants run through the standalone `Vxpipe.AgentRuntime`; the Call
+Engine no longer starts or depends on Jido. Each activation owns one request supervisor,
+coordinator, `Tool.InvocationSupervisor`, invocation registry, and Agent Runtime Session under one
+bounded one-for-all restart budget. A participant supervisor owns that activation unit, so
+participant shutdown or an exhausted activation restart ends that participant subtree without
+restarting the room.
 
-Actions explicitly declared with `execution: :background` submit finite work to bounded,
-temporary workers under the active agent's supervision subtree. Jido receives a correlated
-`running` acknowledgement only after worker startup, so it can complete that conversational
-request without waiting for the work. One bounded coordinator mailbox serializes the eventual
-result as private engine-origin context after caller work; it never fabricates participant
-speech. Chat-provider compatibility may encode that final non-model input with a user wire
-role, but its retained engine provenance and room projection keep it distinct from caller
-speech. Caller interruption does not cancel accepted work, while agent transfer or shutdown
-terminates its local workers. A submitted timeout is reported as an unknown outcome and is
-never retried automatically. The development definition exposes the deterministic
-`prepare_background_report` Action for exercising this lifecycle.
+Every model-requested host or Call Variables operation is submitted to a bounded temporary worker
+under the active agent. `Tool.Invocation` owns one attempt, result bound, and deadline. The
+authoritative registry retains accepted work through leased and explicitly consumed completion,
+exposes only payload-free pending status, reconciles identical invocation IDs, and bounds active
+capacity plus consumed-ID tombstones. No action executes inline in the Session, model request task,
+or coordinator.
 
-Migration to the standalone Agent Runtime has begun behind that live Jido path. The neutral
-`Tool.InvocationSupervisor` owns capacity-bounded temporary workers, and each
-`Tool.Invocation` owns one attempt, result bound, and deadline. Even a host tool whose legacy
-definition says `inline` executes in this worker path. The authoritative invocation registry
-now retains accepted work through leased and explicitly acknowledged completion, exposes only
-payload-free pending statuses, reconciles identical submissions by invocation ID, and bounds both
-active capacity and consumed-ID tombstones. Thin package adapters delegate submission to that
-registry and translate only its safe statuses into Agent Runtime pending context. Remote MCP
-handling and activation selection remain pending, so live calls do not use this
-substrate yet. Resolved host bindings now compile into deterministic Agent Runtime descriptors:
-only the exact name, description, and JSON input schema are model-visible, while the host action
-and default-blocking or explicit-non-blocking conversation mode remain in the private invocation
-binding. Permission-derived Call Variables descriptors use that same path and are default-blocking;
-their private binding reaches the room-scoped variables process from the invocation worker. Both
-conversation modes still use the same supervised submission path.
+An omitted tool-binding conversation mode is blocking; explicit `non_blocking` permits later caller
+turns while the same supervised worker runs. A blocking invocation finishes the current
+acknowledgement round, then later caller input receives a deterministic hold without entering the
+model. Non-blocking turns include the committed running acknowledgement and current safe pending
+projection. Terminal outcomes enter the Session once as private engine-origin continuations.
+Caller interruption stops stale speech/model output but does not cancel accepted tool workers;
+participant/room shutdown terminates their local execution subtree.
 
-A narrow migration coordinator can now issue an ordinary Agent Runtime request from a separately
-supervised task while continuing to receive and project streamed sentence output through the
-existing capability contract. It bounds queued caller work, avoids replaying already-streamed text
-from the canonical final response, and cancels a rejected stream before advancing its queue. The
-activation supervisor does not select this coordinator yet; interruption and removal of the live
-Jido path remain pending.
-
-The coordinator's conversation-admission boundary now consults the invocation registry before
-starting caller work. Any unconsumed default-blocking invocation returns the fixed bounded holding
-response through the normal capability text contract without entering the model. Explicitly
-non-blocking pending work leaves admission open and appears in Agent Runtime's existing safe pending
-projection. Live activation selection remains pending.
+The optional legacy `CreateRoom` model-inference preset remains available to embedded hosts only as
+a text-generation compatibility path. It advertises no tools and rejects an unsolicited provider
+tool response as invalid without executing it or projecting a tool lifecycle. Tool-enabled calls
+use a compiled definition and Agent Runtime.
 
 Terminal tool results are now leased before caller work and submitted through the Session's private
 engine-origin continuation API. Successful committed continuation acknowledges and removes the

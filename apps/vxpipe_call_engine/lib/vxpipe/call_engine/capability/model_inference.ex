@@ -6,7 +6,6 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Capability.SentenceAccumulator
   alias Vxpipe.CallEngine.Provider.ModelInference.Message
-  alias Vxpipe.CallEngine.Tool.{Call, Context, Executor}
 
   @call_timeout 5_000
   @maximum_system_prompt_bytes 32_768
@@ -39,35 +38,25 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
 
   @impl true
   def init(options) do
-    with {:ok, tool_executor} <-
-           Executor.new(
-             Keyword.get(options, :tools, []),
-             Keyword.get(options, :maximum_tool_result_bytes, 16_384)
-           ) do
-      state = %{
-        current: nil,
-        history: [],
-        maximum_context_turns: Keyword.fetch!(options, :maximum_context_turns),
-        maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
-        maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
-        maximum_tool_rounds: Keyword.get(options, :maximum_tool_rounds, 2),
-        owner: Keyword.fetch!(options, :owner),
-        participant_id: Keyword.fetch!(options, :participant_id),
-        pending: :queue.new(),
-        provider: Keyword.fetch!(options, :provider),
-        request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
-        system_prompt: Keyword.fetch!(options, :system_prompt),
-        task_supervisor: Keyword.fetch!(options, :task_supervisor),
-        tool_executor: tool_executor
-      }
+    state = %{
+      current: nil,
+      history: [],
+      maximum_context_turns: Keyword.fetch!(options, :maximum_context_turns),
+      maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
+      maximum_pending_requests: Keyword.fetch!(options, :maximum_pending_requests),
+      owner: Keyword.fetch!(options, :owner),
+      participant_id: Keyword.fetch!(options, :participant_id),
+      pending: :queue.new(),
+      provider: Keyword.fetch!(options, :provider),
+      request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
+      system_prompt: Keyword.fetch!(options, :system_prompt),
+      task_supervisor: Keyword.fetch!(options, :task_supervisor)
+    }
 
-      if valid_configuration?(state) do
-        {:ok, state}
-      else
-        {:stop, :invalid_configuration}
-      end
+    if valid_configuration?(state) do
+      {:ok, state}
     else
-      _error -> {:stop, :invalid_configuration}
+      {:stop, :invalid_configuration}
     end
   end
 
@@ -179,7 +168,6 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
     {provider_module, provider_config} = state.provider
     capability = self()
     request_id = make_ref()
-    tool_context = tool_context(command, state)
 
     try do
       task =
@@ -189,12 +177,7 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
             provider_config,
             messages,
             capability,
-            request_id,
-            state.owner,
-            command,
-            state.tool_executor,
-            tool_context,
-            state.maximum_tool_rounds
+            request_id
           )
         end)
 
@@ -247,6 +230,9 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
 
   defp finish_request({:streamed, {:error, reason}}, state),
     do: fail_current(normalize_stream_error(reason), state)
+
+  defp finish_request({:streamed, {:tool_calls, _calls}}, state),
+    do: fail_current(:invalid_response, state)
 
   defp finish_request(_result, state), do: fail_current(:provider_unavailable, state)
 
@@ -318,26 +304,15 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
          provider_config,
          messages,
          capability,
-         request_id,
-         owner,
-         command,
-         tool_executor,
-         tool_context,
-         maximum_tool_rounds
+         request_id
        ) do
     try do
-      run_model_loop(
+      provider_request(
         provider_module,
         provider_config,
         messages,
         capability,
-        request_id,
-        owner,
-        command,
-        tool_executor,
-        tool_context,
-        maximum_tool_rounds,
-        0
+        request_id
       )
     rescue
       _exception -> {:buffered, {:error, :provider_unavailable}}
@@ -346,74 +321,10 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
     end
   end
 
-  defp run_model_loop(
-         provider_module,
-         provider_config,
-         messages,
-         capability,
-         request_id,
-         owner,
-         command,
-         tool_executor,
-         tool_context,
-         maximum_tool_rounds,
-         round
-       ) do
-    definitions = Executor.definitions(tool_executor)
-
-    result =
-      provider_request(
-        provider_module,
-        provider_config,
-        messages,
-        definitions,
-        capability,
-        request_id
-      )
-
-    case result do
-      {mode, {:tool_calls, calls}} when round < maximum_tool_rounds ->
-        with :ok <- complete_provider_round(mode, capability, request_id),
-             {:ok, continuation} <-
-               execute_tool_calls(owner, capability, command, calls, tool_executor, tool_context) do
-          assistant = %Message{role: :assistant, content: "", tool_calls: calls}
-
-          run_model_loop(
-            provider_module,
-            provider_config,
-            messages ++ [assistant | continuation],
-            capability,
-            request_id,
-            owner,
-            command,
-            tool_executor,
-            tool_context,
-            maximum_tool_rounds,
-            round + 1
-          )
-        else
-          {:error, reason} -> {mode, {:error, reason}}
-        end
-
-      {mode, {:tool_calls, _calls}} ->
-        {mode, {:error, :tool_round_limit}}
-
-      final ->
-        final
-    end
-  end
-
-  defp complete_provider_round(:buffered, _capability, _request_id), do: :ok
-
-  defp complete_provider_round(:streamed, capability, request_id) do
-    GenServer.call(capability, {:stream_round_complete, request_id}, @call_timeout)
-  end
-
   defp provider_request(
          provider_module,
          provider_config,
          messages,
-         definitions,
          capability,
          request_id
        ) do
@@ -422,57 +333,10 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
         GenServer.call(capability, {:stream_chunk, request_id, chunk}, @call_timeout)
       end
 
-      {:streamed, provider_module.stream(provider_config, messages, definitions, emit)}
+      {:streamed, provider_module.stream(provider_config, messages, [], emit)}
     else
-      {:buffered, provider_module.generate(provider_config, messages, definitions)}
+      {:buffered, provider_module.generate(provider_config, messages, [])}
     end
-  end
-
-  defp execute_tool_calls(owner, capability, command, calls, executor, context)
-       when is_list(calls) and calls != [] do
-    Enum.reduce_while(calls, {:ok, []}, fn
-      %Call{} = call, {:ok, messages} ->
-        send(owner, {:vxpipe_capability_tool_started, capability, command, call})
-
-        case Executor.execute(executor, call, context) do
-          {:ok, result} ->
-            send(owner, {:vxpipe_capability_tool_completed, capability, command, call, result})
-            {:cont, {:ok, messages ++ [tool_result_message(call, result)]}}
-
-          {:error, reason} ->
-            send(owner, {:vxpipe_capability_tool_failed, capability, command, call, reason})
-            result = %{"error" => Atom.to_string(reason)}
-            {:cont, {:ok, messages ++ [tool_result_message(call, result)]}}
-        end
-
-      _invalid, _accumulator ->
-        {:halt, {:error, :invalid_response}}
-    end)
-  end
-
-  defp execute_tool_calls(_owner, _capability, _command, _calls, _executor, _context),
-    do: {:error, :invalid_response}
-
-  defp tool_result_message(call, result) do
-    %Message{
-      role: :tool,
-      content: JSON.encode!(result),
-      name: call.name,
-      tool_call_id: call.id
-    }
-  end
-
-  defp tool_context(command, state) do
-    %Context{
-      tenant_id: command.tenant_id,
-      room_id: command.room_id,
-      incarnation_id: command.incarnation_id,
-      agent_participant_id: state.participant_id,
-      source_participant_id: command.participant_id,
-      connection_id: command.connection_id,
-      command_id: command.id,
-      correlation_id: command.correlation_id
-    }
   end
 
   defp provider_streaming?(provider_module, provider_config) do
@@ -529,7 +393,6 @@ defmodule Vxpipe.CallEngine.Capability.ModelInference do
       is_integer(state.maximum_context_turns) and state.maximum_context_turns > 0 and
       is_integer(state.maximum_pending_requests) and state.maximum_pending_requests >= 0 and
       is_integer(state.maximum_output_bytes) and state.maximum_output_bytes > 0 and
-      is_integer(state.maximum_tool_rounds) and state.maximum_tool_rounds > 0 and
       is_integer(state.request_timeout_ms) and state.request_timeout_ms > 0
   end
 

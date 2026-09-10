@@ -1290,3 +1290,26 @@ The complete Call Engine suite passes 221 tests with 1 tagged integration exclus
 `787975`. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
 pass. Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM
 password; no credential source was inspected.
+
+## Implementation checkpoint 4ag: retire inline compatibility tools
+
+The remaining generic `Tool.Executor` was still live through the optional legacy
+`Capability.ModelInference` preset. Added a focused test before implementation: a provider returned
+an unsolicited tool request after receiving an empty advertised definition list, and the capability
+incorrectly emitted `tool_started`, proving it could still attempt inline execution. The test passed
+after removing the executor/model-loop coupling and always calling the provider with no tools.
+
+The compatibility capability now retains only text generation, bounded history/queue/output,
+streaming, cancellation, and safe failure. A provider tool response is invalid rather than a tool
+invocation. A second streaming test initially received `provider_unavailable`; the explicit
+streaming tool-response classifier now reports the same `invalid_response` as the buffered path.
+A room-level test proves no public tool lifecycle event is projected. Deleted obsolete positive
+inline-tool and interrupt-cancels-tool scenarios, then removed `Tool.Executor` and its owning tests.
+Tool-enabled calls now require a compiled definition and the selected Agent Runtime worker path.
+
+The focused compatibility capability/room suites pass 16 tests. The complete Call Engine suite
+passes 215 tests with 1 tagged integration exclusion at seed `678417`. Updated the Call Engine
+README, durable tool-execution decision, and architecture's old tool slice to describe current and
+superseded behavior accurately. Umbrella format, warnings-as-errors compilation, strict Credo, and
+unused-lock checks pass. Umbrella `mix test` stops before test execution at the unchanged absent
+PostgreSQL SCRAM password; no credential source was inspected.

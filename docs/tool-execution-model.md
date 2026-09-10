@@ -230,11 +230,11 @@ running-result pair and invocation ID.
 
 ## Migration and verification
 
-The current Call Engine has `execute` and `submit` paths and tool definitions marked `inline`
-or `background`. Migration must remove that behavioral split only after submit-only tests are
-green. The existing activation-owned `BackgroundSupervisor`, completion-race handling, bounded
-mailbox, and private continuation behavior should be reused and renamed where “background” no
-longer distinguishes a subset of tools.
+The migration removed the old `execute`/`submit` split, Jido dispatcher, and background-only
+completion protocol after submit-only tests were green. The selected definition-driven runtime
+has one activation-owned invocation supervisor, registry, worker, and private-continuation path.
+The optional legacy `CreateRoom` model-inference preset is now text-only: it advertises no tools
+and rejects unsolicited provider tool calls without execution.
 
 Keep responsibilities split while migrating:
 

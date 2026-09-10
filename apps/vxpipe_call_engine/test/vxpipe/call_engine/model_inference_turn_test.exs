@@ -10,17 +10,13 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     AgentTurnInterrupted,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
-    ToolCallCompleted,
-    ToolCallCancelled,
     ToolCallStarted,
     TextOutput
   }
 
   alias Vxpipe.CallEngine.Provider.ModelInference.Message
   alias Vxpipe.CallEngine.TestModelInferenceProvider
-  alias Vxpipe.CallEngine.TestBlockingTool
   alias Vxpipe.CallEngine.Tool.Call
-  alias Vxpipe.CallEngine.Tool.CurrentTime
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -140,8 +136,7 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 7}}
   end
 
-  test "projects a tool lifecycle and model continuation in the originating turn" do
-    enable_tools()
+  test "rejects an unsolicited tool call without projecting a public tool lifecycle" do
     room_id = unique_id("room")
     {room, participant} = start_attached_room(room_id)
     command = send_command(room, participant, "turn-tool", "What time is it?")
@@ -150,33 +145,18 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert :ok = CallEngine.send_text(command)
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
-    assert_receive {:test_model_inference_request, request, _messages, [definition]}
-    assert definition.name == "get_current_time"
+    assert_receive {:test_model_inference_request, request, _messages}
 
     send(request, {:test_model_inference_reply, {:tool_calls, [call]}})
 
     assert_receive {:vxpipe_event,
-                    %ToolCallStarted{
+                    %AgentTurnFailed{
                       sequence: 3,
                       correlation_id: "turn-tool",
-                      tool_call_id: "tool-1",
-                      name: "get_current_time",
-                      arguments: %{}
+                      reason: :invalid_response
                     }}
 
-    assert_receive {:vxpipe_event,
-                    %ToolCallCompleted{
-                      sequence: 4,
-                      tool_call_id: "tool-1",
-                      result: %{"timezone" => "UTC"}
-                    }}
-
-    assert_receive {:test_model_inference_request, continuation, messages, [_definition]}
-    assert Enum.at(messages, -1).role == :tool
-    send(continuation, {:test_model_inference_reply, {:ok, "It is currently noon UTC."}})
-
-    assert_receive {:vxpipe_event, %TextOutput{sequence: 5, text: "It is currently noon UTC."}}
-    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 6}}
+    refute_receive {:vxpipe_event, %ToolCallStarted{}}
   end
 
   test "keeps non-immediate typed input queued behind the active model turn" do
@@ -209,41 +189,6 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
                       %Message{role: :assistant, content: "first answer"},
                       %Message{role: :user, content: "second"}
                     ]}
-  end
-
-  test "interrupts an executing tool and settles its public lifecycle" do
-    Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
-    on_exit(fn -> Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer) end)
-    enable_tools([TestBlockingTool])
-
-    room_id = unique_id("room")
-    {room, participant} = start_attached_room(room_id)
-    current = send_command(room, participant, "turn-tool", "Wait for me.")
-    call = %Call{id: "tool-wait", name: "wait_for_test", arguments: %{}}
-
-    assert :ok = CallEngine.send_text(current)
-    assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
-    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
-    assert_receive {:test_model_inference_request, provider, _messages, [_definition]}
-    send(provider, {:test_model_inference_reply, {:tool_calls, [call]}})
-    assert_receive {:vxpipe_event, %ToolCallStarted{sequence: 3, tool_call_id: "tool-wait"}}
-    assert_receive {:test_blocking_tool_started, tool_task}
-    monitor = Process.monitor(tool_task)
-
-    replacement = send_command(room, participant, "turn-replacement", "Continue.")
-    assert :ok = CallEngine.send_text(replacement)
-    assert_receive {:DOWN, ^monitor, :process, ^tool_task, _reason}
-    assert_receive {:vxpipe_event, %ToolCallCancelled{sequence: 4, tool_call_id: "tool-wait"}}
-
-    assert_receive {:vxpipe_event,
-                    %AgentTurnInterrupted{sequence: 5, correlation_id: "turn-tool"}}
-
-    assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 6}}
-    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 7}}
-    assert_receive {:test_model_inference_request, next_provider, _messages, [_definition]}
-    send(next_provider, {:test_model_inference_reply, {:ok, "Continuing."}})
-    assert_receive {:vxpipe_event, %TextOutput{sequence: 8, text: "Continuing."}}
-    assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 9}}
   end
 
   defp start_attached_room(room_id) do
@@ -310,23 +255,6 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
       settings
       |> Keyword.fetch!(:model_inference)
       |> Keyword.update!(:provider_options, &Keyword.put(&1, :streaming, true))
-
-    Application.put_env(
-      :vxpipe_call_engine,
-      Vxpipe.CallEngine.Application,
-      Keyword.put(settings, :model_inference, model_inference)
-    )
-  end
-
-  defp enable_tools(tools \\ [CurrentTime]) do
-    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-
-    model_inference =
-      settings
-      |> Keyword.fetch!(:model_inference)
-      |> Keyword.put(:tools, tools)
-      |> Keyword.put(:maximum_tool_result_bytes, 4_096)
-      |> Keyword.put(:maximum_tool_rounds, 2)
 
     Application.put_env(
       :vxpipe_call_engine,

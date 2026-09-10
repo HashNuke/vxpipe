@@ -741,6 +741,19 @@ Implementation evidence:
   Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass.
   Umbrella `mix test` stops before execution at the unchanged absent PostgreSQL SCRAM password;
   no credential source was inspected.
+- Checkpoint 4ag removes the last inline model-tool execution path. A red compatibility-capability
+  test first observed an unsolicited tool request emitting `tool_started`; the retained legacy
+  `CreateRoom` model-inference preset is now text-only, always advertises an empty tool list, and
+  classifies buffered or streamed tool responses as invalid without executing or publishing a tool
+  lifecycle. The orphaned generic `Tool.Executor` and its tests are deleted. Current tool-enabled
+  definition-driven calls therefore have one execution path: Agent Runtime submits every accepted
+  invocation to an independently supervised Call Engine worker. Focused legacy capability/room
+  coverage passes 16 tests; the complete Call Engine suite passes 215 tests with 1 integration
+  exclusion at seed `678417`. The Call Engine README, architecture history, and tool-execution
+  decision now distinguish the selected runtime from the text-only compatibility preset. Umbrella
+  format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
+  `mix test` stops before execution at the unchanged absent PostgreSQL SCRAM password; no credential
+  source was inspected.
 
 ## Specification review
 
