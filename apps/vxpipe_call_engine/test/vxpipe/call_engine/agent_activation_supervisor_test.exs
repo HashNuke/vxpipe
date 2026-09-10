@@ -92,6 +92,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
 
     assert AgentActivationSupervisor.whereis_child(activation_id, :remote_mcp) == first_owner
     refute inspect(:sys.get_state(first_owner)) =~ private_value
+    refute inspect(:sys.get_state(activation)) =~ private_value
 
     first_monitors = monitor_children(first)
     Process.exit(first_owner, :kill)

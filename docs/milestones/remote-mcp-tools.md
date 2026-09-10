@@ -144,6 +144,10 @@ definition boundary has started or its specification has been reviewed.
   its authorization bindings. Host-only activations retain the original four-child topology.
   The activation owns only its checked-out bindings; the application-scoped connection cache and
   any reusable protocol client remain separately supervised.
+- [x] The integration owner monitors every deduplicated protocol client. Losing a client fails the
+  owner closed with `:connection_lost`, so its one-for-all activation rebuilds rather than retaining
+  a dead handle. Both owner and activation-supervisor inspection redact private client
+  configuration nested in their runtime/startup state.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

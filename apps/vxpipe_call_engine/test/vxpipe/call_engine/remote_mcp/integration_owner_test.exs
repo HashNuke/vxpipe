@@ -77,6 +77,29 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert length(invocations(client)) == 1
   end
 
+  test "fails the binding owner closed when its protocol client exits" do
+    client = client!([])
+    {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+
+    owner =
+      start_supervised!(
+        {IntegrationOwner,
+         activation_id: "activation-connection-loss",
+         tools: %{"customer_lookup" => binding},
+         integrations: catalog,
+         connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+         protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+      )
+
+    assert_receive {:test_remote_mcp_opened, _key, _config}
+    client_monitor = Process.monitor(client)
+    owner_monitor = Process.monitor(owner)
+
+    assert :ok = stop_supervised(Agent)
+    assert_receive {:DOWN, ^client_monitor, :process, ^client, _reason}
+    assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :connection_lost}
+  end
+
   defp client!(responses) do
     start_supervised!({Agent, fn -> %{responses: responses, invocations: []} end})
   end

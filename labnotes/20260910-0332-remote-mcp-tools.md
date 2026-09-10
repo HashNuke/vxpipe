@@ -206,6 +206,29 @@ Next: the plan startup path still rejects remote bindings because Jido cannot ye
 exact dynamic names and schemas through a supported public interface. Continue with independent
 security/lifecycle checks that do not pretend to lift that blocker.
 
+## 2026-09-10 — fail-closed protocol client loss
+
+- Audited the activation supervisor's restart arguments for private-data exposure. The nested
+  `Integration` record's project-owned Inspect implementation excludes `client_config`; an
+  activation-level assertion confirms the private sentinel is absent from inspected supervisor
+  state as well as owner state.
+- Found a separate lifecycle defect: a runtime binding stored the protocol client PID returned at
+  checkout, but the separately supervised MCP connection subtree can replace that client. The
+  binding owner neither monitored the PID nor refreshed it, so later calls would retain a dead
+  handle.
+- Red: terminated the fake protocol client after a successful exact checkout and required the
+  binding owner to end with `:connection_lost`. The client ended while the owner remained alive.
+- Green: the owner now monitors each deduplicated connection client and terminates closed when a
+  known monitor reports `:DOWN`. Under agent activation this feeds the already-proven one-for-all
+  restart, which performs a fresh exact catalog checkout and connection lookup before serving
+  more tool calls. Unknown process messages remain ignored.
+- The complete Call Engine child passes 192 tests with two tagged integrations excluded. Root
+  formatting, warnings-as-errors compilation, strict Credo, unused-dependency detection, and the
+  deterministic full umbrella suite are green.
+
+Next: the remaining milestone blocker is projecting these exact runtime bindings through a
+supported Jido-owned loop without generating modules or using private APIs.
+
 ## 2026-09-10 — synchronous HTTP response correlation
 
 - Repeated the Vxpipe wire-failure test and found that the test server's wrong-ID response could be

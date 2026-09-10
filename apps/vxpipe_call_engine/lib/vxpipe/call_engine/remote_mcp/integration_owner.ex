@@ -15,12 +15,13 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
   @binding_timeout_ms 5_000
 
   @derive {Inspect, only: [:binding_count]}
-  @enforce_keys [:bindings, :binding_count]
+  @enforce_keys [:bindings, :binding_count, :connection_monitors]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
           bindings: %{String.t() => RuntimeBinding.t()},
-          binding_count: non_neg_integer()
+          binding_count: non_neg_integer(),
+          connection_monitors: %{reference() => Vxpipe.MCP.ConnectionKey.t()}
         }
 
   def start_link(options) do
@@ -76,8 +77,14 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
          true <- Code.ensure_loaded?(protocol) and function_exported?(protocol, :call_tool, 4),
          {:ok, prepared} <- prepare(tools, integrations),
          {:ok, connections} <- open_connections(prepared, connection_provider),
+         {:ok, connection_monitors} <- monitor_connections(connections),
          bindings <- runtime_bindings(prepared, connections, protocol) do
-      {:ok, %__MODULE__{bindings: bindings, binding_count: map_size(bindings)}}
+      {:ok,
+       %__MODULE__{
+         bindings: bindings,
+         binding_count: map_size(bindings),
+         connection_monitors: connection_monitors
+       }}
     else
       _invalid -> {:stop, :invalid_configuration}
     end
@@ -90,6 +97,17 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
       :error -> {:reply, {:error, :unknown_tool}, state}
     end
   end
+
+  @impl true
+  def handle_info({:DOWN, reference, :process, _pid, _reason}, %__MODULE__{} = state) do
+    if Map.has_key?(state.connection_monitors, reference) do
+      {:stop, :connection_lost, state}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info(_message, state), do: {:noreply, state}
 
   defp binding(owner, local_name) do
     GenServer.call(owner, {:binding, local_name}, @binding_timeout_ms)
@@ -188,6 +206,19 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
       }
 
       {entry.name, binding}
+    end)
+  end
+
+  defp monitor_connections(connections) do
+    Enum.reduce_while(connections, {:ok, %{}}, fn {key, connection}, {:ok, monitors} ->
+      case GenServer.whereis(Connection.client(connection)) do
+        client when is_pid(client) ->
+          reference = Process.monitor(client)
+          {:cont, {:ok, Map.put(monitors, reference, key)}}
+
+        nil ->
+          {:halt, {:error, :connection_lost}}
+      end
     end)
   end
 end
