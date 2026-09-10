@@ -168,6 +168,7 @@ defmodule Vxpipe.MCP.TelemetryTest do
 
     {:ok, key} =
       ConnectionKey.new(
+        scope: :application,
         integration_id: "telemetry-#{suffix}",
         credential_generation: "generation"
       )

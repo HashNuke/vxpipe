@@ -43,6 +43,7 @@ defmodule Vxpipe.MCP.FaultClient do
     suffix = System.unique_integer([:positive, :monotonic])
 
     ConnectionKey.new(
+      scope: :application,
       integration_id: "wire-failure-#{fault}-#{suffix}",
       credential_generation: "fixture"
     )

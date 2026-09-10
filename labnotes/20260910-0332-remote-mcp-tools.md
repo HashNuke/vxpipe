@@ -44,3 +44,23 @@
 Next: define the safe resolved MCP tool/catalog records and tenant-first whole-record
 resolution, then pin only public schema/generation selectors into the immutable call plan.
 Private endpoints and credentials must remain behind the runtime integration owner.
+
+## 2026-09-10 — tenant-scoped protocol clients
+
+- Audited `Vxpipe.MCP.ConnectionKey` before building the tenant integration resolver. Its key
+  contained only integration ID and credential generation, which allowed two tenants choosing
+  the same labels to reuse one registered ExMCP client and its session.
+- Red: a lifecycle test opened the same integration/generation label for `tenant-a` and
+  `tenant-b`; both handles returned the same owner/client. A second test showed that missing
+  or inconsistent scope options were accepted.
+- Green: connection keys now require a closed application or tenant scope. Tenant scope embeds
+  the bounded trusted tenant ID in registry equality; application scope rejects a tenant ID,
+  tenant scope requires one, and unknown/malformed options fail closed. Reference/conformance
+  clients and deterministic fixtures explicitly select application scope.
+- Verification: the focused lifecycle file passes 6 tests; the complete MCP child passes
+  32 tests with zero failures and three tagged network integrations excluded. No endpoints,
+  credentials, headers, tenant IDs, or integration IDs were added to telemetry.
+
+Next: resolve tenant-first whole integration records, reject fallback when a tenant record is
+present but invalid/missing the selected operation, and pin only the selected public descriptor
+and safe generation identity into the call plan.

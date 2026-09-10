@@ -21,6 +21,33 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     refute inspect(first) =~ "authorization"
   end
 
+  test "never shares a connection between tenant scopes" do
+    suffix = System.unique_integer([:positive, :monotonic])
+    integration_id = "records-#{suffix}"
+
+    tenant_a = tenant_key("tenant-a", integration_id)
+    tenant_b = tenant_key("tenant-b", integration_id)
+    close_on_exit([tenant_a, tenant_b])
+
+    assert {:ok, first} = open(tenant_a, "Bearer tenant-a-private")
+    assert {:ok, second} = open(tenant_b, "Bearer tenant-b-private")
+
+    refute Connection.owner(first) == Connection.owner(second)
+    refute Connection.client(first) == Connection.client(second)
+  end
+
+  test "requires one explicit well-formed connection scope" do
+    base = [integration_id: "records", credential_generation: "generation-one"]
+
+    assert {:error, :invalid_connection_key} = ConnectionKey.new(base)
+
+    assert {:error, :invalid_connection_key} =
+             ConnectionKey.new([scope: :tenant] ++ base)
+
+    assert {:error, :invalid_connection_key} =
+             ConnectionKey.new([scope: :application, tenant_id: "tenant-a"] ++ base)
+  end
+
   test "retires the complete scoped connection subtree" do
     key = key("retired")
     close_on_exit([key])
@@ -92,8 +119,21 @@ defmodule Vxpipe.MCP.ConnectionsTest do
 
     {:ok, key} =
       ConnectionKey.new(
+        scope: :application,
         integration_id: "orders-#{suffix}",
         credential_generation: generation
+      )
+
+    key
+  end
+
+  defp tenant_key(tenant_id, integration_id) do
+    {:ok, key} =
+      ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: tenant_id,
+        integration_id: integration_id,
+        credential_generation: "generation-one"
       )
 
     key

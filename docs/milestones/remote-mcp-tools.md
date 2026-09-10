@@ -107,6 +107,10 @@ definition boundary has started or its specification has been reviewed.
   exact participant/tool path instead of raising. Focused compiler tests pass 11/11 and the
   call-engine child passes 182 tests with two tagged integrations excluded. This establishes
   the authoring boundary only; scoped catalog resolution and live execution remain unchecked.
+- [x] ExMCP connection keys require an explicit application or tenant scope. Tenant identity
+  participates in registry/cache identity, and a deterministic lifecycle test proves two
+  tenants with equal integration and credential-generation labels receive distinct supervised
+  client subtrees. The MCP child passes 32 tests with three tagged integrations excluded.
 - [ ] Resolve and pin an authorized tenant/application catalog entry into the immutable plan.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 

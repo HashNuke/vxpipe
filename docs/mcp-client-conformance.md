@@ -22,8 +22,10 @@ starting unrelated development voice-provider configuration. The task itself sta
 
 ## Internal public API
 
-- `Vxpipe.MCP.ConnectionKey.new/1` constructs the bounded resolved-integration and
-  credential-generation identity.
+- `Vxpipe.MCP.ConnectionKey.new/1` constructs an explicit application or tenant scope plus
+  bounded resolved-integration and credential-generation identity. Tenant keys include the
+  trusted tenant ID, so equal integration/generation labels cannot share a client or session
+  across tenants.
 - `Vxpipe.MCP.Connections.open/3`, `lookup/1`, and `close/1` own production HTTPS session
   lifecycle. `open_loopback_test/3` is a distinct loopback-only fixture entry and cannot be
   selected by a production configuration flag.

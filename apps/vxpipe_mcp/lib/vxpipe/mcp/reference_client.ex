@@ -29,6 +29,7 @@ defmodule Vxpipe.MCP.ReferenceClient do
     suffix = System.unique_integer([:positive, :monotonic])
 
     ConnectionKey.new(
+      scope: :application,
       integration_id: "everything-reference-#{suffix}",
       credential_generation: @fixture_version
     )

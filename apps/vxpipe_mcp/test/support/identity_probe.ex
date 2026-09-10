@@ -47,6 +47,7 @@ defmodule Vxpipe.MCP.IdentityProbe do
 
     {:ok, key} =
       ConnectionKey.new(
+        scope: :application,
         integration_id: "integration-#{index}",
         credential_generation: "generation-#{index}"
       )

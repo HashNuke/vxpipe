@@ -74,6 +74,7 @@ defmodule Vxpipe.MCP.ConformanceClient do
     suffix = System.unique_integer([:positive, :monotonic])
 
     ConnectionKey.new(
+      scope: :application,
       integration_id: "official-conformance-#{suffix}",
       credential_generation: @harness_version
     )
