@@ -28,6 +28,19 @@ defmodule Vxpipe.MCP.WireFailureTest do
     end
   end
 
+  test "assigns a request-scoped progress token to a tool call" do
+    assert {:error, :remote_error} = invoke(:remote_error)
+    request = FaultServer.take_request("tools/call")
+
+    assert %{
+             "params" => %{
+               "_meta" => %{"progressToken" => progress_token}
+             }
+           } = request
+
+    assert is_integer(progress_token) and progress_token > 0
+  end
+
   defp invoke(fault) do
     server = start_supervised!({FaultServer, fault: fault, owner: self()})
     FaultClient.invoke(FaultServer.endpoint(server), fault)

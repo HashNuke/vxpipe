@@ -4,7 +4,7 @@ defmodule Vxpipe.MCP.FaultClient do
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, Discovery, Invocation}
 
   @default_limit 262_144
-  @default_deadline_ms 500
+  @default_deadline_ms 5_000
 
   def invoke(endpoint, fault, opts \\ []) when is_binary(endpoint) and is_atom(fault) do
     deadline_ms = Keyword.get(opts, :deadline_ms, @default_deadline_ms)

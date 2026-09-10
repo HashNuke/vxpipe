@@ -17,6 +17,12 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
     assert options[:retry_policy] == []
     assert options[:reconnect] == true
     assert options[:headers] == [{"authorization", "Bearer private"}]
+
+    assert options[:security] == %{
+             trusted_origins: ["https://mcp.example.test"],
+             trusted_hosts: []
+           }
+
     assert options[:max_request_bytes] == 262_144
     assert options[:max_response_bytes] == 262_144
     assert options[:max_stream_buffer_bytes] == 262_144
@@ -68,9 +74,7 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
 
   test "constructs plaintext transport only through the loopback test API" do
     assert {:ok, options} =
-             ClientOptions.build_loopback_test(
-               endpoint: "http://127.0.0.1:4321/rpc"
-             )
+             ClientOptions.build_loopback_test(endpoint: "http://127.0.0.1:4321/rpc")
 
     assert options[:url] == "http://127.0.0.1:4321/rpc"
     assert options[:reconnect] == false
@@ -84,8 +88,6 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
     assert reconnecting_options[:reconnect] == true
 
     assert {:error, :loopback_required} =
-             ClientOptions.build_loopback_test(
-               endpoint: "http://mcp.example.test/rpc"
-             )
+             ClientOptions.build_loopback_test(endpoint: "http://mcp.example.test/rpc")
   end
 end

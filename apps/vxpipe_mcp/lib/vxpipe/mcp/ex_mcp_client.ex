@@ -24,7 +24,11 @@ defmodule Vxpipe.MCP.ExMCPClient do
 
   @impl true
   def call_tool(client, name, arguments, timeout) do
-    params = %{"name" => name, "arguments" => arguments}
+    params = %{
+      "name" => name,
+      "arguments" => arguments,
+      "_meta" => %{"progressToken" => System.unique_integer([:positive, :monotonic])}
+    }
 
     client
     |> ExMCP.Client.make_request(

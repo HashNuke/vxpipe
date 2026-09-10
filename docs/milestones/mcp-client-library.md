@@ -1,12 +1,14 @@
 # MCP client integration and conformance
 
-Status: in progress on a maintained ExMCP fork. The exact dependency/profile, bounded all-or-nothing discovery,
-pre-submission validated invocation, scoped supervised connection contracts, two unmodified
-official scenarios, corrected recovery fixture, and Everything-server interoperability are
-implemented. Separate fork branches now address ExMCP 1.3.0's cumulative SSE budget,
-per-client credential-origin trust, fragmented-event parsing, and raw client diagnostics.
-Publishing and pinning the `vxp` integration branch and rerunning the end-to-end gates remain;
-the separate Jido runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
+Status: in progress with the maintained ExMCP fork published and pinned. The exact
+dependency/profile, bounded all-or-nothing discovery, pre-submission validated invocation,
+scoped supervised connection contracts, two unmodified official scenarios, corrected
+recovery fixture, and Everything-server interoperability are implemented. Separate
+published fork branches address ExMCP 1.3.0's cumulative SSE budget, per-client
+credential-origin trust, fragmented-event parsing, and raw client diagnostics. The umbrella
+locks the `vxp` integration branch at `2d31d26`. Milestone-wide operational visibility
+remains; the separate Jido runtime-tool interface blocker belongs to the live-MCP milestone,
+not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
 Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [loop/tool-binding decision](../jido-tool-execution.md); [approved remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
@@ -71,7 +73,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 
 ## Implementation checklist
 
-- [ ] Verify and pin an ExMCP release against the selected profile and project-owned
+- [x] Verify and pin a maintained ExMCP revision against the selected profile and project-owned
   security, identity, size-limit, timeout and no-resubmission requirements.
 - [x] Red-test the smallest `vxpipe_mcp` contract, then add ExMCP to the owning internal
   library with its lockfile; keep Jido/domain dependencies out of this child.
@@ -100,7 +102,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   unbounded loop or falsely complete catalog; partial bindings cannot be invoked.
 - [x] Oversized compressed/chunked/SSE responses stop incrementally at the configured limit;
   timeout/disconnect retains an honest unknown outcome after submission.
-- [ ] Credentials are absent from diagnostics/status; redirects, changed DNS/private
+- [x] Credentials are absent from diagnostics/status; redirects, changed DNS/private
   addresses and credential forwarding obey production policy.
 - [x] Test-only loopback settings cannot be selected through production integration config.
 - [x] Repeatedly register and retire bounded test catalogs; externally supplied identifiers
@@ -110,7 +112,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 - [x] Initialization completes before discovery with and without a server-issued session ID;
   sessions/credentials do not cross integration generations and reconnect never repeats an
   uncertain invocation.
-- [ ] Break/resume a response stream: the original deadline and cumulative byte budget still
+- [x] Break/resume a response stream: the original deadline and cumulative byte budget still
   apply across responses, progress events and reconnects.
 
 ## Manual verification
@@ -144,7 +146,8 @@ milestone. Passing this checkpoint does not resolve Jido AI's runtime-tool inter
 
 Implementation evidence:
 
-- The `vxpipe_mcp` child pins ExMCP 1.3.0 and owns no Jido/domain dependency. Its fixed
+- The `vxpipe_mcp` child pins the maintained `HashNuke/ex_mcp` `vxp` branch at
+  `2d31d26` and owns no Jido/domain dependency. Its fixed
   production client profile accepts verified HTTPS only and selects MCP `2025-11-25`.
 - `Vxpipe.MCP.Discovery` obtains every page through the narrow protocol boundary under one
   absolute deadline and aggregate decoded-JSON budget. It rejects repeated cursors and
@@ -154,12 +157,15 @@ Implementation evidence:
   decoded size across pages, malformed page shapes, duplicate identities, and the page cap.
   Dependency failures become the credential-free `:discovery_failed` category rather than
   exposing raw diagnostics.
-- A synchronous churn test creates 250 unique endpoint hosts, integration IDs, credential
-  generations, tool names, and schema revisions, opening and retiring each supervised
-  connection. BEAM atom and loaded-module growth remain below a fixed five-item ceiling
-  rather than scaling with the supplied identities. Same-named tools in two catalogs also
-  resolve only from the catalog value explicitly supplied by the caller; there is no global
-  remote-name registry in this library.
+- An isolated peer-VM churn test makes two non-overlapping 500-identity passes over endpoint
+  hosts, integration IDs, credential generations, tool names, and schema revisions, opening
+  and retiring each supervised connection. The first pass stabilizes application startup;
+  within the second pass, the first 250 identities warm every path before the final 250 are
+  measured. BEAM atom and loaded-module growth remain below a fixed five-item ceiling, and
+  every measured identifier remains data rather than an atom. Isolation keeps concurrent
+  umbrella test-module loading out of the VM-global counts. Same-named tools in two catalogs
+  also resolve only from the catalog value explicitly supplied by the caller; there is no
+  global remote-name registry in this library.
 - Effective loopback wire tests cover server JSON-RPC failures, method-not-found responses,
   malformed JSON, and wrong correlation IDs through the supervised ExMCP client. Remote and
   unsupported errors become `:remote_error`; malformed and mismatched responses preserve the
@@ -167,15 +173,16 @@ Implementation evidence:
 - Effective 1 KiB response-limit tests reject content encoding entirely and observe
   `:response_too_large` for oversized chunked JSON and POST SSE bodies. A delayed response
   beyond a 100 ms deadline and a server-side disconnect both return `:outcome_unknown`.
-  All five post-submission failures emit one tool call and no retry. Cumulative accounting
-  across resumed streams remains a separate unchecked gate.
+  All five post-submission failures emit one tool call and no retry.
 - A corrected pinned recovery fixture with a 5,000 ms invocation deadline and a server
   `retry: 6000` instruction returns `:outcome_unknown` at the original deadline without a
   reconnect or another tool submission. The same fixture delivered 300 individually bounded
-  progress messages totaling 339,790 bytes of decoded JSON after reconnection; the invocation
-  still succeeded despite the configured 262,144-byte response and stream-buffer limits.
-  ExMCP's SSE buffer is bounded only while a frame is incomplete and is reset after every
-  complete event, so release 1.3.0 cannot satisfy the cumulative stream budget contract.
+  progress messages totaling 339,790 bytes of decoded JSON after reconnection; ExMCP 1.3.0
+  accepted them despite the configured 262,144-byte limits. The maintained fork replaces
+  that failed release behavior. A Vxpipe wire fixture now holds the resumed stream open,
+  sends two individually sub-limit progress events whose aggregate exceeds 1,024 bytes, and
+  observes the request fail within one second rather than at its 5,000 ms deadline. One
+  request-scoped progress token correlates both events and only one `tools/call` is observed.
 - `Vxpipe.MCP.Invocation` selects only from that complete catalog and delegates schema work
   to `Vxpipe.MCP.ArgumentValidator`. Default/explicit JSON Schema 2020-12 and canonical
   explicit Draft 7 arguments are checked without casts or remote resolvers before submission;
@@ -197,8 +204,8 @@ Implementation evidence:
   runner and tagged integration lane reproduce MCP `2025-11-25` initialization and one
   discovered/validated `tools/call`; the full scenario matrix and internal API are recorded in
   [MCP client conformance profile](../mcp-client-conformance.md).
-- The focused behavior test was observed red before implementation and is green with the
-  default child suite (25 tests, 0 failures, three integration tests excluded). The opt-in
+- The focused behavior tests were observed red before implementation and are green with the
+  default child suite (27 tests, 0 failures, three integration tests excluded). The opt-in
   lane passes all three wrapper tests: the two unmodified harness scenarios each score 1/1,
   the corrected recovery fixture scores 3/3, and the Everything probe returns its expected
   tool and result. This is partial conformance evidence, not a blanket claim.
@@ -212,6 +219,15 @@ Implementation evidence:
   issues a session ID, publishes an explicit Draft 7 `echo` schema, and returns the expected
   result through the standalone Vxpipe probe. The earlier date-matched server package was
   rejected because its locked SDK supports only revisions through `2025-06-18`.
+- The fork-adoption checkpoint passes root formatting, warnings-as-errors compilation,
+  strict Credo over 299 files, the unused-dependency check, and the final MCP suite at 27/0
+  (three network integrations excluded). One complete umbrella run also passed every child
+  before the recovery fixture's test-only SRP refactor. Subsequent exact-state root runs
+  exposed a pre-existing call-engine archive assertion that intermittently misses its
+  five-second test deadline; the same test passes alone. That project-owned root-suite issue
+  remains open rather than being represented as a completed common gate. Tests used an
+  isolated build directory only after the ordinary shared test build reproducibly stopped
+  making progress while compiling Mint. No sample UI changed in this checkpoint.
 
 ## Specification review
 

@@ -54,8 +54,11 @@ defmodule Vxpipe.MCP.ClientOptions do
       when is_binary(host) and host != "" ->
         :ok
 
-      {:ok, %URI{scheme: scheme}} when scheme != "https" -> {:error, :https_required}
-      _invalid -> {:error, :invalid_endpoint}
+      {:ok, %URI{scheme: scheme}} when scheme != "https" ->
+        {:error, :https_required}
+
+      _invalid ->
+        {:error, :invalid_endpoint}
     end
   end
 
@@ -96,6 +99,7 @@ defmodule Vxpipe.MCP.ClientOptions do
       transport: :http,
       url: endpoint,
       headers: Keyword.get(config, :headers, []),
+      security: endpoint_security(endpoint),
       allowed_private_hosts: Keyword.get(config, :allowed_private_hosts, []),
       protocol_mode: :legacy_only,
       protocol_version: @protocol_version,
@@ -105,5 +109,10 @@ defmodule Vxpipe.MCP.ClientOptions do
     ]
 
     Keyword.merge(base, transport_options)
+  end
+
+  defp endpoint_security(endpoint) do
+    {:ok, origin} = ExMCP.Security.TokenHandler.extract_origin(endpoint)
+    %{trusted_origins: [origin], trusted_hosts: []}
   end
 end

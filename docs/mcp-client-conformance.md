@@ -6,7 +6,9 @@ MCP client certification.
 ## Pinned inputs
 
 - Protocol: MCP `2025-11-25`, selected through ExMCP's `:legacy_only` profile.
-- Client dependency: ExMCP `1.3.0`, locked by the umbrella.
+- Client dependency: the maintained `HashNuke/ex_mcp` `vxp` branch, locked by the
+  umbrella at `2d31d26270024c123de8b7c80833fcf4d089e3a5`. The branch is based on
+  upstream `master` at `56880c686404082d5340ff42d5295f12e08eff73`.
 - Official client harness: `@modelcontextprotocol/conformance@0.1.16`, tag commit
   `21a9a2febd7100d7c17ac1021ee7f2ed9f66a1e0`.
 - Additional Everything server fixture: `@modelcontextprotocol/server-everything@2026.8.31`,
@@ -35,6 +37,9 @@ starting unrelated development voice-provider configuration. The task itself sta
 - Invocation maps JSON-RPC error objects to `:remote_error`; malformed payloads and mismatched
   response IDs become `:outcome_unknown` after submission. These categories do not include
   remote messages, and the effective wire tests observe exactly one `tools/call` per case.
+- Each client receives an exact-origin security policy derived from its own validated
+  endpoint; broad trusted-host defaults are removed. Each `tools/call` carries a unique
+  progress token so resumed shared-stream events debit the matching request budget.
 - The same wire fixture verifies the configured 1 KiB response boundary: content-encoded
   responses are rejected, and oversized chunked JSON and POST SSE responses fail with the
   dependency's incremental `:response_too_large` cause. Vxpipe reports `:outcome_unknown`
@@ -48,7 +53,7 @@ those inputs.
 
 ## Official client scenario matrix
 
-Run date: 2026-09-09. The harness lists these scenarios for MCP `2025-11-25`.
+Run date: 2026-09-10. The harness lists these scenarios for MCP `2025-11-25`.
 
 | Scenario | Status | Evidence or boundary |
 | --- | --- | --- |
@@ -79,6 +84,7 @@ From the umbrella root:
 bin/test-mcp-conformance
 bin/test-mcp-sse-recovery
 bin/test-mcp-everything
+cd apps/vxpipe_mcp && mix test test/vxpipe/mcp/wire_limit_test.exs
 ```
 
 The harness creates a fresh loopback server per scenario and appends its URL to the Vxpipe
@@ -94,6 +100,13 @@ of the original result over the resumed GET stream. It scores 3/3 with no warnin
 unmodified run is retained as a harness defect because accepting `2025-03-26` would weaken
 the product's exact-version gate.
 
+The deterministic wire-limit test sends two individually valid progress events after
+`Last-Event-ID: event-2` recovery. Each decoded event is below the 1,024-byte limit, but
+their total exceeds it. The resumed stream is deliberately held open and the invocation
+fails within one second of the second event, before its 5,000 ms deadline, proving that
+cumulative accounting—not stream closure or ordinary timeout—stopped the request. The
+fixture also observes exactly one `tools/call`.
+
 The Everything runner clones and verifies exact tag commit `a40bc270`, installs its locked
 dependencies, builds only the Everything workspace, and starts its Streamable HTTP endpoint
 on an ephemeral loopback port. Vxpipe negotiates `2025-11-25` with a server-issued session,
@@ -106,14 +119,12 @@ commit `0155af3` locks MCP SDK `1.19.1`, whose newest supported revision is `202
 Using that package would test fallback negotiation instead of Vxpipe's selected protocol,
 so it was inspected and rejected rather than represented as a pass.
 
-## Blocking compatibility findings
+## Maintained-fork resolution of compatibility findings
 
 ExMCP 1.3.0 and upstream `master` at `56880c6` read HTTP credential trust from the
 application-global `:ex_mcp, :security` configuration rather than from each client. A global
-union of tenant origins would weaken per-integration credential binding, so production
-credentialed remote sessions remain blocked until this is resolved through a public
-dependency boundary. The loopback conformance successes carry no credentialed-production
-claim.
+union of tenant origins would weaken per-integration credential binding. This finding
+blocked production credentialed sessions on the released dependency.
 
 Two further release-level gaps were reproduced against the public client path:
 
@@ -127,10 +138,11 @@ Two further release-level gaps were reproduced against the public client path:
   cannot establish the stronger credential-free diagnostic contract at the public wrapper
   boundary alone.
 
-The recovery deadline itself behaves correctly: with Vxpipe's 5,000 ms invocation deadline
+The released dependency's recovery deadline itself behaved correctly: with Vxpipe's
+5,000 ms invocation deadline
 and a server-provided `retry: 6000`, the submitted call returned the bounded
 `:outcome_unknown` result at the original deadline and did not reconnect or resubmit the
-tool. The cumulative byte half of that acceptance gate remains failed.
+tool. The cumulative byte half of that acceptance gate remained failed on ExMCP 1.3.0.
 
 Vxpipe will not work around these gaps by sharing a global union of tenant trust, installing
 a host-wide Logger filter, disabling the required SSE path, or introducing a second MCP
@@ -152,8 +164,10 @@ must associate complete response events with their JSON-RPC request IDs and prog
 with request-scoped progress tokens, retain those budgets across reconnects, and close the
 affected work when its budget is exhausted.
 
-The local `vxp` integration branch at `2d31d26` implements those boundaries, including a
-separate allowance for traffic that cannot be correlated safely. It is not yet the dependency
-recorded by this umbrella: the production claim remains open until the fork is published,
-`mix.lock` pins it, and every Vxpipe conformance, security, privacy, and recovery gate passes
-through the public wrapper.
+The published `vxp` integration branch at `2d31d26` implements those boundaries,
+including a separate allowance for traffic that cannot be correlated safely. The umbrella
+now pins that exact commit. Vxpipe supplies each client with only its endpoint's canonical
+origin and supplies each tool request with a progress token. The dependency's focused
+security/privacy/parser/budget suites and Vxpipe's wrapper, official-scenario, reference
+server, and resumed-budget gates pass. This is maintained-fork evidence for Vxpipe's selected
+profile, not a claim that upstream ExMCP 1.3.0 contains the fixes.

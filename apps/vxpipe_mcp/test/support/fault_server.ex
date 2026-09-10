@@ -29,10 +29,19 @@ defmodule Vxpipe.MCP.FaultServer do
     |> tap(fn _count -> drain_other_requests() end)
   end
 
+  def take_request(method) when is_binary(method) do
+    receive do
+      {:fault_server_request, ^method, request} -> request
+      {:fault_server_request, _other_method, _request} -> take_request(method)
+    after
+      100 -> nil
+    end
+  end
+
   def init(opts), do: opts
 
   def call(%{method: "GET"} = conn, {_fault, owner}) do
-    send(owner, {:fault_server_request, :stream})
+    send(owner, {:fault_server_request, :stream, nil})
 
     conn
     |> put_resp_content_type("text/event-stream")
@@ -43,7 +52,7 @@ defmodule Vxpipe.MCP.FaultServer do
     {:ok, body, conn} = read_body(conn)
     request = Jason.decode!(body)
     method = Map.get(request, "method")
-    send(owner, {:fault_server_request, method})
+    send(owner, {:fault_server_request, method, request})
     respond(conn, request, fault)
   end
 
@@ -176,8 +185,8 @@ defmodule Vxpipe.MCP.FaultServer do
 
   defp collect_requests(method, count) do
     receive do
-      {:fault_server_request, ^method} -> collect_requests(method, count + 1)
-      {:fault_server_request, _other} -> collect_requests(method, count)
+      {:fault_server_request, ^method, _request} -> collect_requests(method, count + 1)
+      {:fault_server_request, _other, _request} -> collect_requests(method, count)
     after
       0 -> count
     end
@@ -185,7 +194,7 @@ defmodule Vxpipe.MCP.FaultServer do
 
   defp drain_other_requests do
     receive do
-      {:fault_server_request, _method} -> drain_other_requests()
+      {:fault_server_request, _method, _request} -> drain_other_requests()
     after
       0 -> :ok
     end

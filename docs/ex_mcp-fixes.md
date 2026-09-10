@@ -1,7 +1,8 @@
 # ExMCP fork fixes
 
-Status: local fix branches and the `vxp` integration branch are ready; publishing the fork
-and verifying Vxpipe against its pinned commit remain pending.
+Status: all fix branches and the `vxp` integration branch are published at
+`HashNuke/ex_mcp`. Vxpipe consumes `vxp` through its public HTTPS URL and locks commit
+`2d31d26`.
 
 ## Purpose
 
@@ -16,7 +17,7 @@ The fork does not expand Vxpipe's selected protocol profile. Vxpipe still target
 ## Repository and branch policy
 
 - `upstream` points to `azmaveth/ex_mcp`; `master` follows upstream without Vxpipe patches.
-- `origin` points to the `HashNuke/ex_mcp` fork once it has been created.
+- `origin` points to the `HashNuke/ex_mcp` fork.
 - Each `fix/*` branch contains one upstreamable concern and its focused tests.
 - `vxp` is the integration branch used by Vxpipe. It retains merge commits so the source of
   each patch remains visible.
@@ -25,7 +26,7 @@ The fork does not expand Vxpipe's selected protocol profile. Vxpipe still target
 - Upstream changes are merged into `master` and then into the affected fix and integration
   branches without rewriting published history.
 
-Current local branch tips, all based on upstream `56880c6`:
+Published branch tips, all based on upstream `56880c6`:
 
 | Branch | Commit | Responsibility |
 | --- | --- | --- |
@@ -95,6 +96,13 @@ the request's POST response and later GET-stream events share the same request b
 - Request budgets: 57 focused client/HTTP/SSE tests passed.
 - Integrated `vxp`: changed-file formatting, warnings-as-errors compilation, strict Credo,
   and 95 combined focused tests passed.
+- Vxpipe's lockfile resolves the public `vxp` branch to `2d31d26`. Its default MCP suite
+  passes 27 tests, including exact endpoint-origin construction, request progress-token
+  transmission, and cumulative enforcement after `Last-Event-ID` recovery while the
+  resumed stream remains open.
+- The pinned official initialization and tool-call scenarios pass 1/1 each, the corrected
+  recovery scenario passes 3/3, and the pinned Everything server returns the expected
+  `echo` tool result through Vxpipe's wrapper.
 - The full upstream suite ran 4,627 tests with two failures unrelated to the modified MCP
   paths: a locally available Claude authentication-method list differed from the fixture,
   and the modern stdio fixture could not resolve the `:jason` SCM in its generated Mix

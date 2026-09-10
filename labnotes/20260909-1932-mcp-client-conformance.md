@@ -410,3 +410,49 @@ evidence that this production concern is solved.
 - Added `docs/ex_mcp-fixes.md` as the durable branch policy, pull-request order, verification,
   and eventual fork-removal record. Remote publication and Vxpipe dependency verification
   remain pending until the fork is reachable.
+
+## 2026-09-10 — fork publication and Vxpipe adoption
+
+- Published every local branch to `HashNuke/ex_mcp` and verified the remote tips:
+  `master` at `56880c6`, four independently reviewable `fix/*` branches at the commits
+  listed in `docs/ex_mcp-fixes.md`, and combined `vxp` at `2d31d26`.
+- Replaced the Hex dependency with the public HTTPS `vxp` branch. `mix.lock` pins
+  `2d31d26270024c123de8b7c80833fcf4d089e3a5`; no local path or SSH credential is needed
+  by builds. The existing Mint 1.9.3 lock remains unchanged.
+- Added the validated endpoint's canonical origin as each ExMCP client's exact trust policy
+  and removed broad trusted-host defaults from that client. The focused option test was red
+  with no security policy and green after the change.
+- Added a unique integer MCP progress token to every tool request. The wire test was red when
+  `tools/call` omitted `params._meta.progressToken` and green after the adapter supplied
+  it.
+- Added a deterministic legacy recovery fixture. A request-owned POST SSE stream closes
+  after advertising `event-2`; GET recovery presents `Last-Event-ID: event-2`, then sends
+  two complete correlated progress events that are individually below 1,024 bytes but exceed
+  that request budget together. The resumed stream stays open, while the request fails
+  within one second rather than waiting for its 5,000 ms deadline. Only one tool call occurs.
+- Updated a Vxpipe test that had asserted dependency-internal raw failure atoms appeared in
+  logs. It now verifies Vxpipe's owned contract: the bounded public outcome and exactly one
+  submission. Diagnostic privacy is covered separately without coupling to ExMCP log text.
+- The original identity-churn check measured VM-global atom/module counts in the umbrella
+  runner. Concurrent lazy loading from other children produced unrelated deltas (including
+  `Zoi.Validations.*` modules and later test-module atoms), while the focused MCP run stayed
+  green. The check now runs two non-overlapping 500-identity batches in an isolated peer VM:
+  the first stabilizes application startup and the second retains the strict five-atom and
+  five-module ceilings while also proving the supplied strings are not atoms.
+- The wire fault fixture's 500 ms setup/invocation allowance was also too narrow under a
+  loaded umbrella and failed during discovery instead of reaching its intended fault. A
+  two-second intermediate value reproduced the same race in the full MCP suite, so its
+  test-only default now matches Discovery's 5,000 ms bound; the explicit 100 ms timeout
+  cases remain unchanged.
+- Verification: the final default MCP suite passes 27 tests with three network integrations
+  excluded; official `initialize` and `tools_call` pass 1/1 each; the corrected recovery
+  fixture passes 3/3; and the pinned Everything server returns its expected `echo` result.
+  Root formatting, warnings-as-errors compilation, strict Credo over 299 files, and the
+  unused-dependency check also pass. One complete isolated umbrella run passed MCP 27/0,
+  call engine 181/0, Calls 35/0, Persistence 25/0, Gateway 66/0, and Console 55/0 before a
+  test-only SRP refactor of the recovery fixture. Subsequent exact-state root runs twice
+  timed out waiting for the same unrelated asynchronous call-variable archive assertion;
+  its focused rerun passed with the same seed. The suite used the local PostgreSQL Unix
+  socket and a temporary build path because the shared test build had stalled compiling
+  Mint. The project-owned archive-test synchronization issue and milestone-wide operational
+  visibility remain.
