@@ -253,11 +253,10 @@ Keep responsibilities split while migrating:
 - `Vxpipe.AgentRuntime` owns model messages, submission-result encoding, commit barriers, and
   the context-source call before each provider generation. It has no Call Engine dependency.
 
-The current `Tool.Dispatcher` also owns variable projection, Jido tool-call registration,
-execution, background state, and completion acknowledgement. Do not enlarge it for the new
-policy. Move invocation authority to the dedicated registry and retire Jido-specific
-registration with the Jido adapter. Rename `maximum_background_tools` and
-`background_tool_timeout_ms` to invocation-wide settings because every tool now uses them.
+The retired `Tool.Dispatcher` previously owned variable projection, Jido tool-call registration,
+execution, background state, and completion acknowledgement. Invocation authority now belongs to
+the dedicated registry, and the selected configuration uses `maximum_tool_invocations` and
+`tool_invocation_timeout_ms` because every tool shares that worker path.
 
 The delivery boundary is lease/commit, not destructive read: a terminal observation remains
 authoritative while leased to an Agent Runtime request and becomes consumed only after that

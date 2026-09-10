@@ -1466,3 +1466,18 @@ without starting a worker; a submission committed before a lost reply is still r
 existing invocation-ID reconciliation. The focused registry file then passed 3 tests in 2.3
 seconds, and the complete Call Engine suite passed 221 tests with one tagged integration
 exclusion. No polling, inline execution, or automatic retry was added.
+
+## Final audit: invocation-wide configuration names
+
+The selected runtime still exposed `maximum_background_tools` and
+`background_tool_timeout_ms` through OTP application and activation settings. Those names encoded
+the retired execution split even though default-blocking and explicit-non-blocking bindings always
+use one invocation supervisor and registry.
+
+The activation-supervisor fixture was changed first to
+`maximum_tool_invocations` and `tool_invocation_timeout_ms`. Its focused run failed two of three
+tests with `:invalid_configuration`, proving the runtime still required the obsolete contract. The
+runtime graph, plan-startup adapter, application/test settings, and remaining direct activation
+fixture now use only the invocation-wide keys. No compatibility aliases were retained. Focused
+activation, participant, and definition-driven startup coverage then passed 24 tests with no
+failures. The complete Call Engine suite passed 221 tests with one tagged integration exclusion.

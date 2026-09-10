@@ -771,6 +771,14 @@ Implementation evidence:
   submissions remain discoverable by the existing one-shot reconciliation. The focused registry
   file passes 3 tests in 2.3 seconds; the complete Call Engine suite passes 221 tests with one
   tagged integration exclusion.
+- The activation/application configuration contract now names its shared worker capacity
+  `maximum_tool_invocations` and its per-worker deadline `tool_invocation_timeout_ms`. The old
+  background-only names were removed rather than retained as aliases because blocking and
+  non-blocking bindings always use the same pool. Existing activation, participant, and complete
+  definition-driven startup coverage went red when the focused fixture adopted the new contract,
+  then passed 24 tests after the runtime graph, plan adapter, and application/test configuration
+  changed together.
+  The complete Call Engine suite remains green at 221 tests with one tagged integration exclusion.
 
 ## Specification review
 

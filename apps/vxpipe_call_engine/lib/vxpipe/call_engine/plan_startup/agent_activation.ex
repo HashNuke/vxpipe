@@ -81,8 +81,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     [
       activation_id: receiver.activation_id,
       agent_participant_id: receiver.participant_id,
-      background_tool_timeout_ms: Keyword.fetch!(settings, :background_tool_timeout_ms),
-      maximum_background_tools: Keyword.fetch!(settings, :maximum_background_tools),
+      tool_invocation_timeout_ms: Keyword.fetch!(settings, :tool_invocation_timeout_ms),
+      maximum_tool_invocations: Keyword.fetch!(settings, :maximum_tool_invocations),
       owner: owner,
       system_prompt: receiver.prompt,
       variable_binding: variable_binding,
