@@ -134,6 +134,32 @@ defmodule Vxpipe.AgentRuntime.SessionTest do
     refute_receive {:model_provider_process, _provider_pid, _request}
   end
 
+  test "records a fixed assistant message before the next model request" do
+    session =
+      start_supervised!(
+        {Session,
+         instructions: "Be concise",
+         model_provider: Vxpipe.AgentRuntime.TestModelProvider,
+         model: %{reply: "How can I help?", test_owner: self()},
+         pending_context_source: empty_pending_context(self()),
+         event_destination: self()}
+      )
+
+    correlation = %{request_id: "fixed-greeting"}
+    assert :ok = Session.record_assistant(session, "Welcome.", correlation)
+
+    assert {:ok, %Result{status: :completed}} =
+             Session.request(session, "Hello", %{request_id: "after-greeting"})
+
+    assert_receive {:model_provider_process, _provider_pid, request}
+
+    assert Enum.map(request.messages, &{&1.role, &1.content}) == [
+             {:system, "Be concise"},
+             {:assistant, "Welcome."},
+             {:user, "Hello"}
+           ]
+  end
+
   defp empty_pending_context(owner) do
     {Vxpipe.AgentRuntime.TestPendingContextSource, %{owner: owner, result: {:ok, []}}}
   end

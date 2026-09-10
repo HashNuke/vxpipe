@@ -47,3 +47,12 @@
   3 tests and 0 failures. The complete Call Engine suite passed with 234 tests and 0 failures,
   with 1 integration test excluded. Formatting and warnings-as-errors compilation passed.
 - File fetching/decoding/caching, first-message behavior, and lifecycle clocks remain pending.
+
+## 2026-09-10 — fixed-greeting history primitive
+
+- Added an Agent Runtime session boundary for recording an already-selected assistant message
+  while the session is idle. This lets an exact fixed greeting enter model conversation history
+  without asking the model to regenerate it or misrepresenting it as caller input.
+- The focused session test failed first because `record_assistant/3` did not exist, then passed
+  with 6 tests in the file. The stored message is bounded, validated, and discardable by its
+  correlation so later interruption handling can remove an interrupted greeting.

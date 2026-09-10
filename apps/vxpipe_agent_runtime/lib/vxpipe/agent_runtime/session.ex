@@ -6,6 +6,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   alias Vxpipe.AgentRuntime.{
     Conversation,
     Event,
+    Message,
     Request,
     RequestRunner,
     Result,
@@ -28,6 +29,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   ]
 
   @type server :: GenServer.server()
+  @maximum_recorded_assistant_bytes 64 * 1_024
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) when is_list(options) do
@@ -46,6 +48,18 @@ defmodule Vxpipe.AgentRuntime.Session do
   def continue(server, input, correlation, timeout \\ :infinity) do
     GenServer.call(server, {:request, :engine, input, correlation}, timeout)
   end
+
+  @spec record_assistant(server(), String.t(), map(), timeout()) ::
+          :ok | {:error, :busy | :invalid_message}
+  def record_assistant(server, text, correlation, timeout \\ 5_000)
+
+  def record_assistant(server, text, correlation, timeout)
+      when is_binary(text) and is_map(correlation) do
+    GenServer.call(server, {:record_assistant, text, correlation}, timeout)
+  end
+
+  def record_assistant(_server, _text, _correlation, _timeout),
+    do: {:error, :invalid_message}
 
   @spec status(server()) :: :idle | :busy
   def status(server), do: GenServer.call(server, :status)
@@ -164,6 +178,26 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   def handle_call({:request, _origin, _input, _correlation}, _caller, state) do
+    {:reply, {:error, :busy}, state}
+  end
+
+  def handle_call({:record_assistant, text, correlation}, _caller, %{status: :idle} = state) do
+    if valid_assistant_message?(text) do
+      conversation =
+        Conversation.append_exchange(
+          state.conversation,
+          [Message.assistant(text, [])],
+          correlation,
+          :discardable
+        )
+
+      {:reply, :ok, %{state | conversation: conversation}}
+    else
+      {:reply, {:error, :invalid_message}, state}
+    end
+  end
+
+  def handle_call({:record_assistant, _text, _correlation}, _caller, state) do
     {:reply, {:error, :busy}, state}
   end
 
@@ -299,6 +333,11 @@ defmodule Vxpipe.AgentRuntime.Session do
   defp normalize_result(_invalid, correlation, state) do
     result = Result.failed(:invalid_provider_response, correlation)
     {{:ok, result}, Event.new(:request_failed, correlation), state}
+  end
+
+  defp valid_assistant_message?(text) do
+    String.valid?(text) and String.trim(text) != "" and
+      byte_size(text) <= @maximum_recorded_assistant_bytes
   end
 
   defp clear_request(state) do
