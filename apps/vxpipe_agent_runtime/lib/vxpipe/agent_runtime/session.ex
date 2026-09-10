@@ -20,6 +20,8 @@ defmodule Vxpipe.AgentRuntime.Session do
     :active_token,
     :caller,
     :correlation,
+    :request_timer,
+    :termination_reason,
     status: :idle,
     submission_phase: :idle,
     cancel_callers: []
@@ -31,7 +33,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
 
   @spec request(server(), String.t(), map(), timeout()) :: {:ok, Result.t()} | {:error, atom()}
-  def request(server, input, correlation, timeout \\ 5_000) do
+  def request(server, input, correlation, timeout \\ :infinity) do
     GenServer.call(server, {:request, input, correlation}, timeout)
   end
 
@@ -79,6 +81,13 @@ defmodule Vxpipe.AgentRuntime.Session do
           RequestRunner.run(state.conversation, request, runner_options)
         end)
 
+      request_timer =
+        Process.send_after(
+          self(),
+          {:agent_runtime_request_timeout, token},
+          state.configuration.request_timeout_ms
+        )
+
       {:noreply,
        %{
          state
@@ -86,7 +95,8 @@ defmodule Vxpipe.AgentRuntime.Session do
            active_task: task,
            active_token: token,
            caller: caller,
-           correlation: correlation
+           correlation: correlation,
+           request_timer: request_timer
        }}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -103,11 +113,16 @@ defmodule Vxpipe.AgentRuntime.Session do
     do: {:reply, {:error, :idle}, state}
 
   def handle_call(:cancel, caller, %{submission_phase: :submitting} = state) do
-    {:noreply, %{state | cancel_callers: [caller | state.cancel_callers]}}
+    {:noreply,
+     %{
+       state
+       | termination_reason: state.termination_reason || :cancelled,
+         cancel_callers: [caller | state.cancel_callers]
+     }}
   end
 
   def handle_call(:cancel, _caller, state) do
-    {:reply, :ok, cancel_active_request(state)}
+    {:reply, :ok, terminate_active_request(state, :cancelled)}
   end
 
   @impl true
@@ -125,16 +140,30 @@ defmodule Vxpipe.AgentRuntime.Session do
       ) do
     state = %{state | conversation: conversation, submission_phase: :idle}
 
-    case state.cancel_callers do
-      [] ->
+    case state.termination_reason do
+      nil ->
         send(worker, {:agent_runtime_committed, token})
         {:noreply, state}
 
-      cancel_callers ->
-        state = cancel_active_request(state)
-        reply_cancel_callers(cancel_callers)
-        {:noreply, state}
+      reason ->
+        {:noreply, terminate_active_request(state, reason)}
     end
+  end
+
+  def handle_info(
+        {:agent_runtime_request_timeout, token},
+        %{active_token: token, submission_phase: :submitting} = state
+      ) do
+    {:noreply,
+     %{
+       state
+       | request_timer: nil,
+         termination_reason: state.termination_reason || :request_timeout
+     }}
+  end
+
+  def handle_info({:agent_runtime_request_timeout, token}, %{active_token: token} = state) do
+    {:noreply, terminate_active_request(%{state | request_timer: nil}, :request_timeout)}
   end
 
   def handle_info({reference, run_result}, %{active_task: %{ref: reference}} = state) do
@@ -149,7 +178,7 @@ defmodule Vxpipe.AgentRuntime.Session do
         {:DOWN, reference, :process, _pid, _reason},
         %{active_task: %{ref: reference}} = state
       ) do
-    if state.cancel_callers == [] do
+    if is_nil(state.termination_reason) do
       result = Result.failed(:provider_unavailable, state.correlation)
 
       emit(
@@ -160,11 +189,7 @@ defmodule Vxpipe.AgentRuntime.Session do
       GenServer.reply(state.caller, {:ok, result})
       {:noreply, clear_request(state)}
     else
-      result = Result.cancelled(state.correlation)
-      emit_cancelled(state)
-      GenServer.reply(state.caller, {:ok, result})
-      reply_cancel_callers(state.cancel_callers)
-      {:noreply, clear_request(state)}
+      {:noreply, complete_termination(state, state.termination_reason)}
     end
   end
 
@@ -189,6 +214,8 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   defp clear_request(state) do
+    state = cancel_request_timer(state)
+
     %{
       state
       | status: :idle,
@@ -196,6 +223,8 @@ defmodule Vxpipe.AgentRuntime.Session do
         active_token: nil,
         caller: nil,
         correlation: nil,
+        request_timer: nil,
+        termination_reason: nil,
         submission_phase: :idle,
         cancel_callers: []
     }
@@ -221,13 +250,31 @@ defmodule Vxpipe.AgentRuntime.Session do
     end
   end
 
-  defp cancel_active_request(state) do
+  defp terminate_active_request(state, reason) do
     _ = Task.shutdown(state.active_task, :brutal_kill)
     Process.demonitor(state.active_task.ref, [:flush])
 
+    complete_termination(state, reason)
+  end
+
+  defp complete_termination(state, :cancelled) do
     result = Result.cancelled(state.correlation)
     emit_cancelled(state)
     GenServer.reply(state.caller, {:ok, result})
+    reply_cancel_callers(state.cancel_callers)
+    clear_request(state)
+  end
+
+  defp complete_termination(state, :request_timeout) do
+    result = Result.failed(:request_timeout, state.correlation)
+
+    emit(
+      state.configuration.event_destination,
+      Event.new(:request_failed, state.correlation)
+    )
+
+    GenServer.reply(state.caller, {:ok, result})
+    reply_cancel_callers(state.cancel_callers)
     clear_request(state)
   end
 
@@ -240,6 +287,13 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   defp reply_cancel_callers(callers) do
     Enum.each(callers, &GenServer.reply(&1, :ok))
+  end
+
+  defp cancel_request_timer(%{request_timer: nil} = state), do: state
+
+  defp cancel_request_timer(state) do
+    _ = Process.cancel_timer(state.request_timer)
+    %{state | request_timer: nil}
   end
 
   defp emit(destination, event), do: send(destination, {:agent_runtime_event, event})

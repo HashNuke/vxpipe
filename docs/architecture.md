@@ -166,6 +166,12 @@ Agent Runtime enforces its configured per-round tool-call count and per-request 
 assistant-output size before host submission. These bounds keep one model response from
 creating an unbounded worker batch or committing output that the request cannot return.
 
+Each runtime Session also owns its model-request deadline. Expiry closes provisional provider
+work and discards uncommitted messages. If a host submission is already in its commit barrier,
+the timeout becomes pending until that exchange commits; the runtime then stops only its request
+task. A host submission must therefore remain a short, bounded admission operation rather than
+performing the business action itself.
+
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current

@@ -237,6 +237,13 @@ output accumulated across one admitted request. The runner checks both before ex
 submission, preventing an oversized mixed response from starting work that cannot be safely
 represented. Terminal over-limit output is not committed to conversation history.
 
+A Session-owned request timer supplies the default 30-second request deadline, so the public
+request call does not time out independently and leave provider work running. Expiry terminates
+provisional work and returns `request_timeout`. When expiry races with host submission, Session
+records it and completes the submission commit barrier first. The terminal response can therefore
+arrive after the nominal deadline only for that bounded safety handoff; the external invocation is
+not cancelled. A separately bounded host submission callback remains required.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

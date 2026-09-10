@@ -17,6 +17,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
     :pending_context_timeout_ms,
     :maximum_pending_invocations,
     :commit_timeout_ms,
+    :request_timeout_ms,
     :event_destination
   ]
   defstruct @enforce_keys
@@ -43,6 +44,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          {:ok, maximum_pending_invocations} <-
            positive(Keyword.get(options, :maximum_pending_invocations, 32)),
          {:ok, commit_timeout_ms} <- positive(Keyword.get(options, :commit_timeout_ms, 1_000)),
+         {:ok, request_timeout_ms} <-
+           positive(Keyword.get(options, :request_timeout_ms, 30_000)),
          event_destination when is_pid(event_destination) <-
            Keyword.get(options, :event_destination) do
       {:ok,
@@ -59,6 +62,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          pending_context_timeout_ms: pending_context_timeout_ms,
          maximum_pending_invocations: maximum_pending_invocations,
          commit_timeout_ms: commit_timeout_ms,
+         request_timeout_ms: request_timeout_ms,
          event_destination: event_destination
        }}
     else
@@ -105,6 +109,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       :pending_context_timeout_ms,
       :maximum_pending_invocations,
       :commit_timeout_ms,
+      :request_timeout_ms,
       :event_destination
     ])
   end

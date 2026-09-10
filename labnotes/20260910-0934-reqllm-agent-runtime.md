@@ -341,3 +341,35 @@ Verification:
   password.
 - Request deadlines, bounded submit callback failure, streaming, production ReqLLM mapping,
   Call Engine adoption, and private completion consumption remain pending.
+
+## Implementation checkpoint 2g: Session request deadline
+
+Added deadline tests before implementation. The first blocks provider work and requires the
+Session to terminate that process, return a bounded `request_timeout`, discard staged input, and
+become idle. The second blocks the executor's submit/admission callback after the submission
+barrier has begun. It requires deadline expiry to remain pending until release, commit the one
+running exchange, terminate only the request task, and expose the committed exchange to the next
+request.
+
+Both tests initially failed because `request_timeout_ms` was rejected as invalid Session
+configuration. Session now schedules a token-correlated timer for each admitted request and
+cancels it during every terminal cleanup path. An expiry outside submission terminates the
+request task immediately. An expiry inside submission records `request_timeout`; the existing
+commit handler stores the complete exchange before applying that terminal outcome. External
+cancellation and deadline expiry use the same commit-safety mechanism while retaining distinct
+public results and events.
+
+The public `Session.request/4` call now defaults to `:infinity` because the Session owns the
+30-second default deadline. This prevents an unrelated five-second caller timeout from abandoning
+a still-running model request. A caller can still provide an explicit call timeout, but the normal
+host path should configure the runtime deadline instead.
+
+Verification:
+
+- Focused deadline suite: 2 tests, 0 failures after the expected 2-test red run.
+- Complete `vxpipe_agent_runtime` suite: 26 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell has no local PostgreSQL
+  password.
+- The submit/admission callback still needs its own bounded host contract. Streaming, production
+  ReqLLM mapping, Call Engine adoption, and private completion consumption remain pending.

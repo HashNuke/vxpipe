@@ -102,8 +102,8 @@ process or dependency is used.
    Normalized response/tool-call values, the exact private registry, accepted/rejected ordered
    submission batches, blocking/non-blocking acknowledgement rounds, and accepted-work
    recovery after provider failure or cancellation are complete. Per-session tool-batch and
-   accumulated-output bounds are also enforced before side effects. Remaining deadlines,
-   streaming, and production adapter behavior remain pending.
+   accumulated-output bounds and the request deadline are also enforced. Remaining submit
+   callback bounds, streaming, and production adapter behavior remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -295,6 +295,16 @@ Implementation evidence:
   invalid Session configuration. The bounds tests and complete package suite are green at 24
   tests, 0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks
   pass; umbrella tests stop before execution because the local PostgreSQL password is absent.
+- Checkpoint 2g adds a positive Session-owned request deadline, defaulting to 30 seconds. It
+  terminates provisional provider work and discards its staged exchange when time expires. If
+  expiry occurs after the submission barrier begins, Session records the terminal intent, waits
+  for the complete running/rejection exchange to commit, and then terminates the model request
+  without touching accepted external workers. `Session.request/4` now relies on that internal
+  deadline by default instead of an earlier five-second `GenServer.call` timeout.
+- Checkpoint 2g red evidence reported 2 focused failures because `request_timeout_ms` was not a
+  valid Session setting. Deadline tests and the complete package suite are green at 26 tests,
+  0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks pass;
+  umbrella tests stop before execution because the local PostgreSQL password is absent.
 
 ## Specification review
 
