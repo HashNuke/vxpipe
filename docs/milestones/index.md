@@ -2,7 +2,9 @@
 
 Status: 24 milestone specifications: 12 complete and 12 incomplete. Milestone 13, opening audio
 and call lifecycle, is the current implementation slice. Its public opening-source contract is
-pinned; playback gating, greetings, and lifecycle timers remain in progress.
+pinned; fixed-text playback gating, greetings, startup readiness, and maximum-duration
+enforcement are implemented. File playback, caller-idle handling, and the remaining lifecycle
+failure/precedence boundaries are still in progress.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

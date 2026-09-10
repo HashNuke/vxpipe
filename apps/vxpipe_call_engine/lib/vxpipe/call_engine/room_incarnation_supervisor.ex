@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
   alias Vxpipe.CallEngine.{
     CallVariables,
+    CallLifecycle,
     LiveInspection.Buffer,
     ResolvedCallPlan,
     RoomAuthority,
@@ -38,7 +39,8 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
     children =
       [participant_supervisor, capability_supervisor] ++
-        live_inspection_child(options) ++ call_variables_child(options) ++ [authority]
+        live_inspection_child(options) ++
+        call_variables_child(options) ++ call_lifecycle_child(options) ++ [authority]
 
     Supervisor.init(children,
       strategy: :one_for_one,
@@ -49,6 +51,13 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   defp call_variables_child(options) do
     case Keyword.get(options, :plan) do
       %ResolvedCallPlan{} -> [{CallVariables, options}]
+      nil -> []
+    end
+  end
+
+  defp call_lifecycle_child(options) do
+    case Keyword.get(options, :plan) do
+      %ResolvedCallPlan{} -> [{CallLifecycle, options}]
       nil -> []
     end
   end

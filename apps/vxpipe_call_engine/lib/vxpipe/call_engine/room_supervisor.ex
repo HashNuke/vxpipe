@@ -239,6 +239,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
       archive_handoff: archive.handoff,
       archive_source_policy: archive.source_policy,
+      call_lifecycle: call_lifecycle_options(runtime_options),
       live_inspection: live_inspection_options(),
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       remote_mcp_connection_provider:
@@ -316,6 +317,15 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
+  end
+
+  defp call_lifecycle_options(runtime_options) do
+    defaults =
+      :vxpipe_call_engine
+      |> Application.fetch_env!(Vxpipe.CallEngine.Application)
+      |> Keyword.fetch!(:call_lifecycle)
+
+    Keyword.merge(defaults, Keyword.get(runtime_options, :call_lifecycle, []))
   end
 
   defp live_inspection_options do

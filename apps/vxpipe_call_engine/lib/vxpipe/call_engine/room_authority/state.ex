@@ -7,10 +7,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
 
   @enforce_keys [
     :archive_recorder,
+    :call_lifecycle,
     :first_message,
     :opening_audio,
     :snapshot,
-    :speech_to_text_runtime
+    :speech_to_text_runtime,
+    :startup_ready?
   ]
   defstruct @enforce_keys ++
               [
@@ -29,6 +31,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
 
   @type t :: %__MODULE__{
           archive_recorder: Recorder.t(),
+          call_lifecycle: nil | pid(),
           connection_monitors: %{optional(reference()) => String.t()},
           connections: map(),
           first_message: FirstMessage.t(),
@@ -41,6 +44,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           participant_roles: %{optional(String.t()) => atom()},
           snapshot: Snapshot.t(),
           speech_to_text_runtime: :application | map(),
+          startup_ready?: boolean(),
           speech_to_text_monitors: %{optional(reference()) => String.t()},
           text_capability: nil | map(),
           text_to_speech_capability: nil | map()
@@ -51,21 +55,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           Snapshot.t(),
           :application | map(),
           OpeningAudio.t(),
-          FirstMessage.t()
+          FirstMessage.t(),
+          nil | pid()
         ) :: t()
   def new(
         %Recorder{} = archive_recorder,
         %Snapshot{} = snapshot,
         speech_to_text_runtime,
         %OpeningAudio{} = opening_audio \\ OpeningAudio.open(),
-        %FirstMessage{} = first_message \\ FirstMessage.completed()
+        %FirstMessage{} = first_message \\ FirstMessage.completed(),
+        call_lifecycle \\ nil
       ) do
     %__MODULE__{
       archive_recorder: archive_recorder,
+      call_lifecycle: call_lifecycle,
       first_message: first_message,
       opening_audio: opening_audio,
       snapshot: snapshot,
-      speech_to_text_runtime: speech_to_text_runtime
+      speech_to_text_runtime: speech_to_text_runtime,
+      startup_ready?: is_nil(call_lifecycle)
     }
   end
 end

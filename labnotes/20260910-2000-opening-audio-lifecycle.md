@@ -112,3 +112,33 @@
   passed 56 tests. Root formatting, warnings-as-errors compilation, strict Credo, and unused-lock
   checks passed. Root tests remain blocked at Persistence database creation because this shell
   has no PostgreSQL test password.
+
+## 2026-09-10 — startup readiness and maximum duration
+
+- Added a focused `CallLifecycle` GenServer as a temporary significant child of each planned
+  room incarnation. It owns timer handles and binding state; Room Authority only declares
+  readiness and reacts to deadline events. Legacy ad-hoc rooms remain unchanged.
+- Readiness and maximum duration begin with live room-subtree startup. The duration comes only
+  from the immutable resolved plan. A lifecycle process crash shuts down the incarnation rather
+  than restarting and resetting clocks.
+- Entry-caller attachment marks startup ready when the plan selects no STT runtime. When it does
+  select STT, readiness waits for successful capability/ingress binding. Initial fixed/generated
+  greeting admission now waits for readiness as well as the opening-audio gate.
+- The first two room tests failed red because no lifecycle timer existed, then passed after the
+  lifecycle child and authority bridge were added. Inspection found a startup race in which a
+  timer could fire before Room Authority bound to the lifecycle process. A separate focused test
+  failed because the event was discarded; the process now retains and delivers unbound events in
+  firing order.
+- Kept the authority bridge cohesive by moving lifecycle binding and STT-dependent readiness
+  decisions into `RoomAuthority.StartupReadiness` rather than adding another independent concern
+  to Room Authority.
+- Focused evidence: from `apps/vxpipe_call_engine`,
+  `mix test test/vxpipe/call_engine/call_lifecycle_test.exs test/vxpipe/call_engine/call_lifecycle_room_test.exs --seed 238092`
+  passed with 3 tests and 0 failures. The complete Call Engine suite passed with 240 tests and
+  1 integration exclusion. Calls passed 35 tests, Gateway passed 66 tests with 4 integration
+  exclusions, and Console passed 56 tests.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+  The root test command again stopped while creating the Persistence test database because this
+  shell has no PostgreSQL password; no credential value was inspected or logged.
+- Caller-idle notification, early failure on definitive provider startup failure, duration-setting
+  precedence before plan compilation, and file opening playback/cache remain pending.

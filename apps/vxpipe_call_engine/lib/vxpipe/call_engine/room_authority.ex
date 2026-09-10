@@ -29,6 +29,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ParticipantLifecycle,
     State,
     Startup,
+    StartupReadiness,
     ToolCalls
   }
 
@@ -95,22 +96,27 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     room_source = room_source(options)
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
 
-    state =
-      State.new(
-        ArchiveRecorder.new(room_source, incarnation_id, options),
-        build_snapshot(room_source, incarnation_id, options),
-        initial_speech_to_text_runtime(room_source),
-        OpeningAudio.new(room_source),
-        FirstMessage.new(room_source)
-      )
+    with {:ok, call_lifecycle} <- StartupReadiness.bind(room_source, incarnation_id) do
+      state =
+        State.new(
+          ArchiveRecorder.new(room_source, incarnation_id, options),
+          build_snapshot(room_source, incarnation_id, options),
+          initial_speech_to_text_runtime(room_source),
+          OpeningAudio.new(room_source),
+          FirstMessage.new(room_source),
+          call_lifecycle
+        )
 
-    case Startup.start_agent(room_source, options, state) do
-      {:ok, state} ->
-        archive_recorder = ArchiveRecorder.room_opened(state.archive_recorder, state.snapshot)
-        {:ok, %{state | archive_recorder: archive_recorder}}
+      case Startup.start_agent(room_source, options, state) do
+        {:ok, state} ->
+          archive_recorder = ArchiveRecorder.room_opened(state.archive_recorder, state.snapshot)
+          {:ok, %{state | archive_recorder: archive_recorder}}
 
-      {:error, reason} ->
-        {:stop, reason}
+        {:error, reason} ->
+          {:stop, reason}
+      end
+    else
+      {:error, reason} -> {:stop, reason}
     end
   end
 
@@ -150,14 +156,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {caller, _tag},
         state
       ) do
-    ConnectionLifecycle.bind_speech_to_text(
-      command,
-      caller,
-      subscriber,
-      capability,
-      ingress,
-      state
-    )
+    case ConnectionLifecycle.bind_speech_to_text(
+           command,
+           caller,
+           subscriber,
+           capability,
+           ingress,
+           state
+         ) do
+      {:reply, :ok, state} ->
+        case StartupReadiness.ready(state) do
+          {:ok, state} -> {:reply, :ok, state}
+          {:error, %Error{code: code} = error} -> {:stop, code, {:error, error}, state}
+        end
+
+      other ->
+        other
+    end
   end
 
   def handle_call({:detach_connection, command, subscriber}, {caller, _tag}, state) do
@@ -212,6 +227,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       {:error, %Error{}} -> {:noreply, state}
     end
   end
+
+  def handle_info(
+        {:vxpipe_call_lifecycle, lifecycle, :readiness},
+        %{call_lifecycle: lifecycle, startup_ready?: false} = state
+      ) do
+    ConnectionLifecycle.notify(state.connections, :call_start_failed)
+    {:stop, {:shutdown, :startup_readiness_timeout}, state}
+  end
+
+  def handle_info(
+        {:vxpipe_call_lifecycle, lifecycle, :max_duration},
+        %{call_lifecycle: lifecycle} = state
+      ) do
+    ConnectionLifecycle.notify(state.connections, :maximum_duration_reached)
+    {:stop, {:shutdown, :maximum_duration_reached}, state}
+  end
+
+  def handle_info({:vxpipe_call_lifecycle, _lifecycle, _event}, state), do: {:noreply, state}
 
   def handle_info({:vxpipe_capability_failed, capability, command, reason}, state) do
     {:noreply, AgentOutput.failed(capability, command, reason, state)}
@@ -344,7 +377,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
              state.text_to_speech_capability,
              state.snapshot
            ),
-         {:ok, state} <- FirstMessage.start(%{state | opening_audio: opening_audio}) do
+         {:ok, state} <-
+           StartupReadiness.connection_attached(
+             command,
+             %{state | opening_audio: opening_audio}
+           ) do
       {:ok, state}
     end
   end

@@ -22,6 +22,10 @@ config :vxpipe_calls, Vxpipe.Calls,
   registries: %{capability_profiles: %{}, host_tools: %{}}
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+  call_lifecycle: [
+    readiness_timeout_ms: 30_000,
+    timer: {Vxpipe.CallEngine.CallLifecycle.ProcessTimer, []}
+  ],
   agent_runtime: [
     implementation: :agent_runtime,
     model_provider: Vxpipe.AgentRuntime.Provider.ReqLLM,

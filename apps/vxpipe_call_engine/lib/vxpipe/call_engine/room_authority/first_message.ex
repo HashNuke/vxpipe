@@ -46,6 +46,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
       when status in [:completed, :started],
       do: {:ok, state}
 
+  def start(%{startup_ready?: false} = state), do: {:ok, state}
+
   def start(state) do
     with :open <- OpeningAudio.admission(state.opening_audio),
          {:ok, connection_id, connection} <- target_connection(state),

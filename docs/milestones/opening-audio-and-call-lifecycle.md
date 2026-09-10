@@ -21,13 +21,16 @@ A caller hears optional configured opening audio before normal conversation. The
 
 - [x] Red-test fixed-text input gating and actual playout completion with controllable media fakes.
 - [x] Red-test wait/fixed/generated first-message modes with controllable model/media fakes.
-- [ ] Red-test file playback and readiness/idle/duration clocks with controllable time/media fakes.
+- [x] Red-test readiness and maximum-duration clocks with a controllable timer fake.
+- [ ] Red-test file playback and caller-idle clocks with controllable time/media fakes.
 - [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
 - [ ] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
 - [x] Integrate the opening gate with wait/fixed/generated greeting modes for the initial receiver.
 - [x] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
-- [ ] Implement pinned duration and correctly scoped readiness/idle events; keep timing/technical errors safe.
+- [x] Implement planned-call startup readiness and pinned maximum-duration enforcement.
+- [ ] Implement correctly scoped caller-idle notification and early terminal startup failure;
+  keep timing/technical errors safe.
 
 ## Acceptance and failure checks
 
@@ -90,6 +93,21 @@ tool. The hangup worker returns a typed effect; ordered start/completion facts r
 Authority before it applies the effect and ends the room. Focused runtime coverage passed with
 1 test and 0 failures. The complete Call Engine suite passed with 237 tests and 1 integration
 exclusion; Calls, Gateway, and Console suites passed with 35, 66, and 56 tests respectively.
+
+Each planned room incarnation now starts one significant `CallLifecycle` process alongside
+Room Authority. It owns the startup-readiness and maximum-duration timers from live subtree
+startup, retains a deadline that fires before authority binding, and cannot be restarted in a
+way that resets either clock. Room Authority mirrors only the readiness gate and reacts to
+terminal lifecycle events. Attaching the entry caller satisfies readiness immediately when no
+STT runtime is selected; a selected STT runtime must start and bind first. Initial greeting
+admission now requires both readiness and opening-audio completion. The duration timer uses
+only the immutable plan value and ends the entire room with a typed internal reason.
+
+The focused lifecycle files passed with 3 tests and 0 failures after their expected red runs.
+The complete Call Engine suite passed with 240 tests and 1 integration exclusion; Calls,
+Gateway, and Console passed with 35, 66, and 56 tests respectively. Caller-idle notification,
+early termination on definitive provider startup failure, the tenant/application duration
+precedence source, and file playback remain pending, so the milestone is still in progress.
 
 ## Specification review
 

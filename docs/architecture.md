@@ -751,6 +751,21 @@ Deliberate `opening_audio` playback is not itself a readiness failure or subject
 to a new 30-second truncation rule. Preserve its media-input gate and actual
 `started_at` semantics; a failed pre-live startup never fabricates a start time.
 
+The planned-room runtime starts one significant `CallLifecycle` process before Room Authority
+inside the room-incarnation supervisor. That process owns the readiness and whole-call timer
+handles; Room Authority owns neither clock and mirrors only whether startup input is ready. A
+deadline that fires before authority binding is retained and delivered after binding rather than
+lost. Because the lifecycle child is temporary and significant, its failure shuts down the room
+incarnation instead of restarting it with fresh deadlines. Legacy ad-hoc rooms do not receive
+this definition-driven lifecycle child.
+
+For the current web caller, attachment marks readiness when the plan selects no STT runtime. If
+STT is selected, its capability and ingress must start and bind before readiness is marked. The
+readiness timer is then cancelled once, and the initial receiver's greeting remains gated behind
+both readiness and completed opening playout. Readiness expiry and maximum duration notify
+attached connections with safe reasons and terminate the room. Early shutdown on a definitive
+provider startup failure and deeper provider-specific ready handshakes remain to be implemented.
+
 When an agent genuinely waits for caller input, a configurable 15-second idle
 notification lets its instructions decide whether to nudge, wait, or use a
 permitted end-call tool. No automatic silence hangup or repeated-announcement
@@ -772,8 +787,10 @@ changes do not change an active call's limit. Measure from actual `started_at`,
 excluding prepared wait and never resetting on transfer/recovery. It also applies
 to human-only portions. At the limit, the engine ends with a clear duration-limit
 reason. No creation-time override, unlimited mode, warning/grace policy, or closing-
-speech guarantee is added. These are design contracts,
-not runtime changes.
+speech guarantee is added. The current runtime starts its maximum-duration timer with the live
+planned-room subtree, uses only the value already pinned in `ResolvedCallPlan`, and never accepts
+a per-start duration override. Tenant/application/default precedence before plan compilation is
+still pending; the current parser supplies the platform default when the definition omits it.
 
 Closing wording and the decision to invoke the existing hangup tool belong to
 agent instructions (R31). No platform speak-then-end/closing-message API,
