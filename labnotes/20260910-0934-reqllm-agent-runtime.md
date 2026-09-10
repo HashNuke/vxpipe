@@ -1109,6 +1109,20 @@ that still selects the compatibility graph. Umbrella format, warnings-as-errors 
 Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the unchanged
 absent PostgreSQL SCRAM password; no credential source was inspected.
 
+## Implementation checkpoint 4ac: provider-neutral tools
+
+Removed all `Jido.Action` macros and `run/2` adapter callbacks from `CurrentTime`, `DelayedReport`,
+the three generated Call Variables tools, and the two legacy test fixtures. Each module already had
+the complete Vxpipe-owned `definition/0` and `execute/2` behavior; the removed callbacks only routed
+through the retired Jido dispatcher.
+
+Selected execution is unchanged: Agent Runtime exposes the immutable descriptor, resolves its
+private binding, submits it to the invocation registry, and `InvocationExecution` calls `execute/2`
+inside a DynamicSupervisor child. The complete Call Engine suite passes 229 tests with 2 tagged
+integration exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation, strict
+Credo, and unused-lock checks pass; the root test attempt stops at the unchanged absent PostgreSQL
+SCRAM password.
+
 ## Implementation checkpoint 4w: neutral diagnostic fixtures
 
 Moved the definition-driven controlled fixture and Morse audio round trip from Jido's

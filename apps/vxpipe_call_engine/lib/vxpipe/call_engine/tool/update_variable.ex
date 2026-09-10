@@ -13,14 +13,9 @@ defmodule Vxpipe.CallEngine.Tool.UpdateVariable do
     "additionalProperties" => false
   }
 
-  use Jido.Action,
-    name: "update_variable",
-    description: "Set one literal variable in a writable Call Variables section.",
-    schema: @parameters
-
   @behaviour Vxpipe.CallEngine.Tool
 
-  alias Vxpipe.CallEngine.Tool.{Context, Definition, Dispatcher}
+  alias Vxpipe.CallEngine.Tool.{Context, Definition}
 
   @impl Vxpipe.CallEngine.Tool
   def definition do
@@ -33,14 +28,4 @@ defmodule Vxpipe.CallEngine.Tool.UpdateVariable do
 
   @impl Vxpipe.CallEngine.Tool
   def execute(_arguments, %Context{}), do: {:error, :tool_failed}
-
-  @impl Jido.Action
-  def run(arguments, context) when is_map(arguments) and is_map(context) do
-    with dispatcher when not is_nil(dispatcher) <- Map.get(context, :vxpipe_tool_dispatcher),
-         %Context{} = tool_context <- Map.get(context, :vxpipe_tool_context) do
-      Dispatcher.execute(dispatcher, name(), arguments, tool_context)
-    else
-      _invalid -> {:error, :tool_failed}
-    end
-  end
 end

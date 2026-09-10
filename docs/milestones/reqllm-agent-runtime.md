@@ -699,6 +699,14 @@ Implementation evidence:
   with 2 integration exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation,
   strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
   unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
+- Checkpoint 4ac removes `Jido.Action` macros and dispatcher callbacks from every production host /
+  Call Variables tool and from the corresponding test fixtures. They now implement only the
+  project-owned `Tool.definition/0` and `Tool.execute/2` contract. Agent Runtime resolves their exact
+  descriptors and every execution reaches `InvocationExecution` only inside an independently
+  supervised worker; conversation blocking remains binding metadata rather than an execution path.
+  The complete Call Engine suite passes 229 tests with 2 integration exclusions at seed `365486`.
+  Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass;
+  umbrella tests stop before execution at the unchanged absent PostgreSQL SCRAM password.
 
 ## Specification review
 
