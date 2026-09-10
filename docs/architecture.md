@@ -808,8 +808,17 @@ to human-only portions. At the limit, the engine ends with a clear duration-limi
 reason. No creation-time override, unlimited mode, warning/grace policy, or closing-
 speech guarantee is added. The current runtime starts its maximum-duration timer with the live
 planned-room subtree, uses only the value already pinned in `ResolvedCallPlan`, and never accepts
-a per-start duration override. Tenant/application/default precedence before plan compilation is
-still pending; the current parser supplies the platform default when the definition omits it.
+a per-start duration override. The definition parser preserves omission rather than inserting a
+default. Before a prepared call is stored, `vxpipe_calls` resolves the tenant and application
+settings and supplies them to the pure Call Engine compiler; that compiler applies the complete
+precedence and pins the result.
+
+The current OTP setting is `:call_duration` under `:vxpipe_calls, Vxpipe.Calls`. Its
+`max_duration_ms` is the application value and its `tenants` map may hold a
+`[max_duration_ms: value]` override keyed by public tenant key. Values at every configured or
+authored scope use the same closed range of 1,000 through 86,400,000 milliseconds. Malformed
+trusted settings fail compilation rather than silently selecting another value. Changing this
+setting after call preparation does not mutate the stored plan or its live lifecycle timer.
 
 Closing wording and the decision to invoke the existing hangup tool belong to
 agent instructions (R31). No platform speak-then-end/closing-message API,

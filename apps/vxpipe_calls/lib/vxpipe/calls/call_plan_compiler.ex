@@ -2,6 +2,7 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
   @moduledoc false
 
   alias Vxpipe.CallEngine
+  alias Vxpipe.Calls.CallDurationSettings
 
   @spec compile(
           Vxpipe.CallEngine.CallDefinition.t(),
@@ -9,14 +10,19 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
           keyword()
         ) ::
           {:ok, Vxpipe.CallEngine.ResolvedCallPlan.t()}
-          | {:error, Vxpipe.CallEngine.Error.t() | :registries_unavailable}
+          | {:error,
+             Vxpipe.CallEngine.Error.t()
+             | :call_duration_settings_unavailable
+             | :registries_unavailable}
   def compile(definition, invocation, options) when is_list(options) do
-    with {:ok, registries} <- registries(options) do
+    with {:ok, registries} <- registries(options),
+         {:ok, duration_options} <-
+           CallDurationSettings.compiler_options(invocation.tenant_id, options) do
       CallEngine.compile_definition(
         definition,
         invocation,
         registries,
-        engine_options(options)
+        engine_options(options) ++ duration_options
       )
     end
   end

@@ -7,7 +7,14 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   alias Vxpipe.CallEngine.CallDefinition.{CapabilitySelection, ToolSelection}
 
-  alias Vxpipe.CallEngine.{CallInvocation, DefinitionValidation, Id, ResolvedCallPlan}
+  alias Vxpipe.CallEngine.{
+    CallInvocation,
+    DefinitionValidation,
+    DurationLimit,
+    Id,
+    ResolvedCallPlan
+  }
+
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
 
@@ -47,7 +54,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
            resolve_tool_visibility(
              Keyword.get(options, :tool_visibility, definition.tool_visibility),
              participants
-           ) do
+           ),
+         {:ok, max_duration_ms} <- DurationLimit.resolve(definition.max_duration_ms, options) do
       {:ok,
        %ResolvedCallPlan{
          definition_id: definition.resource_id,
@@ -64,7 +72,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          participants: participants,
          call_variables: call_variables,
          tool_visibility: tool_visibility,
-         max_duration_ms: definition.max_duration_ms
+         max_duration_ms: max_duration_ms
        }}
     end
   end

@@ -5,7 +5,8 @@ and call lifecycle, is the current implementation slice. Its public opening-sour
 pinned; fixed-text playback gating, greetings, startup readiness, and maximum-duration
 enforcement are implemented. Definitive selected-STT startup failure ends the attempted room
 immediately, and caller-idle notification now observes opening/output/tool-wait exclusions without
-an automatic repeat cadence. File playback and duration-setting precedence remain in progress.
+an automatic repeat cadence. Definition/tenant/application duration precedence is now pinned before
+call preparation. File playback remains in progress.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

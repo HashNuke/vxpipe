@@ -190,3 +190,26 @@
   password; no credential value was inspected or logged.
 - Dialing/transfer does not exist yet; that later path must suspend idle timing while it waits.
   Duration-setting precedence before plan compilation and file opening playback/cache remain.
+
+## 2026-09-10 — duration-setting precedence
+
+- Kept authored omission distinct in `CallDefinition`: a missing `limits.max_duration_ms` remains
+  `nil` until compilation, while an explicit value keeps the existing 1,000–86,400,000 ms bounds.
+- Added a focused Call Engine duration resolver. It validates trusted tenant/application values,
+  applies definition > tenant > application > platform `1800000`, and writes only the result into
+  the immutable plan.
+- Added a narrow Calls configuration adapter for the `:call_duration` OTP setting. The application
+  value is `max_duration_ms`; tenant overrides are selected from the `tenants` map by public tenant
+  key. Call preparation supplies the resolved candidates to Call Engine without adding invocation
+  or room-start overrides.
+- The compiler red test first found the parser had already inserted `1800000`. The admissions red
+  test then found the prepared plan ignored the tenant's 90-second setting. Both passed after the
+  boundary changes: compiler coverage passed 13 tests and admissions coverage passed 11 tests.
+- The complete Call Engine suite passed with 247 tests and 1 integration exclusion. Calls passed
+  36 tests, Gateway passed 66 tests with 4 integration exclusions, and Console passed 56 tests.
+  The pinned-call test changes both tenant and application settings after preparation and confirms
+  the stored plan retains 90 seconds.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+  Root tests again stopped at Persistence database creation because this shell has no PostgreSQL
+  password; no credential value was inspected or logged.
+- File opening playback and its bounded cache remain pending.

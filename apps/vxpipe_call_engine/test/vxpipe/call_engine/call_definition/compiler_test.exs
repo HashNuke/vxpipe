@@ -216,7 +216,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     assert invocation.definition_revision == 7
     assert invocation.transport == :web
 
-    for forbidden <- [:tenant_id, :entry_caller, :entry_receiver] do
+    for forbidden <- [:tenant_id, :entry_caller, :entry_receiver, :limits] do
       assert {:error,
               %Error{
                 code: :invalid_call_invocation,
@@ -307,6 +307,52 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
 
     assert get_in(changed, [:capability_profiles, "careful-model", :options, :model]) == "changed"
     assert receiver.capabilities.model_inference.options == %{model: "careful"}
+  end
+
+  test "resolves and pins definition, tenant, application, and platform duration precedence" do
+    omitted_input = Map.delete(definition_input(), :limits)
+
+    assert {:ok, omitted_definition} =
+             CallDefinition.new(omitted_input, resource_id: "support", revision: 7)
+
+    assert omitted_definition.max_duration_ms == nil
+
+    assert {:ok, invocation} =
+             CallInvocation.new(invocation_input(),
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo",
+               call_id: "call-duration",
+               room_id: "room-duration"
+             )
+
+    assert {:ok, tenant_plan} =
+             DefinitionCompiler.compile(omitted_definition, invocation, registries(),
+               duration_limits: [tenant: 90_000, application: 120_000]
+             )
+
+    assert tenant_plan.max_duration_ms == 90_000
+
+    assert {:ok, application_plan} =
+             DefinitionCompiler.compile(omitted_definition, invocation, registries(),
+               duration_limits: [application: 120_000]
+             )
+
+    assert application_plan.max_duration_ms == 120_000
+
+    assert {:ok, platform_plan} =
+             DefinitionCompiler.compile(omitted_definition, invocation, registries())
+
+    assert platform_plan.max_duration_ms == 1_800_000
+
+    assert {:ok, explicit_definition} =
+             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+
+    assert {:ok, explicit_plan} =
+             DefinitionCompiler.compile(explicit_definition, invocation, registries(),
+               duration_limits: [tenant: 90_000, application: 120_000]
+             )
+
+    assert explicit_plan.max_duration_ms == 1_800_000
   end
 
   test "validates and resolves participant-local tool visibility overrides" do

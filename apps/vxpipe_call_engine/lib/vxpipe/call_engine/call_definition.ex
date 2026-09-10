@@ -56,7 +56,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           call_variables: CallVariables.t(),
           participants: %{String.t() => Participant.t()},
           tool_visibility: ToolVisibility.t(),
-          max_duration_ms: pos_integer()
+          max_duration_ms: nil | pos_integer()
         }
 
   @spec schema_version() :: String.t()
@@ -276,17 +276,20 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   end
 
   defp duration(input, code, message) do
-    value = Map.get(input, :max_duration_ms, 1_800_000)
+    case Map.fetch(input, :max_duration_ms) do
+      :error ->
+        {:ok, nil}
 
-    if is_integer(value) and value >= 1_000 and value <= 86_400_000 do
-      {:ok, value}
-    else
-      DefinitionValidation.invalid(
-        code,
-        message,
-        ["limits", "max_duration_ms"],
-        "must be between 1000 and 86400000"
-      )
+      {:ok, value} when is_integer(value) and value >= 1_000 and value <= 86_400_000 ->
+        {:ok, value}
+
+      {:ok, _value} ->
+        DefinitionValidation.invalid(
+          code,
+          message,
+          ["limits", "max_duration_ms"],
+          "must be between 1000 and 86400000"
+        )
     end
   end
 

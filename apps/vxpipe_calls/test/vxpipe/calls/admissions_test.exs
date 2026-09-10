@@ -265,6 +265,34 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     assert claim.call.plan.participants["assistant"].prompt == "Help the caller."
   end
 
+  test "pins the tenant call-duration setting while preparing an omitted definition limit",
+       context do
+    duration_options =
+      Keyword.put(context.options, :call_duration,
+        max_duration_ms: 120_000,
+        tenants: %{context.tenant.key => [max_duration_ms: 90_000]}
+      )
+
+    assert {:ok, call, _token} =
+             Calls.prepare_call(
+               context.principal,
+               context.caller_route.key,
+               %{},
+               duration_options
+             )
+
+    assert call.plan.max_duration_ms == 90_000
+
+    changed_options =
+      Keyword.put(context.options, :call_duration,
+        max_duration_ms: 150_000,
+        tenants: %{context.tenant.key => [max_duration_ms: 180_000]}
+      )
+
+    assert {:ok, stored} = Calls.fetch_call(context.tenant.key, call.id, changed_options)
+    assert stored.plan.max_duration_ms == 90_000
+  end
+
   test "does not claim expired tokens and lets distinct tokens share admission exclusion",
        context do
     assert {:ok, call, first} = prepare(context)

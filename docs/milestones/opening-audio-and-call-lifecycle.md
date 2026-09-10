@@ -45,7 +45,7 @@ A caller hears optional configured opening audio before normal conversation. The
   opening playback is not mistaken for failed readiness. Duplicate readiness never repeats a greeting.
 - [x] Idle excludes opening/output/hold/dial/tool wait and only notifies instructions; it does
   not automatically nudge or hang up.
-- [ ] Duration precedence is pinned and invocation overrides fail; later definition/tenant/
+- [x] Duration precedence is pinned and invocation overrides fail; later definition/tenant/
   application edits cannot reset the running call's deadline.
 
 ## Manual verification
@@ -134,6 +134,21 @@ long-tool wait, and speech-start boundaries. The complete Call Engine suite pass
 and 1 integration exclusion; Calls, Gateway, and Console remained green with 35, 66, and 56 tests.
 Dialing is not available in this milestone; its later implementation must use the same suspension
 boundary rather than treating transfer setup as caller silence.
+
+Duration resolution now preserves an omitted authored limit until compilation. Call Engine applies
+explicit definition, tenant, application, then platform-default precedence and pins the resulting
+1,000–86,400,000 millisecond value in `ResolvedCallPlan`. `vxpipe_calls` obtains application and
+tenant values from its trusted `:call_duration` OTP setting while preparing the call; the tenant
+map is keyed by the public tenant key. The invocation schema continues to reject a caller-supplied
+`limits` field, and room startup has no duration override.
+
+The focused red tests first observed `1800000` at the parser instead of `nil` and then observed the
+same premature default instead of the configured tenant value. After implementation, the Call
+Engine compiler file passed 13 tests and Calls admissions passed 11 tests. The complete Call Engine
+suite passed with 247 tests and 1 integration exclusion; Calls passed 36 tests. A stored prepared
+plan remained at 90 seconds after the test supplied changed tenant and application settings,
+proving the mutable setting is not consulted after compilation. File opening playback/cache remains
+pending.
 
 ## Specification review
 
