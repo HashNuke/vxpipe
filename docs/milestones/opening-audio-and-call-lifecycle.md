@@ -26,7 +26,7 @@ A caller hears optional configured opening audio before normal conversation. The
 - [ ] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
 - [x] Integrate the opening gate with wait/fixed/generated greeting modes for the initial receiver.
-- [ ] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
+- [x] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
 - [ ] Implement pinned duration and correctly scoped readiness/idle events; keep timing/technical errors safe.
 
 ## Acceptance and failure checks
@@ -81,7 +81,15 @@ path; generated mode submits a private engine-origin request to the model. Neith
 generated greeting starts before the entry caller attaches, and both remain behind configured
 opening playout. The focused file passed with 5 tests and the complete Call Engine suite passed
 with 236 tests and 1 integration exclusion. Transfer/re-entry greeting semantics, file playback,
-the immediate-hangup binding, and lifecycle clocks remain.
+and lifecycle clocks remain.
+
+Schema `20260910.03` adds a closed authored `platform` tool type. The initial catalog exposes
+current UTC time and immediate hangup under participant-local aliases, with the same default-
+blocking/explicit-non-blocking admission setting and supervised worker execution as every other
+tool. The hangup worker returns a typed effect; ordered start/completion facts reach Room
+Authority before it applies the effect and ends the room. Focused runtime coverage passed with
+1 test and 0 failures. The complete Call Engine suite passed with 237 tests and 1 integration
+exclusion; Calls, Gateway, and Console suites passed with 35, 66, and 56 tests respectively.
 
 ## Specification review
 

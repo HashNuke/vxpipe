@@ -52,9 +52,12 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260910.02`; it adds an optional,
-closed `opening_audio` source that is pinned into the resolved call plan. A text source carries
-fixed text and a file source carries an HTTPS URL without embedded credentials or a fragment;
+The definition-driven compiler's current schema is `20260910.03`; it adds explicitly selected
+platform tools to the participant's unified `tools` map. The fixed initial catalog contains
+`get_current_time` and immediate `hangup`; local aliases and conversation mode are pinned into
+the resolved plan without accepting modules from definition input. Schema `20260910.02` added
+an optional, closed `opening_audio` source that is pinned into the resolved call plan. A text
+source carries fixed text and a file source carries an HTTPS URL without embedded credentials or a fragment;
 configured values are omitted from routine struct inspection. The preceding `20260910.01`
 schema added a default-blocking conversation-admission policy to every tool binding. Only an explicit
 `"conversation_mode":"non_blocking"` permits later caller turns while the submitted
@@ -101,6 +104,12 @@ model. Non-blocking turns include the committed running acknowledgement and curr
 projection. Terminal outcomes enter the Session once as private engine-origin continuations.
 Caller interruption stops stale speech/model output but does not cancel accepted tool workers;
 participant/room shutdown terminates their local execution subtree.
+
+Resolved platform tools use that same descriptor and invocation boundary, but their canonical
+implementations come only from a closed Call Engine catalog. `hangup` returns a typed effect from
+its worker; the invocation registry publishes ordered tool-start/completion facts before Room
+Authority applies the effect and terminates the room. It never ends the call inline inside the
+agent/runtime process or before the tool lifecycle can be archived.
 
 The optional legacy `CreateRoom` model-inference preset remains available to embedded hosts only as
 a text-generation compatibility path. It advertises no tools and rejects an unsolicited provider

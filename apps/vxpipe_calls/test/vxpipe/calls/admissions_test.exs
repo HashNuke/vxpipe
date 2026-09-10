@@ -405,7 +405,7 @@ defmodule Vxpipe.Calls.AdmissionsTest do
       end
 
     %{
-      schema_version: "20260910.02",
+      schema_version: "20260910.03",
       name: "Admission example",
       entry_caller: "caller",
       entry_receiver: "assistant",

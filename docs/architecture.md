@@ -580,6 +580,15 @@ resolved binding or host definition name is rejected rather than silently changi
 compilation does not create an inline path: both conversation modes submit through the same
 invocation registry and supervised worker boundary.
 
+Schema `20260910.03` adds explicitly selected `platform` bindings to that unified tools map.
+Their canonical names resolve through a closed Call Engine catalog; definition input supplies
+neither a module nor executable routing data. The initial catalog exposes current UTC time and
+immediate hangup, while preserving a participant-local model-visible alias and the same pinned
+conversation mode. Platform tools use the ordinary activation-owned invocation worker. Hangup
+returns a typed effect to the registry rather than calling Room Authority from its worker task;
+the registry delivers ordered start/completion facts before Room Authority validates the live
+agent/source connection and terminates the room. There is no inline agent-side hangup path.
+
 Permission-derived Call Variables tools compile through the same descriptor boundary. Because
 these platform tools are generated rather than explicitly selected in the participant's `tools`
 map, the current schema gives each one the default `blocking` conversation mode. Their opaque

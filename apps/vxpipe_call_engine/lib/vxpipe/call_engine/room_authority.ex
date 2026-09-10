@@ -22,6 +22,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
     ConnectionLifecycle,
+    EndCall,
     FirstMessage,
     InputTurns,
     OpeningAudio,
@@ -203,6 +204,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({:vxpipe_capability_tool_failed, capability, command, call, reason}, state) do
     {:noreply, ToolCalls.failed(state, capability, command, call, reason)}
+  end
+
+  def handle_info({:vxpipe_platform_effect, capability, context, :hangup}, state) do
+    case EndCall.authorize(capability, context, state) do
+      :ok -> {:stop, {:shutdown, :agent_hangup}, state}
+      {:error, %Error{}} -> {:noreply, state}
+    end
   end
 
   def handle_info({:vxpipe_capability_failed, capability, command, reason}, state) do

@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
 
   @type t :: %__MODULE__{
           name: String.t(),
-          type: :host | :mcp,
+          type: :host | :mcp | :platform,
           tool: String.t(),
           conversation_mode: :blocking | :non_blocking,
           integration: nil | String.t()
@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
          {:ok, type} <-
            DefinitionValidation.enum(
              type_input,
-             [host: "host", mcp: "mcp"],
+             [host: "host", mcp: "mcp", platform: "platform"],
              code,
              message,
              path ++ ["type"]
@@ -69,7 +69,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
     end
   end
 
-  defp integration(:host, input, code, message, path) do
+  defp integration(type, input, code, message, path) when type in [:host, :platform] do
     if Map.has_key?(input, :integration) do
       DefinitionValidation.invalid(
         code,

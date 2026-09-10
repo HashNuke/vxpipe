@@ -861,7 +861,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   defp definition_input do
     %{
-      schema_version: "20260910.02",
+      schema_version: "20260910.03",
       name: "Persistence admission",
       entry_caller: "caller",
       entry_receiver: "assistant",

@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.{Definition, InvocationBinding}
+  alias Vxpipe.CallEngine.Tool.PlatformCatalog
 
   @spec compile(%{optional(String.t()) => ToolBinding.t()}) ::
           {:ok, [ToolDescriptor.t()]} | {:error, :invalid_tool_binding}
@@ -61,6 +62,28 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   defp descriptor(%ToolBinding{name: name, type: :host, action: action} = resolved, _remote_owner) do
     with {:ok, binding} <- InvocationBinding.from_resolved(resolved),
          {:ok, descriptor} <- descriptor(action, name, binding) do
+      {:ok, descriptor}
+    else
+      _invalid -> {:error, :invalid_tool_binding}
+    end
+  rescue
+    _exception -> {:error, :invalid_tool_binding}
+  end
+
+  defp descriptor(
+         %ToolBinding{name: name, type: :platform, action: action} = resolved,
+         _remote_owner
+       ) do
+    with true <- PlatformCatalog.action?(action),
+         {:ok, binding} <- InvocationBinding.from_resolved(resolved),
+         %Definition{description: description, parameters: parameters} <- action.definition(),
+         {:ok, descriptor} <-
+           ToolDescriptor.new(
+             name: name,
+             description: description,
+             input_schema: parameters,
+             binding: binding
+           ) do
       {:ok, descriptor}
     else
       _invalid -> {:error, :invalid_tool_binding}

@@ -277,11 +277,12 @@ The examples now use `participants.<ref>.type: agent` and consistently give
 `billing` read-only `intake` access. Transfer/variable tools remain derived from
 their existing grants; tool aliases must not collide with generated names.
 
-G1's authoring ambiguity is resolved, but no compiler was implemented. A future
-compiler checkpoint still needs canonical positive/negative fixtures and a
-supported-variable/keyword matrix. Partial illustrations are not complete executable
-definitions, and the broad representative JSON is not a commitment to implement
-every variable in the first slice. No new dated schema release is published here.
+G1's authoring ambiguity is resolved. Schema `20260910.03` implements the first closed
+platform-tool compiler subset: `get_current_time` and immediate `hangup` can be selected under
+local aliases beside host and MCP entries. Unknown platform names fail resolution, and no module
+or executable identifier is accepted from definition input. Broader platform tools still need
+their own vertical checkpoints; the representative JSON is not a commitment to implement every
+illustrated operation at once.
 
 ### G2 — Resolved for the initial scope: admission, authentication, and entry roles
 

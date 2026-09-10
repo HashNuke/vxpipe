@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding do
 
   @type t :: %__MODULE__{
           name: String.t(),
-          type: :host | :mcp,
+          type: :host | :mcp | :platform,
           conversation_mode: :blocking | :non_blocking,
           action: module() | nil,
           remote: ResolvedTool.t() | nil

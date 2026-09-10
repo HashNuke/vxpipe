@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   alias Vxpipe.CallEngine.{CallInvocation, DefinitionValidation, Id, ResolvedCallPlan}
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
+  alias Vxpipe.CallEngine.Tool.PlatformCatalog
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.{
     CallVariables,
@@ -316,6 +317,24 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   defp resolve_tool(
          %ToolSelection{
            name: name,
+           type: :platform,
+           tool: tool,
+           conversation_mode: conversation_mode
+         },
+         _host_tools,
+         _mcp_integrations,
+         _tenant_id,
+         path
+       ) do
+    case PlatformCatalog.fetch(tool) do
+      {:ok, action} -> validate_platform_action(name, tool, action, conversation_mode, path)
+      :error -> invalid(path, "does not resolve to an available platform tool")
+    end
+  end
+
+  defp resolve_tool(
+         %ToolSelection{
+           name: name,
            type: :mcp,
            integration: integration,
            tool: tool,
@@ -371,6 +390,28 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
       end
     else
       invalid(path, "does not implement the host tool contract")
+    end
+  end
+
+  defp validate_platform_action(name, tool, action, conversation_mode, path) do
+    if Code.ensure_loaded?(action) and function_exported?(action, :definition, 0) and
+         function_exported?(action, :execute, 2) do
+      definition = action.definition()
+
+      if definition.name == tool do
+        {:ok,
+         %ToolBinding{
+           name: name,
+           type: :platform,
+           conversation_mode: conversation_mode,
+           action: action,
+           remote: nil
+         }}
+      else
+        invalid(path, "does not match the platform tool name")
+      end
+    else
+      invalid(path, "does not implement the platform tool contract")
     end
   end
 

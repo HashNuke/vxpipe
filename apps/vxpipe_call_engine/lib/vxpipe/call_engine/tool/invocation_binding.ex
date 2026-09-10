@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.Tool.PlatformCatalog
 
   @derive {Inspect, only: [:name, :conversation_mode]}
   @enforce_keys [:name, :conversation_mode, :handler]
@@ -11,6 +12,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
 
   @type handler ::
           {:host, module()}
+          | {:platform, module()}
           | {:call_variables, VariablesBinding.t()}
           | {:remote_mcp, GenServer.server()}
   @type t :: %__MODULE__{
@@ -35,6 +37,26 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
          name: name,
          conversation_mode: conversation_mode,
          handler: {:host, action}
+       }}
+    else
+      {:error, :invalid_binding}
+    end
+  end
+
+  def from_resolved(%ToolBinding{
+        name: name,
+        type: :platform,
+        conversation_mode: conversation_mode,
+        action: action
+      })
+      when is_binary(name) and conversation_mode in [:blocking, :non_blocking] and
+             is_atom(action) do
+    if PlatformCatalog.action?(action) do
+      {:ok,
+       %__MODULE__{
+         name: name,
+         conversation_mode: conversation_mode,
+         handler: {:platform, action}
        }}
     else
       {:error, :invalid_binding}
@@ -94,6 +116,15 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
       }) do
     is_binary(name) and name != "" and conversation_mode in [:blocking, :non_blocking] and
       is_atom(action) and Code.ensure_loaded?(action) and function_exported?(action, :execute, 2)
+  end
+
+  def valid?(%__MODULE__{
+        name: name,
+        conversation_mode: conversation_mode,
+        handler: {:platform, action}
+      }) do
+    is_binary(name) and name != "" and conversation_mode in [:blocking, :non_blocking] and
+      PlatformCatalog.action?(action)
   end
 
   def valid?(%__MODULE__{

@@ -55,7 +55,6 @@ sample_capability_profiles = %{
 }
 
 sample_host_tools = %{
-  "get_current_time" => Vxpipe.CallEngine.Tool.CurrentTime,
   "prepare_background_report" => Vxpipe.CallEngine.Tool.DelayedReport
 }
 
@@ -122,7 +121,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           "order" => %{"id" => "order-demo-1001"}
         },
         definition: %{
-          schema_version: "20260910.02",
+          schema_version: "20260910.03",
           name: "Development sample",
           entry_caller: "caller",
           entry_receiver: "assistant",
@@ -172,7 +171,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               prompt: sample_system_prompt,
               first_message: %{mode: "wait_for_input"},
               tools: %{
-                "get_current_time" => %{type: "host", tool: "get_current_time"},
+                "get_current_time" => %{type: "platform", tool: "get_current_time"},
                 "prepare_background_report" => %{
                   type: "host",
                   tool: "prepare_background_report",

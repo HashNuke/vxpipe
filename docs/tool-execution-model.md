@@ -71,10 +71,10 @@ admission policy, not a model-selectable tool argument or client override. The s
 not change worker placement, tool authorization, timeout, retry, visibility, or retention
 policy.
 
-The current dated compiler implements this field for explicitly authored host and MCP
+The current dated compiler implements this field for explicitly authored platform, host, and MCP
 selections. Permission-derived Call Variables tools compile with the default `blocking` mode.
-The `platform` entry above records the approved unified-map target; selecting authored platform
-tools through that entry still requires a later compiler checkpoint.
+Platform names resolve through a closed engine catalog rather than an application registry or
+definition-supplied module. The initial catalog exposes `get_current_time` and `hangup`.
 
 ## Submission and conversation flow
 
@@ -217,8 +217,10 @@ running-result pair and invocation ID.
   private observation is consumed. If that continuation cannot be admitted, fail the activation
   rather than silently process caller work with missing state.
 - Platform effects such as transfer or hangup are also worker outcomes. Call Engine applies
-  them under room authority. A successful effect may terminate the source activation or room,
-  in which case no artificial follow-up speech is required.
+  them under room authority. For immediate hangup, the worker returns a typed effect; the
+  invocation registry emits ordered lifecycle facts before Room Authority authorizes and applies
+  it. A successful effect may terminate the source activation or room, in which case no
+  artificial follow-up speech is required.
 
 ## Rejected alternatives
 

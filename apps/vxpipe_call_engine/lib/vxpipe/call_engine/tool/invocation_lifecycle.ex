@@ -5,7 +5,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationLifecycle do
     Call,
     InvocationCompletion,
     InvocationRecord,
-    InvocationSubmission
+    InvocationSubmission,
+    PlatformResult
   }
 
   @spec accepted(pid() | nil, pid(), InvocationSubmission.t()) :: :ok
@@ -38,6 +39,17 @@ defmodule Vxpipe.CallEngine.Tool.InvocationLifecycle do
     call = call(submission)
 
     case completion.outcome do
+      {:ok, %PlatformResult{effect: effect, result: result}} ->
+        send(
+          target,
+          {:vxpipe_capability_tool_completed, capability, completion.context, call, result}
+        )
+
+        send(
+          target,
+          {:vxpipe_platform_effect, capability, completion.context, effect}
+        )
+
       {:ok, result} ->
         send(
           target,

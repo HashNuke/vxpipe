@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
 
   alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
-  alias Vxpipe.CallEngine.Tool.{Context, InvocationBinding}
+  alias Vxpipe.CallEngine.Tool.{Context, InvocationBinding, PlatformResult}
 
   @spec run(InvocationBinding.t(), map(), Context.t(), pos_integer()) ::
           {:ok, term()} | {:error, :invalid_result | :tool_failed}
@@ -17,6 +17,18 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
     action
     |> execute(arguments, context)
     |> normalize(maximum_result_bytes)
+  end
+
+  def run(
+        %InvocationBinding{handler: {:platform, action}},
+        arguments,
+        %Context{} = context,
+        maximum_result_bytes
+      )
+      when is_map(arguments) and is_integer(maximum_result_bytes) and maximum_result_bytes > 0 do
+    action
+    |> execute(arguments, context)
+    |> normalize_platform(maximum_result_bytes)
   end
 
   def run(
@@ -58,6 +70,9 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
     end
   end
 
+  defp normalize({:ok, %PlatformResult{}}, _maximum_result_bytes),
+    do: {:error, :invalid_result}
+
   defp normalize({:ok, result}, maximum_result_bytes) do
     try do
       if byte_size(JSON.encode!(result)) <= maximum_result_bytes do
@@ -72,6 +87,20 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
 
   defp normalize({:error, _reason}, _maximum_result_bytes), do: {:error, :tool_failed}
   defp normalize(_result, _maximum_result_bytes), do: {:error, :invalid_result}
+
+  defp normalize_platform(
+         {:ok, %PlatformResult{effect: effect, result: result} = platform_result},
+         maximum_result_bytes
+       )
+       when effect in [:hangup] do
+    case normalize({:ok, result}, maximum_result_bytes) do
+      {:ok, _result} -> {:ok, platform_result}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp normalize_platform(outcome, maximum_result_bytes),
+    do: normalize(outcome, maximum_result_bytes)
 
   defp normalize_remote({:error, reason} = error, _maximum_result_bytes)
        when reason in [:invalid_result, :unknown],

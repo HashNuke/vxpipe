@@ -5,7 +5,7 @@ defmodule Vxpipe.Console.SampleCallTest do
 
   @initial_variables %{"order" => %{"id" => "private-order-sentinel"}}
   @definition %{
-    "schema_version" => "20260910.02",
+    "schema_version" => "20260910.03",
     "entry_caller" => "caller",
     "entry_receiver" => "assistant"
   }

@@ -9,8 +9,8 @@
   and oversized values fail during call-definition parsing.
 - The source becomes typed data in the immutable resolved plan. Routine inspection exposes
   only its type so configured text and URL query data do not leak through ordinary logs.
-- Released the additive call-definition shape as `20260910.02`; current fixtures and the
-  development definition now select that version.
+- Released the additive call-definition shape as `20260910.02`; fixtures and the development
+  definition selected that version at this checkpoint.
 - Red evidence: the focused test first failed because `OpeningAudio` did not exist, then failed
   because the schema still reported `20260910.01`.
 - Green evidence: from `apps/vxpipe_call_engine`,
@@ -83,3 +83,32 @@
   logged.
 - Transfer/re-entry greeting activation, file opening playback/cache, immediate hangup, and
   readiness/idle/duration clocks remain pending.
+
+## 2026-09-10 — platform time and hangup tools
+
+- Released schema `20260910.03` so a participant's unified tools map can select a closed
+  `platform` tool beside host and MCP entries. The initial catalog contains current UTC time and
+  immediate hangup; call-definition input cannot select an arbitrary module.
+- Platform tools retain the participant-local model-visible alias and default to blocking like
+  every other authored tool. They execute through the same activation-owned invocation worker,
+  never inline in Agent Runtime or a GenServer callback.
+- The focused red run failed first at the expected parser boundary because `platform` was not a
+  supported tool type. After parser/compiler support, plan startup correctly exposed its own
+  unsupported-binding guard, which was then expanded for closed catalog entries.
+- The first runtime attempt revealed a real cross-process race: the hangup side effect could end
+  the room before its tool-start message arrived. Hangup now returns a typed worker result. The
+  invocation registry sends start, completion, and effect messages in order; Room Authority
+  validates the live agent/source connection and applies the effect last.
+- Focused evidence: from `apps/vxpipe_call_engine`,
+  `mix test test/vxpipe/call_engine/platform_tools_room_test.exs --seed 238092` passed with
+  1 test and 0 failures.
+- The first broader Call Engine run exposed one assertion that incorrectly expected Registry
+  cleanup to be synchronous with a monitored process exit, plus an unrelated participant-test
+  timing failure. The platform test now asserts the stronger owned contract—ordered start and
+  completion events followed by the exact room monitor—and the unrelated test passed at its
+  focused boundary. A seeded complete Call Engine rerun passed with 237 tests and 0 failures,
+  with 1 integration test excluded.
+- Calls passed 35 tests, Gateway passed 66 tests with 4 integration exclusions, and Console
+  passed 56 tests. Root formatting, warnings-as-errors compilation, strict Credo, and unused-lock
+  checks passed. Root tests remain blocked at Persistence database creation because this shell
+  has no PostgreSQL test password.

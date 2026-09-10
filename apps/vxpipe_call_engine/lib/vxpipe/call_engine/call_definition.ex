@@ -13,7 +13,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260910.02"
+  @schema_version "20260910.03"
   @fields [
     :schema_version,
     :name,

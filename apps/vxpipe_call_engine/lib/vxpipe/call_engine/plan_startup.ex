@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
+  alias Vxpipe.CallEngine.Tool.PlatformCatalog
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -156,7 +157,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           {:halt,
            unsupported(
              ["participants", participant_key, "tools", name],
-             "must be a resolved host or remote MCP tool"
+             "must be a resolved platform, host, or remote MCP tool"
            )}
       end
     end)
@@ -165,6 +166,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   defp supported_tool_binding?(%ResolvedCallPlan.ToolBinding{type: :host, action: action})
        when is_atom(action),
        do: true
+
+  defp supported_tool_binding?(%ResolvedCallPlan.ToolBinding{type: :platform, action: action}),
+    do: PlatformCatalog.action?(action)
 
   defp supported_tool_binding?(%ResolvedCallPlan.ToolBinding{
          type: :mcp,
