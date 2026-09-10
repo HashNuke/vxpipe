@@ -1,8 +1,6 @@
 defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   use ExUnit.Case, async: false
 
-  import Jido.AI.Test
-
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.Archive.{Fact, Handoff}
@@ -412,6 +410,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   test "keeps tools and variables live while archival crashes, then drains retained facts" do
+    configure_agent_runtime_provider(self())
     room_id = unique_id("room-archive-recovery")
     plan = compile_variables_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -419,13 +418,6 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     writer =
       start_supervised!({TestRecoveringArchiveWriter, mode: :raise, observer: self()})
-
-    script =
-      expect_react do
-        user("Can you check the time?")
-        call("get_current_time", %{}, id: "tool-during-archive-outage")
-        answer("The tool still completed.")
-      end
 
     archive =
       archive_options(
@@ -438,7 +430,6 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert {:ok, room} =
              CallEngine.start_call(plan,
-               agent_request_options: Jido.AI.Test.react_opts(script),
                archive_handoff: handoff
              )
 
@@ -457,9 +448,31 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert :ok = CallEngine.send_text(command)
 
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "tool-during-archive-outage",
+               name: "get_current_time",
+               arguments: %{}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
     assert_receive {:vxpipe_event,
                     %ToolCallCompleted{tool_call_id: "tool-during-archive-outage"}},
                    2_000
+
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, acknowledgement_request}
+    assert acknowledgement_request.tools == []
+    assert {:ok, response} = ModelResponse.new(text: "The tool is running.")
+    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
+    assert List.last(completion_request.messages).origin == :engine
+    assert {:ok, response} = ModelResponse.new(text: "The tool still completed.")
+    send(completion_provider, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:vxpipe_event, %TextOutput{text: "The tool still completed."}}, 2_000
     assert_receive {:vxpipe_event, %AgentTurnCompleted{}}, 2_000
@@ -747,34 +760,16 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert_receive {:DOWN, ^archive_monitor, :process, _subscriber, :normal}
   end
 
-  test "executes generated variable actions through the definition-driven Jido loop" do
+  test "executes generated variable actions through the definition-driven Agent Runtime loop" do
+    configure_agent_runtime_provider(self())
     room_id = unique_id("room-variable-actions")
     plan = compile_variables_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     archive = archive_options()
 
-    script =
-      expect_react do
-        user("Collect the intake details.")
-        call("read_variables", %{"sections" => ["order"]}, id: "tool-read-variables")
-
-        call(
-          "update_variables",
-          %{
-            "section_name" => "intake",
-            "data" => %{"summary" => "Asked for assistance"},
-            "expected_revision" => 0
-          },
-          id: "tool-update-variables"
-        )
-
-        answer("The intake details are saved.")
-      end
-
     assert {:ok, room} =
              CallEngine.start_call(plan,
-               agent_request_options: Jido.AI.Test.react_opts(script),
                archive: Keyword.put(archive, :enabled, true)
              )
 
@@ -794,6 +789,25 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert :ok = CallEngine.send_text(command)
 
+    assert_receive {:test_agent_runtime_stream, read_provider, read_request}
+
+    assert Enum.map(read_request.tools, & &1.name) == [
+             "get_current_time",
+             "read_variables",
+             "update_variable",
+             "update_variables"
+           ]
+
+    assert {:ok, read_call} =
+             ToolCall.new(
+               id: "tool-read-variables",
+               name: "read_variables",
+               arguments: %{"sections" => ["order"]}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [read_call])
+    send(read_provider, {:test_agent_runtime_response, {:ok, response}})
+
     assert_receive {:vxpipe_event,
                     %ToolCallCompleted{
                       tool_call_id: "tool-read-variables",
@@ -806,6 +820,28 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                     }},
                    2_000
 
+    assert_receive {:test_agent_runtime_stream, read_ack_provider, read_ack_request}
+    assert read_ack_request.tools == []
+    assert {:ok, response} = ModelResponse.new(text: "I am reading the order details.")
+    send(read_ack_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_stream, update_provider, update_request}
+    assert List.last(update_request.messages).origin == :engine
+
+    assert {:ok, update_call} =
+             ToolCall.new(
+               id: "tool-update-variables",
+               name: "update_variables",
+               arguments: %{
+                 "section_name" => "intake",
+                 "data" => %{"summary" => "Asked for assistance"},
+                 "expected_revision" => 0
+               }
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [update_call])
+    send(update_provider, {:test_agent_runtime_response, {:ok, response}})
+
     assert_receive {:vxpipe_event,
                     %ToolCallCompleted{
                       tool_call_id: "tool-update-variables",
@@ -816,6 +852,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                       }
                     }},
                    2_000
+
+    assert_receive {:test_agent_runtime_stream, update_ack_provider, update_ack_request}
+    assert update_ack_request.tools == []
+    assert {:ok, response} = ModelResponse.new(text: "I am saving the intake details.")
+    send(update_ack_provider, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:test_archive_write, update_writer,
                     %UpdateSnapshot{
@@ -828,6 +869,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert participant_id == receiver.participant_id
     send(update_writer, {:test_archive_write_result, :ok})
+
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
+    assert List.last(completion_request.messages).origin == :engine
+    assert {:ok, response} = ModelResponse.new(text: "The intake details are saved.")
+    send(completion_provider, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:vxpipe_event, %TextOutput{text: "The intake details are saved."}},
                    2_000

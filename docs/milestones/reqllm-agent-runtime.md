@@ -603,6 +603,19 @@ Implementation evidence:
   test passed in isolation, and the complete Call Engine suite passed at seed `365486` with 244 tests
   and 2 integration exclusions. Removing that obsolete compatibility surface remains part of this
   milestone rather than masking it in the new runtime tests.
+- Checkpoint 4t removes the final Jido test API usage from the 18-scenario definition-driven room
+  suite. The archive-outage scenario now proves that Agent Runtime tool execution, live inspection,
+  Call Variables, and buffered archive recovery remain independent. The Call Variables scenario
+  drives a default-blocking read worker, consumes its private result, starts a separate
+  default-blocking update worker, and consumes that result before the final response. Both retain
+  the existing room events and archive snapshot attribution.
+- The two focused scenarios, the complete definition-driven suite, and the complete Call Engine
+  suite pass; the latter reports 244 tests with 2 integration exclusions at seed `365486`. The
+  definition-driven module no longer imports or references Jido. Legacy unit and tagged integration
+  tests plus the temporary test configuration still remain before dependency removal. Umbrella
+  format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
+  `mix test` stops before test execution because PostgreSQL SCRAM authentication needs a password
+  absent from this shell; no credential source was inspected.
 
 ## Specification review
 

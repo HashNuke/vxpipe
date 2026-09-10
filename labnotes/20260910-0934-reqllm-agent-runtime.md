@@ -1049,3 +1049,26 @@ Jido successive-tool test intermittently collecting only one of two completion e
 run passed. A complete rerun at seed `365486` passed 244 tests with 2 tagged integration exclusions.
 This flaky compatibility-only observation reinforces the planned removal order; it was not weakened
 or attributed to the neutral tests.
+
+## Implementation checkpoint 4t: archive recovery and Call Variables parity
+
+Removed the final Jido test API usage from the definition-driven room suite. The archive-recovery
+scenario now drives `get_current_time` through the neutral provider, records its running
+acknowledgement separately, consumes the private completion, and still proves that live inspection,
+room-owned variables, retained facts, recovery, drain, and archive closure continue while the writer
+raises.
+
+The Call Variables scenario makes the asynchronous sequence explicit. The initial caller turn asks
+for `read_variables`; its default-blocking acknowledgement contains no tools. The read completion
+enters a private engine-origin request, where the agent requests `update_variables`; that operation
+is submitted to a second activation-owned worker and gets its own running acknowledgement. Only the
+update's later private completion produces the final saved response. Existing room result events and
+the update snapshot retain the agent participant and tool-call attribution.
+
+The two focused tests pass, the complete definition-driven suite passes 18 tests, and the complete
+Call Engine suite passes 244 tests with 2 tagged integration exclusions at seed `365486`. The suite
+file has no remaining Jido import or reference. Legacy unit/integration tests and the temporary test
+configuration remain before the compatibility graph and dependencies can be removed. Umbrella
+format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
+`mix test` stops before test execution because PostgreSQL SCRAM authentication needs a password
+absent from this shell; no credential source was inspected.
