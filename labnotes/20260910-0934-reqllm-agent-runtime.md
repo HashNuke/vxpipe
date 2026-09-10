@@ -162,3 +162,29 @@ Verification:
   owning-app suite is the available runtime evidence.
 - Repeated model/tool rounds, ReqLLM encoding, invocation workers, blocking admission, and
   Call Engine migration remain deliberately outside this checkpoint.
+
+## Implementation checkpoint 2a: normalized tool-response boundary
+
+Started checkpoint 2 with the data boundary needed by both the deterministic driver and the
+future ReqLLM adapter. The red contract/registry run failed at compilation because the new
+model-only tool projection did not exist. Added four single-purpose modules:
+
+- `ToolCall` accepts only bounded complete IDs, names, argument maps, and provider metadata;
+  inspection omits the arguments and metadata.
+- `ModelResponse` represents final text or mixed text plus complete calls and rejects empty,
+  malformed, oversized, or excessive responses; inspection omits generated text.
+- `ModelTool` contains only name, permitted description, and pinned input schema.
+- `ToolRegistry` pins exact names, rejects duplicates, keeps bindings private, preserves model
+  projection order, and validates returned arguments with the descriptor's compiled schema.
+
+This slice does not call the executor or run another model round yet. It deliberately lands the
+validated/private boundary separately so the loop does not become responsible for schema
+compilation, provider projection, or registry privacy.
+
+Verification:
+
+- Focused contract/registry tests: 8 tests, 0 failures.
+- Complete `vxpipe_agent_runtime` suite: 15 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: again stopped before execution because the shell has no PostgreSQL
+  password; no new code in this slice depends on PostgreSQL.

@@ -1,7 +1,16 @@
 defmodule Vxpipe.AgentRuntime.ContractsTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.AgentRuntime.{Event, Executor, PendingInvocation, Request, Result, ToolDescriptor}
+  alias Vxpipe.AgentRuntime.{
+    Event,
+    Executor,
+    ModelResponse,
+    PendingInvocation,
+    Request,
+    Result,
+    ToolCall,
+    ToolDescriptor
+  }
 
   test "defines a submit-only host executor contract" do
     callbacks = Executor.behaviour_info(:callbacks)
@@ -31,6 +40,28 @@ defmodule Vxpipe.AgentRuntime.ContractsTest do
                conversation_mode: :blocking,
                source_turn_id: "turn_1"
              )
+  end
+
+  test "represents mixed model text and complete tool calls without inspecting payloads" do
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "tool_call_1",
+               name: "lookup_order",
+               arguments: %{"order_id" => "order_1"},
+               provider_metadata: %{opaque: "provider-private"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "I will check.", tool_calls: [call])
+    assert response.text == "I will check."
+    assert response.tool_calls == [call]
+    refute inspect(call) =~ "order_1"
+    refute inspect(call) =~ "provider-private"
+    refute inspect(response) =~ "I will check"
+
+    assert {:error, :empty_response} = ModelResponse.new(text: "", tool_calls: [])
+
+    assert {:error, :invalid_tool_call} =
+             ToolCall.new(id: "", name: "lookup_order", arguments: %{})
   end
 
   test "builds a tool descriptor while keeping its private binding out of inspection" do

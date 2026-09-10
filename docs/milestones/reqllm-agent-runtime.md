@@ -96,9 +96,11 @@ process or dependency is used.
 1. [Complete 2026-09-10] Add the child application and red-test its public descriptor,
    request, result, event, submit-only executor, pending-context source, and session contracts
    with a deterministic model driver.
-2. Implement the submit-only model/tool state machine: final response, accepted running
-   acknowledgements, definite non-submission, multiple calls in model order, mixed text/tool
-   output, commit barriers, bounded failure, and cancellation.
+2. [In progress 2026-09-10] Implement the submit-only model/tool state machine: final
+   response, accepted running acknowledgements, definite non-submission, multiple calls in
+   model order, mixed text/tool output, commit barriers, bounded failure, and cancellation.
+   Normalized response/tool-call values and the exact private registry are complete; execution
+   and repeated rounds remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -225,6 +227,16 @@ Implementation evidence:
   `mix deps.unlock --check-unused` pass. Umbrella `mix test` again stopped before executing
   tests because PostgreSQL authentication requires a password absent from this shell; the
   database-free owning application suite is green.
+- Checkpoint 2a adds bounded `ToolCall` and `ModelResponse` values. Their `Inspect`
+  implementations omit arguments, provider metadata, and generated text. It also adds a
+  pinned `ToolRegistry` that rejects duplicate names, exposes only `ModelTool` projections,
+  resolves exact strings, validates arguments against the compiled JSON Schema, and keeps the
+  private binding out of inspection and provider values.
+- Checkpoint 2a red evidence was a focused compile failure because `ModelTool` did not exist.
+  After implementing the four cohesive value/registry modules, the focused contract/registry
+  run passed 8 tests and the complete package suite passed 15 tests with 0 failures. Umbrella
+  format, warnings-as-errors, strict Credo, and unused-lock checks pass. Umbrella `mix test`
+  remains blocked before test execution by the same absent PostgreSQL password.
 
 ## Specification review
 

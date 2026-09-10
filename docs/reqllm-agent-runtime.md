@@ -203,6 +203,12 @@ unique, payload-free pending-invocation list through a timeout-enforced host sou
 session GenServer. The focused package suite has 12 tests and 0 failures. Repeated tool rounds,
 ReqLLM projection, and Call Engine adoption remain pending, so this is not runtime parity yet.
 
+The next package-local slice adds normalized, inspection-safe model responses and complete
+tool calls plus the activation-pinned registry. The registry rejects duplicate names, projects
+only name/description/schema to providers, resolves exact strings, and validates arguments
+against the compiled schema before returning a private descriptor. Submission and repeated
+rounds remain pending.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).
