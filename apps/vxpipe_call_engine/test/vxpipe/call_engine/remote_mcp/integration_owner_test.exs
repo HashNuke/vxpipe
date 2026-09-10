@@ -97,8 +97,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     owner_monitor = Process.monitor(owner)
 
     assert :ok = stop_supervised(Agent)
-    assert_receive {:DOWN, ^client_monitor, :process, ^client, _reason}
-    assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :connection_lost}
+    assert_receive {:DOWN, ^client_monitor, :process, ^client, _reason}, 1_000
+    assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :connection_lost}, 1_000
   end
 
   test "ends a revoked credential lease with its binding owner" do
@@ -123,7 +123,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
 
     owner_monitor = Process.monitor(owner)
     assert :ok = Connections.revoke(key)
-    assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :credential_revoked}
+    assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :credential_revoked}, 1_000
     assert CredentialLeases.active_count(key) == 0
 
     assert {:error, {:credential_revoked, _child}} =
