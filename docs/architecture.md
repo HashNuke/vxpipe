@@ -250,6 +250,20 @@ required ExMCP hooks are a compatibility blocker to report, not permission to ad
 a second client path or replacement protocol support. No public MCP
 server is in scope. Dependency selection does not prove security, response limits,
 timeouts or conformance: test the effective public ExMCP path before enabling it.
+
+Reusable protocol connections are keyed by application/tenant scope, integration ID,
+and credential generation. An agent activation acquires a monitored, non-secret lease
+for every exact generation used by its resolved bindings; the lease grants access to the
+connection handle without copying endpoint headers or credentials into the call plan or
+lease registry. Ending the activation releases those leases while leaving a connection
+available to other authorized activations. Explicitly revoking a generation first
+tombstones it, then retires its cached connection and notifies every current lease holder;
+new leases and connection opens for that exact generation fail closed. The activation's
+one-for-all supervision then ends the stale binding rather than falling back to another
+tenant or application credential. Runtime tombstones complement the configured credential
+source: after an application restart, that source must be rehydrated without revoked
+generations rather than treating in-memory lease state as durable credential storage.
+
 Stream/session recovery must never silently resubmit `tools/call` or bypass invocation
 deadlines. The same invocation retains one absolute deadline and cumulative decoded/
 decompressed response budget across stream resumption, progress and reconnects;

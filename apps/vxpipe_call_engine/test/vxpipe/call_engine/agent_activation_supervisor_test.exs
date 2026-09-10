@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.CallEngine.TestAgentTool
+  alias Vxpipe.MCP.CredentialLeases
 
   test "starts a configured activation before readiness and restarts it only once" do
     activation_id = unique_activation_id()
@@ -85,7 +86,8 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
       )
 
     activation = start_supervised!({AgentActivationSupervisor, activation_options})
-    assert_receive {:test_remote_mcp_opened, _key, _config}
+    assert_receive {:test_remote_mcp_opened, key, _config}
+    assert CredentialLeases.active_count(key) == 1
 
     first = AgentActivationSupervisor.children(activation)
     first_owner = Map.fetch!(first, :remote_mcp)
@@ -100,6 +102,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
 
     _ = :sys.get_state(activation)
     assert_receive {:test_remote_mcp_opened, _key, _config}
+    assert CredentialLeases.active_count(key) == 1
 
     second = AgentActivationSupervisor.children(activation)
 
@@ -111,6 +114,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     assert :ok = stop_supervised({AgentActivationSupervisor, activation_id})
     assert_children_stopped(second_monitors)
     assert AgentActivationSupervisor.whereis_child(activation_id, :remote_mcp) == nil
+    assert CredentialLeases.active_count(key) == 0
   end
 
   defp options(activation_id) do

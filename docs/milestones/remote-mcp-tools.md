@@ -70,7 +70,7 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
 - [ ] Run while speaking; preserve live context and permitted archived result/descriptors; hidden client events remain hidden.
 - [ ] Refresh/change a discovery catalog: existing calls retain pinned enabled schemas;
   new calls may resolve the new catalog, and unresolved enabled bindings fail preparation.
-- [ ] Revocation fails closed instead of reusing stale authorization; private credential leases
+- [x] Revocation fails closed instead of reusing stale authorization; private credential leases
   redact process status/crash output and are released/invalidated at room-incarnation end.
 - [ ] Library invocation receives only scoped resolved inputs; domain authorization/history
   are tested here, protocol behavior in the library. Real integration uses that same client.
@@ -148,6 +148,13 @@ definition boundary has started or its specification has been reviewed.
   owner closed with `:connection_lost`, so its one-for-all activation rebuilds rather than retaining
   a dead handle. Both owner and activation-supervisor inspection redact private client
   configuration nested in their runtime/startup state.
+- [x] The MCP connection cache now tombstones an explicitly revoked scoped credential generation,
+  closes its reusable protocol subtree, and refuses to reopen that generation. Every activation
+  acquires a monitored non-secret lease before opening clients; revocation ends current binding
+  owners with `:credential_revoked`, while normal activation shutdown releases its leases without
+  closing a connection shared by another authorized activation. Focused lifecycle tests prove
+  existing and subsequent use fail closed, and the configured credential source—not this runtime
+  lease registry—remains responsible for durable revocation across application restarts.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

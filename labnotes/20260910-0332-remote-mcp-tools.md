@@ -259,3 +259,38 @@ supported Jido-owned loop without generating modules or using private APIs.
   full suite passed all application tests against a disposable PostgreSQL instance.
 
 Next: commit the separately verified protocol-client lifecycle checkpoint.
+
+## 2026-09-10 — credential-generation revocation and activation leases
+
+- Audited the distinction between application-scoped reusable MCP protocol connections and
+  activation-local authorization. Stopping an activation already removed its runtime binding but
+  did not represent a credential lease, and an explicit credential revocation could neither retire
+  the cached session nor prevent the same generation from reopening.
+- Red: a connection lifecycle test opened one scoped generation, revoked it, and failed because no
+  revocation entry existed. A second owner lifecycle test required one active lease, owner shutdown
+  with `:credential_revoked`, lease removal, and rejection before a subsequent private client open;
+  it failed because no lease registry existed.
+- Green: `Vxpipe.MCP.CredentialLeases` now owns runtime tombstones and monitored holder sets using
+  only bounded non-secret connection keys. `Connections.revoke/1` records the tombstone before
+  closing the supervised protocol subtree. Connection opening checks before and after open so a
+  concurrent revoke cannot leave a newly opened stale session behind.
+- Each remote integration owner acquires its deduplicated generation leases before opening clients.
+  Revocation notifies every holder and ends it with the internal `:credential_revoked` reason; a
+  fresh owner cannot acquire or open the generation. Holder monitors remove leases after ordinary
+  activation termination, while the separately supervised connection remains reusable until it is
+  explicitly revoked or retired.
+- The tombstones are intentionally runtime state, not recoverable credential storage. Application
+  restart must rebuild configuration from the durable application/tenant credential source without
+  revoked generations. No endpoint, header, credential, tool input, or tenant identity was added to
+  telemetry or public call state.
+- Focused verification: the connection suite passes 7 tests; the owner/activation lifecycle files
+  pass 7 tests under five different seeds; the complete MCP child passes 33 tests with three tagged
+  integrations excluded; and the complete Call Engine child passes 193 tests with two tagged
+  integrations excluded. Root format, warnings-as-errors compilation, strict Credo, and unused
+  dependency checks pass.
+- The deterministic full umbrella suite passes 408 tests against disposable PostgreSQL: MCP 33,
+  Call Engine 193, Calls 35, Persistence 25, Gateway 66, and Console 56. Nine tagged network
+  integrations were excluded, and the disposable server was stopped and removed after the run.
+
+Next: commit and publish this checkpoint. The supported Jido runtime-binding interface remains the
+only model-loop blocker.

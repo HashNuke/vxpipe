@@ -10,7 +10,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   alias Vxpipe.CallEngine.RemoteMCP.{Executor, Integration, IntegrationCatalog, RuntimeBinding}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, ExMCPClient}
+  alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, CredentialLeases, ExMCPClient}
 
   @binding_timeout_ms 5_000
 
@@ -76,6 +76,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
          protocol when is_atom(protocol) <- Keyword.get(options, :protocol, ExMCPClient),
          true <- Code.ensure_loaded?(protocol) and function_exported?(protocol, :call_tool, 4),
          {:ok, prepared} <- prepare(tools, integrations),
+         :ok <- acquire_credential_leases(prepared),
          {:ok, connections} <- open_connections(prepared, connection_provider),
          {:ok, connection_monitors} <- monitor_connections(connections),
          bindings <- runtime_bindings(prepared, connections, protocol) do
@@ -86,6 +87,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
          connection_monitors: connection_monitors
        }}
     else
+      {:error, :credential_revoked} -> {:stop, :credential_revoked}
       _invalid -> {:stop, :invalid_configuration}
     end
   end
@@ -107,10 +109,21 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
     end
   end
 
+  def handle_info({:vxpipe_mcp_credential_revoked, %ConnectionKey{}}, state) do
+    {:stop, :credential_revoked, state}
+  end
+
   def handle_info(_message, state), do: {:noreply, state}
 
   defp binding(owner, local_name) do
     GenServer.call(owner, {:binding, local_name}, @binding_timeout_ms)
+  end
+
+  defp acquire_credential_leases(prepared) do
+    prepared
+    |> Enum.map(& &1.key)
+    |> Enum.uniq()
+    |> CredentialLeases.acquire()
   end
 
   defp prepare(tools, integrations) do

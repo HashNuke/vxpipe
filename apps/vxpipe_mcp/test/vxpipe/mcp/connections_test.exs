@@ -62,6 +62,22 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     assert :error = Connections.lookup(key)
   end
 
+  test "revokes one credential generation and refuses to reopen it" do
+    key = key("revoked")
+    assert {:ok, connection} = open(key, "Bearer private")
+
+    owner_ref = Process.monitor(Connection.owner(connection))
+    client_ref = Process.monitor(Connection.client(connection))
+
+    assert :ok = Connections.revoke(key)
+    assert_receive {:DOWN, ^owner_ref, :process, _pid, :shutdown}
+    assert_receive {:DOWN, ^client_ref, :process, _pid, :shutdown}
+    assert :error = Connections.lookup(key)
+
+    assert {:error, :credential_revoked} = open(key, "Bearer private")
+    assert :error = Connections.lookup(key)
+  end
+
   test "rejects and cleans up a session that negotiates another protocol version" do
     key = key("wrong-version")
     close_on_exit([key])

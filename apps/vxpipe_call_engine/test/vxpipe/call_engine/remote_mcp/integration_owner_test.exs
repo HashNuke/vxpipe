@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
 
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
   alias Vxpipe.CallEngine.RemoteMCPFixture
+  alias Vxpipe.MCP.{Connections, CredentialLeases}
 
   test "opens the scoped generation and invokes the pinned remote operation" do
     client = client!([{:ok, %{"content" => [%{"type" => "text", "text" => "found"}]}}])
@@ -98,6 +99,44 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert :ok = stop_supervised(Agent)
     assert_receive {:DOWN, ^client_monitor, :process, ^client, _reason}
     assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :connection_lost}
+  end
+
+  test "ends a revoked credential lease with its binding owner" do
+    generation = "credential-revoked-#{System.unique_integer([:positive, :monotonic])}"
+    client = client!([])
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(client, self(), "private", credential_generation: generation)
+
+    owner =
+      start_supervised!(
+        {IntegrationOwner,
+         activation_id: "activation-revoked-credential",
+         tools: %{"customer_lookup" => binding},
+         integrations: catalog,
+         connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+         protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+      )
+
+    assert_receive {:test_remote_mcp_opened, key, _config}
+    assert CredentialLeases.active_count(key) == 1
+
+    owner_monitor = Process.monitor(owner)
+    assert :ok = Connections.revoke(key)
+    assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :credential_revoked}
+    assert CredentialLeases.active_count(key) == 0
+
+    assert {:error, {:credential_revoked, _child}} =
+             start_supervised(
+               {IntegrationOwner,
+                activation_id: "activation-revoked-credential-reuse",
+                tools: %{"customer_lookup" => binding},
+                integrations: catalog,
+                connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+                protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+             )
+
+    refute_receive {:test_remote_mcp_opened, ^key, _config}
   end
 
   defp client!(responses) do

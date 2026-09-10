@@ -7,8 +7,8 @@ defmodule Vxpipe.MCP.Application do
   def start(_type, _args) do
     children = [
       {Registry, keys: :unique, name: Vxpipe.MCP.ConnectionRegistry},
-      {DynamicSupervisor,
-       strategy: :one_for_one, name: Vxpipe.MCP.ConnectionSupervisor}
+      Vxpipe.MCP.CredentialLeases,
+      {DynamicSupervisor, strategy: :one_for_one, name: Vxpipe.MCP.ConnectionSupervisor}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Vxpipe.MCP.Supervisor)

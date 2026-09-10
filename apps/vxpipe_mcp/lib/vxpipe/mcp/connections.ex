@@ -11,6 +11,7 @@ defmodule Vxpipe.MCP.Connections do
     Connection,
     ConnectionKey,
     ConnectionNames,
+    CredentialLeases,
     ExMCPRuntime,
     IntegrationSupervisor,
     Telemetry
@@ -22,6 +23,7 @@ defmodule Vxpipe.MCP.Connections do
   @type error ::
           ClientOptions.error()
           | :connection_failed
+          | :credential_revoked
           | :not_ready
           | {:unsupported_protocol_version, String.t() | nil}
 
@@ -47,9 +49,12 @@ defmodule Vxpipe.MCP.Connections do
     started_at = Telemetry.started_at()
 
     {result, outcome} =
-      case lookup(key) do
-        {:ok, connection} -> {{:ok, connection}, :reused}
-        :error -> classify_open(start_connection(key, config, opts, options_builder))
+      if CredentialLeases.revoked?(key) do
+        {{:error, :credential_revoked}, :failed}
+      else
+        key
+        |> open_connection(config, opts, options_builder)
+        |> reject_revoked_connection(key)
       end
 
     Telemetry.connection_stop(
@@ -61,6 +66,12 @@ defmodule Vxpipe.MCP.Connections do
     )
 
     result
+  end
+
+  @spec revoke(ConnectionKey.t()) :: :ok
+  def revoke(%ConnectionKey{} = key) do
+    :ok = CredentialLeases.revoke(key)
+    close(key)
   end
 
   @spec lookup(ConnectionKey.t()) :: {:ok, Connection.t()} | :error
@@ -96,6 +107,24 @@ defmodule Vxpipe.MCP.Connections do
 
     :ok
   end
+
+  defp open_connection(key, config, opts, options_builder) do
+    case lookup(key) do
+      {:ok, connection} -> {{:ok, connection}, :reused}
+      :error -> classify_open(start_connection(key, config, opts, options_builder))
+    end
+  end
+
+  defp reject_revoked_connection({{:ok, connection}, outcome}, key) do
+    if CredentialLeases.revoked?(key) do
+      :ok = close(connection)
+      {{:error, :credential_revoked}, :failed}
+    else
+      {{:ok, connection}, outcome}
+    end
+  end
+
+  defp reject_revoked_connection(result, _key), do: result
 
   defp start_connection(key, config, opts, options_builder) do
     runtime = Keyword.get(opts, :runtime, ExMCPRuntime)
