@@ -204,8 +204,7 @@ GenServer callback. A dedicated output buffer projects complete sentence segment
 existing capability-message contract without replaying the final response after streamed deltas.
 If streamed output violates the engine bound, the coordinator cancels that runtime request before
 admitting queued caller work. This coordinator is not yet selected by the activation supervisor;
-tool completion leasing, interruption, and live-path replacement remain subsequent parts of the
-migration.
+interruption and live-path replacement remain subsequent parts of the migration.
 
 Before it admits a caller command, the migration coordinator now asks a separate conversation-
 admission boundary to inspect the authoritative invocation-registry snapshot. Any unconsumed
@@ -214,6 +213,23 @@ holding response and never sends that caller text to the model. A snapshot conta
 `non_blocking` records remains admissible, and Agent Runtime independently includes those records
 in the request's payload-free pending projection. Registry unavailability fails admission closed.
 This gate never executes, waits for, or cancels the tool worker.
+
+Terminal invocation delivery now follows the registry's lease boundary. The coordinator checks for
+a terminal completion before caller work, converts the bounded outcome into a `ContinueAgent`
+command, and submits it through `Session.continue/4` as private engine-origin input. The continuation
+retains the source call/participant/connection identity and whether its output should use TTS; the
+tool result remains explicitly marked as untrusted data. Caller input arriving during a leased
+non-blocking completion is queued, while a blocking completion still produces the holding response.
+The registry record is acknowledged only after Agent Runtime reports the continuation committed.
+Failure or cancellation before commit releases the lease and fails the coordinator closed without
+rerunning the tool. A terminal completion discovered by a racing caller is leased first even if its
+notification has not yet reached the coordinator mailbox.
+
+To keep this migration boundary cohesive, the coordinator delegates one active request's task,
+correlation, buffering, and cancellation to `Coordinator.ActiveRequest`; terminal projection and
+lease commit/release decisions belong to `Coordinator.RequestOutcome`; completion command/lease
+construction belongs to `CompletionContinuation`. The coordinator retains only serialization,
+admission, and scheduling.
 
 Tagged production evidence confirms Gemini accepts this adapter's exact tool schema and a
 subsequent canonical running-acknowledgement round with ephemeral pending state and tools withheld.

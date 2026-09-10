@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
   alias Vxpipe.AgentRuntime.{ModelResponse, PendingInvocation, Session}
   alias Vxpipe.CallEngine.AgentRuntime.{Coordinator, PendingContextSource}
-  alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
   alias Vxpipe.CallEngine.TestSubmittedInlineTool
@@ -96,7 +96,18 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
                     "Please hold while I finish the current request."}
 
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^terminal_command}
-    refute_receive {:test_agent_runtime_stream, _provider, _request}
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{} = continuation}
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert List.last(request.messages).origin == :engine
+    refute List.last(request.messages).content =~ terminal_command.content
+
+    assert {:ok, response} = ModelResponse.new(text: "The request completed.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^continuation}
+    assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
   end
 
   test "admits unrelated caller turns with non-blocking pending context" do
@@ -106,7 +117,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "non-blocking-call")
 
-    assert_receive {:submitted_inline_tool_started, execution, "non-blocking-call"}
+    assert_receive {:submitted_inline_tool_started, _execution, "non-blocking-call"}
     assert :ok = Coordinator.respond(runtime.coordinator, command)
 
     assert_receive {:test_agent_runtime_stream, provider, request}
@@ -125,8 +136,152 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_capability_text, coordinator, ^command, "The usual rules apply."}
     assert coordinator == runtime.coordinator
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
+  end
 
+  test "holds a later caller turn while the blocking acknowledgement request is active" do
+    runtime = start_runtime()
+    acknowledgement = command("blocking-acknowledgement", "Start checking")
+    later = command("blocking-later", "Can we discuss something else?")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, acknowledgement)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    assert {:accepted, :blocking} =
+             submit_invocation(runtime, :blocking, "blocking-acknowledgement-call")
+
+    assert_receive {:submitted_inline_tool_started, _execution, "blocking-acknowledgement-call"}
+    assert :ok = Coordinator.respond(runtime.coordinator, later)
+
+    assert_receive {:vxpipe_capability_text, coordinator, ^later,
+                    "Please hold while I finish the current request."}
+
+    assert coordinator == runtime.coordinator
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^later}
+
+    assert {:ok, response} = ModelResponse.new(text: "I am checking now.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^acknowledgement}
+  end
+
+  test "consumes a completed invocation before queued caller work" do
+    runtime = start_runtime(completion_target: self())
+    current = command("completion-current", "Start the request")
+    queued = command("completion-queued", "What happened?")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, current)
+    assert_receive {:test_agent_runtime_stream, current_provider, _request}
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "completion-call")
+
+    assert_receive {:submitted_inline_tool_started, execution, "completion-call"}
+    assert :ok = Coordinator.respond(runtime.coordinator, queued)
     send(execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_tool_completion_available, registry, "completion-call"}
+    send(runtime.coordinator, {:vxpipe_tool_completion_available, registry, "completion-call"})
+
+    assert {:ok, response} = ModelResponse.new(text: "I started it.")
+    send(current_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_capability_text_complete, coordinator, ^current}
+    assert coordinator == runtime.coordinator
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{} = continuation}
+
+    assert continuation.tool_call_id == "completion-call"
+    assert continuation.source_command_id == "command-completion-call"
+
+    assert_receive {:test_agent_runtime_stream, continuation_provider, continuation_request}
+    continuation_message = List.last(continuation_request.messages)
+    assert continuation_message.origin == :engine
+    assert continuation_message.content =~ ~s("invocation_id":"completion-call")
+    assert continuation_message.content =~ ~s("type":"tool_invocation_completion")
+    refute continuation_message.content =~ queued.content
+
+    assert {:ok, response} = ModelResponse.new(text: "The request completed.")
+    send(continuation_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^continuation,
+                    "The request completed."}
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^continuation}
+
+    assert_receive {:test_agent_runtime_stream, queued_provider, queued_request}
+    assert List.last(queued_request.messages).content == queued.content
+    assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
+
+    assert {:ok, response} = ModelResponse.new(text: "Everything completed.")
+    send(queued_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^queued}
+  end
+
+  test "leases an already completed non-blocking invocation before a racing caller" do
+    runtime = start_runtime(completion_target: self())
+    caller = command("completion-race", "Did anything finish?")
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "completion-race-call")
+
+    assert_receive {:submitted_inline_tool_started, execution, "completion-race-call"}
+    send(execution, :release_submitted_inline_tool)
+    assert_receive {:vxpipe_tool_completion_available, _registry, "completion-race-call"}
+
+    assert :ok = Coordinator.respond(runtime.coordinator, caller)
+
+    assert_receive {:vxpipe_capability_continuation_started, coordinator,
+                    %ContinueAgent{} = continuation}
+
+    assert continuation.tool_call_id == "completion-race-call"
+    assert_receive {:test_agent_runtime_stream, continuation_provider, _request}
+
+    assert {:ok, response} = ModelResponse.new(text: "The tool finished.")
+    send(continuation_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^continuation}
+
+    assert_receive {:test_agent_runtime_stream, caller_provider, caller_request}
+    assert List.last(caller_request.messages).content == caller.content
+
+    assert {:ok, response} = ModelResponse.new(text: "Yes.")
+    send(caller_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^caller}
+  end
+
+  test "releases an uncommitted completion lease and fails closed" do
+    runtime = start_runtime(completion_target: self())
+
+    assert {:accepted, :blocking} =
+             submit_invocation(runtime, :blocking, "failed-continuation-call")
+
+    assert_receive {:submitted_inline_tool_started, execution, "failed-continuation-call"}
+    send(execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_tool_completion_available, registry, "failed-continuation-call"}
+    monitor = Process.monitor(runtime.coordinator)
+
+    send(
+      runtime.coordinator,
+      {:vxpipe_tool_completion_available, registry, "failed-continuation-call"}
+    )
+
+    assert_receive {:vxpipe_capability_continuation_started, coordinator,
+                    %ContinueAgent{} = continuation}
+
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_response, {:error, :provider_unavailable}})
+
+    assert_receive {:vxpipe_capability_failed, ^coordinator, ^continuation, :provider_unavailable}
+
+    assert_receive {:DOWN, ^monitor, :process, ^coordinator, :completion_continuation_failed}
+
+    assert {:ok,
+            [
+              %Vxpipe.CallEngine.Tool.InvocationStatus{
+                invocation_id: "failed-continuation-call",
+                status: :terminal_queued
+              }
+            ]} = InvocationRegistry.snapshot(runtime.registry)
   end
 
   defp start_runtime(options \\ []) do
@@ -218,7 +373,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
       command_id: "command-#{invocation_id}",
       correlation_id: "turn-#{invocation_id}",
       agent_request_id: "request-#{invocation_id}",
-      tool_call_id: nil
+      tool_call_id: nil,
+      audio_response: true
     }
   end
 

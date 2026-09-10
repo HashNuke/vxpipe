@@ -763,3 +763,37 @@ The complete Call Engine suite passes 229 tests with 2 integration exclusions. U
 warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
 stops before test execution because PostgreSQL SCRAM authentication needs a password absent from
 this shell; no credential source was inspected.
+
+## Implementation checkpoint 4j: completion lease and private continuation
+
+Added a completion-priority coordinator test before implementation. It completed a controlled
+non-blocking invocation while an ordinary model request and a later caller command were pending. The
+red run produced a holding response for the queued command and never admitted the tool completion.
+The implemented scheduler now leases terminal registry work before examining caller input, creates a
+source-correlated `ContinueAgent`, and calls `Session.continue/4` from the separately supervised
+request task. The continuation is announced through the existing capability contract before its
+text can be projected.
+
+A second red test covered the cross-sender notification race: the registry was already terminal,
+but a caller `GenServer.call` reached the idle coordinator before the notification. The coordinator
+now attempts a lease synchronously before admitting an idle caller. For non-blocking work that caller
+is queued behind the private continuation. A blocking completion still holds and discards the caller
+turn while the private continuation proceeds.
+
+The registry record is acknowledged only after the Session returns a completed, committed private
+turn. Provider failure or cancellation releases the uncommitted lease, retains the terminal record,
+and stops the coordinator closed rather than rerunning the tool or letting caller work overtake lost
+state. A focused failure test monitors that coordinator exit and verifies the record returned to
+`terminal_queued`.
+
+Completion construction retains the invocation's source identifiers and its original
+`audio_response` choice in tool context. The completion payload is still bounded untrusted data.
+The coordinator was refactored before commit: `Coordinator.ActiveRequest` owns one request's task,
+correlation, output buffer, and cancellation; `Coordinator.RequestOutcome` owns terminal output and
+lease decisions; `CompletionContinuation` owns lease-to-command construction. The coordinator is
+now the serializer/admission scheduler instead of absorbing those separate reasons to change.
+
+Focused coordinator verification passes 8 tests. The complete Call Engine suite passes 233 tests
+with 2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+authentication needs a password absent from this shell; no credential source was inspected.

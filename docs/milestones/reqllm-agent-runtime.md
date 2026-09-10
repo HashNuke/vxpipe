@@ -128,15 +128,17 @@ process or dependency is used.
    Runtime submit and pending-context adapters are complete. Resolved host bindings now compile to
    deterministic descriptors with model-visible schema separated from the private action and
    conversation mode. Permission-derived Call Variables tools now compile as default-blocking
-   private bindings and execute through the same worker. Remote MCP handling, runtime admission,
-   and activation integration remain. Agent Runtime sessions now accept an OTP process name outside
-   their immutable model configuration, enabling the activation graph. The migration coordinator
-   now projects ordinary streamed Session output through the existing capability contract from a
-   separately supervised request task, bounds its queue/output, avoids replaying final text, and
-   cancels a rejected stream before advancing queued work. It is not activation-selected yet;
+   private bindings and execute through the same worker. Remote MCP handling belongs to the next
+   milestone; activation integration remains. Agent Runtime sessions now accept an OTP process name
+   outside their immutable model configuration, enabling the activation graph. The migration
+   coordinator now projects ordinary streamed Session output through the existing capability
+   contract from a separately supervised request task, bounds its queue/output, avoids replaying
+   final text, and cancels a rejected stream before advancing queued work. It is not
+   activation-selected yet;
    its registry-backed admission gate now holds caller turns for any unconsumed blocking invocation
    and admits turns when every pending invocation is explicitly non-blocking. Completion leasing and
-   interruption remain. Preserve completion and interruption behavior.
+   private continuation consumption are now integrated with completion priority and a commit-time
+   acknowledgement. Interruption remains. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -429,6 +431,23 @@ Implementation evidence:
 - Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
   checkpoint 4i. Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
+- Checkpoint 4j leases terminal invocation outcomes before queued or racing caller work, constructs
+  a source-correlated `ContinueAgent` command, and admits it through `Session.continue/4`. The
+  registry record is acknowledged only after the private engine-origin turn commits. A provider
+  failure releases the uncommitted lease and stops the coordinator closed, retaining the terminal
+  record without rerunning the worker.
+- The completion test was added before implementation and initially observed a queued blocking hold
+  instead of a continuation. A second race test initially sent the caller to the provider because
+  the completion notification had not reached the coordinator. Both paths now lease first. Focused
+  coordinator verification passes 8 tests, including completion priority, the notification race,
+  blocking holds during the active acknowledgement, and failure release.
+- The coordinator refactor keeps request task/buffer/correlation mechanics in `ActiveRequest`,
+  terminal output and lease decisions in `RequestOutcome`, and private command/lease construction in
+  `CompletionContinuation`. Activation selection, interruption, and live-path parity remain pending.
+- The complete Call Engine suite passes 233 tests with 2 integration exclusions. Umbrella format,
+  warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
+  stops before test execution because PostgreSQL SCRAM authentication needs a password absent from
+  this shell; no credential source was inspected.
 
 ## Specification review
 

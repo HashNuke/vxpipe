@@ -3,12 +3,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   use GenServer
 
-  alias Vxpipe.AgentRuntime.{Event, Result, Session}
-  alias Vxpipe.CallEngine.AgentRuntime.{ConversationAdmission, Correlation, OutputBuffer}
-  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.State
+  alias Vxpipe.AgentRuntime.Event
+
+  alias Vxpipe.CallEngine.AgentRuntime.{
+    CompletionContinuation,
+    ConversationAdmission
+  }
+
+  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{ActiveRequest, RequestOutcome, State}
   alias Vxpipe.CallEngine.Command.SendText
-  alias Vxpipe.CallEngine.Tool.Context
-  alias Vxpipe.CallEngine.{Id, Telemetry}
+  alias Vxpipe.CallEngine.Telemetry
 
   @call_timeout 5_000
   @cancel_timeout 1_000
@@ -45,125 +49,129 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   @impl true
   def handle_call({:respond, command}, _from, %State{current: nil} = state) do
-    case admit(command, state) do
-      {:ok, state} -> {:reply, :ok, state}
-      {:held, state} -> {:reply, :ok, state}
-      {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
+    case start_completion(state) do
+      {:ok, state} ->
+        respond_while_current(command, state)
+
+      {:error, :empty} ->
+        case admit(command, state) do
+          {:ok, state} -> {:reply, :ok, state}
+          {:held, state} -> {:reply, :ok, state}
+          {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
+        end
+
+      {:error, :unavailable} ->
+        {:reply, {:error, :unavailable}, state}
     end
   end
 
   def handle_call({:respond, command}, _from, %State{} = state) do
-    if :queue.len(state.pending) < state.maximum_pending_requests do
-      {:reply, :ok, %{state | pending: :queue.in(command, state.pending)}}
-    else
-      {:reply, {:error, :queue_full}, state}
+    respond_while_current(command, state)
+  end
+
+  defp respond_while_current(command, state) do
+    case ConversationAdmission.decide(state.invocation_registry) do
+      :admit ->
+        enqueue(command, state)
+
+      :hold ->
+        emit_holding_response(command, state)
+        {:reply, :ok, state}
+
+      {:error, :unavailable} ->
+        {:reply, {:error, :unavailable}, state}
     end
   end
 
   @impl true
   def handle_info(
+        {:agent_runtime_event, %Event{kind: :request_started, correlation: correlation}},
+        %State{
+          current: %ActiveRequest{
+            kind: {:completion, continuation},
+            correlation: correlation,
+            continuation_started?: false
+          }
+        } = state
+      ) do
+    send(
+      state.owner,
+      {:vxpipe_capability_continuation_started, self(), continuation.command}
+    )
+
+    {:noreply, %{state | current: ActiveRequest.mark_continuation_started(state.current)}}
+  end
+
+  def handle_info(
         {:agent_runtime_event,
          %Event{kind: :text_delta, correlation: correlation, data: %{text: text}}},
-        %State{current: %{correlation: correlation}} = state
+        %State{current: %ActiveRequest{correlation: correlation}} = state
       ) do
-    case OutputBuffer.push(state.current.output, text) do
-      {:ok, output, segments} ->
+    case ActiveRequest.push(state.current, text) do
+      {:ok, current, segments} ->
+        state = %{state | current: current}
         state = observe_first_output(text, state)
         Enum.each(segments, &emit_text(state, &1))
-        {:noreply, put_in(state.current.output, output)}
+        {:noreply, state}
 
       {:error, :invalid_response} ->
         state = cancel_runtime_request(state)
-        {:noreply, fail_and_advance(state, :invalid_response)}
+
+        state.current
+        |> RequestOutcome.fail_uncommitted(:invalid_response, request_outcome_options(state))
+        |> transition(state)
     end
   end
 
   def handle_info(
         {reference, result},
-        %State{current: %{task: %Task{ref: reference}}} = state
+        %State{current: %ActiveRequest{task: %Task{ref: reference}}} = state
       ) do
     Process.demonitor(reference, [:flush])
-    {:noreply, complete_and_advance(result, state)}
+
+    state.current
+    |> RequestOutcome.finish(result, request_outcome_options(state))
+    |> transition(state)
   end
 
   def handle_info(
         {:DOWN, reference, :process, _pid, _reason},
-        %State{current: %{task: %Task{ref: reference}}} = state
+        %State{current: %ActiveRequest{task: %Task{ref: reference}}} = state
       ) do
-    {:noreply, fail_and_advance(state, :provider_unavailable)}
+    state.current
+    |> RequestOutcome.fail_uncommitted(:provider_unavailable, request_outcome_options(state))
+    |> transition(state)
+  end
+
+  def handle_info(
+        {:vxpipe_tool_completion_available, registry, _invocation_id},
+        %State{current: nil} = state
+      ) do
+    if current_registry?(registry, state) do
+      {:noreply, start_next(state)}
+    else
+      {:noreply, state}
+    end
   end
 
   def handle_info(_message, state), do: {:noreply, state}
 
   defp start_request(%SendText{} = command, %State{} = state) do
-    request_id = Id.generate(:agent_request)
-    context = tool_context(command, request_id, state.agent_participant_id)
-    correlation = Correlation.new(state.invocation_registry, context)
-
-    task =
-      Task.Supervisor.async_nolink(state.request_supervisor, fn ->
-        Session.request(state.session, command.content, correlation, :infinity)
-      end)
-
-    current = %{
-      command: command,
-      correlation: correlation,
-      first_output_observed?: false,
-      output: OutputBuffer.new(state.maximum_output_bytes),
-      started_at: Telemetry.started_at(),
-      task: task
-    }
-
-    {:ok, %{state | current: current}}
-  rescue
-    _exception -> {:error, :unavailable}
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  defp complete_and_advance({:ok, %Result{status: :completed, output: output}}, state)
-       when is_binary(output) do
-    state = observe_first_output(output, state)
-
-    case OutputBuffer.finish(state.current.output, output) do
-      {:ok, segments} ->
-        Enum.each(segments, &emit_text(state, &1))
-        Telemetry.model_request_stop(state.current.started_at, state.provider, :ok, true)
-        send(state.owner, {:vxpipe_capability_text_complete, self(), state.current.command})
-        state |> Map.put(:current, nil) |> start_next()
-
-      {:error, :invalid_response} ->
-        fail_and_advance(state, :invalid_response)
+    case ActiveRequest.start_caller(command, request_options(state)) do
+      {:ok, current} -> {:ok, %{state | current: current}}
+      {:error, :unavailable} = error -> error
     end
   end
 
-  defp complete_and_advance({:ok, %Result{status: :cancelled}}, state) do
-    fail_and_advance(state, :interrupted)
-  end
-
-  defp complete_and_advance({:ok, %Result{status: :failed, reason: reason}}, state) do
-    fail_and_advance(state, failure_reason(reason))
-  end
-
-  defp complete_and_advance(_invalid, state) do
-    fail_and_advance(state, :provider_unavailable)
-  end
-
-  defp fail_and_advance(%State{current: nil} = state, _reason), do: start_next(state)
-
-  defp fail_and_advance(%State{} = state, reason) do
-    Telemetry.model_request_stop(
-      state.current.started_at,
-      state.provider,
-      reason,
-      state.current.first_output_observed?
-    )
-
-    send(state.owner, {:vxpipe_capability_failed, self(), state.current.command, reason})
-    state |> Map.put(:current, nil) |> start_next()
-  end
-
   defp start_next(%State{} = state) do
+    case start_completion(state) do
+      {:ok, state} -> state
+      {:error, :empty} -> start_next_caller(state)
+      {:error, :unavailable} -> exit(:completion_lease_unavailable)
+    end
+  end
+
+  defp start_next_caller(%State{} = state) do
     case :queue.out(state.pending) do
       {{:value, command}, pending} ->
         state = %{state | pending: pending}
@@ -185,6 +193,28 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     end
   end
 
+  defp start_completion(state) do
+    case CompletionContinuation.lease_next(
+           state.invocation_registry,
+           state.completion_consumer_id
+         ) do
+      {:ok, continuation} -> start_completion_request(continuation, state)
+      {:error, reason} when reason in [:empty, :unavailable] -> {:error, reason}
+    end
+  end
+
+  defp start_completion_request(continuation, state) do
+    case ActiveRequest.start_completion(continuation, request_options(state)) do
+      {:ok, current} -> {:ok, %{state | current: current}}
+      {:error, :unavailable} -> release_unstarted_completion(continuation, state)
+    end
+  end
+
+  defp release_unstarted_completion(continuation, state) do
+    _ = CompletionContinuation.release(state.invocation_registry, continuation)
+    {:error, :unavailable}
+  end
+
   defp admit(command, state) do
     case ConversationAdmission.decide(state.invocation_registry) do
       :admit ->
@@ -199,6 +229,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     end
   end
 
+  defp enqueue(command, state) do
+    if :queue.len(state.pending) < state.maximum_pending_requests do
+      {:reply, :ok, %{state | pending: :queue.in(command, state.pending)}}
+    else
+      {:reply, {:error, :queue_full}, state}
+    end
+  end
+
   defp emit_holding_response(command, state) do
     send(
       state.owner,
@@ -208,45 +246,57 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     send(state.owner, {:vxpipe_capability_text_complete, self(), command})
   end
 
-  defp observe_first_output(text, state)
-       when is_binary(text) and text != "" and not state.current.first_output_observed? do
-    Telemetry.model_first_token(state.current.started_at, state.provider)
-    put_in(state.current.first_output_observed?, true)
-  end
+  defp transition(:advance, state),
+    do: {:noreply, state |> Map.put(:current, nil) |> start_next()}
 
-  defp observe_first_output(_text, state), do: state
+  defp transition({:stop, reason}, state), do: {:stop, reason, %{state | current: nil}}
+
+  defp observe_first_output(text, state)
+       when is_binary(text) do
+    case ActiveRequest.observe_output(state.current, text) do
+      {current, :first} ->
+        Telemetry.model_first_token(current.started_at, state.provider)
+        %{state | current: current}
+
+      {_current, :subsequent} ->
+        state
+    end
+  end
 
   defp emit_text(state, text) do
     send(state.owner, {:vxpipe_capability_text, self(), state.current.command, text})
   end
 
-  defp cancel_runtime_request(%State{current: %{task: %Task{} = task}} = state) do
-    _ = Session.cancel(state.session, @cancel_timeout)
-    _ = Task.shutdown(task, :brutal_kill)
+  defp cancel_runtime_request(%State{current: %ActiveRequest{} = current} = state) do
+    :ok = ActiveRequest.cancel(current, state.session, @cancel_timeout)
     state
-  catch
-    :exit, _reason -> state
   end
 
-  defp tool_context(command, request_id, agent_participant_id) do
-    %Context{
-      tenant_id: command.tenant_id,
-      room_id: command.room_id,
-      incarnation_id: command.incarnation_id,
-      agent_participant_id: agent_participant_id,
-      source_participant_id: command.participant_id,
-      connection_id: command.connection_id,
-      command_id: command.id,
-      correlation_id: command.correlation_id,
-      agent_request_id: request_id,
-      tool_call_id: nil
-    }
+  defp current_registry?(registry, state) when is_pid(registry) do
+    GenServer.whereis(state.invocation_registry) == registry
+  rescue
+    _exception -> false
   end
 
-  defp failure_reason(:request_timeout), do: :provider_timeout
-  defp failure_reason(:cancelled), do: :interrupted
-  defp failure_reason(:provider_unavailable), do: :provider_unavailable
-  defp failure_reason(_reason), do: :invalid_response
+  defp current_registry?(_registry, _state), do: false
+
+  defp request_options(state) do
+    [
+      agent_participant_id: state.agent_participant_id,
+      invocation_registry: state.invocation_registry,
+      maximum_output_bytes: state.maximum_output_bytes,
+      request_supervisor: state.request_supervisor,
+      session: state.session
+    ]
+  end
+
+  defp request_outcome_options(state) do
+    [
+      invocation_registry: state.invocation_registry,
+      owner: state.owner,
+      provider: state.provider
+    ]
+  end
 
   defp configuration(options) do
     with {:ok, options} <-
@@ -279,6 +329,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       {:ok,
        %State{
          agent_participant_id: agent_participant_id,
+         completion_consumer_id: "agent-runtime-completion:" <> activation_id,
          session: session,
          invocation_registry: invocation_registry,
          request_supervisor: request_supervisor,

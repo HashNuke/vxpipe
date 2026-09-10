@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
   @derive {Inspect, only: [:provider, :maximum_pending_requests]}
   @enforce_keys [
     :agent_participant_id,
+    :completion_consumer_id,
     :session,
     :invocation_registry,
     :request_supervisor,
