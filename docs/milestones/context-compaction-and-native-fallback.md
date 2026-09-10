@@ -8,7 +8,7 @@ Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-cal
 
 A long agent conversation compacts older completed history before exhausting model input
 capacity while preserving current work, variables and permissions. A configured
-provider-native routing fallback supported by the selected Jido AI/ReqLLM provider surface
+provider-native routing fallback supported by the selected ReqLLM provider surface
 can be exercised without adding Vxpipe's own provider chain.
 
 ## Specification
@@ -18,8 +18,8 @@ can be exercised without adding Vxpipe's own provider chain.
 - Summarizer model/provider/execution selection remains unapproved. Before production requests, explicitly settle that narrow selection and record it; do not silently add a cheaper/new provider, local model, or broaden data recipients. A controlled fake compactor proves orchestration independently. Define concrete token accounting/safety margin and failure/deadline behavior without claiming exact counting for unsupported models.
 - Compaction sees only agent-authorized conversation. Summary is derived untrusted data, not system policy, tool result or tool-execution authority. It never updates CallVariables/grants or replaces full permitted archival history. Derived transcripts retain source-interval storage restrictions.
 - Snapshot-based work preserves messages/tool completions arriving afterward; stale results from terminated activations cannot attach to another agent. Keep bounded work outside RoomAuthority/media and attribute observed compaction usage without inventing a user turn or changing retention.
-- Expose only provider-native/router fallback options supported through Jido AI's ReqLLM
-  provider layer and existing configured profiles. No Vxpipe fallback schema/chain/
+- Expose only provider-native/router fallback options supported through the agent runtime's
+  ReqLLM provider layer and existing configured profiles. No Vxpipe fallback schema/chain/
   coordinator and no new STT/TTS fallback. Preserve the same permissions/tools/privacy and
   actual observed provider/model usage. Provider-managed fallback is not permission to repeat
   an MCP action or replay already-emitted speech after a broken stream.

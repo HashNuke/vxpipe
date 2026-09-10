@@ -5,6 +5,10 @@ routing, plan-selected speech startup, trusted sample, failure cleanup, and comp
 text/speech/tool acceptance path are implemented and verified.
 Specification review: approved,
 including the Jido integration follow-up (2026-09-08).
+Forward-runtime note (2026-09-10): the Jido-specific text below records the implementation
+that completed this slice. The [ReqLLM agent-runtime milestone](reqllm-agent-runtime.md)
+must preserve these observable contracts while replacing that mechanism; historical evidence
+is not rewritten as if it used the new runtime.
 Prerequisites: none; start from the existing runnable umbrella.
 Sources: [Canonical representation and minimal definition](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [entry participants](../../labnotes/20260905-0405-call-definition-design.md#entry-participants-and-startup--approved-g2-decisions); [Jido evaluation](../../labnotes/20260908-1344-jido-ai-evaluation.md); [R47](../call-definition-gap-review.md).
 
@@ -48,7 +52,7 @@ cannot change that live call.
   explicitly, never disappear silently. Empty transfer possibilities expose no transfer tool.
 - The first supported subset uses finite static Actions whose local tool keys equal their
   declared Action names. Reject differing aliases before startup until the public binding
-  interface in [the decision](../jido-tool-execution.md) is available. Current Jido AI loses
+  interface in the [ReqLLM runtime migration](reqllm-agent-runtime.md) is available. Current Jido AI loses
   map aliases when constructing model tools; do not silently rename or generate modules.
   This temporary rollout restriction does not remove aliases from the final definition
   contract. The live-MCP slice owns the general runtime-binding interface gate.

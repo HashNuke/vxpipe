@@ -1,12 +1,12 @@
 # Remote MCP tools in a live call
 
-Status: implementation in progress. Specification updated after the 2026-09-08 released-package
-investigation. This slice owns an explicit implementation blocker: a supported public
-Jido AI runtime-tool interface preserving exact local names/schemas and private execution
-bindings. ExMCP conformance alone does not resolve it. Revalidation on 2026-09-10 found that the
-latest Hex release remains Jido AI 2.3.0 and current upstream `main` still has no matching public
-interface; the related catalog issue remains open and proposes a different generic-tool shape.
-Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its background-tool and tenant admission prerequisites; [MCP client integration and conformance](mcp-client-library.md). See the [tool-binding decision](../jido-tool-execution.md).
+Status: implementation in progress. Protocol, configuration, catalog, binding, security and
+activation foundations are implemented. Final model exposure depends on the intermediate
+[ReqLLM agent runtime](reqllm-agent-runtime.md); it no longer depends on a Jido extension or fork.
+Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its
+background-tool and tenant admission prerequisites; [MCP client integration and
+conformance](mcp-client-library.md); [ReqLLM agent runtime](reqllm-agent-runtime.md).
+See the [runtime/tool-binding decision](../reqllm-agent-runtime.md).
 Sources: [Configured integrations](../../labnotes/20260905-0405-call-definition-design.md#applicationtenant-mcp-integrations-and-agent-enablement); [remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [R22–R26/R49](../call-definition-gap-review.md).
 
 ## Runnable outcome
@@ -18,24 +18,23 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
 - Application/tenant integrations are configured infrastructure; each agent enables named operations through its unified local-key tools map. Tenant override replaces the whole integration record, not a deep merge. Calls carry no per-call MCP endpoint/credential override. Resolve tenant from trusted principal and pin bindings/catalog/schema/config generations in the call plan.
 - Use the selected ExMCP integration with MCP `2025-11-25` Streamable HTTP JSON/SSE responses, initialization/capability negotiation and scoped session handling. The earlier `2026-07-28` target is superseded. Do not advertise unsupported sampling/elicitation/tasks or silently negotiate an untested profile.
 - Consume the separately verified thin `vxpipe_mcp` adapter around `ex_mcp`. An engine-side
-  tool bridge exposes enabled remote tools to the established Jido AI AgentServer loop.
+  tool bridge exposes enabled remote tools through the established
+  `Vxpipe.AgentRuntime` data-tool and private-executor contracts.
   The integration owner supplies resolved configuration, private credentials, deadlines,
   pinned schemas and network policy; it owns tenant selection, grants, catalog scoping,
   call/agent lifecycle and result history. Neither gateway nor room processes implement
   another MCP parser. ExMCP owns its protocol/client integration; the internal adapter has
-  no dependency on Jido or those domain applications. Do not add `jido_mcp` or unreleased
-  Jido Connect to manufacture the missing model-tool interface.
+  no dependency on the agent runtime or those domain applications. Do not add a second MCP
+  client or an agent-framework bridge to manufacture model-tool definitions.
 - Expose each enabled local binding with its pinned remote schema while keeping endpoint,
   credential and remote-operation selection outside model arguments. No externally driven
-  Action-module/atom growth, private proxy APIs or generic model-visible endpoint/tool
-  dispatcher. First obtain and prove a supported public Jido AI data-tool projection and
-  execution interface. Current request transformers regenerate schemas from Action modules;
-  interceptors do not replace execution. Neither is the required interface today.
-- Keep static Actions and runtime remote bindings in the same Jido-owned loop. Prove two
+  module/atom growth, private proxy APIs or generic model-visible endpoint/tool dispatcher.
+  Project the descriptor through the ReqLLM runtime while resolving and executing only its
+  paired private binding inside the current activation.
+- Keep platform and runtime remote bindings in the same agent-runtime loop. Prove two
   local aliases can share a handler while retaining independent schemas and private grants.
-  This lifts the early static-tool name restriction without changing the definition contract.
-  Do not introduce a second custom ReqLLM loop. Prefer an upstream extension; a maintained
-  fork/private patch requires an explicit decision, not an implementation workaround.
+  This lifts the historical Jido Action-name restriction without changing the definition
+  contract. Do not introduce a second production model/tool loop inside Call Engine or MCP.
 - Auth variants are none, bearer, or validated custom headers; transport-owned headers cannot be overridden. Secrets stay in the private integration boundary, recoverable through configured secret storage, never tool arguments/plan projections. Authorization-scoped discovery/cache/health/concurrency state must not cross tenant/integration/credential generation.
 - Follow ExMCP and MCP SDK security guidance at Vxpipe's actual outbound boundary:
   trusted configured endpoints, verified HTTPS, address-at-connect/rebinding defenses, no
@@ -49,8 +48,8 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
 ## Implementation checklist
 
 - [x] Red-test a controlled remote MCP fixture for discovery, valid tool invocation, slow result, schema failure, auth and response-size limits.
-- [ ] Prove the public Jido AI runtime-binding extension in a deterministic mixed-tool run;
-  record the exact supported release/API before claiming dynamic catalog support.
+- [ ] Prove the `Vxpipe.AgentRuntime` data-tool/private-binding interface in a deterministic
+  mixed platform/remote run without a second model loop.
 - [x] Wire the verified ExMCP adapter through the integration owner; preserve its pinned
   profile/conformance evidence and enforce dependency direction.
 - [x] Implement private scoped integration resolution/cache/discovery and data-backed binding
@@ -60,8 +59,9 @@ A call's reception agent invokes one tenant-configured remote tool, continues sp
 
 ## Acceptance and failure checks
 
-- [ ] A deterministic Jido run alternates a static Action and remote tool over successive
-  model rounds, then answers; Jido, not a Vxpipe replacement loop, owns continuation.
+- [ ] A deterministic agent-runtime run alternates a platform tool and remote tool over
+  successive model rounds, then answers; `vxpipe_agent_runtime`, not Call Engine or MCP,
+  owns model continuation.
 - [ ] Model-visible tools preserve exact local names/pinned schemas, including two aliases
   sharing one handler. Unknown bindings fail before execution; endpoint selectors and
   credentials never enter the model schema/arguments or public events.
@@ -132,14 +132,14 @@ definition boundary has started or its specification has been reviewed.
   excessive or ambiguous outcomes without retry. Its inspectable state retains no private client
   configuration. Focused tests pass 3 tests and the call-engine child passes 188 tests with two
   tagged integrations excluded. This first checkpoint did not wire the owner into agent
-  activation or Jido.
+  activation or agent runtime.
 - [x] The tool executor and dispatcher accept an explicit activation-local remote owner plus a
   closed set of local aliases. Every remote alias is background-only, participates in the same
   admission/timeout/completion lifecycle as a background host tool, and cannot collide with a
   host tool. A controlled invocation proves the dispatcher remains responsive while the remote
   request waits, completion retains the local alias, and only the pinned remote operation reaches
   the protocol client. This first dispatcher checkpoint did not attach the runtime to the
-  agent-activation supervisor or expose it through Jido's model-visible definitions.
+  agent-activation supervisor or expose it through the runtime's model-visible definitions.
 - [x] Agent activation now conditionally starts a named remote integration owner before its tool
   dispatcher. The owner and dispatcher participate in the existing one-for-all restart domain;
   a controlled owner crash replaces the entire activation, and stopping the activation removes
@@ -166,7 +166,7 @@ definition boundary has started or its specification has been reviewed.
   3/3; the Call Engine suite passes 196 tests and the deterministic umbrella suite passes 411,
   with nine tagged network integrations excluded. Catalog TTL/refresh orchestration and the
   configuration source remain pending; this does not claim the broader
-  resolution/cache/discovery checklist or Jido exposure complete.
+  resolution/cache/discovery checklist or model exposure complete.
 - [x] A separately supervised `CatalogStore` owns only atomic publication of the current immutable
   application/tenant snapshot; catalog loading stays outside its callbacks. A controlled
   replacement test starts an activation-local owner from generation 1, publishes generation 2
@@ -183,7 +183,7 @@ definition boundary has started or its specification has been reviewed.
   engine contract passes 1 test, the affected Calls workflows pass 14 tests, the Call Engine
   suite passes 197 tests, the Calls suite passes 35 tests, and the deterministic umbrella suite
   passes 412 tests with nine tagged integrations excluded. Live room startup, configuration
-  source/refresh orchestration, and Jido projection remain pending.
+  source/refresh orchestration, and agent-runtime projection remain pending.
 - [x] A one-shot `CatalogRefresh` operation now validates a bounded set of scoped integration
   identities, discovers them with explicitly bounded concurrency, assembles one complete
   application/tenant snapshot, and publishes it atomically. A controlled failure after loading a
@@ -222,7 +222,7 @@ definition boundary has started or its specification has been reviewed.
   configuration/catalog/plan/binding/owner values. Root formatting, warnings-as-errors, strict
   Credo, and dependency checks pass; the serialized umbrella suite passes all 424 default-lane
   tests with nine tagged integrations excluded. This proves the engine-owned data path through
-  runtime execution; the separate Jido model-projection acceptance check remains blocked.
+  runtime execution; the separate agent-runtime model-projection acceptance check remains pending.
 - [x] A controlled loopback server now proves `CatalogLoader` and `IntegrationOwner` use the real
   `vxpipe_mcp`/ExMCP client for authenticated discovery and exact pinned invocation. Five focused
   engine tests cover success, authentication rejection, schema rejection before submission,
@@ -232,7 +232,7 @@ definition boundary has started or its specification has been reviewed.
   only through a test-only provider. The MCP child passes 34 tests and the Call Engine child passes
   214 tests, with their tagged integrations excluded. Root formatting, warnings-as-errors, strict
   Credo, and dependency gates pass; the serialized umbrella suite passes all 430 default-lane tests
-  with nine tagged integrations excluded. This does not expose remote bindings to Jido.
+  with nine tagged integrations excluded. This does not expose remote bindings to a model.
 - [x] Remote client authentication now has one closed parser supporting absent/none, bearer, and
   bounded custom-header variants. Raw transport headers, malformed bearer/header values,
   case-insensitive duplicates, and transport-owned header overrides fail before client startup.
@@ -243,9 +243,10 @@ definition boundary has started or its specification has been reviewed.
   tests and the Call Engine child passes 215 tests, with their tagged integrations excluded. Root
   formatting, warnings-as-errors, strict Credo over 322 source files, and unused-dependency gates
   pass. The serialized umbrella suite passes all 434 default-lane tests with nine tagged
-  integrations excluded. This checkpoint does not change the outstanding Jido model-tool
-  projection boundary.
-- [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
+  integrations excluded. This checkpoint does not change the outstanding agent-runtime
+  model-tool projection boundary.
+- [ ] Expose and execute the pinned runtime binding through the adopted
+  `Vxpipe.AgentRuntime` loop.
 
 ## Specification review
 
@@ -255,7 +256,9 @@ Added catalog/schema pinning, unresolved binding failure, revoked authorization 
 The subsequent internal-library prerequisite and scoped-input/domain-ownership boundary
 also passed milestone_review_a's focused follow-up review. The supported protocol revision
 and non-resetting invocation bounds remain approved. The later released-package probe
-confirmed Jido owns repeated rounds but rejects data-tool descriptors and loses aliases
-in model projection. This slice now owns that public-interface gate; the ExMCP library
-checkpoint is independent. No protocol/security or model-schema requirement was waived.
+found that Jido owns repeated rounds but rejects data-tool descriptors and loses aliases
+in model projection. The 2026-09-10 runtime decision moved that generic loop work into its
+own intermediate ReqLLM milestone; this slice consumes the resulting interface. The ExMCP
+library checkpoint remains independent. No protocol/security or model-schema requirement
+was waived.
 This is specification evidence only; implementation and runtime verification remain unchecked.

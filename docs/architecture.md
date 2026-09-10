@@ -133,7 +133,17 @@ transcript is a view of what participants said. **Model context** means everythi
 supplied to the LLM: instructions, selected history, and permitted call variables.
 Neither history nor model context is the mutable variable store.
 
-The agent-loop implementation places one `Jido.AI.Agent`/AgentServer under each
+The selected target places one `Vxpipe.AgentRuntime` session under each active agent
+participant's Vxpipe-owned supervision subtree. The separate `vxpipe_agent_runtime`
+umbrella child owns ReqLLM conversation state, exact data-backed tool projection, repeated
+model/tool rounds, streamed response normalization, cancellation and neutral runtime events.
+It does not own room/participant authority, tool authorization or execution, background
+workers, MCP transport, variables, transfers, TTS, client visibility, or persistence. Those
+remain Call Engine concerns. See the [runtime decision](reqllm-agent-runtime.md) and
+[intermediate milestone](milestones/reqllm-agent-runtime.md).
+
+Until that milestone completes, the running agent-loop implementation places one
+`Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current
 custom model/tool-loop capability process; it does not become a second room or participant
 authority. Jido owns that activation's conversation projection, ordinary ReAct request
@@ -156,6 +166,12 @@ work. The projection filter is the behavioral guarantee. Jido still owns the ReA
 the coordinator neither invokes providers nor executes a replacement model/tool loop.
 The definition-driven text subset attaches this coordinator to its participant and routes
 room turns through it; plan-selected speech routing remains in progress.
+
+The intermediate migration replaces only the Jido-specific runtime child and adapter. It
+retains the coordinator's call-domain queueing, correlation, background-completion, output,
+and interruption responsibilities where they remain cohesive. Jido dependencies are removed
+only after the existing behavior and provider lanes pass through the new package; there is no
+long-lived second production loop.
 
 The implemented `AgentActivationSupervisor` groups the selected Action dispatcher,
 AgentServer and coordinator under a one-for-all policy. The coordinator synchronously
@@ -229,8 +245,9 @@ call timestamps nor the trusted destination-resolution boundary described below.
 
 The selected remote MCP client is [ExMCP](https://hexdocs.pm/ex_mcp/ExMCP.Client.html),
 used directly behind `vxpipe_mcp`. This supersedes direct Jido MCP selection; neither
-`jido_mcp` nor unreleased Jido Connect is required. Jido AI still owns the model/tool
-loop, independently of MCP transport. See the [loop/tool-binding decision](jido-tool-execution.md).
+`jido_mcp` nor Jido Connect is required. The separate `vxpipe_agent_runtime` package owns
+the model/tool loop, independently of MCP transport. See the
+[runtime/tool-binding decision](reqllm-agent-runtime.md).
 Target MCP `2025-11-25` Streamable HTTP with JSON and SSE responses.
 Initialization uses `initialize` followed by `notifications/initialized`; subsequent
 requests carry the negotiated `MCP-Protocol-Version`. Handle optional
@@ -365,17 +382,14 @@ redirect refusal without credential forwarding, and mixed DNS-answer rejection a
 network client. Plaintext transport is available only through the explicit test connection provider;
 production integration configuration still requires HTTPS and cannot select that escape hatch.
 
-Jido AI's current public tool registry expects Action modules and regenerates model
-schemas from them after request transformation. It also loses configured registry aliases
-in model projection. Direct ExMCP does not fix this separate model-tool interface gap.
-Before live-MCP integration ships, require a supported public Jido runtime data-tool
-projection/executor interface that preserves each local name/pinned schema and private
-execution binding without externally driven atom/module creation. Static Actions and
-remote tools must share the Jido-owned loop; do not implement another ReqLLM loop or use
-a generic model-visible endpoint/tool selector. The standalone ExMCP conformance milestone
-can proceed independently. Early platform-tool slices explicitly accept only local keys
-matching their finite Action names until the extension exists; unsupported aliases fail
-before startup. The final call-definition alias contract is unchanged.
+Direct ExMCP intentionally does not expose model tools. Before live-MCP integration ships,
+the intermediate `vxpipe_agent_runtime` milestone must provide the shared runtime-tool
+projection/executor interface: exact local string names, permitted descriptions, pinned
+schemas and separate private bindings without externally driven atom/module creation.
+Platform and remote tools share that one runtime loop. Call Engine resolves and executes
+the bindings; the model never receives endpoint, credential, remote-operation or tenant
+selectors. Do not add another loop inside Call Engine or MCP, or use a generic model-visible
+endpoint/tool selector. The standalone ExMCP conformance milestone remains independent.
 
 The [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 is authoritative. Validate the client using pinned compatible versions of the
@@ -527,7 +541,7 @@ implementation details; the deferred general result/document-inspection design
 is unchanged.
 
 R50 permits explicitly configured LLM provider-native/router fallback only where
-the selected Jido AI/ReqLLM provider surface supports the provider options. It does not add a Vxpipe fallback schema,
+the selected agent-runtime/ReqLLM provider surface supports the provider options. It does not add a Vxpipe fallback schema,
 direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
 permission, privacy, and usage constraints, recording actual observed provider/
 model attribution without inventing hidden upstream attempts or IDs. This does
@@ -812,6 +826,13 @@ lifecycle, routing, turn semantics, tools, transfers, and protocol-neutral
 events. The dependency direction is from gateway to the public call-engine
 contract. The call engine must not depend on RTVI message names, JSON shapes,
 client SDKs, or transport credentials.
+
+The planned `vxpipe_agent_runtime` application owns only the reusable, supervised
+ReqLLM conversation/tool-loop boundary for one agent activation. Call Engine depends on
+its public data-tool, executor and event contracts; the runtime must not depend back on
+Call Engine. `vxpipe_mcp` independently owns ExMCP protocol mechanics. Call Engine is the
+only component that connects an authorized private MCP binding to an agent-runtime tool
+request, preserving an acyclic dependency graph.
 
 ### Reusable gateway and console
 

@@ -2,6 +2,10 @@
 
 Status: complete as of 2026-09-09. Specification review: approved, including the
 Jido ReAct/Action follow-up (2026-09-08).
+Forward-runtime note (2026-09-10): Jido-specific mechanisms below remain historical
+implementation evidence. The [ReqLLM agent-runtime milestone](reqllm-agent-runtime.md)
+must reproduce the approved acknowledgement, cancellation, completion-mailbox and private
+continuation behavior before Jido is removed.
 Prerequisites: [Variables and tool projections](call-variables-and-tool-visibility.md).
 Sources: [Background tools](../../labnotes/20260905-0405-call-definition-design.md#provider-independent-background-tools--approved-g4-decision); [timeouts](../../labnotes/20260905-0405-call-definition-design.md#mcp-timeouts-with-unconfirmed-outcomes--approved-g4-decision).
 

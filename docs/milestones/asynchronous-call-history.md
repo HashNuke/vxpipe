@@ -1,6 +1,9 @@
 # Asynchronous call history and variable snapshots
 
 Status: complete (2026-09-09). Specification review: approved (2026-09-08).
+Forward-runtime note (2026-09-10): the [ReqLLM agent-runtime milestone](reqllm-agent-runtime.md)
+must preserve this slice's archived model/tool/usage facts and attribution while replacing
+the Jido-backed inference mechanism recorded in its implementation evidence.
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Background tools](background-tool-conversation.md).
 Sources: [Incremental facts](../../labnotes/20260905-0405-call-definition-design.md#persist-facts-incrementally-and-derive-the-transcript); [variable snapshots](../../labnotes/20260905-0405-call-definition-design.md#variable-history-snapshots-and-the-latest-pointer--approved-g5-decision); [asynchronous consistency](../../labnotes/20260905-0405-call-definition-design.md#persistence-consistency-levels).
 

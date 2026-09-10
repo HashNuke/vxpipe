@@ -2,6 +2,9 @@
 
 Status: complete as of 2026-09-09. Specification review: approved, including the
 Jido Action follow-up (2026-09-08).
+Forward-runtime note (2026-09-10): Jido Action references below describe the completed
+implementation. The [ReqLLM agent-runtime milestone](reqllm-agent-runtime.md) migrates the
+same permission, schema, privacy and tool-result contracts to data-backed runtime tools.
 Prerequisites: [Definition-driven call](definition-driven-call.md), including its Jido-backed
 agent loop and action boundary.
 Sources: [Call Variables](../../labnotes/20260905-0405-call-definition-design.md#call-variables-are-typed-sectioned-and-permissioned); [authorization](../../labnotes/20260905-0405-call-definition-design.md#authorization-transaction); [client visibility](../../labnotes/20260905-0405-call-definition-design.md#tool-event-visibility-and-sample-debugging--approved-g5-decision).
@@ -25,7 +28,7 @@ During the definition-driven call, the agent reads a prefilled read-only order s
   approved sketches.
 - Generated variable-tool keys match the finite Actions' declared names. Per-call grants
   and schemas remain data checked by handlers, not generated modules. Inherit the initial
-  slice's unsupported-alias diagnostic until the [runtime-binding interface](../jido-tool-execution.md)
+  slice's unsupported-alias diagnostic until the [ReqLLM runtime migration](reqllm-agent-runtime.md)
   is available; ordinary variable tools do not depend on remote MCP integration.
 - Reads return only requested sections with revisions; any forbidden section fails the whole read without values. An authorized unpopulated section returns one `value: null`, without populating nested placeholders.
 - Object updates recursively merge and preserve omitted nested values; arrays replace. Direct-variable updates address literal schema keys. Explicit null assigns/clears only where nullable, retaining the key. Validate the entire candidate atomically; errors leave values/revisions unchanged.

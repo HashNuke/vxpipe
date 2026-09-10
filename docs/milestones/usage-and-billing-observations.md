@@ -16,7 +16,7 @@ An operator inspects each call's model requests, speech-service intervals, tool/
 - Retain observations and derive effective attempt/component amounts: deltas add, cumulative totals replace, final supersedes estimates, explicit corrections may decrease/increase, stale estimates cannot replace finals. Deduplicate proven delivery identities, not equal values; keep included subcategories separate from aggregate totals.
 - Monetary values are exact decimal with currency/source/status; unavailable price/usage is
   not zero. Keep provider-reported price separate from library/catalog-derived estimates;
-  inspect Jido AI/ReqLLM provenance rather than relabeling best-effort cost as a provider
+  inspect agent-runtime/ReqLLM provenance rather than relabeling best-effort cost as a provider
   bill. No new local pricing catalog.
 - Optional configured billing lookup can enrich by real provider ID only where an API supports it. Run outside live room via existing tenant credentials, preserve original observations, never reset ended_at/retention or recreate purged data. A fake adapter proves workflow; actual supported billing integrations need their own verified API evidence.
 

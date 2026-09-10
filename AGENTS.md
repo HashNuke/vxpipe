@@ -199,6 +199,13 @@ proportionate checks when it changes generated configuration.
 - [Standalone ReAct runtime](https://hexdocs.pm/jido_ai/standalone_react_runtime.html)
 - [Jido Action documentation](https://hexdocs.pm/jido_action/)
 
+### ReqLLM
+
+- [ReqLLM documentation](https://hexdocs.pm/req_llm/)
+- [ReqLLM tools](https://hexdocs.pm/req_llm/ReqLLM.Tool.html)
+- [ReqLLM context](https://hexdocs.pm/req_llm/ReqLLM.Context.html)
+- [ReqLLM streaming responses](https://hexdocs.pm/req_llm/ReqLLM.StreamResponse.html)
+
 ### Pipecat
 
 - [React SDK overview](https://docs.pipecat.ai/api-reference/client/react/overview.md)

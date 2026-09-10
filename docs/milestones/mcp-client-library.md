@@ -6,18 +6,17 @@ connections, official/reference interoperability, corrected recovery fixture, an
 operational visibility are implemented and verified. Separate published fork branches
 address ExMCP 1.3.0's cumulative SSE budget, per-client credential-origin trust,
 fragmented-event parsing, synchronous response correlation, and raw client diagnostics.
-The umbrella locks the `vxp` integration branch at `0bfd0ae`. The separate Jido
-runtime-tool interface blocker belongs
-to the live-MCP milestone, not this library.
-Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
+The umbrella locks the `vxp` integration branch at `0bfd0ae`. Agent-runtime model
+exposure belongs to the later live-MCP milestone, not this library.
+Prerequisites: none beyond the existing umbrella. No agent runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
-Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [loop/tool-binding decision](../jido-tool-execution.md); [approved remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
+Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [runtime/tool-binding decision](../reqllm-agent-runtime.md); [approved remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
 
 ## Runnable outcome
 
 A standalone command uses ExMCP through Vxpipe's thin internal integration layer to
 discover and call a remote test tool and runs applicable official client-conformance
-scenarios. This verifies the protocol/policy boundary without starting Jido, a voice
+scenarios. This verifies the protocol/policy boundary without starting an agent runtime, a voice
 room, database or model provider. Model exposure is verified in the live-MCP slice.
 
 ## Specification
@@ -27,7 +26,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
   and transport lifecycle through its public client API. The wrapper owns configured
   supervision, scoped client reuse and Vxpipe policy/result mapping.
 - Use public `ExMCP.Client` discovery/invocation APIs. This library depends on neither
-  Jido AI/Action nor `jido_mcp`/Jido Connect. The engine-side bridge integrates model
+  `vxpipe_agent_runtime` nor Call Engine. The engine-side bridge integrates model
   tools later. Do not use private dependency modules or maintain a second client path.
 - Target MCP `2025-11-25` Streamable HTTP with JSON and SSE responses, replacing the earlier
   `2026-07-28` target. Evaluate ExMCP 1.3.0, pin a compatible release and record its
@@ -45,7 +44,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 - Keep endpoint/tool identifiers and schemas as bounded data. Do not create atoms or
   Action modules from tenant IDs, local aliases, remote names, descriptions or schema
   revisions. Return discovered schemas intact to the integration owner; this library
-  neither generates Jido Actions nor publishes a model-visible endpoint/tool dispatcher.
+  neither creates model tools nor publishes a model-visible endpoint/tool dispatcher.
 - Enforce verified HTTPS, address-at-connect/rebinding checks and no redirect credential
   forwarding at the effective outbound boundary. Apply decoded/decompressed byte limits
   during receipt; preserve definite non-submission versus unknown submitted outcomes.
@@ -76,11 +75,11 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 - [x] Verify and pin a maintained ExMCP revision against the selected profile and project-owned
   security, identity, size-limit, timeout and no-resubmission requirements.
 - [x] Red-test the smallest `vxpipe_mcp` contract, then add ExMCP to the owning internal
-  library with its lockfile; keep Jido/domain dependencies out of this child.
+  library with its lockfile; keep agent-runtime/domain dependencies out of this child.
 - [x] Wire configured ExMCP supervision/readiness, discovery and validated invocation,
   including bounded failure and cleanup behavior.
 - [x] Return a discovered test tool as schema/name data without credential leakage or
-  externally driven atom/module creation; leave Jido exposure to the live-MCP milestone.
+  externally driven atom/module creation; leave model exposure to the live-MCP milestone.
 - [x] Add the official client-conformance driver, pinned harness/reference inputs and a
   documented supported-requirement matrix.
 - [x] Add an opt-in tagged integration lane; keep deterministic contract/security tests in
@@ -91,7 +90,7 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 ## Acceptance and failure checks
 
 - [x] A standalone ExMCP-backed wrapper discovers/calls a reference tool with neither
-  Jido nor database/call engine running; decoded names/schemas remain data.
+  agent runtime nor database/call engine running; decoded names/schemas remain data.
 - [x] Applicable pinned official client scenarios pass; omitted/unsupported scenarios and
   upstream harness defects are explicit, not blanket success.
 - [x] Negotiated-version mismatch, malformed/error responses, wrong correlation IDs and
@@ -130,12 +129,12 @@ room, database or model provider. Model exposure is verified in the live-MCP sli
 
 ## Scope boundaries
 
-No Jido model-tool registration, custom MCP protocol/client implementation, public MCP
+No agent-runtime model-tool registration, custom MCP protocol/client implementation, public MCP
 server feature, local/stdio product integration, full
 multi-version promise, OAuth onboarding, generic resources/prompts UI, server-requested
 sampling/elicitation, auto-fetching documents, or remote cancellation framework. Room
 authorization, background conversation and archival integration follow in the remote-MCP
-milestone. Passing this checkpoint does not resolve Jido AI's runtime-tool interface gap.
+milestone. Passing this checkpoint does not prove live model exposure.
 
 ## Completion and evidence
 
@@ -147,7 +146,7 @@ milestone. Passing this checkpoint does not resolve Jido AI's runtime-tool inter
 Implementation evidence:
 
 - The `vxpipe_mcp` child pins the maintained `HashNuke/ex_mcp` `vxp` branch at
-  `0bfd0ae` and owns no Jido/domain dependency. Its fixed
+  `0bfd0ae` and owns no agent-runtime/domain dependency. Its fixed
   production client profile accepts verified HTTPS only and selects MCP `2025-11-25`.
 - `Vxpipe.MCP.Discovery` obtains every page through the narrow protocol boundary under one
   absolute deadline and aggregate decoded-JSON budget. It rejects repeated cursors and

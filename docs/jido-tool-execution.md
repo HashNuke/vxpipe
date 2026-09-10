@@ -1,8 +1,14 @@
 # Jido loop and runtime tool bindings
 
-Date: 2026-09-08. Status: dependency selection implemented; runtime data-tool interface blocked.
+Date: 2026-09-08. Status: superseded on 2026-09-10 for forward implementation.
 
-## Decision
+The Jido-backed implementation and investigation below remain factual evidence for completed
+milestones. Vxpipe will not maintain a Jido fork or wait on its missing runtime data-tool
+interface. The selected forward path is the separate
+[ReqLLM agent runtime](reqllm-agent-runtime.md), implemented before live MCP tools. That
+milestone must preserve the completed behavior before Jido dependencies are removed.
+
+## Superseded decision
 
 Keep **Jido AI for the model/tool loop** and Jido Action for finite, application-owned
 tools. Use **ExMCP directly behind `vxpipe_mcp`** for remote discovery/invocation.

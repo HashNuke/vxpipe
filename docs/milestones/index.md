@@ -1,15 +1,14 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestones 1 through 10 are complete and milestone 11,
-remote MCP tools in a live call, is in progress. The earlier behavior contracts have
-completed focused review. The 2026-09-08 released-package investigation
-updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
-runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
+Status: 24 milestone specifications: 10 complete and 14 incomplete. Milestone 11, the
+internal ReqLLM agent runtime, is the next implementation slice. Milestone 12,
+remote MCP tools in a live call, has substantial enabling work but cannot complete until
+that runtime is adopted. The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
-MCP-library additions and Jido runtime selection documented during planning on 2026-09-08.
-Jido AI replaces custom agent-loop work; ExMCP supplies the protocol client behind
-`vxpipe_mcp`. See the [loop/tool-binding decision](../jido-tool-execution.md).
-That integration change stayed inside existing milestones. The subsequent user-requested
+MCP-library additions and historical Jido runtime selection documented during planning on
+2026-09-08. The 2026-09-10 [runtime decision](../reqllm-agent-runtime.md) inserts a separate
+ReqLLM-based agent-runtime package before live MCP tools; ExMCP continues to supply the
+protocol client behind `vxpipe_mcp`. The subsequent user-requested
 observability additions introduce an early observable sample call and later call inspection;
 the original milestones retain their filenames and relative order.
 The approved [gateway/console boundary](../gateway-console-boundary.md) keeps the gateway
@@ -43,19 +42,20 @@ progress without claiming the entire milestone is complete.
 8. [x] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
 9. [x] [Call inspection and debugging](call-inspection-and-debugging.md) — Inspect an authorized live or ended call's timeline, permitted snapshots, timings and archival gaps.
 10. [x] [MCP client integration and conformance](mcp-client-library.md) — Verify ExMCP through a thin policy adapter and version-pinned reference/conformance server, independently of Jido.
-11. [ ] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
-12. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
-13. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
-14. [ ] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
-15. [ ] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
-16. [ ] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
-17. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant definitions or room control.
-18. [ ] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
-19. [ ] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
-20. [ ] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
-21. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls, deleting external artifacts before database records.
-22. [ ] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Run the same platform through host application settings or a standalone JSON-configured image.
+11. [ ] [ReqLLM agent runtime](reqllm-agent-runtime.md) — Build and adopt the reusable streamed model/tool loop without Jido.
+12. [ ] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
+13. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
+14. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
+15. [ ] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
+16. [ ] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
+17. [ ] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
+18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant definitions or room control.
+19. [ ] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
+20. [ ] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
+21. [ ] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
+22. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls, deleting external artifacts before database records.
+23. [ ] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
+24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Run the same platform through host application settings or a standalone JSON-configured image.
 
 ## Common implementation and verification gates
 
@@ -104,30 +104,30 @@ option to make a demo pass. A later slice expands support without changing the f
 contracts. Trusted embedded/development fixtures are not public production admission.
 
 The engine owns room/participant/capability lifecycles and protocol-neutral contracts.
-Use one `Jido.AI.Agent`/AgentServer as the supervised inference child of each active agent
-participant, replacing the current custom model/tool-loop process rather than becoming a
-competing participant authority. Jido owns that agent's ReAct requests, conversation
-projection and registered Jido Actions; ReqLLM remains its provider layer. Vxpipe still owns
-identities, turn serialization, authorization, stream/TTS projection, interruption,
-submitted background workers, transfers, variables and room lifecycle. Standalone ReAct is
-limited to focused adapter tests, not a parallel production loop.
+After the intermediate runtime milestone, one supervised `Vxpipe.AgentRuntime` session is
+the inference child of each active agent participant. The separate `vxpipe_agent_runtime`
+child owns ReqLLM conversation state, exact data-backed tool projection, repeated model/tool
+rounds, streaming/cancellation and neutral runtime events. Call Engine owns identities, turn
+serialization and queueing, authorization, private tool execution, stream/TTS projection,
+interruption policy, submitted background workers, transfers, variables and room lifecycle.
+The package neither becomes a participant authority nor gains room, tenant, MCP, persistence,
+gateway, or client-protocol dependencies.
 Introduce `vxpipe_calls` for application workflows, `vxpipe_persistence` for Ecto/Repo,
 and `vxpipe_artifacts` for object storage only in their owning milestones. The gateway
 authenticates/translates; it does not gain direct Repo or provider orchestration ownership.
-The separate `vxpipe_mcp` internal library depends directly on `ex_mcp`, not Jido AI,
-Jido Action, `jido_mcp` or Jido Connect. ExMCP owns protocol/transport lifecycle through
+The separate `vxpipe_mcp` internal library depends directly on `ex_mcp`, not the agent
+runtime or domain applications. ExMCP owns protocol/transport lifecycle through
 public APIs. The wrapper configures supervision, scoped client reuse, policy enforcement
 and result mapping without room, tenant-selection, Repo or gateway dependencies. Its
 standalone integration/conformance checkpoint targets MCP `2025-11-25`, replacing the
 earlier `2026-07-28` profile. No custom-client fallback.
-The engine-side Jido tool bridge is a separate concern. Current Jido AI expects Action
-modules, loses map aliases during model projection and lacks the required public data-tool
-executor interface. The live-MCP milestone must prove that extension before shipping.
-Early static-tool slices accept only keys matching Action names and reject unsupported
-aliases; this is an explicit rollout subset, not a change to the final alias contract.
-No externally driven atom/module generation, private proxy APIs, generic model-visible
-endpoint/tool dispatcher or replacement custom LLM loop is an acceptable workaround.
-Preserve dependency direction in child `mix.exs` files.
+Call Engine connects an activation's immutable private bindings to the agent runtime's narrow
+executor contract. The model receives only exact local string names, permitted descriptions,
+and pinned JSON schemas. Endpoint, credential and remote-operation selectors remain private.
+No externally driven atom/module generation, private dependency APIs, or generic model-visible
+endpoint/tool dispatcher is an acceptable workaround. Preserve dependency direction in child
+`mix.exs` files. The completed Jido-backed slices are historical evidence; milestone 11 must
+prove parity before removing Jido and must leave no second production loop behind.
 
 The two observability slices deliver separate operator interfaces without expanding the
 voice console. The early slice introduces the approved Phoenix shell, `vxpipe_console` /
@@ -172,7 +172,7 @@ provider-fallback chain.
 
 This is a coverage map, not another approval or implementation checklist.
 
-- **Definition-driven one-agent call**: G1/G2; R10, R47; supervised per-activation Jido AI/Jido Action agent loop.
+- **Definition-driven one-agent call**: G1/G2; R10, R47; completed Jido-backed baseline whose behavior the intermediate runtime preserves.
 - **Observable sample call**: user-requested operational visibility; existing architecture telemetry goals, failure evidence and embedded reporter independence.
 - **Local Morse-code audio providers**: optional local verification capabilities requested during planning.
 - **Call Variables and private tool projections**: G3/G5; R17, R18.
@@ -182,7 +182,8 @@ This is a coverage map, not another approval or implementation checklist.
 - **Asynchronous call history and variable snapshots**: G5/G11; R18, R41.
 - **Call inspection and debugging**: user-requested read-only operator workflow over G3/G5/G11; R17, R18, R38, R41; safe live/persisted distinctions.
 - **MCP client integration and conformance**: ExMCP public client, thin policy boundary and independent reference validation; R22, R23, R26, R49.
-- **Remote MCP tools in a live call**: G4/G6; R14–R16, R22–R26, R49; public Jido runtime-tool binding interface gate.
+- **ReqLLM agent runtime**: internal inference boundary, exact data-backed tool projection, repeated rounds, streaming/cancellation and migration parity.
+- **Remote MCP tools in a live call**: G4/G6; R14–R16, R22–R26, R49; connect pinned remote bindings through the ReqLLM runtime executor.
 - **Opening audio and call lifecycle**: G7; R11, R12, R27–R31.
 - **Allowlisted agent-to-agent transfers**: G8; R13, R33, R35, R36.
 - **Live mixing and presence-driven media policy**: G9; R38.
@@ -218,8 +219,9 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Prepared calls and single-use joining](prepared-call-admission.md#specification-review) | Approved | milestone_review_b; Added pinned join mapping, occurrence timestamps, pre/post-admission token semantics, credential/Origin separation and nonblocking lifecycle handoff; re-review approved. |
 | [Asynchronous call history and variable snapshots](asynchronous-call-history.md#specification-review) | Approved | milestone_review_c; Added subscriber crash/saturation isolation, rejected/stale baseline snapshot cases and honest draining; re-review approved. |
 | [Call inspection and debugging](call-inspection-and-debugging.md#specification-review) | Complete; locally reviewed | Calls-owned bounded persisted/live projections and the Console-owned authenticated list/detail workflow are implemented and browser-verified. Storage outage, tool failure, authorization, disclosure, archive-gap, lifecycle and reconnection checks pass with the common implementation gates. |
-| [MCP client integration and conformance](mcp-client-library.md#specification-review) | Revised after investigation | ExMCP replaces direct Jido MCP; protocol/policy gates remain. No Jido dependency or model exposure in this standalone slice; transport conformance is not yet demonstrated. |
-| [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Revised; implementation blocked | Owns the required public Jido AI data-tool projection/executor gate, exact aliases/schemas and mixed-loop proof; ExMCP alone does not resolve it. |
+| [MCP client integration and conformance](mcp-client-library.md#specification-review) | Complete; independently reviewed | The maintained ExMCP fork, protocol/policy boundary, official/reference interoperability, security limits and operational visibility are implemented and verified without model exposure. |
+| [ReqLLM agent runtime](reqllm-agent-runtime.md#specification-review) | Planned; local review only | New intermediate slice owns the internal package, exact runtime-tool loop and Jido migration parity. Deterministic, provider, umbrella and rendered-call evidence remain pending. |
+| [Remote MCP tools in a live call](remote-mcp-tools.md#specification-review) | Revised; partially implemented | Its protocol, configuration, catalog and activation-binding foundations exist. Final model exposure now depends on the ReqLLM agent-runtime milestone instead of a missing Jido extension. |
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
 | [Allowlisted agent-to-agent transfers](agent-transfers.md#specification-review) | Approved | milestone_review_c; Specified history modes, precommit destination silence/source continuity, empty-list and total-deadline races; re-review approved. |
 | [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md#specification-review) | Approved | milestone_review_a; Distinguished omitted policy fields from denied omitted route sources and added fail-closed policy-apply admission/bridge checks; re-review approved. |
@@ -272,9 +274,18 @@ contracts are preserved. The new specifications include automated/manual failure
 and rendered-browser gates. The later approved gateway/console split assigns Phoenix to
 the separate console, retaining gateway reuse; dashboard/authentication implementation
 choices remain explicit. The affected specifications record a focused ownership/dependency
-review; all 23 entries retain their order and unchecked implementation status. See the
+review; all 23 entries retained their order and implementation status. See the
 [observability planning log](../../labnotes/20260908-1725-observability-milestone-plan.md)
 and [gateway/console decision](../gateway-console-boundary.md).
+
+The 2026-09-10 runtime decision adds one intermediate slice, bringing the index to 24.
+It preserves the completed Jido-backed evidence but selects a separate internal ReqLLM
+runtime for forward work, avoiding a Jido fork or missing extension dependency. The new
+milestone precedes live MCP, which retains its completed enabling checkboxes and now consumes
+the runtime's private executor boundary. Planning inspected ReqLLM 1.22.0 and Legion 0.5.0;
+no runtime, provider, dependency-removal, or browser evidence is claimed. See the
+[runtime decision](../reqllm-agent-runtime.md) and
+[planning labnote](../../labnotes/20260910-0934-reqllm-agent-runtime.md).
 
 This checkpoint changes repository documentation only. No application integration,
 browser, live provider, official conformance or umbrella suite execution is claimed;

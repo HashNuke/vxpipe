@@ -141,7 +141,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R19 | G5 | **Resolved:** application/tenant `call_retention` is `"forever"` or a finite duration object such as `{"seconds":2592000}`; application omission defaults forever, tenant omission inherits, and explicit tenant forever overrides a finite application setting. |
 | R20 | G5 | **Resolved:** periodic background sweeps select eligible completed calls using current retention; not instant per-call deletion. Exact deployment interval/default is unspecified, not an hourly policy or deletion SLA. |
 | R21 | G5 | **Resolved:** delete all managed external call objects first, treating definitive not-found as absent, then delete call-owned database data; retain records/references on failure and retry in later sweeps, while coordinating late writers. |
-| R22 | G6 | **Resolved, with implementation gate:** use ExMCP directly through the thin `vxpipe_mcp` policy wrapper, independently of Jido's LLM loop. The initial profile remains 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Direct Jido MCP selection is superseded. Standalone protocol conformance can proceed; live tenant tools require a public Jido AI runtime-binding interface preserving exact local names/schemas and private execution without externally driven atom/module growth. |
+| R22 | G6 | **Resolved, with implementation gate:** use ExMCP directly through the thin `vxpipe_mcp` policy wrapper, independently of the model loop. The initial profile remains 2025-11-25 Streamable HTTP with JSON/SSE, initialization/version negotiation and scoped optional sessions. Direct Jido MCP selection is superseded. Live tenant tools require the intermediate `vxpipe_agent_runtime` package to preserve exact local names/schemas and private execution without externally driven atom/module growth. |
 | R23 | G6 | **Resolved:** use a proper JSON Schema validator, baseline 2020-12, on actual outgoing arguments against pinned inputSchema before submission; reject unsupported enabled bindings before exposure, never weaken constraints or automatically fetch external refs. |
 | R24 | G6 | **Deferred:** store received responses and descriptors with observed outcomes; the agent chooses authorized next steps. Detailed result projection and document/media inspection belong to the dedicated issue, not automatic fetching or a text/JSON-only policy. |
 | R25 | G6 | **Deferred:** server-requested sampling/elicitation and related interactions belong to the dedicated issue; advertise no unimplemented capabilities, report missing capability clearly, and add no continuation/retry exception. |
@@ -169,7 +169,7 @@ or every engineering choice is selected, including the compaction execution mode
 | R47 | G13 | **Resolved:** provider-supported settings belong to reusable configured services/profiles; conversation/interruption/duration policy stays engine-owned. Reject known unsupported combinations during definition validation, with provider-discovered failures handled normally at startup/runtime; no new config layer or arbitrary executable/provider payload. |
 | R48 | G13 | **Resolved:** before each inference compare total input with usable input budget after output reserve; compact older completed conversation at 75%, targeting below 50%. Preserve protected instructions/tools/recent messages/unresolved interactions and pairing, grants, source-interval privacy, variables, and full permitted history. Targets do not guarantee fit; summarizer execution/model and config encoding are not selected. |
 | R49 | G13 | **Resolved:** configurable decoded/decompressed MCP response limit defaults to 1 MiB (1,048,576 bytes), enforced incrementally and cumulatively for streaming. Stop excess receipt/processing with honest bounded outcome details, no automatic retry or full-body archive claim. Archive accepted permitted responses; model-too-large yields explicit projection omission, not remote failure, chopped JSON, or automatic result summarization. |
-| R50 | G13 | **Resolved:** allow explicitly configured provider-native/router LLM fallback only where the selected Jido AI/ReqLLM provider surface supports it; no Vxpipe fallback schema/chain/coordinator or new STT/TTS fallback. Preserve permissions/tool/privacy constraints and observed attribution without inventing upstream attempts or replaying emitted speech/actions. |
+| R50 | G13 | **Resolved:** allow explicitly configured provider-native/router LLM fallback only where the selected agent-runtime/ReqLLM provider surface supports it; no Vxpipe fallback schema/chain/coordinator or new STT/TTS fallback. Preserve permissions/tool/privacy constraints and observed attribution without inventing upstream attempts or replaying emitted speech/actions. |
 
 Not counted as current approval blockers:
 
@@ -1154,7 +1154,7 @@ clearly. This supersedes the earlier 2026 protocol selection.
 around [ExMCP](https://hexdocs.pm/ex_mcp/ExMCP.Client.html), not a new JSON-RPC,
 HTTP/SSE parser or client implementation. ExMCP owns protocol/transport lifecycle
 through public APIs. The wrapper configures/supervises scoped clients and normalizes
-integration outcomes without Jido AI/Action, Calls/Repo/gateway/room state or tenant
+integration outcomes without agent-runtime, Calls/Repo/gateway/room state or tenant
 selection. The domain owner supplies
 resolved endpoint/private credentials/network policy/deadlines and retains grants/
 history. Missing required ExMCP hooks block compatibility, not authorize a
@@ -1166,16 +1166,14 @@ decompressed byte budget across stream resumption, progress and reconnects,
 not fresh limits per HTTP response. Test initialization both with and without a
 server-issued session ID.
 
-**Released-package follow-up:** Jido AI owns successive LLM/tool rounds independently
-of the chosen MCP client. It currently accepts Action modules rather than runtime data
-descriptors and loses registry aliases in model projection. Require a supported public
-Jido AI per-binding schema/executor interface before live tenant tools ship; exact names,
-schemas and private selectors are not optional. No generated tenant modules/atoms, private
-proxy APIs, generic model-visible endpoint/tool dispatcher or custom replacement LLM loop.
-Standalone ExMCP conformance is independent. Early static Actions use matching local keys
-and reject unsupported aliases without changing the final definition contract. Direct
-Jido MCP and unreleased Jido Connect are not selected. See the
-[decision and runtime evidence](jido-tool-execution.md).
+**Agent-runtime follow-up:** build the repeated LLM/tool loop in the separate internal
+`vxpipe_agent_runtime` package directly on ReqLLM. It exposes exact local names and schemas
+while retaining private executor bindings; no generated tenant modules/atoms, private
+dependency APIs, or generic model-visible endpoint/tool dispatcher. Call Engine owns
+authorization and connects the private binding to `vxpipe_mcp`; neither library depends on
+the other. Standalone ExMCP conformance remains independent. See the
+[runtime decision](reqllm-agent-runtime.md) and
+[superseded Jido evidence](jido-tool-execution.md).
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 and [lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
 and pinned [client conformance harness](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md)
@@ -1698,12 +1696,12 @@ not durable confirmation. Parser/transport and config hierarchy remain implement
 particulars; general result/document inspection remains deferred.
 
 R50 allows explicitly configured provider-native/router LLM fallback only where
-the selected Jido AI/ReqLLM provider surface supports the provider options. No Vxpipe fallback schema, direct-provider
+the selected agent-runtime/ReqLLM provider surface supports the provider options. No Vxpipe fallback schema, direct-provider
 chain/coordinator, or new STT/TTS fallback is added. Preserve tool authorization,
 privacy, and observed usage/model/provider attribution without inventing hidden
 upstream IDs/attempts. No MCP retry or replay guarantee for already-emitted speech/
-tool actions follows from a streaming failure. Jido AI delegates provider access to
-ReqLLM; supported remote routing/fallback options are not a generic direct-provider
+tool actions follows from a streaming failure. ReqLLM supplies provider access;
+supported remote routing/fallback options are not a generic direct-provider
 fallback chain. Runtime integration still requires focused verification.
 
 ## Possible checkpoint order and acceptance scenarios
@@ -2411,7 +2409,7 @@ choice remains unselected. MCP receipt defaults to a configurable 1 MiB of cumul
 decoded/decompressed data, enforced incrementally and separately from model
 projection; too-large receipt does not prove remote failure or full archival.
 LLM fallback is limited to explicit provider-native/router options supported through
-the Jido AI/ReqLLM provider surface, not a new Vxpipe chain or STT/TTS feature. No
+the agent-runtime/ReqLLM provider surface, not a new Vxpipe chain or STT/TTS feature. No
 integration test or runtime implementation is claimed.
 
 Consistency cleanup also aligns active R08 startup, R39 duplicate creation, and
