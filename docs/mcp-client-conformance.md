@@ -138,11 +138,11 @@ transport/parser. Milestone completion requires an ExMCP release or explicitly m
 dependency revision that exposes per-client trust, sanitized diagnostics, and cumulative
 stream accounting through its supported boundary.
 
-As of the 2026-09-09 follow-up, the upstream repository has no issue, pull request, or branch
+As of the 2026-09-09 follow-up, the upstream repository had no issue, pull request, or branch
 covering these findings, and `master` contains only unrelated test changes after the 1.3.0
-release. A temporary TDD patch demonstrated that per-client trust and the primary client-log
-sanitization are small changes: the focused upstream suites passed 14 and 33 tests,
-respectively. That patch was not adopted or published.
+release. The subsequent maintained-fork work converted the temporary experiments into
+separate test-first fix branches; their topology and upstream submission order are recorded
+in [ExMCP fork fixes](ex_mcp-fixes.md).
 
 Cumulative accounting requires a deliberate dependency API rather than a counter added to
 the SSE process. MCP `2025-11-25` can multiplex several pending requests over one legacy GET
@@ -151,3 +151,9 @@ combine unrelated calls and eventually fail a valid later invocation. Correct ac
 must associate complete response events with their JSON-RPC request IDs and progress events
 with request-scoped progress tokens, retain those budgets across reconnects, and close the
 affected work when its budget is exhausted.
+
+The local `vxp` integration branch at `2d31d26` implements those boundaries, including a
+separate allowance for traffic that cannot be correlated safely. It is not yet the dependency
+recorded by this umbrella: the production claim remains open until the fork is published,
+`mix.lock` pins it, and every Vxpipe conformance, security, privacy, and recovery gate passes
+through the public wrapper.

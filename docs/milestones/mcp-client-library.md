@@ -1,12 +1,12 @@
 # MCP client integration and conformance
 
-Status: blocked on ExMCP compatibility. The exact dependency/profile, bounded all-or-nothing discovery,
+Status: in progress on a maintained ExMCP fork. The exact dependency/profile, bounded all-or-nothing discovery,
 pre-submission validated invocation, scoped supervised connection contracts, two unmodified
 official scenarios, corrected recovery fixture, and Everything-server interoperability are
-implemented. ExMCP 1.3.0 does not enforce a cumulative byte budget on complete SSE events,
-does not provide per-client credential-origin trust, and can include raw asynchronous
-transport reasons in logs. Those dependency gaps block the remaining production gates; the
-separate Jido runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
+implemented. Separate fork branches now address ExMCP 1.3.0's cumulative SSE budget,
+per-client credential-origin trust, fragmented-event parsing, and raw client diagnostics.
+Publishing and pinning the `vxp` integration branch and rerunning the end-to-end gates remain;
+the separate Jido runtime-tool interface blocker belongs to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
 Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [loop/tool-binding decision](../jido-tool-execution.md); [approved remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
