@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
 
   alias Vxpipe.AgentRuntime.ToolDescriptor
   alias Vxpipe.CallEngine.AgentRuntime.ToolDescriptors
+  alias Vxpipe.CallEngine.CallVariables.Binding
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.{TestAgentTool, TestSubmittedInlineTool}
   alias Vxpipe.CallEngine.Tool.InvocationBinding
@@ -49,6 +50,30 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
              ToolDescriptors.compile(%{"different_name" => binding})
   end
 
+  test "compiles permitted Call Variables tools as default-blocking private bindings" do
+    variable_binding = variable_binding()
+
+    assert {:ok, descriptors} = ToolDescriptors.compile(%{}, variable_binding)
+
+    assert Enum.map(descriptors, & &1.name) == [
+             "read_variables",
+             "update_variable",
+             "update_variables"
+           ]
+
+    assert Enum.all?(descriptors, fn descriptor ->
+             match?(
+               %InvocationBinding{
+                 conversation_mode: :blocking,
+                 handler: {:call_variables, ^variable_binding}
+               },
+               descriptor.binding
+             )
+           end)
+
+    refute inspect(List.first(descriptors)) =~ "CallVariables.Binding"
+  end
+
   defp host_binding(name, action, conversation_mode) do
     %ToolBinding{
       name: name,
@@ -56,6 +81,19 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
       conversation_mode: conversation_mode,
       action: action,
       remote: nil
+    }
+  end
+
+  defp variable_binding do
+    %Binding{
+      server: self(),
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "incarnation-demo",
+      participant_id: "participant-agent",
+      activation_id: "activation-agent",
+      read_sections: ["intake", "order"],
+      write_sections: ["intake"]
     }
   end
 end

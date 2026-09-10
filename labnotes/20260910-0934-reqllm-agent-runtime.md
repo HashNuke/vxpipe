@@ -657,3 +657,33 @@ Verification:
   password absent from this shell; no credential source was inspected.
 - Remote MCP and Call Variables descriptors, activation-owned Session startup, coordinator
   admission/completion leasing, and submit-timeout reconciliation fault injection remain pending.
+
+## Implementation checkpoint 4f: supervised Call Variables tools
+
+Extended the focused descriptor and invocation-worker tests before implementation. The seven-test
+run had the expected two failures: `ToolDescriptors.compile/2` and
+`InvocationBinding.from_call_variables/2` did not exist.
+
+Call Variables bindings now expose their finite permitted Action set from the already-pinned read
+and write sections. The descriptor compiler combines those generated tools with resolved host tools
+in exact name order. Each generated descriptor is default-blocking because these tools are derived
+from permissions rather than explicit participant `tools` entries. Its opaque binding contains the
+scoped `CallVariables.Binding`; the descriptor's model and inspection projections do not.
+
+`InvocationExecution` now handles that private binding by calling its existing authorization and
+command boundary using the invocation's exact tool name. The test supplies a controlled
+room-variables process and observes that its `GenServer.call` originates from the independently
+supervised invocation execution process, not the test/agent caller. Existing Call Variables tests
+continue to own authorization, update, revision, schema, and archival behavior.
+
+Verification so far:
+
+- Focused descriptor and invocation-worker suites: 7 tests, 0 failures after the expected two-test
+  red result.
+- Complete Call Engine suite: 225 tests, 0 failures, 2 integration exclusions.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+- Umbrella `mix test` again stopped before test execution because PostgreSQL SCRAM authentication
+  needs a password absent from this shell; no credential source was inspected.
+- Remote MCP execution remains outside this milestone. Activation-owned Session startup,
+  coordinator admission/completion leasing, and submit-timeout reconciliation fault injection
+  remain pending here.

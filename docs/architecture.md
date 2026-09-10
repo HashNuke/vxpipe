@@ -578,6 +578,13 @@ resolved binding or host definition name is rejected rather than silently changi
 compilation does not create an inline path: both conversation modes submit through the same
 invocation registry and supervised worker boundary.
 
+Permission-derived Call Variables tools compile through the same descriptor boundary. Because
+these platform tools are generated rather than explicitly selected in the participant's `tools`
+map, the current schema gives each one the default `blocking` conversation mode. Their opaque
+binding contains only the scoped room-variables handle and authorization identity. Invocation
+workers call that binding by its exact generated name; Agent Runtime never receives the handle or
+calls the room-scoped variables process itself.
+
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the
 relevant room/agent if the room is still active—for example, a booking success

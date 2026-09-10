@@ -121,7 +121,9 @@ Variables handlers and activation selection remain pending, so live calls do not
 substrate yet. Resolved host bindings now compile into deterministic Agent Runtime descriptors:
 only the exact name, description, and JSON input schema are model-visible, while the host action
 and default-blocking or explicit-non-blocking conversation mode remain in the private invocation
-binding. Both modes still use the same supervised submission path.
+binding. Permission-derived Call Variables descriptors use that same path and are default-blocking;
+their private binding reaches the room-scoped variables process from the invocation worker. Both
+conversation modes still use the same supervised submission path.
 
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,

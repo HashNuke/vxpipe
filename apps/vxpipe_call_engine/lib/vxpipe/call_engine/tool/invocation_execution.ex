@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
   alias Vxpipe.CallEngine.Tool.{Context, InvocationBinding}
 
   @spec run(InvocationBinding.t(), map(), Context.t(), pos_integer()) ::
@@ -14,6 +15,21 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
       when is_map(arguments) and is_integer(maximum_result_bytes) and maximum_result_bytes > 0 do
     action
     |> execute(arguments, context)
+    |> normalize(maximum_result_bytes)
+  end
+
+  def run(
+        %InvocationBinding{
+          name: name,
+          handler: {:call_variables, %VariablesBinding{} = binding}
+        },
+        arguments,
+        %Context{} = context,
+        maximum_result_bytes
+      )
+      when is_map(arguments) and is_integer(maximum_result_bytes) and maximum_result_bytes > 0 do
+    binding
+    |> VariablesBinding.execute(name, arguments, context)
     |> normalize(maximum_result_bytes)
   end
 

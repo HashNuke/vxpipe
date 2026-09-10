@@ -55,22 +55,30 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     }
   end
 
-  @spec actions(map()) :: [module()]
+  @spec actions(map() | t()) :: [module()]
+  def actions(%__MODULE__{} = binding) do
+    actions(binding.read_sections != [], binding.write_sections != [])
+  end
+
   def actions(grants) when is_map(grants) do
-    read = if map_size(grants) > 0, do: [ReadVariables], else: []
-
-    write =
-      if Enum.any?(grants, fn {_section, grant} -> grant == :read_write end) do
-        [UpdateVariables, UpdateVariable]
-      else
-        []
-      end
-
-    read ++ write
+    actions(
+      map_size(grants) > 0,
+      Enum.any?(grants, fn {_section, grant} -> grant == :read_write end)
+    )
   end
 
   @spec variable_tool?(String.t()) :: boolean()
   def variable_tool?(name) when is_binary(name), do: name in @variable_tool_names
+
+  @spec permitted_tool?(t(), String.t()) :: boolean()
+  def permitted_tool?(%__MODULE__{} = binding, "read_variables"),
+    do: binding.read_sections != []
+
+  def permitted_tool?(%__MODULE__{} = binding, name)
+      when name in ["update_variables", "update_variable"],
+      do: binding.write_sections != []
+
+  def permitted_tool?(%__MODULE__{}, _name), do: false
 
   @spec execute(t(), String.t(), map(), Context.t()) ::
           {:ok, map()} | {:error, :invalid_arguments | :tool_failed}
@@ -115,6 +123,12 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     |> Enum.filter(fn {_section, grant} -> grant == :read_write end)
     |> Enum.map(fn {section, _grant} -> section end)
     |> Enum.sort()
+  end
+
+  defp actions(read?, write?) do
+    read = if read?, do: [ReadVariables], else: []
+    write = if write?, do: [UpdateVariables, UpdateVariable], else: []
+    read ++ write
   end
 
   defp authorize_context(binding, context) do

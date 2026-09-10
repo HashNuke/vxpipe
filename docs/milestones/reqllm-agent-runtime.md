@@ -122,8 +122,9 @@ process or dependency is used.
    phases, leased terminal outcomes, explicit consumption, and bounded tombstones. Its narrow Agent
    Runtime submit and pending-context adapters are complete. Resolved host bindings now compile to
    deterministic descriptors with model-visible schema separated from the private action and
-   conversation mode. Remote MCP/Variables handlers, runtime admission, and activation integration
-   remain. Preserve completion and interruption behavior.
+   conversation mode. Permission-derived Call Variables tools now compile as default-blocking
+   private bindings and execute through the same worker. Remote MCP handling, runtime admission,
+   and activation integration remain. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -372,6 +373,17 @@ Implementation evidence:
 - Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
   checkpoint 4e. Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM needs a
   password absent from this shell; no credential source was inspected.
+- Checkpoint 4f adds Call Variables as a second private invocation-binding kind. It derives the
+  finite read/update descriptor set from the already-compiled participant grants, assigns the
+  default `blocking` conversation mode, and dispatches the exact generated name from the neutral
+  invocation worker to the scoped room-variables binding. The model projection cannot inspect the
+  variables process, grants, or identity.
+- Checkpoint 4f red evidence reported the expected 2 failures because descriptor compilation and
+  invocation binding had no Call Variables entry points. The focused descriptor/worker suites then
+  passed 7 tests, and the complete Call Engine suite passed 225 tests with 2 integration exclusions.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
+  checkpoint 4f. Umbrella `mix test` again stopped before test execution because PostgreSQL SCRAM
+  needs a password absent from this shell; no credential source was inspected.
 
 ## Specification review
 

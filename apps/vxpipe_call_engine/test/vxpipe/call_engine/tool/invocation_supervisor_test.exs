@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestSubmittedInlineTool
+  alias Vxpipe.CallEngine.CallVariables.Binding
 
   alias Vxpipe.CallEngine.Tool.{
     Context,
@@ -120,6 +121,56 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
     send(execution, :release_submitted_inline_tool)
   end
 
+  test "hands a Call Variables read to the same supervised worker boundary" do
+    owner = self()
+    variable_server = start_supervised!({Task, fn -> variable_server_loop(owner) end})
+    supervisor = start_invocation_supervisor(1)
+    context = context()
+
+    variable_binding = %Binding{
+      server: variable_server,
+      tenant_id: context.tenant_id,
+      room_id: context.room_id,
+      incarnation_id: context.incarnation_id,
+      participant_id: context.agent_participant_id,
+      activation_id: "activation-agent",
+      read_sections: ["order"],
+      write_sections: []
+    }
+
+    assert {:ok, binding} =
+             InvocationBinding.from_call_variables("read_variables", variable_binding)
+
+    assert {:ok, worker} =
+             InvocationSupervisor.start_invocation(supervisor,
+               invocation_id: "invocation-variables-read",
+               binding: binding,
+               arguments: %{"sections" => ["order"]},
+               context: context,
+               reply_to: self(),
+               timeout_ms: 1_000,
+               maximum_result_bytes: 4_096
+             )
+
+    assert_receive {:test_call_variables_read, execution, ["order"]}
+    refute execution == self()
+
+    assert_receive {:vxpipe_tool_invocation_finished, ^worker,
+                    %InvocationCompletion{
+                      invocation_id: "invocation-variables-read",
+                      tool_name: "read_variables",
+                      conversation_mode: :blocking,
+                      outcome:
+                        {:ok,
+                         %{
+                           "global_revision" => 0,
+                           "sections" => %{
+                             "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
+                           }
+                         }}
+                    }}
+  end
+
   defp start_invocation_supervisor(maximum_children) do
     activation_id = "act-invocations-#{System.unique_integer([:positive])}"
 
@@ -154,5 +205,25 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
       agent_request_id: "request-demo",
       tool_call_id: nil
     }
+  end
+
+  defp variable_server_loop(owner) do
+    receive do
+      {:"$gen_call", {execution, _tag} = from, {:read, command}} ->
+        send(owner, {:test_call_variables_read, execution, command.sections})
+
+        GenServer.reply(
+          from,
+          {:ok,
+           %{
+             "global_revision" => 0,
+             "sections" => %{
+               "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
+             }
+           }}
+        )
+
+        variable_server_loop(owner)
+    end
   end
 end
