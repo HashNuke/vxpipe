@@ -11,6 +11,7 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
   @model_request_stop [:vxpipe, :call_engine, :model, :request, :stop]
   @mcp_connection_stop [:vxpipe, :mcp, :connection, :stop]
   @mcp_request_stop [:vxpipe, :mcp, :request, :stop]
+  @opening_audio_stop [:vxpipe, :call_engine, :opening_audio, :stop]
   @tts_first_audio [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure [:vxpipe, :call_engine, :provider, :failure]
   @runtime_sample [:vxpipe, :call_engine, :runtime, :sample]
@@ -150,6 +151,22 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
     snapshot = TelemetryReporter.snapshot(reporter)
     assert snapshot.tts.first_audio[:morse] == duration_stats(3_000)
     assert snapshot.provider_failures[{:stt, :morse, :unavailable}] == 1
+  end
+
+  test "projects bounded opening-audio outcomes without retaining private metadata" do
+    {_child_id, reporter} = start_reporter(max_pending_events: 4)
+    sentinel = "private-opening-audio-sentinel"
+
+    :telemetry.execute(
+      @opening_audio_stop,
+      %{count: 1, duration: duration_ms(6), text: sentinel},
+      %{source: :text, outcome: :completed, call_id: sentinel}
+    )
+
+    snapshot = TelemetryReporter.snapshot(reporter)
+
+    assert snapshot.opening_audio.stops[{:text, :completed}] == duration_stats(6_000)
+    refute inspect(snapshot) =~ sentinel
   end
 
   test "projects MCP lifecycle and request aggregates after discarding private correlation" do

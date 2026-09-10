@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   use ExUnit.Case, async: false
 
+  @opening_audio_stop_event [:vxpipe, :call_engine, :opening_audio, :stop]
+
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
@@ -25,6 +27,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.AgentRuntime.ModelResponse
 
   test "admits no caller input until configured text finishes actual playout" do
+    attach_opening_audio_telemetry()
     configure_speech_runtime()
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -71,6 +74,11 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert :ok = TestAudioOutputSink.playback_completed(sink)
     assert_eventually_open(plan)
 
+    assert_receive {:opening_audio_telemetry, @opening_audio_stop_event,
+                    %{count: 1, duration: duration}, %{outcome: :completed, source: :text}}
+
+    assert duration >= 0
+
     assert :ok = CallEngine.push_audio(attachment, audio_frame(plan, room, caller, 2))
     assert_receive {:test_stt_audio, ^stt_transport, <<2>>}
 
@@ -79,6 +87,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   end
 
   test "ends the room when required opening speech fails" do
+    attach_opening_audio_telemetry()
     configure_speech_runtime()
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -100,6 +109,44 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     assert_receive {:DOWN, room_monitor, :process, _room_authority, :opening_audio_unavailable}
     assert room_monitor == attachment.room_monitor
+
+    assert_receive {:opening_audio_telemetry, @opening_audio_stop_event,
+                    %{count: 1, duration: duration}, %{outcome: :failed, source: :text}}
+
+    assert duration >= 0
+  end
+
+  test "targets the entry caller rather than another attached participant" do
+    configure_speech_runtime()
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+
+    receiver_sink =
+      start_supervised!({TestAudioOutputSink, observer: self()}, id: :receiver_opening_sink)
+
+    receiver_command =
+      attach_command(plan, room, receiver, "conn-opening-receiver")
+
+    assert {:ok, _attachment} = CallEngine.attach_connection(receiver_command, receiver_sink)
+    refute_receive {:test_tts_control, ^tts_transport, _payload}
+    refute_receive {:test_audio_output, ^receiver_sink, _frame}
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+
+    caller_sink =
+      start_supervised!({TestAudioOutputSink, observer: self()}, id: :caller_opening_sink)
+
+    caller_command = attach_command(plan, room, caller, "conn-opening-caller")
+    assert {:ok, _attachment} = CallEngine.attach_connection(caller_command, caller_sink)
+    assert_receive {:test_tts_control, ^tts_transport, _speak}
+    assert_receive {:test_tts_control, ^tts_transport, _flush}
+
+    complete_speech(tts_transport, caller_sink, "opening-caller-only")
+    refute_receive {:test_audio_output, ^receiver_sink, _frame}
+    assert_eventually_open(plan)
   end
 
   test "reuses bounded rendered text for the same tenant and text-to-speech identity" do
@@ -688,6 +735,24 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     on_exit(fn ->
       Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
     end)
+  end
+
+  def handle_opening_audio_telemetry(event, measurements, metadata, test) do
+    send(test, {:opening_audio_telemetry, event, measurements, metadata})
+  end
+
+  defp attach_opening_audio_telemetry do
+    handler_id = {__MODULE__, make_ref()}
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        @opening_audio_stop_event,
+        &__MODULE__.handle_opening_audio_telemetry/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)

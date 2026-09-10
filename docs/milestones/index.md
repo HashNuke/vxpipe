@@ -1,13 +1,8 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 12 complete and 12 incomplete. Milestone 13, opening audio
-and call lifecycle, is the current implementation slice. Its public opening-source contract is
-pinned; fixed-text playback gating, greetings, startup readiness, and maximum-duration
-enforcement are implemented. Definitive selected-STT startup failure ends the attempted room
-immediately, and caller-idle notification now observes opening/output/tool-wait exclusions without
-an automatic repeat cadence. Definition/tenant/application duration precedence is now pinned before
-call preparation. File playback and generated-text asset reuse are implemented; final acceptance
-verification remains in progress.
+Status: 24 milestone specifications: 13 complete and 11 incomplete. Milestone 13, opening audio
+and call lifecycle, is complete. Milestone 14, allowlisted agent-to-agent transfers, is the current
+implementation slice.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
@@ -49,7 +44,7 @@ progress without claiming the entire milestone is complete.
 10. [x] [MCP client integration and conformance](mcp-client-library.md) — Verify ExMCP through a thin policy adapter and version-pinned reference/conformance server, independently of Jido.
 11. [x] [ReqLLM agent runtime](reqllm-agent-runtime.md) — Build and adopt the reusable streamed model/tool loop without Jido.
 12. [x] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
-13. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
+13. [x] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
 14. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
 15. [ ] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
 16. [ ] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.

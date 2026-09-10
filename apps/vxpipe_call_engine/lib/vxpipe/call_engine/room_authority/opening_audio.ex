@@ -16,12 +16,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
     Id,
     ResolvedCallPlan,
     RoomCapabilitySupervisor,
+    Telemetry,
     TextToSpeechRequest
   }
 
   @derive {Inspect, only: [:phase, :target_participant_id]}
   @enforce_keys [:participant_id, :phase, :settings, :source, :target_participant_id]
-  defstruct @enforce_keys ++ [monitor: nil, request: nil, worker: nil]
+  defstruct @enforce_keys ++ [monitor: nil, request: nil, started_at: nil, worker: nil]
 
   @type phase :: :open | :awaiting_connection | :playing
   @type request ::
@@ -33,6 +34,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
           target_participant_id: nil | String.t(),
           settings: nil | Settings.t(),
           request: request(),
+          started_at: nil | integer(),
           worker: nil | pid(),
           monitor: nil | reference()
         }
@@ -122,9 +124,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
       settings: opening.settings
     ]
 
+    started_at = Telemetry.started_at()
+
     case TextPreparation.start(options) do
       {:ok, request, nil} ->
-        {:ok, %{opening | phase: :playing, request: request}}
+        {:ok, %{opening | phase: :playing, request: request, started_at: started_at}}
 
       {:ok, request, worker} when is_pid(worker) ->
         {:ok,
@@ -133,10 +137,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
            | monitor: Process.monitor(worker),
              phase: :playing,
              request: request,
+             started_at: started_at,
              worker: worker
          }}
 
       {:error, :unavailable} ->
+        Telemetry.opening_audio_stop(started_at, :text, :failed)
         {:error, unavailable()}
     end
   end
@@ -167,6 +173,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
       output_sink: output_sink
     }
 
+    started_at = Telemetry.started_at()
+
     case RoomCapabilitySupervisor.start_opening_audio(
            snapshot.incarnation_id,
            owner,
@@ -180,10 +188,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
            | monitor: Process.monitor(worker),
              phase: :playing,
              request: request,
+             started_at: started_at,
              worker: worker
          }}
 
       {:error, _reason} ->
+        Telemetry.opening_audio_stop(started_at, :file_url, :failed)
         {:error, unavailable()}
     end
   end
@@ -285,6 +295,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
 
   def awaiting_text_playback?(%__MODULE__{}), do: false
 
+  @spec failed(t()) :: :ok
+  def failed(%__MODULE__{
+        source: %OpeningSource{type: source},
+        started_at: started_at
+      })
+      when source in [:file_url, :text] and is_integer(started_at) do
+    Telemetry.opening_audio_stop(started_at, source, :failed)
+  end
+
+  def failed(%__MODULE__{}), do: :ok
+
   defp matching_text_request?(%TextToSpeechRequest{} = expected, request) do
     expected.correlation_id == request.correlation_id and
       expected.connection_id == request.connection_id and
@@ -318,8 +339,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
 
   defp matching_asset_request?(_expected, _request), do: false
 
-  defp opened(opening) do
-    %{opening | monitor: nil, phase: :open, request: nil, worker: nil}
+  defp opened(%__MODULE__{source: %OpeningSource{type: source}, started_at: started_at} = opening) do
+    Telemetry.opening_audio_stop(started_at, source, :completed)
+    %{opening | monitor: nil, phase: :open, request: nil, started_at: nil, worker: nil}
   end
 
   defp unavailable do

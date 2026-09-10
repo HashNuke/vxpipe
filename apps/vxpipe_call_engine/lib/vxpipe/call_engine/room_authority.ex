@@ -330,6 +330,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       when is_struct(request, FilePlaybackRequest) or
              is_struct(request, CachedPlaybackRequest) do
     if OpeningAudio.asset_failure?(state.opening_audio, worker, request) do
+      OpeningAudio.failed(state.opening_audio)
       {:stop, :opening_audio_unavailable, state}
     else
       {:noreply, state}
@@ -338,6 +339,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({:vxpipe_tts_unavailable, capability, _reason}, state) do
     if OpeningAudio.awaiting_text_playback?(state.opening_audio) do
+      OpeningAudio.failed(state.opening_audio)
       {:stop, :opening_audio_unavailable, state}
     else
       state = AgentOutput.unavailable(capability, state)
@@ -359,6 +361,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         %{text_to_speech_capability: %{monitor: monitor}} = state
       ) do
     if OpeningAudio.awaiting_text_playback?(state.opening_audio) do
+      OpeningAudio.failed(state.opening_audio)
       {:stop, :opening_audio_unavailable, state}
     else
       ConnectionLifecycle.notify(state.connections, :agent_unavailable)
@@ -368,6 +371,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
     if OpeningAudio.worker_monitor?(state.opening_audio, monitor) do
+      OpeningAudio.failed(state.opening_audio)
       {:stop, :opening_audio_unavailable, state}
     else
       state =

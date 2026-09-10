@@ -17,6 +17,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   @model_request_stop [:vxpipe, :call_engine, :model, :request, :stop]
   @mcp_connection_stop [:vxpipe, :mcp, :connection, :stop]
   @mcp_request_stop [:vxpipe, :mcp, :request, :stop]
+  @opening_audio_stop [:vxpipe, :call_engine, :opening_audio, :stop]
   @tts_first_audio [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure [:vxpipe, :call_engine, :provider, :failure]
   @runtime_sample [:vxpipe, :call_engine, :runtime, :sample]
@@ -83,6 +84,12 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     )
 
     :telemetry.execute(
+      @opening_audio_stop,
+      %{count: 1, duration: duration_ms(6)},
+      %{source: :text, outcome: :completed}
+    )
+
+    :telemetry.execute(
       @provider_failure,
       %{count: 1},
       %{capability: :model, provider: :req_llm, category: :timeout}
@@ -137,6 +144,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
            )
 
     assert has_element?(view, "#tts-first-audio-deepgram", "7.0 ms")
+    assert has_element?(view, "#opening-audio-text-completed", "Completed 6.0 ms 1")
     assert has_element?(view, "#provider-failure-model-req-llm-timeout", "1")
     assert has_element?(view, "#background-reservation-pressure", "1 / 4")
     assert has_element?(view, "#background-mailbox-pressure", "1 / 4")

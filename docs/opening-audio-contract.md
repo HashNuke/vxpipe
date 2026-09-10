@@ -105,6 +105,11 @@ validate-cache reuse. Generated-text cache coverage first failed because a secon
 another TTS request. It now proves that the first call renders normally and a later same-tenant,
 same-text, same-voice call reuses the bounded PCM asset, while digest tests distinguish tenant,
 text, and output identity and retain none of their source values. The focused opening/asset files
-passed 16 tests. The complete Call Engine suite passed with 258 tests and one
-integration exclusion. The production HTTPS fetch path has no live-network assertion in the
-default suite; interoperability belongs in an explicitly tagged integration lane.
+passed 16 tests. A final caller-target test attaches the receiving agent first and observes no
+opening output, then proves only the entry caller sink receives it. Runtime telemetry tests first
+failed because no terminal opening observation existed; successful playout and controlled provider
+failure now emit one payload-free duration/count event with only closed source/outcome metadata.
+Console diagnostics projects that event into bounded source/outcome timings and counts without
+retaining call identity or content. The complete Call Engine suite passed with 259 tests and one
+integration exclusion; Console passed 57 tests. The production HTTPS fetch path has no live-network
+assertion in the default suite; interoperability belongs in an explicitly tagged integration lane.

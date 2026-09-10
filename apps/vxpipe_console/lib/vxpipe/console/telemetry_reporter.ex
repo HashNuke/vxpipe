@@ -10,6 +10,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
   use GenServer
 
   alias Vxpipe.Console.TelemetryReporter.MCPProjection
+  alias Vxpipe.Console.TelemetryReporter.OpeningAudioProjection
 
   @events [
     [:vxpipe, :gateway, :http, :request, :stop],
@@ -64,7 +65,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   @spec events() :: [nonempty_list(atom())]
-  def events, do: @events ++ MCPProjection.events()
+  def events, do: @events ++ MCPProjection.events() ++ OpeningAudioProjection.events()
 
   @doc false
   def handle_event(event, measurements, metadata, config) do
@@ -126,6 +127,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
        model_first_token: %{},
        model_requests: %{},
        mcp: MCPProjection.new(),
+       opening_audio: OpeningAudioProjection.new(),
        pending: pending,
        provider_failures: %{},
        received_events: 0,
@@ -153,6 +155,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
         requests: state.model_requests
       },
       mcp: state.mcp,
+      opening_audio: state.opening_audio,
       provider_failures: state.provider_failures,
       received_events: state.received_events,
       runtime: runtime_snapshot(state.runtime, state.runtime_sampled_at),
@@ -326,6 +329,13 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   defp project(event, measurements, metadata, state) do
+    case OpeningAudioProjection.project(event, measurements, metadata, state.opening_audio) do
+      {:ok, opening_audio} -> %{state | opening_audio: opening_audio}
+      :unhandled -> project_mcp(event, measurements, metadata, state)
+    end
+  end
+
+  defp project_mcp(event, measurements, metadata, state) do
     case MCPProjection.project(event, measurements, metadata, state.mcp) do
       {:ok, mcp} -> %{state | mcp: mcp}
       :unhandled -> state
@@ -436,6 +446,13 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   defp sanitize_event(event, measurements, metadata) do
+    case OpeningAudioProjection.sanitize(event, measurements, metadata) do
+      {:ok, measurements, metadata} -> {measurements, metadata}
+      :unhandled -> sanitize_mcp(event, measurements, metadata)
+    end
+  end
+
+  defp sanitize_mcp(event, measurements, metadata) do
     case MCPProjection.sanitize(event, measurements, metadata) do
       {:ok, measurements, metadata} -> {measurements, metadata}
       :unhandled -> {%{}, %{}}

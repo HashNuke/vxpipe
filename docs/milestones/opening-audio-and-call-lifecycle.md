@@ -1,6 +1,6 @@
 # Opening audio and call lifecycle
 
-Status: in progress. Specification review: approved (2026-09-08).
+Status: complete (2026-09-10). Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Background tools](background-tool-conversation.md).
 Sources: [Opening audio](../../labnotes/20260905-0405-call-definition-design.md#optional-opening-audio-before-entry-reception--approved-startup-decision); [greetings](../../labnotes/20260905-0405-call-definition-design.md#first-message-behavior--approved-g7-decision); [timers](../../labnotes/20260905-0405-call-definition-design.md#startup-idle-tool-waiting-and-duration--approved-r27r30).
 
@@ -35,13 +35,14 @@ A caller hears optional configured opening audio before normal conversation. The
 
 ## Acceptance and failure checks
 
-- [ ] All consumers—including recorder/archive hooks—receive no participant audio during opening; cached/downloaded/scheduled is not completed playout.
-- [ ] Omitted opening starts normally; warm providers do not open gate; failed playback does not silently continue.
-- [ ] Re-entry/new-agent/new-call greeting behavior remains distinct; closing instructions do not promise audio drain.
-- [ ] Fake-clock tests separate created_at/start/token/readiness/idle/duration clocks and preserve human-only duration enforcement.
-- [ ] Cache keys change for voice/settings/tenant changes and never contain credentials; unsafe/unsupported assets fail safely.
-- [ ] Opening targets entry_caller only; unrelated participants/entry_receiver do not hear it.
-- [ ] Terminal readiness failure and deadline expiry release attempted resources; deliberate
+- [x] All consumers—including recorder/archive hooks—receive no participant audio during opening; cached/downloaded/scheduled is not completed playout.
+- [x] Omitted opening starts normally; warm providers do not open gate; failed playback does not silently continue.
+- [x] Initial activation, duplicate connections, and a new call keep greeting behavior distinct;
+  later transfer-agent activation remains owned by the transfer milestone. Closing instructions do not promise audio drain.
+- [x] Fake-clock tests separate created_at/start/token/readiness/idle/duration clocks and preserve human-only duration enforcement.
+- [x] Cache keys change for voice/settings/tenant changes and never contain credentials; unsafe/unsupported assets fail safely.
+- [x] Opening targets entry_caller only; unrelated participants/entry_receiver do not hear it.
+- [x] Terminal readiness failure and deadline expiry release attempted resources; deliberate
   opening playback is not mistaken for failed readiness. Duplicate readiness never repeats a greeting.
 - [x] Idle excludes opening/output/hold/dial/tool wait and only notifies instructions; it does
   not automatically nudge or hang up.
@@ -61,9 +62,9 @@ No wait music, voicemail speech, local VAD/models, mandatory notice/legal-compli
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Partial implementation evidence (2026-09-10): schema `20260910.02` accepts exactly
@@ -184,6 +185,26 @@ request; actual destination playout completion remains the only event that relea
 The first two-call test failed because the second room synthesized again. The completed focused
 opening/asset files passed 16 tests, and the complete Call Engine suite passed 258 tests with 1
 integration exclusion. Calls, Gateway and Console passed 36, 66 and 56 tests respectively.
+
+The final audit proves an attached entry receiver receives no opening output and cannot start the
+opening; attaching the entry caller sends audio only to its sink. The single ingress gate discards
+pre-completion frames before STT and therefore before transcript/archive consumers, while admitted
+post-completion audio proceeds normally. Omitted-opening, provider-warmup, controlled failure,
+greeting, readiness, idle, created/start-time, and pinned-duration cases remain covered across the
+focused Call Engine and Calls suites.
+
+Opening attempts now emit one terminal payload-free telemetry event. Duration/count measurements
+carry only closed `source` (`text`/`file_url`) and `outcome` (`completed`/`failed`) metadata; omitted
+opening emits none. The focused runtime telemetry test failed first with no message, then passed for
+both correlated playout completion and controlled provider failure. Console diagnostics keeps the
+bounded aggregate in a dedicated projection and renders source, outcome, latest duration, and count
+without retaining call identity or payload data. The final seeded Call Engine suite passed 259 tests
+with 1 integration exclusion. Calls, Gateway, and Console passed 36, 66, and 57 tests respectively.
+Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks passed;
+root tests remained blocked only at Persistence database creation because this shell has no
+PostgreSQL password. Rendered diagnostics checks at 1440×1000 and 390×844 showed the new panel in
+the existing workbench without horizontal overflow; the browser accessibility audit reported zero
+violations.
 
 ## Specification review
 

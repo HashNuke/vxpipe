@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine.Telemetry do
   @model_first_token_event [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
+  @opening_audio_stop_event [:vxpipe, :call_engine, :opening_audio, :stop]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
   @background_tool_stop_event [:vxpipe, :call_engine, :background_tool, :stop]
@@ -23,6 +24,7 @@ defmodule Vxpipe.CallEngine.Telemetry do
     @model_first_token_event,
     @model_request_stop_event,
     @tts_first_audio_event,
+    @opening_audio_stop_event,
     @provider_failure_event,
     @background_tool_admission_event,
     @background_tool_stop_event,
@@ -66,6 +68,18 @@ defmodule Vxpipe.CallEngine.Telemetry do
   @spec tts_first_audio(integer(), term()) :: :ok
   def tts_first_audio(started_at, provider) do
     execute_duration(@tts_first_audio_event, started_at, %{provider: provider(provider)})
+  end
+
+  @doc "Emits one terminal opening-audio outcome without call or content identity."
+  @spec opening_audio_stop(integer(), :file_url | :text, :completed | :failed) :: :ok
+  def opening_audio_stop(started_at, source, outcome)
+      when is_integer(started_at) and source in [:file_url, :text] and
+             outcome in [:completed, :failed] do
+    :telemetry.execute(
+      @opening_audio_stop_event,
+      %{count: 1, duration: System.monotonic_time() - started_at},
+      %{outcome: outcome, source: source}
+    )
   end
 
   @doc "Emits one safe provider failure category."

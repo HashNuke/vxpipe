@@ -293,3 +293,34 @@
 - Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks
   passed. The root test command again stopped while creating the Persistence test database because
   this shell has no PostgreSQL password; no credential value was inspected or logged.
+
+## 2026-09-10 — final acceptance and operational outcome
+
+- Added a caller-target verification without changing runtime behavior. Attaching the entry
+  receiver first emits no synthesis or audio and leaves the gate closed. Attaching the entry caller
+  starts the opening and only its sink receives the output.
+- The participant ingress is the sole raw caller-audio boundary. Its closed state discards frames
+  before STT; archive/transcript facts are created only from later admitted turns. Existing tests
+  prove a pre-completion frame reaches neither STT nor later processing and a post-completion frame
+  does.
+- Added a payload-free terminal opening metric after a red run observed no telemetry. It reports
+  count and monotonic duration with only closed source/outcome categories. Actual playout emits
+  `completed`; a controlled provider or asset failure emits `failed`; omission emits nothing.
+- The remaining acceptance cases were mapped to existing deterministic tests: omission, provider
+  warmup, failed/incomplete playout, wait/fixed/generated greeting, readiness cleanup, idle
+  exclusions, created/start timestamps, duration precedence and pinned maximum duration. Transfer
+  activation remains in the next milestone and must preserve the established one-greeting-per-
+  activation contract.
+- The focused opening/telemetry files passed 14 tests. A separate Console red run failed because the
+  reporter did not subscribe to the event and the diagnostics panel did not exist. The bounded
+  projection and dedicated panel then passed 15 focused tests; the full Console suite passed 57.
+- Rendered `agent-browser` checks at 1440×1000 and 390×844 showed the panel within the existing
+  three-column/stacked workbench without horizontal overflow. The accessibility audit reported zero
+  violations, and the browser reported no page errors or console errors. Chrome required the
+  environment-specific `--no-sandbox` launch argument because this host disables unprivileged user
+  namespaces.
+- The seeded complete Call Engine suite passed 259 tests with 1 integration exclusion; Calls and
+  Gateway passed 36 and 66 tests. Root formatting, warnings-as-errors compilation, strict Credo, and
+  unused-dependency checks passed. The root test command stopped only at Persistence database
+  creation because this shell has no PostgreSQL password; no credential value was inspected or
+  logged.

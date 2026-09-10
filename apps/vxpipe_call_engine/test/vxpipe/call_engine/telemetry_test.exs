@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
   @background_tool_handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
   @background_tool_stop_event [:vxpipe, :call_engine, :background_tool, :stop]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+  @opening_audio_stop_event [:vxpipe, :call_engine, :opening_audio, :stop]
   @runtime_sample_event [:vxpipe, :call_engine, :runtime, :sample]
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
 
@@ -16,6 +17,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
              [:vxpipe, :call_engine, :model, :first_token],
              [:vxpipe, :call_engine, :model, :request, :stop],
              [:vxpipe, :call_engine, :tts, :first_audio],
+             @opening_audio_stop_event,
              [:vxpipe, :call_engine, :provider, :failure],
              @background_tool_admission_event,
              @background_tool_stop_event,

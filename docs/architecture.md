@@ -1936,6 +1936,7 @@ The implemented framework-independent event contract currently includes:
 | `[:vxpipe, :call_engine, :model, :first_token]` | `duration` in Erlang `:native` units | `provider` | Request dispatch to first non-empty model output observed by the agent coordinator; emitted once per request and absent when no output arrives |
 | `[:vxpipe, :call_engine, :model, :request, :stop]` | `duration` in Erlang `:native` units | `provider`, `outcome`, and `first_output` | Request dispatch to terminal completion, cancellation, timeout, or failure; `first_output` is `:observed` or `:missing` |
 | `[:vxpipe, :call_engine, :tts, :first_audio]` | `duration` in Erlang `:native` units | `provider` | TTS request dispatch to the first decoded provider audio frame, before output-sink acceptance or remote playout; emitted once and absent without audio |
+| `[:vxpipe, :call_engine, :opening_audio, :stop]` | `count` equal to `1` and `duration` in Erlang `:native` units | `source` and `outcome` | Configured opening-audio attempt through correlated destination playout completion or terminal failure; emitted once and absent when opening audio is omitted |
 | `[:vxpipe, :call_engine, :provider, :failure]` | `count` equal to `1` | `capability`, `provider`, and `category` | Safe failure projection at the owning model, STT, or TTS boundary; no raw provider reason or response is included |
 | `[:vxpipe, :call_engine, :background_tool, :admission]` | `count` plus `reserved` and configured `limit` gauges observed at that admission | `outcome` | Engine submission boundary after validation and capacity checks; accepted work is counted only after worker startup |
 | `[:vxpipe, :call_engine, :background_tool, :stop]` | `count` and local-worker `duration` in Erlang `:native` units | `outcome` | One terminal observation for a successful, failed, unknown-timeout, or activation-terminated local worker |
@@ -1955,9 +1956,12 @@ Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`,
 `:accepted`, `:saturated`, `:start_failed`, `:unavailable`, or `:invalid_tool`; worker outcomes
 are `:ok`, `:failed`, `:unknown`, or `:terminated`; handoff outcomes are `:queued`,
 `:duplicate`, `:overflow`, or `:consumed`. MCP connection operations are `:open` or `:close`;
-their outcomes are `:opened`, `:reused`, `:failed`, `:closed`, or `:absent`. MCP request
+their outcomes are `:opened`, `:reused`, `:failed`, `:closed`, or `:absent`. Opening-audio
+sources are `:text` or `:file_url` and outcomes are `:completed` or `:failed`. MCP request
 operations are `:discovery` or `:invocation`; their outcomes are bounded to `:ok`, `:failed`,
 `:timeout`, `:rejected`, `:too_large`, `:not_submitted`, `:remote_error`, or `:unknown`.
+Console diagnostics projects opening-audio stops into bounded source/outcome duration aggregates;
+it does not retain call identity, configured text, asset URLs, or provider payloads.
 None of these events carries input/output text, audio, raw provider errors, model names,
 endpoint/tool identity, request arguments/results, credentials, tenant IDs, or integration
 IDs. Only the MCP events may include an ephemeral local client PID; the Console removes it

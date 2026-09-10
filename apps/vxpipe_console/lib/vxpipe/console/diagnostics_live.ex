@@ -5,6 +5,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
 
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
   alias Vxpipe.Console.Diagnostics.MCPPanel
+  alias Vxpipe.Console.Diagnostics.OpeningAudioPanel
   alias Vxpipe.Console.TelemetryReporter
 
   @refresh_interval_ms 1_000
@@ -86,6 +87,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
 
           <div class="workbench-column">
             <.speech_panel first_audio={@snapshot.tts.first_audio} />
+            <OpeningAudioPanel.render metrics={@snapshot.opening_audio} />
             <.background_tools_panel metrics={@snapshot.background_tools} />
             <.failures_panel failures={@snapshot.provider_failures} />
           </div>
