@@ -786,6 +786,12 @@ Implementation evidence:
   same Session. ReqLLM's stream handle remains owned and closed by the provider adapter; the test
   uses no dependency-private cleanup API. The default Agent Runtime suite passes 51 tests with no
   failures and two tagged integration exclusions.
+- The first final umbrella run exposed four Agent Runtime worker/provider handshakes that relied on
+  ExUnit's 100 ms default receive timeout and failed only under concurrent umbrella load. The
+  package test helper now gives positive asynchronous assertions a one-second bound without
+  changing production deadlines or negative-assertion waits. The exact failing seed then passed
+  all 51 package tests, and a fresh complete umbrella run passed all 491 tests with ten tagged
+  integration exclusions against an isolated trust-authenticated PostgreSQL instance.
 
 ## Specification review
 

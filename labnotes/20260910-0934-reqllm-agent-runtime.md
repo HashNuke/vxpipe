@@ -1495,3 +1495,18 @@ cleanup functions.
 Loading the repository `.env` into the command without printing it, the explicit integration lane
 passed 2 tests in 6.2 seconds. ReqLLM redacted the credential in its debug request URL. The default
 Agent Runtime suite remains green at 51 tests with two tagged integration exclusions.
+
+## Final audit: umbrella-load test synchronization
+
+The first complete umbrella run against isolated PostgreSQL reached every child suite but exposed
+four Agent Runtime assertions that depended on ExUnit's 100 ms default receive timeout. Under the
+concurrent umbrella load, pending-context and provider worker handshakes arrived after that bound;
+the owning package suite had remained green in isolation. These were test synchronization failures,
+not runtime request deadlines or failed production outcomes.
+
+The Agent Runtime test helper now configures a one-second `assert_receive` default while leaving
+negative receive assertions at their existing short bound. The exact failed seed then passed all 51
+package tests with two integration exclusions. A fresh root run used a temporary
+trust-authenticated PostgreSQL 18 instance, required no external database credential, and passed
+all 491 tests with ten tagged integration exclusions. The temporary server was stopped and its data
+directory moved to trash after the run.
