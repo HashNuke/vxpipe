@@ -64,6 +64,20 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   @impl true
+  def handle_call(
+        {:respond, command},
+        _from,
+        %State{current: nil, completion_deferred?: true} = state
+      ) do
+    state = %{state | completion_deferred?: false}
+
+    case admit(command, state) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:held, state} -> {:reply, :ok, start_next(state)}
+      {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
+    end
+  end
+
   def handle_call({:respond, command}, _from, %State{current: nil} = state) do
     case start_completion(state) do
       {:ok, state} ->
@@ -110,6 +124,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_tool_completion_available, _registry, _invocation_id},
+        %State{current: nil, completion_deferred?: true} = state
+      ) do
+    {:noreply, state}
+  end
+
   def handle_info(
         {:agent_runtime_event, %Event{kind: :request_started, correlation: correlation}},
         %State{

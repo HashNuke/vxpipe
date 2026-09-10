@@ -16,7 +16,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
     :maximum_output_bytes,
     :maximum_pending_requests
   ]
-  defstruct @enforce_keys ++ [current: nil, pending: :queue.new()]
+  defstruct @enforce_keys ++
+              [
+                current: nil,
+                pending: :queue.new(),
+                completion_deferred?: false
+              ]
 
-  @type t :: %__MODULE__{history: History.t()}
+  @type t :: %__MODULE__{history: History.t(), completion_deferred?: boolean()}
 end

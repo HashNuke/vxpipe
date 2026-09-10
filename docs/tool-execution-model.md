@@ -189,6 +189,11 @@ running-result pair and invocation ID.
 - Cancelling speech or a model stream suppresses stale output but does not cancel an accepted
   worker. Once submission succeeds, its tool-call/running-result pair is a conversation commit
   barrier and cannot be discarded with later provisional text.
+- Interrupting an uncommitted private completion releases its lease without rerunning the worker.
+  Replacement caller admission happens before retry for non-blocking work; blocking work emits its
+  hold before retry. If that completion already committed a nested tool exchange, the original
+  completion is acknowledged and the nested invocation remains pending instead of replaying either
+  operation.
 - A provider failure after submission leaves accepted invocations pending. The coordinator can
   start a fresh private continuation after the failed request terminates; it must not resubmit.
 - Worker startup failure is definite non-submission. Worker crash is a definite failure.

@@ -1,8 +1,14 @@
 defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.AgentRuntime.{ModelResponse, PendingInvocation, Session}
-  alias Vxpipe.CallEngine.AgentRuntime.{Coordinator, PendingContextSource}
+  alias Vxpipe.AgentRuntime.{ModelResponse, PendingInvocation, Session, ToolCall, ToolDescriptor}
+
+  alias Vxpipe.CallEngine.AgentRuntime.{
+    Coordinator,
+    InvocationExecutor,
+    PendingContextSource
+  }
+
   alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
@@ -346,6 +352,143 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_tool_completion_available, _registry, "interrupt-surviving-call"}
   end
 
+  test "interrupts and retries an uncommitted non-blocking completion after replacement caller work" do
+    runtime = start_runtime()
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "interrupted-completion-call")
+
+    assert_receive {:submitted_inline_tool_started, execution, "interrupted-completion-call"}
+    send(execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_capability_continuation_started, coordinator,
+                    %ContinueAgent{} = interrupted_continuation}
+
+    assert coordinator == runtime.coordinator
+    assert_receive {:test_agent_runtime_stream, interrupted_provider, _request}
+    interrupted_monitor = Process.monitor(interrupted_provider)
+
+    assert {:ok, []} = Coordinator.interrupt(coordinator, [])
+    assert_receive {:DOWN, ^interrupted_monitor, :process, ^interrupted_provider, _reason}
+
+    assert {:ok,
+            [
+              %Vxpipe.CallEngine.Tool.InvocationStatus{
+                invocation_id: "interrupted-completion-call",
+                status: :terminal_queued
+              }
+            ]} = InvocationRegistry.snapshot(runtime.registry)
+
+    replacement = command("replacement-before-completion-retry", "let me add something")
+    assert :ok = Coordinator.respond(coordinator, replacement)
+    assert_receive {:test_agent_runtime_stream, replacement_provider, replacement_request}
+    assert List.last(replacement_request.messages).content == replacement.content
+
+    assert {:ok, response} = ModelResponse.new(text: "Go ahead.")
+    send(replacement_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^replacement}
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{} = retried_continuation}
+
+    assert retried_continuation.tool_call_id == interrupted_continuation.tool_call_id
+    assert_receive {:test_agent_runtime_stream, retried_provider, _request}
+
+    assert {:ok, response} = ModelResponse.new(text: "The request completed.")
+    send(retried_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^retried_continuation}
+    assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
+  end
+
+  test "holds a replacement while retrying an interrupted blocking completion" do
+    runtime = start_runtime()
+
+    assert {:accepted, :blocking} =
+             submit_invocation(runtime, :blocking, "interrupted-blocking-completion")
+
+    assert_receive {:submitted_inline_tool_started, execution, "interrupted-blocking-completion"}
+
+    send(execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_capability_continuation_started, coordinator,
+                    %ContinueAgent{} = interrupted_continuation}
+
+    assert_receive {:test_agent_runtime_stream, _interrupted_provider, _request}
+    assert {:ok, []} = Coordinator.interrupt(coordinator, [])
+
+    replacement = command("held-before-completion-retry", "can we continue?")
+    assert :ok = Coordinator.respond(coordinator, replacement)
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, ^replacement,
+                    "Please hold while I finish the current request."}
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^replacement}
+
+    replacement_correlation_id = replacement.correlation_id
+
+    refute_receive {:test_agent_runtime_stream, _caller_provider,
+                    %{correlation: %{correlation_id: ^replacement_correlation_id}}}
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{} = retried_continuation}
+
+    assert retried_continuation.tool_call_id == interrupted_continuation.tool_call_id
+    assert_receive {:test_agent_runtime_stream, retried_provider, _request}
+
+    assert {:ok, response} = ModelResponse.new(text: "The request completed.")
+    send(retried_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^retried_continuation}
+    assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
+  end
+
+  test "acknowledges an interrupted completion after its nested tool exchange commits" do
+    descriptor = runtime_tool_descriptor(:non_blocking)
+    runtime = start_runtime(tools: [descriptor], executor: InvocationExecutor)
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "durable-completion-call")
+
+    assert_receive {:submitted_inline_tool_started, execution, "durable-completion-call"}
+    send(execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_capability_continuation_started, coordinator, %ContinueAgent{}}
+    assert_receive {:test_agent_runtime_stream, completion_provider, _request}
+
+    {:ok, nested_call} =
+      ToolCall.new(
+        id: "nested-tool-call",
+        name: "submitted_inline_tool",
+        arguments: %{"value" => "nested"}
+      )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [nested_call])
+    send(completion_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:submitted_inline_tool_started, nested_execution, "nested"}
+    assert_receive {:test_agent_runtime_stream, _acknowledgement_provider, _request}
+
+    assert {:ok, []} = Coordinator.interrupt(coordinator, [])
+
+    assert {:ok,
+            [
+              %Vxpipe.CallEngine.Tool.InvocationStatus{
+                invocation_id: "nested-tool-call",
+                status: :running
+              }
+            ]} = InvocationRegistry.snapshot(runtime.registry)
+
+    send(nested_execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{} = nested_continuation}
+
+    assert_receive {:test_agent_runtime_stream, nested_provider, _request}
+    assert {:ok, response} = ModelResponse.new(text: "The nested request completed.")
+    send(nested_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^nested_continuation}
+    assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
+  end
+
   defp start_runtime(options \\ []) do
     suffix = System.unique_integer([:positive])
     activation_id = "act-runtime-coordinator-#{suffix}"
@@ -393,8 +536,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          instructions: "Answer briefly.",
          model_provider: TestAgentRuntimeModelProvider,
          model: %{owner: self()},
-         tools: [],
-         executor: nil,
+         tools: Keyword.get(options, :tools, []),
+         executor: Keyword.get(options, :executor),
          pending_context_source: {PendingContextSource, registry_name},
          event_destination: coordinator,
          maximum_output_bytes: Keyword.get(options, :session_maximum_output_bytes, 4_096),
@@ -438,6 +581,33 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
       tool_call_id: nil,
       audio_response: true
     }
+  end
+
+  defp runtime_tool_descriptor(conversation_mode) do
+    resolved = %ToolBinding{
+      name: "submitted_inline_tool",
+      type: :host,
+      conversation_mode: conversation_mode,
+      action: TestSubmittedInlineTool,
+      remote: nil
+    }
+
+    assert {:ok, binding} = InvocationBinding.from_resolved(resolved)
+
+    assert {:ok, descriptor} =
+             ToolDescriptor.new(
+               name: "submitted_inline_tool",
+               description: "Complete a controlled test operation",
+               input_schema: %{
+                 "type" => "object",
+                 "properties" => %{"value" => %{"type" => "string"}},
+                 "required" => ["value"],
+                 "additionalProperties" => false
+               },
+               binding: binding
+             )
+
+    descriptor
   end
 
   defp command(seed, content) do

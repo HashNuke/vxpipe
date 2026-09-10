@@ -105,9 +105,12 @@ The Call Engine coordinator now applies that boundary to caller-turn interruptio
 active runtime request, removes queued caller commands, discards only completed exchanges selected
 by exact connection/correlation/command identity, and then accepts replacement work in the same
 Session. It never addresses the invocation supervisor or an accepted tool worker. Interruption of
-an active private completion continuation still fails the migration coordinator closed; resolving
-whether its leased terminal observation was committed is the next interruption checkpoint before
-this coordinator can be selected in a live activation.
+an active private completion uses the Session's durable-correlation query after cancellation. If
+the completion observation never committed, Call Engine releases its lease and defers the retry
+until replacement input is admitted: non-blocking work lets that caller proceed first, while
+blocking work produces the deterministic hold and then retries. If the continuation already
+committed a nested tool exchange, Call Engine acknowledges the original completion instead of
+replaying it; the nested worker remains authoritative and continues independently.
 
 For every submitted tool, the single correlated running acknowledgement stays in that
 committed conversation and is therefore supplied with every later model request while the

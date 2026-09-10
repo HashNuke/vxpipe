@@ -34,6 +34,11 @@ defmodule Vxpipe.AgentRuntime.Conversation do
     rebuild(entries)
   end
 
+  @spec durable?(t(), map()) :: boolean()
+  def durable?(%__MODULE__{} = conversation, correlation) when is_map(correlation) do
+    Enum.any?(conversation.entries, &Entry.durable_for?(&1, correlation))
+  end
+
   defp rebuild(entries) do
     messages = Enum.flat_map(entries, & &1.messages)
     %__MODULE__{entries: entries, messages: messages, size: length(messages)}

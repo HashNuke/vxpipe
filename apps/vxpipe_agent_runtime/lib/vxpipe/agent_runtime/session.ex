@@ -67,6 +67,16 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   def discard(_server, _correlations, _timeout), do: {:error, :invalid_correlations}
 
+  @spec durable?(server(), map(), timeout()) ::
+          {:ok, boolean()} | {:error, :busy | :invalid_correlation}
+  def durable?(server, correlation, timeout \\ 5_000)
+
+  def durable?(server, correlation, timeout) when is_map(correlation) do
+    GenServer.call(server, {:durable?, correlation}, timeout)
+  end
+
+  def durable?(_server, _correlation, _timeout), do: {:error, :invalid_correlation}
+
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
@@ -158,6 +168,14 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   def handle_call(:status, _caller, state), do: {:reply, state.status, state}
+
+  def handle_call({:durable?, correlation}, _caller, %{status: :idle} = state) do
+    {:reply, {:ok, Conversation.durable?(state.conversation, correlation)}, state}
+  end
+
+  def handle_call({:durable?, _correlation}, _caller, state) do
+    {:reply, {:error, :busy}, state}
+  end
 
   def handle_call({:discard, correlations}, _caller, %{status: :idle} = state) do
     conversation = Conversation.discard(state.conversation, correlations)

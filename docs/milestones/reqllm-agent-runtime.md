@@ -142,8 +142,10 @@ process or dependency is used.
    durable accepted-tool and private-completion facts, and exposes idle-only correlation-based
    discard for the room interruption path. The migration coordinator now cancels active caller
    generation, drops queued caller commands, reconciles exact completed turns, and leaves accepted
-   tool workers running. Active private-completion interruption remains before activation selection.
-   Preserve completion and interruption behavior.
+   tool workers running. It also settles interrupted private completions from durable Session state:
+   uncommitted observations are released and deferred across replacement admission, while a
+   completion that committed a nested tool is acknowledged without replay. Activation selection
+   remains. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -480,6 +482,22 @@ Implementation evidence:
   unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
   Active private-completion interruption and activation selection remain.
+- Checkpoint 4m completes migration-coordinator interruption semantics for a private completion.
+  After cancelling the Session request, Call Engine queries whether that opaque correlation has a
+  durable entry. An uncommitted observation releases its lease and defers completion scheduling
+  across the replacement command: a non-blocking invocation admits the caller first; a blocking
+  invocation holds the caller and immediately retries the completion. A durable observation caused
+  by a nested accepted tool acknowledges the original completion, retains the nested running
+  record, and never replays the original tool outcome.
+- Checkpoint 4m package red evidence reported three missing `Session.durable?/2` calls. Coordinator
+  red evidence reported unavailable interruption for both completion modes, while the nested-tool
+  scenario exposed inherited `tool_call_id` context that rejected the new invocation. Private
+  continuations now reset that per-invocation field. The complete Agent Runtime suite passes 41
+  tests with 1 integration exclusion, and the complete Call Engine suite passes 238 tests with 2
+  integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+  unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.
+  Activation selection remains pending.
 
 ## Specification review
 

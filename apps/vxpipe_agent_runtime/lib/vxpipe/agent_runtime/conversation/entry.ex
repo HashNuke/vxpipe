@@ -27,4 +27,9 @@ defmodule Vxpipe.AgentRuntime.Conversation.Entry do
   def discardable_for?(%__MODULE__{} = entry, correlations) do
     entry.retention == :discardable and MapSet.member?(correlations, entry.correlation)
   end
+
+  @spec durable_for?(t(), map()) :: boolean()
+  def durable_for?(%__MODULE__{} = entry, correlation) when is_map(correlation) do
+    entry.retention == :durable and entry.correlation == correlation
+  end
 end

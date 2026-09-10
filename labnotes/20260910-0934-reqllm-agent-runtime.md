@@ -663,7 +663,8 @@ Verification:
 - Complete Call Engine suite: 223 tests, 0 failures, 2 integration exclusions.
 - Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
 - Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM authentication needs a
-  password absent from this shell; no credential source was inspected.
+password absent from this shell; no credential source was inspected.
+
 - Remote MCP and Call Variables descriptors, activation-owned Session startup, coordinator
   admission/completion leasing, and submit-timeout reconciliation fault injection remain pending.
 
@@ -854,3 +855,34 @@ passed immediately in isolation. The unchanged complete Call Engine suite then p
 with 2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
 unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
 authentication needs a password absent from this shell; no credential source was inspected.
+
+## Implementation checkpoint 4m: private-completion interruption
+
+Added durable-correlation assertions to the three Agent Runtime history tests before
+implementation. The red run reported three undefined `Session.durable?/2` calls. `Conversation`
+now answers whether an opaque request correlation owns any durable entry, and Session exposes that
+query only while idle. Ordinary caller conversation reports false; an accepted tool exchange and a
+committed private engine observation report true. The complete Agent Runtime suite passes 41 tests
+with 1 integration exclusion.
+
+Added three coordinator tests before implementing private-completion interruption. The two
+conversation-mode cases initially returned unavailable because completion interruption was
+deliberately fail-closed. An uncommitted non-blocking completion now releases its lease, suppresses
+the registry notification while replacement input is pending, admits that caller, and retries the
+same terminal observation afterward. The blocking form emits the deterministic hold without model
+admission and then retries immediately. No tool worker is rerun in either case.
+
+The third test makes a completion continuation request another tool, interrupts its acknowledgement
+round after the nested submission commits, and verifies the original completion is consumed while
+only the nested invocation remains running. Its first attempt exposed that
+`CompletionContinuation` inherited the old completed invocation's `tool_call_id`; the submission
+boundary correctly rejected the new call as mismatched. A private continuation is a new agent
+request, so its tool context now resets that field to `nil`. After the durable nested exchange,
+interruption acknowledges the original lease rather than replaying the completion; the nested
+worker continues and its own completion is consumed normally.
+
+Focused coordinator verification passes 13 tests. The complete Call Engine suite passes 238 tests
+with 2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+authentication needs a password absent from this shell; no credential source was inspected.
+Activation selection is the next migration step.

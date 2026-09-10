@@ -19,6 +19,7 @@ defmodule Vxpipe.AgentRuntime.ConversationDiscardTest do
     reply_with_text(provider, "old answer")
 
     assert {:ok, %Result{status: :completed}} = Task.await(caller)
+    assert {:ok, false} = Session.durable?(session, correlation)
     assert :ok = Session.discard(session, [correlation])
 
     next_correlation = %{request_id: "req_after_discard"}
@@ -45,6 +46,7 @@ defmodule Vxpipe.AgentRuntime.ConversationDiscardTest do
     reply_with_text(acknowledgement_provider, "I am checking now.")
     assert {:ok, %Result{status: :completed}} = Task.await(caller)
 
+    assert {:ok, true} = Session.durable?(session, correlation)
     assert :ok = Session.discard(session, [correlation])
 
     next_correlation = %{request_id: "req_after_tool_discard"}
@@ -72,6 +74,7 @@ defmodule Vxpipe.AgentRuntime.ConversationDiscardTest do
     reply_with_text(provider, "Your balance is 23 dollars.")
     assert {:ok, %Result{status: :completed}} = Task.await(continuation)
 
+    assert {:ok, true} = Session.durable?(session, correlation)
     assert :ok = Session.discard(session, [correlation])
 
     next_correlation = %{request_id: "req_after_completion_discard"}

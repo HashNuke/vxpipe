@@ -26,7 +26,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CompletionContinuation do
         tool_context = %{
           lease.completion.context
           | command_id: command.id,
-            correlation_id: command.correlation_id
+            correlation_id: command.correlation_id,
+            tool_call_id: nil
         }
 
         {:ok,
