@@ -687,3 +687,20 @@ Verification so far:
 - Remote MCP execution remains outside this milestone. Activation-owned Session startup,
   coordinator admission/completion leasing, and submit-timeout reconciliation fault injection
   remain pending here.
+
+## Implementation checkpoint 4g: named Agent Runtime Session
+
+Added a focused Agent Runtime test requiring `Session` to start under an explicit OTP name while
+keeping that registration option outside immutable runtime configuration. The initial five-test run
+failed with `:invalid_configuration` because `name` reached `SessionConfiguration`.
+
+`Session.start_link/1` now separates the standard GenServer `name` option before initializing the
+session. A Call Engine activation can consequently refer to its single session through the existing
+activation registry without adding room identity or supervisor topology to package-owned model
+state. The focused Session suite passed 5 tests and the complete Agent Runtime suite passed 38 tests
+with 1 integration exclusion.
+
+Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+Umbrella `mix test` stopped before test execution at the unchanged missing PostgreSQL SCRAM
+password; no credential source was inspected. Call Engine activation wiring and its own
+completion/admission coordinator remain pending.

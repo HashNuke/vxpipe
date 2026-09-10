@@ -282,6 +282,11 @@ request contains that assistant call, the ordinary correlated `running` tool res
 pending projection, and no available tools; Gemini accepts it and streams a non-empty
 acknowledgement. Integration tests are excluded by default and require an explicit include flag.
 
+The Session accepts an optional OTP process name separately from its immutable runtime
+configuration. This lets a Call Engine activation supervise and address exactly one session through
+its existing registry without teaching model/session configuration about room identities or
+supervisor topology.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

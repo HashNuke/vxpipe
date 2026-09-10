@@ -124,7 +124,9 @@ process or dependency is used.
    deterministic descriptors with model-visible schema separated from the private action and
    conversation mode. Permission-derived Call Variables tools now compile as default-blocking
    private bindings and execute through the same worker. Remote MCP handling, runtime admission,
-   and activation integration remain. Preserve completion and interruption behavior.
+   and activation integration remain. Agent Runtime sessions now accept an OTP process name outside
+   their immutable model configuration, enabling the activation graph. Preserve completion and
+   interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -384,6 +386,14 @@ Implementation evidence:
 - Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
   checkpoint 4f. Umbrella `mix test` again stopped before test execution because PostgreSQL SCRAM
   needs a password absent from this shell; no credential source was inspected.
+- Checkpoint 4g separates an optional Session OTP name from validated model/runtime options. Its
+  focused red test failed because the name was treated as unknown runtime configuration; after the
+  change, the named Session is registered and addressable while the complete Agent Runtime suite
+  passes 38 tests with 1 integration exclusion. This is the minimal package prerequisite for the
+  activation-owned child graph and adds no Call Engine or room dependency.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
+  checkpoint 4g. Umbrella `mix test` stopped before test execution at the unchanged missing
+  PostgreSQL SCRAM password; no credential source was inspected.
 
 ## Specification review
 

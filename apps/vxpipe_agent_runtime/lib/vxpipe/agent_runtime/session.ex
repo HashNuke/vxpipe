@@ -30,7 +30,11 @@ defmodule Vxpipe.AgentRuntime.Session do
   @type server :: GenServer.server()
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) when is_list(options) do
+    genserver_options = Keyword.take(options, [:name])
+    session_options = Keyword.delete(options, :name)
+    GenServer.start_link(__MODULE__, session_options, genserver_options)
+  end
 
   @spec request(server(), String.t(), map(), timeout()) :: {:ok, Result.t()} | {:error, atom()}
   def request(server, input, correlation, timeout \\ :infinity) do

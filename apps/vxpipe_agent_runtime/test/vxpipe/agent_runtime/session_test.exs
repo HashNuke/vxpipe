@@ -3,6 +3,24 @@ defmodule Vxpipe.AgentRuntime.SessionTest do
 
   alias Vxpipe.AgentRuntime.{PendingInvocation, Result, Session}
 
+  test "starts under an explicit OTP name without treating it as runtime configuration" do
+    name = {:global, {:agent_runtime_session_test, make_ref()}}
+
+    session =
+      start_supervised!(
+        {Session,
+         name: name,
+         instructions: "Be concise",
+         model_provider: Vxpipe.AgentRuntime.TestModelProvider,
+         model: %{reply: "unused", test_owner: self()},
+         pending_context_source: empty_pending_context(self()),
+         event_destination: self()}
+      )
+
+    assert GenServer.whereis(name) == session
+    assert Session.status(name) == :idle
+  end
+
   test "runs a deterministic model request outside the session process" do
     session =
       start_supervised!(

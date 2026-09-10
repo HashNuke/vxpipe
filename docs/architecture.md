@@ -193,6 +193,9 @@ into the outgoing request, and attaches no engine binding to a ReqLLM tool. Buff
 responses yield the same runtime value. Usage plus ReqLLM-redacted provider call identity crosses
 the token-correlated Session event boundary; prompts, private bindings, raw provider failures, and
 authorization values do not. Call Engine has not yet selected this adapter for live activations.
+Session startup also separates its optional OTP process name from immutable runtime configuration,
+allowing the activation supervisor to use a stable registry reference without making topology part
+of model state.
 
 Tagged production evidence confirms Gemini accepts this adapter's exact tool schema and a
 subsequent canonical running-acknowledgement round with ephemeral pending state and tools withheld.
