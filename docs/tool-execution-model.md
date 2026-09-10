@@ -5,10 +5,11 @@ private continuation admission implemented.
 
 ## Decision
 
-Every model-requested Vxpipe tool is submitted to a bounded, independently supervised
-Call Engine worker. The agent-runtime request worker validates and resolves the request,
-but never executes the tool operation inline. This rule applies to platform tools, Call
-Variables tools, host tools, and remote MCP tools.
+Every model-requested Vxpipe tool invocation is always handed off to a bounded,
+independently supervised Call Engine worker, regardless of tool kind or conversation mode.
+The Agent Runtime request worker validates and resolves the request, but neither it nor an
+agent/runtime GenServer ever executes the tool operation inline. This rule applies to
+platform/built-in tools, Call Variables tools, host tools, and remote MCP tools.
 
 Tool bindings have a separate conversation mode:
 
@@ -19,14 +20,13 @@ Tool bindings have a separate conversation mode:
   request still contains the committed correlated running acknowledgement, so the LLM knows
   which work remains pending.
 
-“Blocking” never means executing a tool inside the agent process or a GenServer callback.
-It is an admission rule for later caller conversation.
-
 ## Call-definition shape
 
 Conversation mode belongs to the agent's local tool binding because two agents may use the
-same underlying operation with different conversational behavior. Omission defaults to
-`blocking`; only the exception needs to be authored:
+same underlying operation with different conversational behavior. Each authored platform/
+built-in, host, or MCP binding obtains its tool-specific mode from that entry in the call
+definition's participant `tools` map. Omission defaults to `blocking`; only the exception
+needs to be authored:
 
 ```json
 {
@@ -44,6 +44,10 @@ same underlying operation with different conversational behavior. Omission defau
           "integration": "banking",
           "tool": "get_credit_card_rules",
           "conversation_mode": "non_blocking"
+        },
+        "end_call": {
+          "type": "platform",
+          "tool": "hangup"
         }
       }
     }
@@ -52,9 +56,15 @@ same underlying operation with different conversational behavior. Omission defau
 ```
 
 The compiler accepts only `blocking` and `non_blocking`, resolves omission to `blocking`,
-and pins the value in the immutable participant tool binding. It is private execution
-policy, not a model-selectable tool argument or client override. The setting does not change
-tool authorization, timeout, retry, visibility, or retention policy.
+and pins the value in the immutable participant tool binding. It is private conversation
+admission policy, not a model-selectable tool argument or client override. The setting does
+not change worker placement, tool authorization, timeout, retry, visibility, or retention
+policy.
+
+The current dated compiler implements this field for explicitly authored host and MCP
+selections. Permission-derived Call Variables tools compile with the default `blocking` mode.
+The `platform` entry above records the approved unified-map target; selecting authored platform
+tools through that entry still requires a later compiler checkpoint.
 
 ## Submission and conversation flow
 
@@ -128,7 +138,11 @@ work. The provider adapter owns only model encoding/streaming.
 
 Committed history proves what the model was previously told, while Call Engine remains
 authoritative for what is still active. Agent Runtime calls a narrow context-source boundary
-before every provider generation, including repeated rounds within one request. Its bounded
+before every provider generation, including repeated rounds within one request. This reporting
+contract is the same for `blocking` and `non_blocking` invocations: every later LLM request
+that is appropriate and admitted receives current pending state. Blocking suppresses only
+unrelated subsequent caller turns; it does not suppress the acknowledgement round, private
+completion continuation, or another otherwise-admitted request's pending context. The bounded
 projection contains identifiers and lifecycle state but no arguments, results, bindings,
 credentials, endpoints, or raw errors:
 

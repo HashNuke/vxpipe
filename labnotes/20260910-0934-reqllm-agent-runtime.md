@@ -112,18 +112,22 @@ results and slow tools as submitted work. Review with the user rejected that spl
 was committed. The prototype was removed and the checkpoint-1 application suite remained
 green with 5 tests and 0 failures.
 
-The selected target now submits every platform, Call Variables, host, and MCP tool to a
-separate bounded worker owned by the active agent's Call Engine subtree. A tool binding's
-conversation mode is a separate concern: omission defaults to `blocking`, while
-`conversation_mode: "non_blocking"` explicitly allows unrelated caller/model turns during
-execution. Blocking never authorizes inline execution.
+The selected target now hands every platform/built-in, Call Variables, host, and MCP tool
+invocation to a separate bounded worker owned by the active agent's Call Engine subtree.
+Neither the Agent Runtime request worker nor an agent/runtime GenServer executes it inline.
+For authored platform/built-in, host, and MCP bindings, the tool-specific
+`conversation_mode` comes from the call-definition `tools` entry and is `blocking` or
+`non_blocking`. Omission defaults to `blocking`; `non_blocking` explicitly allows unrelated
+caller/model turns during execution. The mode changes later-turn admission only, never
+execution placement.
 
 Every accepted submission produces one correlated running tool result. That committed
 exchange survives later speech/model cancellation because real work has started. Completion
 arrives once as a private engine-origin observation with the same invocation ID. Call Engine
 owns authoritative invocation state and supplies a bounded payload-free pending projection
-before every provider generation; this is ephemeral model context, not repeated polling or
-another committed tool result.
+before every provider generation in either mode; every appropriate later LLM request therefore
+sees current pending state. This is ephemeral model context, not repeated polling or another
+committed tool result.
 
 The plan also fixes admission sequencing: the current post-submission acknowledgement round
 may finish, a blocking invocation then prevents later caller turns from entering the model,
@@ -131,6 +135,11 @@ and deterministic hold output is used until its terminal observation has been co
 Non-blocking invocations retain the approved unrelated-conversation behavior. See
 `docs/tool-execution-model.md` for states, races, cancellation, partial submission, multiple
 calls, transfer/shutdown, ownership, and migration checks.
+
+This clarification changes documentation precision only. The current dated compiler already
+supports the choice for authored host and MCP entries. Permission-derived Call Variables tools
+remain default-blocking, and the approved authored platform-tool shape is not claimed as
+implemented by this documentation checkpoint.
 
 ## Implementation checkpoint 4a: call-definition conversation policy
 

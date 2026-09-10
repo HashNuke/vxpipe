@@ -61,8 +61,9 @@ process or dependency is used.
   round. Cancellation discards staged input/output and closes provider work without deleting
   earlier committed exchanges.
 - On tool calls, resolve names only in the request's pinned registry, validate complete
-  arguments, and ask the engine-owned submit-only executor to start independently supervised
-  work. Agent Runtime never executes an operation inline. Preserve call IDs, model order,
+  arguments, and ask the engine-owned submit-only executor to hand every invocation to an
+  independently supervised worker. Neither the Agent Runtime request worker nor an agent/
+  runtime GenServer ever executes an operation inline. Preserve call IDs, model order,
   provider metadata, and definite non-submission errors. Corrupt exchanges and exhausted
   bounds fail the current turn instead of inventing a result.
 - Every accepted submission returns the existing bounded running acknowledgement
@@ -73,16 +74,20 @@ process or dependency is used.
   later speech cancellation as already specified. Completion enters once as a private
   engine-origin observation carrying the same invocation ID; it is not a second result
   attached to the old tool exchange and does not create public caller speech.
-- Tool bindings default to blocking later caller conversation and may opt into
-  `non_blocking` in the call definition. Blocking is Call Engine admission policy, never
-  inline execution: the current acknowledgement round may finish, then caller turns receive
-  a deterministic holding response without entering the LLM until the terminal private
-  continuation is consumed. Non-blocking turns retain all pending running acknowledgements.
+- Each authored platform/built-in, host, or MCP tool binding takes its tool-specific
+  `conversation_mode` from its call-definition `tools` entry. The only values are `blocking`
+  and `non_blocking`; omission resolves to `blocking`. Blocking is Call Engine admission
+  policy only: the current acknowledgement round may finish, then subsequent caller turns
+  receive a deterministic holding response without entering the LLM until the terminal
+  private continuation is consumed. `non_blocking` lets unrelated later turns proceed.
+  The current compiler supports this field on authored host and MCP selections; generated
+  Call Variables tools take the default until a later policy override is explicitly designed.
   Follow the [tool execution model](../tool-execution-model.md).
-- Before every provider generation, obtain a bounded payload-free pending-invocation snapshot
-  from a Call Engine context-source contract. Supply it as trusted ephemeral model context,
-  never as another committed tool result. Conversation history records what was said; Call
-  Engine remains authoritative for what is currently running or awaiting consumption.
+- Before every provider generation in either conversation mode, obtain a bounded payload-free
+  pending-invocation snapshot from a Call Engine context-source contract. Supply it as trusted
+  ephemeral model context, never as another committed tool result. Conversation history records
+  what was said; Call Engine remains authoritative for what is currently running or awaiting
+  consumption.
 - Normalize runtime events for request start, text delta, complete tool request, executor
   outcome, usage, terminal answer, cancellation, and safe failure. Events carry opaque
   correlation supplied by Call Engine, but the runtime does not assign call/participant/turn

@@ -40,10 +40,11 @@ Vxpipe.CallEngine
 
 The package accepts a narrow submit-only executor contract. It supplies the already resolved
 private binding, validated arguments, opaque request context, and invocation identity. Call
-Engine starts every tool in an independently supervised worker and returns either definite
-non-submission or one bounded running acknowledgement. Agent Runtime never executes an
-operation inline. The acknowledgement is the invocation's only ordinary tool result; later
-completion remains a separate private engine-origin turn with the same invocation ID.
+Engine hands every invocation to an independently supervised worker and returns either definite
+non-submission or one bounded running acknowledgement. Neither an Agent Runtime request worker
+nor an agent/runtime GenServer ever executes an operation inline. The acknowledgement is the
+invocation's only ordinary tool result; later completion remains a separate private
+engine-origin turn with the same invocation ID.
 
 ReqLLM requires a callback on its tool value, but provider generation does not execute that
 callback. The projection therefore uses one package-owned static callback with no captured
@@ -114,9 +115,17 @@ complete identifiers and arguments have been assembled and validated. Mixed text
 responses must not double-deliver text. Tool results retain provider-required call IDs and
 ordering. Provider-native built-ins remain distinguishable from Vxpipe-executed tools.
 
-Each pinned binding defaults to blocking later caller conversation and may explicitly select
-non-blocking behavior in the call definition. This policy never changes worker placement.
-See the complete [tool execution model](tool-execution-model.md).
+Each authored platform/built-in, host, or MCP binding obtains its tool-specific
+`conversation_mode` from its call-definition `tools` entry. The only modes are `blocking` and
+`non_blocking`, and omission resolves to `blocking`. Blocking affects only admission of
+subsequent caller turns; `non_blocking` lets unrelated later turns proceed while the invocation
+is pending. Both modes use the same independently supervised worker path and report current
+pending invocation state to every later LLM request that is appropriate and admitted. See the
+complete [tool execution model](tool-execution-model.md).
+
+The current dated call-definition compiler exposes this choice for authored host and MCP
+selections. Permission-derived Call Variables tools use the default `blocking` mode; the planned
+unified platform-tool entry remains a later compiler extension.
 
 The runtime records observed model/provider/usage metadata without interpreting tenant
 permissions, prices, or public visibility. Errors crossing the public package boundary are
