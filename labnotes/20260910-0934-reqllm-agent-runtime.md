@@ -1481,3 +1481,17 @@ runtime graph, plan-startup adapter, application/test settings, and remaining di
 fixture now use only the invocation-wide keys. No compatibility aliases were retained. Focused
 activation, participant, and definition-driven startup coverage then passed 24 tests with no
 failures. The complete Call Engine suite passed 221 tests with one tagged integration exclusion.
+
+## Final audit: live provider usage and cancellation cleanup
+
+Expanded the tagged Gemini acceptance file without changing production behavior. The original
+exact-schema exchange now also requires non-empty usage from at least one of the two live provider
+responses. A second scenario starts a real streaming Session request, waits for its first text
+delta, cancels it through `Session.cancel/1`, observes a cancelled result and idle Session, then
+successfully completes another request through that same Session. This exercises the public runtime
+contract and the provider adapter's existing stream closure; the test does not invoke ReqLLM-private
+cleanup functions.
+
+Loading the repository `.env` into the command without printing it, the explicit integration lane
+passed 2 tests in 6.2 seconds. ReqLLM redacted the credential in its debug request URL. The default
+Agent Runtime suite remains green at 51 tests with two tagged integration exclusions.

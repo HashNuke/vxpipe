@@ -209,7 +209,7 @@ process or dependency is used.
   deterministic hold output, and a completion is consumed before admission reopens.
 - [x] Process inspection, telemetry, errors, and public events contain no prompts, raw tool
   arguments/results, private bindings, credentials, or provider authorization values.
-- [ ] A tagged supported-provider run accepts the exact tool schema, streams conversational
+- [x] A tagged supported-provider run accepts the exact tool schema, streams conversational
   text, performs a real multi-round tool continuation, reports observed usage, and cleans up
   after cancellation without relying on dependency-private APIs.
 
@@ -779,6 +779,13 @@ Implementation evidence:
   then passed 24 tests after the runtime graph, plan adapter, and application/test configuration
   changed together.
   The complete Call Engine suite remains green at 221 tests with one tagged integration exclusion.
+- The final tagged Gemini lane passes 2 tests in 6.2 seconds. One live exchange accepts the exact
+  schema alias and arguments, the correlated running result, the tool-withheld continuation, and a
+  non-empty usage observation. A second live Session is cancelled after its first streamed delta,
+  reports `cancelled` and idle through public runtime APIs, then completes a fresh request on the
+  same Session. ReqLLM's stream handle remains owned and closed by the provider adapter; the test
+  uses no dependency-private cleanup API. The default Agent Runtime suite passes 51 tests with no
+  failures and two tagged integration exclusions.
 
 ## Specification review
 

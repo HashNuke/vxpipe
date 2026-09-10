@@ -338,7 +338,11 @@ A tagged Gemini run now exercises the production streaming path across two provi
 The first response selects an exact raw-JSON-Schema alias with its required argument. The second
 request contains that assistant call, the ordinary correlated `running` tool result, the current
 pending projection, and no available tools; Gemini accepts it and streams a non-empty
-acknowledgement. Integration tests are excluded by default and require an explicit include flag.
+acknowledgement. At least one live response reports non-empty provider usage. A separate live
+Session request is cancelled after its first streamed delta; the cancellation closes that public
+runtime request and the same Session immediately completes another streamed request, exercising
+cleanup without dependency-private APIs. Integration tests are excluded by default and require an
+explicit include flag.
 
 The Session accepts an optional OTP process name separately from its immutable runtime
 configuration. This lets a Call Engine activation supervise and address exactly one session through
