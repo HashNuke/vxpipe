@@ -130,8 +130,12 @@ process or dependency is used.
    conversation mode. Permission-derived Call Variables tools now compile as default-blocking
    private bindings and execute through the same worker. Remote MCP handling, runtime admission,
    and activation integration remain. Agent Runtime sessions now accept an OTP process name outside
-   their immutable model configuration, enabling the activation graph. Preserve completion and
-   interruption behavior.
+   their immutable model configuration, enabling the activation graph. The migration coordinator
+   now projects ordinary streamed Session output through the existing capability contract from a
+   separately supervised request task, bounds its queue/output, avoids replaying final text, and
+   cancels a rejected stream before advancing queued work. It is not activation-selected yet;
+   blocking/non-blocking admission, completion leasing, and interruption remain. Preserve
+   completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -399,6 +403,19 @@ Implementation evidence:
 - Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
   checkpoint 4g. Umbrella `mix test` stopped before test execution at the unchanged missing
   PostgreSQL SCRAM password; no credential source was inspected.
+- Checkpoint 4h adds a narrow Call Engine coordinator for ordinary Agent Runtime requests. Its
+  Session call runs under a supplied `Task.Supervisor`, while the coordinator remains available to
+  project streamed sentence segments through the existing capability contract and bound later
+  caller input. The final canonical result contributes only a suffix that was not already streamed.
+- Checkpoint 4h red evidence first failed because the coordinator module did not exist. A second
+  focused failure exposed that rejecting an oversized stream advanced the queue while the Session
+  was still busy; the coordinator now cancels that runtime request before advancing. The focused
+  suite passes 2 tests and the complete Call Engine suite passes 227 tests with 2 integration
+  exclusions. This checkpoint does not select the coordinator in a live activation and does not
+  claim tool admission/completion behavior.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed for
+  checkpoint 4h. Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.
 
 ## Specification review
 

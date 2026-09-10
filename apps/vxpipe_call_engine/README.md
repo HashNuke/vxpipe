@@ -116,14 +116,21 @@ definition says `inline` executes in this worker path. The authoritative invocat
 now retains accepted work through leased and explicitly acknowledged completion, exposes only
 payload-free pending statuses, reconciles identical submissions by invocation ID, and bounds both
 active capacity and consumed-ID tombstones. Thin package adapters delegate submission to that
-registry and translate only its safe statuses into Agent Runtime pending context. Remote MCP/Call
-Variables handlers and activation selection remain pending, so live calls do not use this
+registry and translate only its safe statuses into Agent Runtime pending context. Remote MCP
+handling and activation selection remain pending, so live calls do not use this
 substrate yet. Resolved host bindings now compile into deterministic Agent Runtime descriptors:
 only the exact name, description, and JSON input schema are model-visible, while the host action
 and default-blocking or explicit-non-blocking conversation mode remain in the private invocation
 binding. Permission-derived Call Variables descriptors use that same path and are default-blocking;
 their private binding reaches the room-scoped variables process from the invocation worker. Both
 conversation modes still use the same supervised submission path.
+
+A narrow migration coordinator can now issue an ordinary Agent Runtime request from a separately
+supervised task while continuing to receive and project streamed sentence output through the
+existing capability contract. It bounds queued caller work, avoids replaying already-streamed text
+from the canonical final response, and cancels a rejected stream before advancing its queue. The
+activation supervisor does not select this coordinator yet; blocking/non-blocking admission,
+completion leasing, interruption, and removal of the live Jido path remain pending.
 
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,

@@ -713,3 +713,29 @@ Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock c
 Umbrella `mix test` stopped before test execution at the unchanged missing PostgreSQL SCRAM
 password; no credential source was inspected. Call Engine activation wiring and its own
 completion/admission coordinator remain pending.
+
+## Implementation checkpoint 4h: ordinary runtime coordination
+
+Added the smallest Call Engine coordinator boundary for an ordinary streamed Agent Runtime turn.
+The first focused test failed because no coordinator module existed. The implemented coordinator
+owns a bounded queue and calls the synchronous `Session.request/4` API under a supplied
+`Task.Supervisor`, leaving its GenServer callback free to receive streamed runtime events. A
+separate output buffer turns deltas into complete sentence messages under the existing capability
+contract and appends only an unstreamed suffix from the canonical final response.
+
+Review identified a cancellation race at the engine output bound: advancing the queue immediately
+after rejecting an oversized delta could find the named Session still busy. The added regression
+test failed with the queued request reported unavailable. The coordinator now cancels the rejected
+runtime request and terminates its caller task before advancing; the queued clean request then
+completes normally.
+
+Verification so far:
+
+- Focused coordinator suite: 2 tests, 0 failures after the expected missing-module and cancellation
+  race red results.
+- Complete Call Engine suite: 227 tests, 0 failures, 2 integration exclusions.
+- Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks passed.
+- Umbrella `mix test` stopped before test execution because PostgreSQL SCRAM authentication needs a
+  password absent from this shell; no credential source was inspected.
+- This checkpoint does not wire the coordinator into an activation and does not claim tool
+  admission, blocking/non-blocking gate, completion leasing, or interruption behavior.

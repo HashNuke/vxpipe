@@ -197,6 +197,16 @@ Session startup also separates its optional OTP process name from immutable runt
 allowing the activation supervisor to use a stable registry reference without making topology part
 of model state.
 
+Call Engine now also has a narrow Agent Runtime coordinator for the migration path. It owns the
+bounded caller-turn queue and calls the synchronous `Session.request/4` API from a separately
+supervised task, so provider work and streamed-event handling never run in the coordinator
+GenServer callback. A dedicated output buffer projects complete sentence segments through the
+existing capability-message contract without replaying the final response after streamed deltas.
+If streamed output violates the engine bound, the coordinator cancels that runtime request before
+admitting queued caller work. This coordinator is not yet selected by the activation supervisor;
+tool admission, completion leasing, interruption, and live-path replacement remain subsequent
+parts of the migration.
+
 Tagged production evidence confirms Gemini accepts this adapter's exact tool schema and a
 subsequent canonical running-acknowledgement round with ephemeral pending state and tools withheld.
 That verifies provider interoperability only; live Vxpipe calls continue through the existing
