@@ -6,7 +6,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest
   alias Vxpipe.CallEngine.Telemetry
 
-  @type outcome :: :advance | {:stop, atom()}
+  @type completed_request ::
+          {:completed, struct(), Vxpipe.CallEngine.AgentRuntime.Correlation.t()}
+  @type outcome :: :advance | {:advance, completed_request()} | {:stop, atom()}
 
   @spec finish(ActiveRequest.t(), term(), keyword()) :: outcome()
   def finish(
@@ -21,8 +23,15 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
       {:ok, segments} ->
         Enum.each(segments, &emit_text(request, &1, options))
         stop_telemetry(request, :ok, request.first_output_observed?, options)
-        send(owner(options), {:vxpipe_capability_text_complete, self(), request.command})
-        commit_completion(request, options)
+
+        case commit_completion(request, options) do
+          :advance ->
+            send(owner(options), {:vxpipe_capability_text_complete, self(), request.command})
+            {:advance, {:completed, request.command, request.correlation}}
+
+          {:stop, _reason} = stop ->
+            stop
+        end
 
       {:error, :invalid_response} ->
         fail_committed(request, :invalid_response, options)

@@ -101,6 +101,14 @@ generated from it remains discardable. Correlations remain opaque to the package
 projected into model messages. History can be discarded only while the Session is idle, after
 active cancellation has reached its terminal acknowledgement.
 
+The Call Engine coordinator now applies that boundary to caller-turn interruption. It cancels the
+active runtime request, removes queued caller commands, discards only completed exchanges selected
+by exact connection/correlation/command identity, and then accepts replacement work in the same
+Session. It never addresses the invocation supervisor or an accepted tool worker. Interruption of
+an active private completion continuation still fails the migration coordinator closed; resolving
+whether its leased terminal observation was committed is the next interruption checkpoint before
+this coordinator can be selected in a live activation.
+
 For every submitted tool, the single correlated running acknowledgement stays in that
 committed conversation and is therefore supplied with every later model request while the
 invocation remains pending. This is retained context, not polling: the runtime does not append

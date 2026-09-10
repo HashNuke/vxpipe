@@ -823,3 +823,34 @@ Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock c
 Umbrella `mix test` stops before test execution because PostgreSQL SCRAM authentication needs a
 password absent from this shell; no credential source was inspected. Coordinator interruption and
 activation selection remain pending.
+
+## Implementation checkpoint 4l: caller interruption coordinator
+
+Added two Call Engine coordinator tests before implementation. The red run failed twice because
+`Coordinator.interrupt/2` did not exist. One test completes an older turn, starts another, queues a
+third, interrupts the latter two while selecting the completed identity for history removal, and
+then proves a replacement provider request contains only the system instruction and replacement
+input. The other keeps a controlled invocation worker running across model interruption and verifies
+its registry phase remains `running`.
+
+The new `Coordinator.Interruption` collaborator owns the cancellation/reconciliation operation.
+It cancels the current caller request through the Session, clears queued caller commands, selects
+completed correlations through the bounded `Coordinator.History`, and calls the idle-only history
+discard boundary. It never calls the invocation registry or supervisor. An active private
+completion currently returns unavailable and fails the temporary migration coordinator closed;
+that lease/commit distinction remains the next interruption checkpoint before activation selection.
+
+`RequestOutcome` now records only successfully completed requests in the bounded history. During
+the first complete Call Engine run, an existing completion test exposed a real ordering race: the
+coordinator sent `text_complete` before acknowledging the terminal invocation record, so an
+immediate registry snapshot could still see `completion_admitted`. Completion acknowledgement now
+commits before the externally visible completion signal. Configuration parsing and state assembly
+were moved to `Coordinator.Configuration`, leaving the coordinator focused on serialization,
+admission, and scheduling.
+
+Focused verification passes 10 coordinator tests. The first full suite after that correction hit
+an unrelated room-incarnation monitor race (`:noproc` instead of `:shutdown`); the specific test
+passed immediately in isolation. The unchanged complete Call Engine suite then passed 235 tests
+with 2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+authentication needs a password absent from this shell; no credential source was inspected.

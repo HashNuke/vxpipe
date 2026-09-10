@@ -284,6 +284,68 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
             ]} = InvocationRegistry.snapshot(runtime.registry)
   end
 
+  test "interrupts current and queued callers, discards selected completed history, and accepts replacement" do
+    runtime = start_runtime()
+    completed = command("interrupt-completed", "old topic")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, completed)
+    assert_receive {:test_agent_runtime_stream, completed_provider, _request}
+    assert {:ok, response} = ModelResponse.new(text: "old answer")
+    send(completed_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, coordinator, ^completed}
+    assert coordinator == runtime.coordinator
+
+    current = command("interrupt-current", "keep talking")
+    queued = command("interrupt-queued", "wait for me")
+    assert :ok = Coordinator.respond(coordinator, current)
+    assert_receive {:test_agent_runtime_stream, current_provider, _request}
+    current_monitor = Process.monitor(current_provider)
+    assert :ok = Coordinator.respond(coordinator, queued)
+
+    completed_identity = {completed.connection_id, completed.correlation_id, completed.id}
+    assert {:ok, [^current, ^queued]} = Coordinator.interrupt(coordinator, [completed_identity])
+    assert_receive {:DOWN, ^current_monitor, :process, ^current_provider, _reason}
+
+    replacement = command("interrupt-replacement", "new topic")
+    assert :ok = Coordinator.respond(coordinator, replacement)
+    assert_receive {:test_agent_runtime_stream, replacement_provider, replacement_request}
+
+    assert Enum.map(replacement_request.messages, & &1.role) == [:system, :user]
+    assert List.last(replacement_request.messages).content == replacement.content
+    refute Enum.any?(replacement_request.messages, &(&1.content == completed.content))
+    refute Enum.any?(replacement_request.messages, &(&1.content == "old answer"))
+
+    assert {:ok, response} = ModelResponse.new(text: "new answer")
+    send(replacement_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^replacement}
+  end
+
+  test "interrupting model work does not cancel a separately supervised tool worker" do
+    runtime = start_runtime(completion_target: self())
+    current = command("interrupt-with-tool", "keep talking")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, current)
+    assert_receive {:test_agent_runtime_stream, _provider, _request}
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "interrupt-surviving-call")
+
+    assert_receive {:submitted_inline_tool_started, execution, "interrupt-surviving-call"}
+
+    assert {:ok, [^current]} = Coordinator.interrupt(runtime.coordinator, [])
+
+    assert {:ok,
+            [
+              %Vxpipe.CallEngine.Tool.InvocationStatus{
+                invocation_id: "interrupt-surviving-call",
+                status: :running
+              }
+            ]} = InvocationRegistry.snapshot(runtime.registry)
+
+    send(execution, :release_submitted_inline_tool)
+    assert_receive {:vxpipe_tool_completion_available, _registry, "interrupt-surviving-call"}
+  end
+
   defp start_runtime(options \\ []) do
     suffix = System.unique_integer([:positive])
     activation_id = "act-runtime-coordinator-#{suffix}"

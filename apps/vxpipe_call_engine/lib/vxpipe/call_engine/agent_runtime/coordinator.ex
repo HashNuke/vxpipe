@@ -10,7 +10,15 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     ConversationAdmission
   }
 
-  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{ActiveRequest, RequestOutcome, State}
+  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{
+    ActiveRequest,
+    Configuration,
+    History,
+    Interruption,
+    RequestOutcome,
+    State
+  }
+
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Telemetry
 
@@ -39,9 +47,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec interrupt(GenServer.server(), [History.identity()]) ::
+          {:ok, [SendText.t()]} | {:error, :unavailable}
+  def interrupt(coordinator, completed_turn_ids) when is_list(completed_turn_ids) do
+    GenServer.call(coordinator, {:interrupt, completed_turn_ids}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
-    case configuration(options) do
+    case Configuration.new(options) do
       {:ok, state} -> {:ok, state}
       {:error, :invalid_configuration} -> {:stop, :invalid_configuration}
     end
@@ -67,6 +83,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   def handle_call({:respond, command}, _from, %State{} = state) do
     respond_while_current(command, state)
+  end
+
+  def handle_call({:interrupt, completed_turn_ids}, _from, %State{} = state) do
+    case Interruption.apply(state, completed_turn_ids, @cancel_timeout) do
+      {:ok, interrupted, state} ->
+        {:reply, {:ok, interrupted}, state}
+
+      {:error, :unavailable, state} ->
+        {:stop, :interruption_failed, {:error, :unavailable}, state}
+    end
   end
 
   defp respond_while_current(command, state) do
@@ -249,6 +275,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   defp transition(:advance, state),
     do: {:noreply, state |> Map.put(:current, nil) |> start_next()}
 
+  defp transition({:advance, {:completed, command, correlation}}, state) do
+    history = History.record(state.history, command, correlation)
+    {:noreply, state |> Map.put(:current, nil) |> Map.put(:history, history) |> start_next()}
+  end
+
   defp transition({:stop, reason}, state), do: {:stop, reason, %{state | current: nil}}
 
   defp observe_first_output(text, state)
@@ -296,50 +327,5 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       owner: state.owner,
       provider: state.provider
     ]
-  end
-
-  defp configuration(options) do
-    with {:ok, options} <-
-           Keyword.validate(options, [
-             :activation_id,
-             :agent_participant_id,
-             :session,
-             :invocation_registry,
-             :request_supervisor,
-             :owner,
-             :provider,
-             :maximum_output_bytes,
-             :maximum_pending_requests
-           ]),
-         activation_id when is_binary(activation_id) and activation_id != "" <-
-           Keyword.get(options, :activation_id),
-         agent_participant_id when is_binary(agent_participant_id) and agent_participant_id != "" <-
-           Keyword.get(options, :agent_participant_id),
-         session when not is_nil(session) <- Keyword.get(options, :session),
-         invocation_registry when not is_nil(invocation_registry) <-
-           Keyword.get(options, :invocation_registry),
-         request_supervisor when not is_nil(request_supervisor) <-
-           Keyword.get(options, :request_supervisor),
-         owner when is_pid(owner) <- Keyword.get(options, :owner),
-         maximum_output_bytes when is_integer(maximum_output_bytes) and maximum_output_bytes > 0 <-
-           Keyword.get(options, :maximum_output_bytes),
-         maximum_pending_requests
-         when is_integer(maximum_pending_requests) and maximum_pending_requests > 0 <-
-           Keyword.get(options, :maximum_pending_requests) do
-      {:ok,
-       %State{
-         agent_participant_id: agent_participant_id,
-         completion_consumer_id: "agent-runtime-completion:" <> activation_id,
-         session: session,
-         invocation_registry: invocation_registry,
-         request_supervisor: request_supervisor,
-         owner: owner,
-         provider: Keyword.get(options, :provider, :other),
-         maximum_output_bytes: maximum_output_bytes,
-         maximum_pending_requests: maximum_pending_requests
-       }}
-    else
-      _invalid -> {:error, :invalid_configuration}
-    end
   end
 end

@@ -140,8 +140,10 @@ process or dependency is used.
    private continuation consumption are now integrated with completion priority and a commit-time
    acknowledgement. Agent Runtime history now distinguishes discardable final conversation from
    durable accepted-tool and private-completion facts, and exposes idle-only correlation-based
-   discard for the room interruption path. Coordinator interruption remains. Preserve completion
-   and interruption behavior.
+   discard for the room interruption path. The migration coordinator now cancels active caller
+   generation, drops queued caller commands, reconciles exact completed turns, and leaves accepted
+   tool workers running. Active private-completion interruption remains before activation selection.
+   Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -463,6 +465,21 @@ Implementation evidence:
   pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM authentication
   needs a password absent from this shell; no credential source was inspected. Coordinator
   interruption and activation selection remain pending.
+- Checkpoint 4l adds caller-turn interruption to the migration coordinator. It cancels the active
+  Session request, clears queued caller commands, selects completed history by exact
+  connection/correlation/command identity, and invokes the idle-only discard boundary before
+  accepting replacement work. It does not address the invocation registry or supervisor, so an
+  accepted tool worker remains running.
+- Checkpoint 4l red evidence reported two missing-function failures because
+  `Coordinator.interrupt/2` did not exist. The focused suite then passed 10 tests. An initial full
+  Call Engine run exposed completion ordering: `text_complete` could reach room authority before
+  the terminal invocation acknowledgement. The acknowledgement now commits first. A second run hit
+  an unrelated incarnation-monitor timing assertion (`:noproc` instead of `:shutdown`); that test
+  passed immediately in isolation, and the unchanged full suite then passed 235 tests with 2
+  integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
+  unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.
+  Active private-completion interruption and activation selection remain.
 
 ## Specification review
 

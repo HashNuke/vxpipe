@@ -130,6 +130,9 @@ boundary.
   while a sink write is backpressured.
 - Model capability tests prove task termination, queue removal, stale-result
   suppression, and conservative history removal.
+- Agent Runtime coordinator tests prove active and queued caller cancellation, exact completed-turn
+  history removal, replacement admission in the same Session, and survival of a separately
+  supervised tool worker.
 - A room vertical test proves participant B can interrupt participant A's spoken
   turn and that every identity in `AgentTurnInterrupted` is authoritative.
 - Gateway codec and turn-state tests prove standard `bot-interrupted`, attributed
