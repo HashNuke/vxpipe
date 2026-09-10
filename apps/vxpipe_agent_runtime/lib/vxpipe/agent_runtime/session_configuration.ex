@@ -11,6 +11,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
     :tool_registry,
     :executor,
     :maximum_model_rounds,
+    :maximum_tool_calls_per_round,
+    :maximum_output_bytes,
     :pending_context_source,
     :pending_context_timeout_ms,
     :maximum_pending_invocations,
@@ -30,6 +32,10 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          {:ok, executor} <- validate_executor(Keyword.get(options, :executor), tool_registry),
          {:ok, maximum_model_rounds} <-
            positive(Keyword.get(options, :maximum_model_rounds, 8)),
+         {:ok, maximum_tool_calls_per_round} <-
+           positive(Keyword.get(options, :maximum_tool_calls_per_round, 32)),
+         {:ok, maximum_output_bytes} <-
+           positive(Keyword.get(options, :maximum_output_bytes, 256 * 1_024)),
          {:ok, pending_context_source} <-
            validate_pending_context_source(Keyword.get(options, :pending_context_source)),
          {:ok, pending_context_timeout_ms} <-
@@ -47,6 +53,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          tool_registry: tool_registry,
          executor: executor,
          maximum_model_rounds: maximum_model_rounds,
+         maximum_tool_calls_per_round: maximum_tool_calls_per_round,
+         maximum_output_bytes: maximum_output_bytes,
          pending_context_source: pending_context_source,
          pending_context_timeout_ms: pending_context_timeout_ms,
          maximum_pending_invocations: maximum_pending_invocations,
@@ -73,6 +81,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       tool_registry: config.tool_registry,
       executor: config.executor,
       maximum_model_rounds: config.maximum_model_rounds,
+      maximum_tool_calls_per_round: config.maximum_tool_calls_per_round,
+      maximum_output_bytes: config.maximum_output_bytes,
       pending_context_source: config.pending_context_source,
       pending_context_timeout_ms: config.pending_context_timeout_ms,
       maximum_pending_invocations: config.maximum_pending_invocations,
@@ -89,6 +99,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       :tools,
       :executor,
       :maximum_model_rounds,
+      :maximum_tool_calls_per_round,
+      :maximum_output_bytes,
       :pending_context_source,
       :pending_context_timeout_ms,
       :maximum_pending_invocations,

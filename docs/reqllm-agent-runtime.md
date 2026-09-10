@@ -232,6 +232,11 @@ submission critical section begins, cancellation waits until the complete runnin
 exchange commits, then terminates only the model request task. This closes the acceptance race:
 accepted external work cannot be erased by speech/model cancellation.
 
+The Session also carries positive limits for tool calls in one provider round and assistant
+output accumulated across one admitted request. The runner checks both before external
+submission, preventing an oversized mixed response from starting work that cannot be safely
+represented. Terminal over-limit output is not committed to conversation history.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

@@ -101,8 +101,9 @@ process or dependency is used.
    model order, mixed text/tool output, commit barriers, bounded failure, and cancellation.
    Normalized response/tool-call values, the exact private registry, accepted/rejected ordered
    submission batches, blocking/non-blocking acknowledgement rounds, and accepted-work
-   recovery after provider failure or cancellation are complete. Remaining bounds, streaming,
-   and production adapter behavior remain pending.
+   recovery after provider failure or cancellation are complete. Per-session tool-batch and
+   accumulated-output bounds are also enforced before side effects. Remaining deadlines,
+   streaming, and production adapter behavior remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -285,6 +286,15 @@ Implementation evidence:
   later request. Full package suite: 21 tests, 0 failures. Umbrella format,
   warnings-as-errors, strict Credo, and unused-lock checks pass; umbrella tests stop before
   execution because the local PostgreSQL password is absent.
+- Checkpoint 2f adds configurable positive limits for tool calls in one model round and for
+  assistant output accumulated across all rounds of one admitted request. Call count and mixed
+  response output are checked before entering the submission barrier, so an over-limit response
+  starts no external worker. An over-limit terminal response is discarded without committing
+  its staged input or output.
+- Checkpoint 2f red evidence reported 3 focused failures because both settings were rejected as
+  invalid Session configuration. The bounds tests and complete package suite are green at 24
+  tests, 0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks
+  pass; umbrella tests stop before execution because the local PostgreSQL password is absent.
 
 ## Specification review
 

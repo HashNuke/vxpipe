@@ -162,6 +162,10 @@ immediately, but cancellation arriving during host submission is deferred until 
 running/rejection exchange commits. The request task is then terminated without touching the
 Call Engine-owned invocation worker. This package behavior still awaits Call Engine migration.
 
+Agent Runtime enforces its configured per-round tool-call count and per-request accumulated
+assistant-output size before host submission. These bounds keep one model response from
+creating an unbounded worker batch or committing output that the request cannot return.
+
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current

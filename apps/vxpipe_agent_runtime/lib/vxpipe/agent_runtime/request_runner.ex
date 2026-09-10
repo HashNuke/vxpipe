@@ -60,26 +60,34 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          output,
          _round,
          _request,
-         _config
+         config
        ) do
-    conversation =
-      Conversation.append(conversation, staged_messages ++ [Message.assistant(response.text, [])])
+    with {:ok, complete_output} <-
+           complete_output(response.text, output, config.maximum_output_bytes) do
+      conversation =
+        Conversation.append(
+          conversation,
+          staged_messages ++ [Message.assistant(response.text, [])]
+        )
 
-    {:ok, complete_output(response.text, output), conversation}
+      {:ok, complete_output, conversation}
+    end
   end
 
   defp handle_response(response, conversation, staged_messages, output, round, request, config) do
     if round >= config.maximum_model_rounds do
       {:error, :model_round_limit}
     else
-      with {:ok, submissions, blocking?} <- submit_calls(response.tool_calls, request, config),
+      with {:ok, next_output} <-
+             append_output(response.text, output, config.maximum_output_bytes),
+           {:ok, submissions, blocking?} <- submit_calls(response.tool_calls, request, config),
            conversation <-
              commit_tool_exchange(response, submissions, conversation, staged_messages),
            :ok <- config.commit.(conversation) do
         generate(
           conversation,
           [],
-          append_output(response.text, output),
+          next_output,
           round + 1,
           not blocking?,
           request,
@@ -93,11 +101,16 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   end
 
   defp submit_calls(calls, request, config) do
-    with :ok <- validate_unique_call_ids(calls),
+    with :ok <- validate_call_count(calls, config.maximum_tool_calls_per_round),
+         :ok <- validate_unique_call_ids(calls),
          {:ok, resolved_calls} <- resolve_calls(calls, config.tool_registry),
          :ok <- config.begin_submission.() do
       submit_resolved_calls(resolved_calls, request, config)
     end
+  end
+
+  defp validate_call_count(calls, maximum) do
+    if length(calls) <= maximum, do: :ok, else: {:error, :tool_call_limit}
   end
 
   defp validate_unique_call_ids(calls) do
@@ -193,13 +206,21 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp rejected_result(reason),
     do: %{"reason" => Atom.to_string(reason), "status" => "rejected"}
 
-  defp append_output("", output), do: output
-  defp append_output(text, output), do: [text | output]
+  defp append_output("", output, _maximum_bytes), do: {:ok, output}
 
-  defp complete_output(text, output) do
-    text
-    |> append_output(output)
-    |> Enum.reverse()
-    |> IO.iodata_to_binary()
+  defp append_output(text, output, maximum_bytes) do
+    next_output = [text | output]
+
+    if IO.iodata_length(next_output) <= maximum_bytes do
+      {:ok, next_output}
+    else
+      {:error, :output_too_large}
+    end
+  end
+
+  defp complete_output(text, output, maximum_bytes) do
+    with {:ok, complete_output} <- append_output(text, output, maximum_bytes) do
+      {:ok, complete_output |> Enum.reverse() |> IO.iodata_to_binary()}
+    end
   end
 end

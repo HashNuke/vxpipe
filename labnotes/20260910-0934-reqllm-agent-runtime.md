@@ -316,3 +316,28 @@ Verification:
   password.
 - Remaining request/response/round deadlines and sizes, streaming, production ReqLLM mapping,
   Call Engine worker/admission migration, and private completion consumption remain pending.
+
+## Implementation checkpoint 2f: request loop bounds
+
+Added focused tests before implementation for two runtime-owned limits. A model response with
+two valid calls must fail before any executor submission when the Session permits one call per
+round. Assistant text accumulated across model/tool rounds must remain within a configured byte
+limit; an oversized mixed response must fail before tool submission, while an oversized final
+response must fail without committing its staged exchange.
+
+The initial three-test run failed at Session startup because
+`maximum_tool_calls_per_round` and `maximum_output_bytes` were not accepted configuration. The
+Session configuration now validates positive values and projects them to `RequestRunner`.
+`RequestRunner` checks batch size and accumulated output before entering the submission critical
+section. The existing hard `ModelResponse` and `ToolCall` ceilings remain the absolute normalized
+value bounds; these new settings constrain an individual Session/request further.
+
+Verification:
+
+- Focused bounds suite: 3 tests, 0 failures after the expected 3-test red run.
+- Complete `vxpipe_agent_runtime` suite: 24 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell has no local PostgreSQL
+  password.
+- Request deadlines, bounded submit callback failure, streaming, production ReqLLM mapping,
+  Call Engine adoption, and private completion consumption remain pending.
