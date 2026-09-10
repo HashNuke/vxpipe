@@ -186,9 +186,34 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         participant_id,
         %State{} = state
       ) do
+    prepare_text_to_speech(
+      runtime,
+      participant_id,
+      state.snapshot.incarnation_id,
+      self()
+    )
+  end
+
+  @spec prepare_text_to_speech(
+          nil | TextToSpeechRuntime.t(),
+          String.t(),
+          String.t(),
+          pid()
+        ) :: {:ok, nil | map()} | {:error, :text_to_speech_start_failed}
+  def prepare_text_to_speech(nil, _participant_id, incarnation_id, owner)
+      when is_binary(incarnation_id) and is_pid(owner),
+      do: {:ok, nil}
+
+  def prepare_text_to_speech(
+        %TextToSpeechRuntime{} = runtime,
+        participant_id,
+        incarnation_id,
+        owner
+      )
+      when is_binary(incarnation_id) and is_pid(owner) do
     case RoomCapabilitySupervisor.start_text_to_speech(
-           state.snapshot.incarnation_id,
-           self(),
+           incarnation_id,
+           owner,
            participant_id,
            runtime.provider,
            runtime.transport,
@@ -197,7 +222,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       {:ok, capability} ->
         text_to_speech_capability = %{
           asset_cache_identity: runtime.asset_cache_identity,
-          monitor: Process.monitor(capability),
+          monitor: nil,
           participant_id: participant_id,
           pid: capability
         }
@@ -213,7 +238,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   def discard_text_to_speech(nil, %State{}), do: :ok
 
   def discard_text_to_speech(capability, %State{} = state) when is_map(capability) do
-    Process.demonitor(capability.monitor, [:flush])
+    if is_reference(capability.monitor), do: Process.demonitor(capability.monitor, [:flush])
 
     RoomCapabilitySupervisor.stop_capability(
       state.snapshot.incarnation_id,
@@ -223,7 +248,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
 
   defp start_selected_text_to_speech(runtime, participant_id, state) do
     with {:ok, capability} <- prepare_text_to_speech(runtime, participant_id, state) do
-      {:ok, %{state | text_to_speech_capability: capability}}
+      {:ok, %{state | text_to_speech_capability: activate_text_to_speech(capability)}}
     end
+  end
+
+  @spec activate_text_to_speech(nil | map()) :: nil | map()
+  def activate_text_to_speech(nil), do: nil
+
+  def activate_text_to_speech(capability) when is_map(capability) do
+    %{capability | monitor: Process.monitor(capability.pid)}
   end
 end

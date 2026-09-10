@@ -11,7 +11,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   @call_timeout 5_000
   @maximum_text_bytes 65_536
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) do
+    GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
+  end
 
   def child_spec(options) do
     %{

@@ -35,7 +35,7 @@ commit, while the source retains conversation.
 ## Acceptance and failure checks
 
 - [ ] Allowed transfer succeeds; injected target, wrong/stale source, duplicate preparations, and generated-tool alias collision fail before unauthorized startup.
-- [ ] Destination startup fails or deadline expires: source remains responsible, no completed event, destination cleaned up.
+- [x] Destination startup fails or deadline expires: source remains responsible, no completed event, destination cleaned up.
 - [ ] Commit preserves call/variables/entry refs; source capability/tool workers terminate, old output cannot reach new activation.
 - [ ] Re-enter agent: same participant ID, new activation, no greeting replay; permitted history only.
 - [ ] Restoration attempts exactly once; detailed failure does not leak through speech or full-debug events.
@@ -95,7 +95,21 @@ Schema `20260910.05` adds a closed call-level `transfer_policy.attempt_timeout_m
 30 seconds, validates 1–120 seconds, and pins it into the immutable plan. Transfer-capable
 activations enlarge the ordinary supervised invocation timeout only when needed so it encloses the
 pinned transfer budget by one second; execution remains in the same activation-owned tool worker.
-Six focused compiler tests pass. Runtime enforcement and cleanup remain the next checkpoint.
+Six focused compiler tests pass.
+
+Destination materialization now runs under a separately named, room-owned task supervisor rather
+than inside Room Authority. Room Authority starts one monotonic total deadline before task startup,
+remains responsive while the destination model/runtime, participant subtree, and selected TTS are
+prepared, and reauthorizes the source immediately before commit. Failure, task death, deadline
+expiry, or stale commit authority keeps the source active and removes the exact destination
+participant/TTS preparation. A late task result cannot commit after pending-attempt authority is
+cleared. A second request while preparation is pending is rejected before another task starts.
+
+The failure and deadline room tests use controlled destination-provider setup. They prove generic
+tool failure, source continuity, a responsive blocking hold while preparation is pending, absence
+of destination registration, duplicate-attempt rejection, and no completion after releasing expired
+setup. The four focused room tests pass. The combined restoration/history/re-entry checklist items
+remain open; this checkpoint does not claim those behaviors.
 
 ## Specification review
 

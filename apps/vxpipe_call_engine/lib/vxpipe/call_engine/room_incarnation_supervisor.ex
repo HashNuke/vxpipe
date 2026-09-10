@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
     ResolvedCallPlan,
     RoomAuthority,
     RoomCapabilitySupervisor,
+    RoomTransferSupervisor,
     RoomParticipantSupervisor
   }
 
@@ -29,6 +30,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   def init(options) do
     participant_supervisor = {RoomParticipantSupervisor, options}
     capability_supervisor = {RoomCapabilitySupervisor, options}
+    transfer_supervisor = {RoomTransferSupervisor, options}
 
     authority = %{
       id: RoomAuthority,
@@ -38,7 +40,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
     }
 
     children =
-      [participant_supervisor, capability_supervisor] ++
+      [participant_supervisor, capability_supervisor, transfer_supervisor] ++
         live_inspection_child(options) ++
         call_variables_child(options) ++ call_lifecycle_child(options) ++ [authority]
 

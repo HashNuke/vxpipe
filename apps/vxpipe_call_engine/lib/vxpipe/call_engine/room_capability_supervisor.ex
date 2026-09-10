@@ -82,7 +82,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
       provider: provider,
       transport: transport,
       maximum_requests: maximum_requests,
-      task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor
+      task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor,
+      name: text_to_speech_ref(incarnation_id, participant_id)
     ]
 
     DynamicSupervisor.start_child(via(incarnation_id), {TextToSpeech, options})
@@ -164,6 +165,14 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
     DynamicSupervisor.terminate_child(via(incarnation_id), capability)
   end
 
+  @spec stop_text_to_speech(String.t(), String.t()) :: :ok | {:error, term()}
+  def stop_text_to_speech(incarnation_id, participant_id) do
+    case GenServer.whereis(text_to_speech_ref(incarnation_id, participant_id)) do
+      capability when is_pid(capability) -> stop_capability(incarnation_id, capability)
+      nil -> :ok
+    end
+  end
+
   def stop_speech_to_text(incarnation_id, capability, ingress) do
     _ = DynamicSupervisor.terminate_child(via(incarnation_id), ingress)
     _ = DynamicSupervisor.terminate_child(via(incarnation_id), capability)
@@ -172,5 +181,10 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   defp via(incarnation_id) do
     {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {:capability_supervisor, incarnation_id}}}
+  end
+
+  defp text_to_speech_ref(incarnation_id, participant_id) do
+    {:via, Registry,
+     {Vxpipe.CallEngine.RoomRegistry, {:text_to_speech, incarnation_id, participant_id}}}
   end
 end

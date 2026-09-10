@@ -1,42 +1,132 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.AgentRuntime.Coordinator, as: AgentRuntimeCoordinator
-  alias Vxpipe.CallEngine.Event.ToolCallCompleted
-  alias Vxpipe.CallEngine.Id
-  alias Vxpipe.CallEngine.PlanStartup
-  alias Vxpipe.CallEngine.PlanStartup.AgentDestination
   alias Vxpipe.CallEngine.RoomParticipantSupervisor
+  alias Vxpipe.CallEngine.RoomTransferSupervisor
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  alias Vxpipe.CallEngine.RoomAuthority.{
-    ParticipantLifecycle,
-    ParticipantPreparation,
-    EventPublisher,
-    Startup,
-    State
+  alias Vxpipe.CallEngine.RoomAuthority.State
+
+  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{
+    Authorizer,
+    Cleanup,
+    Committer,
+    Pending,
+    Preparation
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime
-
-  @spec commit(Request.t(), State.t()) ::
-          {:reply, {:ok, map()} | {:error, :rejected | :unavailable}, State.t()}
-  def commit(%Request{} = request, %State{} = state) do
-    with :ok <- authorize(request, state),
-         {:ok, %AgentDestination{} = destination} <- destination(request, state),
-         {:ok, %ParticipantPreparation{} = preparation} <-
-           ParticipantLifecycle.prepare(
-             destination.command,
-             state,
-             agent_activation: destination.agent_activation
-           ) do
-      prepare_capabilities(request, destination, preparation, state)
+  @spec begin(Request.t(), GenServer.from(), State.t()) ::
+          {:noreply, State.t()} | {:reply, {:error, :rejected | :unavailable}, State.t()}
+  def begin(%Request{} = request, from, %State{pending_agent_transfer: nil} = state) do
+    with :ok <- Authorizer.authorize(request, state) do
+      timeout_ms = state.agent_transfer_runtime.plan.transfer_policy.attempt_timeout_ms
+      deadline_ms = System.monotonic_time(:millisecond) + timeout_ms
+      start_preparation(request, from, deadline_ms, state)
     else
       {:error, :rejected} -> {:reply, {:error, :rejected}, state}
-      {:error, _reason} -> {:reply, {:error, :unavailable}, state}
     end
   end
+
+  def begin(%Request{}, _from, %State{} = state) do
+    {:reply, {:error, :rejected}, state}
+  end
+
+  defp start_preparation(request, from, deadline_ms, state) do
+    case RoomTransferSupervisor.prepare(
+           request.incarnation_id,
+           request,
+           state.agent_transfer_runtime
+         ) do
+      {:ok, task} ->
+        remaining_ms = max(deadline_ms - System.monotonic_time(:millisecond), 0)
+
+        timer =
+          Process.send_after(
+            self(),
+            {:vxpipe_agent_transfer_deadline, task.ref},
+            remaining_ms
+          )
+
+        pending = %Pending{
+          deadline_ms: deadline_ms,
+          from: from,
+          request: request,
+          task: task,
+          timer: timer
+        }
+
+        {:noreply, %{state | pending_agent_transfer: pending}}
+
+      {:error, :unavailable} ->
+        {:reply, {:error, :unavailable}, state}
+    end
+  end
+
+  @spec prepared(reference(), Preparation.t(), State.t()) :: {:noreply, State.t()}
+  def prepared(
+        reference,
+        %Preparation{} = preparation,
+        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+      ) do
+    settle_task(pending)
+
+    cond do
+      deadline_elapsed?(pending) ->
+        Cleanup.discard(preparation, state)
+        fail_pending(pending, %{state | pending_agent_transfer: nil})
+
+      Authorizer.authorize(pending.request, state) != :ok ->
+        Cleanup.discard(preparation, state)
+        reject_pending(pending, %{state | pending_agent_transfer: nil})
+
+      true ->
+        commit_prepared(pending, preparation, state)
+    end
+  end
+
+  def prepared(_reference, %Preparation{} = preparation, %State{} = state) do
+    Cleanup.discard(preparation, state)
+    {:noreply, state}
+  end
+
+  @spec preparation_failed(reference(), State.t()) :: {:noreply, State.t()}
+  def preparation_failed(
+        reference,
+        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+      ) do
+    settle_task(pending)
+    Cleanup.discard_destination(pending.request)
+    fail_pending(pending, %{state | pending_agent_transfer: nil})
+  end
+
+  def preparation_failed(_reference, %State{} = state), do: {:noreply, state}
+
+  @spec deadline_elapsed(reference(), State.t()) :: {:noreply, State.t()}
+  def deadline_elapsed(
+        reference,
+        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+      ) do
+    _ = RoomTransferSupervisor.terminate(pending.request.incarnation_id, pending.task.pid)
+    Process.demonitor(reference, [:flush])
+    Cleanup.discard_destination(pending.request)
+    fail_pending(pending, %{state | pending_agent_transfer: nil})
+  end
+
+  def deadline_elapsed(_reference, %State{} = state), do: {:noreply, state}
+
+  @spec preparation_down(reference(), State.t()) :: {:handled, State.t()} | :unhandled
+  def preparation_down(
+        reference,
+        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+      ) do
+    cancel_timer(pending.timer)
+    Cleanup.discard_destination(pending.request)
+    GenServer.reply(pending.from, {:error, :unavailable})
+    {:handled, %{state | pending_agent_transfer: nil}}
+  end
+
+  def preparation_down(_reference, %State{}), do: :unhandled
 
   @spec teardown_source(State.t(), pid(), Context.t()) :: State.t()
   def teardown_source(%State{} = state, capability, %Context{} = context)
@@ -57,122 +147,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     end
   end
 
-  defp authorize(
-         %Request{} = request,
-         %State{agent_transfer_runtime: %Runtime{} = runtime} = state
-       ) do
-    source = Map.get(runtime.plan.participants, request.source_definition_key)
-    destination = Map.get(runtime.plan.participants, request.destination_definition_key)
-    connection = Map.get(state.connections, request.connection_id)
-
-    if state.snapshot.tenant_id == request.tenant_id and
-         state.snapshot.room_id == request.room_id and
-         state.snapshot.incarnation_id == request.incarnation_id and
-         state.text_capability != nil and
-         state.text_capability.participant_id == request.source_participant_id and
-         state.text_capability.activation_id == request.source_activation_id and
-         GenServer.whereis(state.text_capability.pid) == request.source_capability and
-         source != nil and source.kind == :agent and
-         source.participant_id == request.source_participant_id and
-         source.activation_id == request.source_activation_id and
-         request.destination_definition_key in source.transfers and
-         destination != nil and destination.kind == :agent and
-         destination.participant_id == request.destination_participant_id and
-         not MapSet.member?(state.participant_ids, request.destination_participant_id) and
-         connection != nil and connection.participant_id == request.caller_participant_id do
-      :ok
-    else
-      {:error, :rejected}
-    end
+  defp commit_prepared(pending, preparation, state) do
+    {result, state} = Committer.commit(pending, preparation, state)
+    GenServer.reply(pending.from, {:ok, result})
+    {:noreply, state}
   end
 
-  defp authorize(%Request{}, %State{}), do: {:error, :rejected}
-
-  defp destination(request, %State{agent_transfer_runtime: %Runtime{} = runtime}) do
-    participant = Map.fetch!(runtime.plan.participants, request.destination_definition_key)
-    PlanStartup.agent_destination(runtime.plan, participant, runtime.startup_options)
+  defp settle_task(pending) do
+    Process.demonitor(pending.task.ref, [:flush])
+    cancel_timer(pending.timer)
   end
 
-  defp prepare_capabilities(request, destination, preparation, state) do
-    case Startup.prepare_text_to_speech(
-           destination.text_to_speech,
-           destination.participant.participant_id,
-           state
-         ) do
-      {:ok, text_to_speech} ->
-        commit_prepared(request, destination, preparation, text_to_speech, state)
-
-      {:error, _reason} ->
-        _ = ParticipantLifecycle.discard(preparation, state)
-        {:reply, {:error, :unavailable}, state}
-    end
+  defp cancel_timer(timer) do
+    _ = Process.cancel_timer(timer)
+    :ok
   end
 
-  defp commit_prepared(request, destination, preparation, text_to_speech, state) do
-    {:ok, destination_snapshot, state} = ParticipantLifecycle.commit(preparation, state)
-    source_text_to_speech = state.text_to_speech_capability
-    source_supervisor = Map.fetch!(state.participant_supervisors, request.source_participant_id)
-
-    destination_capability = %{
-      activation_id: destination.participant.activation_id,
-      module: AgentRuntimeCoordinator,
-      monitor: nil,
-      participant_id: destination_snapshot.participant_id,
-      pid:
-        Vxpipe.CallEngine.AgentActivationSupervisor.child_ref(
-          destination.participant.activation_id,
-          :coordinator
-        )
-    }
-
-    pending_agent_teardowns =
-      Map.put(state.pending_agent_teardowns, request.source_capability, %{
-        participant_id: request.source_participant_id,
-        participant_supervisor: source_supervisor
-      })
-
-    state = %{
-      state
-      | agent_turns: %{},
-        pending_agent_teardowns: pending_agent_teardowns,
-        text_capability: destination_capability,
-        text_to_speech_capability: text_to_speech
-    }
-
-    _ = Startup.discard_text_to_speech(source_text_to_speech, state)
-
-    result = %{
-      "destination" => request.destination_definition_key,
-      "status" => "completed"
-    }
-
-    state = publish_completed(request, result, state)
-    {:reply, {:ok, result}, state}
+  defp deadline_elapsed?(pending) do
+    System.monotonic_time(:millisecond) >= pending.deadline_ms
   end
 
-  defp publish_completed(request, result, state) do
-    connection = Map.fetch!(state.connections, request.connection_id)
+  defp fail_pending(pending, state) do
+    GenServer.reply(pending.from, {:error, :unavailable})
+    {:noreply, state}
+  end
 
-    event = %ToolCallCompleted{
-      id: Id.generate(:event),
-      sequence: state.next_sequence,
-      tenant_id: request.tenant_id,
-      room_id: request.room_id,
-      incarnation_id: request.incarnation_id,
-      participant_id: request.source_participant_id,
-      source_participant_id: request.caller_participant_id,
-      connection_id: request.connection_id,
-      command_id: request.command_id,
-      correlation_id: request.correlation_id,
-      tool_call_id: request.tool_call_id,
-      name: "transfer",
-      result: result,
-      occurred_at: DateTime.utc_now(:millisecond)
-    }
-
-    state
-    |> EventPublisher.publish(connection.pid, event)
-    |> Map.update!(:background_tool_calls, &Map.delete(&1, request.tool_call_id))
-    |> Map.update!(:next_sequence, &(&1 + 1))
+  defp reject_pending(pending, state) do
+    GenServer.reply(pending.from, {:error, :rejected})
+    {:noreply, state}
   end
 end

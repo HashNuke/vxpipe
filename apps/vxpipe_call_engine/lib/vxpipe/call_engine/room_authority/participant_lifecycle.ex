@@ -24,9 +24,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
 
   @spec prepare(struct(), State.t(), keyword()) ::
           {:ok, ParticipantPreparation.t()} | {:error, term()}
-  def prepare(command, %State{} = state, options \\ []) do
+  def prepare(command, state_or_incarnation_id, options \\ [])
+
+  def prepare(command, %State{} = state, options) do
+    prepare(command, state.snapshot.incarnation_id, options)
+  end
+
+  @spec prepare(struct(), String.t(), keyword()) ::
+          {:ok, ParticipantPreparation.t()} | {:error, term()}
+  def prepare(command, incarnation_id, options)
+      when is_binary(incarnation_id) and is_list(options) do
     case RoomParticipantSupervisor.start_participant(
-           state.snapshot.incarnation_id,
+           incarnation_id,
            command,
            options
          ) do
@@ -71,8 +80,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
 
   @spec discard(ParticipantPreparation.t(), State.t()) :: :ok | {:error, term()}
   def discard(%ParticipantPreparation{} = preparation, %State{} = state) do
+    discard(preparation, state.snapshot.incarnation_id)
+  end
+
+  @spec discard(ParticipantPreparation.t(), String.t()) :: :ok | {:error, term()}
+  def discard(%ParticipantPreparation{} = preparation, incarnation_id)
+      when is_binary(incarnation_id) do
     RoomParticipantSupervisor.stop_participant(
-      state.snapshot.incarnation_id,
+      incarnation_id,
       preparation.participant_supervisor
     )
   end

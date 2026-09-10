@@ -56,6 +56,20 @@ defmodule Vxpipe.CallEngine.RoomParticipantSupervisor do
     DynamicSupervisor.terminate_child(via(incarnation_id), participant_supervisor)
   end
 
+  @spec stop_participant_by_id(String.t(), String.t(), String.t(), String.t()) ::
+          :ok | {:error, term()}
+  def stop_participant_by_id(incarnation_id, tenant_id, room_id, participant_id) do
+    key = {:participant_supervisor, tenant_id, room_id, participant_id}
+
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, key) do
+      [{participant_supervisor, _value}] ->
+        stop_participant(incarnation_id, participant_supervisor)
+
+      [] ->
+        :ok
+    end
+  end
+
   defp already_started?({:already_started, pid}) when is_pid(pid), do: true
 
   defp already_started?(value) when is_tuple(value) do

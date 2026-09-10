@@ -55,9 +55,12 @@ still contains no WebRTC or RTVI types.
 The definition-driven compiler's current schema is `20260910.05`; it accepts validated
 definition-local agent transfer allowlists, derives one private default-blocking transfer binding
 for each non-empty list, and pins the call-level total transfer-attempt deadline. Transfer-capable
-activations ensure their supervised tool timeout encloses that configured budget. The runnable
-fresh-history prepare/commit path does not yet enforce the deadline. Failure/expiry cleanup,
-alternate history projections, re-entry, and source-capability restoration remain unsupported.
+activations ensure their supervised tool timeout encloses that configured budget. Destination setup
+runs under a separate room-owned task supervisor, leaving Room Authority responsive while it
+prepares the agent and selected TTS. Room Authority reauthorizes the source and destination at
+commit, retains the source through preparation, cleans up failure/expiry, rejects late results,
+then routes successful later turns through the destination and tears the source subtree down.
+Alternate history projections, re-entry, and source-capability restoration remain unsupported.
 Schema `20260910.04` added the transfer allowlists and generated binding. Schema `20260910.03`
 added explicitly selected platform
 tools to the participant's unified `tools` map. The fixed initial catalog contains

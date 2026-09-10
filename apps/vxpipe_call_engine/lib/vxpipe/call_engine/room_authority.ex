@@ -39,7 +39,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   }
 
   @call_timeout 5_000
-  @transfer_timeout 30_000
+  @transfer_timeout 122_000
 
   def start_link(options) do
     {tenant_id, room_id} = room_identity(options)
@@ -203,11 +203,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     InputTurns.accept_text(command, caller, state)
   end
 
-  def handle_call({:transfer_agent, %TransferRequest{} = request}, _from, state) do
-    AgentTransfer.commit(request, state)
+  def handle_call({:transfer_agent, %TransferRequest{} = request}, from, state) do
+    AgentTransfer.begin(request, from, state)
   end
 
   @impl true
+  def handle_info(
+        {reference, {:ok, %AgentTransfer.Preparation{} = preparation}},
+        state
+      )
+      when is_reference(reference) do
+    AgentTransfer.prepared(reference, preparation, state)
+  end
+
+  def handle_info({reference, {:error, _reason}}, state) when is_reference(reference) do
+    AgentTransfer.preparation_failed(reference, state)
+  end
+
+  def handle_info({:vxpipe_agent_transfer_deadline, reference}, state)
+      when is_reference(reference) do
+    AgentTransfer.deadline_elapsed(reference, state)
+  end
+
   def handle_info(
         {:vxpipe_capability_continuation_started, capability, %ContinueAgent{} = command},
         state
@@ -398,31 +415,37 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
-    if OpeningAudio.worker_monitor?(state.opening_audio, monitor) do
-      OpeningAudio.failed(state.opening_audio)
-      {:stop, :opening_audio_unavailable, state}
-    else
-      state =
-        cond do
-          Map.has_key?(state.participant_monitors, monitor) ->
-            ParticipantLifecycle.remove(monitor, reason, state)
+    case AgentTransfer.preparation_down(monitor, state) do
+      {:handled, state} ->
+        {:noreply, state}
 
-          Map.has_key?(state.connection_monitors, monitor) ->
-            ConnectionLifecycle.remove(monitor, reason, state)
+      :unhandled ->
+        if OpeningAudio.worker_monitor?(state.opening_audio, monitor) do
+          OpeningAudio.failed(state.opening_audio)
+          {:stop, :opening_audio_unavailable, state}
+        else
+          state =
+            cond do
+              Map.has_key?(state.participant_monitors, monitor) ->
+                ParticipantLifecycle.remove(monitor, reason, state)
 
-          Map.has_key?(state.speech_to_text_monitors, monitor) ->
-            ConnectionLifecycle.remove_unavailable_speech_to_text(monitor, state)
+              Map.has_key?(state.connection_monitors, monitor) ->
+                ConnectionLifecycle.remove(monitor, reason, state)
 
-          state.text_capability != nil and state.text_capability.monitor != nil and
-              state.text_capability.monitor == monitor ->
-            ConnectionLifecycle.notify(state.connections, :agent_unavailable)
-            %{state | text_capability: nil}
+              Map.has_key?(state.speech_to_text_monitors, monitor) ->
+                ConnectionLifecycle.remove_unavailable_speech_to_text(monitor, state)
 
-          true ->
-            state
+              state.text_capability != nil and state.text_capability.monitor != nil and
+                  state.text_capability.monitor == monitor ->
+                ConnectionLifecycle.notify(state.connections, :agent_unavailable)
+                %{state | text_capability: nil}
+
+              true ->
+                state
+            end
+
+          {:noreply, CallerIdle.reconcile(state)}
         end
-
-      {:noreply, CallerIdle.reconcile(state)}
     end
   end
 

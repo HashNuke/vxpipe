@@ -924,8 +924,12 @@ activation-owned supervised worker path; blocking does not mean inline execution
 Schema `20260910.05` adds the closed call-level `transfer_policy.attempt_timeout_ms`, with a
 30-second default and a bounded 1–120-second range, and pins it into the resolved plan. The
 activation-owned outer invocation timeout encloses the selected attempt budget rather than imposing
-the ordinary 30-second tool limit on a longer configured transfer. Runtime deadline enforcement and
-cleanup remain a separate checkpoint.
+the ordinary 30-second tool limit on a longer configured transfer. One room-owned preparation task
+materializes the destination participant/runtime and selected TTS; `RoomAuthority` owns the single
+pending attempt, its caller reply, monotonic deadline, final reauthorization, and commit. This keeps
+the room control loop available while provider or child startup is pending. Failure or expiry
+terminates the task and exact destination resources while leaving source responsibility unchanged.
+Clearing the pending attempt before replying makes late task results non-authoritative.
 
 The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
 activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
@@ -938,10 +942,10 @@ then terminates the source participant subtree. A stale source is rejected befor
 startup. Runtime configuration retained for later participant materialization has a redacted
 inspection surface.
 
-This checkpoint supports the initial destination's fresh private model history. Preparation
-failure, total-deadline cleanup, duplicate-attempt rejection, late-result exclusion, other approved
-history projections, re-entry with a fresh activation, and the bounded source-capability restoration
-rule remain follow-up work.
+This checkpoint supports the initial destination's fresh private model history and implements
+preparation failure, total-deadline cleanup, duplicate-attempt rejection, and late-result exclusion.
+Other approved history projections, re-entry with a fresh activation, and the bounded source-
+capability restoration rule remain follow-up work.
 
 ### Presence-driven media and transcript policy — approved R38
 

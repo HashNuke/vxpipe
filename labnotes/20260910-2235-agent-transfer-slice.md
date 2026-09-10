@@ -89,3 +89,41 @@
   longer valid transfer policy; it does not add an inline or second execution path.
 - The policy/compiler/startup group passes six focused tests. Runtime enforcement, failure cleanup,
   and late-result exclusion remain the next red-green checkpoint.
+
+## 2026-09-10 — failed and expired destination preparation
+
+- Added the controlled destination-failure room test before changing failure behavior. It confirms
+  an invalid destination runtime returns the existing generic `tool_failed` event, leaves the source
+  activation responsible, registers no destination participant, and routes the next caller turn to
+  the source.
+- Added the total-deadline room test next. Its initial run failed after two seconds because the
+  destination provider blocked inside Room Authority and no attempt timer existed. The green test
+  configures a two-second policy, blocks destination runtime construction, confirms the room still
+  serves the source activation's deterministic blocking response, observes generic failure, releases
+  stale setup, and confirms it cannot emit completion or replace the source.
+- Added one explicitly named task supervisor per room incarnation. It owns only transfer preparation;
+  participant and capability children still start through their existing owning dynamic supervisors.
+  The preparation task builds the destination runtime, participant subtree, and selected TTS while
+  Room Authority continues processing room messages.
+- Room Authority owns the single pending attempt, deferred worker reply, monotonic deadline, and
+  final source/target reauthorization. A concurrent attempt is rejected. Failure, task death, expiry,
+  or lost authority removes the destination participant and TTS without changing source ownership.
+  Clearing pending authority before the tool reply makes a late task result cleanup-only.
+- Prepared TTS is named by room incarnation and participant for exact cleanup. Monitoring is attached
+  by Room Authority only when that prepared capability commits, rather than leaving a monitor owned
+  by the short-lived preparation task.
+- Split destination preparation, authorization, cleanup, commit projection, pending data, and task
+  supervision into responsibility-specific modules. `AgentTransfer` now coordinates their state
+  transitions instead of accumulating provider startup, authorization, resource cleanup, and event
+  construction in one module.
+- A complete focused room run exposed a teardown-observation race in its assertion: the monitored
+  source activation could exit just before its parent participant unregisters. The test now uses the
+  room's own snapshot request as the processing acknowledgement before asserting participant absence;
+  production teardown behavior did not change.
+- The four focused transfer-room tests and complete 269-test Call Engine suite pass, with one tagged
+  integration exclusion. Calls and Gateway pass 36 and 66 tests respectively; Gateway retains four
+  tagged exclusions. Root formatting, warnings-as-errors compilation, strict Credo, and unused-
+  dependency checks pass. The umbrella test command remains blocked at Persistence database creation
+  because this shell has no PostgreSQL password; no credential content was inspected or logged.
+  Alternate history projections, re-entry, private transfer history, and any applicable source-
+  capability restoration evidence remain pending.

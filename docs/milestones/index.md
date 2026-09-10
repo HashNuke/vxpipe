@@ -6,8 +6,9 @@ implementation slice. Its definition parser and compiler now derive a private de
 transfer binding from validated agent-local allowlists. Its first runnable checkpoint commits a
 fresh-history agent destination, preserves room variables, and tears down the source only after
 commit. The next schema checkpoint pins the configurable total attempt budget and ensures the outer
-supervised tool timeout encloses it; runtime deadline enforcement, re-entry, and alternate-history
-checks remain pending.
+supervised tool timeout encloses it. A subsequent runtime checkpoint moves preparation out of Room
+Authority, enforces that deadline, cleans up failed/expired destinations, and excludes late results;
+re-entry and alternate-history checks remain pending.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
