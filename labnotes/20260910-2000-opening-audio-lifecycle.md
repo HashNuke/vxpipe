@@ -213,3 +213,31 @@
   Root tests again stopped at Persistence database creation because this shell has no PostgreSQL
   password; no credential value was inspected or logged.
 - File opening playback and its bounded cache remain pending.
+
+## 2026-09-10 — bounded file-asset pipeline
+
+- Pinned the initial file profile before connecting it to a room: RIFF/WAVE PCM format 1, mono,
+  48 kHz, 16-bit little-endian, with exact byte-rate/block-align validation and no transcoding.
+  Unknown well-formed RIFF chunks are tolerated; duplicate, missing, truncated, empty, malformed,
+  differently encoded, and over-duration assets fail.
+- Defaults are a 6 MiB streamed response, 60 seconds decoded duration, and 5-second DNS/connect/
+  receive/request deadlines. The HTTP path disables redirect, retry, and decompression behavior.
+- Added a conservative address policy. Every literal/resolved address must be globally routable;
+  a mixed public/private DNS answer fails as a whole. The selected address is pinned into the
+  request while the original hostname remains the TLS verification/SNI identity.
+- Added a bounded LRU asset cache keyed by a SHA-256 digest of tenant key, exact URL, and fixed
+  media-profile revision. Cache process state retains no source URL. Different tenants cannot
+  reuse the same entry; failed downloads are not inserted.
+- Kept fetching, address policy, decoding, loading, and caching in focused modules. None of this
+  work runs in Room Authority or another existing GenServer callback. The per-room playback worker
+  is the next checkpoint.
+- The first focused test failed because the typed asset module did not exist. The loader test then
+  failed because settings and loader boundaries did not exist. A supervision test failed because
+  the application did not yet own a named cache, and an invalid-limit test first showed the cache
+  accepting a zero-entry configuration. The completed asset/application files passed 9 tests. The
+  complete Call Engine suite passed with 253 tests and 1 integration exclusion; strict Credo
+  reported no issues.
+- Calls passed 36 tests, Gateway passed 66 tests with 4 integration exclusions, and Console passed
+  56 tests. Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency
+  checks passed. The root test command again stopped while creating the Persistence test database
+  because this shell has no PostgreSQL password; no credential value was inspected or logged.

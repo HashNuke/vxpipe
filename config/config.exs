@@ -44,6 +44,13 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   model_fixture: [enabled: false],
   model_inference: [enabled: false],
   live_inspection: [maximum_pending_records: 64, maximum_retained_records: 256],
+  opening_audio: [
+    fetcher: {Vxpipe.CallEngine.OpeningAudio.ReqFetcher, []},
+    maximum_bytes: 6_291_456,
+    maximum_duration_ms: 60_000,
+    timeout_ms: 5_000,
+    cache: [maximum_entries: 128, maximum_bytes: 67_108_864]
+  ],
   remote_mcp: [
     enabled: false,
     refresh_interval_ms: 60_000,

@@ -25,7 +25,7 @@ A caller hears optional configured opening audio before normal conversation. The
 - [x] Red-test caller-idle clocks and suppression with a controllable timer fake.
 - [ ] Red-test file playback with controllable time/media fakes.
 - [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
-- [ ] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
+- [x] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
 - [x] Integrate the opening gate with wait/fixed/generated greeting modes for the initial receiver.
 - [x] Verify the existing current-time tool and implement a permitted immediate-hangup binding.
@@ -149,6 +149,19 @@ suite passed with 247 tests and 1 integration exclusion; Calls passed 36 tests. 
 plan remained at 90 seconds after the test supplied changed tenant and application settings,
 proving the mutable setting is not consulted after compilation. File opening playback/cache remains
 pending.
+
+The file-asset checkpoint pins the first accepted profile to RIFF/WAVE PCM format 1, mono 48 kHz,
+16-bit little-endian audio. Defaults are a 6 MiB body, 60-second decoded duration, 5-second bounded
+fetch phases, and a 128-entry/64 MiB tenant-scoped in-memory LRU cache. HTTPS fetching disables
+redirects, retries, and decompression; validates all resolved addresses as global; and connects to
+one selected address while keeping the original hostname for TLS. The cache key hashes tenant,
+exact URL, and media-profile revision without retaining the URL.
+
+The first focused test failed at the missing typed asset. A second red test failed at the missing
+settings/loader boundary, and the cache-supervision test initially found no application-owned
+cache. The completed asset/application files passed 9 tests, and the complete Call Engine suite
+passed with 253 tests and 1 integration exclusion. Runtime worker/playout integration
+remains pending, so this does not yet satisfy the runnable file-opening outcome.
 
 ## Specification review
 

@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.ApplicationTest do
 
   alias Vxpipe.CallEngine.Application
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
+  alias Vxpipe.CallEngine.OpeningAudio.AssetCache
   alias Vxpipe.CallEngine.RemoteMCP.CatalogRefresher
 
   test "does not supervise the retired Jido runtime" do
@@ -71,6 +72,25 @@ defmodule Vxpipe.CallEngine.ApplicationTest do
     refute Enum.any?(Application.child_specs(disabled), fn
              {CatalogRefresher, _options} -> true
              _child -> false
+           end)
+  end
+
+  test "supervises one explicitly named bounded opening-asset cache" do
+    settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    configured =
+      Keyword.put(settings, :opening_audio,
+        cache: [maximum_entries: 128, maximum_bytes: 67_108_864]
+      )
+
+    assert Enum.any?(Application.child_specs(configured), fn
+             {AssetCache, options} ->
+               Keyword.get(options, :name) == AssetCache and
+                 Keyword.get(options, :maximum_entries) == 128 and
+                 Keyword.get(options, :maximum_bytes) == 67_108_864
+
+             _child ->
+               false
            end)
   end
 end

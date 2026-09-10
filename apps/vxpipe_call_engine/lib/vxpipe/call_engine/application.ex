@@ -3,6 +3,8 @@ defmodule Vxpipe.CallEngine.Application do
 
   use Application
 
+  alias Vxpipe.CallEngine.OpeningAudio.AssetCache
+
   @impl true
   def start(_type, _args) do
     settings = Application.fetch_env!(:vxpipe_call_engine, __MODULE__)
@@ -23,7 +25,8 @@ defmodule Vxpipe.CallEngine.Application do
       {Task.Supervisor, name: Vxpipe.CallEngine.ModelInferenceTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ArchiveWriterTaskSupervisor},
       Vxpipe.CallEngine.Archive.Supervisor,
-      {Vxpipe.CallEngine.RemoteMCP.CatalogStore, name: Vxpipe.CallEngine.RemoteMCP.CatalogStore}
+      {Vxpipe.CallEngine.RemoteMCP.CatalogStore, name: Vxpipe.CallEngine.RemoteMCP.CatalogStore},
+      opening_audio_cache(settings)
     ]
 
     runtime_children = [
@@ -36,6 +39,11 @@ defmodule Vxpipe.CallEngine.Application do
 
     base_children ++
       model_fixture_children(settings) ++ remote_mcp_children(settings) ++ runtime_children
+  end
+
+  defp opening_audio_cache(settings) do
+    cache_options = settings |> Keyword.fetch!(:opening_audio) |> Keyword.fetch!(:cache)
+    {AssetCache, Keyword.put(cache_options, :name, AssetCache)}
   end
 
   defp model_fixture_children(settings) do

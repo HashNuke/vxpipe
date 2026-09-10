@@ -1,6 +1,7 @@
 # Opening audio contract
 
-Status: fixed-text playback and input gate implemented; file playback remains in progress.
+Status: fixed-text playback/input gate and the bounded file-asset pipeline are implemented;
+room playback remains in progress.
 
 ## Decision
 
@@ -33,13 +34,32 @@ than buffered or replayed. A preparation or playback failure ends the room expli
 never silently opens normal conversation. A text source without a resolved TTS binding and
 the not-yet-supported file source fail validation before a room is registered.
 
-## Remaining runtime choices
+## File asset profile
 
-Before file playback is implemented, the implementation must pin a bounded download policy,
-redirect and network-address policy, accepted audio container/codec, duration and byte limits,
-and cache ownership. The first implementation should accept one exactly validated format that
-the existing output sink can consume without implicit transcoding. Broader media support can
-be a later schema-compatible expansion only if it preserves deterministic validation.
+The first file profile accepts only RIFF/WAVE with one PCM format chunk and one data chunk:
+format code 1, mono, signed 16-bit little-endian samples at 48 kHz, with matching block-align and
+byte-rate fields. The decoder permits well-formed unknown RIFF chunks but rejects truncated,
+duplicate, malformed, empty, trailing, compressed, stereo, differently sampled, or oversized
+audio. No transcoding, resampling, remote playlist, or content-sniffing fallback is performed.
+The response Content-Type must be `audio/wav`, `audio/wave`, or `audio/x-wav`.
+
+The default file limit is 6 MiB (`6291456` bytes), 60 seconds of decoded PCM, and a 5-second DNS,
+connect, receive, and request deadline. Configuration may only select 44–16777216 bytes,
+1–300000 milliseconds of audio, and 100–30000 milliseconds per fetch deadline. The HTTP client
+does not decompress, retry, or follow redirects. It streams into a bounded accumulator instead
+of first accepting an unbounded body and also rejects an oversized declared Content-Length.
+
+Before connecting, literal or resolved addresses are checked and any non-global, loopback,
+private, link-local, carrier-grade NAT, documentation, multicast, mapped-private, or otherwise
+reserved address rejects the complete answer set. The request connects to one selected validated
+address while retaining the original hostname for TLS verification and SNI, preventing a second
+uncontrolled DNS resolution at connection time. There is no initial private-host exception.
+
+Decoded assets are cached in bounded BEAM memory. The cache defaults to 128 entries and 64 MiB,
+evicts least-recently-used entries, and is shared by the Call Engine application. Keys are SHA-256
+digests over the public tenant key, exact URL, and fixed media-profile revision; neither URLs nor
+credentials are retained in keys or routine inspection. A different tenant, URL, or profile
+cannot reuse the entry. Download/preparation failures are not cached.
 
 ## Alternatives rejected
 
@@ -53,9 +73,10 @@ be a later schema-compatible expansion only if it preserves deterministic valida
 
 ## Implications
 
-The definition parser owns syntax and source safety, while a separate runtime coordinator
-must own preparation and gate progression. `RoomAuthority` remains the room decision owner;
-it must not absorb fetching, decoding, caching, or lifecycle timer callback families.
+The definition parser owns syntax and source safety. The implemented asset layer separates DNS
+resolution/address policy, bounded HTTP fetching, WAV decoding, and cache ownership. A separate
+per-room runtime worker must own preparation and playback. `RoomAuthority` remains the room
+decision owner; it must not absorb fetching, decoding, caching, or lifecycle timer callbacks.
 
 ## Verification
 
@@ -64,4 +85,9 @@ schema-version assertions were observed red first, then 2 focused tests passed. 
 runtime is covered by `opening_audio_room_test.exs`: its first run failed because no synthesis was
 started, then 3 tests passed for real playout gating, required-playback failure, and pre-room
 rejection of unsupported sources/configuration. File playback and lifecycle evidence remain
-pending.
+pending. The asset-pipeline tests first failed because no typed asset existed, then passed with
+5 tests covering strict decode/duration checks, public-address policy, bounded LRU/tenant keys,
+invalid cache limits, and fetch-validate-cache reuse. The complete Call Engine suite passed with
+253 tests and one
+integration exclusion. The production HTTPS fetch path has no live-network assertion in the
+default suite; interoperability belongs in an explicitly tagged integration lane.

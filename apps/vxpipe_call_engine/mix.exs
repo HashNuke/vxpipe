@@ -32,6 +32,7 @@ defmodule Vxpipe.CallEngine.MixProject do
     [
       {:bandit, "~> 1.12", only: :test},
       {:jsv, "~> 0.22"},
+      {:req, "~> 0.7.4"},
       {:req_llm, "~> 1.22"},
       {:telemetry, "~> 1.3"},
       {:vxpipe_agent_runtime, in_umbrella: true},
