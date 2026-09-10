@@ -659,6 +659,18 @@ Implementation evidence:
   warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test`
   stops before test execution at the unchanged absent PostgreSQL SCRAM password; no credential
   source was inspected.
+- Checkpoint 4y restores the coordinator's caller-interruption observability before retiring the
+  compatibility coordinator. Cancelling active caller generation now emits the existing bounded
+  `interrupted` capability failure and one model-stop telemetry event classified as `cancelled`;
+  it emits no provider-failure event and still does not cancel independently supervised tools.
+  Focused red evidence observed no capability failure or telemetry before the interruption boundary
+  was updated.
+- Runtime-neutral coordinator tests now also retain payload-free first-output/success telemetry and
+  arbitrary-provider-failure normalization. The focused coordinator suite passes 16 tests, and the
+  complete Call Engine suite passes 241 tests with 2 integration exclusions at seed `365486`.
+  Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass.
+  Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM password;
+  no credential source was inspected.
 
 ## Specification review
 

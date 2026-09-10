@@ -21,6 +21,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     InvocationSupervisor
   }
 
+  @model_first_token_event [:vxpipe, :call_engine, :model, :first_token]
+  @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
+  @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+
   setup do
     Application.put_env(:vxpipe_call_engine, :submitted_inline_tool_observer, self())
 
@@ -50,6 +54,69 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_capability_text, ^coordinator, ^command, "Still working!"}
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
     refute_receive {:vxpipe_capability_text, ^coordinator, ^command, _duplicate}
+  end
+
+  test "reports payload-free first output and successful model telemetry once" do
+    attach_telemetry_events([
+      @model_first_token_event,
+      @model_request_stop_event,
+      @provider_failure_event
+    ])
+
+    runtime = start_runtime(provider: :req_llm)
+    command = command("telemetry-success", "private-model-input")
+    sentinel = "private-model-output"
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_delta, sentinel})
+
+    assert_receive {:telemetry_event, @model_first_token_event, %{duration: first_duration},
+                    %{provider: :req_llm} = first_metadata}
+
+    assert is_integer(first_duration)
+    assert first_duration >= 0
+    refute inspect(first_metadata) =~ sentinel
+
+    assert {:ok, response} = ModelResponse.new(text: sentinel)
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:telemetry_event, @model_request_stop_event, %{duration: total_duration},
+                    %{provider: :req_llm, outcome: :ok, first_output: :observed} = stop_metadata}
+
+    assert total_duration >= first_duration
+    refute inspect(stop_metadata) =~ sentinel
+    refute_receive {:telemetry_event, @model_first_token_event, _, _}
+    refute_receive {:telemetry_event, @provider_failure_event, _, _}
+  end
+
+  test "reports a safe unavailable outcome for an arbitrary provider failure" do
+    attach_telemetry_events([
+      @model_first_token_event,
+      @model_request_stop_event,
+      @provider_failure_event
+    ])
+
+    runtime = start_runtime(provider: :req_llm)
+    command = command("telemetry-failure", "private-model-input")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_response, {:error, :private_provider_reason}})
+
+    assert_receive {:vxpipe_capability_failed, coordinator, ^command, :provider_unavailable}
+    assert coordinator == runtime.coordinator
+
+    assert_receive {:telemetry_event, @model_request_stop_event, %{duration: duration},
+                    %{provider: :req_llm, outcome: :unavailable, first_output: :missing}}
+
+    assert is_integer(duration)
+    assert duration >= 0
+
+    assert_receive {:telemetry_event, @provider_failure_event, %{count: 1},
+                    %{capability: :model, provider: :req_llm, category: :unavailable}}
+
+    refute_receive {:telemetry_event, @model_first_token_event, _, _}
   end
 
   test "cancels a rejected stream before advancing queued caller work" do
@@ -326,6 +393,32 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^replacement}
   end
 
+  test "reports caller interruption as cancelled without a provider failure" do
+    attach_telemetry_events([
+      @model_first_token_event,
+      @model_request_stop_event,
+      @provider_failure_event
+    ])
+
+    runtime = start_runtime(provider: :req_llm)
+    command = command("telemetry-interruption", "Stop this request")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, _provider, _request}
+    assert {:ok, [^command]} = Coordinator.interrupt(runtime.coordinator, [])
+
+    assert_receive {:vxpipe_capability_failed, coordinator, ^command, :interrupted}
+    assert coordinator == runtime.coordinator
+
+    assert_receive {:telemetry_event, @model_request_stop_event, %{duration: duration},
+                    %{provider: :req_llm, outcome: :cancelled, first_output: :missing}}
+
+    assert is_integer(duration)
+    assert duration >= 0
+    refute_receive {:telemetry_event, @model_first_token_event, _, _}
+    refute_receive {:telemetry_event, @provider_failure_event, _, _}
+  end
+
   test "interrupting model work does not cancel a separately supervised tool worker" do
     runtime = start_runtime(completion_target: self())
     current = command("interrupt-with-tool", "keep talking")
@@ -508,7 +601,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          invocation_registry: registry_name,
          request_supervisor: request_supervisor_name,
          owner: self(),
-         provider: :local_fixture,
+         provider: Keyword.get(options, :provider, :local_fixture),
          maximum_output_bytes: Keyword.get(options, :maximum_output_bytes, 4_096),
          maximum_pending_requests: 2}
       )
@@ -628,5 +721,23 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
              )
 
     command
+  end
+
+  def handle_telemetry_event(event, measurements, metadata, test_pid) do
+    send(test_pid, {:telemetry_event, event, measurements, metadata})
+  end
+
+  defp attach_telemetry_events(events) do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach_many(
+        handler_id,
+        events,
+        &__MODULE__.handle_telemetry_event/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
   end
 end

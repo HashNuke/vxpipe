@@ -5,12 +5,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
   alias Vxpipe.CallEngine.AgentRuntime.CompletionContinuation
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{ActiveRequest, History, State}
   alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.Telemetry
 
   @spec apply(State.t(), [History.identity()], timeout()) ::
           {:ok, [SendText.t()], State.t()} | {:error, :unavailable, State.t()}
   def apply(%State{} = state, completed_turn_ids, timeout) when is_list(completed_turn_ids) do
     current = state.current
     interrupted = interrupted_commands(state)
+    report_interruption(current, state)
     state = cancel_current(state, timeout)
     {correlations, history} = History.select(state.history, completed_turn_ids)
     state = %{state | history: history, pending: :queue.new()}
@@ -33,6 +35,22 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
       nil -> pending
     end
   end
+
+  defp report_interruption(
+         %ActiveRequest{kind: :caller, command: %SendText{} = command} = current,
+         state
+       ) do
+    send(state.owner, {:vxpipe_capability_failed, self(), command, :interrupted})
+
+    Telemetry.model_request_stop(
+      current.started_at,
+      state.provider,
+      :interrupted,
+      current.first_output_observed?
+    )
+  end
+
+  defp report_interruption(_current, _state), do: :ok
 
   defp cancel_current(%State{current: nil} = state, _timeout), do: state
 

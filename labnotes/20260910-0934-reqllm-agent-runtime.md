@@ -1140,3 +1140,19 @@ The complete Call Engine suite passes 238 tests with 2 tagged integration exclus
 come from an explicitly constructed compatibility test. Umbrella format, warnings-as-errors
 compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test
 execution at the unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
+
+## Implementation checkpoint 4y: interruption and telemetry parity
+
+Added neutral coordinator coverage for successful first output, arbitrary provider failure, and
+caller interruption. The interruption test failed first because the new coordinator cancelled its
+Session request and cleared the active turn without emitting the existing capability failure or
+model-stop telemetry.
+
+`Interruption` now reports an active caller command as `interrupted` and stops model telemetry with
+the safe `cancelled` outcome before cancelling the provider task. It deliberately does not report a
+provider failure and does not apply this caller outcome to a private completion continuation. Tool
+invocations remain outside this path and continue in their independent supervised workers. The
+focused coordinator suite passes 16 tests, and the complete Call Engine suite passes 241 tests with
+2 tagged integration exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation,
+strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
+unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
