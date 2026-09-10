@@ -117,6 +117,15 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
                     %{capability: :model, provider: :req_llm, category: :unavailable}}
 
     refute_receive {:telemetry_event, @model_first_token_event, _, _}
+
+    replacement = command("after-telemetry-failure", "Try again")
+    assert :ok = Coordinator.respond(coordinator, replacement)
+    assert_receive {:test_agent_runtime_stream, replacement_provider, replacement_request}
+    assert List.last(replacement_request.messages).content == replacement.content
+
+    assert {:ok, response} = ModelResponse.new(text: "Recovered.")
+    send(replacement_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^replacement}
   end
 
   test "cancels a rejected stream before advancing queued caller work" do
@@ -139,6 +148,33 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     send(second_provider, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:vxpipe_capability_text, ^coordinator, ^queued, "Done."}
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^queued}
+  end
+
+  test "bounds the caller queue and advances it after the active request deadline" do
+    runtime = start_runtime(maximum_pending_requests: 1, request_timeout_ms: 250)
+    timed_out = command("deadline-runtime", "Take too long")
+    queued = command("deadline-queued", "Continue")
+    rejected = command("deadline-rejected", "Too many")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, timed_out)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    provider_monitor = Process.monitor(provider)
+
+    assert :ok = Coordinator.respond(runtime.coordinator, queued)
+    assert {:error, :queue_full} = Coordinator.respond(runtime.coordinator, rejected)
+
+    assert_receive {:DOWN, ^provider_monitor, :process, ^provider, _reason}, 1_000
+
+    assert_receive {:vxpipe_capability_failed, coordinator, ^timed_out, :provider_timeout},
+                   1_000
+
+    assert coordinator == runtime.coordinator
+    assert_receive {:test_agent_runtime_stream, queued_provider, queued_request}, 1_000
+    assert List.last(queued_request.messages).content == queued.content
+
+    assert {:ok, response} = ModelResponse.new(text: "Continued.")
+    send(queued_provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^queued}
   end
 
@@ -603,7 +639,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          owner: self(),
          provider: Keyword.get(options, :provider, :local_fixture),
          maximum_output_bytes: Keyword.get(options, :maximum_output_bytes, 4_096),
-         maximum_pending_requests: 2}
+         maximum_pending_requests: Keyword.get(options, :maximum_pending_requests, 2)}
       )
 
     invocation_supervisor =
@@ -634,7 +670,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          pending_context_source: {PendingContextSource, registry_name},
          event_destination: coordinator,
          maximum_output_bytes: Keyword.get(options, :session_maximum_output_bytes, 4_096),
-         request_timeout_ms: 1_000}
+         request_timeout_ms: Keyword.get(options, :request_timeout_ms, 1_000)}
       )
 
     %{coordinator: coordinator, registry: registry_name}

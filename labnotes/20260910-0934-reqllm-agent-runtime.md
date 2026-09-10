@@ -1127,6 +1127,19 @@ tests with 2 tagged exclusions at seed `365486`. Umbrella format, warnings-as-er
 strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
 unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
 
+## Implementation checkpoint 4z: caller queue and deadline parity
+
+Added a neutral coordinator test for the bounded pending-caller queue and the Session-owned request
+deadline. The test admits one active and one queued turn, rejects the third with `queue_full`,
+observes the active provider task terminate without sleeps, receives the safe `provider_timeout`
+outcome, and proves the queued input is the next provider request. The behavior was already present;
+only the test helper needed to expose the configured queue and deadline values.
+
+The focused coordinator suite passes 17 tests, and the complete Call Engine suite passes 242 tests
+with 2 tagged integration exclusions at seed `365486`. Umbrella format, warnings-as-errors
+compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test
+execution at the unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
+
 ## Implementation checkpoint 4x: test-default cutover
 
 Changed `config/test.exs` from the Jido compatibility graph to Agent Runtime. The Call Engine

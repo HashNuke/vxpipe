@@ -671,6 +671,14 @@ Implementation evidence:
   Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass.
   Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM password;
   no credential source was inspected.
+- Checkpoint 4z moves the bounded caller-queue/deadline contract to the neutral coordinator. With
+  one queued slot, a third turn is rejected as `queue_full`; expiry terminates the active provider
+  task, reports `provider_timeout`, and admits the queued turn without a stale result. The existing
+  implementation passed the new owning-boundary test without production changes. The focused
+  coordinator suite passes 17 tests and the complete Call Engine suite passes 242 tests with 2
+  integration exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation, strict
+  Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
+  unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
 
 ## Specification review
 
