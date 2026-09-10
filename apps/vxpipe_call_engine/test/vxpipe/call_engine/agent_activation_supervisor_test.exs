@@ -4,11 +4,9 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator
   alias Vxpipe.CallEngine.Command.SendText
-  alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestAgentTool
   alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
-  alias Vxpipe.MCP.CredentialLeases
 
   alias Vxpipe.AgentRuntime.{Message, ModelResponse}
 
@@ -91,78 +89,6 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     assert AgentActivationSupervisor.whereis_child(activation_id, :coordinator) == nil
     assert AgentActivationSupervisor.whereis_child(activation_id, :session) == nil
     assert AgentActivationSupervisor.whereis_child(activation_id, :invocation_supervisor) == nil
-  end
-
-  test "owns remote MCP authorization for exactly the activation subtree" do
-    activation_id = unique_activation_id()
-    observer = self()
-    private_value = "private-activation-sentinel"
-
-    client =
-      start_supervised!(
-        {Agent, fn -> %{responses: [], invocations: []} end},
-        id: {:remote_mcp_client, activation_id}
-      )
-
-    {integrations, binding} =
-      RemoteMCPFixture.binding!(client, observer, private_value)
-
-    activation_options =
-      Keyword.merge(options(activation_id),
-        remote_tools: %{"customer_lookup" => binding},
-        mcp_integrations: integrations,
-        remote_mcp_connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
-        remote_mcp_protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient
-      )
-
-    activation = start_supervised!({AgentActivationSupervisor, activation_options})
-    assert_receive {:test_remote_mcp_opened, key, _config}
-    assert CredentialLeases.active_count(key) == 1
-
-    first = AgentActivationSupervisor.children(activation)
-    first_owner = Map.fetch!(first, :remote_mcp)
-
-    assert AgentActivationSupervisor.whereis_child(activation_id, :remote_mcp) == first_owner
-    refute inspect(:sys.get_state(first_owner)) =~ private_value
-    refute inspect(:sys.get_state(activation)) =~ private_value
-
-    first_monitors = monitor_children(first)
-    Process.exit(first_owner, :kill)
-    assert_children_stopped(first_monitors)
-
-    _ = :sys.get_state(activation)
-    assert_receive {:test_remote_mcp_opened, _key, _config}
-    assert CredentialLeases.active_count(key) == 1
-
-    second = AgentActivationSupervisor.children(activation)
-
-    assert Enum.all?(second, fn {role, pid} ->
-             is_pid(pid) and pid != Map.fetch!(first, role)
-           end)
-
-    second_monitors = monitor_children(second)
-    assert :ok = stop_supervised({AgentActivationSupervisor, activation_id})
-    assert_children_stopped(second_monitors)
-    assert AgentActivationSupervisor.whereis_child(activation_id, :remote_mcp) == nil
-    assert CredentialLeases.active_count(key) == 0
-  end
-
-  defp options(activation_id) do
-    [
-      activation_id: activation_id,
-      agent_participant_id: "agent-test",
-      owner: self(),
-      system_prompt: "Use only the selected action.",
-      tools: [TestAgentTool],
-      background_tool_timeout_ms: 1_000,
-      maximum_completed_requests: 4,
-      maximum_background_tools: 2,
-      maximum_output_bytes: 65_536,
-      maximum_pending_requests: 2,
-      maximum_tool_result_bytes: 4_096,
-      request_options: [],
-      request_timeout_ms: 1_000
-    ]
   end
 
   defp agent_runtime_options(activation_id) do

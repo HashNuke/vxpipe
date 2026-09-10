@@ -691,6 +691,14 @@ Implementation evidence:
   removed. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
   pass. Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM
   password; no credential source was inspected.
+- Checkpoint 4ab removes the last test that explicitly starts the Jido activation graph. The deleted
+  scenario coupled the old agent graph to a remote-MCP `IntegrationOwner`; live MCP exposure is the
+  next milestone and remains rejected by current `PlanStartup`. MCP catalog, credential-lease,
+  connection, result-bound, failure, and wire contracts remain covered in their owning suites. The
+  Agent Runtime activation suite passes 2 tests and the complete Call Engine suite passes 229 tests
+  with 2 integration exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation,
+  strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
+  unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
 
 ## Specification review
 

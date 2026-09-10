@@ -1158,6 +1158,21 @@ format, warnings-as-errors compilation, strict Credo, and unused-lock checks pas
 `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM password; no
 credential source was inspected.
 
+## Implementation checkpoint 4ab: final explicit Jido activation removal
+
+Removed the isolated activation-supervisor scenario that coupled `IntegrationOwner` to the Jido
+graph. It was not a live-call contract: current `PlanStartup` rejects MCP bindings, and connecting
+those bindings to Agent Runtime is the next milestone. The existing remote-MCP suites continue to
+own catalog resolution, scoped credential leases, private configuration, connection lifecycle,
+input validation, result bounds, failure, and real protocol interoperability.
+
+The activation-supervisor suite now contains only Agent Runtime lifecycle/readiness scenarios and
+passes 2 tests. The complete Call Engine suite passes 229 tests with 2 tagged integration exclusions
+at seed `365486`. No test now explicitly starts the Jido activation graph. Umbrella format,
+warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops
+before test execution at the unchanged absent PostgreSQL SCRAM password; no credential source was
+inspected.
+
 ## Implementation checkpoint 4x: test-default cutover
 
 Changed `config/test.exs` from the Jido compatibility graph to Agent Runtime. The Call Engine
