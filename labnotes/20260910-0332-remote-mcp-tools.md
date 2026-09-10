@@ -457,3 +457,53 @@ automatic refresh; the Jido interface remains the prerequisite for private live-
 
 Next: add bounded refresh scheduling and stale-catalog expiry without doing network work in the
 catalog store or retaining private configuration in inspectable scheduler state.
+
+## 2026-09-10 — bounded catalog lifecycle
+
+- Red: focused lifecycle tests failed because `CatalogRefresher` did not exist, and the
+  application-composition test showed that enabling remote MCP added neither its task supervisor
+  nor its lifecycle owner. After correcting the test source's own child specification, the red
+  failures were solely at those missing project boundaries.
+- Green: `CatalogRefresher` starts one refresh immediately and schedules later cycles after the
+  configured interval. Configuration retrieval and the existing all-or-nothing refresh operation
+  run under an explicitly supplied `Task.Supervisor`; neither the refresher callback nor
+  `CatalogStore` performs remote work. A manual refresh joins an already-running cycle rather than
+  starting concurrent work.
+- Each cycle has a separate wall-clock timeout. A controlled indefinitely blocked source left both
+  the refresher status callback and catalog reads responsive, then returned the normalized
+  `:refresh_timeout` outcome after its supervised task was killed. Source and refresh options are
+  omitted from inspection so a sentinel private value did not appear in process-state output.
+- The last complete catalog survives source or discovery failures until `stale_after_ms` from
+  lifecycle startup or the latest successful refresh. At expiry, an empty catalog is published to
+  fail new resolution closed. A later complete refresh republishes the available catalog and marks
+  it fresh. A successful empty source is treated differently from failure: it immediately
+  publishes the intentional configuration removal and remains a fresh outcome.
+- The stale interval is required to exceed the refresh interval. This guarantees at least one
+  scheduled refresh opportunity before expiry. The default application settings keep automatic
+  remote MCP refresh disabled and, when enabled, use a 60-second refresh interval, 30-second cycle
+  timeout, and five-minute stale limit.
+- Publication/removal still does not terminate an existing activation holding a pinned binding.
+  The separate credential-generation revocation operation remains the explicit active-call
+  invalidation mechanism.
+- Refactor after green: moved one source-fetch/publication attempt into `CatalogRefreshCycle`,
+  option/default/source validation into `CatalogRefresher.Options`, and the redacted data shape
+  into `CatalogRefresher.State`. The GenServer now owns only callback, task, timer, waiter, and
+  freshness orchestration. A focused red check showed the newly extracted options struct exposing
+  a private source-option sentinel through default inspection; its inspection now omits the clock,
+  source, and refresh options. Focused and child suites stayed green after the split.
+- Focused refresher/application verification passes 6 tests under seeds 0, 17, and 103. The full
+  Call Engine suite passes 208 tests with two tagged integrations excluded. Root formatting,
+  warnings-as-errors compilation, strict Credo over 320 source files, and unused-dependency
+  detection pass.
+- Two ordinary-concurrency umbrella attempts reproduced pre-existing asynchronous assertion races
+  outside this checkpoint: the definition-driven archive case observed missing/shifted facts, and
+  one Jido loop case inspected its event list before the second tool-start event arrived. Repeating
+  the archive case in one VM produced 14 passes before the same sequence race on repetition 15.
+  No unrelated archive or agent code was changed here. The complete deterministic umbrella suite
+  then passed with one test case scheduled at a time against disposable PostgreSQL: all 423
+  default-lane tests passed (MCP 33, Call Engine 208, Calls 35, Persistence 25, Gateway 66, Console
+  56), with nine tagged network integrations excluded. The temporary database was stopped and
+  removed after every attempt.
+
+Next: commit this catalog-lifecycle checkpoint. Live MCP use remains blocked on the supported Jido
+runtime data-tool interface.

@@ -35,7 +35,8 @@ defmodule Vxpipe.CallEngine.Application do
        sample_interval_ms: Keyword.fetch!(telemetry, :sample_interval_ms)}
     ]
 
-    base_children ++ model_fixture_children(settings) ++ runtime_children
+    base_children ++
+      model_fixture_children(settings) ++ remote_mcp_children(settings) ++ runtime_children
   end
 
   defp model_fixture_children(settings) do
@@ -48,6 +49,27 @@ defmodule Vxpipe.CallEngine.Application do
         |> Keyword.put_new(:name, Vxpipe.CallEngine.Diagnostics.ModelFixture)
 
       [{Vxpipe.CallEngine.Diagnostics.ModelFixture, fixture_options}]
+    else
+      []
+    end
+  end
+
+  defp remote_mcp_children(settings) do
+    options = Keyword.get(settings, :remote_mcp, enabled: false)
+
+    if Keyword.get(options, :enabled, false) do
+      task_supervisor = Vxpipe.CallEngine.RemoteMCP.CatalogRefreshTaskSupervisor
+
+      refresher_options =
+        options
+        |> Keyword.delete(:enabled)
+        |> Keyword.put_new(:name, Vxpipe.CallEngine.RemoteMCP.CatalogRefresher)
+        |> Keyword.put_new(:task_supervisor, task_supervisor)
+
+      [
+        {Task.Supervisor, name: task_supervisor},
+        {Vxpipe.CallEngine.RemoteMCP.CatalogRefresher, refresher_options}
+      ]
     else
       []
     end

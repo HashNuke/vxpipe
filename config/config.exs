@@ -34,6 +34,12 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   model_fixture: [enabled: false],
   model_inference: [enabled: false],
   live_inspection: [maximum_pending_records: 64, maximum_retained_records: 256],
+  remote_mcp: [
+    enabled: false,
+    refresh_interval_ms: 60_000,
+    stale_after_ms: 300_000,
+    refresh_timeout_ms: 30_000
+  ],
   speech_to_text: [enabled: false],
   telemetry: [sample_interval_ms: 1_000],
   text_to_speech: [enabled: false]

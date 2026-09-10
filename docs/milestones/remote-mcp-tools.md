@@ -201,6 +201,17 @@ definition boundary has started or its specification has been reviewed.
   and the deterministic umbrella suite passes 418 tests with nine tagged integrations excluded.
   The adapter deliberately does not discover or publish tools, schedule refresh, own TTL expiry,
   or define a future tenant/vault persistence implementation.
+- [x] An optional engine-supervised `CatalogRefresher` now runs configuration/discovery cycles in
+  an explicitly named task supervisor, starts immediately, repeats at a bounded interval, and
+  times out blocked cycles without blocking catalog reads or its own status callback. Temporary
+  failures retain the last complete snapshot until `stale_after_ms`; expiry atomically publishes
+  an empty catalog, and a later success recovers. A successful empty source removes configured
+  integrations immediately. State inspection omits source/refresh options, and public status keeps
+  only normalized outcomes. Focused lifecycle/application verification passes 6 tests across
+  three seeds; the Call Engine suite passes 208 tests with two tagged integrations excluded. The
+  deterministic umbrella suite passes all 423 default-lane tests with one test case scheduled at a
+  time and nine tagged network integrations excluded. Snapshot replacement/removal still does not
+  revoke an active pinned credential generation.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

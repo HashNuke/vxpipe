@@ -305,6 +305,20 @@ settings remain inside the redacted engine-owned values. A later tenant/vault-ba
 implement the same whole-source contract without changing discovery or publication. Periodic
 scheduling and stale-catalog expiry remain separate responsibilities.
 
+`RemoteMCP.CatalogRefresher` owns those timing responsibilities when remote MCP is enabled in
+`Vxpipe.CallEngine.Application` settings. It starts configuration retrieval plus discovery
+immediately and repeats it after the configured refresh interval. Each cycle runs under the
+explicitly named `CatalogRefreshTaskSupervisor`, outside both the refresher and catalog-store
+callbacks, and has a separate wall-clock timeout. A transient source/discovery failure retains the
+last good snapshot. If no complete refresh succeeds within `stale_after_ms`, the refresher
+atomically publishes an empty catalog so new definition compilation fails closed; a later complete
+success restores service. A successful empty configuration is an intentional removal and is
+published immediately rather than waiting for staleness. The stale interval must be longer than
+the refresh interval. Timing state retains only normalized outcomes, while fetched private
+configuration exists only within the supervised refresh task. Catalog replacement or removal does
+not mutate a binding already pinned into an active agent; explicit credential-generation
+revocation remains the mechanism for ending active authorization.
+
 Reusable protocol connections are keyed by application/tenant scope, integration ID,
 and credential generation. An agent activation acquires a monitored, non-secret lease
 for every exact generation used by its resolved bindings; the lease grants access to the
