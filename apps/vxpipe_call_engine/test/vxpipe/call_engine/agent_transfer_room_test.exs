@@ -126,6 +126,54 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     send(destination_provider, {:test_agent_runtime_response, {:ok, destination_response}})
   end
 
+  test "all_spoken seeds confirmed caller input but excludes generated unplayed output" do
+    plan = compile_plan(transfer_history: %{mode: "all_spoken"})
+    caller = Map.fetch!(plan.participants, "caller")
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    attach_caller(plan, room, caller)
+
+    remembered = send_command(plan, room, caller, "Remember invoice 17.")
+    assert :ok = CallEngine.send_text(remembered)
+    reply_to_next_request("This generated answer was not played.")
+
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: remembered_correlation}},
+                   2_000
+
+    assert remembered_correlation == remembered.correlation_id
+
+    transfer = send_command(plan, room, caller, "Please transfer me to billing.")
+    assert :ok = CallEngine.send_text(transfer)
+
+    assert_receive {:test_agent_runtime_stream, source_provider, _source_request}
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: "all-spoken-transfer",
+               name: "transfer",
+               arguments: %{"destination" => "billing"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "all-spoken-transfer"}},
+                   2_000
+
+    current = send_command(plan, room, caller, "Can you see what I told reception?")
+    assert :ok = CallEngine.send_text(current)
+
+    {_destination_provider, destination_request} =
+      receive_request_for_prompt("Handle billing requests.")
+
+    assert Enum.map(destination_request.messages, &{&1.role, &1.content}) == [
+             {:system, "Handle billing requests."},
+             {:user, "Remember invoice 17."},
+             {:user, "Please transfer me to billing."},
+             {:user, "Can you see what I told reception?"}
+           ]
+  end
+
   test "room authority rejects a stale source activation before destination startup" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
@@ -298,6 +346,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
   defp compile_plan(options \\ []) do
     billing_model = Keyword.get(options, :billing_model, "test:scripted")
     transfer_timeout_ms = Keyword.get(options, :transfer_timeout_ms, 30_000)
+    transfer_history = Keyword.get(options, :transfer_history, %{mode: "fresh"})
 
     assert {:ok, definition} =
              CallDefinition.new(
@@ -329,6 +378,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      type: "agent",
                      description: "A billing specialist",
                      prompt: "Handle billing requests.",
+                     transfer_history: transfer_history,
                      first_message: %{mode: "wait_for_input"},
                      capabilities: %{model_inference: "billing-model"},
                      tools: %{},

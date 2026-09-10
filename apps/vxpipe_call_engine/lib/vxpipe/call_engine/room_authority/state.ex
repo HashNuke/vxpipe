@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
 
   alias Vxpipe.CallEngine.Archive.Recorder
   alias Vxpipe.CallEngine.Room.Snapshot
-  alias Vxpipe.CallEngine.RoomAuthority.{FirstMessage, OpeningAudio}
+  alias Vxpipe.CallEngine.RoomAuthority.{FirstMessage, OpeningAudio, SpokenHistory}
 
   @enforce_keys [
     :archive_recorder,
@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
     :first_message,
     :opening_audio,
     :snapshot,
+    :spoken_history,
     :speech_to_text_runtime,
     :startup_ready?
   ]
@@ -51,6 +52,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           participant_ids: MapSet.t(String.t()),
           participant_roles: %{optional(String.t()) => atom()},
           snapshot: Snapshot.t(),
+          spoken_history: SpokenHistory.t(),
           speech_to_text_runtime: :application | map(),
           startup_ready?: boolean(),
           speech_to_text_monitors: %{optional(reference()) => String.t()},
@@ -80,6 +82,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
       first_message: first_message,
       opening_audio: opening_audio,
       snapshot: snapshot,
+      spoken_history: SpokenHistory.new(),
       speech_to_text_runtime: speech_to_text_runtime,
       startup_ready?: is_nil(call_lifecycle)
     }

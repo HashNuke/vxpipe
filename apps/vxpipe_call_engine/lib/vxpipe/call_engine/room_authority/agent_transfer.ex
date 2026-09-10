@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  alias Vxpipe.CallEngine.RoomAuthority.State
+  alias Vxpipe.CallEngine.RoomAuthority.{SpokenHistory, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{
     Authorizer,
@@ -33,10 +33,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   end
 
   defp start_preparation(request, from, deadline_ms, state) do
+    destination =
+      Map.fetch!(
+        state.agent_transfer_runtime.plan.participants,
+        request.destination_definition_key
+      )
+
+    initial_messages =
+      SpokenHistory.project(state.spoken_history, destination.transfer_history)
+
     case RoomTransferSupervisor.prepare(
            request.incarnation_id,
            request,
-           state.agent_transfer_runtime
+           state.agent_transfer_runtime,
+           initial_messages
          ) do
       {:ok, task} ->
         remaining_ms = max(deadline_ms - System.monotonic_time(:millisecond), 0)

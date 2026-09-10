@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   alias Vxpipe.CallEngine.RoomAuthority.{
     ConnectionLifecycle,
     EventPublisher,
+    SpokenHistory,
     State,
     TextCapability,
     ToolCalls,
@@ -310,7 +311,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   defp complete_spoken_segment(request, connection, state) do
     archive_recorder = ArchiveRecorder.delivered_output(state.archive_recorder, request)
-    state = %{state | archive_recorder: archive_recorder}
+
+    spoken_history =
+      SpokenHistory.played_assistant(state.spoken_history, request.text)
+
+    state = %{state | archive_recorder: archive_recorder, spoken_history: spoken_history}
     turn = TurnState.get(state, request)
     turn = %{turn | pending_speech: max(turn.pending_speech - 1, 0)}
     state = TurnState.replace(state, request, turn)

@@ -173,19 +173,25 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   end
 
   defp session_child(coordinator, invocation_registry, session, tools, options) do
+    session_options = [
+      instructions: Keyword.fetch!(options, :system_prompt),
+      model_provider: Keyword.fetch!(options, :model_provider),
+      model: Keyword.get(options, :model),
+      tools: tools,
+      executor: InvocationExecutor,
+      pending_context_source: {PendingContextSource, invocation_registry},
+      maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
+      maximum_pending_invocations: Keyword.fetch!(options, :maximum_tool_invocations),
+      request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
+      event_destination: coordinator,
+      name: session
+    ]
+
+    session_options =
+      put_optional(session_options, :initial_messages, Keyword.get(options, :initial_messages))
+
     Supervisor.child_spec(
-      {Session,
-       instructions: Keyword.fetch!(options, :system_prompt),
-       model_provider: Keyword.fetch!(options, :model_provider),
-       model: Keyword.get(options, :model),
-       tools: tools,
-       executor: InvocationExecutor,
-       pending_context_source: {PendingContextSource, invocation_registry},
-       maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
-       maximum_pending_invocations: Keyword.fetch!(options, :maximum_tool_invocations),
-       request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
-       event_destination: coordinator,
-       name: session},
+      {Session, session_options},
       id: :session,
       restart: :permanent
     )

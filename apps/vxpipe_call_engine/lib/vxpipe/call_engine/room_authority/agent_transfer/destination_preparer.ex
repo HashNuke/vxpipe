@@ -7,10 +7,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{Preparation, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  @spec prepare(Request.t(), Runtime.t()) ::
+  @spec prepare(Request.t(), Runtime.t(), [Vxpipe.AgentRuntime.Message.t()]) ::
           {:ok, Preparation.t()} | {:error, :unavailable}
-  def prepare(%Request{} = request, %Runtime{} = runtime) do
-    with {:ok, %AgentDestination{} = destination} <- destination(request, runtime),
+  def prepare(%Request{} = request, %Runtime{} = runtime, initial_messages)
+      when is_list(initial_messages) do
+    with {:ok, %AgentDestination{} = destination} <-
+           destination(request, runtime, initial_messages),
          {:ok, %ParticipantPreparation{} = participant} <-
            ParticipantLifecycle.prepare(
              destination.command,
@@ -23,9 +25,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
     end
   end
 
-  defp destination(request, runtime) do
+  defp destination(request, runtime, initial_messages) do
     participant = Map.fetch!(runtime.plan.participants, request.destination_definition_key)
-    PlanStartup.agent_destination(runtime.plan, participant, runtime.startup_options)
+
+    PlanStartup.agent_destination(
+      runtime.plan,
+      participant,
+      Keyword.put(runtime.startup_options, :initial_messages, initial_messages)
+    )
   end
 
   defp prepare_text_to_speech(request, runtime, destination, participant) do

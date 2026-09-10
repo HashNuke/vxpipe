@@ -157,3 +157,27 @@
   Call Engine does not yet supply the option, so this checkpoint alone does not change a transfer.
 - The focused Session file passes seven tests; the complete Agent Runtime suite passes 53 tests with
   two tagged integration exclusions.
+
+## 2026-09-10 — room-confirmed transfer history projection
+
+- Added a pure projection test first; it failed because no room spoken-history value existed. The
+  green implementation owns an insertion-ordered private queue whose inspection surface reveals
+  only its size. `fresh`/`selected` return no messages, `all_spoken` returns all entries, and
+  `last_n_spoken` returns the configured trailing utterance count.
+- Added a room-level `all_spoken` test before integration. It failed because the destination request
+  contained only its prompt and current caller message.
+- Room input now records text only after the active agent accepts it; final STT records through the
+  same accepted `SendText` path. Assistant output is recorded only from completed playout, at the
+  same point where delivered output becomes an archive fact. Merely generated text is excluded.
+- Transfer acceptance snapshots the destination-owned policy projection once, before the room-owned
+  preparation worker starts. The worker passes only those vetted messages through PlanStartup and
+  the activation graph to Agent Runtime. The destination still receives its own system prompt first.
+- The room test sends two caller turns and one generated but unplayed assistant answer before
+  transfer. Billing receives both caller messages in order and not the unplayed output.
+- The six focused transfer-room tests plus the pure projection test pass. The complete Call Engine
+  suite passes 273 tests with one tagged integration exclusion. Selected-mode reason/variables and
+  re-entry remain pending.
+- Calls and Gateway pass 36 and 66 tests respectively; Gateway retains four tagged exclusions. Root
+  format checking, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  The umbrella test command remains blocked at Persistence database creation because this shell has
+  no PostgreSQL password; no credential content was inspected or logged.

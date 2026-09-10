@@ -63,8 +63,11 @@ runs under a separate room-owned task supervisor, leaving Room Authority respons
 prepares the agent and selected TTS. Room Authority reauthorizes the source and destination at
 commit, retains the source through preparation, cleans up failure/expiry, rejects late results,
 then routes successful later turns through the destination and tears the source subtree down.
-The alternate history policies are compiler-only at this checkpoint; their runtime projections,
-re-entry, and source-capability restoration remain unsupported.
+Room state now retains a private transcript projection of caller input accepted for processing and
+assistant text acknowledged as played. Transfer preparation snapshots that projection once and
+seeds `all_spoken` or the configured `last_n_spoken` window into the destination runtime after its
+own prompt. `fresh` and `selected` seed no prior messages. Selected-mode reason delivery, re-entry,
+and source-capability restoration remain unsupported.
 Schema `20260910.04` added the transfer allowlists and generated binding. Schema `20260910.03`
 added explicitly selected platform
 tools to the participant's unified `tools` map. The fixed initial catalog contains

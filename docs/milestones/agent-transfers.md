@@ -123,8 +123,19 @@ Agent Runtime now has the narrow seed boundary needed by the runtime projection 
 session may start with validated plain caller-user and tool-free assistant messages after its own
 system prompt; injected system/engine/tool messages, tool calls, and tool metadata are rejected.
 The focused seven-test Session file and complete 53-test Agent Runtime suite pass with two tagged
-integration exclusions. Call Engine does not yet populate this option, so no transfer-history
-acceptance item is claimed by this internal prerequisite.
+integration exclusions. That internal prerequisite alone did not populate the option or claim a
+transfer-history acceptance item.
+
+Call Engine now owns a private room transcript projection and populates the seed boundary at the
+start of destination preparation. Accepted caller text/final STT is recorded as user history;
+assistant text is recorded only after audio-sink playback completion. `all_spoken` and
+`last_n_spoken` therefore carry confirmed delivery facts while generated-but-unplayed output is
+excluded; `fresh` and `selected` carry no prior messages. The projection is snapshotted once per
+attempt and its inspection surface exposes only its size. A focused room transfer proves two prior
+caller inputs reach billing while an unplayed generated response does not. The six transfer-room
+tests and one pure projection test pass, and the complete Call Engine suite passes 273 tests with one
+tagged integration exclusion. Selected reason/variable packet semantics and complete re-entry
+coverage remain open.
 
 ## Specification review
 

@@ -122,6 +122,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     ]
 
     base
+    |> put_optional(:initial_messages, Keyword.get(options, :initial_messages))
     |> put_optional(:mcp_integrations, mcp_integrations)
     |> put_optional(
       :remote_mcp_connection_provider,

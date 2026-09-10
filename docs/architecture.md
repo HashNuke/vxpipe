@@ -937,8 +937,7 @@ list. Omission resolves to the privacy-safe `fresh` mode. The closed alternative
 `all_spoken`, `last_n_spoken` with a required positive `turns` value, and `selected`; no other mode
 or mode-specific field is silently accepted. This placement prevents a source model from choosing
 how much prior conversation another participant may receive. The compiler pins the policy into the
-destination participant in the immutable call plan. This schema checkpoint does not yet claim that
-the non-fresh projections are supplied at runtime.
+destination participant in the immutable call plan.
 
 Agent Runtime accepts an internal initial-conversation seed for activation construction. That
 boundary retains the destination's independently configured system prompt and accepts only plain
@@ -947,6 +946,18 @@ messages, tool messages, tool calls, and tool correlation metadata rather than t
 pre-filter them. These messages are committed history, not a client-facing session-initialization
 input. Call Engine remains responsible for deriving the list from confirmed room delivery facts and
 the pinned destination policy before it can use this boundary.
+
+Call Engine now maintains that private room projection independently of Agent Runtime conversation
+and asynchronous archive delivery. Caller text enters it only after the room accepts the input for
+agent processing; final STT input follows the same accepted-command boundary. Assistant text enters
+it only when the audio sink reports playback completion, so generated, queued, interrupted, or
+otherwise unplayed text cannot cross the transfer. Its inspection representation exposes only the
+entry count. At accepted transfer preparation, the room takes one immutable policy projection:
+`all_spoken` supplies all entries, `last_n_spoken` supplies the configured trailing utterance count,
+and `fresh`/`selected` supply no prior messages. Destination startup receives this vetted list
+through the Agent Runtime seed boundary. Later speech during preparation cannot mutate the already
+prepared destination's history. Selected-mode reason delivery and re-entry remain separate
+follow-ups.
 
 The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
 activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
@@ -959,9 +970,9 @@ then terminates the source participant subtree. A stale source is rejected befor
 startup. Runtime configuration retained for later participant materialization has a redacted
 inspection surface.
 
-This checkpoint supports the initial destination's fresh private model history and implements
-preparation failure, total-deadline cleanup, duplicate-attempt rejection, and late-result exclusion.
-Other approved history projections, re-entry with a fresh activation, and the bounded source-
+This checkpoint supports fresh, all-spoken, and bounded-last-spoken destination history and
+implements preparation failure, total-deadline cleanup, duplicate-attempt rejection, and late-result
+exclusion. Selected reason/variables, re-entry with a fresh activation, and the bounded source-
 capability restoration rule remain follow-up work.
 
 ### Presence-driven media and transcript policy — approved R38

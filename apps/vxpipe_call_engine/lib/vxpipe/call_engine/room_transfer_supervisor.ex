@@ -18,15 +18,16 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     }
   end
 
-  @spec prepare(String.t(), Request.t(), Runtime.t()) ::
+  @spec prepare(String.t(), Request.t(), Runtime.t(), [Vxpipe.AgentRuntime.Message.t()]) ::
           {:ok, Task.t()} | {:error, :unavailable}
-  def prepare(incarnation_id, %Request{} = request, %Runtime{} = runtime) do
+  def prepare(incarnation_id, %Request{} = request, %Runtime{} = runtime, initial_messages)
+      when is_list(initial_messages) do
     task =
       Task.Supervisor.async_nolink(
         via(incarnation_id),
         AgentTransfer.DestinationPreparer,
         :prepare,
-        [request, runtime]
+        [request, runtime, initial_messages]
       )
 
     {:ok, task}
