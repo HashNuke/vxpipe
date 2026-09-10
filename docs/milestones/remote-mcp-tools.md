@@ -1,10 +1,8 @@
 # Remote MCP tools in a live call
 
-Status: implementation in progress. Protocol, configuration, catalog, binding, security and
-activation foundations are implemented. The completed
-[ReqLLM agent runtime](reqllm-agent-runtime.md) now projects exact remote descriptors, delegates
-their private handlers, and runs the deterministic non-blocking live-room conversation. Remaining
-acceptance covers mixed tools, visibility/archive evidence, failure matrix, and churn.
+Status: complete. Protocol, configuration, catalog, binding, security, activation, conversation,
+archive, client-visibility, and Call Variables integration are implemented and verified through the
+completed [ReqLLM agent runtime](reqllm-agent-runtime.md).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its
 background-tool and tenant admission prerequisites; [MCP client integration and
 conformance](mcp-client-library.md); [ReqLLM agent runtime](reqllm-agent-runtime.md).
@@ -57,35 +55,35 @@ updates permitted variables. Another agent/tenant cannot use that binding or its
 ## Implementation checklist
 
 - [x] Red-test a controlled remote MCP fixture for discovery, valid tool invocation, slow result, schema failure, auth and response-size limits.
-- [ ] Prove the `Vxpipe.AgentRuntime` data-tool/private-binding interface in a deterministic
+- [x] Prove the `Vxpipe.AgentRuntime` data-tool/private-binding interface in a deterministic
   mixed platform/remote run without a second model loop.
 - [x] Wire the verified ExMCP adapter through the integration owner; preserve its pinned
   profile/conformance evidence and enforce dependency direction.
 - [x] Implement private scoped integration resolution/cache/discovery and data-backed binding
   validation without unbounded external atom/module creation.
-- [ ] Connect tools/call to background workers, complete private history, and safe model/client projections.
+- [x] Connect tools/call to background workers, complete private history, and safe model/client projections.
 - [x] Test security at the effective network client, not only a configured URL string; isolate real network interoperability tests.
 
 ## Acceptance and failure checks
 
-- [ ] A deterministic agent-runtime run alternates a platform tool and remote tool over
+- [x] A deterministic agent-runtime run alternates a platform tool and remote tool over
   successive model rounds, then answers; `vxpipe_agent_runtime`, not Call Engine or MCP,
   owns model continuation.
-- [ ] Model-visible tools preserve exact local names/pinned schemas, including two aliases
+- [x] Model-visible tools preserve exact local names/pinned schemas, including two aliases
   sharing one handler. Unknown bindings fail before execution; endpoint selectors and
   credentials never enter the model schema/arguments or public events.
-- [ ] Tenant/app precedence is whole-record; bad/revoked tenant credentials do not fall back or leak to another endpoint/cache.
-- [ ] Reject unknown/unauthorized tools, argument schema violations, unsafe redirects/private addresses/rebinding, external schema refs and unsupported interactions before unauthorized work.
-- [ ] At/exceed the 1 MiB boundary with compressed and many-chunk bodies; no cap reset per chunk or full-body buffering before checking.
-- [ ] Validate definite non-submission vs unknown submitted timeout; exactly one invocation, no automatic retries or implicit variables updates.
-- [ ] Run while speaking; preserve live context and permitted archived result/descriptors; hidden client events remain hidden.
-- [ ] Refresh/change a discovery catalog: existing calls retain pinned enabled schemas;
+- [x] Tenant/app precedence is whole-record; bad/revoked tenant credentials do not fall back or leak to another endpoint/cache.
+- [x] Reject unknown/unauthorized tools, argument schema violations, unsafe redirects/private addresses/rebinding, external schema refs and unsupported interactions before unauthorized work.
+- [x] At/exceed the 1 MiB boundary with compressed and many-chunk bodies; no cap reset per chunk or full-body buffering before checking.
+- [x] Validate definite non-submission vs unknown submitted timeout; exactly one invocation, no automatic retries or implicit variables updates.
+- [x] Run while speaking; preserve live context and permitted archived result/descriptors; hidden client events remain hidden.
+- [x] Refresh/change a discovery catalog: existing calls retain pinned enabled schemas;
   new calls may resolve the new catalog, and unresolved enabled bindings fail preparation.
 - [x] Revocation fails closed instead of reusing stale authorization; private credential leases
   redact process status/crash output and are released/invalidated at room-incarnation end.
-- [ ] Library invocation receives only scoped resolved inputs; domain authorization/history
+- [x] Library invocation receives only scoped resolved inputs; domain authorization/history
   are tested here, protocol behavior in the library. Real integration uses that same client.
-- [ ] Reconfigure unique tenant endpoint/tool/schema catalogs repeatedly: the live binding
+- [x] Reconfigure unique tenant endpoint/tool/schema catalogs repeatedly: the live binding
   path does not grow atoms/modules with external churn, expose endpoint selectors to the
   model, or let a binding escape its pinned call plan.
 
@@ -102,13 +100,13 @@ No local/stdio MCP, per-call credentials, automatic retry/idempotency, explicit 
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Milestone completion evidence is incomplete. Do not mark this slice complete because its
-definition boundary has started or its specification has been reviewed.
+Milestone completion evidence is recorded below. No UI changed in this milestone, so browser
+inspection was not applicable.
 
 ### Implementation progress
 
@@ -282,6 +280,32 @@ definition boundary has started or its specification has been reviewed.
   warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. A deterministic
   umbrella run against isolated PostgreSQL 18 passes all 497 default-lane tests with ten tagged
   integration exclusions.
+- [x] One activation-level acceptance run now exposes a host tool and two MCP aliases backed by
+  the same activation-owned integration process. The aliases retain different pinned schemas and
+  dispatch only their independently selected remote operations. One Agent Runtime session owns the
+  successive host, first-remote, second-remote, and final-answer model rounds. The first assertion
+  deliberately reached for a private binding in the provider request and failed because the
+  runtime had already converted it to a binding-free `ModelTool`; the corrected assertion verifies
+  shared ownership at the private descriptor boundary and sanitized schemas at the model boundary.
+  The focused activation file passes 5 tests and the complete Call Engine suite passes 228 tests
+  with one tagged integration exclusion. An evidence audit also confirmed the already-green
+  precedence, authorization, schema, wire-limit, submitted-timeout, catalog-pinning, revocation,
+  and external-identity churn checks. The two remaining integrated checks are remote archival/
+  client visibility and scoped library input plus domain-history evidence.
+- [x] A remote-specific room run now keeps a non-blocking MCP worker pending while the agent's
+  acknowledgement is synthesized, delivered to an attached audio sink, and reported complete. The
+  remote completion is archived with its exact local alias, arguments, and full accepted bounded
+  result. The following private continuation invokes the separately generated `update_variables`
+  tool, whose room-scoped process enforces the agent's write grant and publishes revision 1 plus the
+  full variables snapshot. The controlled MCP client observes only remote operation, arguments, and
+  deadline. Existing gateway projection checks prove the same resulting tool-event structs remain
+  hidden by default and expose only the configured metadata/full level. The focused live-room file
+  passes 4 tests, the Call Engine suite passes 230 tests with one tagged integration exclusion, and
+  the official MCP conformance lane passes all 3 tests. This closes the remaining integrated
+  acceptance obligations. Root formatting, warnings-as-errors compilation, strict Credo over 367
+  source files, and unused-dependency checks pass. A deterministic umbrella run with seed `238092`
+  against isolated PostgreSQL 18 passes all 500 default-lane tests with ten tagged integration
+  exclusions. The temporary server was stopped and its data moved to trash.
 
 ## Specification review
 

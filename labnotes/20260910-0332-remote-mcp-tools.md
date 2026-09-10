@@ -698,3 +698,59 @@ PostgreSQL 18 instance: all 497 default-lane tests pass with ten tagged integrat
 temporary server was stopped and its data moved to trash. The ordinary local database path could
 not authenticate because it supplied no password; this was an environment limitation rather than
 a project failure.
+
+## 2026-09-10 — one mixed Agent Runtime tool loop
+
+Added an activation-level acceptance run containing one host tool and two local MCP aliases. Both
+remote aliases use the same activation-owned `IntegrationOwner`, but each keeps its own pinned JSON
+Schema and maps privately to a different remote operation. The scripted model moves through a host
+tool, the first remote alias, the second remote alias, and a final answer as successive requests to
+the same Agent Runtime session. Each remote request reaches only its exact configured operation.
+
+The first run failed because the test tried to read a private invocation binding from the provider's
+tool list. That list correctly contains binding-free `ModelTool` values. The final test verifies the
+shared owner at `ToolDescriptors`, then separately verifies that the provider receives only exact
+local names, public descriptions, and the two different schemas. It also confirms neither remote
+operation nor the private configuration sentinel is inspectable at the provider boundary.
+
+The focused activation file passes 5 tests; the complete Call Engine suite passes 228 tests with one
+tagged integration exclusion. Reviewed existing focused coverage before changing milestone boxes:
+
+- `IntegrationCatalogTest` proves whole-record tenant precedence and no stale application fallback.
+- MCP invocation/security and wire tests reject unknown tools, bad schemas/arguments, external refs,
+  unsafe addresses, rebinding, and redirects before unauthorized work.
+- wire-limit tests cover compressed, incrementally chunked, and resumed SSE responses under one
+  cumulative budget; the wire integration proves submitted timeout/oversize is unknown with one
+  request and no retry.
+- catalog replacement plus live stale-start tests prove old active owners retain their pin while new
+  work resolves the replacement or fails closed.
+- revocation/lease checks and the isolated runtime-binding churn probe cover authorization lifetime,
+  cache separation, and external identity safety.
+
+Remote-specific archive/client-visibility evidence and an integrated scoped-library/domain-history
+check remain before the milestone can be completed.
+
+## 2026-09-10 — spoken remote work, archive, and variables
+
+Added two remote-specific live-room acceptance checks. The first enables the selected TTS profile,
+starts a non-blocking remote invocation, and drives the provider/audio-sink handshake for the
+acknowledgement before releasing the remote worker. The absence of a terminal tool event at that
+point proves speech delivery does not wait for MCP completion. The later private continuation and
+second spoken response complete normally after the controlled release.
+
+The second run enables one typed Call Variables section with a reception-agent read/write grant and
+an asynchronous collecting archive. It archives the remote start and full accepted bounded result,
+then lets the remote completion continuation request `update_variables`. The separately supervised
+variables tool publishes revision 1 and its full snapshot to the archive. Its success remains a
+Call Variables authorization decision; MCP receives no variables handle, room context, participant
+grant, or archive interface. The controlled client records only the exact remote operation,
+arguments, and timeout. Existing gateway tests apply hidden/metadata/full projection to the same
+generic tool-event structs, so remote tools cannot bypass default-hidden visibility.
+
+The focused live-room file passes 4 tests, and the complete Call Engine suite passes 230 tests with
+one tagged integration exclusion. The official MCP conformance integration lane also passes all 3
+tests against the supported profile. Root format, warnings-as-errors compilation, strict Credo over
+367 source files, and unused-dependency checks pass. A full umbrella run with seed `238092` against
+an isolated PostgreSQL 18 instance passes all 500 default-lane tests with ten tagged integration
+exclusions; the server was stopped and its temporary data moved to trash. No UI changed, so browser
+inspection was not applicable. The milestone and index are now complete at 12 of 24 roadmap items.

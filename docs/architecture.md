@@ -599,6 +599,16 @@ the exact pinned remote operation and scoped connection. A catalog change before
 therefore reject the stale plan; an owner that has started retains its checked-out generation until
 activation shutdown or explicit credential revocation.
 
+Remote execution does not introduce a separate conversation path. An explicitly non-blocking MCP
+binding can remain pending while the acknowledgement is synthesized and delivered through the
+agent's ordinary TTS capability; the remote operation still runs only in its supervised invocation
+worker. Its terminal event carries the local alias and bounded result into the ordinary private
+archive and one engine-origin continuation. That continuation may ask for a separately authorized
+Call Variables tool. The variables process—not the MCP client or model runtime—enforces the
+participant's section grant and publishes the resulting snapshot. Client tool visibility remains
+the call's generic hidden/metadata/full policy and therefore does not depend on whether the private
+handler is a host action, Call Variables binding, or remote MCP operation.
+
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the
 relevant room/agent if the room is still active—for example, a booking success

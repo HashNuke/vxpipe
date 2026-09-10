@@ -2,12 +2,13 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
-  alias Vxpipe.CallEngine.AgentRuntime.Coordinator
+  alias Vxpipe.CallEngine.AgentRuntime.{Coordinator, ToolDescriptors}
   alias Vxpipe.CallEngine.Command.SendText
-  alias Vxpipe.CallEngine.RemoteMCPFixture
+  alias Vxpipe.CallEngine.RemoteMCP.{Integration, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
 
   alias Vxpipe.CallEngine.{
+    RemoteMCPFixture,
     TestAgentRuntimeModelProvider,
     TestAgentTool,
     TestBlockingTool,
@@ -15,9 +16,15 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     TestRemoteMCPProtocolClient
   }
 
-  alias Vxpipe.CallEngine.Tool.{Context, InvocationCompletion, InvocationRegistry}
+  alias Vxpipe.CallEngine.Tool.{
+    Context,
+    InvocationBinding,
+    InvocationCompletion,
+    InvocationRegistry
+  }
 
   alias Vxpipe.AgentRuntime.{Message, ModelResponse, ToolCall}
+  alias Vxpipe.MCP.Catalog
 
   setup do
     Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
@@ -248,6 +255,132 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     assert_receive {:vxpipe_capability_text, ^coordinator, _command, "Customer found."}
   end
 
+  test "uses one Agent Runtime loop for host tools and independently pinned remote aliases" do
+    observer = self()
+
+    client =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{
+             responses: [
+               {:wait, observer, {:ok, %{"content" => [%{"type" => "text", "text" => "found"}]}}},
+               {:wait, observer,
+                {:ok, %{"content" => [%{"type" => "text", "text" => "invoice"}]}}}
+             ],
+             invocations: []
+           }
+         end}
+      )
+
+    {integrations, remote_bindings} = remote_aliases!(client)
+    activation_id = unique_activation_id()
+
+    tools =
+      Map.put(
+        remote_bindings,
+        "test_agent_tool",
+        %ToolBinding{
+          name: "test_agent_tool",
+          type: :host,
+          conversation_mode: :blocking,
+          action: TestAgentTool,
+          remote: nil
+        }
+      )
+
+    options =
+      activation_id
+      |> agent_runtime_options()
+      |> Keyword.put(:tools, tools)
+      |> Keyword.put(:mcp_integrations, integrations)
+      |> Keyword.put(:remote_mcp_connection_provider, TestRemoteMCPConnectionProvider)
+      |> Keyword.put(:remote_mcp_protocol_client, TestRemoteMCPProtocolClient)
+      |> Keyword.put(:maximum_completed_requests, 8)
+      |> Keyword.put(:maximum_tool_invocations, 4)
+
+    activation = start_supervised!({AgentActivationSupervisor, options})
+    children = AgentActivationSupervisor.children(activation)
+    remote_owner = Map.fetch!(children, :remote_mcp_owner)
+    coordinator = Map.fetch!(children, :coordinator)
+
+    assert {:ok, private_descriptors} = ToolDescriptors.compile(tools, nil, remote_owner)
+
+    private_descriptors = Map.new(private_descriptors, &{&1.name, &1})
+    private_customer = Map.fetch!(private_descriptors, "customer_lookup")
+    private_invoice = Map.fetch!(private_descriptors, "invoice_lookup")
+
+    assert %InvocationBinding{handler: {:remote_mcp, ^remote_owner}} = private_customer.binding
+    assert %InvocationBinding{handler: {:remote_mcp, ^remote_owner}} = private_invoice.binding
+
+    assert :ok = Coordinator.respond(coordinator, send_text("mixed-runtime-tools"))
+    assert_receive {:test_agent_runtime_stream, initial_provider, initial_request}
+
+    assert Enum.map(initial_request.tools, & &1.name) == [
+             "customer_lookup",
+             "invoice_lookup",
+             "test_agent_tool"
+           ]
+
+    descriptors = Map.new(initial_request.tools, &{&1.name, &1})
+    customer = Map.fetch!(descriptors, "customer_lookup")
+    invoice = Map.fetch!(descriptors, "invoice_lookup")
+
+    assert customer.input_schema == customer_schema()
+    assert invoice.input_schema == invoice_schema()
+    refute inspect(initial_request) =~ "lookup_customer"
+    refute inspect(initial_request) =~ "lookup_invoice"
+    refute inspect(initial_request) =~ "private-mixed-tools"
+
+    reply_with_tool(initial_provider, "host-call", "test_agent_tool", %{"value" => "local"})
+    acknowledge_running("host-call", "test_agent_tool")
+
+    assert_receive {:test_agent_runtime_stream, host_completion_provider, host_completion}
+    assert List.last(host_completion.messages).origin == :engine
+
+    reply_with_tool(
+      host_completion_provider,
+      "customer-call",
+      "customer_lookup",
+      %{"customer_id" => "customer-42"}
+    )
+
+    customer_execution = acknowledge_remote("customer-call", "customer_lookup")
+    send(customer_execution, :release_test_remote_mcp)
+
+    assert_receive {:test_agent_runtime_stream, customer_completion_provider, customer_completion}
+
+    assert List.last(customer_completion.messages).origin == :engine
+
+    reply_with_tool(
+      customer_completion_provider,
+      "invoice-call",
+      "invoice_lookup",
+      %{"invoice_number" => 42}
+    )
+
+    invoice_execution = acknowledge_remote("invoice-call", "invoice_lookup")
+    send(invoice_execution, :release_test_remote_mcp)
+
+    assert_receive {:test_agent_runtime_stream, invoice_completion_provider, invoice_completion}
+    assert List.last(invoice_completion.messages).origin == :engine
+
+    assert {:ok, final_response} = ModelResponse.new(text: "Both records are ready.")
+    send(invoice_completion_provider, {:test_agent_runtime_response, {:ok, final_response}})
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, _command, "Both records are ready."}
+
+    assert [
+             %{name: "lookup_customer", arguments: %{"customer_id" => "customer-42"}} =
+               customer_invocation,
+             %{name: "lookup_invoice", arguments: %{"invoice_number" => 42}} =
+               invoice_invocation
+           ] = Agent.get(client, & &1.invocations)
+
+    assert customer_invocation.timeout in 1..12_000
+    assert invoice_invocation.timeout in 1..12_000
+  end
+
   defp agent_runtime_options(activation_id) do
     [
       runtime: :agent_runtime,
@@ -288,6 +421,115 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
         remote: nil
       }
     })
+  end
+
+  defp acknowledge_running(invocation_id, tool_name) do
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, acknowledgement}
+    assert acknowledgement.tools == []
+
+    assert Enum.any?(acknowledgement.messages, fn
+             %Message{
+               role: :tool,
+               name: ^tool_name,
+               tool_call_id: ^invocation_id,
+               content: content
+             } ->
+               content =~ "running"
+
+             _message ->
+               false
+           end)
+
+    assert {:ok, response} = ModelResponse.new(text: "I am checking now.")
+    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  defp acknowledge_remote(invocation_id, tool_name) do
+    assert_receive {:test_remote_mcp_invocation_started, execution}
+    acknowledge_running(invocation_id, tool_name)
+    execution
+  end
+
+  defp reply_with_tool(provider, id, name, arguments) do
+    assert {:ok, call} = ToolCall.new(id: id, name: name, arguments: arguments)
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  defp remote_aliases!(client) do
+    assert {:ok, catalog} =
+             Catalog.new([
+               %{
+                 "name" => "lookup_customer",
+                 "description" => "Looks up one customer.",
+                 "inputSchema" => customer_schema()
+               },
+               %{
+                 "name" => "lookup_invoice",
+                 "description" => "Looks up one invoice.",
+                 "inputSchema" => invoice_schema()
+               }
+             ])
+
+    assert {:ok, integration} =
+             Integration.new(
+               integration_id: "records",
+               configuration_generation: "configuration-mixed",
+               credential_generation: "credential-mixed",
+               catalog_generation: "catalog-mixed",
+               catalog: catalog,
+               allowed_tools: ["lookup_customer", "lookup_invoice"],
+               client_config: [
+                 test_client: client,
+                 test_observer: self(),
+                 private: "private-mixed-tools"
+               ],
+               invocation_deadline_ms: 12_000
+             )
+
+    assert {:ok, integrations} =
+             IntegrationCatalog.new(
+               application: %{},
+               tenants: %{"tenant-demo" => %{"records" => integration}}
+             )
+
+    bindings = %{
+      "customer_lookup" => remote_binding!(integrations, "customer_lookup", "lookup_customer"),
+      "invoice_lookup" => remote_binding!(integrations, "invoice_lookup", "lookup_invoice")
+    }
+
+    {integrations, bindings}
+  end
+
+  defp remote_binding!(integrations, local_name, remote_name) do
+    assert {:ok, resolved} =
+             IntegrationCatalog.resolve(integrations, "tenant-demo", "records", remote_name)
+
+    %ToolBinding{
+      name: local_name,
+      type: :mcp,
+      conversation_mode: :blocking,
+      action: nil,
+      remote: resolved
+    }
+  end
+
+  defp customer_schema do
+    %{
+      "type" => "object",
+      "properties" => %{"customer_id" => %{"type" => "string"}},
+      "required" => ["customer_id"],
+      "additionalProperties" => false
+    }
+  end
+
+  defp invoice_schema do
+    %{
+      "type" => "object",
+      "properties" => %{"invoice_number" => %{"type" => "integer"}},
+      "required" => ["invoice_number"],
+      "additionalProperties" => false
+    }
   end
 
   defp stale_context do
