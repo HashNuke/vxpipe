@@ -158,9 +158,12 @@ Each authored platform/built-in, host, or MCP binding obtains its tool-specific
 `conversation_mode` from its call-definition `tools` entry. The only modes are `blocking` and
 `non_blocking`, and omission resolves to `blocking`. Blocking affects only admission of
 subsequent caller turns; `non_blocking` lets unrelated later turns proceed while the invocation
-is pending. Both modes use the same independently supervised worker path and report current
-pending invocation state to every later LLM request that is appropriate and admitted. See the
-complete [tool execution model](tool-execution-model.md).
+is pending. Both modes use the same independently supervised worker path; neither authorizes an
+inline callback in the model request task or Session. Every later LLM request that is appropriate
+and admitted receives the current pending invocation identities and safe statuses. This is
+required for non-blocking caller turns: the LLM can answer the new request while remaining aware
+of the separately executing work. See the complete
+[tool execution model](tool-execution-model.md).
 
 The current dated call-definition compiler exposes this choice for authored host and MCP
 selections. Permission-derived Call Variables tools use the default `blocking` mode; the planned

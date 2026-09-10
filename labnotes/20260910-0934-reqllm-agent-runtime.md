@@ -1141,6 +1141,23 @@ tests with 2 tagged exclusions at seed `365486`. Umbrella format, warnings-as-er
 strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
 unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
 
+## Tool execution contract clarification
+
+Confirmed that `conversation_mode` is only a conversation-admission policy on an agent's
+call-definition tool binding. Omission and explicit `blocking` both prevent later caller turns
+from entering the model while the accepted invocation is pending; explicit `non_blocking` admits
+those turns. The two modes do not represent different execution strategies: every model-requested
+platform, Call Variables, host, or MCP operation is handed to the same independently supervised
+Call Engine worker boundary and is never executed inline by the model request task or an agent/
+runtime GenServer.
+
+For each later LLM request admitted while non-blocking work is pending, Agent Runtime retains the
+single committed running acknowledgement and adds the bounded authoritative pending projection.
+That projection carries invocation identity and safe lifecycle status, allowing the model to
+handle intervening conversation while remaining aware of work it must return to. The durable tool
+execution decision and current milestone now state these invariants explicitly. This was a
+documentation clarification only; no runtime behavior or verification claim changed.
+
 ## Implementation checkpoint 4z: caller queue and deadline parity
 
 Added a neutral coordinator test for the bounded pending-caller queue and the Session-owned request

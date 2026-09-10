@@ -20,6 +20,16 @@ Tool bindings have a separate conversation mode:
   request still contains the committed correlated running acknowledgement, so the LLM knows
   which work remains pending.
 
+| Authored `conversation_mode` | Worker execution | Later caller turns while pending |
+| --- | --- | --- |
+| omitted | independent supervised worker | blocked |
+| `blocking` | independent supervised worker | blocked |
+| `non_blocking` | independent supervised worker | admitted |
+
+There is no inline execution alternative behind this setting. `conversation_mode` changes
+only Call Engine conversation admission after submission; it does not change how or where the
+operation runs.
+
 ## Call-definition shape
 
 Conversation mode belongs to the agent's local tool binding because two agents may use the
@@ -140,11 +150,13 @@ Committed history proves what the model was previously told, while Call Engine r
 authoritative for what is still active. Agent Runtime calls a narrow context-source boundary
 before every provider generation, including repeated rounds within one request. This reporting
 contract is the same for `blocking` and `non_blocking` invocations: every later LLM request
-that is appropriate and admitted receives current pending state. Blocking suppresses only
-unrelated subsequent caller turns; it does not suppress the acknowledgement round, private
-completion continuation, or another otherwise-admitted request's pending context. The bounded
-projection contains identifiers and lifecycle state but no arguments, results, bindings,
-credentials, endpoints, or raw errors:
+that is appropriate and admitted receives current pending state. In particular, every caller
+turn admitted while non-blocking work remains pending includes each invocation's identity and
+safe current status, so the model can discuss another request without forgetting the work it
+must return to. Blocking suppresses only unrelated subsequent caller turns; it does not
+suppress the acknowledgement round, private completion continuation, or another otherwise-
+admitted request's pending context. The bounded projection contains identifiers and lifecycle
+state but no arguments, results, bindings, credentials, endpoints, or raw errors:
 
 ```json
 {

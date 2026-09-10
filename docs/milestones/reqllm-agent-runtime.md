@@ -80,7 +80,9 @@ process or dependency is used.
   and `non_blocking`; omission resolves to `blocking`. Blocking is Call Engine admission
   policy only: the current acknowledgement round may finish, then subsequent caller turns
   receive a deterministic holding response without entering the LLM until the terminal
-  private continuation is consumed. `non_blocking` lets unrelated later turns proceed.
+  private continuation is consumed. `non_blocking` lets unrelated later turns proceed. Both
+  modes always hand execution to the same independently supervised worker path; this setting
+  never selects inline execution.
   The current compiler supports this field on authored host and MCP selections; generated
   Call Variables tools take the default until a later policy override is explicitly designed.
   Follow the [tool execution model](../tool-execution-model.md).
@@ -197,7 +199,8 @@ process or dependency is used.
 - [x] A non-blocking acknowledgement, unrelated caller turn, and later engine-origin completion
   reproduce the completed milestone's ordering and visibility behavior. The single correlated
   running acknowledgement is committed once and appears in every later model request while
-  pending, with no repeated polling or status message. The private completion carries the same
+  pending. Each admitted request also receives the authoritative pending identity and safe
+  status, with no repeated polling or status message. The private completion carries the same
   invocation ID and is consumed once, with no fake public user message or competing TTS stream.
 - [x] Every provider generation receives the current bounded pending projection without tool
   arguments/results or private routing data; it is not appended repeatedly to conversation.
