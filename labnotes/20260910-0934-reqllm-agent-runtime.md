@@ -70,3 +70,37 @@ ordered milestone index, forward live-MCP plan, later compaction/usage wording, 
 completed Jido-backed milestone headers so historical implementation evidence is not
 mistaken for the selected forward architecture. No application code, dependencies, or
 runtime behavior changed in this checkpoint.
+
+## Implementation checkpoint 1: package contracts and lifecycle
+
+- Created the `vxpipe_agent_runtime` umbrella child with direct `req_llm` and `jsv`
+  dependencies. It has no dependency on Call Engine, MCP, persistence, gateway, console,
+  or Jido.
+- Added separate modules for the tool descriptor, admitted request, terminal result,
+  normalized event, model-provider behavior, private executor behavior, session, and OTP
+  application. The split keeps provider execution, descriptor validation, data contracts,
+  and lifecycle ownership independently testable.
+- Added a deterministic test-only model provider under this application's own test support.
+  It accepts mock model data and can return immediately or block, so later checkpoints can
+  extend it with scripted streaming/tool-call outcomes without network access.
+- The first focused red run failed at compile time because `Result` and the other contracts
+  did not exist. After the minimal implementation, 4 focused tests passed.
+- Added a lifecycle test that monitors a blocked provider request. It failed because
+  `Task.Supervisor.async_nolink/2` allowed the request to outlive session shutdown. Retaining
+  the supervised task's link to the trapping session fixed the ownership contract; the
+  focused suite then passed with 5 tests and 0 failures.
+- Tool descriptors validate bounded names, descriptions, and JSON schemas at construction.
+  Their derived inspection excludes the opaque binding and compiled validator. Requests and
+  results likewise omit prompt/output payloads from inspection.
+
+Repeated model/tool rounds, argument execution, streaming, cancellation, the production
+ReqLLM adapter, and Call Engine migration are not part of this checkpoint and remain pending.
+
+Verification after formatting:
+
+- `cd apps/vxpipe_agent_runtime && mix test`: 5 tests, 0 failures.
+- Umbrella `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+  `mix credo --strict`, and `mix deps.unlock --check-unused`: passed.
+- Umbrella `mix test` did not execute because the test alias could not create the PostgreSQL
+  database without a password in this shell. This package does not use the database; the
+  limitation remains recorded rather than treating a later command's exit status as proof.

@@ -82,7 +82,7 @@ executor while preserving a different pinned schema. No Jido process or dependen
 
 ## Migration checkpoints
 
-1. Add the child application and red-test its public descriptor, request, result, event,
+1. [Complete 2026-09-10] Add the child application and red-test its public descriptor, request, result, event,
    executor, and session contracts with a deterministic model driver.
 2. Implement the smallest repeated model/tool state machine: final response, one tool
    continuation, multiple calls with ordered results, mixed text/tool output, bounded
@@ -99,7 +99,7 @@ executor while preserving a different pinned schema. No Jido process or dependen
 
 ## Implementation checklist
 
-- [ ] Red-test and add the standalone package contracts and supervised lifecycle.
+- [x] Red-test and add the standalone package contracts and supervised lifecycle.
 - [ ] Implement deterministic repeated rounds, exact runtime-tool resolution, canonical
   tool exchanges, streaming events, cancellation, and all declared bounds.
 - [ ] Move/refine the existing ReqLLM projection behind the new package and add focused plus
@@ -166,7 +166,22 @@ contract to the already implemented MCP bindings.
 - [ ] Update this milestone, the index checkbox, architecture/API docs, and implementation
   labnote with actual test/browser/provider evidence in the implementation commits.
 
-Implementation evidence: none yet. Planning inspection is not runtime verification.
+Implementation evidence:
+
+- Checkpoint 1 adds the standalone `vxpipe_agent_runtime` child with no Call Engine,
+  MCP, persistence, gateway, console, or Jido dependency. It defines bounded request,
+  result, safe event, model-provider, private executor, and tool-descriptor contracts.
+- A deterministic test-only model provider proves provider work runs outside the session
+  GenServer. A monitored blocking provider proves a supervised session shutdown terminates
+  its active request worker. Focused application suite: 5 tests, 0 failures.
+- The initial focused run failed because the package contracts did not exist. The lifecycle
+  test then failed while the request was unlinked; changing the supervised task to retain
+  session ownership made it green. Repeated rounds and production ReqLLM projection remain
+  intentionally pending in checkpoints 2 and 3.
+- `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix credo --strict`,
+  and `mix deps.unlock --check-unused` pass at the umbrella root. The umbrella `mix test`
+  alias could not create `vxpipe_test` because this shell has no PostgreSQL password; it
+  stopped before executing tests. No database is used by this package checkpoint.
 
 ## Specification review
 
