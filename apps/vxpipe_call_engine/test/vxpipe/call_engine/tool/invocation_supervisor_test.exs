@@ -100,6 +100,26 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
     refute_receive {:vxpipe_tool_invocation_finished, ^worker, _duplicate}
   end
 
+  test "keeps a prepared invocation dormant until its owner explicitly begins it" do
+    supervisor = start_invocation_supervisor(1)
+
+    assert {:ok, worker} =
+             InvocationSupervisor.prepare_invocation(supervisor,
+               invocation_id: "invocation-prepared",
+               binding: host_binding(:blocking),
+               arguments: %{"value" => "prepared"},
+               context: context(),
+               reply_to: self(),
+               timeout_ms: 1_000,
+               maximum_result_bytes: 4_096
+             )
+
+    refute_receive {:submitted_inline_tool_started, _execution, "prepared"}
+    assert :ok = InvocationSupervisor.begin_invocation(worker)
+    assert_receive {:submitted_inline_tool_started, execution, "prepared"}
+    send(execution, :release_submitted_inline_tool)
+  end
+
   defp start_invocation_supervisor(maximum_children) do
     activation_id = "act-invocations-#{System.unique_integer([:positive])}"
 

@@ -112,9 +112,11 @@ never retried automatically. The development definition exposes the deterministi
 Migration to the standalone Agent Runtime has begun behind that live Jido path. The neutral
 `Tool.InvocationSupervisor` owns capacity-bounded temporary workers, and each
 `Tool.Invocation` owns one attempt, result bound, and deadline. Even a host tool whose legacy
-definition says `inline` executes in this worker path. The authoritative invocation registry,
-remote MCP/Call Variables handlers, and activation selection remain pending, so live calls do not
-use this substrate yet.
+definition says `inline` executes in this worker path. The authoritative invocation registry
+now retains accepted work through leased and explicitly acknowledged completion, exposes only
+payload-free pending statuses, reconciles identical submissions by invocation ID, and bounds both
+active capacity and consumed-ID tombstones. Remote MCP/Call Variables handlers, Agent Runtime
+adapters, and activation selection remain pending, so live calls do not use this substrate yet.
 
 The engine emits payload-free `:telemetry` events for model request/first-output timing,
 TTS first provider audio, safe model/STT/TTS provider failures, and background-tool admission,

@@ -21,8 +21,30 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisor do
   @spec start_invocation(DynamicSupervisor.supervisor(), keyword()) ::
           DynamicSupervisor.on_start_child()
   def start_invocation(supervisor, options) do
+    case prepare_invocation(supervisor, options) do
+      {:ok, invocation} ->
+        case begin_invocation(invocation) do
+          :ok ->
+            {:ok, invocation}
+
+          {:error, _reason} = error ->
+            _ = DynamicSupervisor.terminate_child(supervisor, invocation)
+            error
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  @spec prepare_invocation(DynamicSupervisor.supervisor(), keyword()) ::
+          DynamicSupervisor.on_start_child()
+  def prepare_invocation(supervisor, options) do
     DynamicSupervisor.start_child(supervisor, {Invocation, options})
   end
+
+  @spec begin_invocation(GenServer.server()) :: :ok | {:error, :already_started | :unavailable}
+  def begin_invocation(invocation), do: Invocation.begin(invocation)
 
   @impl true
   def init(options) do

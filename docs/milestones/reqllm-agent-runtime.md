@@ -118,8 +118,10 @@ process or dependency is used.
    explicit-non-blocking binding policy. The schema/compiler portion is complete in
    `20260910.01`. The neutral capacity-bounded host invocation supervisor/worker is complete and
    proves that a legacy-inline operation executes out of process with one bounded terminal
-   outcome. Registry authority, remote MCP/Variables handlers, runtime admission, and activation
-   integration remain. Preserve completion and interruption behavior.
+   outcome. The authoritative registry now retains idempotent submissions, payload-free pending
+   phases, leased terminal outcomes, explicit consumption, and bounded tombstones. Remote
+   MCP/Variables handlers, Agent Runtime adapters, runtime admission, and activation integration
+   remain. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.

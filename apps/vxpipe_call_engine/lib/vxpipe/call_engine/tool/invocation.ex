@@ -20,27 +20,41 @@ defmodule Vxpipe.CallEngine.Tool.Invocation do
     }
   end
 
+  @spec begin(GenServer.server()) :: :ok | {:error, :already_started | :unavailable}
+  def begin(invocation) do
+    GenServer.call(invocation, :begin, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     Process.flag(:trap_exit, true)
 
     with {:ok, state} <- configuration(options) do
-      task =
-        Task.async(fn ->
-          InvocationExecution.run(
-            state.binding,
-            state.arguments,
-            state.context,
-            state.maximum_result_bytes
-          )
-        end)
-
-      timer = Process.send_after(self(), :vxpipe_tool_invocation_timeout, state.timeout_ms)
-      {:ok, Map.merge(state, %{task: task, timer: timer})}
+      {:ok, Map.merge(state, %{task: nil, timer: nil})}
     else
       _invalid -> {:stop, :invalid_configuration}
     end
   end
+
+  @impl true
+  def handle_call(:begin, _from, %{task: nil} = state) do
+    task =
+      Task.async(fn ->
+        InvocationExecution.run(
+          state.binding,
+          state.arguments,
+          state.context,
+          state.maximum_result_bytes
+        )
+      end)
+
+    timer = Process.send_after(self(), :vxpipe_tool_invocation_timeout, state.timeout_ms)
+    {:reply, :ok, %{state | task: task, timer: timer}}
+  end
+
+  def handle_call(:begin, _from, state), do: {:reply, {:error, :already_started}, state}
 
   @impl true
   def handle_info({reference, outcome}, %{task: %{ref: reference}} = state) do

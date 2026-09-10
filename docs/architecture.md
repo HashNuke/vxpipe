@@ -559,8 +559,13 @@ The first Call Engine migration checkpoint implements the neutral host-tool work
 `Tool.Invocation` owns one execution attempt and deadline. It deliberately ignores the legacy
 Action definition's `inline`/`background` distinction. An operation whose old definition says
 `inline` therefore still runs outside the submitting process and reports one correlated terminal
-outcome. Registry authority, remote MCP/Call Variables handlers, delivery leases, and activation
-wiring remain subsequent checkpoints; this substrate is not yet selected by live calls.
+outcome. `Tool.InvocationRegistry` now owns bounded capacity from accepted startup through consumed
+completion, idempotent submission reconciliation, worker identity, terminal races, payload-free
+ordered snapshots, completion lease/release, explicit acknowledgement, and bounded consumed-ID
+tombstones. A worker is prepared dormant, monitored, recorded, and only then explicitly begun, so
+a fast completion cannot overtake its authoritative running record. Only acknowledgement frees
+capacity. Remote MCP/Call Variables handlers, Agent Runtime adapters, and activation wiring remain
+subsequent checkpoints; this substrate is not yet selected by live calls.
 
 Late business confirmations are an external-event concern deferred beyond this
 MCP slice. A future gateway webhook or other external event could inform the

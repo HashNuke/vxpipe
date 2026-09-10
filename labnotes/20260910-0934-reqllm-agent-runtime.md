@@ -560,3 +560,42 @@ Verification:
 - Umbrella format, warnings-as-errors compilation, Credo strict, and unused-lock checks passed.
 - Umbrella `mix test` stopped before tests because local PostgreSQL SCRAM authentication requires a
   password unavailable in this shell; no credential source was inspected.
+
+## Implementation checkpoint 4c: authoritative invocation registry
+
+Added the registry lifecycle test first. Its red compile failed because `InvocationRegistry`,
+`InvocationStatus`, and `CompletionLease` did not exist. The green path adds separate submission,
+record, registry-state, safe-status, and lease values around the process boundary instead of
+putting execution state into `AgentCoordinator` or enlarging the legacy `Tool.Dispatcher`.
+
+The registry accepts a validated runtime binding only after its DynamicSupervisor starts the
+worker. It retains a private fingerprint so an identical delivery of the same invocation ID is
+acknowledged without starting a second worker, while a conflicting reuse is rejected. Capacity is
+reserved through `running`, `terminal_queued`, and `completion_admitted`; a terminal result does not
+free capacity merely because a worker exited.
+
+Completion notification carries only registry identity and invocation ID. The consumer leases the
+private completion, acknowledges it only after its later Agent Runtime continuation commits, or
+releases it after failure/cancellation so it can be leased again without rerunning the operation.
+Acknowledgement removes the live record and adds its ID to a bounded tombstone set. Ordered
+snapshots contain only invocation ID, local tool name, conversation mode, source turn ID, and safe
+phase—never arguments, result, handler, or credentials.
+
+A review before commit found a fast-completion race between `start_child/2` returning and the
+registry installing its record/monitor. A new red test required a prepared worker to remain dormant.
+`InvocationSupervisor` now separates prepare from begin; the registry prepares the child, installs
+its monitor and local record, then explicitly begins it before returning accepted. A fast
+completion is consequently handled only after the GenServer commits the running record.
+
+Verification:
+
+- Focused invocation worker/registry suites: 4 tests, 0 failures after the expected missing-module
+  red compile and the expected missing prepare/begin red failure.
+- Complete Call Engine suite: 220 tests, 0 failures, 2 integration exclusions.
+- Umbrella format, warnings-as-errors compilation, Credo strict, and unused-lock checks passed.
+- Umbrella `mix test` stopped before tests because local PostgreSQL SCRAM authentication requires a
+  password unavailable in this shell; no credential source was inspected.
+
+The registry currently accepts host invocation bindings and a PID completion target. Remote MCP
+and Call Variables runtime bindings, the Agent Runtime submit/pending adapters, activation
+supervision, coordinator admission, and submit-timeout reconciliation fault injection remain.
