@@ -20,6 +20,16 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
   @spec full?(t()) :: boolean()
   def full?(%__MODULE__{} = state), do: map_size(state.records) >= state.maximum_invocations
 
+  @spec size(t()) :: non_neg_integer()
+  def size(%__MODULE__{} = state), do: map_size(state.records)
+
+  @spec completion_depth(t()) :: non_neg_integer()
+  def completion_depth(%__MODULE__{} = state) do
+    Enum.count(state.records, fn {_invocation_id, record} ->
+      record.status == :terminal_queued
+    end)
+  end
+
   @spec consumed?(t(), String.t()) :: boolean()
   def consumed?(%__MODULE__{} = state, invocation_id) do
     MapSet.member?(state.consumed, invocation_id)

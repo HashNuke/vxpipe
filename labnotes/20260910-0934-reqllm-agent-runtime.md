@@ -1329,3 +1329,46 @@ and the complete Call Engine rerun passed 215 tests with 1 tagged integration ex
 Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the unchanged
 absent PostgreSQL SCRAM password; no credential source was inspected. Rendered sample inspection
 and the final milestone acceptance audit remain.
+
+## Acceptance checkpoint: rendered non-blocking flow and invocation telemetry
+
+The development call definition now marks only `prepare_background_report` with
+`conversation_mode: "non_blocking"`; the fast `get_current_time` binding omits the setting and
+therefore retains the default `blocking` policy. This is conversation-admission configuration
+only. Both operations still use the same activation-owned invocation registry, supervisor, and
+independent worker boundary.
+
+Rendered verification used the HTTPS development endpoint with Chromium at desktop and mobile
+viewports. A fake browser media device was needed for the automated pass so the speech provider
+would not close an otherwise silent test connection. The client reached RTC ready state and
+completed a live current-time tool round. A ten-second report invocation then produced its
+running acknowledgement; a later caller message was admitted and answered while the worker was
+still pending; the private completion was consumed once afterward. Interruption stopped active
+speech/model output but did not stop the accepted tool worker. The landing page and console had no
+page-level horizontal overflow at 390 px. The project source passed the Impeccable static detector.
+The imported voice-console component still reports dependency-owned accessibility findings for
+unnamed icon controls, light-theme contrast, heading structure, and its scrollable event region;
+no project UI code was changed in this checkpoint.
+
+The live diagnostics page initially showed no invocation observations even though the selected
+Agent Runtime path had executed a tool. The retired dispatcher had been the only producer of the
+existing bounded admission, stop, and handoff telemetry. A focused registry test failed first
+because no admission event arrived. `Tool.InvocationTelemetry` now translates authoritative
+registry transitions into those existing bounded events: accepted/saturated/start-failed
+admission, terminal worker outcome, queued/released completion depth, and consumed handoff. The
+events contain counts, limits, durations, and safe outcome atoms only. The focused test then passed
+2 tests, and the refreshed live diagnostics page showed one accepted reservation, one successful
+worker outcome, and one queued/consumed handoff without exposing invocation IDs, arguments, or
+results.
+
+Verification after stopping the development server:
+
+- Agent Runtime: 42 tests, 0 failures, 1 tagged integration exclusion.
+- Call Engine: 216 tests, 0 failures, 1 tagged integration exclusion.
+- `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix credo --strict`, and
+  `mix deps.unlock --check-unused` pass at the umbrella root.
+- The first concurrent child-suite run exposed two pre-existing 100 ms timing-sensitive assertions;
+  each focused rerun and both subsequent sequential suites passed without a production change.
+- Umbrella `mix test` still stops before test execution because PostgreSQL SCRAM authentication
+  requires a password absent from this non-interactive shell. An attempt to reuse Goreman's env
+  loader without starting its RPC server was unavailable; no credential source was inspected.

@@ -1,6 +1,10 @@
 defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
   use ExUnit.Case, async: false
 
+  @admission_event [:vxpipe, :call_engine, :background_tool, :admission]
+  @handoff_event [:vxpipe, :call_engine, :background_tool, :handoff]
+  @stop_event [:vxpipe, :call_engine, :background_tool, :stop]
+
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestSubmittedInlineTool
 
@@ -19,6 +23,11 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
     on_exit(fn ->
       Application.delete_env(:vxpipe_call_engine, :submitted_inline_tool_observer)
     end)
+  end
+
+  @doc false
+  def handle_telemetry(event, measurements, metadata, test) do
+    send(test, {:invocation_telemetry, event, measurements, metadata})
   end
 
   test "retains one idempotent invocation through leased completion and explicit consumption" do
@@ -155,6 +164,47 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
     send(second_execution, :release_submitted_inline_tool)
   end
 
+  test "emits bounded telemetry as submitted work is admitted, settled, and consumed" do
+    attach_telemetry()
+    {registry, _supervisor} = start_registry(maximum_invocations: 1)
+
+    assert {:accepted, :non_blocking} =
+             InvocationRegistry.submit(
+               registry,
+               host_binding(:non_blocking),
+               %{"value" => "telemetry-private-value"},
+               context(),
+               "telemetry-private-invocation"
+             )
+
+    assert_receive {:invocation_telemetry, @admission_event, %{count: 1, reserved: 1, limit: 1},
+                    %{outcome: :accepted}}
+
+    assert_receive {:submitted_inline_tool_started, execution, "telemetry-private-value"}
+    send(execution, :release_submitted_inline_tool)
+
+    assert_receive {:invocation_telemetry, @stop_event, %{count: 1, duration: duration},
+                    %{outcome: :ok}}
+
+    assert is_integer(duration) and duration >= 0
+
+    assert_receive {:invocation_telemetry, @handoff_event, %{count: 1, depth: 1, limit: 1},
+                    %{outcome: :queued}}
+
+    assert {:ok, %CompletionLease{lease_id: lease_id}} =
+             InvocationRegistry.lease_next(registry, "telemetry-consumer")
+
+    assert :ok =
+             InvocationRegistry.acknowledge_completion(
+               registry,
+               "telemetry-private-invocation",
+               lease_id
+             )
+
+    assert_receive {:invocation_telemetry, @handoff_event, %{count: 1, depth: 0, limit: 1},
+                    %{outcome: :consumed}}
+  end
+
   defp start_registry(options) do
     activation_id = "act-registry-#{System.unique_integer([:positive])}"
     maximum_invocations = Keyword.fetch!(options, :maximum_invocations)
@@ -206,5 +256,19 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
       agent_request_id: "request-demo",
       tool_call_id: nil
     }
+  end
+
+  defp attach_telemetry do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach_many(
+        handler_id,
+        [@admission_event, @stop_event, @handoff_event],
+        &__MODULE__.handle_telemetry/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
   end
 end

@@ -175,7 +175,8 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
                 "get_current_time" => %{type: "host", tool: "get_current_time"},
                 "prepare_background_report" => %{
                   type: "host",
-                  tool: "prepare_background_report"
+                  tool: "prepare_background_report",
+                  conversation_mode: "non_blocking"
                 }
               },
               transfers: [],

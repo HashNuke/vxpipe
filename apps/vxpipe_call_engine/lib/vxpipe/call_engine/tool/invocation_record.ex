@@ -18,6 +18,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
     :submission,
     :worker,
     :monitor,
+    :started_at,
     :status
   ]
   defstruct @enforce_keys ++ [completion: nil, lease: nil]
@@ -36,6 +37,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
       submission: submission,
       worker: worker,
       monitor: monitor,
+      started_at: System.monotonic_time(),
       status: :running
     }
   end

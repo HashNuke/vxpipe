@@ -2,8 +2,8 @@
 
 Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
 the production ReqLLM boundary with tagged-provider interoperability are implemented. Call Engine
-uses the activation-owned Agent Runtime graph and no longer depends on Jido; final acceptance and
-rendered-sample evidence remain pending.
+uses the activation-owned Agent Runtime graph and no longer depends on Jido. The rendered sample
+now demonstrates the non-blocking flow; the final acceptance audit remains pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -159,7 +159,7 @@ process or dependency is used.
    activation-owned invocation worker/lifecycle path. Preserve completion and interruption behavior.
 5. [In progress 2026-09-10] Run parity and churn checks, inspect the rendered sample, and remove
    unused Jido AI, Jido Action, Jido, and related lock entries. Dependency and fallback-loop
-   removal is complete; rendered sample inspection and the final acceptance audit remain.
+   removal and rendered sample inspection are complete; the final acceptance audit remains.
 
 ## Implementation checklist
 
@@ -207,7 +207,7 @@ process or dependency is used.
 - [x] Omitted binding policy blocks later caller model admission by default; an explicit
   `non_blocking` binding permits the unrelated-turn sequence. Blocking turns receive bounded
   deterministic hold output, and a completion is consumed before admission reopens.
-- [ ] Process inspection, telemetry, errors, and public events contain no prompts, raw tool
+- [x] Process inspection, telemetry, errors, and public events contain no prompts, raw tool
   arguments/results, private bindings, credentials, or provider authorization values.
 - [ ] A tagged supported-provider run accepts the exact tool schema, streams conversational
   text, performs a real multi-round tool continuation, reports observed usage, and cleans up

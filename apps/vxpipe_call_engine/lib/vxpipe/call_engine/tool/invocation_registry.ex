@@ -10,7 +10,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     InvocationLifecycle,
     InvocationRecord,
     InvocationSubmission,
-    InvocationSupervisor
+    InvocationSupervisor,
+    InvocationTelemetry
   }
 
   alias Vxpipe.CallEngine.Tool.InvocationRegistry.State
@@ -121,6 +122,13 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     with {:ok, record} <- State.fetch(state, invocation_id),
          {:ok, record} <- InvocationRecord.release(record, lease_id) do
       state = State.replace(state, record)
+
+      InvocationTelemetry.handoff(
+        :queued,
+        State.completion_depth(state),
+        state.maximum_invocations
+      )
+
       notify_completion(state, invocation_id)
       {:reply, :ok, state}
     else
@@ -131,7 +139,15 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   def handle_call({:acknowledge_completion, invocation_id, lease_id}, _from, state) do
     with {:ok, record} <- State.fetch(state, invocation_id),
          true <- InvocationRecord.leased_by?(record, lease_id) do
-      {:reply, :ok, State.consume(state, record)}
+      state = State.consume(state, record)
+
+      InvocationTelemetry.handoff(
+        :consumed,
+        State.completion_depth(state),
+        state.maximum_invocations
+      )
+
+      {:reply, :ok, state}
     else
       _missing_or_stale -> {:reply, {:error, :unavailable}, state}
     end
@@ -150,6 +166,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         case InvocationRecord.finish(record, completion) do
           {:ok, record} ->
             state = State.replace(state, record)
+
+            InvocationTelemetry.settled(record)
+
+            InvocationTelemetry.handoff(
+              :queued,
+              State.completion_depth(state),
+              state.maximum_invocations
+            )
 
             InvocationLifecycle.settled(
               state.lifecycle_target,
@@ -175,6 +199,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         completion = InvocationRecord.failed_completion(record)
         {:ok, record} = InvocationRecord.finish(record, completion)
         state = State.replace(state, record)
+        InvocationTelemetry.terminated(record)
+
+        InvocationTelemetry.handoff(
+          :queued,
+          State.completion_depth(state),
+          state.maximum_invocations
+        )
+
         InvocationLifecycle.settled(state.lifecycle_target, state.completion_target, record)
         notify_completion(state, record.invocation_id)
         {:noreply, state}
@@ -188,6 +220,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   defp start_invocation(submission, state) do
     if State.full?(state) do
+      InvocationTelemetry.admission(
+        :saturated,
+        State.size(state),
+        state.maximum_invocations
+      )
+
       {:reply, {:error, :saturated}, state}
     else
       start_available_invocation(submission, state)
@@ -214,6 +252,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
           :ok ->
             state = State.add(state, record)
 
+            InvocationTelemetry.admission(
+              :accepted,
+              State.size(state),
+              state.maximum_invocations
+            )
+
             InvocationLifecycle.accepted(
               state.lifecycle_target,
               state.completion_target,
@@ -225,13 +269,32 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
           {:error, _reason} ->
             Process.demonitor(monitor, [:flush])
             _ = DynamicSupervisor.terminate_child(state.invocation_supervisor, worker)
+
+            InvocationTelemetry.admission(
+              :start_failed,
+              State.size(state),
+              state.maximum_invocations
+            )
+
             {:reply, {:error, :unavailable}, state}
         end
 
       {:error, :max_children} ->
+        InvocationTelemetry.admission(
+          :saturated,
+          State.size(state),
+          state.maximum_invocations
+        )
+
         {:reply, {:error, :saturated}, state}
 
       {:error, _reason} ->
+        InvocationTelemetry.admission(
+          :unavailable,
+          State.size(state),
+          state.maximum_invocations
+        )
+
         {:reply, {:error, :unavailable}, state}
     end
   end
