@@ -111,6 +111,13 @@ definition boundary has started or its specification has been reviewed.
   participates in registry/cache identity, and a deterministic lifecycle test proves two
   tenants with equal integration and credential-generation labels receive distinct supervised
   client subtrees. The MCP child passes 32 tests with three tagged integrations excluded.
+- [x] The compiler resolves an enabled tenant integration to a safe immutable tool descriptor.
+  The plan pins the selected scope, integration/configuration/credential/catalog generations,
+  local alias, remote operation, validated public input schema, deadline, and result limit;
+  private connection configuration remains in the integration catalog. The focused compiler
+  test proves an endpoint and authorization sentinel do not appear in the plan. Application
+  fallback, whole-record tenant precedence, stale-generation checkout, and runtime invocation
+  remain part of the unchecked integration-resolution work below.
 - [ ] Resolve and pin an authorized tenant/application catalog entry into the immutable plan.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 

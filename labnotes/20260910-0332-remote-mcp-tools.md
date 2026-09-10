@@ -64,3 +64,34 @@ Private endpoints and credentials must remain behind the runtime integration own
 Next: resolve tenant-first whole integration records, reject fallback when a tenant record is
 present but invalid/missing the selected operation, and pin only the selected public descriptor
 and safe generation identity into the call plan.
+
+## 2026-09-10 — safe compiler-side binding
+
+- Red: a compiler test configured a tenant MCP integration containing an endpoint and an
+  authorization sentinel, then selected one remote operation through a different local alias.
+  Compilation first failed because no resolved remote-tool record existed.
+- Green: the call engine now owns a private configured-integration record, a tenant/application
+  integration catalog, and a safe resolved-tool descriptor. The compiler pins tenant scope;
+  integration, configuration, credential, and catalog generations; the local alias and remote
+  operation; the validated public input schema and description; and the invocation deadline and
+  result-size limit. The plan contains neither private client configuration nor its endpoint or
+  headers.
+- The call engine directly depends on the umbrella MCP adapter because this compilation boundary
+  consumes its discovered catalog and JSON Schema validation contract. The MCP adapter remains
+  independent of call-domain applications.
+- `Vxpipe.MCP.ArgumentValidator.validate_schema/1` reuses the outgoing-argument validator's
+  closed JSON Schema build path. Unsupported dialects and external references can therefore be
+  rejected before a tool descriptor enters a call plan rather than only at invocation time.
+- Focused verification passes: the compiler-side MCP test passes 1 test; the full MCP child
+  passes 32 tests with three tagged network integrations excluded; the full call-engine child
+  passes 183 tests with two tagged integrations excluded.
+- Root verification passes: format, warnings-as-errors compilation, strict Credo, unused
+  dependency detection, and the full 397-test umbrella suite with nine tagged integrations
+  excluded. The umbrella test used an isolated temporary PostgreSQL instance because the local
+  default server requires unavailable password authentication.
+- This checkpoint does not claim live MCP execution. Application fallback, tenant whole-record
+  rejection, exact generation checkout of private runtime configuration, revocation behavior,
+  and the Jido execution bridge remain open.
+
+Next: red-test integration-catalog precedence and exact runtime checkout so an existing call can
+use only the private integration generation pinned into its plan and never silently fall back.

@@ -1,8 +1,15 @@
 defmodule Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding do
   @moduledoc false
 
-  @enforce_keys [:name, :type, :action]
-  defstruct @enforce_keys
+  alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
 
-  @type t :: %__MODULE__{name: String.t(), type: :host, action: module()}
+  @enforce_keys [:name, :type]
+  defstruct @enforce_keys ++ [:action, :remote]
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          type: :host | :mcp,
+          action: module() | nil,
+          remote: ResolvedTool.t() | nil
+        }
 end

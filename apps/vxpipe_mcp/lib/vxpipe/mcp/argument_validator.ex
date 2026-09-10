@@ -7,19 +7,36 @@ defmodule Vxpipe.MCP.ArgumentValidator do
   @spec validate(map(), map()) ::
           :ok | {:error, :invalid_arguments | :unsupported_input_schema}
   def validate(schema, arguments) when is_map(schema) and is_map(arguments) do
-    with :ok <- supported_dialect(schema),
-         false <- external_reference?(schema),
-         {:ok, root} <- JSV.build(schema, resolver: [], atoms: false, warnings: :silent),
+    with {:ok, root} <- build(schema),
          {:ok, _validated} <- JSV.validate(arguments, root, cast: false) do
       :ok
     else
-      true -> {:error, :unsupported_input_schema}
       {:error, %JSV.ValidationError{}} -> {:error, :invalid_arguments}
       {:error, _build_error} -> {:error, :unsupported_input_schema}
     end
   end
 
   def validate(_schema, _arguments), do: {:error, :invalid_arguments}
+
+  @spec validate_schema(map()) :: :ok | {:error, :unsupported_input_schema}
+  def validate_schema(schema) when is_map(schema) do
+    case build(schema) do
+      {:ok, _root} -> :ok
+      {:error, _reason} -> {:error, :unsupported_input_schema}
+    end
+  end
+
+  def validate_schema(_schema), do: {:error, :unsupported_input_schema}
+
+  defp build(schema) do
+    with :ok <- supported_dialect(schema),
+         false <- external_reference?(schema) do
+      JSV.build(schema, resolver: [], atoms: false, warnings: :silent)
+    else
+      true -> {:error, :unsupported_input_schema}
+      {:error, _reason} = error -> error
+    end
+  end
 
   defp supported_dialect(schema) do
     case Map.get(schema, "$schema") do

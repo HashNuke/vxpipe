@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   alias Vxpipe.CallEngine.CallDefinition.{CapabilitySelection, ToolSelection}
 
   alias Vxpipe.CallEngine.{CallInvocation, DefinitionValidation, Id, ResolvedCallPlan}
+  alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.{
     CallVariables,
@@ -34,7 +35,13 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          {:ok, call_variables} <-
            resolve_call_variables(definition.call_variables, invocation.initial_variables),
          {:ok, participants} <-
-           resolve_participants(definition, capability_profiles, host_tools),
+           resolve_participants(
+             definition,
+             capability_profiles,
+             host_tools,
+             Map.get(registries, :mcp_integrations),
+             invocation.tenant_id
+           ),
          {:ok, tool_visibility} <-
            resolve_tool_visibility(
              Keyword.get(options, :tool_visibility, definition.tool_visibility),
@@ -97,13 +104,21 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     end
   end
 
-  defp resolve_participants(definition, capability_profiles, host_tools) do
+  defp resolve_participants(
+         definition,
+         capability_profiles,
+         host_tools,
+         mcp_integrations,
+         tenant_id
+       ) do
     Enum.reduce_while(definition.participants, {:ok, %{}}, fn {key, participant}, {:ok, acc} ->
       case resolve_participant(
              participant,
              definition.default_capabilities,
              capability_profiles,
-             host_tools
+             host_tools,
+             mcp_integrations,
+             tenant_id
            ) do
         {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
         {:error, _error} = error -> {:halt, error}
@@ -115,10 +130,12 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          %CallDefinition.Participant{} = participant,
          defaults,
          profiles,
-         host_tools
+         host_tools,
+         mcp_integrations,
+         tenant_id
        ) do
     with {:ok, capabilities} <- resolve_capabilities(participant, defaults, profiles),
-         {:ok, tools} <- resolve_tools(participant, host_tools) do
+         {:ok, tools} <- resolve_tools(participant, host_tools, mcp_integrations, tenant_id) do
       activation_id = if participant.kind == :agent, do: Id.generate(:activation), else: nil
 
       {:ok,
@@ -244,20 +261,37 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   defp put_capability(capabilities, :text_to_speech, selection),
     do: %{capabilities | text_to_speech: selection}
 
-  defp resolve_tools(%CallDefinition.Participant{kind: :human}, _host_tools), do: {:ok, %{}}
+  defp resolve_tools(
+         %CallDefinition.Participant{kind: :human},
+         _host_tools,
+         _mcp_integrations,
+         _tenant_id
+       ),
+       do: {:ok, %{}}
 
-  defp resolve_tools(%CallDefinition.Participant{} = participant, host_tools) do
+  defp resolve_tools(
+         %CallDefinition.Participant{} = participant,
+         host_tools,
+         mcp_integrations,
+         tenant_id
+       ) do
     Enum.reduce_while(participant.tools, {:ok, %{}}, fn {name, selection}, {:ok, acc} ->
       path = ["participants", participant.definition_key, "tools", name]
 
-      case resolve_tool(selection, host_tools, path) do
+      case resolve_tool(selection, host_tools, mcp_integrations, tenant_id, path) do
         {:ok, binding} -> {:cont, {:ok, Map.put(acc, name, binding)}}
         {:error, _error} = error -> {:halt, error}
       end
     end)
   end
 
-  defp resolve_tool(%ToolSelection{name: name, type: :host, tool: tool}, host_tools, path) do
+  defp resolve_tool(
+         %ToolSelection{name: name, type: :host, tool: tool},
+         host_tools,
+         _mcp_integrations,
+         _tenant_id,
+         path
+       ) do
     cond do
       name != tool ->
         invalid(path, "must use the static Action name as its local key in this schema subset")
@@ -270,7 +304,29 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     end
   end
 
-  defp resolve_tool(%ToolSelection{type: :mcp}, _host_tools, path) do
+  defp resolve_tool(
+         %ToolSelection{name: name, type: :mcp, integration: integration, tool: tool},
+         _host_tools,
+         %IntegrationCatalog{} = integrations,
+         tenant_id,
+         path
+       ) do
+    case IntegrationCatalog.resolve(integrations, tenant_id, integration, tool) do
+      {:ok, remote} ->
+        {:ok, %ToolBinding{name: name, type: :mcp, action: nil, remote: remote}}
+
+      {:error, _reason} ->
+        invalid(path, "does not resolve to an available remote MCP tool")
+    end
+  end
+
+  defp resolve_tool(
+         %ToolSelection{type: :mcp},
+         _host_tools,
+         _mcp_integrations,
+         _tenant_id,
+         path
+       ) do
     invalid(path, "does not resolve to an available remote MCP tool")
   end
 
@@ -280,7 +336,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
       definition = action.definition()
 
       if definition.name == name do
-        {:ok, %ToolBinding{name: name, type: :host, action: action}}
+        {:ok, %ToolBinding{name: name, type: :host, action: action, remote: nil}}
       else
         invalid(path, "does not match the registered host tool name")
       end
