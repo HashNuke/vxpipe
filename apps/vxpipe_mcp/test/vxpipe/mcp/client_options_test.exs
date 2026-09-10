@@ -79,6 +79,20 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
     assert options[:url] == "http://127.0.0.1:4321/rpc"
     assert options[:reconnect] == false
 
+    assert {:ok, post_only_options} =
+             ClientOptions.build_loopback_test(
+               endpoint: "http://127.0.0.1:4321/rpc",
+               use_sse: false
+             )
+
+    assert post_only_options[:use_sse] == false
+
+    assert {:error, :invalid_sse_mode} =
+             ClientOptions.build_loopback_test(
+               endpoint: "http://127.0.0.1:4321/rpc",
+               use_sse: :sometimes
+             )
+
     assert {:ok, reconnecting_options} =
              ClientOptions.build_loopback_test(
                endpoint: "http://localhost:4321/rpc",

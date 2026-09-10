@@ -5,15 +5,17 @@ defmodule Vxpipe.MCP.FaultServer do
 
   import Plug.Conn
 
-  @session_id "vxpipe-fault-session"
-
   def child_spec(opts) do
     fault = Keyword.fetch!(opts, :fault)
     owner = Keyword.fetch!(opts, :owner)
+    session_id = "vxpipe-fault-session-#{System.unique_integer([:positive, :monotonic])}"
 
     Supervisor.child_spec(
       {Bandit,
-       plug: {__MODULE__, {fault, owner}}, ip: {127, 0, 0, 1}, port: 0, startup_log: false},
+       plug: {__MODULE__, {fault, owner, session_id}},
+       ip: {127, 0, 0, 1},
+       port: 0,
+       startup_log: false},
       id: {__MODULE__, make_ref()}
     )
   end
@@ -40,7 +42,7 @@ defmodule Vxpipe.MCP.FaultServer do
 
   def init(opts), do: opts
 
-  def call(%{method: "GET"} = conn, {_fault, owner}) do
+  def call(%{method: "GET"} = conn, {_fault, owner, _session_id}) do
     send(owner, {:fault_server_request, :stream, nil})
 
     conn
@@ -48,15 +50,15 @@ defmodule Vxpipe.MCP.FaultServer do
     |> send_resp(200, ": stream ready\n\n")
   end
 
-  def call(%{method: "POST"} = conn, {fault, owner}) do
+  def call(%{method: "POST"} = conn, {fault, owner, session_id}) do
     {:ok, body, conn} = read_body(conn)
     request = Jason.decode!(body)
     method = Map.get(request, "method")
     send(owner, {:fault_server_request, method, request})
-    respond(conn, request, fault)
+    respond(conn, request, fault, session_id)
   end
 
-  defp respond(conn, %{"method" => "initialize", "id" => id}, _fault) do
+  defp respond(conn, %{"method" => "initialize", "id" => id}, _fault, session_id) do
     result = %{
       "protocolVersion" => "2025-11-25",
       "capabilities" => %{"tools" => %{}},
@@ -64,15 +66,15 @@ defmodule Vxpipe.MCP.FaultServer do
     }
 
     conn
-    |> put_resp_header("mcp-session-id", @session_id)
+    |> put_resp_header("mcp-session-id", session_id)
     |> json_response(200, %{"jsonrpc" => "2.0", "id" => id, "result" => result})
   end
 
-  defp respond(conn, %{"method" => "notifications/initialized"}, _fault) do
+  defp respond(conn, %{"method" => "notifications/initialized"}, _fault, _session_id) do
     send_resp(conn, 202, "")
   end
 
-  defp respond(conn, %{"method" => "tools/list", "id" => id}, _fault) do
+  defp respond(conn, %{"method" => "tools/list", "id" => id}, _fault, _session_id) do
     tool = %{
       "name" => "fault_tool",
       "inputSchema" => %{"type" => "object", "additionalProperties" => false}
@@ -85,7 +87,7 @@ defmodule Vxpipe.MCP.FaultServer do
     })
   end
 
-  defp respond(conn, %{"method" => "tools/call", "id" => id}, :remote_error) do
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :remote_error, _session_id) do
     json_response(conn, 200, %{
       "jsonrpc" => "2.0",
       "id" => id,
@@ -96,7 +98,7 @@ defmodule Vxpipe.MCP.FaultServer do
     })
   end
 
-  defp respond(conn, %{"method" => "tools/call"}, :wrong_id) do
+  defp respond(conn, %{"method" => "tools/call"}, :wrong_id, _session_id) do
     json_response(conn, 200, %{
       "jsonrpc" => "2.0",
       "id" => "unrelated-request",
@@ -104,13 +106,13 @@ defmodule Vxpipe.MCP.FaultServer do
     })
   end
 
-  defp respond(conn, %{"method" => "tools/call"}, :malformed) do
+  defp respond(conn, %{"method" => "tools/call"}, :malformed, _session_id) do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(200, "{not-json")
   end
 
-  defp respond(conn, %{"method" => "tools/call", "id" => id}, :unsupported) do
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :unsupported, _session_id) do
     json_response(conn, 200, %{
       "jsonrpc" => "2.0",
       "id" => id,
@@ -118,7 +120,7 @@ defmodule Vxpipe.MCP.FaultServer do
     })
   end
 
-  defp respond(conn, %{"method" => "tools/call", "id" => id}, :compressed) do
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :compressed, _session_id) do
     payload = success_payload(id, "compressed")
 
     conn
@@ -126,21 +128,21 @@ defmodule Vxpipe.MCP.FaultServer do
     |> json_response(200, payload)
   end
 
-  defp respond(conn, %{"method" => "tools/call", "id" => id}, :chunked_oversized) do
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :chunked_oversized, _session_id) do
     id
     |> success_payload(String.duplicate("x", 1_500))
     |> Jason.encode!()
     |> then(&send_chunked_payload(conn, "application/json", &1))
   end
 
-  defp respond(conn, %{"method" => "tools/call", "id" => id}, :sse_oversized) do
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :sse_oversized, _session_id) do
     event =
       "event: message\ndata: #{Jason.encode!(success_payload(id, String.duplicate("x", 1_500)))}\n\n"
 
     send_chunked_payload(conn, "text/event-stream", event)
   end
 
-  defp respond(conn, %{"method" => "tools/call", "id" => id}, :slow) do
+  defp respond(conn, %{"method" => "tools/call", "id" => id}, :slow, _session_id) do
     receive do
       :release_fault_response -> json_response(conn, 200, success_payload(id, "late"))
     after
@@ -148,7 +150,8 @@ defmodule Vxpipe.MCP.FaultServer do
     end
   end
 
-  defp respond(_conn, %{"method" => "tools/call"}, :disconnect), do: exit(:shutdown)
+  defp respond(_conn, %{"method" => "tools/call"}, :disconnect, _session_id),
+    do: exit(:shutdown)
 
   defp json_response(conn, status, payload) do
     conn

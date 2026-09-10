@@ -10,11 +10,13 @@ defmodule Vxpipe.MCP.FaultClient do
     deadline_ms = Keyword.get(opts, :deadline_ms, @default_deadline_ms)
     max_response_bytes = Keyword.get(opts, :max_response_bytes, @default_limit)
     max_stream_buffer_bytes = Keyword.get(opts, :max_stream_buffer_bytes, @default_limit)
+    use_sse? = Keyword.get(opts, :use_sse, false)
     {:ok, key} = connection_key(fault)
 
     {:ok, connection} =
       Connections.open_loopback_test(key,
         endpoint: endpoint,
+        use_sse: use_sse?,
         limits: [
           max_response_bytes: max_response_bytes,
           max_stream_buffer_bytes: max_stream_buffer_bytes,

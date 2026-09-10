@@ -48,7 +48,8 @@ defmodule Vxpipe.MCP.WireLimitTest do
         FaultClient.invoke(CumulativeSSEServer.endpoint(server), :cumulative_sse_oversized,
           deadline_ms: 5_000,
           max_response_bytes: @response_limit,
-          max_stream_buffer_bytes: @response_limit
+          max_stream_buffer_bytes: @response_limit,
+          use_sse: true
         )
       end)
 

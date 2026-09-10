@@ -14,6 +14,7 @@ defmodule Vxpipe.MCP.ClientOptions do
           | :https_required
           | :invalid_endpoint
           | :invalid_reconnect
+          | :invalid_sse_mode
           | :loopback_required
           | TransportOptions.error()
 
@@ -22,7 +23,7 @@ defmodule Vxpipe.MCP.ClientOptions do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_production_endpoint(endpoint),
          {:ok, transport_options} <- TransportOptions.build(config) do
-      {:ok, options(endpoint, config, transport_options, true)}
+      {:ok, options(endpoint, config, transport_options, true, true)}
     end
   end
 
@@ -36,8 +37,9 @@ defmodule Vxpipe.MCP.ClientOptions do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_loopback_endpoint(endpoint),
          {:ok, reconnect?} <- loopback_reconnect(config),
+         {:ok, use_sse?} <- loopback_sse(config),
          {:ok, transport_options} <- TransportOptions.build(config) do
-      {:ok, options(endpoint, config, transport_options, reconnect?)}
+      {:ok, options(endpoint, config, transport_options, reconnect?, use_sse?)}
     end
   end
 
@@ -84,6 +86,13 @@ defmodule Vxpipe.MCP.ClientOptions do
     end
   end
 
+  defp loopback_sse(config) do
+    case Keyword.get(config, :use_sse, true) do
+      use_sse? when is_boolean(use_sse?) -> {:ok, use_sse?}
+      _invalid -> {:error, :invalid_sse_mode}
+    end
+  end
+
   defp loopback_host?(host) do
     normalized = String.downcase(host)
 
@@ -94,7 +103,7 @@ defmodule Vxpipe.MCP.ClientOptions do
     end
   end
 
-  defp options(endpoint, config, transport_options, reconnect?) do
+  defp options(endpoint, config, transport_options, reconnect?, use_sse?) do
     base = [
       transport: :http,
       url: endpoint,
@@ -105,7 +114,7 @@ defmodule Vxpipe.MCP.ClientOptions do
       protocol_version: @protocol_version,
       retry_policy: [],
       reconnect: reconnect?,
-      use_sse: true
+      use_sse: use_sse?
     ]
 
     Keyword.merge(base, transport_options)

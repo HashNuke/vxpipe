@@ -205,3 +205,34 @@ authorization bindings end with that activation. The Jido projection blocker rem
 Next: the plan startup path still rejects remote bindings because Jido cannot yet project their
 exact dynamic names and schemas through a supported public interface. Continue with independent
 security/lifecycle checks that do not pretend to lift that blocker.
+
+## 2026-09-10 — synchronous HTTP response correlation
+
+- Repeated the Vxpipe wire-failure test and found that the test server's wrong-ID response could be
+  accepted as the current request's successful result. ExMCP parsed the response ID but discarded
+  it in the synchronous HTTP path.
+- Added `fix/http-response-correlation` from upstream `56880c6`. Red: both a JSON-RPC result and an
+  error carrying another request ID were accepted. Green: ExMCP now accepts either envelope only
+  when its ID exactly matches the generated request ID and reports mismatches as non-retryable.
+- Published the isolated fix at `8ae7684`, merged it into the fork's `vxp` branch, and
+  updated the ordered upstream contribution notes in `docs/ex_mcp-fixes.md`.
+- All 12 focused ExMCP result-validation tests, warnings-as-errors compilation, and strict Credo
+  passed. The full upstream suite ran 4,622 tests with two unrelated baseline/environment failures:
+  a local Claude authentication-method expectation and the modern stdio fixture's child Mix process
+  failing to resolve the `:jason` SCM.
+- The ExMCP pre-commit hook initially exposed two unformatted files already on upstream `master`.
+  Added a mechanical prerequisite branch, `chore/format-acp-tests` at `75d1c6b`, whose commit passed
+  the complete hook and 155 focused ACP tests. Merged that prerequisite into every fix branch.
+- Running the complete hook against the `vxp` superset then found an unreachable fallback in the
+  earlier request-budget fix. Removed it on `fix/request-scoped-sse-budgets` at `261bc90`; its commit
+  passed formatting, warnings-as-errors compilation, Credo, Dialyzer, and the skip-tag guard.
+  The corrected `vxp` tip is `0bfd0ae`, and all branch tips are published to `HashNuke/ex_mcp`.
+- Vxpipe pins that exact integration tip. Its three wire-failure scenarios passed 20 randomized
+  repetitions, the MCP child passed 32 tests, and the cumulative SSE reconnection test remained
+  green with the loopback-only stream mode made explicit per fixture.
+- Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency detection, and
+  the complete umbrella suite pass. One initial randomized suite run hit an unrelated persistence
+  teardown race; that focused test then passed ten randomized repetitions and the deterministic
+  full suite passed all application tests against a disposable PostgreSQL instance.
+
+Next: commit the separately verified protocol-client lifecycle checkpoint.

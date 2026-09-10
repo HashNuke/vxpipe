@@ -2,12 +2,12 @@
 
 Status: all fix branches and the `vxp` integration branch are published at
 `HashNuke/ex_mcp`. Vxpipe consumes `vxp` through its public HTTPS URL and locks commit
-`2d31d26`.
+`0bfd0ae`.
 
 ## Purpose
 
 Vxpipe uses ExMCP rather than maintaining a second MCP client. ExMCP 1.3.0 and upstream
-`master` at `56880c6` need four compatibility fixes for Vxpipe's remote-client profile. The
+`master` at `56880c6` need five compatibility fixes for Vxpipe's remote-client profile. The
 fixes live as independently reviewable branches so they can be contributed upstream, while
 `vxp` merges every required fix for Vxpipe to use until compatible upstream releases exist.
 
@@ -18,6 +18,8 @@ The fork does not expand Vxpipe's selected protocol profile. Vxpipe still target
 
 - `upstream` points to `azmaveth/ex_mcp`; `master` follows upstream without Vxpipe patches.
 - `origin` points to the `HashNuke/ex_mcp` fork.
+- `chore/format-acp-tests` is the prerequisite pull request that makes upstream `master` pass
+  its configured repository-wide format gate before any functional fix is proposed.
 - Each `fix/*` branch contains one upstreamable concern and its focused tests.
 - `vxp` is the integration branch used by Vxpipe. It retains merge commits so the source of
   each patch remains visible.
@@ -26,27 +28,35 @@ The fork does not expand Vxpipe's selected protocol profile. Vxpipe still target
 - Upstream changes are merged into `master` and then into the affected fix and integration
   branches without rewriting published history.
 
-Published branch tips, all based on upstream `56880c6`:
+Published branches, all derived from upstream `56880c6`:
 
-| Branch | Commit | Responsibility |
-| --- | --- | --- |
-| `fix/per-client-http-security` | `cbd06dc` | Apply each HTTP client's exact-origin security policy to credential forwarding and user resolution. |
-| `fix/safe-client-diagnostics` | `570f631` | Summarize client/transport failures without rendering nested response, credential, or tool data. |
-| `fix/sse-fragment-parser` | `12ee528` | Preserve incomplete SSE bytes across arbitrary TCP chunk boundaries. |
-| `fix/request-scoped-sse-budgets` | `8add24c` | Enforce cumulative request budgets across complete SSE events and recovery; based on the parser fix. |
-| `vxp` | `2d31d26` | Merge all four fixes for Vxpipe consumption. |
+| Branch | Change commit | Published tip | Responsibility |
+| --- | --- | --- | --- |
+| `chore/format-acp-tests` | `75d1c6b` | `75d1c6b` | Format two upstream ACP tests required by the repository's own pre-commit gate. |
+| `fix/per-client-http-security` | `cbd06dc` | `e9ebab9` | Apply each HTTP client's exact-origin security policy to credential forwarding and user resolution. |
+| `fix/safe-client-diagnostics` | `570f631` | `662ad75` | Summarize client/transport failures without rendering nested response, credential, or tool data. |
+| `fix/http-response-correlation` | `8ae7684` | `1dc9ce2` | Reject synchronous HTTP results and errors whose JSON-RPC ID does not match the request. |
+| `fix/sse-fragment-parser` | `12ee528` | `c2222f6` | Preserve incomplete SSE bytes across arbitrary TCP chunk boundaries. |
+| `fix/request-scoped-sse-budgets` | `8add24c`, `261bc90` | `261bc90` | Enforce request-scoped budgets across complete SSE events and recovery; remove an unreachable fallback found by Dialyzer. |
+| `vxp` | — | `0bfd0ae` | Merge the prerequisite and all five fixes for Vxpipe consumption. |
 
 ## Upstream pull-request order
 
 Submit the changes in this order:
 
-1. `fix/per-client-http-security` is independent and can target upstream `master` directly.
-2. `fix/safe-client-diagnostics` is independent and can target upstream `master` directly.
-   It may be reviewed in parallel with the security fix, but keeping it second gives the
-   upstream discussion one security boundary at a time.
-3. `fix/sse-fragment-parser` targets upstream `master`. It establishes correct incremental
+1. `chore/format-acp-tests` targets upstream `master`. Submit and merge this mechanical change
+   first so every later branch passes ExMCP's configured pre-commit commands without bypassing
+   the format gate.
+2. `fix/per-client-http-security` is independent and can target the newly formatted upstream
+   `master`.
+3. `fix/safe-client-diagnostics` is independent and can target upstream `master`.
+   It may be reviewed in parallel with the security fix, but keeping it immediately after that
+   fix keeps the upstream discussion to one security boundary at a time.
+4. `fix/http-response-correlation` is independent and targets upstream `master`. It establishes
+   that synchronous HTTP responses belong to the request before their result or error is accepted.
+5. `fix/sse-fragment-parser` targets upstream `master`. It establishes correct incremental
    parsing before response accounting relies on complete event boundaries.
-4. `fix/request-scoped-sse-budgets` depends on the parser fix. Open it against the parser
+6. `fix/request-scoped-sse-budgets` depends on the parser fix. Open it against the parser
    branch while that pull request is pending, or wait for the parser pull request to merge
    and then target upstream `master`. Do not present the parser changes twice in review.
 
@@ -68,6 +78,13 @@ HTTP request boundary.
 Failure logs retain the operation and the failure's structural shape, but not nested remote
 values. Tool names in invalid header annotations are fingerprinted. Returned protocol data
 is unchanged; this fix concerns logs, not application error normalization.
+
+### Synchronous HTTP response correlation
+
+Every synchronous JSON-RPC result or error must carry the exact ID generated for its request.
+A response with another ID is rejected as `:response_id_mismatch` with non-retryable delivery
+semantics. Retrying is unsafe because the server may already have performed the requested action;
+accepting the unrelated response would attribute another operation's outcome to the caller.
 
 ### Fragment-safe SSE parsing
 
@@ -92,24 +109,28 @@ the request's POST response and later GET-stream events share the same request b
 - Per-client security: 14 focused tests and 109 transport tests passed.
 - Safe diagnostics: 33 focused client tests passed; the private response sentinel was absent
   from captured logs.
+- Synchronous response correlation: all 12 focused result-validation tests passed, covering both
+  result and error envelopes with mismatched request IDs.
 - SSE parsing: 12 parser tests and 52 related stream tests passed.
 - Request budgets: 57 focused client/HTTP/SSE tests passed.
-- Integrated `vxp`: changed-file formatting, warnings-as-errors compilation, strict Credo,
-  and 95 combined focused tests passed.
-- Vxpipe's lockfile resolves the public `vxp` branch to `2d31d26`. Its default MCP suite
-  passes 27 tests, including exact endpoint-origin construction, request progress-token
+- Integrated `vxp` at `0bfd0ae` passes every configured ExMCP pre-commit command:
+  repository-wide formatting, warnings-as-errors compilation, Credo, Dialyzer, and the staged
+  skip-tag guard. The focused fix suites also pass.
+- Vxpipe's lockfile resolves the public `vxp` branch to `0bfd0ae`. Its default MCP suite
+  passes 32 tests, including exact endpoint-origin construction, request progress-token
   transmission, and cumulative enforcement after `Last-Event-ID` recovery while the
   resumed stream remains open.
 - The pinned official initialization and tool-call scenarios pass 1/1 each, the corrected
   recovery scenario passes 3/3, and the pinned Everything server returns the expected
   `echo` tool result through Vxpipe's wrapper.
-- The full upstream suite ran 4,627 tests with two failures unrelated to the modified MCP
+- The full upstream suite ran 4,622 tests with two failures unrelated to the modified MCP
   paths: a locally available Claude authentication-method list differed from the fixture,
   and the modern stdio fixture could not resolve the `:jason` SCM in its generated Mix
   project.
-- The repository-wide format check is independently red on two unchanged upstream Codex test
-  files. Changed files pass `mix format --check-formatted`; the response-budget commit used
-  `--no-verify` only because the upstream pre-commit hook invokes the already-red global gate.
+- The formatting prerequisite passes its complete pre-commit hook and 155 focused ACP tests. The
+  subsequent response-budget cleanup also passed the complete hook before it was committed. Every
+  published fix branch now contains the prerequisite, and the `vxp` superset passes the same full
+  hook commands without exceptions.
 
 ## Removal policy
 
