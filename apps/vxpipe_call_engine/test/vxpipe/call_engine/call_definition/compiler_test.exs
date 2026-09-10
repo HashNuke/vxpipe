@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     CapabilitySelection,
     ConnectionIntent,
     Participant,
+    ToolSelection,
     ToolVisibility
   }
 
@@ -87,7 +88,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
          definition_input(),
          [:participants, "reception", :tools, "get_current_time", :type],
          "mcp"
-       ), ["participants", "reception", "tools", "get_current_time", "type"]},
+       ), ["participants", "reception", "tools", "get_current_time", "integration"]},
       {put_in(
          definition_input(),
          [:participants, "reception", :tools],
@@ -109,6 +110,45 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
       assert details["path"] == path
       refute inspect(details) =~ "do-not-echo-me"
     end
+  end
+
+  test "parses a remote MCP operation under its model-visible local alias" do
+    input =
+      put_in(
+        definition_input(),
+        [:participants, "reception", :tools],
+        %{
+          "customer_lookup" => %{
+            type: "mcp",
+            integration: "records",
+            tool: "lookup_customer"
+          }
+        }
+      )
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "support", revision: 7)
+
+    assert %ToolSelection{
+             name: "customer_lookup",
+             type: :mcp,
+             integration: "records",
+             tool: "lookup_customer"
+           } = definition.participants["reception"].tools["customer_lookup"]
+
+    assert {:ok, invocation} =
+             CallInvocation.new(invocation_input(),
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo"
+             )
+
+    assert {:error,
+            %Error{
+              code: :call_definition_resolution_failed,
+              details: %{
+                "path" => ["participants", "reception", "tools", "customer_lookup"]
+              }
+            }} = DefinitionCompiler.compile(definition, invocation, registries())
   end
 
   test "invocation identity comes from trusted options and entry overrides are rejected" do

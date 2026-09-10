@@ -270,6 +270,10 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     end
   end
 
+  defp resolve_tool(%ToolSelection{type: :mcp}, _host_tools, path) do
+    invalid(path, "does not resolve to an available remote MCP tool")
+  end
+
   defp validate_action(name, action, path) do
     if Code.ensure_loaded?(action) and function_exported?(action, :definition, 0) and
          function_exported?(action, :execute, 2) do

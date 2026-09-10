@@ -1,6 +1,6 @@
 # Remote MCP tools in a live call
 
-Status: not implemented. Specification updated after the 2026-09-08 released-package
+Status: implementation in progress. Specification updated after the 2026-09-08 released-package
 investigation. This slice owns an explicit implementation blocker: a supported public
 Jido AI runtime-tool interface preserving exact local names/schemas and private execution
 bindings. ExMCP conformance alone does not resolve it.
@@ -96,8 +96,19 @@ No local/stdio MCP, per-call credentials, automatic retry/idempotency, explicit 
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Milestone completion evidence is incomplete. Do not mark this slice complete because its
+definition boundary has started or its specification has been reviewed.
+
+### Implementation progress
+
+- [x] The call-definition parser accepts an MCP selection as a model-visible local alias
+  containing only `integration` and remote `tool` identifiers. It rejects configuration and
+  credentials through the closed input grammar. An unresolved MCP selection now fails at its
+  exact participant/tool path instead of raising. Focused compiler tests pass 11/11 and the
+  call-engine child passes 182 tests with two tagged integrations excluded. This establishes
+  the authoring boundary only; scoped catalog resolution and live execution remain unchecked.
+- [ ] Resolve and pin an authorized tenant/application catalog entry into the immutable plan.
+- [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review
 

@@ -4,9 +4,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
   alias Vxpipe.CallEngine.DefinitionValidation
 
   @enforce_keys [:name, :type, :tool]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [:integration]
 
-  @type t :: %__MODULE__{name: String.t(), type: :host, tool: String.t()}
+  @type t :: %__MODULE__{
+          name: String.t(),
+          type: :host | :mcp,
+          tool: String.t(),
+          integration: nil | String.t()
+        }
 
   def new(name, value, path) do
     code = :invalid_call_definition
@@ -15,14 +20,46 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
     with {:ok, name} <- DefinitionValidation.identifier(name, code, message, path),
          :ok <- reject_reserved(name, code, message, path),
          {:ok, input} <-
-           DefinitionValidation.normalize_map(value, [:type, :tool], code, message, path),
+           DefinitionValidation.normalize_map(
+             value,
+             [:type, :tool, :integration],
+             code,
+             message,
+             path
+           ),
          {:ok, type_input} <- DefinitionValidation.fetch(input, :type, code, message, path),
          {:ok, type} <-
-           DefinitionValidation.enum(type_input, [host: "host"], code, message, path ++ ["type"]),
+           DefinitionValidation.enum(
+             type_input,
+             [host: "host", mcp: "mcp"],
+             code,
+             message,
+             path ++ ["type"]
+           ),
          {:ok, tool_input} <- DefinitionValidation.fetch(input, :tool, code, message, path),
          {:ok, tool} <-
-           DefinitionValidation.identifier(tool_input, code, message, path ++ ["tool"]) do
-      {:ok, %__MODULE__{name: name, type: type, tool: tool}}
+           DefinitionValidation.identifier(tool_input, code, message, path ++ ["tool"]),
+         {:ok, integration} <- integration(type, input, code, message, path) do
+      {:ok, %__MODULE__{name: name, type: type, tool: tool, integration: integration}}
+    end
+  end
+
+  defp integration(:mcp, input, code, message, path) do
+    with {:ok, value} <- DefinitionValidation.fetch(input, :integration, code, message, path) do
+      DefinitionValidation.identifier(value, code, message, path ++ ["integration"])
+    end
+  end
+
+  defp integration(:host, input, code, message, path) do
+    if Map.has_key?(input, :integration) do
+      DefinitionValidation.invalid(
+        code,
+        message,
+        path ++ ["integration"],
+        "is only supported for MCP tools"
+      )
+    else
+      {:ok, nil}
     end
   end
 
