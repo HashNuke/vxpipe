@@ -452,7 +452,9 @@ evidence that this production concern is solved.
   call engine 181/0, Calls 35/0, Persistence 25/0, Gateway 66/0, and Console 55/0 before a
   test-only SRP refactor of the recovery fixture. Subsequent exact-state root runs twice
   timed out waiting for the same unrelated asynchronous call-variable archive assertion;
-  its focused rerun passed with the same seed. The suite used the local PostgreSQL Unix
-  socket and a temporary build path because the shared test build had stalled compiling
-  Mint. The project-owned archive-test synchronization issue and milestone-wide operational
-  visibility remain.
+  its focused rerun passed with the same seed. Investigation found that the test's capacity
+  of four could be occupied by its baseline and three startup facts before the update was
+  offered. Raising only that non-overflow fixture's capacity to eight removed the scheduling
+  race, and the next complete root suite passed every child. The suite used the local
+  PostgreSQL Unix socket and a temporary build path because the shared test build had stalled
+  compiling Mint. Milestone-wide operational visibility remains.

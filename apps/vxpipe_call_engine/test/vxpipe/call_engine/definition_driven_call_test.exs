@@ -619,7 +619,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    handoff = open_archive()
+    handoff = open_archive(maximum_pending_facts: 8)
     archive_monitor = Process.monitor(handoff.subscriber)
 
     assert {:ok, room} = CallEngine.start_call(plan, archive_handoff: handoff)
@@ -1170,7 +1170,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     compile_plan_from(room_id, input, profiles, options)
   end
 
-  defp open_archive(options \\ []) do
+  defp open_archive(options) do
     options = archive_options(options)
 
     assert {:ok, handoff} = ArchiveSupervisor.open(options)

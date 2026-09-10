@@ -221,13 +221,14 @@ Implementation evidence:
   rejected because its locked SDK supports only revisions through `2025-06-18`.
 - The fork-adoption checkpoint passes root formatting, warnings-as-errors compilation,
   strict Credo over 299 files, the unused-dependency check, and the final MCP suite at 27/0
-  (three network integrations excluded). One complete umbrella run also passed every child
-  before the recovery fixture's test-only SRP refactor. Subsequent exact-state root runs
-  exposed a pre-existing call-engine archive assertion that intermittently misses its
-  five-second test deadline; the same test passes alone. That project-owned root-suite issue
-  remains open rather than being represented as a completed common gate. Tests used an
-  isolated build directory only after the ordinary shared test build reproducibly stopped
-  making progress while compiling Mint. No sample UI changed in this checkpoint.
+  (three network integrations excluded). Exact-state root runs exposed a pre-existing
+  call-engine archive test whose capacity-four fixture could drop its fifth startup/update
+  item under load. A separate test-hygiene checkpoint raised only that non-overflow fixture's
+  capacity; the dedicated overflow contract remains unchanged. The complete umbrella suite
+  then passed MCP 27/0, call engine 181/0, Calls 35/0, Persistence 25/0, Gateway 66/0, and
+  Console 55/0. Tests used an isolated build directory only after the ordinary shared test
+  build reproducibly stopped making progress while compiling Mint. No sample UI changed in
+  this checkpoint.
 
 ## Specification review
 
