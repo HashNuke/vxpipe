@@ -63,8 +63,21 @@ No human bridge, arbitrary dialing, named transfers, graph/on_success hooks, gen
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation remains partial; do not mark this slice complete because its specification has
+been reviewed or because the compiler boundary below exists.
+
+Partial implementation evidence (2026-09-10): schema `20260910.04` accepts unique, non-empty
+definition-local agent transfer refs and rejects malformed, duplicate, missing, self, and human
+destinations with indexed paths. The compiler derives one `transfer` descriptor only for a
+non-empty list, keeps runtime participant/activation identities in its private binding, projects
+only safe refs/descriptions, validates the destination with a closed JSON Schema, applies the
+ordinary participant-local visibility override, and pins conversation admission to `blocking`.
+Both conversation modes retain the common independently supervised worker contract; this derived
+tool adds no inline execution route. Authored `transfer` aliases remain reserved. `PlanStartup`
+still rejects all transfer-enabled plans, so this checkpoint cannot start a destination or mutate
+room control before the prepare/commit implementation exists. Four focused transfer compiler tests,
+the 18-test compiler/descriptor/startup group, and the complete 263-test Call Engine suite passed;
+Calls, Gateway, and Console passed 36, 66, and 57 tests respectively.
 
 ## Specification review
 

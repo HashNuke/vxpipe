@@ -1437,7 +1437,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       if speech?, do: %{text_to_speech: text_to_speech_profile}, else: %{}
 
     %{
-      schema_version: "20260910.03",
+      schema_version: "20260910.04",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},

@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding, as: TransferBinding
 
   @derive {Inspect, only: [:name, :conversation_mode]}
   @enforce_keys [:name, :conversation_mode, :handler]
@@ -13,6 +14,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   @type handler ::
           {:host, module()}
           | {:platform, module()}
+          | {:participant_transfer, TransferBinding.t()}
           | {:call_variables, VariablesBinding.t()}
           | {:remote_mcp, GenServer.server()}
   @type t :: %__MODULE__{
@@ -64,6 +66,24 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   end
 
   def from_resolved(%ToolBinding{}), do: {:error, :invalid_binding}
+
+  @spec from_participant_transfer(ToolBinding.t()) ::
+          {:ok, t()} | {:error, :invalid_binding}
+  def from_participant_transfer(%ToolBinding{
+        name: "transfer",
+        type: :participant_transfer,
+        conversation_mode: :blocking,
+        transfer: %TransferBinding{} = binding
+      }) do
+    {:ok,
+     %__MODULE__{
+       name: "transfer",
+       conversation_mode: :blocking,
+       handler: {:participant_transfer, binding}
+     }}
+  end
+
+  def from_participant_transfer(%ToolBinding{}), do: {:error, :invalid_binding}
 
   @spec from_remote(ToolBinding.t(), GenServer.server()) ::
           {:ok, t()} | {:error, :invalid_binding}
@@ -117,6 +137,13 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
     is_binary(name) and name != "" and conversation_mode in [:blocking, :non_blocking] and
       is_atom(action) and Code.ensure_loaded?(action) and function_exported?(action, :execute, 2)
   end
+
+  def valid?(%__MODULE__{
+        name: "transfer",
+        conversation_mode: :blocking,
+        handler: {:participant_transfer, %TransferBinding{}}
+      }),
+      do: true
 
   def valid?(%__MODULE__{
         name: name,

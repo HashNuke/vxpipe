@@ -13,7 +13,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260910.03"
+  @schema_version "20260910.04"
   @fields [
     :schema_version,
     :name,
@@ -93,6 +93,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
            DefinitionValidation.fetch(input, :participants, code, message, []),
          {:ok, participants} <- participants(participants_input, code, message),
          :ok <- validate_entries(entry_caller, entry_receiver, participants, code, message),
+         :ok <- validate_transfers(participants, code, message),
          :ok <- validate_variable_permissions(participants, call_variables, code, message),
          {:ok, tool_visibility} <-
            ToolVisibility.new(
@@ -240,6 +241,55 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, duration} <- duration(input, code, message) do
       {:ok, duration}
     end
+  end
+
+  defp validate_transfers(participants, code, message) do
+    participants
+    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
+    |> Enum.reduce_while(:ok, fn {_definition_key, participant}, :ok ->
+      case validate_transfer_targets(participant, participants, code, message) do
+        :ok -> {:cont, :ok}
+        {:error, _error} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp validate_transfer_targets(participant, participants, code, message) do
+    participant.transfers
+    |> Enum.with_index()
+    |> Enum.reduce_while(:ok, fn {target, index}, :ok ->
+      path = ["participants", participant.definition_key, "transfers", Integer.to_string(index)]
+
+      result =
+        case Map.fetch(participants, target) do
+          :error ->
+            DefinitionValidation.invalid(code, message, path, "must reference a participant")
+
+          {:ok, _destination} when target == participant.definition_key ->
+            DefinitionValidation.invalid(
+              code,
+              message,
+              path,
+              "must reference another participant"
+            )
+
+          {:ok, %{kind: :agent}} ->
+            :ok
+
+          {:ok, _destination} ->
+            DefinitionValidation.invalid(
+              code,
+              message,
+              path,
+              "must reference an agent participant in this schema subset"
+            )
+        end
+
+      case result do
+        :ok -> {:cont, :ok}
+        {:error, _error} = error -> {:halt, error}
+      end
+    end)
   end
 
   defp validate_variable_permissions(participants, call_variables, code, message) do

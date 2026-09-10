@@ -6,6 +6,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.{Definition, InvocationBinding}
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding, as: TransferBinding
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
 
   @spec compile(%{optional(String.t()) => ToolBinding.t()}) ::
@@ -102,6 +104,32 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
              name: name,
              description: remote.description,
              input_schema: remote.input_schema,
+             binding: binding
+           ) do
+      {:ok, descriptor}
+    else
+      _invalid -> {:error, :invalid_tool_binding}
+    end
+  rescue
+    _exception -> {:error, :invalid_tool_binding}
+  end
+
+  defp descriptor(
+         %ToolBinding{
+           name: "transfer",
+           type: :participant_transfer,
+           transfer: %TransferBinding{} = transfer
+         } = resolved,
+         _remote_owner
+       ) do
+    with {:ok, binding} <- InvocationBinding.from_participant_transfer(resolved),
+         %Definition{description: description, parameters: parameters} <-
+           ParticipantTransfer.definition(transfer),
+         {:ok, descriptor} <-
+           ToolDescriptor.new(
+             name: "transfer",
+             description: description,
+             input_schema: parameters,
              binding: binding
            ) do
       {:ok, descriptor}

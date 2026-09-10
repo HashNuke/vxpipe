@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.CurrentTime
 
-  @schema_version "20260910.03"
+  @schema_version "20260910.04"
 
   test "Elixir and JSON inputs produce the same typed definition" do
     input = definition_input()
@@ -105,7 +105,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
          %{record_audio: false}
        ), ["participants", "reception", "while_present"]},
       {put_in(definition_input(), [:participants, "reception", :transfers], ["caller"]),
-       ["participants", "reception", "transfers"]}
+       ["participants", "reception", "transfers", "0"]}
     ]
 
     for {input, path} <- cases do

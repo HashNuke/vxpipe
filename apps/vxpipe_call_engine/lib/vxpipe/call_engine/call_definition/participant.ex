@@ -231,14 +231,37 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     DefinitionValidation.invalid(code, message, path ++ ["tools"], "must be an object")
   end
 
-  defp transfers([], _code, _message, _path), do: {:ok, []}
+  defp transfers(value, code, message, path) when is_list(value) do
+    value
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, [], MapSet.new()}, fn {target, index}, {:ok, targets, seen} ->
+      target_path = path ++ ["transfers", Integer.to_string(index)]
+
+      case DefinitionValidation.identifier(target, code, message, target_path) do
+        {:ok, target} ->
+          if MapSet.member?(seen, target) do
+            {:halt,
+             DefinitionValidation.invalid(code, message, target_path, "must not be duplicated")}
+          else
+            {:cont, {:ok, [target | targets], MapSet.put(seen, target)}}
+          end
+
+        {:error, _error} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, targets, _seen} -> {:ok, Enum.reverse(targets)}
+      {:error, _error} = error -> error
+    end
+  end
 
   defp transfers(_value, code, message, path) do
     DefinitionValidation.invalid(
       code,
       message,
       path ++ ["transfers"],
-      "must be empty until participant transfers are supported"
+      "must be an array of participant references"
     )
   end
 end

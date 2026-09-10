@@ -17,6 +17,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
+  alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding, as: TransferBinding
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.{
     CallVariables,
@@ -42,7 +43,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          {:ok, host_tools} <- registry(registries, :host_tools),
          {:ok, call_variables} <-
            resolve_call_variables(definition.call_variables, invocation.initial_variables),
-         {:ok, participants} <-
+         {:ok, base_participants} <-
            resolve_participants(
              definition,
              capability_profiles,
@@ -50,6 +51,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
              Map.get(registries, :mcp_integrations),
              invocation.tenant_id
            ),
+         {:ok, participants} <- resolve_transfer_bindings(base_participants),
          {:ok, tool_visibility} <-
            resolve_tool_visibility(
              Keyword.get(options, :tool_visibility, definition.tool_visibility),
@@ -183,6 +185,67 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
       {:ok, %CallVariables{sections: sections}}
     end
+  end
+
+  defp resolve_transfer_bindings(participants) do
+    participants
+    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
+    |> Enum.reduce_while({:ok, participants}, fn {definition_key, participant}, {:ok, acc} ->
+      case transfer_binding(participant, participants) do
+        {:ok, nil} ->
+          {:cont, {:ok, acc}}
+
+        {:ok, binding} ->
+          if Map.has_key?(participant.tools, "transfer") do
+            {:halt,
+             invalid(
+               ["participants", definition_key, "tools", "transfer"],
+               "collides with the generated transfer tool"
+             )}
+          else
+            transfer_tool = %ToolBinding{
+              name: "transfer",
+              type: :participant_transfer,
+              conversation_mode: :blocking,
+              action: nil,
+              remote: nil,
+              transfer: binding
+            }
+
+            updated = %{
+              participant
+              | tools: Map.put(participant.tools, "transfer", transfer_tool)
+            }
+
+            {:cont, {:ok, Map.put(acc, definition_key, updated)}}
+          end
+      end
+    end)
+  end
+
+  defp transfer_binding(%ResolvedCallPlan.Participant{transfers: []}, _participants),
+    do: {:ok, nil}
+
+  defp transfer_binding(%ResolvedCallPlan.Participant{} = source, participants) do
+    targets =
+      Map.new(source.transfers, fn definition_key ->
+        destination = Map.fetch!(participants, definition_key)
+
+        {definition_key,
+         %{
+           definition_key: definition_key,
+           participant_id: destination.participant_id,
+           description: destination.description
+         }}
+      end)
+
+    {:ok,
+     %TransferBinding{
+       source_definition_key: source.definition_key,
+       source_participant_id: source.participant_id,
+       source_activation_id: source.activation_id,
+       targets: targets
+     }}
   end
 
   defp validate_initial_variables(sections, initial_variables) do

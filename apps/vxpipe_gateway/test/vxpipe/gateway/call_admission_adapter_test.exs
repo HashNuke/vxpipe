@@ -93,7 +93,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     %ResolvedCallPlan{
       definition_id: unique_id("definition"),
       definition_revision: 1,
-      schema_version: "20260910.03",
+      schema_version: "20260910.04",
       tenant_id: tenant_id,
       actor_id: unique_id("actor"),
       call_id: unique_id("call"),

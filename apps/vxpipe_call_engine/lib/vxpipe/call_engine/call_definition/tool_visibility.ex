@@ -67,7 +67,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolVisibility do
       {tool_key, level_input}, {:ok, acc} when is_binary(tool_key) ->
         path = ["tool_visibility_overrides", participant_key, tool_key]
 
-        if Map.has_key?(participant.tools, tool_key) do
+        if configured_tool?(participant, tool_key) do
           case level(level_input, path) do
             {:ok, visibility} -> {:cont, {:ok, Map.put(acc, tool_key, visibility)}}
             {:error, _error} = error -> {:halt, error}
@@ -88,6 +88,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolVisibility do
   defp tool_levels(participant_key, _value, _participant) do
     invalid(["tool_visibility_overrides", participant_key], "must be an object")
   end
+
+  defp configured_tool?(%Participant{transfers: transfers}, "transfer"), do: transfers != []
+
+  defp configured_tool?(%Participant{tools: tools}, tool_key),
+    do: Map.has_key?(tools, tool_key)
 
   defp level(value, path) do
     DefinitionValidation.enum(value, @levels, @code, @message, path)

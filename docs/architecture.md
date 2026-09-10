@@ -912,6 +912,20 @@ cannot commit an expired attempt; clean up its exact mapped leg without automati
 redial. This is separate from startup readiness and whole-call duration and adds
 no remote-outcome certainty or durable recovery framework.
 
+Schema `20260910.04` implements the authoring and compilation half of this boundary for
+agent-to-agent destinations. Each non-empty, unique `transfers` list must resolve to other agent
+participants in the same definition. Compilation adds one private participant-transfer binding
+under the reserved `transfer` name, captures the source participant/activation and destination
+participant identities outside the model projection, and exposes only destination refs plus their
+safe descriptions in a closed input schema. The generated binding uses the ordinary tool-visibility
+policy and defaults to blocking later caller conversation. It still executes through the same
+activation-owned supervised worker path; blocking does not mean inline execution.
+
+This is not yet a runnable transfer. `PlanStartup` continues to reject every plan with a non-empty
+transfer allowlist until destination preparation, current-source reauthorization, room commit, and
+source teardown are implemented. That fail-closed startup boundary prevents the compiler release
+from silently enabling an incomplete control mutation.
+
 ### Presence-driven media and transcript policy — approved R38
 
 Normal call-wide permissions live in `media_policy`. Each participant's optional
