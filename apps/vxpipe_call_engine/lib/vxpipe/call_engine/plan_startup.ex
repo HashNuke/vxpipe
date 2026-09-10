@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.CallDefinition.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
+  alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
 
@@ -60,7 +61,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text} <- speech_to_text_runtime(caller, plan.opening_audio, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(receiver, options),
-         :ok <- supported_opening_audio(plan.opening_audio, text_to_speech),
+         :ok <- supported_opening_audio(plan.opening_audio, text_to_speech, options),
          {:ok, caller_command} <- participant_command(plan, caller),
          {:ok, receiver_command} <- participant_command(plan, receiver) do
       {:ok,
@@ -235,20 +236,24 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp supported_opening_audio(nil, _text_to_speech), do: :ok
+  defp supported_opening_audio(nil, _text_to_speech, _options), do: :ok
 
   defp supported_opening_audio(
          %OpeningAudio{type: :text},
-         %TextToSpeechRuntime{}
+         %TextToSpeechRuntime{},
+         _options
        ),
        do: :ok
 
-  defp supported_opening_audio(%OpeningAudio{type: :text}, nil) do
+  defp supported_opening_audio(%OpeningAudio{type: :text}, nil, _options) do
     unsupported(["opening_audio"], "text opening audio requires text-to-speech")
   end
 
-  defp supported_opening_audio(%OpeningAudio{type: :file_url}, _text_to_speech) do
-    unsupported(["opening_audio", "type"], "file opening audio is not supported yet")
+  defp supported_opening_audio(%OpeningAudio{type: :file_url}, _text_to_speech, options) do
+    case Keyword.get(options, :opening_audio) do
+      %OpeningAudioSettings{} -> :ok
+      _invalid -> unsupported(["opening_audio"], "file opening audio is not configured")
+    end
   end
 
   defp text_to_speech_runtime(receiver, options) do

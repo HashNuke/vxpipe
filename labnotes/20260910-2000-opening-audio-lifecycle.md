@@ -241,3 +241,30 @@
   56 tests. Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency
   checks passed. The root test command again stopped while creating the Persistence test database
   because this shell has no PostgreSQL password; no credential value was inspected or logged.
+
+## 2026-09-10 — supervised file playback
+
+- The first room-level run failed at the expected boundary: `PlanStartup` still rejected the
+  already-compiled `file_url` source as unsupported.
+- Added a typed, redacted file-playback request and a temporary `OpeningAudio.Player` started only
+  through the room incarnation's capability supervisor. The dedicated process performs asset load
+  and output work; Room Authority retains only correlation, failure, and input-gate decisions.
+- The player supplies mono 48 kHz PCM to the existing sink in chunks of at most 1,920 bytes/20
+  milliseconds. The sink's existing bounded queue and synchronous backpressure pace longer assets
+  without adding an unbounded room mailbox or a second media transport.
+- File playback uses the receiving participant identity for output attribution but requires no TTS
+  capability. Both text and speech input remain closed through fetch, enqueue, start, and progress;
+  only correlated sink completion opens them and permits first-message handling.
+- A fetch/output/worker failure ends the room with the existing safe opening-unavailable reason.
+  The failure test holds the fake fetch until connection startup is complete, then releases a
+  controlled error, proving the fetch runs outside Room Authority and does not block attachment.
+- A second red test exposed that a failure from an otherwise unrelated TTS capability would stop a
+  file opening. File playback now distinguishes its worker from text playback and continues when
+  TTS is unavailable; a text opening retains its required-TTS failure behavior.
+- The focused opening-room file passed 9 tests. The related startup/asset files passed 23 tests,
+  warnings-as-errors compilation and strict Credo passed, and a seeded complete Call Engine run
+  passed 256 tests with 1 integration exclusion. Reusable generated-text/TTS caching remains.
+- Calls passed 36 tests, Gateway passed 66 tests with 4 integration exclusions, and Console passed
+  56 tests. Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency
+  checks passed. The root test command again stopped while creating the Persistence test database
+  because this shell has no PostgreSQL password; no credential value was inspected or logged.

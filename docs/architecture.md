@@ -718,10 +718,13 @@ does not acquire per-call retention. Render timing, cache storage/eviction, and
 source fetching are not selected. Asset preparation itself starts no call tree
 and does not set `started_at`.
 
-The fixed-text runtime now starts synthesis when the entry caller's output sink attaches,
-keeps both text and STT ingress closed, and releases them only on that sink's actual completion
-acknowledgement. Provider or playback failure stops the room. File fetch/format/cache behavior
-remains unavailable and is rejected before room registration until its bounded policy lands.
+The fixed-text runtime starts synthesis when the entry caller's output sink attaches. HTTPS-file
+sources instead start a temporary worker under the room capability supervisor, independent of TTS.
+That worker performs the bounded tenant-scoped load and supplies PCM chunks of at most 20
+milliseconds through the existing output backpressure boundary. Both forms keep text and STT
+ingress closed and release
+them only on that sink's actual completion acknowledgement. Provider, asset, worker, or playback
+failure stops the room. File retrieval never runs in Room Authority.
 
 This is an initial-call barrier, separate from each agent's greeting and from
 transfer behavior. Notices for later joiners are not selected here. Record `started_at` at actual live-call start, not at notice

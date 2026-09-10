@@ -12,13 +12,14 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     TestAgentRuntimeModelProvider,
     TestAudioOutputSink,
     TestCallLifecycleTimer,
+    TestOpeningAudioFetcher,
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
-  alias Vxpipe.CallEngine.CallDefinition.OpeningAudio, as: OpeningSource
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.OpeningAudio.{AssetCache, Download}
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
   alias Vxpipe.AgentRuntime.ModelResponse
@@ -133,35 +134,146 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_call_lifecycle_timer_scheduled, _idle_timer, 15_000}
   end
 
-  test "rejects unsupported opening playback before registering a room" do
+  test "plays a file opening through a supervised room worker without text-to-speech" do
+    configure_speech_runtime()
+
+    configure_opening_audio(
+      {:ok, %Download{body: wave(<<1, 0, 2, 0>>), content_type: "audio/wav"}}
+    )
+
+    url = "https://assets.example.test/opening.wav"
+    plan = compile_plan(opening_audio: %{type: "file_url", url: url})
+    plan = without_receiver_text_to_speech(plan)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    refute_receive {:test_tts_transport_started, _transport, _connection}
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-file-opening")
+
+    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert_receive {:test_stt_transport_started, stt_transport, _connection}
+    assert_receive {:test_opening_audio_fetch, ^url, _limits}
+
+    assert_receive {:test_audio_output, ^sink, frame}
+    assert frame.participant_id == receiver.participant_id
+    assert frame.connection_id == "conn-file-opening"
+    assert frame.payload == <<1, 0, 2, 0>>
+    assert_receive {:test_audio_output_finish, ^sink, correlation_id}
+
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+
+    assert :ok =
+             CallEngine.push_audio(
+               attachment,
+               audio_frame(plan, room, caller, 1, "conn-file-opening")
+             )
+
+    refute_receive {:test_stt_audio, ^stt_transport, _audio}
+
+    assert :ok = TestAudioOutputSink.playback_started(sink)
+    assert :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_eventually_open(plan)
+
+    assert is_binary(correlation_id)
+
+    assert :ok =
+             CallEngine.push_audio(
+               attachment,
+               audio_frame(plan, room, caller, 2, "conn-file-opening")
+             )
+
+    assert_receive {:test_stt_audio, ^stt_transport, <<2>>}
+  end
+
+  test "continues file opening when an unrelated text-to-speech capability fails" do
+    configure_speech_runtime()
+    test = self()
+
+    configure_opening_audio(fn ->
+      send(test, {:test_opening_audio_waiting, self()})
+
+      receive do
+        :release_opening_audio ->
+          {:ok, %Download{body: wave(<<1, 0, 2, 0>>), content_type: "audio/wav"}}
+      end
+    end)
+
+    plan =
+      compile_plan(
+        opening_audio: %{
+          type: "file_url",
+          url: "https://assets.example.test/opening-with-tts.wav"
+        }
+      )
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-file-opening-tts-failure")
+    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert_receive {:test_opening_audio_waiting, worker}
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      ~s({"type":"Error","request_id":"req","code":"MESSAGE_INVALID"})
+    )
+
+    send(worker, :release_opening_audio)
+    assert_receive {:test_audio_output, ^sink, _frame}
+    assert_receive {:test_audio_output_finish, ^sink, _correlation_id}
+    assert :ok = TestAudioOutputSink.playback_started(sink)
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_eventually_open(plan)
+    refute_receive {:DOWN, _room_monitor, :process, _room_authority, _reason}
+    assert is_reference(attachment.room_monitor)
+  end
+
+  test "ends the room when a required file opening cannot be loaded" do
+    configure_speech_runtime()
+    test = self()
+
+    configure_opening_audio(fn ->
+      send(test, {:test_opening_audio_waiting, self()})
+
+      receive do
+        :fail_opening_audio -> {:error, :unavailable}
+      end
+    end)
+
+    plan =
+      compile_plan(
+        opening_audio: %{
+          type: "file_url",
+          url: "https://assets.example.test/missing.wav"
+        }
+      )
+      |> without_receiver_text_to_speech()
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-file-opening-failure")
+    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert_receive {:test_opening_audio_waiting, worker}
+    send(worker, :fail_opening_audio)
+
+    assert_receive {:DOWN, room_monitor, :process, _room_authority, :opening_audio_unavailable}
+    assert room_monitor == attachment.room_monitor
+  end
+
+  test "rejects text opening without text-to-speech before registering a room" do
     configure_speech_runtime()
     plan = compile_plan()
-
-    file_plan = %{
-      plan
-      | opening_audio: %OpeningSource{
-          type: :file_url,
-          text: nil,
-          url: "https://assets.example.test/opening.wav"
-        }
-    }
-
-    assert {:error,
-            %Error{
-              code: :unsupported_call_plan,
-              details: %{"path" => ["opening_audio", "type"]}
-            }} = CallEngine.start_call(file_plan)
-
-    assert Registry.lookup(
-             Vxpipe.CallEngine.RoomRegistry,
-             {file_plan.tenant_id, file_plan.room_id}
-           ) == []
-
-    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
-    capabilities = %{receiver.capabilities | text_to_speech: nil}
-    receiver = %{receiver | capabilities: capabilities}
-    participants = Map.put(plan.participants, plan.entry_receiver, receiver)
-    no_tts_plan = %{plan | participants: participants}
+    no_tts_plan = without_receiver_text_to_speech(plan)
 
     assert {:error,
             %Error{
@@ -360,13 +472,13 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     command
   end
 
-  defp audio_frame(plan, room, caller, sequence_number) do
+  defp audio_frame(plan, room, caller, sequence_number, connection_id \\ "conn-opening") do
     %AudioFrame{
       tenant_id: plan.tenant_id,
       room_id: plan.room_id,
       incarnation_id: room.incarnation_id,
       participant_id: caller.participant_id,
-      connection_id: "conn-opening",
+      connection_id: connection_id,
       track_id: "track-opening",
       codec: :opus,
       sample_rate: 48_000,
@@ -414,6 +526,52 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_audio_output_finish, ^sink, _turn_id}
     :ok = TestAudioOutputSink.playback_started(sink)
     :ok = TestAudioOutputSink.playback_completed(sink)
+  end
+
+  defp configure_opening_audio(response) do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    cache = start_supervised!({AssetCache, maximum_entries: 2, maximum_bytes: 256})
+
+    opening_audio = [
+      cache: cache,
+      fetcher: {TestOpeningAudioFetcher, [observer: self(), response: response]},
+      maximum_bytes: 256,
+      maximum_duration_ms: 1_000,
+      timeout_ms: 1_000
+    ]
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(original, :opening_audio, opening_audio)
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+  end
+
+  defp without_receiver_text_to_speech(plan) do
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    capabilities = %{receiver.capabilities | text_to_speech: nil}
+    receiver = %{receiver | capabilities: capabilities}
+    participants = Map.put(plan.participants, plan.entry_receiver, receiver)
+    %{plan | participants: participants}
+  end
+
+  defp wave(pcm) do
+    format =
+      <<1::little-16, 1::little-16, 48_000::little-32, 96_000::little-32, 2::little-16,
+        16::little-16>>
+
+    body =
+      "fmt " <>
+        <<byte_size(format)::little-32>> <>
+        format <>
+        "data" <>
+        <<byte_size(pcm)::little-32>> <> pcm
+
+    "RIFF" <> <<byte_size(body) + 4::little-32>> <> "WAVE" <> body
   end
 
   defp configure_speech_runtime do

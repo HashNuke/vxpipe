@@ -23,7 +23,7 @@ A caller hears optional configured opening audio before normal conversation. The
 - [x] Red-test wait/fixed/generated first-message modes with controllable model/media fakes.
 - [x] Red-test readiness and maximum-duration clocks with a controllable timer fake.
 - [x] Red-test caller-idle clocks and suppression with a controllable timer fake.
-- [ ] Red-test file playback with controllable time/media fakes.
+- [x] Red-test file playback with controllable time/media fakes.
 - [x] Define and validate the closed text/HTTPS-file opening source encoding and pin it into the immutable call plan.
 - [x] Define bounded file fetch, accepted audio format, cache, and safe runtime failure behavior before adding file playback.
 - [ ] Implement bounded file/TTS asset preparation and tenant-safe cache; keep reusable assets distinct from per-call recording retention.
@@ -76,9 +76,9 @@ red runs. The runtime outcome is not complete.
 The fixed-text runtime starts only after the entry caller attaches an output sink. Its focused
 test proves that early audio never reaches STT, early text is rejected, provider/enqueue/start/
 progress do not release input, actual sink completion releases both paths, and provider failure
-ends the room. It also proves unsupported file playback and text without TTS fail before room
-registration. The focused file passed with 3 tests; the broader Call Engine suite passed with
-234 tests and 1 integration exclusion.
+ends the room. At that checkpoint it also proved unsupported file playback and that text without
+TTS fails before room registration. The focused file passed with 3 tests; the broader Call Engine
+suite passed with 234 tests and 1 integration exclusion.
 
 Initial-receiver greeting coverage now proves all three modes. `wait_for_input` emits nothing;
 fixed text is recorded as the exact assistant message and follows the normal text/TTS output
@@ -160,8 +160,20 @@ exact URL, and media-profile revision without retaining the URL.
 The first focused test failed at the missing typed asset. A second red test failed at the missing
 settings/loader boundary, and the cache-supervision test initially found no application-owned
 cache. The completed asset/application files passed 9 tests, and the complete Call Engine suite
-passed with 253 tests and 1 integration exclusion. Runtime worker/playout integration
-remains pending, so this does not yet satisfy the runnable file-opening outcome.
+passed with 253 tests and 1 integration exclusion.
+
+File opening now starts a temporary worker through the room capability supervisor after the entry
+caller attaches its output sink. The worker prepares the tenant-scoped asset outside Room Authority,
+feeds PCM chunks of at most 20 milliseconds through the existing output backpressure boundary,
+and waits for the sink's actual playback completion. A file source does not require a TTS capability.
+Load, output, or worker failure ends the room without opening caller input; unrelated or pre-completion
+playback signals do not release the gate.
+
+The new room test first failed at the runtime's explicit `file_url` rejection. The focused opening
+room file then passed 9 tests, including caller input suppression, sink-completion gating, the
+no-TTS path, independence from an unrelated TTS failure, and a controllable asynchronous load
+failure. A seeded complete Call Engine run passed 256 tests with 1 integration exclusion. Cached
+generated text/TTS assets and the remaining acceptance checks are still pending.
 
 ## Specification review
 

@@ -1,7 +1,7 @@
 # Opening audio contract
 
-Status: fixed-text playback/input gate and the bounded file-asset pipeline are implemented;
-room playback remains in progress.
+Status: fixed-text and HTTPS-file playback/input gating are implemented; reusable generated-text
+audio caching remains in progress.
 
 ## Decision
 
@@ -31,8 +31,8 @@ agent's TTS binding. Normal text and media input remain closed until the output 
 actual playout completion; preparation, synthesis completion, enqueueing, or provider
 readiness do not open the gate. Input received while the gate is closed is discarded rather
 than buffered or replayed. A preparation or playback failure ends the room explicitly and
-never silently opens normal conversation. A text source without a resolved TTS binding and
-the not-yet-supported file source fail validation before a room is registered.
+never silently opens normal conversation. A text source without a resolved TTS binding fails
+validation before a room is registered; file playback is independent of TTS.
 
 ## File asset profile
 
@@ -74,20 +74,23 @@ cannot reuse the entry. Download/preparation failures are not cached.
 ## Implications
 
 The definition parser owns syntax and source safety. The implemented asset layer separates DNS
-resolution/address policy, bounded HTTP fetching, WAV decoding, and cache ownership. A separate
-per-room runtime worker must own preparation and playback. `RoomAuthority` remains the room
-decision owner; it must not absorb fetching, decoding, caching, or lifecycle timer callbacks.
+resolution/address policy, bounded HTTP fetching, WAV decoding, and cache ownership. A temporary
+worker under the room capability supervisor owns file preparation, bounded output, and playback
+tracking. `RoomAuthority` owns only the opening gate and correlated outcome decision; it does not
+fetch, decode, cache, or push file media.
 
 ## Verification
 
 The compiler contract is covered by `opening_audio_compiler_test.exs`: missing runtime type and
 schema-version assertions were observed red first, then 2 focused tests passed. The fixed-text
 runtime is covered by `opening_audio_room_test.exs`: its first run failed because no synthesis was
-started, then 3 tests passed for real playout gating, required-playback failure, and pre-room
-rejection of unsupported sources/configuration. File playback and lifecycle evidence remain
-pending. The asset-pipeline tests first failed because no typed asset existed, then passed with
-5 tests covering strict decode/duration checks, public-address policy, bounded LRU/tenant keys,
-invalid cache limits, and fetch-validate-cache reuse. The complete Call Engine suite passed with
-253 tests and one
+started, then passed for real playout gating, required-playback failure, and pre-room rejection of
+invalid text configuration. The file-room red run failed at the runtime's explicit file rejection;
+the completed focused file passed 9 tests covering the supervised no-TTS file path, independence
+from an unrelated TTS failure, caller input suppression through actual sink completion, and
+controlled preparation failure. The asset-pipeline tests first failed because no typed asset
+existed, then passed with 5 tests covering strict decode/
+duration checks, public-address policy, bounded LRU/tenant keys, invalid cache limits, and fetch-
+validate-cache reuse. The complete Call Engine suite passed with 256 tests and one
 integration exclusion. The production HTTPS fetch path has no live-network assertion in the
 default suite; interoperability belongs in an explicitly tagged integration lane.

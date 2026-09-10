@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.Archive.Handoff
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
+  alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
 
   alias Vxpipe.CallEngine.{
     CallLifecycle,
@@ -37,9 +38,11 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   def start_call(%ResolvedCallPlan{} = plan, options) when is_list(options) do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
       [] ->
-        with :ok <- PlanStartup.validate(plan, plan_startup_options(options)) do
+        with {:ok, opening_audio} <- opening_audio_settings(),
+             runtime_options = Keyword.put(options, :opening_audio, opening_audio),
+             :ok <- PlanStartup.validate(plan, plan_startup_options(runtime_options)) do
           archive = prepare_archive(options)
-          start_planned_room(plan, options, archive)
+          start_planned_room(plan, runtime_options, archive)
         end
 
       [_room] ->
@@ -247,6 +250,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       archive_source_policy: archive.source_policy,
       call_lifecycle: call_lifecycle_options(runtime_options),
       live_inspection: live_inspection_options(),
+      opening_audio: Keyword.fetch!(runtime_options, :opening_audio),
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       remote_mcp_connection_provider:
         Keyword.get(runtime_options, :remote_mcp_connection_provider),
@@ -320,9 +324,30 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       agent_runtime: Keyword.fetch!(settings, :agent_runtime),
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
+      opening_audio: Keyword.fetch!(runtime_options, :opening_audio),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),
       text_to_speech: Keyword.fetch!(settings, :text_to_speech)
     ]
+  end
+
+  defp opening_audio_settings do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    case settings |> Keyword.fetch!(:opening_audio) |> OpeningAudioSettings.new() do
+      {:ok, opening_audio} ->
+        {:ok, opening_audio}
+
+      {:error, _reason} ->
+        {:error,
+         Error.new(
+           :unsupported_call_plan,
+           "The resolved call plan is not supported by this runtime.",
+           details: %{
+             "path" => ["opening_audio"],
+             "reason" => "runtime configuration is invalid"
+           }
+         )}
+    end
   end
 
   defp call_lifecycle_options(runtime_options) do

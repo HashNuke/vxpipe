@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
 
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Media.Ingress
+  alias Vxpipe.CallEngine.OpeningAudio.{FilePlaybackRequest, Player, Settings}
 
   def start_link(options) do
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
@@ -125,6 +126,16 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
       {:error, _reason} = error ->
         error
     end
+  end
+
+  def start_opening_audio(
+        incarnation_id,
+        room_authority,
+        %FilePlaybackRequest{} = request,
+        %Settings{} = settings
+      ) do
+    options = [owner: room_authority, request: request, settings: settings]
+    DynamicSupervisor.start_child(via(incarnation_id), {Player, options})
   end
 
   def stop_capability(incarnation_id, capability) do
