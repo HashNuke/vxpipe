@@ -7,7 +7,7 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
     assert {:ok, options} =
              ClientOptions.build(
                endpoint: "https://mcp.example.test/rpc",
-               headers: [{"authorization", "Bearer private"}]
+               authentication: [type: :bearer, token: "private"]
              )
 
     assert options[:transport] == :http
@@ -29,6 +29,20 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
     assert options[:dns_timeout_ms] == 1_000
     assert options[:timeout] == 5_000
     assert options[:request_timeout] == 30_000
+  end
+
+  test "rejects raw transport headers and invalid authentication before startup" do
+    assert {:error, :invalid_authentication} =
+             ClientOptions.build(
+               endpoint: "https://mcp.example.test/rpc",
+               headers: [{"authorization", "Bearer private"}]
+             )
+
+    assert {:error, :invalid_authentication} =
+             ClientOptions.build(
+               endpoint: "https://mcp.example.test/rpc",
+               authentication: [type: :custom_headers, headers: [{"accept", "text/plain"}]]
+             )
   end
 
   test "rejects plaintext remote endpoints" do

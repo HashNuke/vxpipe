@@ -124,7 +124,10 @@ defmodule Vxpipe.MCP.ConnectionsTest do
       key,
       [
         endpoint: "https://mcp.example.test/rpc",
-        headers: [{"authorization", authorization}]
+        authentication: [
+          type: :custom_headers,
+          headers: [{"authorization", authorization}]
+        ]
       ],
       runtime: ReadyClientRuntime
     )

@@ -84,7 +84,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
       configured!(endpoint,
         client_config: [
           endpoint: endpoint,
-          headers: [{"authorization", "Bearer rejected-credential"}],
+          authentication: [type: :bearer, token: "rejected-credential"],
           use_sse: false
         ]
       )
@@ -162,7 +162,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
         allowed_tools: ["lookup_customer"],
         client_config: [
           endpoint: endpoint,
-          headers: [{"authorization", @authorization}],
+          authentication: [type: :bearer, token: "controlled-tenant-credential"],
           use_sse: false
         ]
       ]

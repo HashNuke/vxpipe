@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.ApplicationConfiguration do
 
   @behaviour Vxpipe.CallEngine.RemoteMCP.ConfigurationSource
 
-  alias Vxpipe.CallEngine.RemoteMCP.ConfiguredIntegration
+  alias Vxpipe.CallEngine.RemoteMCP.{ClientConfiguration, ConfiguredIntegration}
 
   @default_application :vxpipe_call_engine
   @default_key :remote_mcp_integrations
@@ -32,8 +32,10 @@ defmodule Vxpipe.CallEngine.RemoteMCP.ApplicationConfiguration do
   defp build_integrations(configured) do
     configured
     |> Enum.reduce_while({:ok, []}, fn raw, {:ok, integrations} ->
-      case ConfiguredIntegration.new(raw) do
-        {:ok, integration} -> {:cont, {:ok, [integration | integrations]}}
+      with {:ok, integration} <- ConfiguredIntegration.new(raw),
+           :ok <- ClientConfiguration.validate(integration.client_config) do
+        {:cont, {:ok, [integration | integrations]}}
+      else
         {:error, _reason} -> {:halt, {:error, :invalid_remote_mcp_configuration}}
       end
     end)

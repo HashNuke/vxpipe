@@ -24,7 +24,10 @@ defmodule Vxpipe.CallEngine.RemoteMCP.ApplicationConfigurationTest do
         allowed_tools: ["clock"],
         client_config: [
           endpoint: "https://utilities.example.test/mcp",
-          headers: [{"authorization", private_value}]
+          authentication: [
+            type: :custom_headers,
+            headers: [{"authorization", private_value}]
+          ]
         ]
       ],
       [
@@ -81,6 +84,40 @@ defmodule Vxpipe.CallEngine.RemoteMCP.ApplicationConfigurationTest do
                application: :vxpipe_call_engine,
                key: @configuration_key
              )
+  end
+
+  test "rejects client settings that bypass the closed transport and authentication profile" do
+    invalid_client_configs = [
+      [endpoint: "http://utilities.example.test/mcp"],
+      [
+        endpoint: "https://utilities.example.test/mcp",
+        headers: [{"authorization", "private"}]
+      ],
+      [
+        endpoint: "https://utilities.example.test/mcp",
+        authentication: [type: :custom_headers, headers: [{"host", "other.example.test"}]]
+      ]
+    ]
+
+    Enum.each(invalid_client_configs, fn client_config ->
+      Application.put_env(:vxpipe_call_engine, @configuration_key, [
+        [
+          scope: :application,
+          integration_id: "utilities",
+          configuration_generation: "configuration-1",
+          credential_generation: "credential-1",
+          catalog_generation: "catalog-1",
+          allowed_tools: ["clock"],
+          client_config: client_config
+        ]
+      ])
+
+      assert {:error, :invalid_remote_mcp_configuration} =
+               ApplicationConfiguration.fetch(
+                 application: :vxpipe_call_engine,
+                 key: @configuration_key
+               )
+    end)
   end
 
   defp restore_configuration(:not_configured) do

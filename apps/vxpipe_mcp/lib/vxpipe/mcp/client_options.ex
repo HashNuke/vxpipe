@@ -5,13 +5,14 @@ defmodule Vxpipe.MCP.ClientOptions do
   Broader protocol and retry support in ExMCP is intentionally not inherited.
   """
 
-  alias Vxpipe.MCP.TransportOptions
+  alias Vxpipe.MCP.{Authentication, TransportOptions}
 
   @protocol_version "2025-11-25"
 
   @type error ::
           :endpoint_required
           | :https_required
+          | :invalid_authentication
           | :invalid_endpoint
           | :invalid_reconnect
           | :invalid_sse_mode
@@ -22,8 +23,10 @@ defmodule Vxpipe.MCP.ClientOptions do
   def build(config) when is_list(config) do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_production_endpoint(endpoint),
+         :ok <- reject_raw_headers(config),
+         {:ok, headers} <- Authentication.headers(Keyword.get(config, :authentication)),
          {:ok, transport_options} <- TransportOptions.build(config) do
-      {:ok, options(endpoint, config, transport_options, true, true)}
+      {:ok, options(endpoint, headers, config, transport_options, true, true)}
     end
   end
 
@@ -36,10 +39,12 @@ defmodule Vxpipe.MCP.ClientOptions do
   def build_loopback_test(config) when is_list(config) do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_loopback_endpoint(endpoint),
+         :ok <- reject_raw_headers(config),
+         {:ok, headers} <- Authentication.headers(Keyword.get(config, :authentication)),
          {:ok, reconnect?} <- loopback_reconnect(config),
          {:ok, use_sse?} <- loopback_sse(config),
          {:ok, transport_options} <- TransportOptions.build(config) do
-      {:ok, options(endpoint, config, transport_options, reconnect?, use_sse?)}
+      {:ok, options(endpoint, headers, config, transport_options, reconnect?, use_sse?)}
     end
   end
 
@@ -103,11 +108,17 @@ defmodule Vxpipe.MCP.ClientOptions do
     end
   end
 
-  defp options(endpoint, config, transport_options, reconnect?, use_sse?) do
+  defp reject_raw_headers(config) do
+    if Keyword.has_key?(config, :headers),
+      do: {:error, :invalid_authentication},
+      else: :ok
+  end
+
+  defp options(endpoint, headers, config, transport_options, reconnect?, use_sse?) do
     base = [
       transport: :http,
       url: endpoint,
-      headers: Keyword.get(config, :headers, []),
+      headers: headers,
       security: endpoint_security(endpoint),
       allowed_private_hosts: Keyword.get(config, :allowed_private_hosts, []),
       protocol_mode: :legacy_only,

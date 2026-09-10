@@ -25,7 +25,7 @@ defmodule Vxpipe.MCP.TelemetryTest do
                key,
                [
                  endpoint: "https://mcp.example.test/rpc",
-                 headers: [{"authorization", "Bearer private-secret"}]
+                 authentication: [type: :bearer, token: "private-secret"]
                ],
                runtime: ReadyClientRuntime
              )

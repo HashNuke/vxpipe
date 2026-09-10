@@ -564,3 +564,40 @@ crossing the unresolved Jido runtime data-tool boundary.
 
 Next: commit the engine-to-wire checkpoint, then audit the remaining history/client-projection work
 that can proceed without the unresolved Jido data-tool interface.
+
+## 2026-09-10 — closed remote authentication configuration
+
+- The post-wire audit found that `vxpipe_mcp` still accepted arbitrary raw HTTP headers and that
+  the OTP configuration source constructed a redacted integration without validating its
+  production endpoint/authentication profile. Those values would fail only when discovery opened
+  a client, despite the source contract describing a validated complete replacement.
+- Red: the focused MCP tests failed because the authentication parser did not exist and raw
+  headers were still accepted. A Call Engine source test then passed plaintext, raw-header, and
+  transport-header-override profiles; it failed because all three entered the configured source.
+  A bearer-token edge test also proved that padding was accepted in the middle of a token.
+- Green: `Vxpipe.MCP.Authentication` now owns the closed absent/none, bearer, and custom-header
+  grammar. It validates bounded token/header values, normalizes names, rejects case-insensitive
+  duplicates, and prevents credential configuration from overriding transport-owned headers.
+  `ClientOptions` rejects the old raw `:headers` input and receives only normalized authentication
+  headers. Bearer padding is accepted only as a suffix.
+- `RemoteMCP.ClientConfiguration` is a separate network-free production-profile validator used by
+  the OTP source. The source still owns raw-record conversion and whole-source failure; it does not
+  gain transport construction details or perform discovery. Other controlled sources and tests can
+  continue constructing `ConfiguredIntegration` values without pretending to be the OTP boundary.
+- A child-directory `mix format` attempt reported that no local formatter inputs are configured.
+  Exact changed paths were formatted from the umbrella root, which owns `.formatter.exs`.
+- Focused verification passes all 7 authentication/client-profile tests and all 4 source tests.
+  The MCP child passes 37 tests with three tagged integrations excluded. The Call Engine child
+  passes 215 tests with two tagged integrations excluded. Root formatting, warnings-as-errors,
+  strict Credo over 322 source files, and unused-dependency detection pass. The serialized
+  umbrella suite passes all 434 default-lane tests against disposable PostgreSQL: MCP 37, Call
+  Engine 215, Calls 35, Persistence 25, Gateway 66, and Console 56; nine tagged integrations are
+  excluded.
+- The first disposable database start attempted the system socket directory and failed for lack of
+  permission before tests ran. Redirecting the socket into the temporary cluster started the
+  server. A subsequent diagnostic using `PGHOST` still selected port 5432 because the test config
+  does not consume `PGPORT`; the final run used the supported `VXPIPE_TEST_DATABASE_URL` override.
+  The completed suite was green, then the cluster was stopped and its temporary directory removed.
+
+Next: commit and push this authentication checkpoint, then resume the remaining milestone audit
+without crossing the unresolved Jido runtime data-tool boundary.

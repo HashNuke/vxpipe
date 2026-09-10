@@ -231,6 +231,18 @@ definition boundary has started or its specification has been reviewed.
   214 tests, with their tagged integrations excluded. Root formatting, warnings-as-errors, strict
   Credo, and dependency gates pass; the serialized umbrella suite passes all 430 default-lane tests
   with nine tagged integrations excluded. This does not expose remote bindings to Jido.
+- [x] Remote client authentication now has one closed parser supporting absent/none, bearer, and
+  bounded custom-header variants. Raw transport headers, malformed bearer/header values,
+  case-insensitive duplicates, and transport-owned header overrides fail before client startup.
+  The OTP configuration source validates the complete production HTTPS/client profile and rejects
+  the whole source when any endpoint or authentication setting is invalid, while private values
+  remain inside inspection-redacted integration records. Focused verification passes all 7 MCP
+  authentication/client-profile tests and all 4 application-source tests; the MCP child passes 37
+  tests and the Call Engine child passes 215 tests, with their tagged integrations excluded. Root
+  formatting, warnings-as-errors, strict Credo over 322 source files, and unused-dependency gates
+  pass. The serialized umbrella suite passes all 434 default-lane tests with nine tagged
+  integrations excluded. This checkpoint does not change the outstanding Jido model-tool
+  projection boundary.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

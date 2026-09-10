@@ -27,7 +27,10 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
         allowed_tools: ["lookup_customer"],
         client_config: [
           endpoint: "https://records.example.test/mcp",
-          headers: [{"authorization", private_value}]
+          authentication: [
+            type: :custom_headers,
+            headers: [{"authorization", private_value}]
+          ]
         ],
         invocation_deadline_ms: 12_000,
         maximum_result_bytes: 65_536

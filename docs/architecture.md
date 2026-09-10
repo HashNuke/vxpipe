@@ -305,6 +305,17 @@ settings remain inside the redacted engine-owned values. A later tenant/vault-ba
 implement the same whole-source contract without changing discovery or publication. Periodic
 scheduling and stale-catalog expiry remain separate responsibilities.
 
+Remote client authentication is a closed configuration value: omit it or use `:none`, use
+`[type: :bearer, token: ...]`, or use
+`[type: :custom_headers, headers: [{name, value}, ...]]`. Raw transport `:headers` are rejected.
+Custom header names and values are bounded and validated before client startup, names are
+normalized case-insensitively, and duplicates are rejected. Authentication may own an
+`authorization` header, but cannot override transport-owned fields such as `host`, `accept`,
+`content-type`, `content-length`, `mcp-protocol-version`, or `mcp-session-id`. The OTP source
+validates the complete production HTTPS/client profile before accepting any integration record;
+one malformed endpoint or authentication value rejects the complete source without opening a
+network connection. Secret values remain only in the inspection-redacted private configuration.
+
 `RemoteMCP.CatalogRefresher` owns those timing responsibilities when remote MCP is enabled in
 `Vxpipe.CallEngine.Application` settings. It starts configuration retrieval plus discovery
 immediately and repeats it after the configured refresh interval. Each cycle runs under the
