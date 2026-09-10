@@ -23,7 +23,9 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
           binding_count: non_neg_integer()
         }
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) do
+    GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
+  end
 
   def child_spec(options) do
     %{
@@ -57,6 +59,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
              :activation_id,
              :connection_provider,
              :integrations,
+             :name,
              :protocol,
              :tools
            ]),

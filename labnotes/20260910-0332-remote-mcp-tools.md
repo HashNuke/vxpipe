@@ -180,3 +180,28 @@ Jido continuation remain gated on a supported public runtime data-tool interface
 
 Next: attach the integration owner to the one-for-all agent-activation subtree and prove its
 authorization bindings end with that activation. The Jido projection blocker remains separate.
+
+## 2026-09-10 — activation-scoped integration ownership
+
+- Red: started an agent activation with one pinned remote binding and required the scoped client
+  to open. No open occurred because `AgentActivationSupervisor` ignored every remote runtime
+  option and retained its host-only topology.
+- Green: the supervisor now conditionally starts a named `RemoteMCP.IntegrationOwner` before the
+  dispatcher and passes only its local alias set plus owner reference to the dispatcher. The owner
+  accepts a Registry name while retaining its existing safe runtime state. With no remote tools,
+  the original four children and Jido configuration remain unchanged.
+- The remote owner is a permanent member of the activation's one-for-all restart domain. A focused
+  lifecycle test kills that owner and proves every activation child terminates and is replaced;
+  stopping the activation then terminates the replacement owner and removes its Registry entry.
+  This ends activation-local authorization bindings, not the separately supervised reusable MCP
+  connection cache.
+- Focused activation/dispatcher/owner verification passes 10 tests. The complete call-engine
+  child passes 191 tests with zero failures and two tagged integrations excluded.
+- Root format, warnings-as-errors compilation, strict Credo, unused-dependency detection, and the
+  full umbrella suite pass with all default-lane tests green; nine tagged network integrations
+  are excluded. The suite used an isolated temporary PostgreSQL instance and left no test server
+  running.
+
+Next: the plan startup path still rejects remote bindings because Jido cannot yet project their
+exact dynamic names and schemas through a supported public interface. Continue with independent
+security/lifecycle checks that do not pretend to lift that blocker.

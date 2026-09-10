@@ -4,9 +4,10 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
   use Supervisor
 
   alias Vxpipe.CallEngine.{Agent, AgentCoordinator, JidoAgentRuntime}
+  alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
   alias Vxpipe.CallEngine.Tool.{BackgroundSupervisor, Dispatcher}
 
-  @roles [:agent_server, :background_tools, :coordinator, :tool_dispatcher]
+  @roles [:agent_server, :background_tools, :coordinator, :remote_mcp, :tool_dispatcher]
 
   def start_link(options) do
     activation_id = Keyword.fetch!(options, :activation_id)
@@ -49,6 +50,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
     background_tools = via(activation_id, :background_tools)
     coordinator = via(activation_id, :coordinator)
     tool_dispatcher = via(activation_id, :tool_dispatcher)
+    {remote_mcp, remote_tools, remote_mcp_children} = remote_mcp_runtime(activation_id, options)
 
     background_tools_child =
       Supervisor.child_spec(
@@ -68,6 +70,8 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
          background_tool_timeout_ms: Keyword.get(options, :background_tool_timeout_ms, 30_000),
          completion_target: coordinator,
          name: tool_dispatcher,
+         remote_mcp: remote_mcp,
+         remote_tools: Map.keys(remote_tools),
          tools: Keyword.fetch!(options, :tools),
          variable_binding: Keyword.get(options, :variable_binding),
          maximum_background_tools: Keyword.get(options, :maximum_background_tools, 4),
@@ -113,13 +117,51 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
         restart: :permanent
       )
 
+    children =
+      [background_tools_child] ++
+        remote_mcp_children ++ [dispatcher_child, agent_server_child, coordinator_child]
+
     Supervisor.init(
-      [background_tools_child, dispatcher_child, agent_server_child, coordinator_child],
+      children,
       strategy: :one_for_all,
       max_restarts: 1,
       max_seconds: 5
     )
   end
+
+  defp remote_mcp_runtime(activation_id, options) do
+    tools = Keyword.get(options, :remote_tools, %{})
+
+    if map_size(tools) == 0 do
+      {nil, tools, []}
+    else
+      owner = via(activation_id, :remote_mcp)
+
+      owner_options =
+        [
+          activation_id: activation_id,
+          integrations: Keyword.get(options, :mcp_integrations),
+          name: owner,
+          tools: tools
+        ]
+        |> maybe_put(
+          :connection_provider,
+          Keyword.fetch(options, :remote_mcp_connection_provider)
+        )
+        |> maybe_put(:protocol, Keyword.fetch(options, :remote_mcp_protocol))
+
+      child =
+        Supervisor.child_spec({IntegrationOwner, owner_options},
+          id: :remote_mcp,
+          restart: :permanent
+        )
+
+      {owner, tools, [child]}
+    end
+  end
+
+  defp maybe_put(options, key, {:ok, value}), do: Keyword.put(options, key, value)
+  defp maybe_put(options, _key, :error), do: options
 
   defp via(activation_id, role) do
     {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, registry_key(activation_id, role)}}

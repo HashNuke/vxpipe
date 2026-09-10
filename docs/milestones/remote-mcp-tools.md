@@ -129,14 +129,21 @@ definition boundary has started or its specification has been reviewed.
   invokes only the pinned remote operation under its deadline/result limit, and normalizes
   excessive or ambiguous outcomes without retry. Its inspectable state retains no private client
   configuration. Focused tests pass 3 tests and the call-engine child passes 188 tests with two
-  tagged integrations excluded. The owner is not yet wired into agent activation or Jido.
+  tagged integrations excluded. This first checkpoint did not wire the owner into agent
+  activation or Jido.
 - [x] The tool executor and dispatcher accept an explicit activation-local remote owner plus a
   closed set of local aliases. Every remote alias is background-only, participates in the same
   admission/timeout/completion lifecycle as a background host tool, and cannot collide with a
   host tool. A controlled invocation proves the dispatcher remains responsive while the remote
   request waits, completion retains the local alias, and only the pinned remote operation reaches
-  the protocol client. This runtime path is not yet attached to the agent-activation supervisor
-  or exposed through Jido's model-visible definitions.
+  the protocol client. This first dispatcher checkpoint did not attach the runtime to the
+  agent-activation supervisor or expose it through Jido's model-visible definitions.
+- [x] Agent activation now conditionally starts a named remote integration owner before its tool
+  dispatcher. The owner and dispatcher participate in the existing one-for-all restart domain;
+  a controlled owner crash replaces the entire activation, and stopping the activation removes
+  its authorization bindings. Host-only activations retain the original four-child topology.
+  The activation owns only its checked-out bindings; the application-scoped connection cache and
+  any reusable protocol client remain separately supervised.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review
