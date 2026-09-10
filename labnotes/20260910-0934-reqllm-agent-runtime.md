@@ -1272,3 +1272,21 @@ warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbre
 before test execution at the unchanged absent PostgreSQL SCRAM password; no credential source was
 inspected. The separate legacy dispatcher/background executor family and Jido dependency entries
 remain for the next checkpoint.
+
+## Implementation checkpoint 4af: unreachable dispatcher removal
+
+Deleted the old dispatcher, its state module, background dynamic supervisor, background invocation,
+background completion, and the dispatcher compatibility suite. These modules had no consumer after
+the Jido graph deletion. Narrowed `ContinueAgent` to the one selected constructor based on
+`InvocationCompletion`; the room can no longer receive the retired background-completion protocol.
+
+The old `Tool.Executor` was not deleted in this checkpoint. Read-only inspection found that the
+optional legacy `Capability.ModelInference` preset still uses it to execute model-requested tools
+inline in its provider task. Removing that live consumer requires an explicit behavior checkpoint,
+not treating the executor as unreachable. This also means the universal supervised-worker contract
+is not yet complete across that compatibility preset.
+
+The complete Call Engine suite passes 221 tests with 1 tagged integration exclusion at seed
+`787975`. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
+pass. Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM
+password; no credential source was inspected.

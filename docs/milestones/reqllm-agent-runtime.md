@@ -731,6 +731,16 @@ Implementation evidence:
   and unused-lock checks pass. Umbrella `mix test` stops before execution at the unchanged absent
   PostgreSQL SCRAM password; no credential source was inspected. Legacy tool dispatcher modules and
   Jido dependency/lock entries remain for their own cleanup checkpoint.
+- Checkpoint 4af deletes the unreachable dispatcher, dispatcher state, background supervisor,
+  background invocation/completion protocol, and their compatibility suite. `ContinueAgent` now
+  has one constructor for the authoritative `InvocationCompletion` protocol; the earlier
+  background-completion shape cannot enter room authority. The current `Tool.Executor` is retained
+  temporarily because the optional legacy text-only/model-inference preset still calls it; that
+  remaining inline tool surface must be retired before claiming one universal worker path. The
+  complete Call Engine suite passes 221 tests with 1 integration exclusion at seed `787975`.
+  Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass.
+  Umbrella `mix test` stops before execution at the unchanged absent PostgreSQL SCRAM password;
+  no credential source was inspected.
 
 ## Specification review
 

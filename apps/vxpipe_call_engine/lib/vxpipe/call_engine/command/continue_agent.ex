@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Command.ContinueAgent do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Id
-  alias Vxpipe.CallEngine.Tool.{BackgroundCompletion, Call, InvocationCompletion}
+  alias Vxpipe.CallEngine.Tool.InvocationCompletion
 
   @derive {Inspect, except: [:content]}
   @enforce_keys [
@@ -35,24 +35,6 @@ defmodule Vxpipe.CallEngine.Command.ContinueAgent do
           tool_call_id: String.t(),
           tool_name: String.t()
         }
-
-  @spec new(struct(), BackgroundCompletion.t()) :: t()
-  def new(source, %BackgroundCompletion{call: %Call{} = call, outcome: outcome}) do
-    %__MODULE__{
-      id: Id.generate(:command),
-      tenant_id: source.tenant_id,
-      room_id: source.room_id,
-      incarnation_id: source.incarnation_id,
-      participant_id: source.participant_id,
-      connection_id: source.connection_id,
-      correlation_id: Id.generate(:turn),
-      content: content(call.id, call.name, outcome, "background_tool_completion"),
-      audio_response: source.audio_response,
-      source_command_id: source.id,
-      tool_call_id: call.id,
-      tool_name: call.name
-    }
-  end
 
   @spec new(InvocationCompletion.t()) :: t()
   def new(%InvocationCompletion{} = completion) do
