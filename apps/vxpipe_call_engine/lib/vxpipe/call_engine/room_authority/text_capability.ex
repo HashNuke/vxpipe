@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TextCapability do
   @moduledoc false
 
   alias Vxpipe.CallEngine.AgentCoordinator
+  alias Vxpipe.CallEngine.AgentRuntime.Coordinator, as: AgentRuntimeCoordinator
   alias Vxpipe.CallEngine.RoomAuthority.State
 
   @spec ready?(State.t()) :: boolean()
@@ -27,6 +28,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TextCapability do
 
   @spec stop(State.t()) :: :ok | {:error, term()}
   def stop(%State{text_capability: %{module: AgentCoordinator}}), do: :ok
+  def stop(%State{text_capability: %{module: AgentRuntimeCoordinator}}), do: :ok
 
   def stop(%State{} = state) do
     Vxpipe.CallEngine.RoomCapabilitySupervisor.stop_capability(

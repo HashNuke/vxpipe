@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
   alias Vxpipe.CallEngine.Command.JoinParticipant
-  alias Vxpipe.CallEngine.CallVariables.Binding
+  alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -177,93 +177,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp agent_activation_options(plan, receiver, options) do
-    with %CapabilitySelection{provider: :req_llm, options: provider_options} <-
-           receiver.capabilities.model_inference,
-         {:ok, model} <- agent_model(provider_options),
-         owner when is_pid(owner) <- Keyword.get(options, :owner),
-         request_options when is_list(request_options) <-
-           Keyword.get(options, :agent_request_options, []),
-         settings when is_list(settings) <- Keyword.get(options, :agent_runtime) do
-      model_fixture = Keyword.get(settings, :model_fixture)
-
-      host_tools =
-        receiver.tools
-        |> Map.values()
-        |> Enum.sort_by(& &1.name)
-        |> Enum.map(& &1.action)
-
-      tools = host_tools ++ Binding.actions(receiver.variable_permissions.grants)
-
-      with {:ok, variable_binding} <- variable_binding(plan, receiver, options) do
-        {:ok,
-         [
-           activation_id: receiver.activation_id,
-           agent_participant_id: receiver.participant_id,
-           background_tool_timeout_ms: Keyword.fetch!(settings, :background_tool_timeout_ms),
-           maximum_background_tools: Keyword.fetch!(settings, :maximum_background_tools),
-           owner: owner,
-           provider: if(model_fixture, do: :local_fixture, else: :req_llm),
-           system_prompt: receiver.prompt,
-           tools: tools,
-           variable_binding: variable_binding,
-           maximum_completed_requests: Keyword.fetch!(settings, :maximum_completed_requests),
-           maximum_output_bytes: Keyword.fetch!(settings, :maximum_output_bytes),
-           maximum_pending_requests: Keyword.fetch!(settings, :maximum_pending_requests),
-           maximum_tool_result_bytes: Keyword.fetch!(settings, :maximum_tool_result_bytes),
-           request_options:
-             request_options
-             |> put_model_fixture(model_fixture)
-             |> Keyword.put(:model, model),
-           request_timeout_ms: Keyword.fetch!(settings, :request_timeout_ms)
-         ]}
-      end
-    else
-      _unsupported ->
-        unsupported(
-          ["participants", receiver.definition_key, "capabilities", "model_inference"],
-          "must select a supported ReqLLM model profile"
-        )
-    end
-  rescue
-    _exception ->
-      unsupported(
-        ["participants", receiver.definition_key, "capabilities", "model_inference"],
-        "must select a supported ReqLLM model profile"
-      )
-  end
-
-  defp variable_binding(plan, receiver, options) do
-    cond do
-      map_size(receiver.variable_permissions.grants) == 0 ->
-        {:ok, nil}
-
-      Keyword.get(options, :validation_only, false) ->
-        {:ok, nil}
-
-      true ->
-        build_variable_binding(plan, receiver, options)
-    end
-  end
-
-  defp build_variable_binding(plan, receiver, options) do
-    case {Keyword.get(options, :call_variables), Keyword.get(options, :incarnation_id)} do
-      {server, incarnation_id} when is_pid(server) and is_binary(incarnation_id) ->
-        {:ok, Binding.new(server, plan, receiver, incarnation_id)}
-
-      _invalid ->
-        unsupported(["call_variables", "sections"], "runtime binding is unavailable")
-    end
-  end
-
-  defp put_model_fixture(request_options, nil), do: request_options
-
-  defp put_model_fixture(request_options, fixture) do
-    tool_context =
-      request_options
-      |> Keyword.get(:tool_context, %{})
-      |> Map.put(:vxpipe_model_fixture, fixture)
-
-    Keyword.put(request_options, :tool_context, tool_context)
+    AgentActivationOptions.new(plan, receiver, options)
   end
 
   defp speech_to_text_runtime(caller, options) do
@@ -383,20 +297,6 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       ["participants", participant.definition_key, "capabilities", Atom.to_string(kind)],
       "must select a capability profile supported by the configured runtime"
     )
-  end
-
-  defp agent_model(%{model: model} = options)
-       when map_size(options) == 1 and is_binary(model),
-       do: nonempty_model(model)
-
-  defp agent_model(%{"model" => model} = options)
-       when map_size(options) == 1 and is_binary(model),
-       do: nonempty_model(model)
-
-  defp agent_model(_unsupported), do: {:error, :unsupported_provider_options}
-
-  defp nonempty_model(model) do
-    if String.trim(model) == "", do: {:error, :invalid_model}, else: {:ok, model}
   end
 
   defp unsupported(path, reason) do

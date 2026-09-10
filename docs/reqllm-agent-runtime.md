@@ -118,8 +118,15 @@ the authoritative invocation registry, and one Session. The graph retains the pa
 activation's `:one_for_all` strategy and single-restart budget, so replacement cannot retain a
 Session, invocation registry, or worker from the failed activation generation. The coordinator is
 started first and the registry and Session resolve its registered reference to the current PID at
-their own startup boundaries. Plan startup still selects the temporary Jido compatibility graph;
-live selection and parity are the next migration step.
+their own startup boundaries.
+
+Plan Startup and Room Authority can select this graph through an internal application runtime
+setting. Plan Startup validates and pins the selected provider configuration, call-definition
+model and prompt, resolved host-tool map, Call Variables binding, and runtime limits. Room Authority
+stores the selected coordinator module behind its existing text-capability boundary, so response,
+interruption, and participant-owned shutdown require no room-protocol change. The temporary default
+still selects the Jido compatibility graph while its scripted parity scenarios are moved to the
+neutral test provider; it is not a second intended production loop.
 
 For every submitted tool, the single correlated running acknowledgement stays in that
 committed conversation and is therefore supplied with every later model request while the

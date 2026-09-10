@@ -48,6 +48,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
+    TestAgentRuntimeModelProvider,
     TestArchiveWriter,
     TestCollectingArchiveWriter,
     TestFailingTextToSpeechTransport,
@@ -55,6 +56,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     TestSpeechToTextTransport,
     TestTextToSpeechTransport
   }
+
+  alias Vxpipe.AgentRuntime.{Message, ModelResponse}
 
   test "archives private lifecycle, accepted input, tool, and generated-output facts" do
     room_id = unique_id("room-private-history")
@@ -995,6 +998,40 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              fixture
   end
 
+  test "starts an explicitly selected Agent Runtime activation through room authority" do
+    configure_agent_runtime_provider(self())
+    room_id = unique_id("room-agent-runtime")
+    plan = compile_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+
+    assert AgentActivationSupervisor.whereis_child(receiver.activation_id, :agent_server) == nil
+    assert is_pid(AgentActivationSupervisor.whereis_child(receiver.activation_id, :session))
+
+    attach_caller(plan, room, caller, "conn-agent-runtime")
+    command = send_command(plan, room, caller, "conn-agent-runtime", "Hello Agent Runtime")
+
+    assert :ok = CallEngine.send_text(command)
+    assert_receive {:vxpipe_event, %ParticipantTurnStarted{correlation_id: correlation_id}}
+    assert correlation_id == command.correlation_id
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{correlation_id: ^correlation_id}}
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+
+    assert [%Message{role: :system, content: "Use the available host action."} | _history] =
+             request.messages
+
+    assert Enum.map(request.tools, & &1.name) == ["get_current_time"]
+
+    assert {:ok, response} = ModelResponse.new(text: "Hello through Agent Runtime.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %TextOutput{text: "Hello through Agent Runtime."}}
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation_id}}
+  end
+
   test "runs controlled local model outcomes through the complete room turn" do
     fixture =
       start_supervised!(
@@ -1481,6 +1518,27 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:model_fixture, fixture)
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(original, :agent_runtime, agent_runtime)
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+  end
+
+  defp configure_agent_runtime_provider(observer) do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      original
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:implementation, :agent_runtime)
+      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, owner: observer)
 
     Application.put_env(
       :vxpipe_call_engine,

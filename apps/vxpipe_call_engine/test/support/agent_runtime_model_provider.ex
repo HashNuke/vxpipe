@@ -3,6 +3,17 @@ defmodule Vxpipe.CallEngine.TestAgentRuntimeModelProvider do
 
   @behaviour Vxpipe.AgentRuntime.ModelProvider
 
+  @spec new(keyword()) :: {:ok, map()} | {:error, :invalid_configuration}
+  def new(options) do
+    with {:ok, options} <- Keyword.validate(options, [:model, :owner]),
+         model when is_binary(model) and model != "" <- Keyword.get(options, :model),
+         owner when is_pid(owner) <- Keyword.get(options, :owner) do
+      {:ok, %{model: model, owner: owner}}
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
   @impl true
   def generate(_model, _request), do: {:error, :unexpected_buffered_generation}
 

@@ -916,3 +916,34 @@ pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM a
 a password absent from this shell; no credential source was inspected. Plan startup is deliberately
 unchanged in this checkpoint, so live rooms still select the compatibility graph; that selection
 and room-level parity are next.
+
+## Implementation checkpoint 4o: application-selected room path
+
+Added a definition-driven room test before implementation. It configured the application runtime
+to select Agent Runtime, started a planned room, and expected a Session instead of a Jido
+AgentServer. The red run found the old AgentServer, proving that Plan Startup ignored the requested
+runtime and that the earlier graph was reachable only through its direct supervisor test.
+
+Plan Startup now turns an explicit `:agent_runtime` application selection into activation options.
+It calls the application-configured model provider constructor with the call-definition-pinned model,
+passes the resolved host-tool map for neutral descriptor compilation, and retains the prompt,
+Call Variables binding, provider label, and existing bounds. Invalid provider construction becomes
+the same bounded unsupported-plan error as other invalid model runtime configuration.
+
+Room Authority now records either the migration coordinator or the legacy coordinator behind its
+existing text-capability module/PID pair. Response already dispatches through that pair;
+interruption and participant-owned shutdown gained the matching migration-coordinator clauses. The
+room test attaches the caller, submits text, inspects the pinned system instruction and host alias
+at the deterministic Agent Runtime provider, and receives the unchanged participant-turn,
+`TextOutput`, and agent-turn-completed events.
+
+The activation-option translation was separated into `PlanStartup.AgentActivation` after the test
+went green. This reduced `PlanStartup` from 464 to 306 lines and keeps provider/activation migration
+logic out of speech and participant startup translation. The complete Call Engine suite passes 240
+tests with 2 integration exclusions. The first full run hit an existing 100 ms model-inference test
+timing assertion; the unchanged suite passed on immediate rerun. The application default remains
+the compatibility graph until its scripted tool and failure parity tests are migrated to the neutral
+provider; this setting is a migration seam, not two intended production loops. Umbrella format,
+warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops
+before test execution because the local PostgreSQL SCRAM password is absent; no credential source
+was inspected.

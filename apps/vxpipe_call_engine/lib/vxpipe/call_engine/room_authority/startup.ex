@@ -4,6 +4,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   alias Vxpipe.CallEngine.Capability.{DeterministicText, ModelInference}
   alias Vxpipe.CallEngine.Command.{CreateRoom, JoinParticipant}
 
+  alias Vxpipe.CallEngine.AgentRuntime.Coordinator, as: AgentRuntimeCoordinator
+
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
     AgentCoordinator,
@@ -73,7 +75,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         AgentActivationSupervisor.child_ref(startup.receiver.activation_id, :coordinator)
 
       text_capability = %{
-        module: AgentCoordinator,
+        module: agent_coordinator(startup.agent_activation),
         monitor: nil,
         participant_id: receiver_snapshot.participant_id,
         pid: coordinator_ref
@@ -94,6 +96,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       )
     else
       _error -> {:error, :agent_start_failed}
+    end
+  end
+
+  defp agent_coordinator(activation_options) do
+    case Keyword.get(activation_options, :runtime, :jido) do
+      :agent_runtime -> AgentRuntimeCoordinator
+      :jido -> AgentCoordinator
     end
   end
 

@@ -2,8 +2,8 @@
 
 Status: implementation in progress. Package contracts, lifecycle, provider-neutral loop, and
 the production ReqLLM boundary with tagged-provider interoperability are implemented. Call Engine
-migration now includes an activation-owned runtime graph; live call selection and final evidence
-remain pending.
+migration now includes an activation-owned runtime graph and application-selected room path;
+default selection, behavioral parity, and final evidence remain pending.
 Prerequisites: [Definition-driven call](definition-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
@@ -149,9 +149,10 @@ process or dependency is used.
    `:agent_runtime` activation now owns one request supervisor, coordinator, invocation supervisor,
    invocation registry, and Session under the existing one-for-all restart budget. Its deterministic
    activation test reaches the new provider boundary and proves complete graph replacement after a
-   Session failure. Plan startup still selects the temporary Jido compatibility graph; switching
-   that live selection and preserving room behavior are next. Preserve completion and interruption
-   behavior.
+   Session failure. Plan startup and room authority can now select that graph through the internal
+   application runtime setting while preserving the existing capability contract. The temporary
+   default remains the Jido compatibility graph until its scripted parity scenarios move to the
+   neutral test provider. Preserve completion and interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.
@@ -521,7 +522,24 @@ Implementation evidence:
   integration exclusions. Umbrella format, warnings-as-errors compilation, strict Credo, and
   unused-lock checks pass. Umbrella `mix test` stops before test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected. Plan
-  startup and room authority do not select this graph yet.
+  startup and room authority do not select this graph by default yet.
+- Checkpoint 4o connects the explicit application-selected Agent Runtime graph to the full room
+  path. Its test was written first and observed an old Jido `agent_server`, proving that Plan Startup
+  ignored the selection. After implementation, Plan Startup builds and validates the selected model
+  provider config, retains the resolved host-tool map for neutral descriptor compilation, and pins
+  the existing call-definition prompt and model in the activation options.
+- Room Authority records the selected coordinator module behind its existing text-capability map.
+  Normal response, interruption, and participant-owned shutdown therefore use the same room
+  contracts for both migration graphs. A focused room test starts a planned call, proves that the
+  activation has a Session and no Jido AgentServer, reaches the deterministic provider, and observes
+  the ordinary participant-turn and agent-text completion events.
+- Agent activation option construction moved out of the 464-line `PlanStartup` module into the
+  cohesive `PlanStartup.AgentActivation` module; `PlanStartup` is now 306 lines and remains focused
+  on validating and assembling the rest of room startup. The complete Call Engine suite passes 240
+  tests with 2 integration exclusions. Umbrella format, warnings-as-errors compilation, strict
+  Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution because the
+  local PostgreSQL SCRAM password is absent; no credential source was inspected. Default selection
+  and remaining scripted tool parity still need migration before the Jido graph can be removed.
 
 ## Specification review
 
