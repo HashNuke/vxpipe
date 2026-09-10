@@ -5,6 +5,15 @@ defmodule Vxpipe.CallEngine.ApplicationTest do
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
   alias Vxpipe.CallEngine.RemoteMCP.CatalogRefresher
 
+  test "does not supervise the retired Jido runtime" do
+    settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    refute Enum.any?(Application.child_specs(settings), fn
+             Vxpipe.CallEngine.Jido -> true
+             _child -> false
+           end)
+  end
+
   test "supervises the model fixture only when application configuration enables it" do
     settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 

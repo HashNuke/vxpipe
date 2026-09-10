@@ -590,7 +590,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert participant_registered?(room_id, caller.participant_id)
     assert participant_registered?(room_id, receiver.participant_id)
     refute participant_registered?(room_id, unused.participant_id)
-    assert AgentActivationSupervisor.whereis_child(unused.activation_id, :agent_server) == nil
+    assert AgentActivationSupervisor.whereis_child(unused.activation_id, :session) == nil
 
     assert {:ok, attach} =
              AttachConnection.new(
@@ -1079,6 +1079,25 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert startup.agent_activation[:model].model == "test:scripted"
   end
 
+  test "rejects the retired Jido implementation during plan startup" do
+    plan = compile_plan(unique_id("room-retired-jido"))
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      settings
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:implementation, :jido)
+
+    assert {:error, %Error{code: :unsupported_call_plan}} =
+             PlanStartup.new(plan,
+               owner: self(),
+               agent_runtime: agent_runtime,
+               agent_request_options: [],
+               speech_to_text: [enabled: false],
+               text_to_speech: [enabled: false]
+             )
+  end
+
   test "starts an explicitly selected Agent Runtime activation through room authority" do
     configure_agent_runtime_provider(self())
     room_id = unique_id("room-agent-runtime")
@@ -1088,7 +1107,6 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert {:ok, room} = CallEngine.start_call(plan)
 
-    assert AgentActivationSupervisor.whereis_child(receiver.activation_id, :agent_server) == nil
     assert is_pid(AgentActivationSupervisor.whereis_child(receiver.activation_id, :session))
 
     attach_caller(plan, room, caller, "conn-agent-runtime")
@@ -1203,7 +1221,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              {:participant, plan.tenant_id, room_id, receiver.participant_id}
            ) == []
 
-    assert AgentActivationSupervisor.whereis_child(receiver.activation_id, :agent_server) == nil
+    assert AgentActivationSupervisor.whereis_child(receiver.activation_id, :session) == nil
   end
 
   test "rejects enabled later-slice features before registering a room" do

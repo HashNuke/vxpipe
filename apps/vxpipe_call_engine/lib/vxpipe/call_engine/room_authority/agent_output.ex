@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   }
 
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator, as: AgentRuntimeCoordinator
-  alias Vxpipe.CallEngine.{AgentCoordinator, Id, TextToSpeechRequest, TurnInterrupter}
+  alias Vxpipe.CallEngine.{Id, TextToSpeechRequest, TurnInterrupter}
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     ConnectionLifecycle,
@@ -330,10 +330,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   defp interrupt_text_generation(%{text_capability: %{module: ModelInference}} = state, ids) do
     ModelInference.interrupt(state.text_capability.pid, ids)
-  end
-
-  defp interrupt_text_generation(%{text_capability: %{module: AgentCoordinator}} = state, ids) do
-    AgentCoordinator.interrupt(state.text_capability.pid, ids)
   end
 
   defp interrupt_text_generation(

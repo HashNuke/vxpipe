@@ -1233,3 +1233,23 @@ focused coordinator suite passes 16 tests, and the complete Call Engine suite pa
 2 tagged integration exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation,
 strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
 unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
+
+## Implementation checkpoint 4ad: single selected activation path
+
+Added an application-boundary test before implementation. It failed because the Call Engine
+application still supervised the global `Vxpipe.CallEngine.Jido` process. A second focused plan
+startup test failed because an explicit `implementation: :jido` still produced legacy activation
+options.
+
+Removed the global Jido child and the runtime branches from activation supervision and room
+authority. `PlanStartup.AgentActivation` now rejects every implementation other than
+`:agent_runtime`; `AgentActivationSupervisor` can only construct `RuntimeGraph`; room startup,
+interruption, and stop use the Agent Runtime coordinator directly. Migration-era assertions that
+queried the retired `:agent_server` role now inspect the selected `:session` role instead.
+
+The focused application, activation-supervisor, and retired-plan tests pass 6 tests. The complete
+Call Engine suite passes 231 tests with 2 tagged integration exclusions at seed `487487`. Umbrella
+format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
+`mix test` stops before test execution because PostgreSQL SCRAM authentication needs a password
+absent from this shell; no credential source was inspected. The unreachable Jido modules, legacy
+dispatcher implementation/tests, and dependency entries remain for explicit follow-up removal.

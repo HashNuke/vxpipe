@@ -710,6 +710,17 @@ Implementation evidence:
   The complete Call Engine suite passes 229 tests with 2 integration exclusions at seed `365486`.
   Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass;
   umbrella tests stop before execution at the unchanged absent PostgreSQL SCRAM password.
+- Checkpoint 4ad removes Jido from the selected Call Engine supervision and startup path. A red
+  application-boundary test first observed the global Jido child; it is no longer supervised.
+  `PlanStartup.AgentActivation` now accepts only `:agent_runtime`, the activation supervisor can
+  build only `RuntimeGraph`, and room authority routes start, stop, and interruption through the
+  neutral coordinator without a runtime branch. Explicit `implementation: :jido` plan startup is
+  rejected as unsupported. The focused startup/activation tests pass 6 tests, and the complete
+  Call Engine suite passes 231 tests with 2 integration exclusions at seed `487487`. Umbrella
+  format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
+  `mix test` stops before execution at the unchanged absent PostgreSQL SCRAM password; no
+  credential source was inspected. The now-unreachable Jido modules, legacy dispatcher, tests,
+  dependencies, and lock entries remain for the following removal checkpoints.
 
 ## Specification review
 

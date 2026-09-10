@@ -3,18 +3,14 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
 
   use Supervisor
 
-  alias Vxpipe.CallEngine.AgentActivation.{JidoGraph, RuntimeGraph}
+  alias Vxpipe.CallEngine.AgentActivation.RuntimeGraph
 
   @roles [
-    :agent_server,
-    :background_tools,
     :coordinator,
     :invocation_registry,
     :invocation_supervisor,
-    :remote_mcp,
     :request_supervisor,
-    :session,
-    :tool_dispatcher
+    :session
   ]
 
   def start_link(options) do
@@ -66,8 +62,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
   end
 
   defp graph_children(options) do
-    case Keyword.get(options, :runtime, :jido) do
-      :jido -> {:ok, JidoGraph.children(options)}
+    case Keyword.get(options, :runtime, :agent_runtime) do
       :agent_runtime -> RuntimeGraph.children(options)
       _invalid -> {:error, :invalid_configuration}
     end

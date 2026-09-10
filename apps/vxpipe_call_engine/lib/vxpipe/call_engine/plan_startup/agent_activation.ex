@@ -16,18 +16,15 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
            receiver.capabilities.model_inference,
          {:ok, model} <- agent_model(provider_options),
          owner when is_pid(owner) <- Keyword.get(options, :owner),
-         request_options when is_list(request_options) <-
-           Keyword.get(options, :agent_request_options, []),
          settings when is_list(settings) <- Keyword.get(options, :agent_runtime),
          {:ok, variable_binding} <- variable_binding(plan, receiver, options),
          {:ok, activation_options} <-
            activation_options(
-             Keyword.get(settings, :implementation, :jido),
+             Keyword.get(settings, :implementation, :agent_runtime),
              receiver,
              model,
              variable_binding,
              owner,
-             request_options,
              settings
            ) do
       {:ok, activation_options}
@@ -45,7 +42,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
          model,
          variable_binding,
          owner,
-         _request_options,
          settings
        ) do
     provider_module = Keyword.get(settings, :model_provider)
@@ -72,43 +68,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
   end
 
   defp activation_options(
-         :jido,
-         receiver,
-         model,
-         variable_binding,
-         owner,
-         request_options,
-         settings
-       ) do
-    model_fixture = Keyword.get(settings, :model_fixture)
-
-    host_tools =
-      receiver.tools
-      |> Map.values()
-      |> Enum.sort_by(& &1.name)
-      |> Enum.map(& &1.action)
-
-    tools = host_tools ++ Binding.actions(receiver.variable_permissions.grants)
-
-    {:ok,
-     common_options(receiver, variable_binding, owner, settings) ++
-       [
-         provider: if(model_fixture, do: :local_fixture, else: :req_llm),
-         tools: tools,
-         request_options:
-           request_options
-           |> put_model_fixture(model_fixture)
-           |> Keyword.put(:model, model)
-       ]}
-  end
-
-  defp activation_options(
          _implementation,
          _receiver,
          _model,
          _variable_binding,
          _owner,
-         _request_options,
          _settings
        ),
        do: {:error, :unsupported_agent_runtime}
@@ -151,17 +115,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       _invalid ->
         unsupported(["call_variables", "sections"], "runtime binding is unavailable")
     end
-  end
-
-  defp put_model_fixture(request_options, nil), do: request_options
-
-  defp put_model_fixture(request_options, fixture) do
-    tool_context =
-      request_options
-      |> Keyword.get(:tool_context, %{})
-      |> Map.put(:vxpipe_model_fixture, fixture)
-
-    Keyword.put(request_options, :tool_context, tool_context)
   end
 
   defp agent_model(%{model: model} = options)
