@@ -5,10 +5,18 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.TestAgentTool
-  alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
+  alias Vxpipe.CallEngine.{TestAgentRuntimeModelProvider, TestAgentTool, TestBlockingTool}
+  alias Vxpipe.CallEngine.Tool.{Context, InvocationCompletion, InvocationRegistry}
 
-  alias Vxpipe.AgentRuntime.{Message, ModelResponse}
+  alias Vxpipe.AgentRuntime.{Message, ModelResponse, ToolCall}
+
+  setup do
+    Application.put_env(:vxpipe_call_engine, :blocking_tool_observer, self())
+
+    on_exit(fn ->
+      Application.delete_env(:vxpipe_call_engine, :blocking_tool_observer)
+    end)
+  end
 
   test "owns one complete Agent Runtime activation graph" do
     activation_id = unique_activation_id()
@@ -91,6 +99,57 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     assert AgentActivationSupervisor.whereis_child(activation_id, :invocation_supervisor) == nil
   end
 
+  test "replacement discards an in-flight worker and ignores its stale completion" do
+    activation_id = unique_activation_id()
+
+    activation =
+      start_supervised!({AgentActivationSupervisor, blocking_tool_options(activation_id)})
+
+    first = AgentActivationSupervisor.children(activation)
+    coordinator = Map.fetch!(first, :coordinator)
+
+    assert :ok = Coordinator.respond(coordinator, send_text("stale-tool-activation"))
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    assert {:ok, call} =
+             ToolCall.new(id: "stale-tool-call", name: "wait_for_test", arguments: %{})
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_blocking_tool_started, execution}
+
+    assert [{_id, invocation_worker, :worker, _modules}] =
+             DynamicSupervisor.which_children(Map.fetch!(first, :invocation_supervisor))
+
+    first_monitors = monitor_children(first)
+    execution_monitor = Process.monitor(execution)
+    Process.exit(Map.fetch!(first, :session), :kill)
+
+    assert_children_stopped(first_monitors)
+    assert_receive {:DOWN, ^execution_monitor, :process, ^execution, _reason}, 1_000
+
+    _ = :sys.get_state(activation)
+    second = AgentActivationSupervisor.children(activation)
+    replacement_registry = Map.fetch!(second, :invocation_registry)
+
+    stale_completion = %InvocationCompletion{
+      invocation_id: "stale-tool-call",
+      tool_name: "wait_for_test",
+      conversation_mode: :blocking,
+      context: stale_context(),
+      outcome: {:ok, %{"released" => true}}
+    }
+
+    send(
+      replacement_registry,
+      {:vxpipe_tool_invocation_finished, invocation_worker, stale_completion}
+    )
+
+    _ = :sys.get_state(replacement_registry)
+    assert {:ok, []} = InvocationRegistry.snapshot(replacement_registry)
+  end
+
   defp agent_runtime_options(activation_id) do
     [
       runtime: :agent_runtime,
@@ -119,6 +178,33 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
       maximum_tool_result_bytes: 4_096,
       request_timeout_ms: 1_000
     ]
+  end
+
+  defp blocking_tool_options(activation_id) do
+    Keyword.put(agent_runtime_options(activation_id), :tools, %{
+      "wait_for_test" => %ToolBinding{
+        name: "wait_for_test",
+        type: :host,
+        conversation_mode: :blocking,
+        action: TestBlockingTool,
+        remote: nil
+      }
+    })
+  end
+
+  defp stale_context do
+    %Context{
+      tenant_id: "tenant-test",
+      room_id: "room-test",
+      incarnation_id: "incarnation-test",
+      agent_participant_id: "agent-test",
+      source_participant_id: "caller-test",
+      connection_id: "connection-test",
+      command_id: "command-test",
+      correlation_id: "stale-tool-activation",
+      agent_request_id: "request-test",
+      tool_call_id: "stale-tool-call"
+    }
   end
 
   defp send_text(correlation_id) do

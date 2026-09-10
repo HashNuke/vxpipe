@@ -190,10 +190,10 @@ process or dependency is used.
 - [x] Multiple tool calls are submitted and acknowledged in provider-required model order.
   Partial submission preserves already-started work; a missing or duplicate acknowledgement
   cannot advance the model loop.
-- [ ] Cancelling an active streamed request closes it, suppresses later deltas, discards only
+- [x] Cancelling an active streamed request closes it, suppresses later deltas, discards only
   uncommitted exchange data, and leaves the session usable. It neither terminates an accepted
   worker nor removes its committed tool-call/running-result pair.
-- [ ] Killing the runtime session terminates request workers without ending the room. Killing
+- [x] Killing the runtime session terminates request workers without ending the room. Killing
   the participant activation cleans up the complete runtime subtree and stale results cannot
   attach to a replacement activation.
 - [x] A non-blocking acknowledgement, unrelated caller turn, and later engine-origin completion

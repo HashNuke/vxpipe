@@ -1432,3 +1432,19 @@ JSON byte limit becomes `invalid_result`, while an abnormal execution-process ex
 `tool_failed` terminal outcome. Neither case retries. The expanded request-bounds file passes 9
 tests, and the invocation-supervisor file passes 6 tests. These are acceptance tests over existing
 behavior; no production change was required.
+
+## Acceptance checkpoint: cancellation and activation replacement
+
+Re-audited the Session cancellation, streamed-output, conversation-discard, coordinator
+interruption, activation-supervisor, and participant-supervisor tests together. They directly prove
+that cancellation stops provisional provider work and later deltas, preserves only exchanges that
+crossed the accepted-tool commit barrier, leaves the Session usable, and never addresses the
+independently supervised tool worker. Participant teardown remains scoped below the room.
+
+Added the missing generation-replacement scenario. It starts a real blocking invocation beneath an
+activation, kills the Session, and observes the one-for-all generation remove the request,
+coordinator, registry, invocation supervisor, invocation worker, and its execution task. The
+activation's one allowed restart creates entirely new children. Injecting the old worker's terminal
+message into the replacement registry leaves its snapshot empty, proving a stale completion cannot
+attach to the new generation. The focused activation-supervisor suite passes 3 tests. Existing
+behavior satisfied the requirement, so this checkpoint required no production change.
