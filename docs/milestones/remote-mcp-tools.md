@@ -115,10 +115,14 @@ definition boundary has started or its specification has been reviewed.
   The plan pins the selected scope, integration/configuration/credential/catalog generations,
   local alias, remote operation, validated public input schema, deadline, and result limit;
   private connection configuration remains in the integration catalog. The focused compiler
-  test proves an endpoint and authorization sentinel do not appear in the plan. Application
-  fallback, whole-record tenant precedence, stale-generation checkout, and runtime invocation
-  remain part of the unchecked integration-resolution work below.
-- [ ] Resolve and pin an authorized tenant/application catalog entry into the immutable plan.
+  test proves an endpoint and authorization sentinel do not appear in the plan.
+- [x] Tenant/application resolution uses whole-record precedence: an application integration is
+  considered only when the tenant has no record with that integration ID. Runtime checkout
+  returns private configuration only for the exact scope and complete descriptor/generation
+  identity pinned in the plan. Missing/replaced tenant records fail stale without application
+  fallback. The focused catalog test passes 2 tests and the call-engine child passes 185 tests
+  with two tagged integrations excluded. Runtime ownership and invocation remain unchecked.
+- [x] Resolve and pin an authorized tenant/application catalog entry into the immutable plan.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

@@ -95,3 +95,27 @@ and safe generation identity into the call plan.
 
 Next: red-test integration-catalog precedence and exact runtime checkout so an existing call can
 use only the private integration generation pinned into its plan and never silently fall back.
+
+## 2026-09-10 — exact private integration checkout
+
+- Red: a focused catalog test proved application fallback worked when no tenant record existed,
+  then required private configuration checkout for the exact resolved descriptor. The test
+  failed with an undefined `IntegrationCatalog.checkout/2`, while a tenant record that omitted
+  the application operation already failed with `:tool_not_allowed` instead of falling back.
+- Green: checkout now retrieves from the descriptor's exact application or tenant scope and
+  reconstructs the current public descriptor before releasing the private integration record.
+  The scope, integration ID, all three generations, allowed operation, schema, description,
+  deadline, and result limit must still match. Any missing, replaced, or malformed record returns
+  the single closed `:stale_integration` outcome.
+- A tenant-scoped descriptor never changes scope during checkout. Removing the tenant record while
+  an equivalent application integration exists therefore fails stale rather than exposing the
+  application credential. Replacing only the tenant credential generation also fails stale.
+- Focused verification passes 2 tests. The complete call-engine child passes 185 tests with zero
+  failures and two tagged integrations excluded.
+- Root format, warnings-as-errors compilation, strict Credo, unused-dependency detection, and the
+  full 399-test umbrella suite pass; nine tagged network integrations are excluded. The root test
+  again used an isolated temporary PostgreSQL instance.
+
+Next: introduce a supervised runtime integration owner that checks out this exact private record,
+acquires a scoped MCP client, validates outgoing arguments against the pinned schema, and invokes
+the pinned remote operation under its absolute deadline and byte limit.

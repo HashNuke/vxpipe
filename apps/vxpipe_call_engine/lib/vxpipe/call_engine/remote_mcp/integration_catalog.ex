@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog do
           :invalid_integration_catalog
           | :invalid_tool_descriptor
           | :integration_not_configured
+          | :stale_integration
           | :tool_not_allowed
           | :unknown_tool
           | :unsupported_input_schema
@@ -51,6 +52,32 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog do
           :error -> {:error, :integration_not_configured}
         end
     end
+  end
+
+  @spec checkout(t(), ResolvedTool.t()) ::
+          {:ok, Integration.t()} | {:error, :stale_integration}
+  def checkout(%__MODULE__{} = catalog, %ResolvedTool{} = resolved) do
+    with {:ok, integration} <- scoped_integration(catalog, resolved),
+         {:ok, current} <- resolve_tool(integration, resolved.scope, resolved.remote_name),
+         true <- current == resolved do
+      {:ok, integration}
+    else
+      _stale_or_invalid -> {:error, :stale_integration}
+    end
+  end
+
+  defp scoped_integration(catalog, %ResolvedTool{
+         scope: :application,
+         integration_id: integration_id
+       }) do
+    Map.fetch(catalog.application, integration_id)
+  end
+
+  defp scoped_integration(catalog, %ResolvedTool{
+         scope: {:tenant, tenant_id},
+         integration_id: integration_id
+       }) do
+    tenant_integration(catalog, tenant_id, integration_id)
   end
 
   defp tenant_integration(catalog, tenant_id, integration_id) do
