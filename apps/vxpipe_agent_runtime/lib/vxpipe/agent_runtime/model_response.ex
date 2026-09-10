@@ -28,6 +28,18 @@ defmodule Vxpipe.AgentRuntime.ModelResponse do
 
   def new(_attributes), do: {:error, :invalid_response}
 
+  @spec valid?(term()) :: boolean()
+  def valid?(%__MODULE__{text: text, tool_calls: tool_calls}) do
+    with {:ok, _text} <- validate_text(text),
+         {:ok, _tool_calls} <- validate_tool_calls(tool_calls) do
+      text != "" or tool_calls != []
+    else
+      _invalid -> false
+    end
+  end
+
+  def valid?(_response), do: false
+
   defp validate_text(text)
        when is_binary(text) and byte_size(text) <= @maximum_text_bytes,
        do: {:ok, text}

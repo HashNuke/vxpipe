@@ -3,13 +3,9 @@ defmodule Vxpipe.AgentRuntime.Request do
 
   @derive {Inspect, only: [:correlation]}
   @enforce_keys [:input, :correlation]
-  defstruct @enforce_keys ++ [pending_invocations: []]
+  defstruct @enforce_keys
 
-  @type t :: %__MODULE__{
-          input: String.t(),
-          correlation: map(),
-          pending_invocations: [Vxpipe.AgentRuntime.PendingInvocation.t()]
-        }
+  @type t :: %__MODULE__{input: String.t(), correlation: map()}
   @default_max_input_bytes 64 * 1_024
 
   @spec new(String.t(), map(), keyword()) :: {:ok, t()} | {:error, atom()}
@@ -28,10 +24,4 @@ defmodule Vxpipe.AgentRuntime.Request do
   end
 
   def new(_input, _correlation, _options), do: {:error, :invalid_request}
-
-  @spec with_pending_invocations(t(), [Vxpipe.AgentRuntime.PendingInvocation.t()]) :: t()
-  def with_pending_invocations(%__MODULE__{} = request, pending_invocations)
-      when is_list(pending_invocations) do
-    %{request | pending_invocations: pending_invocations}
-  end
 end

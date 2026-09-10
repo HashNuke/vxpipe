@@ -209,6 +209,13 @@ only name/description/schema to providers, resolves exact strings, and validates
 against the compiled schema before returning a private descriptor. Submission and repeated
 rounds remain pending.
 
+The first repeated-round slice now handles one accepted call end to end within the package.
+It commits the assistant tool request and correlated running acknowledgement before the next
+provider generation, refreshes authoritative pending context, and withholds tools when the
+host reports the binding as blocking. Session option validation is isolated from lifecycle,
+and the request runner owns model/tool sequencing. Multiple calls currently fail closed before
+submission until ordered partial-submission semantics are implemented.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

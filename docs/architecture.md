@@ -144,10 +144,11 @@ persistence. Those remain Call Engine concerns. See the
 and [intermediate milestone](milestones/reqllm-agent-runtime.md).
 
 The package foundation now implements the submit-only executor behavior and the bounded,
-timeout-enforced pending-invocation context-source boundary. Its session fetches that safe
-projection outside its GenServer before provider generation. Repeated model/tool rounds,
-ReqLLM projection, and Call Engine adoption remain pending; the running call path below still
-uses Jido until those checkpoints are green.
+timeout-enforced pending-invocation context-source boundary. Its first package-local loop
+submits one complete call, commits its correlated running acknowledgement, refreshes pending
+state, and performs the acknowledgement round outside the Session GenServer. Ordered batches,
+streaming, cancellation, ReqLLM projection, and Call Engine adoption remain pending; the
+running call path below still uses Jido until those checkpoints are green.
 
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each

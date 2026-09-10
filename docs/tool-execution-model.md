@@ -1,6 +1,6 @@
 # Tool execution model
 
-Date: 2026-09-10. Status: selected target; agent-runtime boundary implementation begun.
+Date: 2026-09-10. Status: selected target; single-call agent-runtime loop implemented.
 
 ## Decision
 

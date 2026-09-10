@@ -3,18 +3,21 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   use GenServer
 
-  alias Vxpipe.AgentRuntime.{Event, PendingContext, Request, Result}
+  alias Vxpipe.AgentRuntime.{
+    Conversation,
+    Event,
+    Request,
+    RequestRunner,
+    Result,
+    SessionConfiguration
+  }
 
   @derive {Inspect, only: [:status]}
   defstruct [
-    :instructions,
-    :model_provider,
-    :model,
-    :pending_context_source,
-    :pending_context_timeout_ms,
-    :maximum_pending_invocations,
-    :event_destination,
+    :configuration,
+    :conversation,
     :active_task,
+    :active_token,
     :caller,
     :correlation,
     status: :idle
@@ -37,38 +40,11 @@ defmodule Vxpipe.AgentRuntime.Session do
   def init(options) do
     Process.flag(:trap_exit, true)
 
-    with {:ok, options} <-
-           Keyword.validate(options, [
-             :instructions,
-             :model_provider,
-             :model,
-             :pending_context_source,
-             :pending_context_timeout_ms,
-             :maximum_pending_invocations,
-             :event_destination
-           ]),
-         instructions when is_binary(instructions) <- Keyword.get(options, :instructions),
-         model_provider when is_atom(model_provider) <- Keyword.get(options, :model_provider),
-         true <- Code.ensure_loaded?(model_provider),
-         true <- function_exported?(model_provider, :generate, 2),
-         {:ok, pending_context_source} <-
-           validate_pending_context_source(Keyword.get(options, :pending_context_source)),
-         pending_context_timeout_ms
-         when is_integer(pending_context_timeout_ms) and pending_context_timeout_ms > 0 <-
-           Keyword.get(options, :pending_context_timeout_ms, 1_000),
-         maximum_pending_invocations
-         when is_integer(maximum_pending_invocations) and maximum_pending_invocations > 0 <-
-           Keyword.get(options, :maximum_pending_invocations, 32),
-         destination when is_pid(destination) <- Keyword.get(options, :event_destination) do
+    with {:ok, configuration} <- SessionConfiguration.new(options) do
       {:ok,
        %__MODULE__{
-         instructions: instructions,
-         model_provider: model_provider,
-         model: Keyword.get(options, :model),
-         pending_context_source: pending_context_source,
-         pending_context_timeout_ms: pending_context_timeout_ms,
-         maximum_pending_invocations: maximum_pending_invocations,
-         event_destination: destination
+         configuration: configuration,
+         conversation: Conversation.new(configuration.instructions)
        }}
     else
       _invalid -> {:stop, :invalid_configuration}
@@ -78,22 +54,30 @@ defmodule Vxpipe.AgentRuntime.Session do
   @impl true
   def handle_call({:request, input, correlation}, caller, %{status: :idle} = state) do
     with {:ok, request} <- Request.new(input, correlation) do
-      emit(state.event_destination, Event.new(:request_started, correlation))
+      emit(state.configuration.event_destination, Event.new(:request_started, correlation))
+      session = self()
+      token = make_ref()
+
+      commit = fn conversation ->
+        commit_conversation(session, token, conversation, state.configuration.commit_timeout_ms)
+      end
+
+      runner_options = SessionConfiguration.runner_options(state.configuration, commit)
 
       task =
         Task.Supervisor.async(Vxpipe.AgentRuntime.RequestSupervisor, fn ->
-          with {:ok, pending_invocations} <-
-                 PendingContext.fetch(state.pending_context_source, correlation,
-                   timeout_ms: state.pending_context_timeout_ms,
-                   maximum_invocations: state.maximum_pending_invocations
-                 ) do
-            request = Request.with_pending_invocations(request, pending_invocations)
-            state.model_provider.generate(state.model, request)
-          end
+          RequestRunner.run(state.conversation, request, runner_options)
         end)
 
       {:noreply,
-       %{state | status: :busy, active_task: task, caller: caller, correlation: correlation}}
+       %{
+         state
+         | status: :busy,
+           active_task: task,
+           active_token: token,
+           caller: caller,
+           correlation: correlation
+       }}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -106,10 +90,18 @@ defmodule Vxpipe.AgentRuntime.Session do
   def handle_call(:status, _caller, state), do: {:reply, state.status, state}
 
   @impl true
-  def handle_info({reference, provider_result}, %{active_task: %{ref: reference}} = state) do
+  def handle_info(
+        {:agent_runtime_commit, worker, token, %Conversation{} = conversation},
+        %{active_task: %{pid: worker}, active_token: token} = state
+      ) do
+    send(worker, {:agent_runtime_committed, token})
+    {:noreply, %{state | conversation: conversation}}
+  end
+
+  def handle_info({reference, run_result}, %{active_task: %{ref: reference}} = state) do
     Process.demonitor(reference, [:flush])
-    {reply, event} = normalize_result(provider_result, state.correlation)
-    emit(state.event_destination, event)
+    {reply, event, state} = normalize_result(run_result, state.correlation, state)
+    emit(state.configuration.event_destination, event)
     GenServer.reply(state.caller, reply)
     {:noreply, clear_request(state)}
   end
@@ -119,43 +111,56 @@ defmodule Vxpipe.AgentRuntime.Session do
         %{active_task: %{ref: reference}} = state
       ) do
     result = Result.failed(:provider_unavailable, state.correlation)
-    emit(state.event_destination, Event.new(:request_failed, state.correlation))
+
+    emit(
+      state.configuration.event_destination,
+      Event.new(:request_failed, state.correlation)
+    )
+
     GenServer.reply(state.caller, {:ok, result})
     {:noreply, clear_request(state)}
   end
 
   def handle_info(_message, state), do: {:noreply, state}
 
-  defp normalize_result({:ok, output}, correlation) when is_binary(output) do
+  defp normalize_result({:ok, output, %Conversation{} = conversation}, correlation, state)
+       when is_binary(output) do
     result = Result.completed(output, correlation)
-    {{:ok, result}, Event.new(:response_completed, correlation)}
+
+    {{:ok, result}, Event.new(:response_completed, correlation),
+     %{state | conversation: conversation}}
   end
 
-  defp normalize_result({:error, reason}, correlation) when is_atom(reason) do
+  defp normalize_result({:error, reason}, correlation, state) when is_atom(reason) do
     result = Result.failed(reason, correlation)
-    {{:ok, result}, Event.new(:request_failed, correlation)}
+    {{:ok, result}, Event.new(:request_failed, correlation), state}
   end
 
-  defp normalize_result(_invalid, correlation) do
+  defp normalize_result(_invalid, correlation, state) do
     result = Result.failed(:invalid_provider_response, correlation)
-    {{:ok, result}, Event.new(:request_failed, correlation)}
+    {{:ok, result}, Event.new(:request_failed, correlation), state}
   end
 
   defp clear_request(state) do
-    %{state | status: :idle, active_task: nil, caller: nil, correlation: nil}
+    %{
+      state
+      | status: :idle,
+        active_task: nil,
+        active_token: nil,
+        caller: nil,
+        correlation: nil
+    }
   end
 
-  defp validate_pending_context_source({module, _source} = context_source)
-       when is_atom(module) do
-    if Code.ensure_loaded?(module) and function_exported?(module, :snapshot, 3) do
-      {:ok, context_source}
-    else
-      {:error, :invalid_pending_context_source}
+  defp commit_conversation(session, token, conversation, timeout_ms) do
+    send(session, {:agent_runtime_commit, self(), token, conversation})
+
+    receive do
+      {:agent_runtime_committed, ^token} -> :ok
+    after
+      timeout_ms -> {:error, :commit_unavailable}
     end
   end
-
-  defp validate_pending_context_source(_context_source),
-    do: {:error, :invalid_pending_context_source}
 
   defp emit(destination, event), do: send(destination, {:agent_runtime_event, event})
 end

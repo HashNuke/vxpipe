@@ -188,3 +188,40 @@ Verification:
 - Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
 - Umbrella `mix test`: again stopped before execution because the shell has no PostgreSQL
   password; no new code in this slice depends on PostgreSQL.
+
+## Implementation checkpoint 2b: one submitted tool round
+
+The desired Session test first reported 5 tests with 4 failures: the old provider contract
+returned plain strings, provider requests did not contain conversation messages, and Session
+rejected tool/loop options. Replaced that transitional path with normalized `Message` and
+`ModelRequest` values, committed `Conversation` state, and a `RequestRunner` dedicated to
+model/tool sequencing.
+
+The executor callback still never runs business logic. Its accepted response now includes the
+binding's already-resolved `blocking` or `non_blocking` conversation mode. For one valid call,
+the request worker resolves the exact private descriptor, validates its arguments, calls
+`submit/4`, and commits the assistant tool-call message plus
+`{"status":"running","invocation_id":...}` through a synchronous Session acknowledgement.
+Only after that barrier does it fetch current pending state and run the next provider request.
+A blocking acceptance supplies no tools in that acknowledgement request. Mixed text from the
+tool-call response and the acknowledgement response is returned once and in order.
+
+Moved option/adapter validation and runner projection into `SessionConfiguration`, leaving
+Session focused on request admission, task lifecycle, committed conversation, and commit
+acknowledgements. `RequestRunner` owns sequencing; value, registry, context-source, and executor
+modules retain their narrower boundaries.
+
+A model response with several tool calls was still able to accept work without the required
+partial-commit implementation. A new regression test failed while that request waited for a
+second round. Until the ordered batch checkpoint lands, multiple calls now fail explicitly with
+`multiple_tool_calls_unsupported` before invoking the executor. This is a temporary fail-closed
+boundary, not the final milestone behavior.
+
+Verification:
+
+- Complete `vxpipe_agent_runtime` suite: 17 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because PostgreSQL authentication needs a
+  password absent from this shell.
+- Streaming, ordered multiple calls/partial rejection, cancellation, provider failure after
+  acceptance, and production ReqLLM encoding remain pending.
