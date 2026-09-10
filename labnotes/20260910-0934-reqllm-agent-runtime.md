@@ -1108,3 +1108,21 @@ exclusions at seed `365486`. Remote MCP activation ownership remains the only di
 that still selects the compatibility graph. Umbrella format, warnings-as-errors compilation, strict
 Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the unchanged
 absent PostgreSQL SCRAM password; no credential source was inspected.
+
+## Implementation checkpoint 4w: neutral diagnostic fixtures
+
+Moved the definition-driven controlled fixture and Morse audio round trip from Jido's
+`model_fixture` request option to `Diagnostics.AgentRuntimeModelProvider`. Startup assertions now
+inspect the selected neutral provider and its pinned model/fixture configuration. The room-turn test
+still exercises deterministic success, provider failure, and missing output; the Morse test still
+runs two complete STT-to-model-to-TTS turns.
+
+The first full Call Engine run failed because the missing-output scenario emitted
+`provider_unavailable` instead of the existing `invalid_response` contract. Agent Runtime was
+flattening every provider error, including its own bounded `invalid_provider_response` category.
+`RequestRunner` now preserves only that known safe category and continues collapsing arbitrary raw
+provider reasons to `provider_unavailable`. A focused package test owns that classification. The
+Agent Runtime suite passes 42 tests with 1 tagged exclusion, and the Call Engine suite passes 238
+tests with 2 tagged exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation,
+strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
+unchanged absent PostgreSQL SCRAM password; no credential source was inspected.

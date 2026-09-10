@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   }
 
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
-  alias Vxpipe.CallEngine.Diagnostics.ModelFixture
+  alias Vxpipe.CallEngine.Diagnostics.{AgentRuntimeModelProvider, ModelFixture}
   alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
 
   alias Vxpipe.CallEngine.Command.{
@@ -1058,7 +1058,10 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     agent_runtime =
       settings
       |> Keyword.fetch!(:agent_runtime)
-      |> Keyword.put(:model_fixture, fixture)
+      |> Keyword.put(:implementation, :agent_runtime)
+      |> Keyword.put(:model_provider, AgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, fixture: fixture)
+      |> Keyword.put(:model_provider_label, :local_fixture)
 
     assert {:ok, startup} =
              PlanStartup.new(plan,
@@ -1070,9 +1073,10 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              )
 
     assert startup.agent_activation[:provider] == :local_fixture
-
-    assert startup.agent_activation[:request_options][:tool_context][:vxpipe_model_fixture] ==
-             fixture
+    assert startup.agent_activation[:runtime] == :agent_runtime
+    assert startup.agent_activation[:model_provider] == AgentRuntimeModelProvider
+    assert startup.agent_activation[:model].fixture == fixture
+    assert startup.agent_activation[:model].model == "test:scripted"
   end
 
   test "starts an explicitly selected Agent Runtime activation through room authority" do
@@ -1600,7 +1604,10 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     agent_runtime =
       original
       |> Keyword.fetch!(:agent_runtime)
-      |> Keyword.put(:model_fixture, fixture)
+      |> Keyword.put(:implementation, :agent_runtime)
+      |> Keyword.put(:model_provider, AgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, fixture: fixture)
+      |> Keyword.put(:model_provider_label, :local_fixture)
 
     Application.put_env(
       :vxpipe_call_engine,

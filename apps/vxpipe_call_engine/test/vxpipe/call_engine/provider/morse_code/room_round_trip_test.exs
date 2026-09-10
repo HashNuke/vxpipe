@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     CallDefinition,
     CallInvocation,
     DefinitionCompiler,
+    Diagnostics.AgentRuntimeModelProvider,
     Diagnostics.ModelFixture
   }
 
@@ -36,7 +37,10 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
     agent_runtime =
       original
       |> Keyword.fetch!(:agent_runtime)
-      |> Keyword.put(:model_fixture, fixture)
+      |> Keyword.put(:implementation, :agent_runtime)
+      |> Keyword.put(:model_provider, AgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, fixture: fixture)
+      |> Keyword.put(:model_provider_label, :local_fixture)
 
     speech_to_text = [
       enabled: false,

@@ -210,6 +210,9 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
             {:error, :invalid_provider_response}
           end
 
+        {:error, :invalid_provider_response} ->
+          {:error, :invalid_provider_response}
+
         {:error, _reason} ->
           {:error, :provider_unavailable}
 

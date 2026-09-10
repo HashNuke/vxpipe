@@ -83,6 +83,22 @@ defmodule Vxpipe.AgentRuntime.EngineContinuationTest do
     assert {:ok, %Result{status: :completed}} = Task.await(caller)
   end
 
+  test "preserves the bounded invalid-provider-response category" do
+    session = start_session()
+
+    caller =
+      Task.async(fn ->
+        Session.request(session, "Return malformed output", %{request_id: "req_invalid_output"})
+      end)
+
+    release_pending_context("req_invalid_output")
+    assert_receive {:model_provider_process, provider, _request}
+    send(provider, {:test_model_response, {:error, :invalid_provider_response}})
+
+    assert {:ok, %Result{status: :failed, reason: :invalid_provider_response}} =
+             Task.await(caller)
+  end
+
   defp start_session do
     start_supervised!(
       {Session,

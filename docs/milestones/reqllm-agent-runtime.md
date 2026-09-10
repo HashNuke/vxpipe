@@ -639,6 +639,18 @@ Implementation evidence:
   Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass.
   Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM password;
   no credential source was inspected.
+- Checkpoint 4w moves both the deterministic room fixture and the Morse end-to-end speech fixture
+  from Jido request options to `Diagnostics.AgentRuntimeModelProvider`. `PlanStartup` now receives the
+  same provider configuration shape used by the development sample, and the fixture-turn test retains
+  success, unavailable, and malformed-output evidence through the complete room path.
+- The migration exposed one classification mismatch: Agent Runtime flattened the provider's bounded
+  `invalid_provider_response` into `provider_unavailable`. The package now preserves that one safe
+  known category while still hiding every arbitrary provider reason. Red evidence was the room test
+  receiving `provider_unavailable`; a new owning-boundary test and the room test now receive the
+  intended invalid-response result. Agent Runtime passes 42 tests with 1 exclusion, and Call Engine
+  passes 238 tests with 2 exclusions at seed `365486`. Umbrella format, warnings-as-errors
+  compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test
+  execution at the unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
 
 ## Specification review
 
