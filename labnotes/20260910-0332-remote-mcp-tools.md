@@ -119,3 +119,36 @@ use only the private integration generation pinned into its plan and never silen
 Next: introduce a supervised runtime integration owner that checks out this exact private record,
 acquires a scoped MCP client, validates outgoing arguments against the pinned schema, and invokes
 the pinned remote operation under its absolute deadline and byte limit.
+
+## 2026-09-10 — standalone activation integration owner
+
+- Red: focused tests attempted to start a supervised owner for one local alias backed by a pinned
+  tenant tool. Both failed because `RemoteMCP.IntegrationOwner` did not exist. A separate red test
+  showed malformed list-shaped private client configuration was accepted as an integration.
+- Green: the owner now checks out every MCP binding before opening protocol clients, derives the
+  tenant/application-aware `ConnectionKey`, deduplicates equal keys within the activation, and
+  retains only safe runtime bindings. Private connection configuration is consumed during client
+  open and absent from the owner's inspectable state. Malformed non-keyword configuration now
+  fails before startup.
+- The owner forces the pinned result limit into both the MCP client's cumulative response budget
+  and single buffered-stream-frame budget. Invocation still applies the same limit to the decoded
+  result and uses the pinned absolute duration. A test proves schema-invalid arguments make no
+  protocol call, while valid arguments use the remote operation rather than its local alias.
+- Result normalization preserves valid response maps, maps excessive/malformed results to
+  `:invalid_result`, and maps post-submission ambiguity/deadline exhaustion to `:unknown`. Other
+  failures are closed `:tool_failed` outcomes. The owner never retries.
+- This process is deliberately standalone in this checkpoint. It is not yet a child of the agent
+  activation, is not reachable through the current dispatcher/Jido module-only tool surface, and
+  does not establish revocation signaling or call-history events.
+- Focused owner/configuration tests pass 3 tests. The complete call-engine child passes 188 tests
+  with two tagged integrations excluded. Root format, warnings-as-errors compilation, strict
+  Credo, unused-dependency detection, and the full 402-test umbrella suite pass with nine tagged
+  integrations excluded; the root test used isolated temporary PostgreSQL.
+- During this checkpoint, four stale BEAMs left by earlier Vxpipe/ExMCP work were audited by exact
+  PID, command, working directory, sockets, and parent. Two old Phoenix VMs, one no-start IEx VM,
+  one orphaned infinite-sleep VM, and the old Vxpipe asset watcher were terminated. No unrelated
+  tmux panes or Topics Club release processes were touched.
+
+Next: wire the owner beneath the agent-activation supervisor and extend the dispatcher/executor
+boundary so remote tools use the existing bounded background lifecycle. The model projection and
+Jido continuation remain gated on a supported public runtime data-tool interface.

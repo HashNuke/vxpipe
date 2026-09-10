@@ -123,6 +123,13 @@ definition boundary has started or its specification has been reviewed.
   fallback. The focused catalog test passes 2 tests and the call-engine child passes 185 tests
   with two tagged integrations excluded. Runtime ownership and invocation remain unchecked.
 - [x] Resolve and pin an authorized tenant/application catalog entry into the immutable plan.
+- [x] A standalone supervised integration owner converts exact checked-out records into safe
+  activation-local runtime bindings. It deduplicates scoped clients by connection key, applies
+  the pinned cumulative response/stream-frame limit at client open, validates actual arguments,
+  invokes only the pinned remote operation under its deadline/result limit, and normalizes
+  excessive or ambiguous outcomes without retry. Its inspectable state retains no private client
+  configuration. Focused tests pass 3 tests and the call-engine child passes 188 tests with two
+  tagged integrations excluded. The owner is not yet wired into agent activation or Jido.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

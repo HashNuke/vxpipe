@@ -47,6 +47,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.Integration do
          %Catalog{} = catalog <- Keyword.get(options, :catalog),
          {:ok, allowed_tools} <- allowed_tools(Keyword.get(options, :allowed_tools), catalog),
          client_config when is_list(client_config) <- Keyword.get(options, :client_config),
+         true <- Keyword.keyword?(client_config),
          {:ok, invocation_deadline_ms} <- invocation_deadline(options),
          {:ok, maximum_result_bytes} <- result_limit(options) do
       {:ok,
