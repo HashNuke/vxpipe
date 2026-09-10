@@ -601,3 +601,25 @@ that can proceed without the unresolved Jido data-tool interface.
 
 Next: commit and push this authentication checkpoint, then resume the remaining milestone audit
 without crossing the unresolved Jido runtime data-tool boundary.
+
+## 2026-09-10 — Jido runtime-tool boundary revalidation
+
+- Audited the remaining milestone checks after the authentication checkpoint. Remote execution
+  already uses the common bounded background worker, and generic room archival plus the gateway's
+  hidden/metadata/full projection are keyed by the local tool name. They cannot form a live remote
+  path until the model loop can advertise and dispatch the runtime binding.
+- `mix hex.info jido_ai` reports 2.3.0, released 2026-08-05, as the latest official release and the
+  currently locked version. No newer released API is available to evaluate.
+- Fetched current upstream `main` at `e3d0f7671fe1349c00d7f6918eaee95a17c4c33c` into a temporary
+  checkout. `ReAct.ToolSelection` still accepts Action-module values, `Config.reqllm_tools/1`
+  rebuilds model definitions from those modules, and the runner resolves and executes the Action
+  module. The current interceptor permits argument transformation only after module resolution.
+- The related upstream issue 282 remains open. It proposes a bounded generic catalog search/run
+  facade and explicitly leaves the shape undecided; it does not provide the required exact local
+  alias, pinned schema, and private executor interface.
+- The temporary source checkout was removed after inspection. No upstream repository, issue, or
+  dependency state was changed. A Vxpipe-side generated-module or generic-selector workaround
+  remains outside the approved architecture.
+
+Next: obtain an explicit maintenance decision for a Jido fork/private patch or wait for a supported
+upstream runtime data-tool interface before implementing the milestone's live mixed-tool slice.

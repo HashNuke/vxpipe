@@ -3,7 +3,9 @@
 Status: implementation in progress. Specification updated after the 2026-09-08 released-package
 investigation. This slice owns an explicit implementation blocker: a supported public
 Jido AI runtime-tool interface preserving exact local names/schemas and private execution
-bindings. ExMCP conformance alone does not resolve it.
+bindings. ExMCP conformance alone does not resolve it. Revalidation on 2026-09-10 found that the
+latest Hex release remains Jido AI 2.3.0 and current upstream `main` still has no matching public
+interface; the related catalog issue remains open and proposes a different generic-tool shape.
 Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its background-tool and tenant admission prerequisites; [MCP client integration and conformance](mcp-client-library.md). See the [tool-binding decision](../jido-tool-execution.md).
 Sources: [Configured integrations](../../labnotes/20260905-0405-call-definition-design.md#applicationtenant-mcp-integrations-and-agent-enablement); [remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [R22–R26/R49](../call-definition-gap-review.md).
 

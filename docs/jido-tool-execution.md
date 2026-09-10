@@ -1,6 +1,6 @@
 # Jido loop and runtime tool bindings
 
-Date: 2026-09-08. Status: planning decision; no application dependency installed.
+Date: 2026-09-08. Status: dependency selection implemented; runtime data-tool interface blocked.
 
 ## Decision
 
@@ -66,6 +66,16 @@ Sources: [Tool adapter](https://hex.pm/packages/jido_ai/2.3.0/files/lib/jido_ai/
 [request transformer](https://hex.pm/packages/jido_ai/2.3.0/files/lib/jido_ai/reasoning/react/request_transformer.ex),
 [runner](https://hex.pm/packages/jido_ai/2.3.0/files/lib/jido_ai/reasoning/react/runner.ex),
 [default-branch interceptor](https://github.com/agentjido/jido_ai/blob/fc5bc1434ddb69493fe8a68443f03bc6a198c5a2/lib/jido_ai/tool_interceptor.ex).
+
+The boundary was revalidated on 2026-09-10. The official Hex registry still lists 2.3.0 as
+the latest `jido_ai` release. The current upstream `main` commit
+[`e3d0f767`](https://github.com/agentjido/jido_ai/tree/e3d0f7671fe1349c00d7f6918eaee95a17c4c33c)
+still types and validates ReAct tool inputs as Action modules, derives ReqLLM definitions from
+those modules, and dispatches by the resolved Action module. No public runtime descriptor/executor
+contract matching the requirements below was found. [Issue 282](https://github.com/agentjido/jido_ai/issues/282)
+also remains open; its proposed bounded `search_actions`/`run_action` facade deliberately differs
+from exposing each definition-selected local alias with its exact pinned schema. Neither the latest
+release nor current upstream therefore lifts this blocker.
 
 ## Required Jido interface
 
@@ -135,7 +145,8 @@ Sources: [ExMCP 1.3.0](https://hex.pm/packages/ex_mcp/1.3.0),
   the tool interface, not the orchestration engine. Do not force long-running work into
   request-transformer/interceptor hooks.
 
-The index retains **21 milestones and their existing order**:
+The Jido decision retained the then-existing milestone order. The current index has **23
+milestones** after two later observability slices were added:
 
 - The definition-driven slice proves Jido streaming and repeated host-tool rounds with
   finite static Actions. Until the public binding extension exists, its explicitly limited
@@ -151,5 +162,5 @@ The index retains **21 milestones and their existing order**:
   completion, with no external atom growth or private selector leakage. It remains blocked
   on that interface even after protocol conformance passes.
 
-No milestone is implemented by this investigation. The isolated five-test probe is not
+The original investigation itself implemented no milestone. Its isolated five-test probe is not
 AgentServer/media integration, transport-security verification or an official conformance run.
