@@ -1253,3 +1253,22 @@ format, warnings-as-errors compilation, strict Credo, and unused-lock checks pas
 `mix test` stops before test execution because PostgreSQL SCRAM authentication needs a password
 absent from this shell; no credential source was inspected. The unreachable Jido modules, legacy
 dispatcher implementation/tests, and dependency entries remain for explicit follow-up removal.
+
+## Implementation checkpoint 4ae: unreachable Jido module removal
+
+Deleted the now-unreachable Jido agent, agent factory, request transformer, global runtime,
+runtime adapter, activation graph, and compatibility coordinator. The deletion removes 1,280
+production lines, including the 799-line coordinator whose responsibilities are now split among
+the neutral coordinator modules, Agent Runtime Session, invocation registry, invocation supervisor,
+and individual workers. Also deleted the transformer unit suite and old tagged provider test; the
+selected runtime's provider encoding and complete room behavior remain covered in their owning
+applications.
+
+The first complete Call Engine run after deletion reached all tests but exposed the existing Morse
+TTS interruption race: replacement audio reached `audio_output_busy` before the old output task
+ended. The focused test passed on immediate rerun, and the complete suite then passed 226 tests with
+1 tagged integration exclusion at seed `410833`, without a production change. Umbrella format,
+warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops
+before test execution at the unchanged absent PostgreSQL SCRAM password; no credential source was
+inspected. The separate legacy dispatcher/background executor family and Jido dependency entries
+remain for the next checkpoint.

@@ -721,6 +721,16 @@ Implementation evidence:
   `mix test` stops before execution at the unchanged absent PostgreSQL SCRAM password; no
   credential source was inspected. The now-unreachable Jido modules, legacy dispatcher, tests,
   dependencies, and lock entries remain for the following removal checkpoints.
+- Checkpoint 4ae deletes the unreachable Jido agent, factory, request transformer, global runtime,
+  runtime adapter, activation graph, and 799-line compatibility coordinator. It also removes the
+  transformer's unit suite and the old tagged provider test; each retained selected-runtime
+  behavior already has neutral Agent Runtime coverage recorded above. The complete Call Engine
+  suite passes 226 tests with 1 integration exclusion at seed `410833`. One preceding run observed
+  the existing Morse TTS interruption race as `audio_output_busy`; its focused rerun and the full
+  rerun passed without changes. Umbrella format, warnings-as-errors compilation, strict Credo,
+  and unused-lock checks pass. Umbrella `mix test` stops before execution at the unchanged absent
+  PostgreSQL SCRAM password; no credential source was inspected. Legacy tool dispatcher modules and
+  Jido dependency/lock entries remain for their own cleanup checkpoint.
 
 ## Specification review
 
