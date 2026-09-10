@@ -263,6 +263,16 @@ and generation identity into the immutable plan. Catalog TTL/refresh orchestrati
 configuration source remain outside the loader rather than becoming another concern of an
 agent activation.
 
+`RemoteMCP.CatalogStore` owns only the current immutable application/tenant catalog
+snapshot. A configuration owner loads and validates every replacement before one atomic
+publication; network discovery never runs in the store's GenServer callback and cannot
+delay readers. New definition compilation sees the published replacement. An activation
+already started from an earlier snapshot retains its own exact runtime binding, schema and
+connection until that activation ends or its credential generation is revoked. Publication
+does not mutate a running activation or silently switch its remote operation. The initial
+store does not schedule TTL refreshes or decide how application/tenant configuration is
+retrieved.
+
 Reusable protocol connections are keyed by application/tenant scope, integration ID,
 and credential generation. An agent activation acquires a monitored, non-secret lease
 for every exact generation used by its resolved bindings; the lease grants access to the

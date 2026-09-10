@@ -331,3 +331,32 @@ only model-loop blocker.
 Next: add bounded current-snapshot publication/refresh around this loader and prove an active
 activation retains its pinned schema while a later compilation sees the replacement snapshot.
 The supported Jido runtime-tool interface remains required before the vertical outcome can run.
+
+## 2026-09-10 — atomic catalog snapshot publication
+
+- Kept remote discovery out of a GenServer callback. `RemoteMCP.CatalogStore` has one
+  responsibility: return the current immutable `IntegrationCatalog` or atomically replace it
+  after an external configuration/discovery owner has prepared a complete snapshot.
+- Red: a controlled test could not start the absent `CatalogStore` child.
+- Green: the Call Engine application now supervises one explicitly named store initialized with an
+  empty valid catalog. The public store also supports unnamed supervised instances for isolated
+  tests and embedded composition.
+- The replacement test starts an activation-local integration owner from catalog generation 1,
+  publishes generation 2 with a different input schema and private protocol client, and resolves
+  the new descriptor from the current snapshot. The first owner continues to validate against and
+  invoke only generation 1; generation 2's client receives no call. Checking the old descriptor
+  against the replacement snapshot fails as `:stale_integration`.
+- Publication alone never revokes credentials or mutates active owners. The separately implemented
+  credential-generation revocation path remains the fail-closed invalidation mechanism.
+- This checkpoint does not schedule TTL refreshes, retrieve application/tenant configuration, or
+  wire the store into Calls preparation and room startup. It does not lift the Jido runtime-tool
+  blocker.
+- Focused verification passes 1 test, and the complete Call Engine child passes 197 tests with two
+  tagged integrations excluded. Root format, warnings-as-errors compilation, strict Credo over
+  312 files, and unused-dependency detection pass. The ordinary root test command again cannot
+  create its database because the machine's default PostgreSQL listener requires an unavailable
+  password; the deterministic umbrella run against isolated temporary PostgreSQL passes all 412
+  default-lane tests with nine tagged network integrations excluded.
+
+Next: connect catalog lookup to the Calls preparation and live room-start boundaries without
+giving Calls or Gateway access to private MCP configuration.

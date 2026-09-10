@@ -165,6 +165,14 @@ definition boundary has started or its specification has been reviewed.
   with nine tagged network integrations excluded. Catalog TTL/refresh orchestration and the
   configuration source remain pending; this does not claim the broader
   resolution/cache/discovery checklist or Jido exposure complete.
+- [x] A separately supervised `CatalogStore` owns only atomic publication of the current immutable
+  application/tenant snapshot; catalog loading stays outside its callbacks. A controlled
+  replacement test starts an activation-local owner from generation 1, publishes generation 2
+  with a different schema and client, and proves the active owner still validates/invokes its
+  original pinned binding while subsequent resolution sees generation 2. Credential revocation
+  remains the explicit mechanism that invalidates an active generation. Automatic TTL scheduling
+  and configuration-source integration remain pending. The Call Engine suite passes 197 tests;
+  the deterministic umbrella suite passes 412, with nine tagged network integrations excluded.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review
