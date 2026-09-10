@@ -4,8 +4,17 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator
   alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.{TestAgentRuntimeModelProvider, TestAgentTool, TestBlockingTool}
+
+  alias Vxpipe.CallEngine.{
+    TestAgentRuntimeModelProvider,
+    TestAgentTool,
+    TestBlockingTool,
+    TestRemoteMCPConnectionProvider,
+    TestRemoteMCPProtocolClient
+  }
+
   alias Vxpipe.CallEngine.Tool.{Context, InvocationCompletion, InvocationRegistry}
 
   alias Vxpipe.AgentRuntime.{Message, ModelResponse, ToolCall}
@@ -148,6 +157,95 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
 
     _ = :sys.get_state(replacement_registry)
     assert {:ok, []} = InvocationRegistry.snapshot(replacement_registry)
+  end
+
+  test "owns and executes a private remote MCP binding in the Agent Runtime graph" do
+    observer = self()
+    remote_result = {:ok, %{"content" => [%{"type" => "text", "text" => "found"}]}}
+
+    client =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{responses: [{:wait, observer, remote_result}], invocations: []}
+         end}
+      )
+
+    generation = "credential-#{System.unique_integer([:positive, :monotonic])}"
+
+    {integrations, remote_binding} =
+      RemoteMCPFixture.binding!(client, self(), "private-remote-sentinel",
+        credential_generation: generation
+      )
+
+    activation_id = unique_activation_id()
+
+    options =
+      activation_id
+      |> agent_runtime_options()
+      |> Keyword.put(:tools, %{"customer_lookup" => remote_binding})
+      |> Keyword.put(:mcp_integrations, integrations)
+      |> Keyword.put(:remote_mcp_connection_provider, TestRemoteMCPConnectionProvider)
+      |> Keyword.put(:remote_mcp_protocol_client, TestRemoteMCPProtocolClient)
+
+    activation = start_supervised!({AgentActivationSupervisor, options})
+    children = AgentActivationSupervisor.children(activation)
+
+    assert Map.has_key?(children, :remote_mcp_owner)
+    assert_receive {:test_remote_mcp_opened, _key, opened_config}
+    assert opened_config[:private] == "private-remote-sentinel"
+    refute inspect(:sys.get_state(activation)) =~ "private-remote-sentinel"
+
+    coordinator = Map.fetch!(children, :coordinator)
+    assert :ok = Coordinator.respond(coordinator, send_text("remote-mcp-activation"))
+    assert_receive {:test_agent_runtime_stream, provider, request}
+
+    assert [tool] = request.tools
+    assert tool.name == "customer_lookup"
+    assert tool.description == "Looks up one customer."
+    refute inspect(tool) =~ "lookup_customer"
+    refute inspect(request) =~ "private-remote-sentinel"
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "remote-mcp-call",
+               name: "customer_lookup",
+               arguments: %{"customer_id" => "customer-42"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_remote_mcp_invocation_started, execution}
+    refute execution == provider
+
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, acknowledgement}
+    assert acknowledgement.tools == []
+
+    assert Enum.any?(acknowledgement.messages, fn
+             %Message{role: :tool, tool_call_id: "remote-mcp-call", content: content} ->
+               content =~ "running"
+
+             _message ->
+               false
+           end)
+
+    assert {:ok, acknowledgement_response} = ModelResponse.new(text: "I am checking now.")
+
+    send(
+      acknowledgement_provider,
+      {:test_agent_runtime_response, {:ok, acknowledgement_response}}
+    )
+
+    send(execution, :release_test_remote_mcp)
+
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
+    assert List.last(completion_request.messages).origin == :engine
+
+    assert {:ok, completion_response} = ModelResponse.new(text: "Customer found.")
+    send(completion_provider, {:test_agent_runtime_response, {:ok, completion_response}})
+
+    assert_receive {:vxpipe_capability_text, ^coordinator, _command, "Customer found."}
   end
 
   defp agent_runtime_options(activation_id) do

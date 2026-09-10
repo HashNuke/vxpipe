@@ -2,13 +2,17 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
+  alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
 
   @derive {Inspect, only: [:name, :conversation_mode]}
   @enforce_keys [:name, :conversation_mode, :handler]
   defstruct @enforce_keys
 
-  @type handler :: {:host, module()} | {:call_variables, VariablesBinding.t()}
+  @type handler ::
+          {:host, module()}
+          | {:call_variables, VariablesBinding.t()}
+          | {:remote_mcp, GenServer.server()}
   @type t :: %__MODULE__{
           name: String.t(),
           conversation_mode: :blocking | :non_blocking,
@@ -38,6 +42,32 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   end
 
   def from_resolved(%ToolBinding{}), do: {:error, :invalid_binding}
+
+  @spec from_remote(ToolBinding.t(), GenServer.server()) ::
+          {:ok, t()} | {:error, :invalid_binding}
+  def from_remote(
+        %ToolBinding{
+          name: name,
+          type: :mcp,
+          conversation_mode: conversation_mode,
+          remote: %ResolvedTool{}
+        },
+        owner
+      )
+      when is_binary(name) and conversation_mode in [:blocking, :non_blocking] do
+    if server_ref?(owner) do
+      {:ok,
+       %__MODULE__{
+         name: name,
+         conversation_mode: conversation_mode,
+         handler: {:remote_mcp, owner}
+       }}
+    else
+      {:error, :invalid_binding}
+    end
+  end
+
+  def from_remote(%ToolBinding{}, _owner), do: {:error, :invalid_binding}
 
   @spec from_call_variables(String.t(), VariablesBinding.t()) ::
           {:ok, t()} | {:error, :invalid_binding}
@@ -75,5 +105,20 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
       VariablesBinding.permitted_tool?(binding, name)
   end
 
+  def valid?(%__MODULE__{
+        name: name,
+        conversation_mode: conversation_mode,
+        handler: {:remote_mcp, owner}
+      }) do
+    is_binary(name) and name != "" and conversation_mode in [:blocking, :non_blocking] and
+      server_ref?(owner)
+  end
+
   def valid?(_binding), do: false
+
+  defp server_ref?(nil), do: false
+  defp server_ref?(server) when is_pid(server) or is_atom(server), do: true
+  defp server_ref?({:global, _term}), do: true
+  defp server_ref?({:via, module, _term}) when is_atom(module), do: true
+  defp server_ref?(_server), do: false
 end

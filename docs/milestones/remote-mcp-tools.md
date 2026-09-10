@@ -1,8 +1,9 @@
 # Remote MCP tools in a live call
 
 Status: implementation in progress. Protocol, configuration, catalog, binding, security and
-activation foundations are implemented. Final model exposure depends on the intermediate
-[ReqLLM agent runtime](reqllm-agent-runtime.md); it no longer depends on a Jido extension or fork.
+activation foundations are implemented. The completed
+[ReqLLM agent runtime](reqllm-agent-runtime.md) now projects exact remote descriptors and delegates
+their private handlers; live room startup and end-to-end conversation remain.
 Prerequisites: [Asynchronous history](asynchronous-call-history.md), including its
 background-tool and tenant admission prerequisites; [MCP client integration and
 conformance](mcp-client-library.md); [ReqLLM agent runtime](reqllm-agent-runtime.md).
@@ -252,6 +253,17 @@ definition boundary has started or its specification has been reviewed.
   pass. The serialized umbrella suite passes all 434 default-lane tests with nine tagged
   integrations excluded. This checkpoint does not change the outstanding agent-runtime
   model-tool projection boundary.
+- [x] Agent Runtime descriptor compilation now accepts a resolved MCP tool only when it has an
+  opaque activation-owned remote handler. The model receives the exact local alias, description,
+  and pinned schema; it receives no remote operation, endpoint, credential, or owner reference.
+  `AgentActivationSupervisor` conditionally owns the remote integration process in the same
+  one-for-all generation as its Session, invocation registry, and invocation supervisor. A real
+  remote binding executes through the common supervised invocation worker and preserves a bounded
+  remote result. Red evidence first found the missing descriptor API, then the absent activation
+  child; focused checks pass 13 tests and the complete Call Engine suite passes 225 tests with one
+  tagged integration exclusion. All 495 default umbrella tests pass with ten tagged integration
+  exclusions. Plan/room startup still needs to supply the pinned catalog before this is a live-call
+  path.
 - [ ] Expose and execute the pinned runtime binding through the adopted
   `Vxpipe.AgentRuntime` loop.
 

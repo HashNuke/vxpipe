@@ -4,6 +4,8 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   alias Vxpipe.AgentRuntime.Session
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
+  alias Vxpipe.CallEngine.RemoteMCP.{IntegrationCatalog, IntegrationOwner}
+  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
 
   alias Vxpipe.CallEngine.AgentRuntime.{
     Coordinator,
@@ -21,35 +23,38 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     coordinator = child_ref(activation_id, :coordinator)
     invocation_registry = child_ref(activation_id, :invocation_registry)
     invocation_supervisor = child_ref(activation_id, :invocation_supervisor)
+    remote_mcp_owner = remote_mcp_owner(activation_id, options)
     request_supervisor = child_ref(activation_id, :request_supervisor)
     session = child_ref(activation_id, :session)
 
     with {:ok, tools} <-
            ToolDescriptors.compile(
              Keyword.fetch!(options, :tools),
-             Keyword.get(options, :variable_binding)
+             Keyword.get(options, :variable_binding),
+             remote_mcp_owner
            ) do
       {:ok,
-       [
-         request_supervisor_child(request_supervisor),
-         coordinator_child(
-           activation_id,
-           coordinator,
-           invocation_registry,
-           request_supervisor,
-           session,
-           options
-         ),
-         invocation_supervisor_child(activation_id, invocation_supervisor, options),
-         invocation_registry_child(
-           activation_id,
-           coordinator,
-           invocation_registry,
-           invocation_supervisor,
-           options
-         ),
-         session_child(coordinator, invocation_registry, session, tools, options)
-       ]}
+       [request_supervisor_child(request_supervisor)] ++
+         remote_mcp_children(activation_id, remote_mcp_owner, options) ++
+         [
+           coordinator_child(
+             activation_id,
+             coordinator,
+             invocation_registry,
+             request_supervisor,
+             session,
+             options
+           ),
+           invocation_supervisor_child(activation_id, invocation_supervisor, options),
+           invocation_registry_child(
+             activation_id,
+             coordinator,
+             invocation_registry,
+             invocation_supervisor,
+             options
+           ),
+           session_child(coordinator, invocation_registry, session, tools, options)
+         ]}
     else
       _invalid -> {:error, :invalid_configuration}
     end
@@ -62,6 +67,49 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
       id: :request_supervisor,
       restart: :permanent
     )
+  end
+
+  defp remote_mcp_owner(activation_id, options) do
+    if remote_mcp_tools?(Keyword.fetch!(options, :tools)) do
+      child_ref(activation_id, :remote_mcp_owner)
+    end
+  end
+
+  defp remote_mcp_tools?(tools) do
+    Enum.any?(tools, fn
+      {_name, %ToolBinding{type: :mcp}} -> true
+      _entry -> false
+    end)
+  end
+
+  defp remote_mcp_children(_activation_id, nil, _options), do: []
+
+  defp remote_mcp_children(activation_id, remote_mcp_owner, options) do
+    with %IntegrationCatalog{} = integrations <- Keyword.get(options, :mcp_integrations) do
+      owner_options = [
+        activation_id: activation_id,
+        tools: Keyword.fetch!(options, :tools),
+        integrations: integrations,
+        name: remote_mcp_owner
+      ]
+
+      owner_options =
+        owner_options
+        |> put_optional(
+          :connection_provider,
+          Keyword.get(options, :remote_mcp_connection_provider)
+        )
+        |> put_optional(:protocol, Keyword.get(options, :remote_mcp_protocol_client))
+
+      [
+        Supervisor.child_spec({IntegrationOwner, owner_options},
+          id: :remote_mcp_owner,
+          restart: :permanent
+        )
+      ]
+    else
+      _invalid -> raise ArgumentError, "remote MCP integrations are unavailable"
+    end
   end
 
   defp coordinator_child(
@@ -145,4 +193,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
 
   defp child_ref(activation_id, role),
     do: AgentActivationSupervisor.child_ref(activation_id, role)
+
+  defp put_optional(options, _key, nil), do: options
+  defp put_optional(options, key, value), do: Keyword.put(options, key, value)
 end

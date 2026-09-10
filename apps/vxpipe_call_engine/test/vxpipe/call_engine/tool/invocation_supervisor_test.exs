@@ -2,7 +2,15 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
   use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.TestSubmittedInlineTool
+  alias Vxpipe.CallEngine.RemoteMCP.{IntegrationOwner, ResolvedTool}
+  alias Vxpipe.CallEngine.RemoteMCPFixture
+
+  alias Vxpipe.CallEngine.{
+    TestRemoteMCPConnectionProvider,
+    TestRemoteMCPProtocolClient,
+    TestSubmittedInlineTool
+  }
+
   alias Vxpipe.CallEngine.CallVariables.Binding
 
   alias Vxpipe.CallEngine.Tool.{
@@ -220,6 +228,58 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
                              "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
                            }
                          }}
+                    }}
+  end
+
+  test "hands a remote MCP call to the same supervised worker boundary" do
+    response = {:ok, %{"content" => [%{"type" => "text", "text" => "found"}]}}
+    observer = self()
+
+    client =
+      start_supervised!(
+        {Agent, fn -> %{responses: [{:wait, observer, response}], invocations: []} end}
+      )
+
+    generation = "credential-#{System.unique_integer([:positive, :monotonic])}"
+
+    {integrations, %ToolBinding{remote: %ResolvedTool{}} = resolved} =
+      RemoteMCPFixture.binding!(client, self(), "private", credential_generation: generation)
+
+    owner =
+      start_supervised!(
+        {IntegrationOwner,
+         activation_id: "activation-remote-worker",
+         tools: %{"customer_lookup" => resolved},
+         integrations: integrations,
+         connection_provider: TestRemoteMCPConnectionProvider,
+         protocol: TestRemoteMCPProtocolClient}
+      )
+
+    assert_receive {:test_remote_mcp_opened, _key, _config}
+    assert {:ok, binding} = InvocationBinding.from_remote(resolved, owner)
+    supervisor = start_invocation_supervisor(1)
+
+    assert {:ok, worker} =
+             InvocationSupervisor.start_invocation(supervisor,
+               invocation_id: "invocation-remote",
+               binding: binding,
+               arguments: %{"customer_id" => "customer-42"},
+               context: context(),
+               reply_to: self(),
+               timeout_ms: 1_000,
+               maximum_result_bytes: 4_096
+             )
+
+    assert_receive {:test_remote_mcp_invocation_started, execution}
+    refute execution == self()
+    send(execution, :release_test_remote_mcp)
+
+    assert_receive {:vxpipe_tool_invocation_finished, ^worker,
+                    %InvocationCompletion{
+                      invocation_id: "invocation-remote",
+                      tool_name: "customer_lookup",
+                      conversation_mode: :blocking,
+                      outcome: ^response
                     }}
   end
 

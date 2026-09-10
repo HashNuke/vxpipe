@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
   @moduledoc false
 
   alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
+  alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
   alias Vxpipe.CallEngine.Tool.{Context, InvocationBinding}
 
   @spec run(InvocationBinding.t(), map(), Context.t(), pos_integer()) ::
@@ -33,6 +34,18 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
     |> normalize(maximum_result_bytes)
   end
 
+  def run(
+        %InvocationBinding{name: name, handler: {:remote_mcp, owner}},
+        arguments,
+        %Context{},
+        maximum_result_bytes
+      )
+      when is_map(arguments) and is_integer(maximum_result_bytes) and maximum_result_bytes > 0 do
+    owner
+    |> IntegrationOwner.execute(name, arguments)
+    |> normalize_remote(maximum_result_bytes)
+  end
+
   def run(_binding, _arguments, _context, _maximum_result_bytes), do: {:error, :tool_failed}
 
   defp execute(action, arguments, context) do
@@ -59,4 +72,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationExecution do
 
   defp normalize({:error, _reason}, _maximum_result_bytes), do: {:error, :tool_failed}
   defp normalize(_result, _maximum_result_bytes), do: {:error, :invalid_result}
+
+  defp normalize_remote({:error, reason} = error, _maximum_result_bytes)
+       when reason in [:invalid_result, :unknown],
+       do: error
+
+  defp normalize_remote(result, maximum_result_bytes), do: normalize(result, maximum_result_bytes)
 end

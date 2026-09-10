@@ -623,3 +623,38 @@ without crossing the unresolved Jido runtime data-tool boundary.
 
 Next: obtain an explicit maintenance decision for a Jido fork/private patch or wait for a supported
 upstream runtime data-tool interface before implementing the milestone's live mixed-tool slice.
+
+## 2026-09-10 — Agent Runtime remote descriptor and worker bridge
+
+The completed ReqLLM Agent Runtime removed the historical Jido interface blocker. Reconfirmed the
+execution contract before wiring remote tools: every tool is handed to the same independently
+supervised Call Engine invocation worker. `conversation_mode` only controls admission of later
+caller turns; omission/default `blocking` and explicit `non_blocking` never select different
+execution paths.
+
+Red descriptor coverage first failed because `ToolDescriptors.compile/3` did not exist. The new
+boundary accepts a resolved remote tool only with an opaque activation-owned owner reference and
+copies only its exact local alias, public description, and pinned JSON Schema into Agent Runtime.
+A follow-up negative check caught that Elixir's `nil` is an atom: the initial generic named-server
+guard mistakenly treated a missing owner as valid. The closed check now rejects `nil`, so an MCP
+descriptor cannot exist without its execution owner.
+
+Red activation coverage then started the existing five-child graph and found no remote owner. The
+runtime graph now conditionally starts `RemoteMCP.IntegrationOwner` before the coordinator and
+includes it in the activation's one-for-all generation. Its private connection configuration stays
+behind the integration value's redacted inspection boundary. Host-only activations retain their
+existing topology.
+
+The invocation execution boundary now calls the remote owner from the same task-backed temporary
+worker used for host and Call Variables bindings. A controlled slow protocol call proved the MCP
+operation runs outside both the model request process and the test caller, then reports one bounded
+correlated result. Remote `unknown` and `invalid_result` outcomes retain their safe classifications;
+unexpected binding/authorization failures remain `tool_failed`.
+
+The descriptor, invocation-worker, and activation checks pass 13 tests. The complete Call Engine
+suite passes 225 tests with one tagged integration exclusion. Root format, warnings-as-errors
+compilation, strict Credo, and unused-lock checks pass. A fresh complete umbrella run against a
+temporary trust-authenticated PostgreSQL 18 instance passes all 495 default tests with ten tagged
+integration exclusions; the server was stopped and its temporary data moved to trash. This
+checkpoint does not yet make a room start resolve and supply the pinned integration catalog; that
+is the next red/green boundary.

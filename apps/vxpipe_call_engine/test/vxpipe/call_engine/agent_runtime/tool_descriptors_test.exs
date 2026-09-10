@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
   alias Vxpipe.AgentRuntime.ToolDescriptor
   alias Vxpipe.CallEngine.AgentRuntime.ToolDescriptors
   alias Vxpipe.CallEngine.CallVariables.Binding
+  alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.{TestAgentTool, TestSubmittedInlineTool}
   alias Vxpipe.CallEngine.Tool.InvocationBinding
@@ -72,6 +73,40 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
            end)
 
     refute inspect(List.first(descriptors)) =~ "CallVariables.Binding"
+  end
+
+  test "compiles an MCP alias from its pinned schema and private activation owner" do
+    owner = {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {:test, "remote-owner"}}}
+    {_integrations, remote_binding} = RemoteMCPFixture.binding!(self(), self(), "private")
+
+    assert {:ok, [%ToolDescriptor{} = descriptor]} =
+             ToolDescriptors.compile(%{"customer_lookup" => remote_binding}, nil, owner)
+
+    assert descriptor.name == "customer_lookup"
+    assert descriptor.description == "Looks up one customer."
+
+    assert descriptor.input_schema == %{
+             "type" => "object",
+             "properties" => %{"customer_id" => %{"type" => "string"}},
+             "required" => ["customer_id"],
+             "additionalProperties" => false
+           }
+
+    assert %InvocationBinding{
+             name: "customer_lookup",
+             conversation_mode: :blocking,
+             handler: {:remote_mcp, ^owner}
+           } = descriptor.binding
+
+    refute inspect(descriptor) =~ "remote-owner"
+    refute inspect(descriptor) =~ "lookup_customer"
+  end
+
+  test "rejects an MCP alias without an activation-owned remote handler" do
+    {_integrations, remote_binding} = RemoteMCPFixture.binding!(self(), self(), "private")
+
+    assert {:error, :invalid_tool_binding} =
+             ToolDescriptors.compile(%{"customer_lookup" => remote_binding})
   end
 
   defp host_binding(name, action, conversation_mode) do
