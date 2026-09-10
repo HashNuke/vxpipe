@@ -9,6 +9,8 @@ defmodule Vxpipe.Console.TelemetryReporter do
 
   use GenServer
 
+  alias Vxpipe.Console.TelemetryReporter.MCPProjection
+
   @events [
     [:vxpipe, :gateway, :http, :request, :stop],
     [:vxpipe, :call_engine, :model, :first_token],
@@ -62,7 +64,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
   end
 
   @spec events() :: [nonempty_list(atom())]
-  def events, do: @events
+  def events, do: @events ++ MCPProjection.events()
 
   @doc false
   def handle_event(event, measurements, metadata, config) do
@@ -105,7 +107,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
     :ok =
       :telemetry.attach_many(
         handler_id,
-        @events,
+        events(),
         &__MODULE__.handle_event/4,
         handler_config
       )
@@ -123,6 +125,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
        last_event_at: nil,
        model_first_token: %{},
        model_requests: %{},
+       mcp: MCPProjection.new(),
        pending: pending,
        provider_failures: %{},
        received_events: 0,
@@ -149,6 +152,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
         first_token: state.model_first_token,
         requests: state.model_requests
       },
+      mcp: state.mcp,
       provider_failures: state.provider_failures,
       received_events: state.received_events,
       runtime: runtime_snapshot(state.runtime, state.runtime_sampled_at),
@@ -321,7 +325,12 @@ defmodule Vxpipe.Console.TelemetryReporter do
     }
   end
 
-  defp project(_event, _measurements, _metadata, state), do: state
+  defp project(event, measurements, metadata, state) do
+    case MCPProjection.project(event, measurements, metadata, state.mcp) do
+      {:ok, mcp} -> %{state | mcp: mcp}
+      :unhandled -> state
+    end
+  end
 
   defp sanitize_event(
          [:vxpipe, :gateway, :http, :request, :stop],
@@ -426,7 +435,12 @@ defmodule Vxpipe.Console.TelemetryReporter do
     {sanitize_runtime(measurements), %{}}
   end
 
-  defp sanitize_event(_event, _measurements, _metadata), do: {%{}, %{}}
+  defp sanitize_event(event, measurements, metadata) do
+    case MCPProjection.sanitize(event, measurements, metadata) do
+      {:ok, measurements, metadata} -> {measurements, metadata}
+      :unhandled -> {%{}, %{}}
+    end
+  end
 
   defp sanitize_duration(%{duration: duration}) when is_integer(duration) and duration >= 0,
     do: %{duration: duration}

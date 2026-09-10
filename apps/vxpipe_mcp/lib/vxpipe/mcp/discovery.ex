@@ -5,7 +5,7 @@ defmodule Vxpipe.MCP.Discovery do
   A partial result is never returned as a usable catalog.
   """
 
-  alias Vxpipe.MCP.{Catalog, ExMCPClient}
+  alias Vxpipe.MCP.{Catalog, ExMCPClient, Telemetry}
 
   @default_deadline_ms 5_000
   @default_max_pages 20
@@ -23,29 +23,34 @@ defmodule Vxpipe.MCP.Discovery do
 
   @spec discover(term(), keyword()) :: {:ok, Catalog.t()} | {:error, error()}
   def discover(client, opts \\ []) do
+    started_at = Telemetry.started_at()
     protocol = Keyword.get(opts, :protocol, ExMCPClient)
     deadline_ms = Keyword.get(opts, :deadline_ms, @default_deadline_ms)
     max_pages = Keyword.get(opts, :max_pages, @default_max_pages)
     max_decoded_bytes = Keyword.get(opts, :max_decoded_bytes, @default_max_decoded_bytes)
 
-    with :ok <- positive(:deadline_ms, deadline_ms),
-         :ok <- positive(:max_pages, max_pages),
-         :ok <- positive(:max_decoded_bytes, max_decoded_bytes) do
-      state = %{
-        client: client,
-        protocol: protocol,
-        cursor: nil,
-        seen_cursors: MapSet.new(),
-        deadline: now() + deadline_ms,
-        page_count: 0,
-        max_pages: max_pages,
-        decoded_bytes: 0,
-        max_decoded_bytes: max_decoded_bytes,
-        tools: []
-      }
+    result =
+      with :ok <- positive(:deadline_ms, deadline_ms),
+           :ok <- positive(:max_pages, max_pages),
+           :ok <- positive(:max_decoded_bytes, max_decoded_bytes) do
+        state = %{
+          client: client,
+          protocol: protocol,
+          cursor: nil,
+          seen_cursors: MapSet.new(),
+          deadline: now() + deadline_ms,
+          page_count: 0,
+          max_pages: max_pages,
+          decoded_bytes: 0,
+          max_decoded_bytes: max_decoded_bytes,
+          tools: []
+        }
 
-      fetch_page(state)
-    end
+        fetch_page(state)
+      end
+
+    Telemetry.request_stop(started_at, :discovery, telemetry_outcome(result), client_pid(client))
+    result
   end
 
   defp fetch_page(%{page_count: page_count, max_pages: max_pages})
@@ -132,6 +137,27 @@ defmodule Vxpipe.MCP.Discovery do
 
   defp positive(_name, value) when is_integer(value) and value > 0, do: :ok
   defp positive(name, _value), do: {:error, {:invalid_option, name}}
+
+  defp telemetry_outcome({:ok, %Catalog{}}), do: :ok
+  defp telemetry_outcome({:error, :discovery_timed_out}), do: :timeout
+  defp telemetry_outcome({:error, :discovery_too_large}), do: :too_large
+
+  defp telemetry_outcome({:error, reason})
+       when reason in [
+              :discovery_page_limit_exceeded,
+              :duplicate_tool_name,
+              :invalid_discovery_response,
+              :malformed_tool,
+              :repeated_cursor
+            ],
+       do: :rejected
+
+  defp telemetry_outcome({:error, {:invalid_option, _name}}), do: :rejected
+  defp telemetry_outcome({:error, :discovery_failed}), do: :failed
+  defp telemetry_outcome({:error, _reason}), do: :failed
+
+  defp client_pid(client) when is_pid(client), do: client
+  defp client_pid(_client), do: nil
 
   defp now, do: System.monotonic_time(:millisecond)
 end

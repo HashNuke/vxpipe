@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
   use Phoenix.LiveView, layout: false
 
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
+  alias Vxpipe.Console.Diagnostics.MCPPanel
   alias Vxpipe.Console.TelemetryReporter
 
   @refresh_interval_ms 1_000
@@ -80,6 +81,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
               first_token={@snapshot.model.first_token}
               requests={@snapshot.model.requests}
             />
+            <MCPPanel.render metrics={@snapshot.mcp} />
           </div>
 
           <div class="workbench-column">

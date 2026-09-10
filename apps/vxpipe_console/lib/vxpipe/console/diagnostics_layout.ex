@@ -29,7 +29,7 @@ defmodule Vxpipe.Console.DiagnosticsLayout do
             --canvas: oklch(1 0 0);
             --green: oklch(0.51 0.13 162.48);
             --green-soft: oklch(0.95 0.055 162.48);
-            --coral: oklch(0.6 0.185 22.23);
+            --coral: oklch(0.56 0.185 22.23);
             --coral-soft: oklch(0.96 0.045 22.23);
             --violet: oklch(0.585 0.233 277.117);
             --blue: oklch(0.55 0.19 259.815);

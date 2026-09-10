@@ -29,7 +29,8 @@ defmodule Vxpipe.MCP.MixProject do
       {:ex_mcp, git: "https://github.com/HashNuke/ex_mcp.git", branch: "vxp"},
       {:jason, "~> 1.4"},
       {:jsv, "~> 0.22"},
-      {:plug, "~> 1.20"}
+      {:plug, "~> 1.20"},
+      {:telemetry, "~> 1.3"}
     ]
   end
 

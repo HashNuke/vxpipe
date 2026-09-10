@@ -12,7 +12,8 @@ defmodule Vxpipe.MCP.Connections do
     ConnectionKey,
     ConnectionNames,
     ExMCPRuntime,
-    IntegrationSupervisor
+    IntegrationSupervisor,
+    Telemetry
   }
 
   @connection_supervisor Vxpipe.MCP.ConnectionSupervisor
@@ -27,7 +28,7 @@ defmodule Vxpipe.MCP.Connections do
   @spec open(ConnectionKey.t(), keyword(), keyword()) ::
           {:ok, Connection.t()} | {:error, error()}
   def open(%ConnectionKey{} = key, config, opts \\ []) when is_list(config) do
-    do_open(key, config, opts, &ClientOptions.build/1)
+    report_open(key, config, opts, &ClientOptions.build/1)
   end
 
   @doc """
@@ -39,17 +40,27 @@ defmodule Vxpipe.MCP.Connections do
           {:ok, Connection.t()} | {:error, error()}
   def open_loopback_test(%ConnectionKey{} = key, config, opts \\ [])
       when is_list(config) do
-    do_open(key, config, opts, &ClientOptions.build_loopback_test/1)
+    report_open(key, config, opts, &ClientOptions.build_loopback_test/1)
   end
 
-  defp do_open(key, config, opts, options_builder) do
-    case lookup(key) do
-      {:ok, connection} ->
-        {:ok, connection}
+  defp report_open(key, config, opts, options_builder) do
+    started_at = Telemetry.started_at()
 
-      :error ->
-        start_connection(key, config, opts, options_builder)
-    end
+    {result, outcome} =
+      case lookup(key) do
+        {:ok, connection} -> {{:ok, connection}, :reused}
+        :error -> classify_open(start_connection(key, config, opts, options_builder))
+      end
+
+    Telemetry.connection_stop(
+      started_at,
+      :open,
+      outcome,
+      active_connection_count(),
+      result_client(result)
+    )
+
+    result
   end
 
   @spec lookup(ConnectionKey.t()) :: {:ok, Connection.t()} | :error
@@ -66,16 +77,24 @@ defmodule Vxpipe.MCP.Connections do
   def close(%Connection{} = connection), do: close(Connection.key(connection))
 
   def close(%ConnectionKey{} = key) do
-    case ConnectionNames.lookup(:owner, key) do
-      {:ok, owner} ->
-        case DynamicSupervisor.terminate_child(@connection_supervisor, owner) do
-          :ok -> :ok
-          {:error, :not_found} -> :ok
-        end
+    started_at = Telemetry.started_at()
+    client = lookup_client(key)
 
-      :error ->
-        :ok
-    end
+    outcome =
+      case ConnectionNames.lookup(:owner, key) do
+        {:ok, owner} -> close_owner(owner)
+        :error -> :absent
+      end
+
+    Telemetry.connection_stop(
+      started_at,
+      :close,
+      outcome,
+      active_connection_count(),
+      client
+    )
+
+    :ok
   end
 
   defp start_connection(key, config, opts, options_builder) do
@@ -135,5 +154,31 @@ defmodule Vxpipe.MCP.Connections do
       {:error, _reason} ->
         {:error, :connection_failed}
     end
+  end
+
+  defp classify_open({:ok, %Connection{}} = result), do: {result, :opened}
+  defp classify_open({:error, _reason} = result), do: {result, :failed}
+
+  defp result_client({:ok, connection}), do: Connection.client(connection)
+  defp result_client({:error, _reason}), do: nil
+
+  defp lookup_client(key) do
+    case ConnectionNames.lookup(:client, key) do
+      {:ok, client} -> client
+      :error -> nil
+    end
+  end
+
+  defp close_owner(owner) do
+    case DynamicSupervisor.terminate_child(@connection_supervisor, owner) do
+      :ok -> :closed
+      {:error, :not_found} -> :absent
+    end
+  end
+
+  defp active_connection_count do
+    @connection_supervisor
+    |> DynamicSupervisor.count_children()
+    |> Map.fetch!(:active)
   end
 end

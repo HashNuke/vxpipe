@@ -15,6 +15,8 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   @gateway_request_stop [:vxpipe, :gateway, :http, :request, :stop]
   @model_first_token [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop [:vxpipe, :call_engine, :model, :request, :stop]
+  @mcp_connection_stop [:vxpipe, :mcp, :connection, :stop]
+  @mcp_request_stop [:vxpipe, :mcp, :request, :stop]
   @tts_first_audio [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure [:vxpipe, :call_engine, :provider, :failure]
   @runtime_sample [:vxpipe, :call_engine, :runtime, :sample]
@@ -44,6 +46,8 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   end
 
   test "renders live bounded call-path measurements" do
+    {_child_id, reporter} = start_reporter({__MODULE__, make_ref()}, 32)
+    configure_reporter(reporter)
     sentinel = "private-diagnostics-sentinel"
 
     :telemetry.execute(
@@ -102,6 +106,18 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
       %{outcome: :queued}
     )
 
+    :telemetry.execute(
+      @mcp_connection_stop,
+      %{active_connections: 2, count: 1, duration: duration_ms(5)},
+      %{operation: :open, outcome: :opened, client: self(), integration_id: sentinel}
+    )
+
+    :telemetry.execute(
+      @mcp_request_stop,
+      %{count: 1, duration: duration_ms(8), result: sentinel},
+      %{operation: :invocation, outcome: :remote_error, client: self(), tool_name: sentinel}
+    )
+
     emit_runtime(7)
 
     {:ok, view, _html} = live(build_conn(), "/diagnostics")
@@ -131,6 +147,24 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert has_element?(view, "#background-worker-unknown td:last-child")
     assert has_element?(view, "#background-handoff-queued td:first-child", "Queued")
     assert has_element?(view, "#background-handoff-queued td:last-child")
+    assert has_element?(view, "#mcp-active-connections", "2")
+    assert has_element?(view, "#mcp-queue-pressure", "Not applicable")
+    assert has_element?(view, "#mcp-connection-open-opened td:first-child", "Open")
+    assert has_element?(view, "#mcp-connection-open-opened td:nth-child(2)", "Opened")
+    assert has_element?(view, "#mcp-connection-open-opened td:nth-child(3)", "5.0 ms")
+    assert has_element?(view, "#mcp-connection-open-opened td:last-child", "1")
+
+    assert has_element?(view, "#mcp-request-invocation-remote-error td:first-child", "Invocation")
+
+    assert has_element?(
+             view,
+             "#mcp-request-invocation-remote-error td:nth-child(2)",
+             "Remote error"
+           )
+
+    assert has_element?(view, "#mcp-request-invocation-remote-error td:nth-child(3)", "8.0 ms")
+    assert has_element?(view, "#mcp-request-invocation-remote-error td:last-child", "1")
+
     assert has_element?(view, ~s(a[href="/diagnostics/system"]), "System dashboard")
     assert has_element?(view, ~s(a[href="/"]), "Voice console")
     refute render(view) =~ sentinel

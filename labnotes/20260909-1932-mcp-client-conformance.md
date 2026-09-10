@@ -458,3 +458,49 @@ evidence that this production concern is solved.
   race, and the next complete root suite passed every child. The suite used the local
   PostgreSQL Unix socket and a temporary build path because the shared test build had stalled
   compiling Mint. Milestone-wide operational visibility remains.
+
+## 2026-09-10 — operational visibility red contract
+
+- Chose two bounded telemetry families for the standalone MCP client: terminal connection
+  lifecycle events and terminal discovery/invocation request events. Their measurements are
+  limited to counts, native monotonic durations, and the current supervised connection count.
+- Event metadata is limited to closed operation/outcome categories and, when available, the
+  local client PID for same-VM correlation. Endpoint identity, integration or tenant identity,
+  credential generation, headers, tool names, arguments, catalog contents, and results are
+  excluded. The Console projection must discard even that PID before queueing an event.
+- This client boundary is synchronous and owns no admission queue. Operational UI must say
+  queue pressure is not applicable rather than report an invented value.
+- Red: three focused boundary tests fail because `Connections`, `Discovery`, and `Invocation`
+  do not yet emit the specified events. The ordinary child test build again stalled while
+  compiling Mint; the already-established isolated test build produced the expected three
+  missing-event failures.
+
+## 2026-09-10 — operational visibility green and rendered review
+
+- Added an MCP-owned emitter and instrumented the actual connection, discovery, and
+  invocation boundaries. Open/reuse/failure and close/absence are distinct lifecycle
+  outcomes; discovery and invocation map their public results into closed terminal outcome
+  categories. The current supervised connection count is observed rather than inferred from
+  earlier events.
+- Added a dedicated Console MCP projection. It sanitizes inside the Telemetry handler before
+  sending to the reporter, discards local client correlation and unexpected fields, and
+  retains only finite duration aggregates plus the latest active-connection count. A
+  suspended-reporter test confirms private sentinels and the client PID never enter its
+  queued messages or snapshot.
+- Added a separate MCP diagnostics component rather than expanding the existing LiveView's
+  presentation responsibilities. It uses the established instrument-section and ledger
+  language for active connections, lifecycle outcomes, and discovery/invocation outcomes.
+  It states that queue pressure is not applicable because this synchronous client boundary
+  owns no admission queue.
+- Green: the MCP child passes 30 tests with three integrations excluded, and Console passes
+  56 tests. The populated panel was rendered in Chromium at 1440 × 1000 and 390 × 844. The
+  mobile document had no horizontal overflow. Scoped accessibility audits reported zero
+  violations after restoring the diagnostics Fault Coral value to the existing documented
+  design token; browser runtime errors were empty.
+- Root formatting, warnings-as-errors compilation, strict Credo across 302 files, and the
+  unused-dependency check pass. The first umbrella run produced a transient
+  `:discovery_failed` in the compressed-response fixture before invocation; the same test at
+  that seed passed through the root application set, the complete MCP child passed at that
+  seed, and the next exact-state umbrella run passed all 393 default tests with nine tagged
+  integrations excluded. No behavior or timeout was changed to conceal the unrepeatable
+  fixture result.

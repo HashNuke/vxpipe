@@ -1,7 +1,7 @@
 # Call-definition implementation milestones
 
-Status: 23 milestone specifications; milestones 1 through 9 are complete and milestone 10,
-MCP client integration and conformance, is next. The earlier behavior contracts have
+Status: 23 milestone specifications; milestones 1 through 10 are complete and milestone 11,
+remote MCP tools in a live call, is next. The earlier behavior contracts have
 completed focused review. The 2026-09-08 released-package investigation
 updated the Jido/ExMCP boundaries; the live-MCP slice retains one explicit public
 runtime-tool interface blocker. Standalone MCP client work is independent of that gap.
@@ -42,7 +42,7 @@ progress without claiming the entire milestone is complete.
 7. [x] [Prepared calls and single-use joining](prepared-call-admission.md) — Prepare in PostgreSQL, then start exactly one live call when its caller joins.
 8. [x] [Asynchronous call history and variable snapshots](asynchronous-call-history.md) — Archive permitted events without putting PostgreSQL in the live-call critical path.
 9. [x] [Call inspection and debugging](call-inspection-and-debugging.md) — Inspect an authorized live or ended call's timeline, permitted snapshots, timings and archival gaps.
-10. [ ] [MCP client integration and conformance](mcp-client-library.md) — Verify ExMCP through a thin policy adapter and version-pinned reference/conformance server, independently of Jido.
+10. [x] [MCP client integration and conformance](mcp-client-library.md) — Verify ExMCP through a thin policy adapter and version-pinned reference/conformance server, independently of Jido.
 11. [ ] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
 12. [ ] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
 13. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.

@@ -9,6 +9,8 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
   @gateway_request_stop [:vxpipe, :gateway, :http, :request, :stop]
   @model_first_token [:vxpipe, :call_engine, :model, :first_token]
   @model_request_stop [:vxpipe, :call_engine, :model, :request, :stop]
+  @mcp_connection_stop [:vxpipe, :mcp, :connection, :stop]
+  @mcp_request_stop [:vxpipe, :mcp, :request, :stop]
   @tts_first_audio [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure [:vxpipe, :call_engine, :provider, :failure]
   @runtime_sample [:vxpipe, :call_engine, :runtime, :sample]
@@ -148,6 +150,44 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
     snapshot = TelemetryReporter.snapshot(reporter)
     assert snapshot.tts.first_audio[:morse] == duration_stats(3_000)
     assert snapshot.provider_failures[{:stt, :morse, :unavailable}] == 1
+  end
+
+  test "projects MCP lifecycle and request aggregates after discarding private correlation" do
+    {_child_id, reporter} = start_reporter(max_pending_events: 4)
+    sentinel = "private-mcp-sentinel"
+    client = self()
+    :ok = :sys.suspend(reporter)
+
+    :telemetry.execute(
+      @mcp_connection_stop,
+      %{
+        active_connections: 2,
+        count: 1,
+        duration: duration_ms(5),
+        endpoint: sentinel
+      },
+      %{operation: :open, outcome: :opened, client: client, integration_id: sentinel}
+    )
+
+    :telemetry.execute(
+      @mcp_request_stop,
+      %{count: 1, duration: duration_ms(8), result: sentinel},
+      %{operation: :invocation, outcome: :remote_error, client: client, tool_name: sentinel}
+    )
+
+    assert {:messages, queued_messages} = Process.info(reporter, :messages)
+    refute inspect(queued_messages) =~ sentinel
+    refute inspect(queued_messages) =~ inspect(client)
+
+    :ok = :sys.resume(reporter)
+    snapshot = TelemetryReporter.snapshot(reporter)
+
+    assert snapshot.mcp.active_connections == 2
+    assert snapshot.mcp.queue_pressure == :not_applicable
+    assert snapshot.mcp.connections[{:open, :opened}] == duration_stats(5_000)
+    assert snapshot.mcp.requests[{:invocation, :remote_error}] == duration_stats(8_000)
+    refute inspect(snapshot) =~ sentinel
+    refute inspect(snapshot) =~ inspect(client)
   end
 
   test "sanitizes queued events and never dimensions aggregates by call identity" do

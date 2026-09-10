@@ -51,3 +51,16 @@ aggregates: reservation/mailbox pressure, admissions, terminal duration, and han
 Desktop 1440 px and mobile 390 px Chromium renders were inspected in empty and populated
 states; hierarchy remained scannable and no horizontal overflow appeared. The voice-console
 surface and design tokens did not change, so `DESIGN.md` requires no update for this extension.
+
+## Finish evidence — remote MCP
+
+Remote MCP visibility extends the central timing column with one established instrument
+section, not a detached card surface. It exposes active connections, explicit unavailable
+queue pressure, lifecycle outcomes, and discovery/invocation outcomes using the existing
+readout and ledger grammar. Desktop 1440 × 1000 and mobile 390 × 844 populated Chromium
+renders were inspected; the mobile document remained exactly 390 px wide and tables stayed
+legible without horizontal overflow. Scoped accessibility audits returned zero violations at
+both viewports, and the browser reported no runtime errors. The review found that the
+diagnostics-only Fault Coral value had drifted from the documented design token and failed
+small-text contrast; restoring the documented token resolved the violation. No new token was
+introduced, so `DESIGN.md` requires no update.

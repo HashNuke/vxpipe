@@ -1,14 +1,13 @@
 # MCP client integration and conformance
 
-Status: in progress with the maintained ExMCP fork published and pinned. The exact
-dependency/profile, bounded all-or-nothing discovery, pre-submission validated invocation,
-scoped supervised connection contracts, two unmodified official scenarios, corrected
-recovery fixture, and Everything-server interoperability are implemented. Separate
-published fork branches address ExMCP 1.3.0's cumulative SSE budget, per-client
-credential-origin trust, fragmented-event parsing, and raw client diagnostics. The umbrella
-locks the `vxp` integration branch at `2d31d26`. Milestone-wide operational visibility
-remains; the separate Jido runtime-tool interface blocker belongs to the live-MCP milestone,
-not this library.
+Status: complete. The maintained ExMCP fork is published and pinned; the exact profile,
+bounded all-or-nothing discovery, pre-submission validated invocation, scoped supervised
+connections, official/reference interoperability, corrected recovery fixture, and bounded
+operational visibility are implemented and verified. Separate published fork branches
+address ExMCP 1.3.0's cumulative SSE budget, per-client credential-origin trust,
+fragmented-event parsing, and raw client diagnostics. The umbrella locks the `vxp`
+integration branch at `2d31d26`. The separate Jido runtime-tool interface blocker belongs
+to the live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No Jido runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
 Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [loop/tool-binding decision](../jido-tool-execution.md); [approved remote profile](../../labnotes/20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
@@ -139,9 +138,9 @@ milestone. Passing this checkpoint does not resolve Jido AI's runtime-tool inter
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/integration evidence in the implementation commit.
 
 Implementation evidence:
@@ -229,6 +228,27 @@ Implementation evidence:
   Console 55/0. Tests used an isolated build directory only after the ordinary shared test
   build reproducibly stopped making progress while compiling Mint. No sample UI changed in
   this checkpoint.
+- `Vxpipe.MCP.Telemetry` now emits terminal connection and request observations from the
+  actual public wrapper boundaries. Measurements are bounded to count, native duration, and
+  current supervised-connection count; metadata is limited to closed operation/outcome
+  categories and an optional local client PID. Endpoint/tool identity, tenant/integration
+  identity, credentials, schemas, arguments, and results never enter those events.
+- Console owns a separate MCP projection that sanitizes in the emitting process, before its
+  bounded reporter mailbox. A suspended-reporter check proves private fields and local PID
+  correlation enter neither queued messages nor retained snapshots. The diagnostics panel
+  exposes active connections, lifecycle and request latency/outcomes, while stating that
+  queue pressure is not applicable to this synchronous client boundary.
+- The operational checkpoint was test-first: three MCP boundary tests failed for missing
+  events, then reporter and LiveView tests failed for the absent projection/panel. The final
+  MCP child passes 30 tests with three tagged integrations excluded, and Console passes 56.
+  A final root run passes all 393 default tests with nine tagged integrations excluded:
+  MCP 30, call engine 181, Calls 35, Persistence 25, Gateway 66, and Console 56. Root
+  formatting, warnings-as-errors compilation, strict Credo over 302 files, and the
+  unused-dependency check pass.
+- The populated diagnostics panel was inspected in Chromium at 1440 × 1000 and 390 × 844.
+  It has no mobile horizontal overflow or browser runtime errors. Scoped accessibility
+  audits report zero violations after restoring the diagnostics Fault Coral value to the
+  already-documented design token. The responsive voice-console surface was unchanged.
 
 ## Specification review
 

@@ -46,6 +46,11 @@ starting unrelated development voice-provider configuration. The task itself sta
   after timeout, disconnect, or these post-submission failures and never resubmits the call.
 - `Vxpipe.MCP.ReferenceProbe.run/2` is the fixture-facing boundary that discovers and calls
   Everything's `echo` tool while preserving the remote definition and result as data.
+- `Vxpipe.MCP.Telemetry.events/0` exposes bounded terminal connection and request events.
+  They contain counts, native monotonic durations, the current supervised connection count,
+  closed operation/outcome categories, and at most an ephemeral local client PID. Endpoint,
+  tenant/integration, credential, catalog, tool, argument, and result data are excluded.
+  The optional Console projection drops the PID and unexpected fields before queueing.
 
 Tenant lookup, credential resolution, enabled-tool selection, agent grants, call lifetime,
 and model projection do not belong to this library. The later live-MCP milestone supplies

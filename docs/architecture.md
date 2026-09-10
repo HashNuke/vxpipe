@@ -1589,6 +1589,7 @@ Telemetry includes:
 - TTS time to first audio;
 - transport playback delay and end-to-end response latency;
 - tool and transfer lifecycles, and observed supported provider-native LLM fallback;
+- remote MCP connection lifecycle plus discovery/invocation latency and outcomes;
 - provider availability and error categories;
 - tokens, characters, audio duration, and cost attribution;
 - per-room mailbox and bounded-queue pressure; and
@@ -1613,6 +1614,8 @@ The implemented framework-independent event contract currently includes:
 | `[:vxpipe, :call_engine, :background_tool, :stop]` | `count` and local-worker `duration` in Erlang `:native` units | `outcome` | One terminal observation for a successful, failed, unknown-timeout, or activation-terminated local worker |
 | `[:vxpipe, :call_engine, :background_tool, :handoff]` | `count` plus completion `depth` and configured `limit` gauges observed at that handoff | `outcome` | Bounded coordinator-mailbox queue, duplicate, overflow, or consumption boundary |
 | `[:vxpipe, :call_engine, :runtime, :sample]` | `active_rooms`, `memory_bytes`, and `run_queue` as non-negative gauges | none | Periodic engine-owned sample outside room callbacks; active rooms come from the room DynamicSupervisor and VM values from the local BEAM |
+| `[:vxpipe, :mcp, :connection, :stop]` | `count`, `duration` in Erlang `:native` units, and current `active_connections` | `operation`, `outcome`, and optional local client PID | Terminal standalone MCP client open/reuse/failure or close/absence observation; the PID permits same-VM restricted correlation without exposing integration identity |
+| `[:vxpipe, :mcp, :request, :stop]` | `count` and `duration` in Erlang `:native` units | `operation`, `outcome`, and optional local client PID | Terminal complete-catalog discovery or prevalidated invocation boundary |
 
 Gateway operations are closed categories (`:cors_preflight`, `:health_check`,
 `:room_create`, `:session_create`, `:rtvi_offer`, `:rtvi_candidates`, or `:unknown`).
@@ -1624,8 +1627,14 @@ Engine provider labels are normalized to the closed `:req_llm`, `:deepgram`,
 `:invalid_response`, `:output_failure`, or `:unknown`. Background admission outcomes are
 `:accepted`, `:saturated`, `:start_failed`, `:unavailable`, or `:invalid_tool`; worker outcomes
 are `:ok`, `:failed`, `:unknown`, or `:terminated`; handoff outcomes are `:queued`,
-`:duplicate`, `:overflow`, or `:consumed`. None of these events carries
-input/output text, audio, raw provider errors, model names, or correlation identifiers.
+`:duplicate`, `:overflow`, or `:consumed`. MCP connection operations are `:open` or `:close`;
+their outcomes are `:opened`, `:reused`, `:failed`, `:closed`, or `:absent`. MCP request
+operations are `:discovery` or `:invocation`; their outcomes are bounded to `:ok`, `:failed`,
+`:timeout`, `:rejected`, `:too_large`, `:not_submitted`, `:remote_error`, or `:unknown`.
+None of these events carries input/output text, audio, raw provider errors, model names,
+endpoint/tool identity, request arguments/results, credentials, tenant IDs, or integration
+IDs. Only the MCP events may include an ephemeral local client PID; the Console removes it
+before queueing or retaining an observation.
 `active_rooms` is the current DynamicSupervisor child count rather than a lifecycle-event
 estimate. The runtime sampler is an explicitly named call-engine child and its interval comes
 from the call-engine application setting `telemetry: [sample_interval_ms: ...]`.
@@ -1648,7 +1657,8 @@ Project-owned handlers perform bounded local work because Telemetry invokes hand
 in the emitting process; downstream reporting/inspection must not introduce SQL,
 network waits or unbounded queues into media/model callbacks. Embedded hosts can
 attach to the complete list returned by `Vxpipe.CallEngine.Telemetry.events/0` without a
-gateway, Console, Phoenix, or database dependency. A stable handler identifier,
+gateway, Console, Phoenix, or database dependency. Standalone MCP hosts likewise use
+`Vxpipe.MCP.Telemetry.events/0`; the MCP library has no Console dependency. A stable handler identifier,
 detach-before-attach startup, orderly detach and a bounded receiving collector keep that
 integration safe; the engine README contains a minimal host example. Measurement boundaries
 must distinguish provider output, gateway egress and actual remote playback; missing data is
@@ -1666,7 +1676,11 @@ operation, outcome and failure keys are normalized to the closed categories abov
 including fallbacks for unexpected metadata. Snapshot ages expose stale collection,
 and the dropped count exposes saturation. One stable Telemetry handler identifier is
 detached before attachment and during normal shutdown, so a replacement also removes a
-handler left behind by an abrupt reporter exit.
+handler left behind by an abrupt reporter exit. A separate MCP projection owns MCP event
+sanitation and aggregation; it drops the local client PID and all unexpected fields in the
+emitting process before the reporter message is sent. The standalone MCP operations are
+synchronous and own no admission queue, so the diagnostic panel reports queue pressure as
+not applicable rather than inventing a gauge.
 
 An optional engine-owned local model fixture makes the early dashboard failure path
 deterministic. It is disabled in base application configuration and may be enabled only
