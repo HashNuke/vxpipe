@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.CurrentTime
 
-  @schema_version "20260909.01"
+  @schema_version "20260910.01"
 
   test "Elixir and JSON inputs produce the same typed definition" do
     input = definition_input()
@@ -91,6 +91,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
        ), ["participants", "reception", "tools", "get_current_time", "integration"]},
       {put_in(
          definition_input(),
+         [:participants, "reception", :tools, "get_current_time", :conversation_mode],
+         "inline"
+       ), ["participants", "reception", "tools", "get_current_time", "conversation_mode"]},
+      {put_in(
+         definition_input(),
          [:participants, "reception", :tools],
          %{"transfer" => %{type: "host", tool: "get_current_time"}}
        ), ["participants", "reception", "tools", "transfer"]},
@@ -149,6 +154,45 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
                 "path" => ["participants", "reception", "tools", "customer_lookup"]
               }
             }} = DefinitionCompiler.compile(definition, invocation, registries())
+  end
+
+  test "defaults tool conversation admission to blocking and accepts an explicit non-blocking opt-out" do
+    assert {:ok, blocking_definition} =
+             CallDefinition.new(definition_input(), resource_id: "support", revision: 7)
+
+    assert %ToolSelection{conversation_mode: :blocking} =
+             blocking_definition.participants["reception"].tools["get_current_time"]
+
+    assert {:ok, invocation} =
+             CallInvocation.new(invocation_input(),
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo"
+             )
+
+    assert {:ok, blocking_plan} =
+             DefinitionCompiler.compile(blocking_definition, invocation, registries())
+
+    assert %ToolBinding{conversation_mode: :blocking} =
+             blocking_plan.participants["reception"].tools["get_current_time"]
+
+    non_blocking_input =
+      put_in(
+        definition_input(),
+        [:participants, "reception", :tools, "get_current_time", :conversation_mode],
+        "non_blocking"
+      )
+
+    assert {:ok, non_blocking_definition} =
+             CallDefinition.new(non_blocking_input, resource_id: "support", revision: 7)
+
+    assert %ToolSelection{conversation_mode: :non_blocking} =
+             non_blocking_definition.participants["reception"].tools["get_current_time"]
+
+    assert {:ok, non_blocking_plan} =
+             DefinitionCompiler.compile(non_blocking_definition, invocation, registries())
+
+    assert %ToolBinding{conversation_mode: :non_blocking} =
+             non_blocking_plan.participants["reception"].tools["get_current_time"]
   end
 
   test "invocation identity comes from trusted options and entry overrides are rejected" do

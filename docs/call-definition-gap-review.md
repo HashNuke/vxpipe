@@ -958,7 +958,7 @@ required. A browser flag, route, or visual concealment cannot change that policy
 Existing credential/header exclusions still apply. The detailed failed-transfer
 restoration cause is internal even for samples/full visibility. Visibility grants
 neither tool execution nor additional agent variable or cross-call access. The
-definition-driven gateway path implements the policy as of schema `20260909.01`:
+definition-driven gateway path implements the policy in schema `20260910.01`:
 it pins runtime participant/tool selections in a private one-time session and
 filters the RTVI projection before transport delivery.
 

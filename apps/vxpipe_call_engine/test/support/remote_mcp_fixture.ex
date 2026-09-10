@@ -38,6 +38,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPFixture do
     binding = %ToolBinding{
       name: "customer_lookup",
       type: :mcp,
+      conversation_mode: :blocking,
       action: nil,
       remote: remote
     }

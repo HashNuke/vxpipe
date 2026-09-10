@@ -286,7 +286,12 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
   end
 
   defp resolve_tool(
-         %ToolSelection{name: name, type: :host, tool: tool},
+         %ToolSelection{
+           name: name,
+           type: :host,
+           tool: tool,
+           conversation_mode: conversation_mode
+         },
          host_tools,
          _mcp_integrations,
          _tenant_id,
@@ -298,14 +303,23 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
 
       true ->
         case Map.fetch(host_tools, tool) do
-          {:ok, action} when is_atom(action) -> validate_action(name, action, path)
-          _error -> invalid(path, "does not resolve to an available host tool")
+          {:ok, action} when is_atom(action) ->
+            validate_action(name, action, conversation_mode, path)
+
+          _error ->
+            invalid(path, "does not resolve to an available host tool")
         end
     end
   end
 
   defp resolve_tool(
-         %ToolSelection{name: name, type: :mcp, integration: integration, tool: tool},
+         %ToolSelection{
+           name: name,
+           type: :mcp,
+           integration: integration,
+           tool: tool,
+           conversation_mode: conversation_mode
+         },
          _host_tools,
          %IntegrationCatalog{} = integrations,
          tenant_id,
@@ -313,7 +327,14 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
        ) do
     case IntegrationCatalog.resolve(integrations, tenant_id, integration, tool) do
       {:ok, remote} ->
-        {:ok, %ToolBinding{name: name, type: :mcp, action: nil, remote: remote}}
+        {:ok,
+         %ToolBinding{
+           name: name,
+           type: :mcp,
+           conversation_mode: conversation_mode,
+           action: nil,
+           remote: remote
+         }}
 
       {:error, _reason} ->
         invalid(path, "does not resolve to an available remote MCP tool")
@@ -330,13 +351,20 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     invalid(path, "does not resolve to an available remote MCP tool")
   end
 
-  defp validate_action(name, action, path) do
+  defp validate_action(name, action, conversation_mode, path) do
     if Code.ensure_loaded?(action) and function_exported?(action, :definition, 0) and
          function_exported?(action, :execute, 2) do
       definition = action.definition()
 
       if definition.name == name do
-        {:ok, %ToolBinding{name: name, type: :host, action: action, remote: nil}}
+        {:ok,
+         %ToolBinding{
+           name: name,
+           type: :host,
+           conversation_mode: conversation_mode,
+           action: action,
+           remote: nil
+         }}
       else
         invalid(path, "does not match the registered host tool name")
       end

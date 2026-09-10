@@ -3,13 +3,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @enforce_keys [:name, :type, :tool]
+  @enforce_keys [:name, :type, :tool, :conversation_mode]
   defstruct @enforce_keys ++ [:integration]
 
   @type t :: %__MODULE__{
           name: String.t(),
           type: :host | :mcp,
           tool: String.t(),
+          conversation_mode: :blocking | :non_blocking,
           integration: nil | String.t()
         }
 
@@ -22,7 +23,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
          {:ok, input} <-
            DefinitionValidation.normalize_map(
              value,
-             [:type, :tool, :integration],
+             [:type, :tool, :integration, :conversation_mode],
              code,
              message,
              path
@@ -39,9 +40,27 @@ defmodule Vxpipe.CallEngine.CallDefinition.ToolSelection do
          {:ok, tool_input} <- DefinitionValidation.fetch(input, :tool, code, message, path),
          {:ok, tool} <-
            DefinitionValidation.identifier(tool_input, code, message, path ++ ["tool"]),
+         {:ok, conversation_mode} <- conversation_mode(input, code, message, path),
          {:ok, integration} <- integration(type, input, code, message, path) do
-      {:ok, %__MODULE__{name: name, type: type, tool: tool, integration: integration}}
+      {:ok,
+       %__MODULE__{
+         name: name,
+         type: type,
+         tool: tool,
+         conversation_mode: conversation_mode,
+         integration: integration
+       }}
     end
+  end
+
+  defp conversation_mode(input, code, message, path) do
+    DefinitionValidation.enum(
+      Map.get(input, :conversation_mode, "blocking"),
+      [blocking: "blocking", non_blocking: "non_blocking"],
+      code,
+      message,
+      path ++ ["conversation_mode"]
+    )
   end
 
   defp integration(:mcp, input, code, message, path) do

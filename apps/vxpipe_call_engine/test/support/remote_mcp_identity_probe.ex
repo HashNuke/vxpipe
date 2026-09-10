@@ -50,6 +50,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPIdentityProbe do
     binding = %ToolBinding{
       name: identity.local_name,
       type: :mcp,
+      conversation_mode: :blocking,
       action: nil,
       remote: resolved
     }

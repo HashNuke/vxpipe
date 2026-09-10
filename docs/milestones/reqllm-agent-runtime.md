@@ -114,7 +114,9 @@ process or dependency is used.
    checkpoint.
 4. Replace the Jido AgentServer child in an activation with `Vxpipe.AgentRuntime`; migrate
    the coordinator/dispatcher to one worker-submission path and compile default-blocking /
-   explicit-non-blocking binding policy. Preserve completion and interruption behavior.
+   explicit-non-blocking binding policy. The schema/compiler portion is complete in
+   `20260910.01`; runtime admission and worker integration remain. Preserve completion and
+   interruption behavior.
 5. Run parity and churn checks, inspect the rendered sample, then remove unused Jido AI,
    Jido Action, Jido, and related lock entries. Do not remove them earlier or retain an
    unused fallback loop after migration.

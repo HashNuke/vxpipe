@@ -64,6 +64,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
     assert %ToolBinding{
              name: "customer_lookup",
              type: :mcp,
+             conversation_mode: :non_blocking,
              remote: %ResolvedTool{
                scope: {:tenant, "tenant-demo"},
                integration_id: "records",
@@ -130,6 +131,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
             "customer_lookup" => %{
               type: "mcp",
               integration: "records",
+              conversation_mode: "non_blocking",
               tool: "lookup_customer"
             }
           }

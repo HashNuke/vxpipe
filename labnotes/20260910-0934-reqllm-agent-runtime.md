@@ -132,6 +132,30 @@ Non-blocking invocations retain the approved unrelated-conversation behavior. Se
 `docs/tool-execution-model.md` for states, races, cancellation, partial submission, multiple
 calls, transfer/shutdown, ownership, and migration checks.
 
+## Implementation checkpoint 4a: call-definition conversation policy
+
+Started the Call Engine migration at its stable configuration boundary. Schema
+`20260910.01` adds `conversation_mode` to each participant-local host or MCP tool binding.
+Omission compiles to `:blocking`; only the exact external value `"non_blocking"` compiles to
+`:non_blocking`, and unsupported values fail at the precise tool path. Both values describe
+later caller-turn admission only. They do not select an execution path: every operation will
+be handed to the same independently supervised Call Engine worker boundary.
+
+Focused compiler coverage exercises the blocking default, explicit non-blocking host tool,
+explicit non-blocking remote MCP binding, and invalid value. The resolved plan carries the
+policy privately for runtime admission; model-visible tool descriptions and client tool-event
+visibility remain separate projections.
+
+Red verification failed at compilation because neither typed struct exposed
+`conversation_mode`. After implementation, the focused compiler suite passed 12 tests. The
+complete Call Engine suite passed 216 tests with 2 integration exclusions. Its first run had
+one pre-existing 100 ms MCP-owner shutdown assertion miss; that test passed immediately in
+isolation and the unchanged complete suite then passed.
+
+Umbrella format, warnings-as-errors compilation, Credo strict, and unused-lock checks passed.
+Umbrella `mix test` again stopped before tests because local PostgreSQL SCRAM authentication
+requires a password unavailable in this shell; no credential source was inspected.
+
 ## Implementation checkpoint 1b: submit-only and pending-context contracts
 
 Reopened the provisional executor contract before beginning the loop. The focused red suite

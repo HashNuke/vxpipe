@@ -1450,7 +1450,7 @@ The detailed failed-transfer restoration reason is also internal-only: full
 visibility, including samples, cannot expose it through debug tool payloads.
 
 The gateway now implements this boundary for the trusted definition-driven call
-path. Schema `20260909.01` validates the definition policy and resolves participant
+path. Schema `20260910.01` validates the definition policy and resolves participant
 definition keys to runtime participant IDs in the immutable call plan. Trusted
 creation may replace the complete policy pair; the result is carried privately in
 the one-time transport session and is absent from its public response. The RTVI
@@ -2426,7 +2426,10 @@ The implementation and verification evidence are detailed in
 ### Current definition-driven call runtime
 
 The initial definition checkpoints released engine-owned schema `20260906.02`; the
-current additive schema is `20260909.01`. Resource ID/revision and trusted
+current schema is `20260910.01`. It adds per-tool conversation admission: omission resolves
+to `blocking`, while only explicit `"non_blocking"` opts into later caller turns during
+pending work. Both modes always use the same independently supervised Call Engine worker
+path. Resource ID/revision and trusted
 tenant/actor identity are constructor metadata rather than fields accepted from
 definition or invocation documents. Fixed known keys are normalized without
 creating atoms from input; equivalent JSON and Elixir maps produce the same typed

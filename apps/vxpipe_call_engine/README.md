@@ -52,8 +52,12 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260909.01`; it adds the
-pinned client tool-visibility policy to the earlier `20260906.02` shape. Trusted
+The definition-driven compiler's current schema is `20260910.01`; it adds a
+default-blocking conversation-admission policy to every tool binding. Only an explicit
+`"conversation_mode":"non_blocking"` permits later caller turns while the submitted
+operation remains pending. This is independent of execution placement: every operation is
+handed to an independently supervised Call Engine worker. The schema retains the pinned
+client tool-visibility policy from the earlier `20260909.01` shape. Trusted
 hosts supply resource and tenant identity separately
 from JSON-safe definition and invocation maps. The compiler validates a closed
 one-human/one-agent web subset and pins capability profiles, host-tool bindings,

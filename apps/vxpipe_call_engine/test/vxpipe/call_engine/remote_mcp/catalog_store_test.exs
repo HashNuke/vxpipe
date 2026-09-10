@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.CatalogStoreTest do
     old_binding = %ToolBinding{
       name: "customer_lookup",
       type: :mcp,
+      conversation_mode: :blocking,
       action: nil,
       remote: old_remote
     }
