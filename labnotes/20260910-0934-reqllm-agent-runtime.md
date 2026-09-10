@@ -1072,3 +1072,21 @@ configuration remain before the compatibility graph and dependencies can be remo
 format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
 `mix test` stops before test execution because PostgreSQL SCRAM authentication needs a password
 absent from this shell; no credential source was inspected.
+
+## Implementation checkpoint 4u: obsolete compatibility-test removal
+
+Removed the old `AgentTest` module and two real-Jido scenarios from `AgentCoordinatorTest` only
+after mapping each assertion to runtime-neutral coverage. The Agent Runtime activation graph proves
+immutable instruction and exact tool projection plus whole-graph replacement. `ToolDescriptorsTest`
+proves generated Call Variables JSON schemas and private bindings. `ToolRoundTest` proves ordered
+multiple-call submission and acknowledgement. Room-level tool conversation tests prove that accepted
+calls use independent supervised workers and retain the existing lifecycle projection.
+
+These tests therefore represented the compatibility implementation, not additional product
+contracts. Production behavior did not change. The focused activation/coordinator/runtime/room set
+passes 54 tests, and the complete Call Engine suite passes 239 tests with 2 tagged integration
+exclusions at seed `365486`. Remaining Jido references are confined to the compatibility activation,
+its coordinator event fixture, the request transformer, and a tagged provider test. Umbrella format,
+warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops
+before test execution at the unchanged absent PostgreSQL SCRAM password; no credential source was
+inspected.

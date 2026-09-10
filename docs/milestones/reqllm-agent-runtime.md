@@ -616,6 +616,18 @@ Implementation evidence:
   format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
   `mix test` stops before test execution because PostgreSQL SCRAM authentication needs a password
   absent from this shell; no credential source was inspected.
+- Checkpoint 4u removes five Jido-only compatibility tests after mapping their contracts to neutral
+  replacements. Activation-owned instruction/tool pinning and one-for-all lifecycle are covered by
+  the Agent Runtime activation test; exact variable schemas and private bindings are covered by the
+  descriptor compiler; ordered multiple-call submission and acknowledgement are covered by the
+  standalone runtime; and room tests cover independent workers plus accepted/completed projection.
+  No production behavior changed and no coverage unique to the selected runtime was removed.
+- The focused migration set passes 54 tests and the complete Call Engine suite passes 239 tests with
+  2 integration exclusions at seed `365486`. Jido references remain in the compatibility activation,
+  coordinator event fixture, request transformer, and tagged provider test, so dependencies are not
+  removed yet. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
+  pass. Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM
+  password; no credential source was inspected.
 
 ## Specification review
 
