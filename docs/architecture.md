@@ -273,6 +273,17 @@ does not mutate a running activation or silently switch its remote operation. Th
 store does not schedule TTL refreshes or decide how application/tenant configuration is
 retrieved.
 
+The public Call Engine compilation facade acquires that current snapshot and injects it only
+for the duration of pure definition compilation. `vxpipe_calls` centralizes definition-save
+and call-preparation compilation through its small `CallPlanCompiler` boundary: it supplies
+ordinary provider/tool registries and, when embedding requires it, an opaque catalog-store
+server reference. It never receives an integration snapshot, endpoint, header or credential.
+Only the resulting safe immutable call plan crosses back into Calls and later Gateway paths.
+An unavailable store fails definition resolution instead of accepting a definition against a
+stale caller-supplied MCP registry. Live room startup must obtain exact private bindings again
+inside Call Engine; it must not route a private catalog through a prepared-call or gateway
+record.
+
 Reusable protocol connections are keyed by application/tenant scope, integration ID,
 and credential generation. An agent activation acquires a monitored, non-secret lease
 for every exact generation used by its resolved bindings; the lease grants access to the

@@ -173,6 +173,15 @@ definition boundary has started or its specification has been reviewed.
   remains the explicit mechanism that invalidates an active generation. Automatic TTL scheduling
   and configuration-source integration remain pending. The Call Engine suite passes 197 tests;
   the deterministic umbrella suite passes 412, with nine tagged network integrations excluded.
+- [x] Calls definition validation and prepared-call compilation now use a narrow Call Engine
+  facade that resolves the current catalog snapshot internally. Calls supplies only its ordinary
+  public registries and an optional opaque store reference; it receives only the safe immutable
+  plan, never the private integration catalog or connection settings. Both Calls workflows share
+  one `CallPlanCompiler` responsibility instead of duplicating configuration lookup. The focused
+  engine contract passes 1 test, the affected Calls workflows pass 14 tests, the Call Engine
+  suite passes 197 tests, the Calls suite passes 35 tests, and the deterministic umbrella suite
+  passes 412 tests with nine tagged integrations excluded. Live room startup, configuration
+  source/refresh orchestration, and Jido projection remain pending.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review

@@ -360,3 +360,35 @@ The supported Jido runtime-tool interface remains required before the vertical o
 
 Next: connect catalog lookup to the Calls preparation and live room-start boundaries without
 giving Calls or Gateway access to private MCP configuration.
+
+## 2026-09-10 — private catalog resolution at the compilation boundary
+
+- Audited the definition-save and call-preparation paths after catalog publication. Both Calls
+  workflows invoked the pure engine compiler directly and could only resolve MCP bindings if a
+  private `IntegrationCatalog` was placed in a registries map visible to Calls.
+- Red: the remote definition compiler test removed `mcp_integrations` from the supplied public
+  registries, provided only a supervised catalog-store reference, and called the intended Call
+  Engine facade. Compilation failed because that facade did not exist.
+- Green: `Vxpipe.CallEngine.compile_definition/4` now reads the current immutable snapshot and
+  injects it within the engine call frame before delegating to the pure compiler. Its return is
+  still only the safe `ResolvedCallPlan`; a missing store becomes a structured definition-
+  resolution failure. The existing private endpoint/header sentinel remains absent from plan
+  inspection.
+- `Vxpipe.Calls.CallPlanCompiler` now owns the Calls-side registry lookup and delegation used by
+  both `Definitions` and `Admissions`. It can pass an opaque store server reference for embedding
+  or tests but has no dependency on MCP types and never receives the snapshot or connection
+  configuration. This also removes duplicated registry-resolution functions from those workflows.
+- Focused verification passes: the engine boundary test passes 1 test and the affected Calls
+  definition/admission files pass 14 tests. The complete Call Engine child passes 197 tests with
+  two tagged integrations excluded; the complete Calls child passes 35 tests.
+- Root formatting, warnings-as-errors compilation, strict Credo over 313 files, and unused-
+  dependency detection pass. The deterministic umbrella suite passes all 412 default-lane tests
+  against disposable PostgreSQL: MCP 33, Call Engine 197, Calls 35, Persistence 25, Gateway 66,
+  and Console 56; nine tagged network integrations are excluded. The temporary database was
+  stopped and removed after the run.
+- This checkpoint does not make MCP-enabled rooms start. Live startup must reacquire exact private
+  bindings inside Call Engine, and `PlanStartup` must continue rejecting them until Jido can
+  preserve their runtime aliases and schemas through a supported public interface.
+
+Next: inspect and connect the room-start private-binding acquisition boundary without putting the
+catalog or credentials in Calls, Gateway, the prepared-call record, or the safe plan.

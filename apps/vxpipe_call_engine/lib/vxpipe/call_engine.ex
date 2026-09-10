@@ -4,12 +4,35 @@ defmodule Vxpipe.CallEngine do
   """
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
   alias Vxpipe.CallEngine.ConnectionAttachment
+  alias Vxpipe.CallEngine.DefinitionValidation
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
   alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
+  alias Vxpipe.CallEngine.RemoteMCP.CatalogStore
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.RoomSupervisor
+
+  @spec compile_definition(CallDefinition.t(), CallInvocation.t(), map(), keyword()) ::
+          {:ok, ResolvedCallPlan.t()} | {:error, Error.t()}
+  def compile_definition(definition, invocation, registries, options \\ [])
+
+  def compile_definition(
+        %CallDefinition{} = definition,
+        %CallInvocation{} = invocation,
+        registries,
+        options
+      )
+      when is_map(registries) and is_list(options) do
+    {catalog_store, compiler_options} =
+      Keyword.pop(options, :mcp_catalog_store, CatalogStore)
+
+    with {:ok, integrations} <- catalog_snapshot(catalog_store) do
+      registries = Map.put(registries, :mcp_integrations, integrations)
+      DefinitionCompiler.compile(definition, invocation, registries, compiler_options)
+    end
+  end
 
   @spec start_call(ResolvedCallPlan.t(), keyword()) ::
           {:ok, Vxpipe.CallEngine.Room.Snapshot.t()} | {:error, Error.t()}
@@ -117,5 +140,17 @@ defmodule Vxpipe.CallEngine do
          "The send-text command deadline has elapsed."
        )}
     end
+  end
+
+  defp catalog_snapshot(catalog_store) do
+    CatalogStore.snapshot(catalog_store)
+  catch
+    :exit, _reason ->
+      DefinitionValidation.invalid(
+        :call_definition_resolution_failed,
+        "The call definition could not be resolved.",
+        ["registries", "mcp_integrations"],
+        "is unavailable"
+      )
   end
 end

@@ -1,8 +1,16 @@
 defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
-  alias Vxpipe.CallEngine.RemoteMCP.{Integration, IntegrationCatalog, ResolvedTool}
+  alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation}
+
+  alias Vxpipe.CallEngine.RemoteMCP.{
+    CatalogStore,
+    Integration,
+    IntegrationCatalog,
+    ResolvedTool
+  }
+
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.MCP.Catalog
 
@@ -40,11 +48,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.RemoteMCPCompilerTest do
                actor_id: "actor-demo"
              )
 
+    store = start_supervised!({CatalogStore, catalog: integrations})
+
     assert {:ok, plan} =
-             DefinitionCompiler.compile(
+             CallEngine.compile_definition(
                definition,
                invocation,
-               registries(integrations)
+               Map.delete(registries(integrations), :mcp_integrations),
+               mcp_catalog_store: store
              )
 
     assert %ToolBinding{

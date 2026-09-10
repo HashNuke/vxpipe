@@ -1,9 +1,10 @@
 defmodule Vxpipe.Calls.Definitions do
   @moduledoc "Definition revision and participant-route workflows."
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, Error}
+  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, Error}
 
   alias Vxpipe.Calls.{
+    CallPlanCompiler,
     DefinitionRevision,
     ParticipantRoute,
     PrivateMaterial,
@@ -131,21 +132,11 @@ defmodule Vxpipe.Calls.Definitions do
              call_id: "definition-validation-call",
              room_id: "definition-validation-room"
            ),
-         {:ok, registries} <- registries(options),
-         {:ok, _plan} <- DefinitionCompiler.compile(definition, invocation, registries) do
+         {:ok, _plan} <- CallPlanCompiler.compile(definition, invocation, options) do
       []
     else
       {:error, %Error{} = error} -> [Error.to_public(error)]
       {:error, reason} -> [%{"code" => "configuration_unavailable", "reason" => inspect(reason)}]
-    end
-  end
-
-  defp registries(options) do
-    configured = Application.get_env(:vxpipe_calls, Vxpipe.Calls, [])
-
-    case Keyword.get(options, :registries, Keyword.get(configured, :registries)) do
-      value when is_map(value) -> {:ok, value}
-      _unavailable -> {:error, :registries_unavailable}
     end
   end
 

@@ -1,10 +1,11 @@
 defmodule Vxpipe.Calls.Admissions do
   @moduledoc "Prepared-call and single-use participant admission workflows."
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler, ResolvedCallPlan}
+  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, ResolvedCallPlan}
 
   alias Vxpipe.Calls.{
     AdmissionClaim,
+    CallPlanCompiler,
     IssuedJoinToken,
     JoinToken,
     PreparedCall,
@@ -55,7 +56,8 @@ defmodule Vxpipe.Calls.Admissions do
     do: {:error, :invalid_call_preparation}
 
   @spec fetch(String.t(), String.t(), keyword()) :: {:ok, PreparedCall.t()} | {:error, term()}
-  def fetch(tenant_key, call_id, options \\ []) when is_binary(tenant_key) and is_binary(call_id) do
+  def fetch(tenant_key, call_id, options \\ [])
+      when is_binary(tenant_key) and is_binary(call_id) do
     with {:ok, repository} <- Repositories.fetch(options, :call_repository) do
       Repositories.call(repository, :fetch_call, [tenant_key, call_id])
     end
@@ -144,8 +146,8 @@ defmodule Vxpipe.Calls.Admissions do
              call_id: generated_id(options, :call_id_generator),
              room_id: generated_id(options, :room_id_generator)
            ),
-         {:ok, registries} <- registries(options) do
-      DefinitionCompiler.compile(definition, invocation, registries)
+         {:ok, plan} <- CallPlanCompiler.compile(definition, invocation, options) do
+      {:ok, plan}
     end
   end
 
@@ -228,15 +230,6 @@ defmodule Vxpipe.Calls.Admissions do
     case Keyword.get(options, :join_token_ttl_seconds, @default_token_ttl_seconds) do
       seconds when is_integer(seconds) and seconds >= @default_token_ttl_seconds -> {:ok, seconds}
       _invalid -> {:error, :invalid_join_token_ttl}
-    end
-  end
-
-  defp registries(options) do
-    configured = Application.get_env(:vxpipe_calls, Vxpipe.Calls, [])
-
-    case Keyword.get(options, :registries, Keyword.get(configured, :registries)) do
-      value when is_map(value) -> {:ok, value}
-      _unavailable -> {:error, :registries_unavailable}
     end
   end
 
