@@ -37,9 +37,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              pending_invocations,
              request.correlation
            ),
-         {:ok, %ModelResponse{} = response} <-
-           config.model_provider.generate(config.model, model_request),
-         true <- ModelResponse.valid?(response) do
+         {:ok, response} <- generate_response(config.model_provider, config.model, model_request) do
       handle_response(
         response,
         conversation,
@@ -164,6 +162,29 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
 
   defp model_tools(_registry, false), do: []
   defp model_tools(registry, true), do: ToolRegistry.model_tools(registry)
+
+  defp generate_response(model_provider, model, model_request) do
+    try do
+      case model_provider.generate(model, model_request) do
+        {:ok, %ModelResponse{} = response} ->
+          if ModelResponse.valid?(response) do
+            {:ok, response}
+          else
+            {:error, :invalid_provider_response}
+          end
+
+        {:error, _reason} ->
+          {:error, :provider_unavailable}
+
+        _invalid ->
+          {:error, :invalid_provider_response}
+      end
+    rescue
+      _error -> {:error, :provider_unavailable}
+    catch
+      _kind, _reason -> {:error, :provider_unavailable}
+    end
+  end
 
   defp running_result(call),
     do: %{"invocation_id" => call.id, "status" => "running"}

@@ -147,9 +147,15 @@ The package foundation now implements the submit-only executor behavior and the 
 timeout-enforced pending-invocation context-source boundary. Its package-local loop resolves
 and validates complete ordered batches, submits each call, commits a matched running or safe
 rejection result, refreshes pending state, and performs the correctly gated acknowledgement
-round outside the Session GenServer. Failure recovery, streaming, cancellation, ReqLLM
+round outside the Session GenServer. Remaining failure paths, streaming, cancellation, ReqLLM
 projection, and Call Engine adoption remain pending; the running call path below still uses
 Jido until those checkpoints are green.
+
+Within the package loop, an accepted running exchange is now durable for the Session lifetime
+even if the following provider generation fails. Later turns retain that exchange once and
+combine it with the current engine-owned pending projection; a provider failure cannot trigger
+resubmission or erase accepted work. Call Engine adoption is still required before this affects
+live calls.
 
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each

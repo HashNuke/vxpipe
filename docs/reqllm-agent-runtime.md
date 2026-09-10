@@ -221,6 +221,11 @@ It commits a matched running or safe rejection result for each call, retaining a
 when a later submission rejects. Any accepted blocking call withholds tools from the next
 round; explicitly non-blocking calls do not.
 
+The committed running exchange also survives failure of its acknowledgement provider request.
+Provider-returned reasons and exceptions collapse to a bounded `provider_unavailable` result.
+A later request in the same Session receives the one committed tool-call/running pair plus the
+current pending projection; the invocation is not resubmitted or duplicated.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

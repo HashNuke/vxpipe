@@ -256,3 +256,29 @@ Verification:
   PostgreSQL password.
 - Provider failure after acceptance, conversation recovery, cancellation, stream events,
   explicit per-round limits, and production ReqLLM mapping remain pending.
+
+## Implementation checkpoint 2d: provider-failure recovery
+
+Added a focused recovery scenario around the commit barrier. A non-blocking tool is accepted
+and its assistant-call/running-result exchange commits. The acknowledgement provider then
+returns a deliberately private raw failure. The red test showed that raw atom escaping through
+the public `Result`.
+
+`RequestRunner` now owns provider-boundary normalization: valid normalized responses pass;
+provider errors, exceptions, and exits become `provider_unavailable`; malformed success values
+become `invalid_provider_response`. It does not expose the dependency's reason or retry.
+
+After that failed request returns, a new request in the same Session receives the committed
+original user message, assistant tool call, and single running result before its new user
+message. It also receives the fresh authoritative pending projection. The test confirms that
+the invocation is neither lost nor submitted again.
+
+Verification:
+
+- Focused recovery test: 1 test, 0 failures.
+- Complete `vxpipe_agent_runtime` suite: 19 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the local PostgreSQL password is
+  absent from this shell.
+- Cooperative request cancellation, remaining bounds, streaming, ReqLLM projection, and Call
+  Engine adoption remain pending.

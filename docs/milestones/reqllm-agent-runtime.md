@@ -100,8 +100,9 @@ process or dependency is used.
    response, accepted running acknowledgements, definite non-submission, multiple calls in
    model order, mixed text/tool output, commit barriers, bounded failure, and cancellation.
    Normalized response/tool-call values, the exact private registry, accepted/rejected ordered
-   submission batches, and blocking/non-blocking acknowledgement rounds are complete. Failure
-   recovery, streaming, and cancellation remain pending.
+   submission batches, blocking/non-blocking acknowledgement rounds, and accepted-work
+   recovery after provider failure are complete. Remaining failure bounds, streaming, and
+   cancellation remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -264,6 +265,15 @@ Implementation evidence:
   package suite is green at 18 tests, 0 failures. Umbrella format, warnings-as-errors, strict
   Credo, and unused-lock checks pass; umbrella tests again stop before execution because the
   local PostgreSQL password is absent.
+- Checkpoint 2d proves the submission commit barrier across provider failure. After the
+  running exchange commits, a raw acknowledgement-provider error collapses to
+  `provider_unavailable`. A later request in the same Session contains the original user,
+  assistant call, and running result exactly once, followed by the new user input and current
+  pending projection. No work is resubmitted and no raw provider reason escapes.
+- Checkpoint 2d red evidence exposed the raw provider error in the public Result. The focused
+  recovery test and full package suite are green at 19 tests, 0 failures. Umbrella format,
+  warnings-as-errors, strict Credo, and unused-lock checks pass; umbrella tests remain blocked
+  before execution by absent PostgreSQL authentication.
 
 ## Specification review
 
