@@ -357,6 +357,50 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^caller}
   end
 
+  test "serializes independently completed invocations once with their original identities" do
+    runtime = start_runtime()
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "completion-first")
+
+    assert_receive {:submitted_inline_tool_started, first_execution, "completion-first"}
+
+    assert {:accepted, :non_blocking} =
+             submit_invocation(runtime, :non_blocking, "completion-second")
+
+    assert_receive {:submitted_inline_tool_started, second_execution, "completion-second"}
+
+    send(second_execution, :release_submitted_inline_tool)
+
+    assert_receive {:vxpipe_capability_continuation_started, coordinator,
+                    %ContinueAgent{} = second_continuation}
+
+    assert coordinator == runtime.coordinator
+    assert second_continuation.tool_call_id == "completion-second"
+    assert_receive {:test_agent_runtime_stream, second_provider, second_request}
+    assert List.last(second_request.messages).content =~ ~s("invocation_id":"completion-second")
+
+    send(first_execution, :release_submitted_inline_tool)
+    refute_receive {:vxpipe_capability_continuation_started, ^coordinator, _while_busy}
+
+    assert {:ok, response} = ModelResponse.new(text: "The second request completed.")
+    send(second_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^second_continuation}
+
+    assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
+                    %ContinueAgent{} = first_continuation}
+
+    assert first_continuation.tool_call_id == "completion-first"
+    assert_receive {:test_agent_runtime_stream, first_provider, first_request}
+    assert List.last(first_request.messages).content =~ ~s("invocation_id":"completion-first")
+
+    assert {:ok, response} = ModelResponse.new(text: "The first request completed.")
+    send(first_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^first_continuation}
+    assert {:ok, []} = InvocationRegistry.snapshot(runtime.registry)
+    refute_receive {:vxpipe_capability_continuation_started, ^coordinator, _duplicate}
+  end
+
   test "releases an uncommitted completion lease and fails closed" do
     runtime = start_runtime(completion_target: self())
 

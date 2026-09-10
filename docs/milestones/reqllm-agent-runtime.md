@@ -679,6 +679,18 @@ Implementation evidence:
   integration exclusions at seed `365486`. Umbrella format, warnings-as-errors compilation, strict
   Credo, and unused-lock checks pass. Umbrella `mix test` stops before test execution at the
   unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
+- Checkpoint 4aa proves two independently supervised non-blocking invocations may complete out of
+  order and are serialized back into the agent exactly once with their original IDs. While the
+  second completion is active, the first remains queued; after the second commits, the first is the
+  next private continuation and both registry records are consumed.
+- With streaming, failure recovery, deadlines, interruption, completion leasing, tool-worker
+  survival, and out-of-order completion parity now owned by neutral tests, the legacy
+  `AgentCoordinatorTest` compatibility suite is removed. The focused neutral coordinator suite
+  passes 18 tests and the complete Call Engine suite passes 230 tests with 2 integration exclusions
+  at seed `365486`; production compatibility modules remain until their final explicit consumers are
+  removed. Umbrella format, warnings-as-errors compilation, strict Credo, and unused-lock checks
+  pass. Umbrella `mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM
+  password; no credential source was inspected.
 
 ## Specification review
 

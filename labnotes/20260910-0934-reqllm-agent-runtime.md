@@ -1140,6 +1140,24 @@ with 2 tagged integration exclusions at seed `365486`. Umbrella format, warnings
 compilation, strict Credo, and unused-lock checks pass. Umbrella `mix test` stops before test
 execution at the unchanged absent PostgreSQL SCRAM password; no credential source was inspected.
 
+## Implementation checkpoint 4aa: completion ordering and legacy-suite removal
+
+Added a neutral coordinator scenario with two non-blocking invocations running in separate workers.
+The second worker finishes first and its private continuation starts first. The first worker then
+finishes while that continuation is active and remains queued until the second commits. Its own
+continuation retains the first invocation ID, both results are consumed once, and no duplicate
+continuation appears.
+
+This completed the meaningful compatibility-test map: streamed output, bounded failure, recovery,
+queue deadlines, interruption, durable tool-worker survival, completion leases, and completion
+ordering now have Agent Runtime-owned tests. Deleted the old `AgentCoordinatorTest` suite, whose
+remaining assertions described Jido event plumbing and the retired dispatcher rather than selected
+runtime behavior. The focused neutral coordinator suite passes 18 tests, and the complete Call
+Engine suite passes 230 tests with 2 tagged integration exclusions at seed `365486`. Umbrella
+format, warnings-as-errors compilation, strict Credo, and unused-lock checks pass. Umbrella
+`mix test` stops before test execution at the unchanged absent PostgreSQL SCRAM password; no
+credential source was inspected.
+
 ## Implementation checkpoint 4x: test-default cutover
 
 Changed `config/test.exs` from the Jido compatibility graph to Agent Runtime. The Call Engine
