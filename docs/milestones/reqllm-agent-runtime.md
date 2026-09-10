@@ -102,8 +102,9 @@ process or dependency is used.
    Normalized response/tool-call values, the exact private registry, accepted/rejected ordered
    submission batches, blocking/non-blocking acknowledgement rounds, and accepted-work
    recovery after provider failure or cancellation are complete. Per-session tool-batch and
-   accumulated-output bounds and the request deadline are also enforced. Remaining submit
-   callback bounds, streaming, and production adapter behavior remain pending.
+   accumulated-output bounds, the request deadline, and private engine-origin continuation
+   admission are also implemented. Remaining submit callback bounds, streaming, production
+   adapter behavior, and Call Engine lease integration remain pending.
 3. Add the ReqLLM adapter by moving/refining the existing Call Engine projection. Prove raw
    JSON Schema aliases, canonical exchanges, streaming collection, usage, and cleanup at
    that boundary. Keep live-provider checks tagged.
@@ -305,6 +306,15 @@ Implementation evidence:
   valid Session setting. Deadline tests and the complete package suite are green at 26 tests,
   0 failures. Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks pass;
   umbrella tests stop before execution because the local PostgreSQL password is absent.
+- Checkpoint 2h adds `Session.continue/4` for private engine-origin input. The normalized message
+  retains `origin: :engine` in runtime history while using the ordinary provider `user` role
+  required by supported chat APIs. A successful continuation commits its input and answer; a
+  provider failure commits neither, allowing Call Engine to retain and later re-admit its
+  completion lease. Caller input retains `origin: :caller` distinctly.
+- Checkpoint 2h red evidence reported 2 focused failures because the continuation API did not
+  exist. Continuation tests and the complete package suite are green at 28 tests, 0 failures.
+  Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks pass; umbrella tests
+  stop before execution because the local PostgreSQL password is absent.
 
 ## Specification review
 

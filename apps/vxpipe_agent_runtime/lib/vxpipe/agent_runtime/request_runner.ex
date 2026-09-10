@@ -15,7 +15,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   @spec run(Conversation.t(), Request.t(), map()) ::
           {:ok, String.t(), Conversation.t()} | {:error, atom()}
   def run(%Conversation{} = conversation, %Request{} = request, config) when is_map(config) do
-    staged_messages = [Message.user(request.input)]
+    staged_messages = [Message.user(request.input, request.origin)]
 
     generate(conversation, staged_messages, [], 1, true, request, config)
   end

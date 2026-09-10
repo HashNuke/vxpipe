@@ -1,6 +1,7 @@
 # Tool execution model
 
-Date: 2026-09-10. Status: selected target; ordered loop and cancellation-safe commit barrier implemented.
+Date: 2026-09-10. Status: selected target; ordered loop, cancellation-safe commit barrier, and
+private continuation admission implemented.
 
 ## Decision
 

@@ -1,11 +1,12 @@
 defmodule Vxpipe.AgentRuntime.Request do
   @moduledoc "A single input admitted to an agent-runtime session."
 
-  @derive {Inspect, only: [:correlation]}
-  @enforce_keys [:input, :correlation]
+  @derive {Inspect, only: [:origin, :correlation]}
+  @enforce_keys [:input, :origin, :correlation]
   defstruct @enforce_keys
 
-  @type t :: %__MODULE__{input: String.t(), correlation: map()}
+  @type origin :: :caller | :engine
+  @type t :: %__MODULE__{input: String.t(), origin: origin(), correlation: map()}
   @default_max_input_bytes 64 * 1_024
 
   @spec new(String.t(), map(), keyword()) :: {:ok, t()} | {:error, atom()}
@@ -13,13 +14,23 @@ defmodule Vxpipe.AgentRuntime.Request do
 
   def new(input, correlation, options)
       when is_binary(input) and is_map(correlation) and is_list(options) do
-    max_input_bytes = Keyword.get(options, :max_input_bytes, @default_max_input_bytes)
+    with {:ok, options} <-
+           Keyword.validate(options,
+             max_input_bytes: @default_max_input_bytes,
+             origin: :caller
+           ) do
+      max_input_bytes = Keyword.fetch!(options, :max_input_bytes)
+      origin = Keyword.fetch!(options, :origin)
 
-    cond do
-      input == "" -> {:error, :invalid_input}
-      not (is_integer(max_input_bytes) and max_input_bytes > 0) -> {:error, :invalid_limit}
-      byte_size(input) > max_input_bytes -> {:error, :input_too_large}
-      true -> {:ok, %__MODULE__{input: input, correlation: correlation}}
+      cond do
+        input == "" -> {:error, :invalid_input}
+        origin not in [:caller, :engine] -> {:error, :invalid_origin}
+        not (is_integer(max_input_bytes) and max_input_bytes > 0) -> {:error, :invalid_limit}
+        byte_size(input) > max_input_bytes -> {:error, :input_too_large}
+        true -> {:ok, %__MODULE__{input: input, origin: origin, correlation: correlation}}
+      end
+    else
+      _invalid -> {:error, :invalid_request}
     end
   end
 

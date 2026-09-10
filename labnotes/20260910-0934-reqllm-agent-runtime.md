@@ -373,3 +373,33 @@ Verification:
   password.
 - The submit/admission callback still needs its own bounded host contract. Streaming, production
   ReqLLM mapping, Call Engine adoption, and private completion consumption remain pending.
+
+## Implementation checkpoint 2h: private engine continuation
+
+Added two tests before implementation for the completion half of an asynchronous invocation.
+The first admits a framed tool-completion observation, requires the provider request to carry an
+ordinary `user` role with retained engine provenance, commits the answer, and proves the next
+caller request sees that history with caller and engine inputs still distinguishable. The second
+forces a provider failure and requires the completion observation to be absent from the next
+request, preserving the host's ability to retain and retry its delivery lease.
+
+The red run failed twice because Session had no continuation API. Added `Session.continue/4` and
+an `origin` field constrained to `caller` or `engine` on normalized requests/user messages. Both
+paths share the same single-request admission, deadline, loop, cancellation, and commit behavior;
+the distinction is provenance, not a second provider loop. Provider projection will map both to
+the compatible user wire role in the ReqLLM adapter checkpoint.
+
+The runtime accepts already framed private content rather than interpreting Call Engine tool
+outcomes. Call Engine remains authoritative for invocation IDs, result-size validation, untrusted
+payload framing, completion queueing, and lease acknowledgement. The future adapter must
+acknowledge that lease only after `Session.continue/4` completes successfully.
+
+Verification:
+
+- Focused continuation suite: 2 tests, 0 failures after the expected 2-test red run.
+- Complete `vxpipe_agent_runtime` suite: 28 tests, 0 failures.
+- Umbrella format, warnings-as-errors, strict Credo, and unused-lock checks: pass.
+- Umbrella `mix test`: stopped before test execution because the shell has no local PostgreSQL
+  password.
+- Submit admission reconciliation, streaming, production ReqLLM mapping, and Call Engine lease
+  integration remain pending.

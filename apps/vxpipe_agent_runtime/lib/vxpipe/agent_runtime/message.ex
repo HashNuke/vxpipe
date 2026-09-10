@@ -5,12 +5,14 @@ defmodule Vxpipe.AgentRuntime.Message do
 
   @derive {Inspect, only: [:role, :name, :tool_call_id]}
   @enforce_keys [:role, :content]
-  defstruct @enforce_keys ++ [name: nil, tool_call_id: nil, tool_calls: []]
+  defstruct @enforce_keys ++ [origin: nil, name: nil, tool_call_id: nil, tool_calls: []]
 
   @type role :: :system | :user | :assistant | :tool
+  @type origin :: :caller | :engine | nil
   @type t :: %__MODULE__{
           role: role(),
           content: String.t(),
+          origin: origin(),
           name: String.t() | nil,
           tool_call_id: String.t() | nil,
           tool_calls: [ToolCall.t()]
@@ -19,8 +21,12 @@ defmodule Vxpipe.AgentRuntime.Message do
   @spec system(String.t()) :: t()
   def system(content) when is_binary(content), do: %__MODULE__{role: :system, content: content}
 
-  @spec user(String.t()) :: t()
-  def user(content) when is_binary(content), do: %__MODULE__{role: :user, content: content}
+  @spec user(String.t(), :caller | :engine) :: t()
+  def user(content, origin \\ :caller)
+
+  def user(content, origin) when is_binary(content) and origin in [:caller, :engine] do
+    %__MODULE__{role: :user, content: content, origin: origin}
+  end
 
   @spec assistant(String.t(), [ToolCall.t()]) :: t()
   def assistant(content, tool_calls) when is_binary(content) and is_list(tool_calls) do

@@ -34,7 +34,13 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   @spec request(server(), String.t(), map(), timeout()) :: {:ok, Result.t()} | {:error, atom()}
   def request(server, input, correlation, timeout \\ :infinity) do
-    GenServer.call(server, {:request, input, correlation}, timeout)
+    GenServer.call(server, {:request, :caller, input, correlation}, timeout)
+  end
+
+  @spec continue(server(), String.t(), map(), timeout()) ::
+          {:ok, Result.t()} | {:error, atom()}
+  def continue(server, input, correlation, timeout \\ :infinity) do
+    GenServer.call(server, {:request, :engine, input, correlation}, timeout)
   end
 
   @spec status(server()) :: :idle | :busy
@@ -59,8 +65,8 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   @impl true
-  def handle_call({:request, input, correlation}, caller, %{status: :idle} = state) do
-    with {:ok, request} <- Request.new(input, correlation) do
+  def handle_call({:request, origin, input, correlation}, caller, %{status: :idle} = state) do
+    with {:ok, request} <- Request.new(input, correlation, origin: origin) do
       emit(state.configuration.event_destination, Event.new(:request_started, correlation))
       session = self()
       token = make_ref()
@@ -103,7 +109,7 @@ defmodule Vxpipe.AgentRuntime.Session do
     end
   end
 
-  def handle_call({:request, _input, _correlation}, _caller, state) do
+  def handle_call({:request, _origin, _input, _correlation}, _caller, state) do
     {:reply, {:error, :busy}, state}
   end
 

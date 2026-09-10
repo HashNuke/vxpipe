@@ -244,6 +244,14 @@ records it and completes the submission commit barrier first. The terminal respo
 arrive after the nominal deadline only for that bounded safety handoff; the external invocation is
 not cancelled. A separately bounded host submission callback remains required.
 
+`Session.continue/4` now gives Call Engine a separate admission path for a private tool-completion
+observation. The input keeps `origin: :engine` in normalized runtime history but projects as an
+ordinary provider `user` role, matching providers that reject a conversation ending with an
+assistant message. It does not manufacture caller speech. The continuation is committed only
+with a successful terminal model response; failure leaves it uncommitted so Call Engine can keep
+the authoritative completion lease. Wiring lease acknowledgement to this result remains part of
+the Call Engine migration.
+
 Sources: [ReqLLM](https://hexdocs.pm/req_llm),
 [Legion](https://hexdocs.pm/legion), and
 [Legion source](https://github.com/software-mansion-labs/legion).

@@ -172,6 +172,13 @@ the timeout becomes pending until that exchange commits; the runtime then stops 
 task. A host submission must therefore remain a short, bounded admission operation rather than
 performing the business action itself.
 
+Agent Runtime has distinct caller and private engine-origin admission APIs. Both may require a
+provider `user` wire role, but normalized messages retain their origin so an external tool
+completion is never mistaken for caller speech. A successful private continuation commits the
+observation and answer together; a failed one commits neither. Call Engine remains responsible
+for retaining the completion lease until that successful result and for suppressing public
+caller/transcript projection.
+
 Until that milestone completes, the running agent-loop implementation places one
 `Jido.AI.Agent`/AgentServer under each
 active agent participant's Vxpipe-owned supervision subtree. It replaces the current
