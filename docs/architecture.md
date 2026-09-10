@@ -293,6 +293,18 @@ configuration, schedule itself, own TTL expiry, or perform protocol work outside
 `CatalogLoader`. Configuration removal/revocation and stale-snapshot expiry therefore remain
 required before this becomes an automatic production refresh loop.
 
+`RemoteMCP.ConfigurationSource` is the narrow boundary that supplies one complete validated set
+of configured integrations to that future refresh owner. The first adapter,
+`RemoteMCP.ApplicationConfiguration`, reads raw keyword records from the
+`:vxpipe_call_engine, :remote_mcp_integrations` OTP application setting and converts them at
+runtime into redacted `ConfiguredIntegration` values. Runtime conversion is intentional: Mix
+configuration must not need project modules to be compiled before it can declare infrastructure.
+A missing setting means no configured integrations, while one invalid record rejects the entire
+source rather than silently publishing a partial authorization catalog. Private connection
+settings remain inside the redacted engine-owned values. A later tenant/vault-backed adapter can
+implement the same whole-source contract without changing discovery or publication. Periodic
+scheduling and stale-catalog expiry remain separate responsibilities.
+
 Reusable protocol connections are keyed by application/tenant scope, integration ID,
 and credential generation. An agent activation acquires a monitored, non-secret lease
 for every exact generation used by its resolved bindings; the lease grants access to the

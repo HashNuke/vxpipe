@@ -427,3 +427,33 @@ catalog or credentials in Calls, Gateway, the prepared-call record, or the safe 
 
 Next: add the configuration-source/scheduler and stale-catalog expiry semantics before enabling
 automatic refresh; the Jido interface remains the prerequisite for private live-start handoff.
+
+## 2026-09-10 — OTP application configuration source
+
+- Kept configuration retrieval separate from discovery, atomic publication, and periodic timing.
+  `RemoteMCP.ConfigurationSource` defines the whole-source boundary; the first
+  `ApplicationConfiguration` adapter reads the raw
+  `:vxpipe_call_engine, :remote_mcp_integrations` OTP setting.
+- Red: focused tests failed because `ApplicationConfiguration` did not exist. They required valid
+  application- and tenant-scoped records to become redacted `ConfiguredIntegration` values, an
+  absent setting to mean an empty source, and one invalid record to reject the entire source.
+- Green: the adapter validates its own options, converts every raw keyword record through the
+  existing configured-integration constructor, preserves source order, and returns only after the
+  complete set succeeds. It does not log, inspect, or return private connection settings outside
+  the redacted values.
+- Raw records are converted at runtime so an application's Mix configuration does not have to
+  construct project structs before the project modules are compiled. A later tenant/vault-backed
+  adapter can implement the same behaviour without changing catalog loading or publication.
+- The test module runs synchronously because it mutates OTP application environment and restores
+  the previous value after each case. Focused verification passes all 3 tests. The complete Call
+  Engine suite passes 203 tests with two tagged integrations excluded. Root formatting,
+  warnings-as-errors compilation, strict Credo over 316 source files, and unused-dependency
+  detection pass. The deterministic umbrella suite passes all 418 default-lane tests against a
+  disposable PostgreSQL instance: MCP 33, Call Engine 203, Calls 35, Persistence 25, Gateway 66,
+  and Console 56; nine tagged network integrations are excluded. The temporary database was
+  stopped and removed after the run.
+- This checkpoint does not wire an automatic refresh process, TTL expiry, configuration removal,
+  or durable credential revocation. Those remain the next catalog-lifecycle checkpoint.
+
+Next: add bounded refresh scheduling and stale-catalog expiry without doing network work in the
+catalog store or retaining private configuration in inspectable scheduler state.

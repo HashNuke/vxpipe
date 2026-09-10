@@ -192,6 +192,15 @@ definition boundary has started or its specification has been reviewed.
   integrations excluded. Configuration retrieval, periodic scheduling, TTL expiry, and generation
   removal/revocation remain separate pending work; this checkpoint does not claim automatic
   production refresh.
+- [x] Remote integration configuration now enters through a small `ConfigurationSource`
+  behaviour. Its first adapter reads raw records from the
+  `:vxpipe_call_engine, :remote_mcp_integrations` OTP application setting and converts the full
+  set into validated, inspection-redacted `ConfiguredIntegration` values at runtime. A missing
+  setting is an empty source; one invalid record rejects the whole source. Focused verification
+  passes 3 tests, the Call Engine suite passes 203 tests with two tagged integrations excluded,
+  and the deterministic umbrella suite passes 418 tests with nine tagged integrations excluded.
+  The adapter deliberately does not discover or publish tools, schedule refresh, own TTL expiry,
+  or define a future tenant/vault persistence implementation.
 - [ ] Expose and execute the pinned runtime binding through a supported Jido-owned loop.
 
 ## Specification review
