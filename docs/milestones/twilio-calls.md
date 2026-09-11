@@ -196,6 +196,46 @@ Live media is still not claimed. The authenticated Twilio WebSocket upgrade, bid
 conversion, media DTMF/control, shared transfer-harness parity, and tagged provider verification
 remain pending.
 
+## Checkpoint 5: authenticated media ingress and wire normalization
+
+Gateway now exposes `GET /api/telephony/twilio/:ingress_key/media/:token` as a raw WebSocket route.
+It validates the upgrade and the `X-Twilio-Signature` computed over the exact configured WSS URL
+before consuming the one-time admission token. A forged request therefore receives `401` without
+invalidating the legitimate token; successful reuse receives the same bounded not-found result as
+any other consumed token. The binding must also match the configured Twilio service identity.
+
+The socket monitors the exact leg owner and pins the first authenticated Stream SID. Separate
+decoders validate Twilio's start, media, DTMF, mark, stop, and protocol-control envelopes. Start
+accepts only mono `audio/x-mulaw` at 8 kHz and the bound Account SID/Call SID. Media becomes the
+provider-neutral PCMU packet with bounded payload, sequence, chunk, and provider timestamp. DTMF
+uses gateway observation time where the wire event has no own timestamp. A second start,
+cross-call/cross-stream frame, malformed payload, or binary WebSocket frame closes the socket before
+room dispatch.
+
+The first HTTP test was red with `404` because no Twilio media route existed. Four decoder behavior
+tests were red with the adapter's explicit unsupported-media response, and three socket tests were
+red because no socket module existed. The focused wire boundary and full Gateway lane are green:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/twilio/media_socket_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_decoder_test.exs \
+  test/vxpipe/gateway/http/twilio_media_test.exs
+# 9 tests, 0 failures
+
+mix test --max-cases 1
+# 203 tests, 0 failures (5 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+The complete umbrella run passes all seven application lanes—784 tests with zero failures.
+
+This checkpoint still makes no live-audio claim. Twilio's wire codec is PCMU, while the available
+`membrane_g711_plugin` release implements PCMA only; using it would be incorrect. The next
+checkpoint will keep media lifecycle/routing in Membrane while supplying a narrow tested PCMU
+codec and fixed 8/48 kHz conversion without FFmpeg. Outbound media/clear handling, shared transfer
+parity, and tagged provider verification remain pending.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

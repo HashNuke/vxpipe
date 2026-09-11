@@ -12,7 +12,8 @@ defmodule Vxpipe.Gateway.HTTP.Router do
     TelephonyIngressConfig,
     TelnyxEvents,
     TelnyxMedia,
-    TwilioEvents
+    TwilioEvents,
+    TwilioMedia
   }
 
   alias Vxpipe.Gateway.CallAdmission
@@ -27,19 +28,23 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       |> Keyword.get(:call_admission, [])
       |> configure_call_admission(telephony_events)
 
+    media_options =
+      telephony
+      |> Keyword.take([
+        :media_admission,
+        :maximum_media_message_bytes,
+        :media_socket,
+        :media_socket_timeout_ms,
+        :twilio_media_socket
+      ])
+      |> Keyword.merge(registry: telephony_events.registry, clock: telephony_events.clock)
+
     %{
       call_admission: CallAdmissions.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
-      telephony_media:
-        telephony
-        |> Keyword.take([
-          :media_admission,
-          :maximum_media_message_bytes,
-          :media_socket,
-          :media_socket_timeout_ms
-        ])
-        |> TelnyxMedia.init(),
+      telnyx_media: TelnyxMedia.init(media_options),
+      twilio_media: TwilioMedia.init(media_options),
       rtvi: options |> Keyword.get(:webrtc, []) |> RTVI.init()
     }
   end
@@ -90,7 +95,17 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         } = conn,
         options
       ) do
-    TelnyxMedia.upgrade(conn, options.telephony_media, ingress_key, token)
+    TelnyxMedia.upgrade(conn, options.telnyx_media, ingress_key, token)
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "GET",
+          path_info: ["api", "telephony", "twilio", ingress_key, "media", token]
+        } = conn,
+        options
+      ) do
+    TwilioMedia.upgrade(conn, options.twilio_media, ingress_key, token)
   end
 
   def call(
@@ -185,7 +200,8 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       :media_admission,
       :maximum_media_message_bytes,
       :media_socket,
-      :media_socket_timeout_ms
+      :media_socket_timeout_ms,
+      :twilio_media_socket
     ])
   end
 

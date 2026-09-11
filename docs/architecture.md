@@ -1022,10 +1022,18 @@ starts its pinned room, and activates the incoming leg. Activation returns a typ
 the common media binding and its one-time provider media URL. The HTTP boundary then answers with
 Twilio [`<Connect><Stream>`](https://www.twilio.com/docs/voice/twiml/stream) TwiML pointing to that
 WSS URL; there is no fictitious second answer API command. Telnyx consumes the same typed activation
-result but continues to acknowledge its asynchronous event with an ordinary success response. This
-establishes Twilio's authenticated synchronous control handoff. The WebSocket upgrade,
-bidirectional G.711 media, in-band DTMF, and complete transfer parity remain unsupported until their
-owning checkpoints are implemented.
+result but continues to acknowledge its asynchronous event with an ordinary success response.
+
+The corresponding `GET /api/telephony/twilio/:ingress_key/media/:token` WebSocket boundary checks
+the upgrade shape, resolves the configured Twilio service, and validates `X-Twilio-Signature`
+against the exact configured WSS URL before consuming the one-time media token. A rejected signature
+therefore cannot burn a legitimate admission token. The resulting socket pins the configured
+Account SID, exact Call SID, one Stream SID, and live leg owner. It accepts only Twilio's declared
+mono 8 kHz `audio/x-mulaw` start format, bounds and decodes PCMU media, timestamps DTMF at gateway
+observation, and dispatches normalized events through the provider-neutral leg boundary. Cross-call
+or cross-stream frames close the socket rather than entering the room. PCMU remains an authenticated
+provider packet at this checkpoint: bidirectional conversion/routing and complete transfer parity
+remain unsupported until their owning checkpoints are implemented.
 
 Outbound Twilio control uses the current official
 [Calls resource](https://www.twilio.com/docs/voice/api/call-resource). Gateway posts one

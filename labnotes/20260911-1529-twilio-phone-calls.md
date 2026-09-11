@@ -35,10 +35,10 @@ Implementation checkpoints planned from this evidence:
 2. Add provider-specific configured-service validation and Twilio form-signature/webhook/TwiML
    ingress without adding Twilio data to participant definitions.
 3. Add no-retry REST dial/end operations and exact status/AMD correlation.
-4. Add an authenticated media socket and Membrane G.711 pipelines. Use the pure
-   `membrane_g711_plugin`; do not introduce FFmpeg. If 8/48 kHz conversion has no suitable
-   non-FFmpeg Membrane element, implement a narrow tested Membrane resampling element rather than an
-   external process.
+4. Add an authenticated media socket and Membrane G.711 pipelines. The released
+   `membrane_g711_plugin` implements PCMA only, while Twilio requires PCMU, so it cannot be used for
+   this path. Keep the pipeline lifecycle in Membrane and implement a narrow tested PCMU codec plus
+   fixed 8/48 kHz conversion rather than introducing FFmpeg.
 5. Reuse the full provider-neutral private-transfer harness for parity, then add a guarded tagged
    live-provider lane with no unapproved destination.
 
@@ -201,3 +201,53 @@ The full umbrella suite passes all seven application lanes—775 tests with zero
 
 The authenticated media WebSocket, G.711 conversion, media DTMF/control, complete shared transfer
 harness, and tagged live-provider proof remain pending. This checkpoint makes no live-media claim.
+
+## Checkpoint 5: authenticated media WebSocket and wire events
+
+Twilio's current Media Streams documentation was checked again before this checkpoint. The initial
+WebSocket upgrade carries `X-Twilio-Signature` over the exact configured WSS URL. A bidirectional
+stream then sends `connected`, `start`, inbound `media`, DTMF, `mark`, and `stop` JSON messages.
+The start message declares mono `audio/x-mulaw` at 8 kHz; media payloads are base64-encoded raw
+PCMU bytes. Outbound messages later use media, mark, and clear. A mark is returned only after the
+associated buffered playback reaches the caller, while clear flushes queued audio and returns the
+pending marks.
+
+The released Membrane package search exposed an important constraint: `membrane_g711_plugin` 0.1.2
+implements A-law/PCMA only. `membrane_g711_format` can describe PCMU but does not encode or decode
+it, and the readily available resampler uses FFmpeg's swresample. The next pipeline checkpoint must
+therefore use Membrane for lifecycle and flow control with a narrowly scoped pure-Elixir PCMU codec
+and deterministic fixed-rate converter. This avoids both the wrong codec and an unnecessary FFmpeg
+runtime.
+
+The first endpoint test failed with `404` because the Twilio WSS route did not exist. The resulting
+boundary verifies upgrade shape, configured service, and exact URL signature before it consumes the
+one-time media token. The test demonstrates that a request signed for a trailing-slash variant gets
+`401`, after which the exact signed request can still upgrade; only that successful admission
+consumes the token.
+
+Four initial decoder cases failed with the adapter's explicit
+`invalid_twilio_media_message` response. Separate field, start, packet, and control decoders now
+pin Account SID, Call SID, one MZ Stream SID, format, sequences, timestamps, bounded payloads, and
+DTMF. They leave PCMU as a provider packet for the later Membrane pipeline. Three socket tests were
+then red because `MediaSocket` did not exist. The socket now monitors the exact leg, dispatches
+start/media/DTMF through the common leg contract, and closes on cross-call frames or owner exit.
+
+Focused and application evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/twilio/media_socket_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_decoder_test.exs \
+  test/vxpipe/gateway/http/twilio_media_test.exs
+# 9 tests, 0 failures
+
+mix test --max-cases 1
+# 203 tests, 0 failures (5 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+The complete umbrella suite passes all seven application lanes—784 tests with zero failures.
+
+This is authenticated ingress and wire normalization, not live Twilio audio. PCMU decode/encode,
+8/48 kHz conversion, outbound media/clear, Membrane pipeline selection, full transfer parity, and
+the tagged provider lane remain pending.

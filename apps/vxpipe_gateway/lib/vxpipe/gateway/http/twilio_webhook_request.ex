@@ -5,7 +5,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioWebhookRequest do
 
   alias Plug.Conn.Utils
   alias Vxpipe.CallEngine.Telephony.{Adapter, Event, Webhook}
-  alias Vxpipe.Gateway.HTTP.RawBody
+  alias Vxpipe.Gateway.HTTP.{RawBody, TwilioRequestSignature}
   alias Vxpipe.Gateway.Telephony.{ConfiguredService, ServiceRegistry}
 
   @type endpoint_builder :: (ConfiguredService.t() -> {String.t(), map()})
@@ -19,7 +19,7 @@ defmodule Vxpipe.Gateway.HTTP.TwilioWebhookRequest do
          :ok <- provider(service),
          :ok <- form_content_type(conn),
          {:ok, body, conn} <- RawBody.read(conn, options.maximum_body_bytes),
-         {:ok, signature} <- signature(conn),
+         {:ok, signature} <- TwilioRequestSignature.fetch(conn),
          {url, route_parameters} <- endpoint_builder.(service),
          webhook <- webhook(body, signature, options.clock, url, route_parameters),
          result <- Adapter.ingest_webhook(service.adapter, service.adapter_options, webhook) do
@@ -49,13 +49,6 @@ defmodule Vxpipe.Gateway.HTTP.TwilioWebhookRequest do
 
       _missing_or_duplicate ->
         {:error, :unsupported_media_type}
-    end
-  end
-
-  defp signature(conn) do
-    case get_req_header(conn, "x-twilio-signature") do
-      [value] when value != "" -> {:ok, value}
-      _missing_or_duplicate -> {:error, :invalid_authentication_headers}
     end
   end
 

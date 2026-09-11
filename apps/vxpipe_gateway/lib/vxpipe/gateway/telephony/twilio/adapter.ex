@@ -9,6 +9,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.Adapter do
     DialCommand,
     EndCallCommand,
     IncomingAnswer,
+    MediaDecoder,
     WebhookDecoder,
     WebhookVerifier
   }
@@ -36,6 +37,5 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.Adapter do
   end
 
   @impl true
-  def decode_media_message(_options, _message),
-    do: {:error, :invalid_twilio_media_message}
+  def decode_media_message(options, message), do: MediaDecoder.decode(options, message)
 end
