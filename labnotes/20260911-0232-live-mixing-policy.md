@@ -384,3 +384,21 @@
   25, Gateway 83 with four exclusions, and Console 57. Formatting, warnings-as-errors compilation,
   strict Credo, and the unused-dependency check pass. Manual sample-console verification remains
   open.
+
+## 2026-09-11 — composed restrictive WebRTC transition
+
+- Added a second external WebRTC acceptance scenario without changing production code. It first
+  proves the normal caller-to-receiver route, queues another caller frame, then admits a third
+  human whose `while_present` policy permits only caller/specialist audio and transcript routes and
+  denies audio/transcript storage.
+- Admission synchronously advances every registered media enforcer. After it returns, the original
+  receiver gets neither the queued old interval nor later audio. A subsequently connected
+  specialist receives new caller Opus, and the caller receives new specialist Opus; both decode to
+  one 20 ms PCM frame.
+- The green-first result is composition evidence rather than a behavior implementation checkpoint:
+  the earlier authority barrier, Membrane ingress replacement, mixer purge, and output-generation
+  replacement already satisfied the live audio contract when exercised together. The Gateway
+  suite now passes 84 tests with four tagged integration exclusions.
+- The milestone acceptance item remains unchecked because provider-returned STT signals are not
+  yet pinned to the audio interval's policy revision. That transcript provenance and demand
+  lifecycle remains the next engine behavior change.

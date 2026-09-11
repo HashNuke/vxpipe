@@ -253,6 +253,16 @@ passes 83 tests with four tagged integration exclusions; a fresh PostgreSQL-back
 and every common quality gate pass. An authorized monitor connection,
 restrictive live-policy transition, and sample-console/manual verification remain open.
 
+The first composed transition check now covers the live audio half of that remaining barrier
+acceptance. Three negotiated WebRTC clients establish an initially permitted caller-to-receiver
+route; the caller then queues another encoded frame immediately before a restrictive specialist is
+admitted. Once admission returns, the receiver gets neither that old interval nor later frames,
+while newly encoded caller/specialist audio crosses only their allowlisted route in both directions.
+This required no production change: the existing authority commit, ingress generation restart,
+mixer purge, and egress generation replacement compose correctly. The Gateway suite passes 84
+tests with four tagged integration exclusions. STT provider-session provenance must still prove
+the transcript half before the broader acceptance item can be marked complete.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

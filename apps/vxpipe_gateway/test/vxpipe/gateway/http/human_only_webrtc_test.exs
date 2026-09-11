@@ -9,6 +9,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
   alias Membrane.Opus.{Decoder, Encoder}
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.SessionSupervisor
 
@@ -46,6 +47,46 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     assert decodable_pcm_size(caller_packet) == 1_920
   end
 
+  test "a restrictive participant commits new live routes before queued audio can cross" do
+    plan = compile_restrictive_plan()
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    specialist = Map.fetch!(plan.participants, "specialist")
+
+    caller_client = connect(issue_session(plan, room, caller.participant_id).session_id)
+    receiver_client = connect(issue_session(plan, room, receiver.participant_id).session_id)
+
+    :ok = send_audio(caller_client, 1, 960, 8_000)
+    assert receiver_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    :ok = send_audio(caller_client, 2, 1_920, 7_000)
+    assert {:ok, command} = join_command(plan, specialist.participant_id)
+    assert {:ok, _participant} = CallEngine.join_participant(command)
+
+    specialist_client =
+      plan
+      |> issue_session(room, specialist.participant_id)
+      |> then(&connect(&1.session_id))
+
+    receiver_peer = receiver_client.client
+    receiver_track = receiver_client.output_track_id
+
+    refute_receive {:ex_webrtc, ^receiver_peer, {:rtp, ^receiver_track, _rid, %Packet{}}},
+                   1_000
+
+    :ok = send_audio(caller_client, 3, 2_880, 6_000)
+    assert specialist_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    :ok = send_audio(specialist_client, 1, 960, -6_000)
+    assert caller_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    refute_receive {:ex_webrtc, ^receiver_peer, {:rtp, ^receiver_track, _rid, %Packet{}}},
+                   500
+  end
+
   defp compile_plan do
     resource_id = unique_id("human-webrtc")
     room_id = unique_id("room-human-webrtc")
@@ -81,6 +122,67 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
     plan
+  end
+
+  defp compile_restrictive_plan do
+    resource_id = unique_id("restrictive-webrtc")
+    room_id = unique_id("room-restrictive-webrtc")
+
+    input = %{
+      schema_version: CallDefinition.schema_version(),
+      entry_caller: "caller",
+      entry_receiver: "receiver",
+      defaults: %{capabilities: %{}},
+      call_variables: %{sections: %{}},
+      participants: %{
+        "caller" => human_participant(),
+        "receiver" => human_participant(),
+        "specialist" =>
+          Map.put(human_participant(), :while_present, %{
+            audio_routes: %{
+              "caller" => ["specialist"],
+              "specialist" => ["caller"]
+            },
+            transcript_routes: %{
+              "caller" => ["specialist"],
+              "specialist" => ["caller"]
+            },
+            record_audio: false,
+            save_transcripts: false
+          })
+      },
+      limits: %{max_duration_ms: 30_000}
+    }
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+
+    assert {:ok, invocation} =
+             CallInvocation.new(
+               %{
+                 call_definition: %{id: resource_id, revision: 1},
+                 initial_variables: %{},
+                 transport: %{type: "web"}
+               },
+               tenant_id: "tenant-restrictive-webrtc",
+               actor_id: "actor-restrictive-webrtc",
+               call_id: unique_id("call-restrictive-webrtc"),
+               room_id: room_id
+             )
+
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    plan
+  end
+
+  defp join_command(plan, participant_id) do
+    JoinParticipant.new(
+      tenant_id: plan.tenant_id,
+      actor_id: plan.actor_id,
+      room_id: plan.room_id,
+      participant_id: participant_id,
+      role: :human,
+      deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+    )
   end
 
   defp human_participant do
