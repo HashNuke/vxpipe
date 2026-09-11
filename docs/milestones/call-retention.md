@@ -1,7 +1,7 @@
 # Whole-call retention and deletion
 
 Status: not implemented. Specification review: approved (2026-09-08).
-Prerequisites: [Call-details publications](call-details-publications.md), including all persisted history/artifact owners.
+Prerequisites: [Call-details publications](call-details-publications.md), including all persisted history/artifact owners; [Embedded/container delivery](embedded-and-container-delivery.md). This is intentionally the final implementation milestone.
 Sources: [Retention](../../labnotes/20260905-0405-call-definition-design.md#retention-periods--approved-application-and-tenant-policy); [R19–R21](../call-definition-gap-review.md).
 
 ## Runnable outcome

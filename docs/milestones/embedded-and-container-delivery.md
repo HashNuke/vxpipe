@@ -1,7 +1,7 @@
 # Embedded and JSON-configured container delivery
 
 Status: not implemented. Specification review: approved (2026-09-08).
-Prerequisites: [Call retention](call-retention.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries before release acceptance.
+Prerequisites: [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries before release acceptance. Whole-call retention deliberately follows delivery as the final milestone.
 Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical definition boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 See also the approved [gateway/console boundary](../gateway-console-boundary.md).
 
