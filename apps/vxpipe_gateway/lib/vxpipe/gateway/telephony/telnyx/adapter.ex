@@ -13,6 +13,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.Adapter do
   }
 
   alias Vxpipe.Gateway.Telephony.Telnyx.{
+    ClientState,
     MediaDecoder,
     MediaSettings,
     VoiceClient,
@@ -111,7 +112,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.Adapter do
     end
   end
 
-  defp client_state(leg_id), do: Base.encode64(JSON.encode!(%{"vxpipe_leg_id" => leg_id}))
+  defp client_state(leg_id), do: ClientState.encode(leg_id)
 
   defp put_answering_machine_detection(payload, :detect),
     do: Map.put(payload, "answering_machine_detection", "detect")

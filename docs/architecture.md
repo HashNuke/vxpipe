@@ -1004,8 +1004,11 @@ handling. Incoming initiation additionally retains the caller and called address
 standard/premium machine detection, and hangup events map to the closed common vocabulary;
 documented premium human variants become `human`, premium machine/silence/fax outcomes become
 `machine`, and `not_sure` becomes `unknown`. Known timeout/busy/no-answer hangups retain that
-meaning, while unrecognized provider hangup causes become generic failure. Outbound initiation and
-other authenticated but unconsumed Voice API events are acknowledged through `ignore`.
+meaning, while unrecognized provider hangup causes become generic failure. An outgoing initiation
+is consumed only when its signed payload includes the bounded opaque Vxpipe leg ID previously
+encoded into provider `client_state`; this provides the correlation seam for an accepted or unknown
+dial submission without selecting by phone number. The remaining authenticated but unconsumed
+Voice API events are acknowledged through `ignore`.
 
 Gateway exposes this boundary at
 `POST /api/telephony/telnyx/:ingress_key/events`. The deployment configuration resolves the opaque

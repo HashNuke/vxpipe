@@ -123,6 +123,11 @@ source-identity, input-delivery, output-envelope, and teardown tests pass, as do
 tests and the complete 731-test umbrella gate. Private briefing, outbound transfer/press-1
 acceptance, AMD cleanup, deterministic complete-call harness, and authorized real-provider
 verification remain pending.
+Telnyx outgoing-initiation webhooks also recover a bounded opaque Vxpipe leg ID from signed
+`client_state` and emit a common outgoing event instead of being discarded. Malformed or absent
+correlation fails decoding. This is the prerequisite for associating later provider identifiers
+with exactly one pending transfer, including when the immediate dial outcome is unknown; it does
+not yet submit that outbound dial.
 
 ## Specification review
 

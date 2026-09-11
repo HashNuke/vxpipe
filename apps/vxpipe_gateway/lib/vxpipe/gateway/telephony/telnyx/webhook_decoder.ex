@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookDecoder do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Telephony.{Event, Webhook}
+  alias Vxpipe.Gateway.Telephony.Telnyx.ClientState
 
   @maximum_event_type_bytes 128
   @maximum_event_id_bytes 128
@@ -42,8 +43,16 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookDecoder do
     end
   end
 
-  defp decode_event("call.initiated", %{"payload" => %{"direction" => "outgoing"}}),
-    do: :ignore
+  defp decode_event("call.initiated", %{"payload" => %{"direction" => "outgoing"}} = data) do
+    with {:ok, payload} <- payload(data),
+         {:ok, from} <- bounded_field(payload, "from", @maximum_phone_address_bytes),
+         {:ok, to} <- bounded_field(payload, "to", @maximum_phone_address_bytes),
+         {:ok, leg_id} <- ClientState.decode(Map.get(payload, "client_state")) do
+      build_event(:outgoing, data, from: from, to: to, leg_id: leg_id)
+    else
+      _invalid -> invalid()
+    end
+  end
 
   defp decode_event("call.initiated", _invalid), do: invalid()
 

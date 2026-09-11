@@ -24,6 +24,37 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookDecoderTest do
             }} = WebhookDecoder.decode(webhook)
   end
 
+  test "normalizes an outgoing initiation only with its opaque Vxpipe leg correlation" do
+    client_state = Base.encode64(JSON.encode!(%{"vxpipe_leg_id" => "tleg-transfer-1"}))
+
+    assert {:ok,
+            %Event{
+              kind: :outgoing,
+              leg_id: "tleg-transfer-1",
+              provider_call_control_id: "call-control-1",
+              provider_call_leg_id: "call-leg-1",
+              provider_call_session_id: "call-session-1"
+            }} =
+             "call.initiated"
+             |> webhook(%{"direction" => "outgoing", "client_state" => client_state})
+             |> WebhookDecoder.decode()
+
+    malformed = [
+      nil,
+      "not-base64",
+      Base.encode64(JSON.encode!(%{})),
+      Base.encode64(JSON.encode!(%{"vxpipe_leg_id" => "tleg-transfer-1", "extra" => true})),
+      Base.encode64(JSON.encode!(%{"vxpipe_leg_id" => ""}))
+    ]
+
+    Enum.each(malformed, fn value ->
+      assert {:error, :invalid_telnyx_webhook} =
+               "call.initiated"
+               |> webhook(%{"direction" => "outgoing", "client_state" => value})
+               |> WebhookDecoder.decode()
+    end)
+  end
+
   test "normalizes answered, DTMF, and standard or premium AMD events" do
     assert {:ok, %Event{kind: :answered}} =
              "call.answered" |> webhook() |> WebhookDecoder.decode()
@@ -70,7 +101,6 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookDecoderTest do
 
   test "ignores authenticated events outside the consumed vocabulary" do
     ignored = [
-      webhook("call.initiated", %{"direction" => "outgoing"}),
       webhook("streaming.started"),
       webhook("call.playback.ended"),
       webhook("future.provider.event")

@@ -1038,3 +1038,38 @@ PostgreSQL 17 instance.
 
 Outbound transfer dialing, private briefing, exact destination press-1 acceptance, AMD/failure
 cleanup, and the deterministic full-call harness remain before this milestone is runnable.
+
+## Checkpoint 27: signed outgoing-leg correlation
+
+Telnyx dial commands already put Vxpipe's opaque internal leg ID into `client_state`, but the
+webhook decoder discarded every outgoing initiation. That made a later signed event unusable for
+binding an unknown immediate dial outcome to its pending transfer. A focused test first failed at
+compilation because common telephony events had no internal leg field.
+
+Common events now include a bounded `:outgoing` initiation carrying `leg_id`. The Telnyx decoder
+accepts it only after the provider webhook has passed the existing signature boundary and the
+payload's base64 JSON contains exactly a valid Vxpipe leg identifier. Missing, malformed, empty, or
+oversized client state fails decoding rather than falling back to a phone number. A single Telnyx
+`ClientState` module now owns command encoding plus webhook/media decoding, avoiding divergent
+formats.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/webhook_decoder_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/media_decoder_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/adapter_test.exs
+# 17 tests, 0 failures
+
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/telephony/adapter_test.exs
+# 5 tests, 0 failures
+```
+
+This checkpoint supplies correlation only. The outbound leg owner, media-admission reservation,
+dial submission, and pending-transfer control remain next.
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. The umbrella test command again hit only the previously recorded startup-readiness monitor
+race in Call Engine (`:noproc` after the room had already exited); the changed Gateway lane passed
+all 156 tests. The complete 348-test Call Engine lane immediately passed at that failing umbrella
+seed, so no unrelated lifecycle change was included in this checkpoint.

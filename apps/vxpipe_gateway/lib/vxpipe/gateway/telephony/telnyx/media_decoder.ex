@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaDecoder do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket}
+  alias Vxpipe.Gateway.Telephony.Telnyx.ClientState
 
   @maximum_message_bytes 131_072
 
@@ -147,8 +148,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaDecoder do
   defp media_format(_invalid), do: :error
 
   defp matching_client_state(options, encoded) when is_binary(encoded) do
-    with {:ok, decoded} <- Base.decode64(encoded),
-         {:ok, %{"vxpipe_leg_id" => leg_id}} <- JSON.decode(decoded),
+    with {:ok, leg_id} <- ClientState.decode(encoded),
          :ok <- required_expected(options, :leg_id, leg_id) do
       :ok
     else

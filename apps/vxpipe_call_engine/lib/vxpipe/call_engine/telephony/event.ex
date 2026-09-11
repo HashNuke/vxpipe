@@ -3,7 +3,16 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
 
   alias Vxpipe.CallEngine.Telephony.MediaPacket
 
-  @kinds [:incoming, :answered, :media_started, :media, :dtmf, :answering_machine, :ended]
+  @kinds [
+    :incoming,
+    :outgoing,
+    :answered,
+    :media_started,
+    :media,
+    :dtmf,
+    :answering_machine,
+    :ended
+  ]
   @answering_machine_results [:human, :machine, :unknown]
   @end_reasons [:hangup, :busy, :no_answer, :failed, :timeout]
   @dtmf ~r/\A[0-9*#A-D]\z/
@@ -17,6 +26,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
              :provider_call_control_id,
              :provider_call_leg_id,
              :provider_call_session_id,
+             :leg_id,
              :occurred_at,
              :stream_id,
              :sequence_number,
@@ -30,6 +40,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
                 provider_connection_id: nil,
                 provider_call_leg_id: nil,
                 provider_call_session_id: nil,
+                leg_id: nil,
                 occurred_at: nil,
                 stream_id: nil,
                 sequence_number: nil,
@@ -42,7 +53,14 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
               ]
 
   @type kind ::
-          :incoming | :answered | :media_started | :media | :dtmf | :answering_machine | :ended
+          :incoming
+          | :outgoing
+          | :answered
+          | :media_started
+          | :media
+          | :dtmf
+          | :answering_machine
+          | :ended
 
   @type t :: %__MODULE__{
           kind: kind(),
@@ -52,6 +70,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           provider_call_control_id: String.t(),
           provider_call_leg_id: nil | String.t(),
           provider_call_session_id: nil | String.t(),
+          leg_id: nil | String.t(),
           occurred_at: nil | DateTime.t(),
           stream_id: nil | String.t(),
           sequence_number: nil | non_neg_integer(),
@@ -73,6 +92,11 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
     do:
       present?(event.from) and present?(event.to) and present?(event.provider_connection_id) and
         webhook_identified?(event)
+
+  defp valid_kind?(%__MODULE__{kind: :outgoing} = event),
+    do:
+      present?(event.leg_id) and present?(event.from) and present?(event.to) and
+        present?(event.provider_connection_id) and webhook_identified?(event)
 
   defp valid_kind?(%__MODULE__{kind: :answered} = event), do: webhook_identified?(event)
 
