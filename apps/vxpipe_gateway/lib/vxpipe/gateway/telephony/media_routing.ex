@@ -36,7 +36,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
              attachment,
              identity,
              engine,
-             media_pipelines.room_egress
+             media_pipelines.room_egress,
+             media_pipelines.playback_clearer
            ) do
       {:ok, %{room_audio_egress: egress, room_audio_ingress: ingress}}
     end
@@ -90,7 +91,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
          attachment,
          identity,
          engine,
-         pipeline
+         pipeline,
+         playback_clearer
        ) do
     case engine.room_audio_output_configuration(attachment) do
       :disabled ->
@@ -105,6 +107,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
               owner: self(),
               engine: engine,
               pipeline: pipeline,
+              playback_clearer: playback_clearer,
               pipeline_supervisor: child_supervisor,
               pipeline_options: [socket_owner: socket_owner, stream_id: stream_id]
             ]

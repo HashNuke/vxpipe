@@ -74,6 +74,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
           owner: self(),
           maximum_frames: Keyword.get(options, :maximum_audio_frames, 500),
           pipeline: Keyword.fetch!(options, :media_pipelines).direct_output,
+          playback_clearer: Keyword.fetch!(options, :media_pipelines).playback_clearer,
           pipeline_supervisor: child_supervisor,
           pipeline_options: [socket_owner: socket_owner, stream_id: stream_id]
         ]

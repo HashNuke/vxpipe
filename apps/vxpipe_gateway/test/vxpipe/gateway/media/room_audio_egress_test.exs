@@ -74,6 +74,8 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
       Task.async(fn -> GenServer.call(egress, {:vxpipe_apply_media_policy, snapshot(5)}) end)
 
     assert_receive {:test_room_audio_output_pipeline_stopped, ^old_pipeline_id, _pipeline}
+    assert_receive {:test_remote_playback_cleared, pipeline_options}
+    assert pipeline_options[:test_observer] == self()
 
     assert_receive {:test_room_audio_output_pipeline_started, new_pipeline_id, _pipeline, ^egress}
 
@@ -125,6 +127,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
       "track-output",
       engine: Vxpipe.Gateway.TestRoomAudioOutputEngine,
       pipeline: Vxpipe.Gateway.TestRoomAudioOutputPipeline,
+      playback_clearer: Vxpipe.Gateway.TestPlaybackClearer,
       pipeline_supervisor: Vxpipe.Gateway.TestRoomAudioOutputPipelineSupervisor,
       pipeline_options: [test_observer: self()]
     )

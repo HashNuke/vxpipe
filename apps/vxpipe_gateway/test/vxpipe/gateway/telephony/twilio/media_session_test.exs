@@ -70,6 +70,25 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
     assert_receive {:vxpipe_audio_playback, _output, "turn-phone", :started}, 2_000
     assert_receive {:vxpipe_audio_playback, _output, "turn-phone", {:completed, 20}}, 2_000
 
+    interruption_frame = %{
+      output_frame(binding, assistant.participant_id)
+      | correlation_id: "turn-interrupted",
+        payload: :binary.copy(<<1_000::little-signed-16>>, 3 * 960)
+    }
+
+    assert :ok = AudioOutput.push(snapshot.audio_output, interruption_frame)
+
+    assert {:ok, played_ms} =
+             AudioOutput.interrupt(snapshot.audio_output, "turn-interrupted", self())
+
+    assert played_ms >= 0
+    assert_receive {:test_twilio_socket_clear, clear_message}, 2_000
+
+    assert JSON.decode!(clear_message) == %{
+             "event" => "clear",
+             "streamSid" => @stream_sid
+           }
+
     assert :ok =
              CallAdmission.handle_live_event(
                [],
@@ -278,6 +297,11 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
     receive do
       {:vxpipe_twilio_socket_send, message} ->
         send(observer, {:test_twilio_socket_send, message})
+
+        if JSON.decode!(message)["event"] == "clear" do
+          send(observer, {:test_twilio_socket_clear, message})
+        end
+
         socket_loop(observer)
 
       :stop ->

@@ -183,6 +183,8 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
               owner: self(),
               engine: engine,
               pipeline: Keyword.get(options, :pipeline, RoomAudioOutputPipeline),
+              playback_clearer:
+                Keyword.get(options, :playback_clearer, Vxpipe.Gateway.Media.PlaybackClearer.Noop),
               pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, __MODULE__),
               pipeline_options: pipeline_options
             ]

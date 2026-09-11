@@ -1040,8 +1040,13 @@ The reverse path applies a bounded six-sample averaging filter, converts 48-to-8
 and uses `Membrane.Realtimer` before producing the exact Twilio media envelope with its pinned
 Stream SID. No FFmpeg runtime or external codec process participates. Codec/rate math remains in
 small deterministic modules beneath the Membrane elements rather than in the socket or room
-authority. Explicit Twilio buffered-playout clearing, complete transfer parity, and live-provider
-verification remain pending checkpoints.
+authority. When interruption or a policy revision replaces an output pipeline, the shared output
+lifecycle first terminates the old local producer, then invokes its configured playback clearer,
+and only then launches the replacement. Twilio's clearer emits the exact `clear` command for the
+pinned Stream SID, so already-buffered provider audio cannot continue after barge-in or a privacy
+barrier. Transports without a remote playback-clear operation use the explicit no-op implementation
+of that contract. Complete transfer parity and live-provider verification remain pending
+checkpoints.
 
 Outbound Twilio control uses the current official
 [Calls resource](https://www.twilio.com/docs/voice/api/call-resource). Gateway posts one

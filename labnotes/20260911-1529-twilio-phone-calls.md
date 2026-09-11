@@ -304,3 +304,43 @@ Credo, 797 tests across all seven applications, and the unused-dependency check.
 The remaining Twilio work is explicit remote-buffer clearing on interruption/privacy changes, the
 full common private-transfer harness, and a guarded tagged provider lane. No live-provider claim is
 made from the deterministic pipeline proof.
+
+## Checkpoint 7: remote playback clear
+
+Twilio buffers outbound media after the server sends it, so terminating the local Membrane
+pipeline alone is insufficient for interruption and privacy transitions. A transport-owned
+`PlaybackClearer` contract now sits beside the direct and room-egress pipeline selections. The
+shared replacement workflows terminate the old producer synchronously, invoke the clearer with its
+pinned transport options, and only then start a new pipeline. The stop-clear-start order prevents
+old paced buffers from being delivered after the remote clear. Twilio sends `clear` with the exact
+Stream SID; the existing non-Twilio paths retain an explicit no-op clearer.
+
+The initial focused run produced the expected three failures: an undefined Twilio clearer and no
+clear notification from either replacement workflow. After the contract was wired through both
+output states and telephony session setup, the tests proved exact command encoding, invalid target
+rejection, and lifecycle ordering. The common Twilio media-session test now queues multiple PCM
+frames, interrupts that turn, and observes the same clear command through the configured socket
+owner.
+
+Combining that session test with the shared lifecycle tests exposed an existing fixture collision:
+all direct-output tests reused one Registry key while a spawned pipeline from the previous test
+could still be unregistering. Per-test connection identities fixed the test ownership boundary;
+no sleep or production timeout changed. The combined group passed twice consecutively.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/media/audio_output_test.exs \
+  test/vxpipe/gateway/media/room_audio_egress_test.exs \
+  test/vxpipe/gateway/telephony/twilio/playback_clearer_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_session_test.exs --max-cases 1
+# 13 tests, 0 failures (two consecutive runs)
+
+mix test --max-cases 1
+# 218 tests, 0 failures (5 excluded)
+```
+
+The umbrella completion gates pass: formatting, warnings-as-errors compilation, strict Credo, 799
+tests across all seven applications, and the unused-dependency check.
+
+Private-transfer parity and tagged live-provider verification remain. This checkpoint does not
+claim either one.

@@ -1,6 +1,6 @@
 # Twilio through the common telephony contract
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: implementation in progress. Specification review: approved (2026-09-08).
 Prerequisites: [Telnyx/common telephony slice](telnyx-calls.md), including its tested provider-neutral adapter contract.
 Sources: [Common telephony boundary](../../labnotes/20260905-0405-call-definition-design.md#keep-telephony-provider-neutral-and-pin-the-resolved-definition-in-the-room); [transfer and machine behavior](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [R32](../call-definition-gap-review.md).
 
@@ -278,6 +278,44 @@ This proves bidirectional codec conversion and provider-neutral live-session rou
 deterministic media; it is not tagged real-provider evidence. Explicit `clear` handling for
 Twilio's remote playback buffer, full transfer-harness parity, and the guarded live lane remain
 pending.
+
+## Checkpoint 7: interruption clears remote playback
+
+Direct playout and room-mixer egress now receive a small provider-neutral playback-clearer
+contract. Pipeline replacement synchronously terminates the old supervised producer before it
+clears the provider buffer and launches a replacement. This order prevents a paced frame from the
+old pipeline racing behind the clear command. The Twilio implementation sends the exact `clear`
+event with the authenticated Stream SID; the existing transports that do not yet expose a remote
+clear action use an explicit no-op implementation.
+
+The first focused run had three intended failures: the Twilio clearer did not exist, and neither
+direct interruption nor a room policy transition invoked a clearer. The green tests prove
+stop-clear-start ordering at both shared lifecycles, invalid target rejection, and the exact Twilio
+wire command. The real Twilio media-session test additionally interrupts queued speech and observes
+that command through the same socket owner selected by the configured pipeline set.
+
+That combined run also exposed an old test-fixture race: all direct-output tests used the same
+Registry key while their spawned pipelines unregistered asynchronously at test teardown. Giving
+each test a unique connection identity removed the collision without sleeps or weaker lifecycle
+assertions. Two consecutive focused runs and the complete Gateway lane pass.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/media/audio_output_test.exs \
+  test/vxpipe/gateway/media/room_audio_egress_test.exs \
+  test/vxpipe/gateway/telephony/twilio/playback_clearer_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_session_test.exs --max-cases 1
+# 13 tests, 0 failures (two consecutive runs)
+
+mix test --max-cases 1
+# 218 tests, 0 failures (5 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, the complete 799-test umbrella
+suite, and the unused-dependency check also pass.
+
+Full private-transfer harness parity and tagged live-provider verification remain before this
+milestone can be marked complete.
 
 ## Specification review
 

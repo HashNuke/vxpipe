@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
     :owner,
     :pipeline,
     :pipeline_options,
+    :playback_clearer,
     :pipeline_supervisor,
     :progress_interval_frames
   ]
@@ -44,6 +45,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
       owner: Keyword.fetch!(options, :owner),
       pipeline: Keyword.fetch!(options, :pipeline),
       pipeline_options: Keyword.get(options, :pipeline_options, []),
+      playback_clearer:
+        Keyword.get(options, :playback_clearer, Vxpipe.Gateway.Media.PlaybackClearer.Noop),
       pipeline_supervisor: Keyword.fetch!(options, :pipeline_supervisor),
       progress_interval_frames: Keyword.get(options, :progress_interval_frames, 5),
       queue: :queue.new()

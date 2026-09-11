@@ -43,6 +43,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.PipelineLifecycle do
   @spec replace(State.t()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def replace(%State{} = state) do
     with :ok <- stop(state),
+         :ok <- state.playback_clearer.clear(state.pipeline_options),
          {:ok, state} <- launch(clear(state)) do
       {:ok, state}
     else
