@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
 
   alias Vxpipe.CallEngine.CallDefinition.{TransferPolicy, VariablePermissions}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Effective, Snapshot}
+  alias Vxpipe.CallEngine.TestMediaPolicyEnforcer
 
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
@@ -101,6 +102,84 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
              )
   end
 
+  test "refuses startup with a non-positive enforcement timeout" do
+    Process.flag(:trap_exit, true)
+
+    assert {:error, :invalid_policy_enforcement_timeout} =
+             Authority.start_link(
+               plan: plan(%{}),
+               incarnation_id: "incarnation-invalid-enforcement-timeout",
+               register: false,
+               media_policy_enforcement_timeout_ms: 0
+             )
+  end
+
+  test "registers an enforcer only after it installs the current revision" do
+    server = start_authority(plan(%{}))
+    enforcer = start_enforcer()
+
+    assert {:ok, %Snapshot{revision: 0}} = Authority.register_enforcer(server, enforcer)
+
+    assert_receive {:media_policy_applied, ^enforcer, %Snapshot{revision: 0}}
+    assert {:error, :already_registered} = Authority.register_enforcer(server, enforcer)
+  end
+
+  test "does not acknowledge admission until every enforcer installs the new revision" do
+    server = start_authority(plan(%{"specialist-id" => policy(record_audio: false)}))
+    automatic = start_enforcer()
+    manual = start_enforcer(mode: :manual)
+
+    assert {:ok, %Snapshot{revision: 0}} = Authority.register_enforcer(server, automatic)
+    assert_receive {:media_policy_applied, ^automatic, %Snapshot{revision: 0}}
+
+    registration = Task.async(fn -> Authority.register_enforcer(server, manual) end)
+    assert_receive {:media_policy_applied, ^manual, %Snapshot{revision: 0}}
+    assert Task.yield(registration, 0) == nil
+    TestMediaPolicyEnforcer.acknowledge(manual, :ok)
+    assert {:ok, %Snapshot{revision: 0}} = Task.await(registration)
+
+    admission = Task.async(fn -> Authority.admit(server, "specialist-id") end)
+
+    assert_receive {:media_policy_applied, ^automatic, %Snapshot{revision: 1}}
+    assert_receive {:media_policy_applied, ^manual, %Snapshot{revision: 1}}
+    assert Task.yield(admission, 0) == nil
+
+    TestMediaPolicyEnforcer.acknowledge(manual, :ok)
+
+    assert {:ok, %Snapshot{revision: 1, effective: %Effective{record_audio: false}}} =
+             Task.await(admission)
+  end
+
+  test "fails closed when an enforcer rejects a transition" do
+    Process.flag(:trap_exit, true)
+    server = start_authority(plan(%{"specialist-id" => policy(record_audio: false)}))
+    enforcer = start_enforcer(mode: :ok)
+
+    assert {:ok, %Snapshot{revision: 0}} = Authority.register_enforcer(server, enforcer)
+    assert_receive {:media_policy_applied, ^enforcer, %Snapshot{revision: 0}}
+
+    :sys.replace_state(enforcer, &Map.put(&1, :mode, {:error, :cannot_apply}))
+    monitor = Process.monitor(server)
+
+    assert {:error, :enforcement_failed} = Authority.admit(server, "specialist-id")
+    assert_receive {:DOWN, ^monitor, :process, ^server, :media_policy_enforcement_failed}
+  end
+
+  test "fails closed when a registered enforcer exits" do
+    Process.flag(:trap_exit, true)
+    server = start_authority(plan(%{}))
+    enforcer = start_enforcer()
+
+    assert {:ok, %Snapshot{revision: 0}} = Authority.register_enforcer(server, enforcer)
+    assert_receive {:media_policy_applied, ^enforcer, %Snapshot{revision: 0}}
+
+    monitor = Process.monitor(server)
+    Process.exit(enforcer, :kill)
+
+    assert_receive {:DOWN, ^monitor, :process, ^server,
+                    {:media_policy_enforcer_unavailable, ^enforcer, :killed}}
+  end
+
   defp start_authority(plan) do
     options = [
       plan: plan,
@@ -113,6 +192,12 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     |> Authority.child_spec()
     |> Map.put(:significant, false)
     |> start_supervised!()
+  end
+
+  defp start_enforcer(options \\ []) do
+    start_supervised!(
+      {TestMediaPolicyEnforcer, Keyword.merge([owner: self(), mode: :ok], options)}
+    )
   end
 
   defp plan(presence_policies) do

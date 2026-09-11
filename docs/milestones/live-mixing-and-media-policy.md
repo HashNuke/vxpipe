@@ -91,6 +91,19 @@ acknowledgement barrier remain open. The expanded Call Engine suite passes 297 t
 tagged integration exclusion, and the database-backed umbrella suite passes across every child
 application.
 
+The authority now also owns a bounded revision-acknowledgement barrier for media enforcers.
+Registration succeeds only after an enforcer installs the current snapshot. Admission and leave
+compute the candidate revision but do not publish it as committed until every registered enforcer
+acknowledges it. Rejection, timeout, malformed acknowledgement, or later enforcer process loss
+terminates the significant policy authority so its room fails closed; a partially applied policy
+can therefore never leave the room running. Focused red/green tests cover initial installation,
+blocked admission until the final acknowledgement, rejection, process loss, duplicate
+registration, and invalid timeout configuration. The complete Call Engine suite passes 302 tests
+with one tagged integration exclusion. A fresh database-backed umbrella run also passes across all
+seven child applications. No mixer, transcript projector, or archive gate is registered yet, so
+the implementation checklist remains open until those concrete consumers apply and enforce the
+revisions.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

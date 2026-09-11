@@ -89,3 +89,27 @@
   umbrella run also passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two
   exclusions, Call Engine 297 with one exclusion, Calls 37, Persistence 25, Gateway 67 with four
   exclusions, and Console 57. The disposable PostgreSQL 17 container was removed afterward.
+
+## 2026-09-11 — revision acknowledgement barrier
+
+- Added the focused barrier tests first. Four cases failed with the expected undefined
+  `register_enforcer/2` boundary; a fifth then demonstrated that a zero enforcement timeout was
+  accepted during authority startup.
+- Added a small `MediaPolicy.Enforcer` message boundary and a bounded `MediaPolicy.Barrier`.
+  Registration first installs the current snapshot and only then monitors the enforcer as required.
+  A transition computes a candidate revision, applies it to every registered enforcer within one
+  shared deadline, and commits the authority state only after every acknowledgement is `:ok`.
+- Enforcers do not run policy math. They receive the complete revisioned snapshot they must install
+  locally. Rejected, timed-out, malformed, or unavailable enforcement fails the significant policy
+  authority, which ends the room rather than allowing partially applied revisions to continue.
+  Later loss of a registered enforcer has the same fail-closed outcome.
+- A deliberately blocked test enforcer proves that `admit/2` remains pending until the final
+  acknowledgement. Other focused cases prove initial revision installation, duplicate rejection,
+  transition rejection, enforcer loss, and timeout validation.
+- Focused verification passes nine policy-authority tests. The complete Call Engine suite passes
+  302 tests with one tagged integration exclusion. A fresh umbrella run against a disposable
+  PostgreSQL 17 instance also passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two
+  exclusions, Call Engine 302 with one exclusion, Calls 37, Persistence 25, Gateway 67 with four
+  exclusions, and Console 57. The disposable database was removed afterward. No concrete mixer,
+  transcript projector, or archive consumer is registered yet; this checkpoint establishes their
+  common commit boundary but does not claim that media is enforced.

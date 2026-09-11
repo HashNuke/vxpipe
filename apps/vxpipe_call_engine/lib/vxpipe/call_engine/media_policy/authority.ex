@@ -3,11 +3,12 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
+  alias Vxpipe.CallEngine.MediaPolicy.{Barrier, Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.{MediaPolicy, Participant}
 
   @call_timeout 5_000
+  @default_enforcement_timeout_ms 1_000
 
   def start_link(options) do
     name = if Keyword.get(options, :register, true), do: via(options), else: nil
@@ -34,14 +35,22 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   @spec snapshot(GenServer.server(), timeout()) :: Snapshot.t()
   def snapshot(server, timeout \\ @call_timeout), do: GenServer.call(server, :snapshot, timeout)
 
+  @spec register_enforcer(GenServer.server(), pid(), timeout()) ::
+          {:ok, Snapshot.t()} | {:error, :already_registered | :enforcement_failed}
+  def register_enforcer(server, enforcer, timeout \\ @call_timeout) when is_pid(enforcer) do
+    GenServer.call(server, {:register_enforcer, enforcer}, timeout)
+  end
+
   @spec admit(GenServer.server(), String.t(), timeout()) ::
-          {:ok, Snapshot.t()} | {:error, :already_present | :unknown_participant}
+          {:ok, Snapshot.t()}
+          | {:error,
+             :already_present | :enforcement_failed | :invalid_policy | :unknown_participant}
   def admit(server, participant_id, timeout \\ @call_timeout) when is_binary(participant_id) do
     GenServer.call(server, {:admit, participant_id}, timeout)
   end
 
   @spec leave(GenServer.server(), String.t(), timeout()) ::
-          {:ok, Snapshot.t()} | {:error, :not_present}
+          {:ok, Snapshot.t()} | {:error, :enforcement_failed | :invalid_policy | :not_present}
   def leave(server, participant_id, timeout \\ @call_timeout) when is_binary(participant_id) do
     GenServer.call(server, {:leave, participant_id}, timeout)
   end
@@ -51,7 +60,8 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     plan = Keyword.fetch!(options, :plan)
     host_ceiling = Keyword.get(options, :media_policy_ceiling, MediaPolicy.inherit())
 
-    with %ResolvedCallPlan{} <- plan,
+    with {:ok, enforcement_timeout_ms} <- enforcement_timeout(options),
+         %ResolvedCallPlan{} <- plan,
          {:ok, participant_policies} <- participant_policies(plan.participants),
          {:ok, effective} <- Effective.compose(host_ceiling, plan.media_policy, %{}) do
       {:ok,
@@ -60,6 +70,8 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
          normal_policy: plan.media_policy,
          participant_policies: participant_policies,
          contributions: %{},
+         enforcement_timeout_ms: enforcement_timeout_ms,
+         enforcers: %{},
          snapshot: %Snapshot{
            revision: 0,
            present_participant_ids: MapSet.new(),
@@ -67,12 +79,28 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
          }
        }}
     else
+      {:error, reason} -> {:stop, reason}
       _invalid -> {:stop, :invalid_policy}
     end
   end
 
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
+
+  def handle_call({:register_enforcer, enforcer}, _from, state) do
+    if Map.has_key?(state.enforcers, enforcer) do
+      {:reply, {:error, :already_registered}, state}
+    else
+      case Enforcer.apply(enforcer, state.snapshot, state.enforcement_timeout_ms) do
+        :ok ->
+          enforcers = Map.put(state.enforcers, enforcer, Process.monitor(enforcer))
+          {:reply, {:ok, state.snapshot}, %{state | enforcers: enforcers}}
+
+        {:error, _reason} ->
+          {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
+      end
+    end
+  end
 
   def handle_call({:admit, participant_id}, _from, state) do
     cond do
@@ -95,6 +123,17 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     end
   end
 
+  @impl true
+  def handle_info({:DOWN, monitor, :process, enforcer, reason}, state) do
+    case Map.fetch(state.enforcers, enforcer) do
+      {:ok, ^monitor} ->
+        {:stop, {:media_policy_enforcer_unavailable, enforcer, reason}, state}
+
+      _unknown ->
+        {:noreply, state}
+    end
+  end
+
   defp commit(contributions, state) do
     case Effective.compose(state.host_ceiling, state.normal_policy, contributions) do
       {:ok, effective} ->
@@ -104,7 +143,13 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
           effective: effective
         }
 
-        {:reply, {:ok, snapshot}, %{state | contributions: contributions, snapshot: snapshot}}
+        case Barrier.apply(state.enforcers, snapshot, state.enforcement_timeout_ms) do
+          :ok ->
+            {:reply, {:ok, snapshot}, %{state | contributions: contributions, snapshot: snapshot}}
+
+          {:error, :enforcement_failed} ->
+            {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
+        end
 
       {:error, :invalid_policy} ->
         {:stop, :invalid_policy, {:error, :invalid_policy}, state}
@@ -128,6 +173,17 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   end
 
   defp participant_policies(_participants), do: {:error, :invalid_policy}
+
+  defp enforcement_timeout(options) do
+    case Keyword.get(
+           options,
+           :media_policy_enforcement_timeout_ms,
+           @default_enforcement_timeout_ms
+         ) do
+      timeout when is_integer(timeout) and timeout > 0 -> {:ok, timeout}
+      _invalid -> {:error, :invalid_policy_enforcement_timeout}
+    end
+  end
 
   defp via(options) do
     options
