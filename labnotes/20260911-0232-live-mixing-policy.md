@@ -441,3 +441,17 @@
   interval frame never reach the transport, while post-relaxation audio does.
 - The focused ingress suite passes six tests. Barrier registration and source-revision transcript
   projection remain separate work, so no broader milestone acceptance item is claimed yet.
+
+## 2026-09-11 — planned-room STT barrier registration
+
+- Added a planned-room attachment test before implementation. Its red run observed the STT
+  transport start but never close under an already-committed no-live/no-storage transcript policy.
+- Connection binding now registers ingress first and the provider capability second with the room
+  policy authority. Both must apply its current snapshot before the STT handles become part of
+  Room Authority state or attachment succeeds.
+- The green test proves the current snapshot closes the unnecessary provider transport before
+  attachment returns, later audio is accepted and discarded without reaching any transport, and
+  the call remains controllable. Legacy ad-hoc rooms have no policy authority and keep their prior
+  behavior.
+- The focused planned-room test passes. Provider-result projection still needs to consume the
+  session-pinned revision before the transcript transition acceptance can be closed.

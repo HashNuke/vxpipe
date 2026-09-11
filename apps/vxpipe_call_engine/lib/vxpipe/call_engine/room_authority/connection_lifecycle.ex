@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
   alias Vxpipe.CallEngine.Media.Ingress
+  alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor}
   alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, State, TextCapability}
 
@@ -19,7 +20,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
           {:reply, :ok | {:error, Error.t()}, State.t()}
   def bind_speech_to_text(command, caller, subscriber, capability, ingress, %State{} = state) do
     case authorize_speech_to_text_binding(command, caller, subscriber, state) do
-      :ok -> bind(command, capability, ingress, state)
+      :ok -> bind_with_media_policy(command, capability, ingress, state)
       {:error, error} -> {:reply, {:error, error}, state}
     end
   end
@@ -217,6 +218,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     end
   end
 
+  defp bind_with_media_policy(command, capability, ingress, state) do
+    case register_speech_to_text_enforcers(state.media_policy_authority, capability, ingress) do
+      :ok -> bind(command, capability, ingress, state)
+      {:error, _reason} -> {:reply, {:error, speech_to_text_policy_unavailable()}, state}
+    end
+  end
+
+  defp register_speech_to_text_enforcers(nil, _capability, _ingress), do: :ok
+
+  defp register_speech_to_text_enforcers(authority, capability, ingress) do
+    with {:ok, _snapshot} <- MediaPolicyAuthority.register_enforcer(authority, ingress),
+         {:ok, _snapshot} <- MediaPolicyAuthority.register_enforcer(authority, capability) do
+      :ok
+    end
+  end
+
   defp bind(command, capability, ingress, state) do
     capability_monitor = Process.monitor(capability)
     ingress_monitor = Process.monitor(ingress)
@@ -357,6 +374,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       :speech_to_text_not_bindable,
       "Speech-to-text cannot be bound to this connection.",
       details: %{"connection_id" => connection_id}
+    )
+  end
+
+  defp speech_to_text_policy_unavailable do
+    Error.new(
+      :speech_to_text_policy_unavailable,
+      "Speech-to-text media policy could not be applied.",
+      retryable: true
     )
   end
 

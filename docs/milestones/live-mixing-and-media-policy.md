@@ -284,6 +284,13 @@ demand permits new audio without replaying anything from the denied interval. Th
 suite passes six tests. Planned-room barrier registration and revision-aware transcript projection
 remain open, so the broader checklist item is still not complete.
 
+Planned connection attachment now registers both STT ingress and the stable STT capability with
+the room's policy authority before binding them into Room Authority. Registration applies the
+already-committed room snapshot synchronously, so a source denied both live and stored transcript
+consumers closes its newly opened provider transport before attachment returns and later audio is
+dropped without disconnecting the caller. Legacy ad-hoc rooms keep their existing unversioned STT
+path. A focused planned-room test passes; revision-aware provider-result projection remains open.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
