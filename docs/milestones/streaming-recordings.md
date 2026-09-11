@@ -478,6 +478,35 @@ check.
 Terminal failed-upload evidence, agent-egress provenance, tagged S3-compatible integration, and
 authorized operator playback remain pending. The milestone is not complete.
 
+## Checkpoint 12: object-completion failure evidence
+
+The artifact-writer test boundary now exercises a successful bounded PCM handoff followed by a
+terminal object-completion failure. The writer preserves the accepted sample/chunk counts, changes
+the attempted complete manifest to `incomplete` with a closed `completion_failed` reason, publishes
+no object reference, and hands that exact result to the separately supervised metadata publisher.
+The writer exits normally before the metadata adapter acknowledges success.
+
+The test was first red because the fake object store still returned its unconditional success and
+the writer correctly produced an object reference. Its configurable completion outcome then made
+the existing production failure path observable without adding a network dependency:
+
+```text
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 3 tests, 0 failures
+
+mix test --max-cases 1
+# 6 tests, 0 failures
+```
+
+Checkpoint 10 independently proves that this no-object, incomplete result is accepted by the real
+Ecto metadata projection for a started call. This checkpoint does not claim that metadata survives
+a simultaneous object-store and database outage. Agent-egress provenance, tagged S3-compatible
+integration, room/writer crash coverage, and operator playback remain pending.
+
+Root formatting, compilation with warnings as errors, strict Credo over 642 source files, all 819
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

@@ -441,3 +441,35 @@ The first complete umbrella run exposed the inbound Membrane child-readiness rac
 separate `20260911-1942-audio-pipeline-readiness.md` labnote. After that ancillary fix, root
 formatting, compilation with warnings as errors, strict Credo over 642 source files, all 818 umbrella
 tests, and the unused-dependency check pass.
+
+## 2026-09-11: terminal object-completion failure evidence
+
+The next red test sent one accepted PCM chunk through a supervised artifact writer and configured
+the fake object store to fail completion. It failed initially because the fake ignored that option
+and returned a successful object reference. Test support now returns its configured completion
+outcome after reporting the attempted manifest.
+
+The production writer required no change. On failure it retained one accepted chunk and 960 samples,
+changed the terminal status to incomplete with `completion_failed`, omitted the object reference,
+exited normally, and passed the exact immutable result to the independently supervised metadata
+publisher. The metadata adapter was allowed to acknowledge only after the artifact writer's `DOWN`,
+demonstrating that metadata latency is not part of writer lifetime.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 3 tests, 0 failures
+
+mix test --max-cases 1
+# 6 tests, 0 failures
+```
+
+The persistence checkpoint already covers storage of an incomplete result without an object
+reference. This test intentionally does not claim survival when both object storage and metadata
+storage are unavailable. Live agent-egress provenance, room/writer crash cases, tagged object-store
+integration, and playback remain pending.
+
+Root formatting, compilation with warnings as errors, strict Credo over 642 source files, all 819
+umbrella tests, and the unused-dependency check pass.

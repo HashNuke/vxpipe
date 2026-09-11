@@ -18,8 +18,13 @@ defmodule Vxpipe.Artifacts.TestObjectStore do
     end
   end
 
-  def complete(session, manifest, _options) do
+  def complete(session, manifest, options) do
     send(session.observer, {:test_object_store_completed, self(), manifest})
-    {:ok, %{object_key: session.spec.object_key, etag: "test-etag"}}
+
+    Keyword.get(
+      options,
+      :complete,
+      {:ok, %{object_key: session.spec.object_key, etag: "test-etag"}}
+    )
   end
 end

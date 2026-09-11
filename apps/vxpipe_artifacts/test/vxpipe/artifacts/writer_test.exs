@@ -122,6 +122,49 @@ defmodule Vxpipe.Artifacts.WriterTest do
     assert_receive {:vxpipe_artifact_metadata_published, _publisher, ^result, 2}
   end
 
+  test "publishes an incomplete manifest when object completion fails" do
+    source = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
+
+    options = [
+      source: source,
+      spec: specification("artifact-completion-failed"),
+      object_store: TestObjectStore,
+      object_store_options: [observer: self(), complete: {:error, :storage_unavailable}],
+      maximum_pending_chunks: 1,
+      drain_timeout_ms: 1_000,
+      observer: self(),
+      metadata: [writer: {TestMetadataWriter, [observer: self()]}]
+    ]
+
+    assert {:ok, writer} = Writers.start_writer(options)
+    writer_monitor = Process.monitor(writer)
+    handoff = Writer.handoff(writer)
+
+    assert_receive {:test_object_store_opened, _task, _spec}
+    chunk = chunk(0, 0)
+    assert :ok = Handoff.offer(handoff, chunk)
+    assert_receive {:test_object_store_write, write_task, write_ref, ^chunk}
+    send(write_task, {:test_object_store_continue, write_ref})
+
+    source_monitor = Process.monitor(source)
+    send(source, :stop)
+    assert_receive {:DOWN, ^source_monitor, :process, ^source, :normal}
+    assert_receive {:test_object_store_completed, _task, attempted_manifest}
+    assert attempted_manifest.status == :complete
+
+    assert_receive {:vxpipe_artifact_writer_finished, ^writer, result}
+    assert result.artifact == nil
+    assert result.manifest.status == :incomplete
+    assert result.manifest.terminal_reason == :completion_failed
+    assert result.manifest.accepted_chunks == 1
+    assert result.manifest.sample_count == 960
+    assert_receive {:DOWN, ^writer_monitor, :process, ^writer, :normal}
+
+    assert_receive {:test_artifact_metadata_write, metadata_task, reference, ^result}
+    send(metadata_task, {:test_artifact_metadata_result, reference, :ok})
+    assert_receive {:vxpipe_artifact_metadata_published, _publisher, ^result, 1}
+  end
+
   defp chunk(sequence, offset_samples) do
     %Chunk{
       sequence: sequence,
