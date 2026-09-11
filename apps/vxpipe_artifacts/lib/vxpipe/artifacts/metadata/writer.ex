@@ -3,12 +3,12 @@ defmodule Vxpipe.Artifacts.Metadata.Writer do
 
   alias Vxpipe.Artifacts.Result
 
-  @callback write(keyword(), Result.t()) ::
+  @callback store_metadata(keyword(), Result.t()) ::
               :ok | {:retry, term()} | {:discard, term()}
 
   @spec valid?(module()) :: boolean()
   def valid?(module) when is_atom(module) do
-    Code.ensure_loaded?(module) and function_exported?(module, :write, 2)
+    Code.ensure_loaded?(module) and function_exported?(module, :store_metadata, 2)
   end
 
   def valid?(_module), do: false

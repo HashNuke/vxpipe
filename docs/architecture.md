@@ -2383,6 +2383,15 @@ responses, and publisher-capacity failures are reported as unavailable/discarded
 not revise the artifact manifest or stop a call. The artifacts application defines this port but
 does not depend on Calls or Ecto. A later adapter checkpoint projects the result into PostgreSQL.
 
+Calls owns a distinct `ArtifactRepository` port and tenant/scopes-authorized artifact workflows;
+artifact metadata is not folded into transcript/tool fact storage. Persistence supplies the Ecto
+adapter and one `call_artifacts` row per terminal artifact. The row stores the complete/incomplete
+manifest, aligned gap intervals, exact source identity, and a minimal object reference containing
+only the object key and optional ETag. Provider-returned locations are not persisted or exposed as
+playback authorization. Duplicate identical publication is idempotent, while conflicting reuse of
+an artifact ID and a wrong call incarnation fail. Incomplete metadata may survive without an object
+reference, which reports an attempted/failed artifact rather than inventing playable audio.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

@@ -5,6 +5,7 @@ defmodule Vxpipe.Calls do
     Administration,
     Admissions,
     Archives,
+    Artifacts,
     Definitions,
     Inspections,
     TelephonyAdmissions
@@ -70,11 +71,17 @@ defmodule Vxpipe.Calls do
   def archive_call_fact(fact, options \\ []),
     do: Archives.store_call_fact(fact, options)
 
+  def archive_call_artifact(artifact, options \\ []),
+    do: Artifacts.store(artifact, options)
+
   def fetch_variable_snapshots(principal, call_id, options \\ []),
     do: Archives.fetch_variable_snapshots(principal, call_id, options)
 
   def fetch_call_facts(principal, call_id, options \\ []),
     do: Archives.fetch_call_facts(principal, call_id, options)
+
+  def fetch_call_artifacts(principal, call_id, options \\ []),
+    do: Artifacts.fetch(principal, call_id, options)
 
   def fetch_call_history(principal, call_id, options \\ []),
     do: Archives.fetch_call_history(principal, call_id, options)

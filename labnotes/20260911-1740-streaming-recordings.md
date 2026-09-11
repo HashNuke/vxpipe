@@ -360,3 +360,42 @@ pipeline coverage while the suite was under concurrent load. That test now permi
 its focused two-test suite passes and no production deadline changed. The complete root rerun passes
 formatting, compilation with warnings as errors, strict Credo over 635 source files, all 812 umbrella
 tests, and the unused-dependency check.
+
+## 2026-09-11: durable artifact metadata projection
+
+The metadata publisher needed a database-neutral destination contract before runtime wiring. Calls
+now has a dedicated artifact repository and workflows rather than adding unrelated callbacks to its
+existing transcript/tool/variable archive repository. `CallArtifact` validates terminal identity,
+PCM clock progress, source identity, gaps, status, and the stored-object reference. Tenant-bound
+reads require the `calls` scope.
+
+Persistence adds a ninth migration and a focused artifact store. It inserts or deduplicates one row
+per call/artifact ID in a transaction, checks the established incarnation, rejects conflicting
+redelivery, and returns the domain contract on reads. Rows contain manifests and storage references,
+never PCM. A complete result must have an object reference; an incomplete result may have none.
+
+The `EctoStorage` metadata adapter projects the artifacts terminal result into that Calls workflow.
+It keeps the object key and optional ETag while dropping the provider-returned location, which is
+not an authorization mechanism. Known invalid/conflicting results are terminal discards; repository
+availability errors are retries for the publisher.
+
+The Calls test first failed on the missing contract and APIs. After that boundary was green, the
+persistence test failed with `:unsupported_archive_fact`, then passed through the real Ecto adapter
+and transaction. Focused evidence:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/artifacts_test.exs \
+  test/vxpipe/calls/archives_test.exs --max-cases 1
+# 10 tests, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test \
+  mix test --max-cases 1
+# 32 tests, 0 failures
+```
+
+The full nine-migration chain succeeded on a new empty temporary database, which was then removed.
+Root formatting, compilation with warnings as errors, strict Credo over 641 source files, all 814
+umbrella tests, and the unused-dependency check pass. Runtime recording configuration, terminal
+failed-upload integration, agent-egress provenance, tagged storage integration, and playback remain.

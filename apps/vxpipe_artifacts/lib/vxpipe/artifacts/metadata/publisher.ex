@@ -66,7 +66,7 @@ defmodule Vxpipe.Artifacts.Metadata.Publisher do
 
     task =
       Task.Supervisor.async_nolink(Vxpipe.Artifacts.MetadataTaskSupervisor, fn ->
-        configuration.writer.write(configuration.writer_options, state.result)
+        configuration.writer.store_metadata(configuration.writer_options, state.result)
       end)
 
     timeout_timer =

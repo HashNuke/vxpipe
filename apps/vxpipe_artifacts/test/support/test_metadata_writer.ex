@@ -4,7 +4,7 @@ defmodule Vxpipe.Artifacts.TestMetadataWriter do
   @behaviour Vxpipe.Artifacts.Metadata.Writer
 
   @impl true
-  def write(options, result) do
+  def store_metadata(options, result) do
     observer = Keyword.fetch!(options, :observer)
     reference = make_ref()
     send(observer, {:test_artifact_metadata_write, self(), reference, result})

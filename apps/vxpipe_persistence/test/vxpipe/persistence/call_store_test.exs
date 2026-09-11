@@ -5,12 +5,14 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, VariableSnapshot}
+  alias Vxpipe.Artifacts.{Manifest, Result}
   alias Vxpipe.CallEngine.Archive.{Fact, Handoff}
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
 
   alias Vxpipe.Persistence.{
     ArchiveStore,
+    ArtifactStore,
     CallStore,
     CredentialStore,
     DefinitionStore,
@@ -23,6 +25,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   alias Vxpipe.Persistence.Schema.Call, as: StoredCall
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredJoinToken
   alias Vxpipe.Persistence.Schema.CallFact, as: StoredCallFact
+  alias Vxpipe.Persistence.Schema.CallArtifact, as: StoredCallArtifact
   alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredVariableSnapshot
 
   @tenant_key "AAAAAAAAAAAAAAAA"
@@ -44,6 +47,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       definition_repository: {DefinitionStore, Repo},
       call_repository: {CallStore, Repo},
       archive_repository: {ArchiveStore, Repo},
+      artifact_repository: {ArtifactStore, Repo},
       inspection_repository: {InspectionStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
       uuid_generator: sequence([@key_id, @definition_id, @route_id, @support_route_id]),
@@ -573,6 +577,95 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
     invalid_room = %{later | id: "event-invalid-room", room_id: "not-a-uuid"}
     assert {:discard, :call_fact_insert_failed} = EctoStorage.write(context.options, invalid_room)
+  end
+
+  test "EctoStorage stores idempotent terminal recording metadata for one call", context do
+    {call, incarnation_id} = running_call(context)
+
+    manifest = %Manifest{
+      artifact_id: "artifact-persisted-full-mix",
+      tenant_id: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: incarnation_id,
+      kind: :full_mix,
+      object_key: "calls/tenant/call/recordings/artifact-persisted-full-mix.s16le",
+      participant_id: nil,
+      connection_id: nil,
+      track_id: nil,
+      sample_rate: 48_000,
+      channels: 1,
+      sample_format: :s16le,
+      started_offset_samples: 0,
+      ended_offset_samples: 2_880,
+      sample_count: 1_920,
+      accepted_chunks: 2,
+      rejected_chunks: 1,
+      gaps: [%{offset_samples: 960, sample_count: 960}],
+      status: :incomplete,
+      terminal_reason: :normal
+    }
+
+    result = %Result{
+      manifest: manifest,
+      artifact: %{object_key: manifest.object_key, etag: "etag-persisted", location: "ignored"}
+    }
+
+    assert :ok = EctoStorage.store_metadata(context.options, result)
+    assert :ok = EctoStorage.store_metadata(context.options, result)
+
+    assert {:ok, [artifact]} =
+             Calls.fetch_call_artifacts(context.principal, call.id, context.options)
+
+    assert artifact.id == manifest.artifact_id
+    assert artifact.kind == :full_mix
+    assert artifact.status == :incomplete
+
+    assert artifact.object_reference == %{
+             "etag" => "etag-persisted",
+             "object_key" => manifest.object_key
+           }
+
+    assert artifact.gaps == [%{"offset_samples" => 960, "sample_count" => 960}]
+    refute inspect(artifact) =~ "ignored"
+    assert Repo.aggregate(StoredCallArtifact, :count) == 1
+
+    other_tenant = %{context.principal | tenant_key: "ZZZZZZZZZZZZZZZZ"}
+
+    assert {:error, :call_not_found} =
+             Calls.fetch_call_artifacts(other_tenant, call.id, context.options)
+
+    conflicting = %Result{result | manifest: %{manifest | sample_count: 960}}
+
+    assert {:discard, :call_artifact_conflict} =
+             EctoStorage.store_metadata(context.options, conflicting)
+
+    failed_manifest = %{
+      manifest
+      | artifact_id: "artifact-failed-full-mix",
+        object_key: "calls/tenant/call/recordings/artifact-failed-full-mix.s16le",
+        started_offset_samples: nil,
+        ended_offset_samples: nil,
+        sample_count: 0,
+        accepted_chunks: 0,
+        gaps: [],
+        terminal_reason: :completion_failed
+    }
+
+    assert :ok =
+             EctoStorage.store_metadata(
+               context.options,
+               %Result{manifest: failed_manifest, artifact: nil}
+             )
+
+    assert {:ok, artifacts} =
+             Calls.fetch_call_artifacts(context.principal, call.id, context.options)
+
+    failed = Enum.find(artifacts, &(&1.id == failed_manifest.artifact_id))
+    assert failed.status == :incomplete
+    assert failed.object_reference == nil
+    assert failed.terminal_reason == "completion_failed"
+    assert Repo.aggregate(StoredCallArtifact, :count) == 2
   end
 
   test "pages persisted facts and variable revisions on one tenant detail", context do

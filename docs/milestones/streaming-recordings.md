@@ -387,6 +387,51 @@ playback.
 Root formatting, compilation with warnings as errors, strict Credo over 635 source files, all 812
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 10: durable call-artifact records
+
+Calls now owns a focused `ArtifactRepository` port and artifact workflows separate from transcript,
+tool, and variable archives. Its immutable `CallArtifact` contract validates room/call identity,
+full-mix versus participant-track identity, PCM format, aligned progress and gaps, terminal status,
+and the optional stored-object reference. Reads require the caller's `calls` scope and bind the
+tenant at the repository query.
+
+Persistence adds a `call_artifacts` table and `ArtifactStore`. One terminal row belongs to one call,
+is deleted with that call, and contains no audio bytes. Identical delivery is idempotent;
+conflicting reuse of an artifact ID, a mismatched call incarnation, an unstarted call, or a
+cross-tenant lookup fails. A complete row requires an object reference, while an incomplete row may
+honestly retain manifest evidence when object completion failed.
+
+`EctoStorage` also implements the artifacts metadata port. Its projection keeps only the object key
+and optional ETag from the storage result; a provider-returned location is neither persisted nor
+treated as access authorization. Terminal validation/conflict failures are discarded, while
+transient repository failures remain retryable by the artifacts-owned publisher from checkpoint 9.
+The dependency from Persistence to Artifacts is compile-time only, preserving application startup
+ownership.
+
+The Calls test was first red at the absent artifact contract/workflow. The persistence test was then
+red because `EctoStorage` classified the terminal result as unsupported. Green evidence covers the
+separate Calls boundary, real Ecto transaction/deduplication, exact gap and object-reference
+round-trip, conflict rejection, and all persistence tests:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/artifacts_test.exs \
+  test/vxpipe/calls/archives_test.exs --max-cases 1
+# 10 tests, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test \
+  mix test --max-cases 1
+# 32 tests, 0 failures
+```
+
+The complete nine-migration chain also succeeds against a newly created empty database, which was
+removed after verification. Runtime recording/S3 selection, failed-upload end-to-end publication,
+tagged storage integration, agent-egress provenance, and operator playback remain pending.
+
+Root formatting, compilation with warnings as errors, strict Credo over 641 source files, all 814
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

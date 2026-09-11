@@ -4,6 +4,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
 
   alias Vxpipe.Persistence.Schema.{
     Admission,
+    CallArtifact,
     DefinitionRevision,
     JoinToken,
     TelephonyLeg,
@@ -40,6 +41,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
     has_many :admissions, Admission
     has_many :telephony_legs, TelephonyLeg
     has_many :variable_snapshots, VariableSnapshot
+    has_many :artifacts, CallArtifact
     belongs_to :latest_variables_snapshot, VariableSnapshot
 
     timestamps(type: :utc_datetime_usec)
