@@ -1,7 +1,8 @@
 defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{History, State}
+  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{History, State, UsageRounds}
+  alias Vxpipe.CallEngine.Usage.ProviderContext
 
   @default_maximum_completed_requests 32
 
@@ -19,11 +20,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
     Keyword.validate(options, [
       :activation_id,
       :agent_participant_id,
+      :call_id,
       :session,
       :invocation_registry,
       :request_supervisor,
       :owner,
       :provider,
+      :usage_provider,
       :maximum_completed_requests,
       :maximum_output_bytes,
       :maximum_pending_requests
@@ -35,12 +38,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
            Keyword.get(options, :activation_id),
          agent_participant_id when is_binary(agent_participant_id) and agent_participant_id != "" <-
            Keyword.get(options, :agent_participant_id),
+         call_id when is_binary(call_id) and call_id != "" <- Keyword.get(options, :call_id),
          session when not is_nil(session) <- Keyword.get(options, :session),
          invocation_registry when not is_nil(invocation_registry) <-
            Keyword.get(options, :invocation_registry),
          request_supervisor when not is_nil(request_supervisor) <-
            Keyword.get(options, :request_supervisor),
          owner when is_pid(owner) <- Keyword.get(options, :owner),
+         %ProviderContext{} = usage_provider <- Keyword.get(options, :usage_provider),
          maximum_completed_requests
          when is_integer(maximum_completed_requests) and maximum_completed_requests > 0 <-
            Keyword.get(
@@ -57,11 +62,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
        %{
          activation_id: activation_id,
          agent_participant_id: agent_participant_id,
+         call_id: call_id,
          session: session,
          invocation_registry: invocation_registry,
          request_supervisor: request_supervisor,
          owner: owner,
          provider: Keyword.get(options, :provider, :other),
+         usage_provider: usage_provider,
          maximum_completed_requests: maximum_completed_requests,
          maximum_output_bytes: maximum_output_bytes,
          maximum_pending_requests: maximum_pending_requests
@@ -73,13 +80,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
 
   defp build_state(values) do
     %State{
+      activation_id: values.activation_id,
       agent_participant_id: values.agent_participant_id,
+      call_id: values.call_id,
       completion_consumer_id: "agent-runtime-completion:" <> values.activation_id,
       session: values.session,
       invocation_registry: values.invocation_registry,
       request_supervisor: values.request_supervisor,
       owner: values.owner,
       provider: values.provider,
+      usage_provider: values.usage_provider,
+      usage_rounds: UsageRounds.new(),
       history: History.new(values.maximum_completed_requests),
       maximum_output_bytes: values.maximum_output_bytes,
       maximum_pending_requests: values.maximum_pending_requests

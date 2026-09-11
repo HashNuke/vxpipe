@@ -666,6 +666,75 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert Enum.any?(archived, &match?(%Fact{kind: :archive_stream_closed}, &1))
   end
 
+  test "archives model usage privately with call and turn attribution" do
+    configure_agent_runtime_provider(self())
+    room_id = unique_id("room-model-usage")
+    plan = compile_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+
+    archive =
+      archive_options(
+        writer: {TestCollectingArchiveWriter, self()},
+        maximum_pending_facts: 32
+      )
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
+
+    attach_caller(plan, room, caller, "conn-model-usage")
+    _startup_facts = collect_archive_facts_through(:connection_attached)
+
+    command =
+      send_command(
+        plan,
+        room,
+        caller,
+        "conn-model-usage",
+        "Please answer this measured turn"
+      )
+
+    assert :ok = CallEngine.send_text(command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    assert {:ok, response} =
+             ModelResponse.new(
+               text: "Measured answer.",
+               usage: %{input_tokens: 8, output_tokens: 2, total_tokens: 10},
+               provider_metadata: %{
+                 request_id: "provider-request-room-1",
+                 response_id: "provider-response-room-1",
+                 authorization: "must-not-be-archived"
+               }
+             )
+
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    facts = collect_archive_facts_through(:usage_observed, 3)
+    usage_facts = Enum.filter(facts, &(&1.kind == :usage_observed))
+
+    assert Enum.map(usage_facts, &get_in(&1.payload, ["measurement", "component"]))
+           |> Enum.sort() == ["input_tokens", "output_tokens", "total_tokens"]
+
+    assert Enum.all?(usage_facts, fn fact ->
+             fact.tenant_id == plan.tenant_id and
+               fact.call_id == plan.call_id and
+               fact.room_id == room_id and
+               fact.incarnation_id == room.incarnation_id and
+               fact.participant_id == receiver.participant_id and
+               fact.activation_id == receiver.activation_id and
+               fact.correlation_id == command.correlation_id and
+               fact.public_sequence == nil and
+               fact.payload["provider"]["name"] == "test" and
+               fact.payload["provider"]["integration_id"] == "test-model" and
+               fact.payload["provider"]["request_id"] == "provider-request-room-1" and
+               fact.payload["provider"]["operation_id"] == "provider-response-room-1"
+           end)
+
+    refute inspect(usage_facts) =~ "must-not-be-archived"
+    refute_receive {:vxpipe_event, %{kind: :usage_observed}}
+  end
+
   test "starts only entry participants and routes an attached caller through Agent Runtime" do
     configure_agent_runtime_provider(self())
     room_id = unique_id("room")

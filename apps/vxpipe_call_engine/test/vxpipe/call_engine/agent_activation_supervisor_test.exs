@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.RemoteMCP.{Integration, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.Usage.ProviderContext
 
   alias Vxpipe.CallEngine.{
     RemoteMCPFixture,
@@ -382,10 +383,18 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
   end
 
   defp agent_runtime_options(activation_id) do
+    assert {:ok, usage_provider} =
+             ProviderContext.new(
+               name: "test",
+               integration_id: "test-model",
+               model: "test:scripted"
+             )
+
     [
       runtime: :agent_runtime,
       activation_id: activation_id,
       agent_participant_id: "agent-test",
+      call_id: "call-test",
       owner: self(),
       system_prompt: "Use only the selected action.",
       tools: %{
@@ -401,6 +410,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
       model_provider: TestAgentRuntimeModelProvider,
       model: %{owner: self()},
       provider: :test,
+      usage_provider: usage_provider,
       tool_invocation_timeout_ms: 1_000,
       maximum_completed_requests: 4,
       maximum_tool_invocations: 2,

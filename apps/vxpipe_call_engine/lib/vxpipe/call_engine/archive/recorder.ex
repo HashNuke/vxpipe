@@ -64,6 +64,20 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     }
   end
 
+  @doc false
+  @spec participant_activation(t(), String.t()) :: String.t() | nil
+  def participant_activation(%__MODULE__{} = recorder, participant_id)
+      when is_binary(participant_id) do
+    Map.get(recorder.participant_activations, participant_id)
+  end
+
+  @doc false
+  @spec call_id?(t(), String.t()) :: boolean()
+  def call_id?(%__MODULE__{port: nil}, _call_id), do: true
+
+  def call_id?(%__MODULE__{port: port}, call_id) when is_binary(call_id),
+    do: port.call_id == call_id
+
   @spec room_opened(t(), RoomSnapshot.t()) :: t()
   def room_opened(%__MODULE__{} = recorder, %RoomSnapshot{} = snapshot) do
     emit(recorder, :room_opened,
@@ -192,7 +206,7 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
   end
 
   defp activation(recorder, participant_id) do
-    Map.get(recorder.participant_activations, participant_id)
+    participant_activation(recorder, participant_id)
   end
 
   defp live_inspection_port(plan) do

@@ -2649,6 +2649,25 @@ sequence; contradictory reuse of one of those identities is an error. Cumulative
 enough explicit source sequencing to choose between otherwise-equivalent-status reports are
 ambiguous rather than settled by arrival order.
 
+The first runtime capture path translates each completed model round into this neutral contract.
+The agent-runtime coordinator keeps a bounded request/round tracker until the runtime's terminal
+event, independently of whether its task result has already advanced the conversation. This
+prevents cross-sender mailbox ordering from dropping a late usage event. Each tool-intermediate and
+final round receives a distinct local attempt ID; that ID is never presented as a provider ID.
+The translation currently accepts only non-negative integer input, output, and total token fields.
+Input/output are declared as included components only when a reported total exists. Arbitrary usage
+and provider metadata are discarded, and cost fields whose reported-versus-catalog provenance is
+not established are deliberately left unknown.
+
+Model usage is handed only to the owning `RoomAuthority`, which authenticates the current or
+committed-transfer teardown capability against its pinned participant activation and call
+incarnation. It projects each accepted observation as a private `usage_observed` archive/live-
+inspection fact through the existing bounded asynchronous port; no client protocol event is
+created. Genuine response/request/session IDs remain in that private fact. An operation may carry
+provider identity with no measurement, so lack of token or price evidence does not erase the
+operation and is not rewritten as zero. Failed/interrupted model attempts and the remaining speech,
+tool, and carrier boundaries are still later parts of the usage milestone.
+
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports
 them. It runs outside the media hot path and `RoomAuthority` and can outlive the

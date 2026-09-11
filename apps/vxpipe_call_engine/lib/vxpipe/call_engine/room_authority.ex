@@ -43,7 +43,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     State,
     Startup,
     StartupReadiness,
-    ToolCalls
+    ToolCalls,
+    UsageObservations
   }
 
   @call_timeout 5_000
@@ -310,6 +311,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({:vxpipe_capability_text_complete, capability, command}, state) do
     state = AgentOutput.text_complete(capability, command, state)
     {:noreply, CallerIdle.reconcile(state)}
+  end
+
+  def handle_info({:vxpipe_usage_observations, capability, observations}, state) do
+    {:noreply, UsageObservations.record(state, capability, observations)}
   end
 
   def handle_info({:vxpipe_capability_tool_started, capability, command, call}, state) do

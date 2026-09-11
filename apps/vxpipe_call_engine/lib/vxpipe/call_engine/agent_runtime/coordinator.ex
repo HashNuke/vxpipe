@@ -15,8 +15,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
     Configuration,
     History,
     Interruption,
+    ModelUsage,
     RequestOutcome,
-    State
+    State,
+    UsageRounds
   }
 
   alias Vxpipe.CallEngine.Command.SendText
@@ -125,7 +127,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   def handle_call({:generated_greeting, command}, _from, %State{current: nil} = state) do
     case ActiveRequest.start_greeting(command, request_options(state)) do
-      {:ok, current} -> {:reply, :ok, %{state | current: current}}
+      {:ok, current} -> {:reply, :ok, put_current(state, current)}
       {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
     end
   end
@@ -155,7 +157,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   def handle_call({:caller_idle, command}, _from, %State{current: nil} = state) do
     case ActiveRequest.start_caller_idle(command, request_options(state)) do
-      {:ok, current} -> {:reply, :ok, %{state | current: current}}
+      {:ok, current} -> {:reply, :ok, put_current(state, current)}
       {:error, :unavailable} -> {:reply, {:error, :unavailable}, state}
     end
   end
@@ -236,6 +238,21 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   def handle_info(
+        {:agent_runtime_event, %Event{kind: :model_usage, correlation: correlation, data: data}},
+        %State{} = state
+      ) do
+    {:noreply, ModelUsage.record(state, correlation, data)}
+  end
+
+  def handle_info(
+        {:agent_runtime_event, %Event{kind: kind, correlation: correlation}},
+        %State{} = state
+      )
+      when kind in [:response_completed, :request_failed, :request_cancelled] do
+    {:noreply, ModelUsage.complete(state, correlation)}
+  end
+
+  def handle_info(
         {reference, result},
         %State{current: %ActiveRequest{task: %Task{ref: reference}}} = state
       ) do
@@ -270,7 +287,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   defp start_request(%SendText{} = command, %State{} = state) do
     case ActiveRequest.start_caller(command, request_options(state)) do
-      {:ok, current} -> {:ok, %{state | current: current}}
+      {:ok, current} -> {:ok, put_current(state, current)}
       {:error, :unavailable} = error -> error
     end
   end
@@ -317,7 +334,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   defp start_completion_request(continuation, state) do
     case ActiveRequest.start_completion(continuation, request_options(state)) do
-      {:ok, current} -> {:ok, %{state | current: current}}
+      {:ok, current} -> {:ok, put_current(state, current)}
       {:error, :unavailable} -> release_unstarted_completion(continuation, state)
     end
   end
@@ -413,5 +430,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       owner: state.owner,
       provider: state.provider
     ]
+  end
+
+  defp put_current(state, current) do
+    %{state | current: current, usage_rounds: UsageRounds.register(state.usage_rounds, current)}
   end
 end

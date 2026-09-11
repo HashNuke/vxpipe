@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
   alias Vxpipe.CallEngine.AgentRuntime.ModelContextSource
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.Usage.ProviderContext
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan}
 
   @error_code :unsupported_call_plan
@@ -61,6 +62,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
          true <- Code.ensure_loaded?(provider_module),
          true <- function_exported?(provider_module, :new, 1),
          provider_options when is_list(provider_options) <- provider_options,
+         {:ok, usage_provider} <- model_usage_provider(receiver, model),
          {:ok, provider_config} <-
            provider_module.new(Keyword.put(provider_options, :model, model)) do
       {:ok,
@@ -78,6 +80,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
            model_provider: provider_module,
            model: provider_config,
            provider: Keyword.get(settings, :model_provider_label, :req_llm),
+           usage_provider: usage_provider,
            tools: receiver.tools
          ]}
     else
@@ -110,6 +113,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     base = [
       activation_id: receiver.activation_id,
       agent_participant_id: receiver.participant_id,
+      call_id: plan.call_id,
       tool_invocation_timeout_ms: tool_invocation_timeout(plan, receiver, settings),
       maximum_tool_invocations: Keyword.fetch!(settings, :maximum_tool_invocations),
       owner: owner,
@@ -233,6 +237,23 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
        do: nonempty_model(model)
 
   defp agent_model(_unsupported), do: {:error, :unsupported_provider_options}
+
+  defp model_usage_provider(receiver, model) do
+    selection = receiver.capabilities.model_inference
+
+    ProviderContext.new(
+      name: model_provider_name(model),
+      integration_id: selection.profile,
+      model: model
+    )
+  end
+
+  defp model_provider_name(model) do
+    case String.split(model, ":", parts: 2) do
+      [provider, _model] when provider != "" -> provider
+      _other -> "req_llm"
+    end
+  end
 
   defp nonempty_model(model) do
     if String.trim(model) == "", do: {:error, :invalid_model}, else: {:ok, model}

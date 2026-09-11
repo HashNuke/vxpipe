@@ -14,12 +14,11 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
     :capability,
     :provider,
     :attribution,
-    :measurement,
     :outcome,
     :observed_at
   ]
 
-  defstruct @enforce_keys ++ [delivery_id: nil, source_sequence: nil]
+  defstruct @enforce_keys ++ [delivery_id: nil, source_sequence: nil, measurement: nil]
 
   @type capability ::
           :model_inference | :speech_to_text | :text_to_speech | :tool | :telephony
@@ -36,14 +35,14 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
           capability: capability(),
           provider: ProviderContext.t(),
           attribution: Attribution.t(),
-          measurement: Measurement.t(),
+          measurement: Measurement.t() | nil,
           outcome: outcome(),
           observed_at: DateTime.t()
         }
 
   @spec new(keyword()) :: {:ok, t()} | {:error, :invalid_observation}
   def new(options) when is_list(options) do
-    defaults = [delivery_id: nil, source_sequence: nil]
+    defaults = [delivery_id: nil, source_sequence: nil, measurement: nil]
 
     required = [
       :id,
@@ -53,7 +52,6 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
       :capability,
       :provider,
       :attribution,
-      :measurement,
       :outcome,
       :observed_at
     ]
@@ -68,7 +66,7 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
          capability when capability in @capabilities <- Keyword.get(options, :capability),
          %ProviderContext{} <- Keyword.get(options, :provider),
          %Attribution{} <- Keyword.get(options, :attribution),
-         %Measurement{} <- Keyword.get(options, :measurement),
+         true <- valid_measurement?(Keyword.get(options, :measurement)),
          outcome when outcome in @outcomes <- Keyword.get(options, :outcome),
          %DateTime{} <- Keyword.get(options, :observed_at) do
       {:ok, struct!(__MODULE__, options)}
@@ -88,4 +86,8 @@ defmodule Vxpipe.CallEngine.Usage.Observation do
 
   defp valid_sequence?(nil), do: true
   defp valid_sequence?(value), do: is_integer(value) and value >= 0
+
+  defp valid_measurement?(nil), do: true
+  defp valid_measurement?(%Measurement{}), do: true
+  defp valid_measurement?(_measurement), do: false
 end

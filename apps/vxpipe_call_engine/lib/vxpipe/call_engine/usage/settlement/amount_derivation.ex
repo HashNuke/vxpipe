@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Usage.Settlement.AmountDerivation do
   @moduledoc "Derives one effective amount for each attempt, component, unit, and provenance."
 
-  alias Vxpipe.CallEngine.Usage.{EffectiveAmount, Observation}
+  alias Vxpipe.CallEngine.Usage.{EffectiveAmount, Measurement, Observation}
   alias Vxpipe.CallEngine.Usage.Settlement.DeliveryDeduplication
 
   @type error ::
@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.Usage.Settlement.AmountDerivation do
   @spec derive([Observation.t()]) :: {:ok, [EffectiveAmount.t()]} | {:error, error()}
   def derive(observations) do
     observations
+    |> Enum.filter(&match?(%Observation{measurement: %Measurement{}}, &1))
     |> Enum.group_by(&amount_key/1)
     |> Enum.reduce_while({:ok, []}, fn {_key, grouped}, {:ok, amounts} ->
       case derive_amount(grouped) do

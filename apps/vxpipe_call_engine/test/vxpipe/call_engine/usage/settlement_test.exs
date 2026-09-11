@@ -62,6 +62,36 @@ defmodule Vxpipe.CallEngine.Usage.SettlementTest do
     refute inspect(observation) =~ "provider-request-1"
   end
 
+  test "retains an identified provider operation when no measurement is available" do
+    assert {:ok, provider} =
+             ProviderContext.new(
+               name: "provider-fixture",
+               integration_id: "model-primary",
+               request_id: "provider-request-without-usage"
+             )
+
+    assert {:ok, attribution} = Attribution.new(participant_id: "participant-agent")
+
+    assert {:ok, observation} =
+             Observation.new(
+               id: "usage-operation-without-measurement",
+               tenant_id: "tenant-usage",
+               call_id: "call-usage",
+               attempt_id: "model-attempt-without-measurement",
+               capability: :model_inference,
+               provider: provider,
+               attribution: attribution,
+               outcome: :succeeded,
+               observed_at: @observed_at
+             )
+
+    assert observation.measurement == nil
+    assert observation.provider.request_id == "provider-request-without-usage"
+    assert {:ok, settlement} = Settlement.derive([observation])
+    assert settlement.amounts == []
+    assert {:error, :unknown_unit} = Settlement.total(settlement, :tokens)
+  end
+
   test "adds distinct deltas, deduplicates proven delivery, and never lets finality replace a delta" do
     observations = [
       observation("delta-1", 100, delivery_id: "delivery-1", status: :final),

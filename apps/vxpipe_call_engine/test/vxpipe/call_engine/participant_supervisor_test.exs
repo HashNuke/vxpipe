@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.RoomParticipantSupervisor
+  alias Vxpipe.CallEngine.Usage.ProviderContext
   alias Vxpipe.CallEngine.{TestAgentRuntimeModelProvider, TestAgentTool}
 
   test "an agent participant owns its configured activation subtree" do
@@ -123,10 +124,18 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
   end
 
   defp activation_options(activation_id, participant_id) do
+    assert {:ok, usage_provider} =
+             ProviderContext.new(
+               name: "test",
+               integration_id: "test-model",
+               model: "test:scripted"
+             )
+
     [
       runtime: :agent_runtime,
       activation_id: activation_id,
       agent_participant_id: participant_id,
+      call_id: unique_id("call"),
       owner: self(),
       system_prompt: "Use the selected action.",
       tools: %{
@@ -142,6 +151,7 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisorTest do
       model_provider: TestAgentRuntimeModelProvider,
       model: %{model: "test:scripted", owner: self()},
       provider: :test,
+      usage_provider: usage_provider,
       tool_invocation_timeout_ms: 1_000,
       maximum_tool_invocations: 2,
       maximum_completed_requests: 4,

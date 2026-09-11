@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
   alias Vxpipe.CallEngine.TestSubmittedHostTool
+  alias Vxpipe.CallEngine.Usage.{Observation, ProviderContext}
 
   alias Vxpipe.CallEngine.Tool.{
     Context,
@@ -54,6 +55,104 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_capability_text, ^coordinator, ^command, "Still working!"}
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
     refute_receive {:vxpipe_capability_text, ^coordinator, ^command, _duplicate}
+  end
+
+  test "hands a completed model round to the room as private typed usage" do
+    runtime = start_runtime()
+    command = command("usage-runtime", "Count this model round")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    assert {:ok, response} =
+             ModelResponse.new(
+               text: "Counted.",
+               usage: %{input_tokens: 9, output_tokens: 3, total_tokens: 12},
+               provider_metadata: %{
+                 model: "fixture:usage-model",
+                 request_id: "provider-model-request-1",
+                 response_id: "provider-model-response-1"
+               }
+             )
+
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_usage_observations, coordinator, observations}
+    assert coordinator == runtime.coordinator
+    assert length(observations) == 3
+    assert [attempt_id] = observations |> Enum.map(& &1.attempt_id) |> Enum.uniq()
+    assert String.starts_with?(attempt_id, "matt_")
+
+    assert Enum.all?(observations, fn
+             %Observation{
+               tenant_id: "tenant-demo",
+               call_id: "call-demo",
+               capability: :model_inference,
+               outcome: :succeeded
+             } = observation ->
+               observation.attempt_id == attempt_id and
+                 observation.provider.name == "fixture" and
+                 observation.provider.integration_id == "test-model" and
+                 observation.provider.request_id == "provider-model-request-1" and
+                 observation.provider.operation_id == "provider-model-response-1" and
+                 observation.attribution.activation_id == runtime.activation_id and
+                 observation.attribution.turn_id == command.correlation_id
+
+             _other ->
+               false
+           end)
+
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
+  end
+
+  test "keeps intermediate tool and final model rounds as distinct usage attempts" do
+    descriptor = runtime_tool_descriptor(:non_blocking)
+    runtime = start_runtime(tools: [descriptor], executor: InvocationExecutor)
+    command = command("multi-round-usage", "Start the background operation")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, first_provider, _request}
+
+    assert {:ok, tool_call} =
+             ToolCall.new(
+               id: "usage-tool-call",
+               name: "submitted_host_tool",
+               arguments: %{"value" => "usage-tool"}
+             )
+
+    assert {:ok, first_response} =
+             ModelResponse.new(
+               text: "I am starting it.",
+               tool_calls: [tool_call],
+               usage: %{input_tokens: 10, output_tokens: 2, total_tokens: 12},
+               provider_metadata: %{request_id: "provider-round-1"}
+             )
+
+    send(first_provider, {:test_agent_runtime_response, {:ok, first_response}})
+
+    assert_receive {:vxpipe_usage_observations, coordinator, first_observations}
+    assert_receive {:submitted_host_tool_started, execution, "usage-tool"}
+    assert_receive {:test_agent_runtime_stream, second_provider, _request}
+
+    assert {:ok, second_response} =
+             ModelResponse.new(
+               text: "It is running.",
+               usage: %{input_tokens: 20, output_tokens: 3, total_tokens: 23},
+               provider_metadata: %{request_id: "provider-round-2"}
+             )
+
+    send(second_provider, {:test_agent_runtime_response, {:ok, second_response}})
+
+    assert_receive {:vxpipe_usage_observations, ^coordinator, second_observations}
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
+
+    assert [first_attempt] = first_observations |> Enum.map(& &1.attempt_id) |> Enum.uniq()
+    assert [second_attempt] = second_observations |> Enum.map(& &1.attempt_id) |> Enum.uniq()
+    refute first_attempt == second_attempt
+    assert hd(first_observations).provider.request_id == "provider-round-1"
+    assert hd(second_observations).provider.request_id == "provider-round-2"
+
+    send(execution, :release_submitted_host_tool)
   end
 
   test "reports payload-free first output and successful model telemetry once" do
@@ -677,11 +776,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
         {Coordinator,
          activation_id: activation_id,
          agent_participant_id: "participant-agent",
+         call_id: "call-demo",
          session: session_name,
          invocation_registry: registry_name,
          request_supervisor: request_supervisor_name,
          owner: self(),
          provider: Keyword.get(options, :provider, :local_fixture),
+         usage_provider: usage_provider_context(),
          maximum_output_bytes: Keyword.get(options, :maximum_output_bytes, 4_096),
          maximum_pending_requests: Keyword.get(options, :maximum_pending_requests, 2)}
       )
@@ -717,7 +818,18 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          request_timeout_ms: Keyword.get(options, :request_timeout_ms, 1_000)}
       )
 
-    %{coordinator: coordinator, registry: registry_name}
+    %{activation_id: activation_id, coordinator: coordinator, registry: registry_name}
+  end
+
+  defp usage_provider_context do
+    assert {:ok, provider} =
+             ProviderContext.new(
+               name: "fixture",
+               integration_id: "test-model",
+               model: "fixture:default"
+             )
+
+    provider
   end
 
   defp submit_invocation(runtime, conversation_mode, invocation_id) do

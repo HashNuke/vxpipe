@@ -1,8 +1,9 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation and settlement contract implemented (2026-09-11);
-provider capture, archival/operator projection, and billing enrichment remain. Specification
-review: approved (2026-09-08).
+Status: in progress. Typed observation/settlement and successful model-round capture into the
+private archive are implemented (2026-09-11); failed/interrupted model attempts, other provider
+boundaries, operator totals, and billing enrichment remain. Specification review: approved
+(2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
 
@@ -81,8 +82,39 @@ Implementation evidence (2026-09-11, typed observation and settlement checkpoint
   compilation, strict Credo over 671 source files, all 851 tests across the eight umbrella apps,
   and the unused-dependency check.
 
-This is a partial milestone. No provider adapter emits the contract yet, and no persistence,
-inspection, or billing-lookup behavior is claimed by this checkpoint.
+That first checkpoint was partial: no provider adapter emitted the contract and it claimed no
+persistence, inspection, or billing-lookup behavior.
+
+Implementation evidence (2026-09-11, completed model-round capture checkpoint):
+
+- Model responses already carried bounded usage and redacted call metadata from Agent Runtime.
+  Call Engine now translates supported input/output/total token evidence for every successful
+  intermediate or final model round into separate provider-neutral observations. Each round has a
+  distinct local attempt ID; genuine provider request/response/session IDs remain explicitly
+  namespaced and are never synthesized from that local ID.
+- A request-scoped round tracker remains until Agent Runtime's terminal event, so task-result and
+  event messages arriving from different processes cannot discard an already emitted usage event.
+  The projection whitelists supported fields, derives no missing measurement, ignores arbitrary
+  metadata, and does not persist a cost field until its provider-reported versus library-estimate
+  provenance can be proven.
+- `RoomAuthority` accepts usage only from its current activation or a source activation awaiting
+  committed-transfer teardown, validates the pinned tenant/call/room/incarnation and participant
+  activation, and hands explicit JSON facts to the existing bounded private archive/live-inspection
+  port. There is no client event. A provider operation may be retained with no measurement, leaving
+  totals unknown rather than zero.
+- Red evidence: the measurement-less-operation test first failed with
+  `{:error, :invalid_observation}`; the pure projector first failed because the module was absent;
+  the coordinator test first failed on missing usage configuration; and the room test crashed on
+  the deliberately absent `RoomAuthority` message clause, then timed out waiting for
+  `usage_observed`.
+- Focused green evidence: 7 settlement tests, 2 projector tests, 20 coordinator tests, the
+  definition-driven room/archive case, and 5 activation-supervisor tests pass. The complete Call
+  Engine suite passes 369 tests with one existing integration exclusion. All root gates pass:
+  formatting, warnings-as-errors compilation, strict Credo over 676 source files, all 857 tests
+  across the eight umbrella apps, and the unused-dependency check.
+
+This remains a partial milestone. Hosted speech, tool and carrier capture, failed/interrupted model
+attempts, persisted settlement/operator totals, and billing enrichment are not claimed yet.
 
 ## Specification review
 

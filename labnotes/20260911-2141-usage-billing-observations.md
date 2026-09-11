@@ -48,3 +48,55 @@ Verification so far:
   unused-dependency check pass.
 
 No adapter capture, persistence, operator projection, or billing lookup has been implemented yet.
+
+## 2026-09-11: completed model-round capture
+
+The next red/green pass exposed four separate boundaries rather than putting translation,
+correlation, authorization, and serialization into the coordinator or room process:
+
+- `ModelProjection` accepts only non-negative integer input/output/total token evidence and safe
+  provider identity. Arbitrary metadata and ambiguous floating-point cost fields do not cross the
+  boundary.
+- `UsageRounds` tracks each Agent Runtime request until its terminal event. This is intentionally
+  separate from the coordinator's current task because usage and task-result messages have
+  different senders and may reach the mailbox in either order.
+- `UsageObservations` authenticates the emitting capability and pinned identities before changing
+  the room's archive recorder.
+- `ArchiveProjection` produces explicit JSON-safe private facts rather than relying on generic
+  struct serialization.
+
+An observation can now omit its measurement. This retains genuine request/session identity when a
+provider returns no supported usage or price, and settlement then has no effective amount for that
+operation. It reports the unit as unknown rather than inventing zero.
+
+Each successful model response creates one distinct attempt per model round, including intermediate
+tool rounds. Input and output tokens are marked as included in total tokens only when total tokens
+were actually supplied. Provider request/response/session IDs remain private; local attempt IDs are
+never substituted for them. The room accepts the active agent capability and a source capability
+awaiting teardown after a committed transfer so incurred usage is not lost solely because authority
+has moved.
+
+Red evidence:
+
+- The measurement-less operation was rejected as `:invalid_observation`.
+- The projector calls failed because no projector module existed.
+- The first coordinator usage test failed startup because call/provider usage identity was not part
+  of its configuration.
+- The full-room test hit the missing `RoomAuthority.handle_info/2` clause and then timed out waiting
+  for a private usage fact.
+
+Focused green evidence so far:
+
+- Settlement and projector: 9 tests, 0 failures.
+- Coordinator: 20 tests, 0 failures, including two model rounds around an asynchronous tool.
+- Definition-driven private archive case: 1 test, 0 failures.
+- Activation supervisor: 5 tests, 0 failures.
+- Formatting, warnings-as-errors compilation, and strict Credo over 676 source files pass.
+
+The first complete Call Engine run found four direct activation-supervisor test fixtures that
+bypassed call-plan startup and therefore lacked the new explicit call/provider usage identity.
+Those fixtures now provide the same internal contract and their focused tests pass. The complete
+Call Engine suite passes 369 tests with one existing integration exclusion. All 857 tests across
+the eight umbrella apps pass, as do the formatting, warnings-as-errors compilation, strict Credo,
+and unused-dependency gates. Failed/interrupted model attempt capture, hosted speech, tools,
+carriers, operator totals, and billing lookup remain.
