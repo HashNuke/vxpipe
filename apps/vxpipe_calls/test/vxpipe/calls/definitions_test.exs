@@ -22,16 +22,21 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     [tenant: tenant, other_tenant: other_tenant, options: options]
   end
 
-  test "keeps a saved draft route unavailable until publication", %{tenant: tenant, options: options} do
+  test "keeps a saved draft route unavailable until publication", %{
+    tenant: tenant,
+    options: options
+  } do
     assert {:ok, draft} = Definitions.save(tenant.key, definition_input(), options)
     assert draft.revision == 1
     assert draft.published_at == nil
     assert draft.validation_errors == []
     assert [route] = draft.routes
+
     assert route.key =~
              ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
 
-    assert {:error, :route_unavailable} = Definitions.resolve_route(tenant.key, route.key, options)
+    assert {:error, :route_unavailable} =
+             Definitions.resolve_route(tenant.key, route.key, options)
 
     assert {:ok, published} =
              Definitions.publish(tenant.key, draft.definition_id, draft.revision, options)
@@ -56,7 +61,9 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     changed = Map.put(definition_input(), :name, "Changed")
 
     assert {:ok, second} =
-             Definitions.save(tenant.key, changed,
+             Definitions.save(
+               tenant.key,
+               changed,
                Keyword.put(options, :definition_id, first.definition_id)
              )
 
@@ -69,8 +76,12 @@ defmodule Vxpipe.Calls.DefinitionsTest do
              Definitions.resolve_route(other_tenant.key, first_route.key, options)
   end
 
-  test "records unsupported feature errors and refuses publication", %{tenant: tenant, options: options} do
-    unsupported = put_in(definition_input(), [:defaults, :capabilities, :model_inference], "missing-model")
+  test "records unsupported feature errors and refuses publication", %{
+    tenant: tenant,
+    options: options
+  } do
+    unsupported =
+      put_in(definition_input(), [:defaults, :capabilities, :model_inference], "missing-model")
 
     assert {:ok, draft} = Definitions.save(tenant.key, unsupported, options)
     assert [%{"code" => "call_definition_resolution_failed"}] = draft.validation_errors
@@ -90,6 +101,34 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     assert {:error, :private_definition_material} = Definitions.save(tenant.key, source, options)
   end
 
+  test "stores provider-neutral phone intent metadata without creating a web join route", %{
+    tenant: tenant,
+    options: options
+  } do
+    source =
+      definition_input()
+      |> put_in([:participants, "assistant", :transfers], ["phone-support"])
+      |> put_in([:participants, "phone-support"], %{
+        type: "human",
+        connection: %{
+          service: "primary-phone",
+          mode: "dial",
+          number: "+15550001001"
+        }
+      })
+
+    assert {:ok, draft} = Definitions.save(tenant.key, source, options)
+
+    assert %{
+             "admission" => "transfer",
+             "mode" => "dial",
+             "number" => "+15550001001",
+             "service" => "primary-phone"
+           } = draft.compiled_metadata["participants"]["phone-support"]["connection"]
+
+    assert Enum.map(draft.routes, & &1.participant_ref) == ["caller"]
+  end
+
   defp registries do
     %{
       capability_profiles: %{
@@ -101,7 +140,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
 
   defp definition_input do
     %{
-      schema_version: "20260911.02",
+      schema_version: "20260911.03",
       name: "Example",
       entry_caller: "caller",
       entry_receiver: "assistant",

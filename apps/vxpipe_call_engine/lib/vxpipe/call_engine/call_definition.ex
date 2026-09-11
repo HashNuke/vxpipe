@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260911.02"
+  @schema_version "20260911.03"
   @fields [
     :schema_version,
     :name,
@@ -107,6 +107,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          :ok <- validate_media_policies(media_policy, participants),
          {:ok, transfer_policy} <- TransferPolicy.new(Map.get(input, :transfer_policy)),
          :ok <- validate_variable_permissions(participants, call_variables, code, message),
+         :ok <- validate_dial_destinations(participants, call_variables, code, message),
          {:ok, tool_visibility} <-
            ToolVisibility.new(
              Map.get(input, :tool_visibility, "hidden"),
@@ -308,6 +309,18 @@ defmodule Vxpipe.CallEngine.CallDefinition do
            }} ->
             :ok
 
+          {:ok,
+           %{
+             kind: :human,
+             connection: %Vxpipe.CallEngine.CallDefinition.ConnectionIntent{
+               service: service,
+               mode: :dial,
+               admission: :transfer
+             }
+           }}
+          when is_binary(service) ->
+            :ok
+
           {:ok, _destination} ->
             DefinitionValidation.invalid(
               code,
@@ -355,6 +368,114 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         {:error, _error} = error -> {:halt, error}
       end
     end)
+  end
+
+  defp validate_dial_destinations(participants, call_variables, code, message) do
+    participants
+    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
+    |> Enum.reduce_while(:ok, fn {_key, participant}, :ok ->
+      case validate_dial_destination(participant, participants, call_variables, code, message) do
+        :ok -> {:cont, :ok}
+        {:error, _error} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp validate_dial_destination(
+         %Participant{
+           connection: %Vxpipe.CallEngine.CallDefinition.ConnectionIntent{
+             number_from_variable: %Vxpipe.CallEngine.CallDefinition.NumberFromVariable{} = source
+           }
+         } = participant,
+         participants,
+         call_variables,
+         code,
+         message
+       ) do
+    path = ["participants", participant.definition_key, "connection", "number_from_variable"]
+
+    with {:ok, section} <-
+           fetch_dial_section(call_variables, source.section, code, message, path),
+         :ok <- string_dial_variable(section.schema, source.variable, code, message, path),
+         :ok <- protected_dial_section(participants, source.section, code, message) do
+      :ok
+    end
+  end
+
+  defp validate_dial_destination(
+         %Participant{},
+         _participants,
+         _call_variables,
+         _code,
+         _message
+       ),
+       do: :ok
+
+  defp fetch_dial_section(call_variables, section_name, code, message, path) do
+    case Map.fetch(call_variables.sections, section_name) do
+      {:ok, section} ->
+        {:ok, section}
+
+      :error ->
+        DefinitionValidation.invalid(
+          code,
+          message,
+          path ++ ["section"],
+          "must reference a declared Call Variables section"
+        )
+    end
+  end
+
+  defp string_dial_variable(schema, variable, code, message, path) do
+    case schema |> Map.get("properties", %{}) |> Map.fetch(variable) do
+      {:ok, variable_schema} ->
+        if string_compatible_schema?(variable_schema) do
+          :ok
+        else
+          DefinitionValidation.invalid(
+            code,
+            message,
+            path ++ ["variable"],
+            "must reference a string-compatible Call Variable"
+          )
+        end
+
+      :error ->
+        DefinitionValidation.invalid(
+          code,
+          message,
+          path ++ ["variable"],
+          "must reference a declared Call Variable"
+        )
+    end
+  end
+
+  defp string_compatible_schema?(%{"type" => "string"}), do: true
+
+  defp string_compatible_schema?(%{"type" => types}) when is_list(types),
+    do: "string" in types
+
+  defp string_compatible_schema?(_schema), do: false
+
+  defp protected_dial_section(participants, section, code, message) do
+    participants
+    |> Enum.sort_by(fn {definition_key, _participant} -> definition_key end)
+    |> Enum.find(fn {_definition_key, participant} ->
+      participant.kind == :agent and
+        Map.get(participant.variable_permissions.grants, section) == :read_write
+    end)
+    |> case do
+      nil ->
+        :ok
+
+      {definition_key, _participant} ->
+        DefinitionValidation.invalid(
+          code,
+          message,
+          ["participants", definition_key, "variable_permissions", section],
+          "must not grant write access to a dial-routing section"
+        )
+    end
   end
 
   defp duration(input, code, message) do

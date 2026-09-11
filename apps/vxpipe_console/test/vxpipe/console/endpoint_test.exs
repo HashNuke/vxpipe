@@ -74,7 +74,7 @@ defmodule Vxpipe.Console.EndpointTest do
         {SampleCall,
          backend: TestSampleCallBackend.backend(backend),
          definition: %{
-           "schema_version" => "20260911.02",
+           "schema_version" => "20260911.03",
            "entry_caller" => "caller",
            "entry_receiver" => "assistant"
          },
@@ -122,7 +122,7 @@ defmodule Vxpipe.Console.EndpointTest do
         {SampleCall,
          backend: TestSampleCallBackend.backend(backend),
          definition: %{
-           "schema_version" => "20260911.02",
+           "schema_version" => "20260911.03",
            "entry_caller" => "caller",
            "entry_receiver" => "assistant"
          },

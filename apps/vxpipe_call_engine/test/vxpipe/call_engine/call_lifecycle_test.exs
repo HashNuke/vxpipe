@@ -36,7 +36,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleTest do
     %ResolvedCallPlan{
       definition_id: "definition-lifecycle",
       definition_revision: 1,
-      schema_version: "20260911.02",
+      schema_version: "20260911.03",
       tenant_id: "tenant-lifecycle",
       actor_id: "actor-lifecycle",
       call_id: unique_id("call"),

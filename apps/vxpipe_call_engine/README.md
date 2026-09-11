@@ -52,7 +52,7 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260911.02`. It adds web human transfer
+The definition-driven compiler's current schema is `20260911.03`. It retains web human transfer
 destinations alongside the normal call-wide `media_policy` and each participant's optional
 `while_present` contribution. A human transfer destination uses an exact web
 `receive`/`transfer` connection intent, may configure one fixed `transfer_notice`, and makes the
@@ -68,6 +68,15 @@ effective intersection. Participant commit applies its contribution before Room 
 membership; transport detach does not clear presence, while authoritative participant exit removes
 only that participant's contribution. Losing the policy authority ends the room rather than
 continuing without privacy state. Mixer, transcript, and archive enforcement remain incomplete.
+
+The same schema adds provider-neutral phone connection intent without storing provider credentials
+or command payloads. A configured service string may receive one literal E.164 number or dial
+exactly one literal E.164 number or direct `number_from_variable` reference. Dial admission defaults
+to `transfer`; web remains receive-only. A variable-backed destination must reference a declared
+string-compatible variable, and no agent may have write access to that routing section. The model
+continues to select only a compiler-allowlisted participant ref, never a service or number. This is
+the definition/compiler boundary; provider adapters and live phone legs are implemented by the
+telephony milestone rather than inferred from accepting the schema.
 
 The schema also accepts validated definition-local participant transfer allowlists, derives one private default-blocking transfer binding
 for each non-empty list, pins the call-level total transfer-attempt deadline, and pins each agent's

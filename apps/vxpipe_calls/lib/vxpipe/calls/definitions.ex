@@ -163,11 +163,7 @@ defmodule Vxpipe.Calls.Definitions do
       Map.new(definition.participants, fn {ref, participant} ->
         connection =
           if participant.connection do
-            %{
-              "admission" => Atom.to_string(participant.connection.admission),
-              "mode" => Atom.to_string(participant.connection.mode),
-              "service" => Atom.to_string(participant.connection.service)
-            }
+            connection_metadata(participant.connection)
           end
 
         {ref,
@@ -184,6 +180,28 @@ defmodule Vxpipe.Calls.Definitions do
       "schema_version" => definition.schema_version
     }
   end
+
+  defp connection_metadata(connection) do
+    %{
+      "admission" => Atom.to_string(connection.admission),
+      "mode" => Atom.to_string(connection.mode),
+      "service" => connection_service(connection.service)
+    }
+    |> maybe_put("number", connection.number)
+    |> maybe_put("number_from_variable", number_source(connection.number_from_variable))
+  end
+
+  defp connection_service(:web), do: "web"
+  defp connection_service(service) when is_binary(service), do: service
+
+  defp number_source(nil), do: nil
+
+  defp number_source(source) do
+    %{"section" => source.section, "variable" => source.variable}
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp source_digest(source) do
     source

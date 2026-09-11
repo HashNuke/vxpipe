@@ -130,7 +130,7 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
 
   defp definition_input do
     %{
-      schema_version: "20260911.02",
+      schema_version: "20260911.03",
       name: "Operator example",
       entry_caller: "caller",
       entry_receiver: "assistant",

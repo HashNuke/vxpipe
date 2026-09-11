@@ -210,7 +210,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     %ResolvedCallPlan{
       definition_id: "definition-policy-authority",
       definition_revision: 1,
-      schema_version: "20260911.02",
+      schema_version: "20260911.03",
       tenant_id: "tenant-policy",
       actor_id: "actor-policy",
       call_id: "call-policy",

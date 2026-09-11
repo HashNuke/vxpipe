@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CallVariablesCompilerTest do
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan
 
-  @schema_version "20260911.02"
+  @schema_version "20260911.03"
 
   test "compiles partial initial values and agent permissions into typed plan state" do
     assert {:ok, definition} =

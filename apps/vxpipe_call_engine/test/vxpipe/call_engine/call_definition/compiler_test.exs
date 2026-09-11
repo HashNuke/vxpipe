@@ -19,7 +19,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Tool.CurrentTime
 
-  @schema_version "20260911.02"
+  @schema_version "20260911.03"
 
   test "Elixir and JSON inputs produce the same typed definition" do
     input = definition_input()
@@ -115,8 +115,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
       {Map.put(definition_input(), :provider_api_key, "do-not-echo-me"), ["provider_api_key"]},
       {put_in(definition_input(), [:participants, "caller", :prompt], "wrong kind"),
        ["participants", "caller", "prompt"]},
-      {put_in(definition_input(), [:participants, "caller", :connection, :service], "sip"),
-       ["participants", "caller", "connection", "service"]},
+      {put_in(
+         definition_input(),
+         [:participants, "caller", :connection, :service],
+         "bad service"
+       ), ["participants", "caller", "connection", "service"]},
       {put_in(
          definition_input(),
          [:participants, "reception", :tools, "get_current_time", :type],

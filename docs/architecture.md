@@ -964,6 +964,17 @@ destination; it is not a free-form address, public client event, or full variabl
 The resolved plan pins the connection intent and notice. This checkpoint defines the authoring and
 compilation boundary.
 
+Schema `20260911.03` generalizes the human connection intent for configured telephony services
+without turning provider names into atoms or admitting credentials/provider commands into the call
+definition. A receive intent carries a literal E.164 number and an explicit admission. A dial intent
+uses exactly one literal E.164 number or one direct `number_from_variable` section/variable
+reference and normalizes to transfer admission. The referenced variable must be declared with a
+string-compatible schema, and every agent is forbidden write access to its routing section. The
+compiler accepts that participant only through an existing source `transfers` allowlist; the model
+still receives a participant ref rather than a telephone number or provider selector. This schema
+checkpoint defines pinned intent, not a live provider leg. Calls metadata preserves the same safe
+intent and creates browser join routes only for web participants.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or
