@@ -70,7 +70,17 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         } = conn,
         options
       ) do
-    TwilioEvents.handle(conn, options.telephony, ingress_key)
+    TwilioEvents.handle_voice(conn, options.telephony, ingress_key)
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: ["api", "telephony", "twilio", ingress_key, "events", leg_id]
+        } = conn,
+        options
+      ) do
+    TwilioEvents.handle_callback(conn, options.telephony, ingress_key, leg_id)
   end
 
   def call(

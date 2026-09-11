@@ -23,7 +23,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegIdentity do
         service,
         leg
       ) do
-    if Enum.all?([call_control_id, call_leg_id, call_session_id], &present?/1) do
+    if Enum.all?([call_control_id, call_leg_id], &present?/1) and
+         optional_identifier?(call_session_id) do
       {:ok, binding(leg_id, request, service, leg, call_control_id, call_leg_id, call_session_id)}
     else
       {:error, :incomplete_provider_identity}
@@ -38,17 +39,17 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegIdentity do
           pid()
         ) :: {:ok, MediaBinding.t()} | {:error, :telephony_leg_mismatch}
   def from_event(
-        %Event{kind: :outgoing} = event,
+        %Event{kind: kind} = event,
         leg_id,
         %OutboundLegRequest{} = request,
         %ConfiguredService{} = service,
         leg
       )
-      when is_pid(leg) do
+      when kind in [:outgoing, :answered, :ended] and is_pid(leg) do
     if Event.valid?(event) and event.leg_id == leg_id and
          event.provider == service.identity.provider and
          event.provider_connection_id == service.identity.provider_connection_id and
-         present?(event.provider_call_session_id) and
+         optional_identifier?(event.provider_call_session_id) and
          event.from == service.outbound_number and event.to == request.to do
       {:ok,
        binding(
@@ -85,4 +86,6 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegIdentity do
   end
 
   defp present?(value), do: is_binary(value) and value != ""
+  defp optional_identifier?(nil), do: true
+  defp optional_identifier?(value), do: present?(value)
 end

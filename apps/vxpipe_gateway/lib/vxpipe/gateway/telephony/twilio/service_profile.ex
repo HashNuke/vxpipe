@@ -2,9 +2,8 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.ServiceProfile do
   @moduledoc false
 
   alias Vxpipe.Gateway.Telephony.ConfiguredServiceProfile
-  alias Vxpipe.Gateway.Telephony.Twilio.{Adapter, WebhookVerifier}
+  alias Vxpipe.Gateway.Telephony.Twilio.{Adapter, Identifier, WebhookVerifier}
 
-  @account_sid ~r/\AAC[0-9a-fA-F]{32}\z/
   @maximum_secret_bytes 4_096
 
   @spec new(keyword()) ::
@@ -39,7 +38,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.ServiceProfile do
   end
 
   defp account_sid(value) when is_binary(value) do
-    if Regex.match?(@account_sid, value), do: {:ok, value}, else: :error
+    if Identifier.account_sid?(value), do: {:ok, value}, else: :error
   end
 
   defp account_sid(_invalid), do: :error

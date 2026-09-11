@@ -104,7 +104,7 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
     case lookup_entry(event.provider, service, event.provider_call_leg_id) do
       {:ok, leg, :outgoing} -> OutgoingLeg.dispatch(leg, event, timeout)
       {:ok, leg, _incoming} -> Leg.dispatch(leg, event, timeout)
-      {:error, :leg_not_found} = error -> error
+      {:error, :leg_not_found} -> dispatch_unbound_outgoing(event, timeout)
     end
   end
 
@@ -142,4 +142,13 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
       [] -> {:error, :leg_not_found}
     end
   end
+
+  defp dispatch_unbound_outgoing(%Event{leg_id: leg_id} = event, timeout)
+       when is_binary(leg_id) do
+    with {:ok, leg} <- lookup_outgoing(leg_id) do
+      OutgoingLeg.dispatch(leg, event, timeout)
+    end
+  end
+
+  defp dispatch_unbound_outgoing(%Event{}, _timeout), do: {:error, :leg_not_found}
 end

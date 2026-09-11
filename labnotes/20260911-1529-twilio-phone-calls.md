@@ -153,3 +153,51 @@ Formatting, warnings-as-errors compilation, strict Credo, and the unused-depende
 This checkpoint stops at the authenticated synchronous control handoff. It does not yet expose the
 Twilio media WebSocket or claim bidirectional G.711 audio, DTMF/status/AMD callbacks, outbound calls,
 or private-transfer parity.
+
+## Checkpoint 4: outbound Calls API and signed callbacks
+
+Current Twilio Calls API, status callback, and asynchronous AMD documentation was checked before
+implementation. Create is a form-encoded `POST` under the configured Account SID with HTTP Basic
+authentication. Inline `Twiml` is accepted in place of a separate URL. Status callback events are
+individually repeated form parameters, and Twilio documents that callback delivery order is not
+guaranteed. Ending a live call updates the exact Call SID with `Status=completed`. Async AMD uses
+`MachineDetection=Enable`, `AsyncAmd=true`, and a signed result callback.
+
+Four focused adapter tests were red with `twilio_command_not_supported`. The implementation was
+split into credential, REST transport, dial-form, end-call, and incoming-answer modules instead of
+growing the adapter. The tests then proved the exact request target and fields, Basic auth, accepted
+Call SID, bounded 4xx rejection, unknown 5xx outcome, no retry, and exact call termination.
+
+The first four HTTP callback tests were red because Plug's JSON parser attempted to decode Twilio's
+form body before the route could authenticate it. The raw-route predicate now includes the exact
+callback path. A shared Twilio request extractor owns form content type, bounded raw bytes,
+signature header, configured endpoint construction, verification, and adapter ingestion; the HTTP
+handler owns only routing and responses. Status and AMD decoders remain separate from incoming
+Voice decoding. A signed callback for another leg path fails authentication, and an authenticated
+but unconsumed `queued` status returns success without dispatch.
+
+The first out-of-order contract test then failed with `{:error, :leg_not_found}` when an `answered`
+callback arrived before `initiated` after an unknown create result. Pending outbound routing now
+uses the opaque internal leg ID only to locate the existing owner. That owner still requires valid
+provider/account/origin/destination identity before registering the Call SID and binding media. An
+answered or terminal progress event can therefore settle an ambiguous create without issuing a
+second dial.
+
+Focused and application evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/twilio_callbacks_test.exs \
+  test/vxpipe/gateway/telephony/twilio/adapter_test.exs \
+  test/vxpipe/gateway/telephony/outgoing_leg_test.exs
+# 22 tests, 0 failures
+
+mix test --max-cases 1
+# 194 tests, 0 failures (5 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+The full umbrella suite passes all seven application lanes—775 tests with zero failures.
+
+The authenticated media WebSocket, G.711 conversion, media DTMF/control, complete shared transfer
+harness, and tagged live-provider proof remain pending. This checkpoint makes no live-media claim.

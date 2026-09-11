@@ -5,10 +5,9 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
 
   alias Vxpipe.Gateway.Telephony.{
     ConfiguredService,
-    MediaAdmission
+    MediaAdmission,
+    ProviderEndpoint
   }
-
-  alias Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint
 
   @spec dial(
           String.t(),
@@ -41,7 +40,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
     identity = service.identity
 
     if valid_leg_id?(leg_id) and OutboundLegRequest.valid?(request) and
-         identity.provider == :telnyx and
+         identity.provider in [:telnyx, :twilio] and
          identity.service_id == request.service_id and
          matching_scope?(identity.scope, request.tenant_id) and
          is_binary(service.outbound_number) do
@@ -63,8 +62,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
       leg_id: leg_id,
       from: service.outbound_number,
       to: request.to,
-      callback_url: PublicEndpoint.event_url(service),
-      media_url: PublicEndpoint.media_url(service, token),
+      callback_url: ProviderEndpoint.event_url(service, leg_id),
+      media_url: ProviderEndpoint.media_url(service, token),
       answering_machine_detection: service.answering_machine_detection
     }
   end

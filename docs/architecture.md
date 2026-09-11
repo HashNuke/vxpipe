@@ -1023,9 +1023,32 @@ the common media binding and its one-time provider media URL. The HTTP boundary 
 Twilio [`<Connect><Stream>`](https://www.twilio.com/docs/voice/twiml/stream) TwiML pointing to that
 WSS URL; there is no fictitious second answer API command. Telnyx consumes the same typed activation
 result but continues to acknowledge its asynchronous event with an ordinary success response. This
-checkpoint establishes Twilio's authenticated synchronous control handoff only. The WebSocket
-upgrade, bidirectional G.711 media, DTMF, status callbacks, outbound control, and complete transfer
-parity remain unsupported until their owning checkpoints are implemented.
+establishes Twilio's authenticated synchronous control handoff. The WebSocket upgrade,
+bidirectional G.711 media, in-band DTMF, and complete transfer parity remain unsupported until their
+owning checkpoints are implemented.
+
+Outbound Twilio control uses the current official
+[Calls resource](https://www.twilio.com/docs/voice/api/call-resource). Gateway posts one
+form-encoded create request with HTTP Basic authentication, the configured E.164 `From`, the
+already-authorized destination, inline `<Connect><Stream>` TwiML, and the exact signed callback URL
+for the opaque internal leg. The requested progress callbacks are `initiated`, `ringing`,
+`answered`, and `completed`. A configured detection mode additionally enables asynchronous
+[answering-machine detection](https://www.twilio.com/docs/voice/answering-machine-detection) and
+points its result at that same callback boundary. Gateway never retries this create request: a
+network or 5xx outcome remains unknown, while a 4xx response is a bounded provider rejection. To
+end a known attempt, it updates only that exact Account SID/Call SID resource to `completed`.
+
+Gateway receives those callbacks at
+`POST /api/telephony/twilio/:ingress_key/events/:leg_id`. The configured URL, including the exact
+opaque leg path, participates in signature verification before the body is decoded. Account SID,
+Call SID, direction, bounded sequence, configured origin, authorized destination, and internal leg
+ID are retained for correlation. Status values normalize to outgoing, answered, or ended events;
+async AMD normalizes to human, machine, or unknown. Authenticated statuses outside that consumed
+vocabulary are acknowledged without dispatch. Because Twilio says callbacks may arrive out of
+order, any fully correlated progress callback—not only the initial one—may bind a pending leg after
+an unknown create outcome. It can only locate the already-running owner by its opaque leg ID, must
+pass the owner's complete identity checks, and cannot submit another dial. Once bound, later
+callbacks route by the exact Call SID.
 
 The Telnyx gateway boundary authenticates the untouched request body before any event decoding.
 It verifies the base64 Ed25519 signature over `timestamp <> "|" <> raw_body` with the configured
@@ -1202,12 +1225,13 @@ tenant, call, room incarnation, participant, and owner before media admission su
 inbound-only service or mismatched request fails before carrier submission; a failed owner is not
 restarted by its supervisor.
 When the immediate dial result is unknown, the reservation and the same owner remain pending. A
-signed outgoing-initiation event uses only the opaque internal leg ID to locate that existing owner;
-it cannot start a leg. The owner rechecks provider, configured connection, origination number, and
-authorized destination before adopting the event's complete carrier identity. A mismatch leaves the
-pending attempt unchanged. On success, the owner registers the provider leg before binding media,
-so an early waiting media socket cannot race ahead of subsequent exact-leg event routing. Accepted
-responses use that same registration-before-bind operation.
+signed, fully correlated progress event uses only the opaque internal leg ID to locate that existing
+owner; it cannot start a leg. The owner rechecks provider, configured connection, origination
+number, and authorized destination before adopting the event's complete carrier identity. This
+allows an answered or terminal event to settle the attempt even if carrier callbacks arrive out of
+order. A mismatch leaves the pending attempt unchanged. On success, the owner registers the provider
+leg before binding media, so an early waiting media socket cannot race ahead of subsequent exact-leg
+event routing. Accepted responses use that same registration-before-bind operation.
 Call Engine initiates a dial transfer only through a narrow host-supplied outbound-leg connector.
 The engine resolves the participant's literal number or direct protected creation-time Call
 Variable from the immutable plan, builds one request containing the exact tenant, actor, call,

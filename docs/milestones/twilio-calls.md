@@ -157,6 +157,45 @@ umbrella lanes pass—764 tests with zero failures.
 This does not yet claim live Twilio media. The authenticated WebSocket upgrade, G.711 audio path,
 status/AMD/DTMF callbacks, outbound calls, and full private-transfer parity remain pending.
 
+## Checkpoint 4: outbound control and signed progress callbacks
+
+The Twilio adapter now submits one form-encoded Calls API request with HTTP Basic authentication,
+configured origin, authorized destination, inline media TwiML, four progress callback events, and
+optional asynchronous AMD. It classifies 4xx responses as bounded rejections and network/5xx
+outcomes as unknown; neither outcome is retried. Exact-leg cleanup updates only the returned Call
+SID to `completed`.
+
+Gateway now exposes a form callback route whose exact internal-leg path is covered by Twilio
+signature verification. Provider-specific decoders normalize progress and AMD into the existing
+event vocabulary. Unconsumed authenticated statuses are acknowledged without dispatch. The common
+outbound owner can adopt a fully correlated answered or terminal status after an unknown create
+response, so callback reordering cannot strand a valid call or cause a second dial. Provider,
+configured account, internal leg, origin, and destination must all match before adoption.
+
+The HTTP boundary, raw request extraction, credential validation, REST transport, dial form,
+hangup command, and callback decoding remain separate responsibilities. The red tests first failed
+with unsupported Twilio commands, then with the form callback being parsed as JSON. A later
+out-of-order contract test failed with `leg_not_found` until pending-owner correlation accepted a
+fully identified progress event.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/twilio_callbacks_test.exs \
+  test/vxpipe/gateway/telephony/twilio/adapter_test.exs \
+  test/vxpipe/gateway/telephony/outgoing_leg_test.exs
+# 22 tests, 0 failures
+
+mix test --max-cases 1
+# 194 tests, 0 failures (5 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+The complete umbrella run passes all seven application lanes—775 tests with zero failures.
+
+Live media is still not claimed. The authenticated Twilio WebSocket upgrade, bidirectional G.711
+conversion, media DTMF/control, shared transfer-harness parity, and tagged provider verification
+remain pending.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

@@ -117,7 +117,12 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   def handle_call(:disconnect, _from, state), do: {:stop, :normal, :ok, state}
 
-  def handle_call({:event, %Event{kind: :outgoing} = event}, _from, %{status: :unknown} = state) do
+  def handle_call(
+        {:event, %Event{kind: kind} = event},
+        _from,
+        %{status: :unknown} = state
+      )
+      when kind in [:outgoing, :answered, :ended] do
     case OutgoingLegIdentity.from_event(
            event,
            state.leg_id,
@@ -127,7 +132,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
          ) do
       {:ok, binding} ->
         case register_and_bind(state, binding) do
-          :ok -> {:reply, :ok, %{state | binding: binding, status: :accepted}}
+          :ok -> handle_adopted_event(event, binding, state)
           {:error, reason} -> {:reply, {:error, reason}, fail(state, reason)}
         end
 
@@ -284,6 +289,19 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
       {:error, {:already_registered, _owner}} ->
         {:error, :telephony_leg_already_owned}
+    end
+  end
+
+  defp handle_adopted_event(%Event{kind: :outgoing}, binding, state) do
+    {:reply, :ok, %{state | binding: binding, status: :accepted}}
+  end
+
+  defp handle_adopted_event(%Event{} = event, binding, state) do
+    state = %{state | binding: binding, status: :accepted}
+
+    case OutgoingLegLifecycle.handle(event, binding, state.service, state.leg_id) do
+      {:keep, result} -> {:reply, result, state}
+      {:stop, result} -> {:stop, :normal, result, state}
     end
   end
 

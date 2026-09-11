@@ -3,10 +3,9 @@ defmodule Vxpipe.Gateway.HTTP.TwilioEvents do
 
   import Plug.Conn
 
-  alias Plug.Conn.Utils
-  alias Vxpipe.CallEngine.Telephony.{Adapter, Event, Webhook}
-  alias Vxpipe.Gateway.HTTP.RawBody
-  alias Vxpipe.Gateway.Telephony.{ConfiguredService, IngressHandler, ServiceRegistry}
+  alias Vxpipe.CallEngine.Telephony.Event
+  alias Vxpipe.Gateway.HTTP.TwilioWebhookRequest
+  alias Vxpipe.Gateway.Telephony.IngressHandler
   alias Vxpipe.Gateway.Telephony.Twilio.{PublicEndpoint, TwiML}
 
   @spec route?(Plug.Conn.t()) :: boolean()
@@ -16,97 +15,75 @@ defmodule Vxpipe.Gateway.HTTP.TwilioEvents do
       }),
       do: true
 
+  def route?(%Plug.Conn{
+        method: "POST",
+        path_info: ["api", "telephony", "twilio", _ingress_key, "events", _leg_id]
+      }),
+      do: true
+
   def route?(%Plug.Conn{}), do: false
 
-  @spec handle(Plug.Conn.t(), map(), String.t()) :: Plug.Conn.t()
-  def handle(conn, options, ingress_key) do
-    with {:ok, service} <- ServiceRegistry.fetch(options.registry, ingress_key),
-         :ok <- provider(service),
-         :ok <- form_content_type(conn),
-         {:ok, body, conn} <- RawBody.read(conn, options.maximum_body_bytes),
-         {:ok, signature} <- signature(conn),
-         webhook <- webhook(service, body, signature, options.clock),
-         {:ok, %Event{kind: :incoming} = event} <-
-           Adapter.ingest_webhook(service.adapter, service.adapter_options, webhook),
+  @spec handle_voice(Plug.Conn.t(), map(), String.t()) :: Plug.Conn.t()
+  def handle_voice(conn, options, ingress_key) do
+    endpoint = fn service -> {PublicEndpoint.voice_url(service), %{}} end
+
+    with {:ok, conn, service, %Event{kind: :incoming} = event} <-
+           TwilioWebhookRequest.ingest(conn, options, ingress_key, endpoint),
          {:ok, media_url} <- IngressHandler.dispatch(options.handler, service.identity, event),
          {:ok, twiml} <- TwiML.connect_stream(media_url) do
       conn
       |> put_resp_content_type("application/xml")
       |> send_resp(200, twiml)
     else
-      {:error, reason, conn} ->
-        raw_body_error(conn, reason)
-
-      {:error, :disabled} ->
-        send_resp(conn, 404, "not found")
-
-      {:error, :service_not_found} ->
-        send_resp(conn, 404, "not found")
-
-      {:error, :wrong_provider} ->
-        send_resp(conn, 404, "not found")
-
-      {:error, :unsupported_media_type} ->
-        send_resp(conn, 415, "expected form webhook")
-
-      {:error, :invalid_authentication_headers} ->
-        send_resp(conn, 401, "invalid webhook authentication")
-
-      {:error, :invalid_twilio_webhook_authentication} ->
-        send_resp(conn, 401, "invalid webhook authentication")
-
-      {:error, :invalid_twilio_webhook_verifier_configuration} ->
-        send_resp(conn, 503, "webhook processing unavailable")
-
-      {:error, :invalid_twilio_webhook} ->
-        send_resp(conn, 400, "invalid webhook")
-
-      {:error, :invalid_twilio_media_url} ->
-        send_resp(conn, 503, "webhook processing unavailable")
-
-      {:error, _reason} ->
-        send_resp(conn, 503, "webhook processing unavailable")
-
-      :ignore ->
-        send_resp(conn, 200, "ok")
-
-      :ok ->
-        send_resp(conn, 503, "webhook processing unavailable")
+      {:ignore, conn} -> send_resp(conn, 200, "ok")
+      {:error, reason, conn} -> error_response(conn, reason)
+      {:error, _reason} -> send_resp(conn, 503, "webhook processing unavailable")
+      :ok -> send_resp(conn, 503, "webhook processing unavailable")
     end
   end
 
-  defp provider(%ConfiguredService{identity: %{provider: :twilio}}), do: :ok
-  defp provider(%ConfiguredService{}), do: {:error, :wrong_provider}
+  @spec handle_callback(Plug.Conn.t(), map(), String.t(), String.t()) :: Plug.Conn.t()
+  def handle_callback(conn, options, ingress_key, leg_id) do
+    endpoint = fn service ->
+      {PublicEndpoint.event_url(service, leg_id), %{"leg_id" => leg_id}}
+    end
 
-  defp form_content_type(conn) do
-    case get_req_header(conn, "content-type") do
-      [value] ->
-        case Utils.media_type(value) do
-          {:ok, "application", "x-www-form-urlencoded", _parameters} -> :ok
-          _unsupported -> {:error, :unsupported_media_type}
-        end
-
-      _missing_or_duplicate ->
-        {:error, :unsupported_media_type}
+    with {:ok, conn, service, %Event{} = event} <-
+           TwilioWebhookRequest.ingest(conn, options, ingress_key, endpoint),
+         result <- IngressHandler.dispatch(options.handler, service.identity, event) do
+      callback_response(conn, result)
+    else
+      {:ignore, conn} -> send_resp(conn, 200, "ok")
+      {:error, reason, conn} -> error_response(conn, reason)
     end
   end
 
-  defp signature(conn) do
-    case get_req_header(conn, "x-twilio-signature") do
-      [value] when value != "" -> {:ok, value}
-      _missing_or_duplicate -> {:error, :invalid_authentication_headers}
-    end
-  end
+  defp callback_response(conn, :ok), do: send_resp(conn, 200, "ok")
+  defp callback_response(conn, {:ok, _result}), do: send_resp(conn, 200, "ok")
 
-  defp webhook(service, body, signature, clock) do
-    %Webhook{
-      headers: %{"x-twilio-signature" => signature},
-      body: body,
-      received_at: clock.(),
-      url: PublicEndpoint.voice_url(service)
-    }
-  end
+  defp callback_response(conn, {:error, _reason}),
+    do: send_resp(conn, 503, "webhook processing unavailable")
 
-  defp raw_body_error(conn, :payload_too_large), do: send_resp(conn, 413, "payload too large")
-  defp raw_body_error(conn, :body_unavailable), do: send_resp(conn, 400, "invalid webhook")
+  defp error_response(conn, :payload_too_large), do: send_resp(conn, 413, "payload too large")
+  defp error_response(conn, :body_unavailable), do: send_resp(conn, 400, "invalid webhook")
+  defp error_response(conn, :disabled), do: send_resp(conn, 404, "not found")
+  defp error_response(conn, :service_not_found), do: send_resp(conn, 404, "not found")
+  defp error_response(conn, :wrong_provider), do: send_resp(conn, 404, "not found")
+
+  defp error_response(conn, :unsupported_media_type),
+    do: send_resp(conn, 415, "expected form webhook")
+
+  defp error_response(conn, :invalid_authentication_headers),
+    do: send_resp(conn, 401, "invalid webhook authentication")
+
+  defp error_response(conn, :invalid_twilio_webhook_authentication),
+    do: send_resp(conn, 401, "invalid webhook authentication")
+
+  defp error_response(conn, :invalid_twilio_webhook_verifier_configuration),
+    do: send_resp(conn, 503, "webhook processing unavailable")
+
+  defp error_response(conn, :invalid_twilio_webhook),
+    do: send_resp(conn, 400, "invalid webhook")
+
+  defp error_response(conn, _reason), do: send_resp(conn, 503, "webhook processing unavailable")
 end

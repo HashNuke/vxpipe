@@ -6,6 +6,11 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.PublicEndpoint do
   @spec voice_url(ConfiguredService.t()) :: String.t()
   def voice_url(%ConfiguredService{} = service), do: append_path(service, "voice")
 
+  @spec event_url(ConfiguredService.t(), String.t()) :: String.t()
+  def event_url(%ConfiguredService{} = service, leg_id) when is_binary(leg_id) do
+    append_path(service, "events/#{path_segment(leg_id)}")
+  end
+
   @spec media_url(ConfiguredService.t(), String.t()) :: String.t()
   def media_url(%ConfiguredService{} = service, token) when is_binary(token) do
     service
@@ -23,4 +28,6 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.PublicEndpoint do
     |> Map.put(:path, path)
     |> URI.to_string()
   end
+
+  defp path_segment(value), do: URI.encode(value, &URI.char_unreserved?/1)
 end

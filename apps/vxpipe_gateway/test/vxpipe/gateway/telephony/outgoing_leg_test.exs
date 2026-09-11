@@ -71,6 +71,38 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert binding.provider_call_session_id == "outbound-call-session"
   end
 
+  test "submits the same outbound-leg contract through a configured Twilio service", context do
+    service = twilio_service(self(), answering_machine_detection: :detect)
+    request = %{request() | service_id: "twilio-primary"}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service,
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    assert_receive {:test_twilio_dial, dial}
+
+    assert dial.leg_id == context.leg_id
+    assert dial.from == "+15550001000"
+    assert dial.to == "+15550001001"
+    assert dial.answering_machine_detection == :detect
+
+    assert dial.callback_url ==
+             "https://voice.example.test/voice/api/telephony/twilio/outbound_ingress/events/#{context.leg_id}"
+
+    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url)
+    assert binding.provider == :twilio
+    assert binding.leg == leg
+    assert binding.provider_call_control_id == "CA00000000000000000000000000000001"
+    assert binding.provider_call_leg_id == "CA00000000000000000000000000000001"
+    assert binding.provider_call_session_id == nil
+  end
+
   test "rejects an inbound-only service before submitting a dial", context do
     service = service(self(), outbound_number: nil)
 
@@ -119,6 +151,40 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert binding.provider_call_control_id == event.provider_call_control_id
     assert binding.provider_call_leg_id == event.provider_call_leg_id
     assert binding.provider_call_session_id == event.provider_call_session_id
+  end
+
+  test "adopts an out-of-order Twilio answered callback after an unknown submission", context do
+    service =
+      twilio_service(self(),
+        auth_token: "unknown:#{:erlang.pid_to_list(self())}"
+      )
+
+    request = %{request() | service_id: "twilio-primary"}
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request,
+               service,
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    assert_receive {:test_twilio_dial, dial}
+
+    event = twilio_answered_event(context.leg_id)
+    assert :ok = CallIngress.handle_event([], service.identity, event)
+    refute_receive {:test_twilio_dial, _duplicate}
+
+    assert {:ok, ^leg} =
+             LegSupervisor.lookup(:twilio, "twilio-primary", event.provider_call_leg_id)
+
+    assert {:ok, binding} = consume_media(context.media_admission, dial.media_url)
+    assert binding.leg == leg
+    assert binding.provider_call_control_id == event.provider_call_control_id
+    assert binding.provider_call_leg_id == event.provider_call_leg_id
+    assert binding.provider_call_session_id == nil
   end
 
   test "the engine connector resolves the tenant service and starts one supervised leg",
@@ -272,6 +338,27 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     )
   end
 
+  defp twilio_service(observer, overrides) do
+    options =
+      Keyword.merge(
+        [
+          id: "twilio-primary",
+          ingress_key: "outbound_ingress",
+          scope: {:tenant, "tenantkey1234567"},
+          provider: :twilio,
+          account_sid: "AC00000000000000000000000000000000",
+          auth_token: "observer:#{:erlang.pid_to_list(observer)}",
+          outbound_number: "+15550001000",
+          public_base_url: "https://voice.example.test/voice",
+          adapter: Vxpipe.Gateway.TestTwilioTelephonyAdapter
+        ],
+        overrides
+      )
+
+    assert {:ok, service} = ConfiguredService.new(options)
+    service
+  end
+
   defp start_accepted_leg(context, service) do
     assert {:ok, leg} =
              LegSupervisor.start_outgoing(
@@ -329,6 +416,23 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
       provider_call_session_id: "outbound-call-session",
       leg_id: leg_id,
       occurred_at: ~U[2026-09-11 13:45:00Z],
+      from: "+15550001000",
+      to: "+15550001001"
+    }
+  end
+
+  defp twilio_answered_event(leg_id) do
+    %Event{
+      kind: :answered,
+      provider: :twilio,
+      provider_event_id: "CA00000000000000000000000000000002:status:2",
+      provider_connection_id: "AC00000000000000000000000000000000",
+      provider_call_control_id: "CA00000000000000000000000000000002",
+      provider_call_leg_id: "CA00000000000000000000000000000002",
+      provider_call_session_id: nil,
+      leg_id: leg_id,
+      occurred_at: ~U[2026-09-11 13:46:00Z],
+      sequence_number: 2,
       from: "+15550001000",
       to: "+15550001001"
     }
