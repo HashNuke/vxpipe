@@ -12,7 +12,15 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
 
     leg = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
 
-    %{binding: media_binding(leg), clock: clock, leg: leg, server: server}
+    task_supervisor = start_supervised!({Task.Supervisor, name: nil})
+
+    %{
+      binding: media_binding(leg),
+      clock: clock,
+      leg: leg,
+      server: server,
+      task_supervisor: task_supervisor
+    }
   end
 
   test "issues one opaque token and consumes it once for the exact ingress", context do
@@ -60,6 +68,73 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
 
     assert {:error, :invalid_media_token} =
              MediaAdmission.consume(context.server, "ingress-primary", token)
+  end
+
+  test "reserves an outbound token before exact provider identifiers are known", context do
+    assert {:ok, token} =
+             MediaAdmission.reserve(context.server, "ingress-primary", context.leg, 60_000)
+
+    consumer =
+      Task.Supervisor.async_nolink(context.task_supervisor, fn ->
+        MediaAdmission.consume(context.server, "ingress-primary", token)
+      end)
+
+    assert Task.yield(consumer, 50) == nil
+    assert :ok = MediaAdmission.bind(context.server, context.binding)
+    assert {:ok, {:ok, context.binding}} == Task.yield(consumer, 1_000)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.consume(context.server, "ingress-primary", token)
+  end
+
+  test "keeps a reserved token pending after a mismatched bind", context do
+    assert {:ok, token} =
+             MediaAdmission.reserve(context.server, "ingress-primary", context.leg, 60_000)
+
+    mismatched = %{context.binding | ingress_key: "ingress-other"}
+    assert {:error, :media_binding_mismatch} = MediaAdmission.bind(context.server, mismatched)
+
+    consumer =
+      Task.Supervisor.async_nolink(context.task_supervisor, fn ->
+        MediaAdmission.consume(context.server, "ingress-primary", token)
+      end)
+
+    assert Task.yield(consumer, 50) == nil
+    assert :ok = MediaAdmission.bind(context.server, context.binding)
+    assert {:ok, {:ok, context.binding}} == Task.yield(consumer, 1_000)
+  end
+
+  test "revocation releases an upgrade waiting on a reserved token", context do
+    assert {:ok, token} =
+             MediaAdmission.reserve(context.server, "ingress-primary", context.leg, 60_000)
+
+    consumer =
+      Task.Supervisor.async_nolink(context.task_supervisor, fn ->
+        MediaAdmission.consume(context.server, "ingress-primary", token)
+      end)
+
+    assert Task.yield(consumer, 50) == nil
+    assert :ok = MediaAdmission.revoke(context.server, context.leg)
+
+    assert {:ok, {:error, :invalid_media_token}} == Task.yield(consumer, 1_000)
+  end
+
+  test "an expired reservation cannot be bound and releases its waiting upgrade", context do
+    assert {:ok, token} =
+             MediaAdmission.reserve(context.server, "ingress-primary", context.leg, 100)
+
+    consumer =
+      Task.Supervisor.async_nolink(context.task_supervisor, fn ->
+        MediaAdmission.consume(context.server, "ingress-primary", token)
+      end)
+
+    assert Task.yield(consumer, 50) == nil
+    :atomics.put(context.clock, 1, 10_100)
+
+    assert {:error, :media_admission_not_found} =
+             MediaAdmission.bind(context.server, context.binding)
+
+    assert {:ok, {:error, :invalid_media_token}} == Task.yield(consumer, 1_000)
   end
 
   defp media_binding(leg) do

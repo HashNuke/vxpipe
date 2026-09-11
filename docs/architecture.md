@@ -1143,6 +1143,12 @@ the exact live leg process and its tenant, call, incarnation, participant, confi
 provider identifiers. The token is single-use, is valid only under that service's opaque ingress
 key, and is revoked when the leg terminates. Repeated command preparation reuses the still-pending
 token instead of creating multiple valid media admissions.
+Outbound dialing may reserve that token against the exact supervised leg and ingress key before the
+provider has returned its call identifiers. At most one upgrade may wait on the reservation. Binding
+the complete validated media identity releases that waiter and consumes the token atomically;
+expiry, revocation, or owner death releases it with the same invalid-token outcome. A mismatched bind
+does not consume the reservation. This closes the media-before-command-response race without
+weakening the exact final binding or exposing whether a token is merely pending.
 Gateway consumes that token only after validating an RFC-compliant WebSocket upgrade at
 `GET /api/telephony/telnyx/:ingress_key/media/:token`. A wrong ingress key, expired/reused token,
 or malformed token receives the same not-found response. An invalid upgrade does not consume a

@@ -1073,3 +1073,34 @@ pass. The umbrella test command again hit only the previously recorded startup-r
 race in Call Engine (`:noproc` after the room had already exited); the changed Gateway lane passed
 all 156 tests. The complete 348-test Call Engine lane immediately passed at that failing umbrella
 seed, so no unrelated lifecycle change was included in this checkpoint.
+
+## Checkpoint 28: pending outbound media admission
+
+A carrier dial request needs its media URL before its response supplies the exact provider call
+identifiers. Issuing a fully bound token first would invent those identifiers; registering only
+after the response would leave a race in which an early carrier upgrade receives a false 404.
+
+`MediaAdmission` can now reserve one opaque token against an exact supervised leg and ingress key,
+then bind the complete validated `MediaBinding`. At most one consumer waits while the reservation is
+pending. A successful bind replies to that waiter and consumes the token atomically. Wrong ingress,
+mismatched binding, a duplicate consumer, revocation, expiry, and owner death all retain the same
+closed/non-enumerating behavior as ordinary single-use admissions.
+
+The initial expiry test was red because an expired bind returned a mismatch and left the waiting
+upgrade unresolved. The bind path now detects expiry first, drops the reservation, and releases the
+waiter with `:invalid_media_token`.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/media_admission_test.exs \
+  test/vxpipe/gateway/http/telnyx_media_test.exs
+# 11 tests, 0 failures
+```
+
+This is an admission primitive only. The outgoing leg owner will generate the reservation, submit
+the dial without retry, and finalize it from an accepted response or the signed correlated event.
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. A complete umbrella run passed all seven lanes—736 tests with zero failures—against a fresh
+disposable PostgreSQL 17 instance. An earlier Gateway-only run hit an unrelated 100 ms room-output
+teardown assertion; its owning six-test file immediately passed at the same seed.

@@ -128,6 +128,12 @@ Telnyx outgoing-initiation webhooks also recover a bounded opaque Vxpipe leg ID 
 correlation fails decoding. This is the prerequisite for associating later provider identifiers
 with exactly one pending transfer, including when the immediate dial outcome is unknown; it does
 not yet submit that outbound dial.
+Gateway media admission can now reserve the opaque outbound media URL before provider identifiers
+exist and atomically bind the complete exact identity afterward. One early upgrade waits within the
+existing bound, while bind, expiry, revocation, or leg-owner death settles it without revealing a
+pending-token state. Focused reservation, mismatch, expiry, revocation, single-use, and HTTP-upgrade
+tests pass, as does the complete 736-test umbrella gate. Outbound leg ownership and dial submission
+remain pending.
 
 ## Specification review
 
