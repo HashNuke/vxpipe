@@ -14,6 +14,17 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
 
   @sample_rate 48_000
   @channels 1
+  @children MapSet.new([
+              :source,
+              :jitter_buffer,
+              :room_timestamp,
+              :depayloader,
+              :parser,
+              :decoder,
+              :channel_mixer,
+              :frame_parser,
+              :sink
+            ])
 
   @spec start_link(keyword()) :: Pipeline.on_start()
   def start_link(options) do
@@ -36,7 +47,8 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
       incarnation_id: Keyword.fetch!(options, :incarnation_id),
       participant_id: Keyword.fetch!(options, :participant_id),
       connection_id: Keyword.fetch!(options, :connection_id),
-      track_id: nil
+      track_id: nil,
+      playing_children: MapSet.new()
     }
 
     jitter_latency = options |> Keyword.fetch!(:jitter_latency) |> Time.milliseconds()
@@ -63,9 +75,14 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
   end
 
   @impl true
-  def handle_playing(_context, state) do
-    send(state.owner, {:vxpipe_audio_pipeline_ready, state.pipeline_id})
-    {[], state}
+  def handle_child_playing(child, _context, state) do
+    playing_children = MapSet.put(state.playing_children, child)
+
+    if MapSet.equal?(playing_children, @children) do
+      send(state.owner, {:vxpipe_audio_pipeline_ready, state.pipeline_id})
+    end
+
+    {[], %{state | playing_children: playing_children}}
   end
 
   @impl true
