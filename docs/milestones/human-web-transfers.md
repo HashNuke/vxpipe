@@ -1,9 +1,9 @@
 # Private briefing and human web acceptance
 
-Status: partially implemented. The protocol-neutral private room lane, exact destination control,
-briefing playback barrier, authenticated gateway sideband/session routing, human-only commit, and
-dropped-destination cleanup and rendered two-browser sample path are implemented. The remaining
-failure checks remain. Specification review: approved (2026-09-08).
+Status: implemented (2026-09-11). The protocol-neutral private room lane, exact destination
+control, briefing playback barrier, authenticated gateway sideband/session routing, human-only
+commit, bounded timeout cleanup, fail-closed policy barrier, and rendered two-browser sample path
+are complete. Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Agent transfers](agent-transfers.md); [Live mixing/media policy](live-mixing-and-media-policy.md).
 Sources: [Human transfer acceptance/briefing](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [commit barrier](../../labnotes/20260905-0405-call-definition-design.md#retained-transfer-and-media-enforcement-invariants).
 
@@ -18,7 +18,11 @@ Reception prepares a human web destination. That person privately hears permitte
 - Human readiness requires usable media and explicit acceptance. Client owns acceptance presentation; gateway receives an authenticated control message bound to destination participant, connection and current pending attempt. Specify and test a Vxpipe adapter extension/sideband control, not an invented RTVI-core event.
 - Source/model/caller cannot accept for destination. Duplicate/stale/late acceptance cannot commit twice or another attempt. Keep one total 30-second transfer deadline including private preparation; preserve source until commit/failure.
 - At commit apply destination while_present privacy restrictions before main bridge, then change control and terminate source agent subtree. active agent nil is valid; variables, allowed live transcripts, duration and authorized monitoring continue independently.
-- Failure/timeout cleans only the pending destination, source handles typed outcome with approved single recovery limit. Detailed restoration cause remains internal, including full sample visibility.
+- Recoverable destination failure or timeout cleans only the pending destination; the source
+  handles a typed outcome under the approved single recovery limit. If a media-policy enforcer
+  cannot apply the commit barrier consistently, the destination is never bridged, the source is
+  never handed off, and the room closes fail-closed. Detailed causes remain internal, including
+  when the development sample exposes all permitted tool events.
 
 ## Implementation checklist
 
@@ -31,10 +35,12 @@ Reception prepares a human web destination. That person privately hears permitte
 ## Acceptance and failure checks
 
 - [x] Before acceptance destination cannot hear caller/main room; caller cannot hear private briefing.
-- [ ] Forged source/caller/other-connection, stale and duplicate acceptance reject; timeout/late readiness cannot bridge.
-- [ ] Consent/acceptance alone does not bypass policy application; failed privacy barrier leaves source responsible with no leaked media.
-- [ ] After commit source capabilities/workers end, two humans converse and variables survive; original start/duration clocks remain.
-- [ ] Busy/failing/dropped destination cleans exact attempt and does not terminate a still-valid caller/source conversation.
+- [x] Forged source/caller/other-connection, stale and duplicate acceptance reject; timeout/late readiness cannot bridge.
+- [x] Consent/acceptance alone does not bypass policy application; a failed privacy barrier emits
+  no main-media promotion or successful handoff and closes the room fail-closed.
+- [x] After commit source capabilities/workers end, two humans converse and variables survive; original start/duration clocks remain.
+- [x] Busy/recoverably failing/dropped destination affects only the exact attempt and does not
+  terminate a still-valid caller/source conversation.
 - [x] Pre-commit isolation blocks destination microphone publishing as well as main-room
   listening/transcripts; no unrestricted variables/history snapshot reaches that destination.
 - [x] Early acceptance cannot bypass usable media and private briefing/configured-notice
@@ -61,9 +67,9 @@ No platform-mandated acceptance button/UI design, phone provider yet, blanket re
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Partial implementation evidence (2026-09-11): the Call Engine focused room test starts a genuine
@@ -81,8 +87,15 @@ RTVI `chat` channel remains unchanged. A full Gateway test drives the caller's t
 through RTVI and two real ExWebRTC peer connections. It proves destination input/output isolation,
 exact-attempt acceptance, private briefing delivery, source teardown, Membrane pipeline readiness,
 and bidirectional Opus room audio after activation. All 94 Gateway tests pass (four excluded).
-This does not mark the milestone complete: timeout/late-control coverage, explicit
-failed-policy-barrier coverage, and the remaining combined lifecycle assertions above remain.
+The final Call Engine checkpoint adds the remaining timeout, late-control, media-policy failure,
+and lifecycle assertions. Its first timeout run exposed that successful private preparation
+cancelled the total-attempt timer; the coordinator now settles only the completed preparation task
+and retains the original timer through acceptance, readiness, and briefing. The exact destination
+is discarded when that timer fires, late readiness rejects, and the source agent stays available.
+The controlled policy-barrier failure proves acceptance and completed briefing still cannot
+promote main media: the room closes under the existing significant-child fail-closed contract
+before source handoff. The success path also proves the same Call Variables and Call Lifecycle
+processes survive human promotion, so no transfer resets the pinned duration clock.
 
 The Console sample checkpoint adds a dedicated `/transfer` destination page beside the unchanged
 Pipecat caller console. It obtains only a public locator plus expiring participant token, claims the
@@ -95,9 +108,16 @@ violations or incomplete checks. The full two-human runtime remains covered by t
 gateway integration test above, while the README now gives the manual two-browser verification
 flow.
 
+Final completion verification passes the five focused human-transfer room tests, formatting,
+warnings-as-errors compilation, strict Credo across 4,660 modules/functions, unused dependency
+checks, and the full umbrella suite against a fresh disposable PostgreSQL database (MCP 37/3
+excluded, Agent Runtime 58/2, Call Engine 338/1, Calls 37, Persistence 25, Gateway 95/4, Console
+59). The final checkpoint changed no UI; its rendered-browser evidence is the immediately
+preceding sample checkpoint.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added bidirectional private-lane isolation, transcript/snapshot restrictions and early-acceptance sequencing tests; re-review approved.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+The implementation and runtime evidence above complete the subsequently executed milestone.

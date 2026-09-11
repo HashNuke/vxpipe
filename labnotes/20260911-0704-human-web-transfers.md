@@ -175,3 +175,40 @@
   entries. The first umbrella attempt reused the database exercised by the rendered browser and a
   persistence test correctly observed that extra definition revision; the clean pass used a fresh
   database in the same disposable PostgreSQL container.
+
+## Checkpoint: total deadline and privacy failure closure
+
+- Added the missing total-deadline test around a fully prepared web-human destination. The first
+  run failed because successful private preparation demonitoring also cancelled the transfer's
+  total timer, leaving an accepted but not media-ready attempt pending indefinitely.
+- Split that lifecycle operation narrowly: successful human preparation now settles its completed
+  task monitor without cancelling the original attempt timer. Agent destinations still cancel the
+  timer only when their immediate preparation/commit path settles.
+- The green timeout path discards the exact provisional connection and prepared participant,
+  reports the transfer failure, keeps the source agent session running, rejects late readiness,
+  and emits no successful transfer or main-media promotion.
+- Added a controlled restrictive `while_present` commit whose mixer is forced to reject the next
+  policy revision. Acceptance, usable media, and completed private playback do not bypass policy:
+  no main-media promotion or successful tool completion is emitted, and the significant
+  media-policy failure closes the room rather than leave a possibly partial policy installed.
+  Recoverable destination failures retain the source conversation; an inconsistent privacy
+  barrier is intentionally catastrophic and fail-closed.
+- The successful handoff test now pins both the Call Variables process and Call Lifecycle process
+  across promotion. Together with the real two-peer Gateway test, this proves variables and the
+  original maximum-duration clock survive while the two humans continue after source teardown.
+- Focused verification passes all five human web transfer room tests. The first complete Call
+  Engine run found the existing timing-sensitive human-only maximum-duration assertion receiving
+  `:noproc` after its room had already exited; its isolated rerun passed. Final umbrella gate
+  evidence is recorded in the milestone once the clean completion run finishes.
+- Two umbrella runs then exposed a separate brittle diagnostics assertion: a globally subscribed
+  test reporter correctly observed extra telemetry from concurrently running Console tests while
+  it was suspended, but the test required exactly three dropped events. The assertion now proves
+  its owned saturation contract with a lower bound and permits additional global events; it still
+  requires the one admitted event and verifies that a later request is collected.
+- The focused Console diagnostics module passes all seven tests after that correction. The clean
+  umbrella rerun passes MCP 37/3 excluded, Agent Runtime 58/2, Call Engine 338/1, Calls 37,
+  Persistence 25, Gateway 95/4, and Console 59 against a fresh database. Formatting,
+  warnings-as-errors compilation, strict Credo over 4,660 modules/functions, unused dependency
+  checks, and `git diff --check` pass. The disposable PostgreSQL container was stopped after the
+  suite. This checkpoint changed no UI; the preceding rendered two-browser sample evidence still
+  owns the interface verification.

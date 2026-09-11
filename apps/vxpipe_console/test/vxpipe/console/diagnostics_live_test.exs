@@ -278,13 +278,15 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
     :ok = :sys.resume(first_reporter)
 
-    assert %{received_events: 1, dropped_events: 3} =
+    assert %{received_events: 1, dropped_events: dropped_events} =
              TelemetryReporter.snapshot(first_reporter)
+
+    assert dropped_events >= 3
 
     received_before_disconnect = TelemetryReporter.snapshot(first_reporter).received_events
     assert health_request().status == 200
 
-    assert TelemetryReporter.snapshot(first_reporter).received_events ==
+    assert TelemetryReporter.snapshot(first_reporter).received_events >=
              received_before_disconnect + 1
 
     first_reporter_monitor = Process.monitor(first_reporter)

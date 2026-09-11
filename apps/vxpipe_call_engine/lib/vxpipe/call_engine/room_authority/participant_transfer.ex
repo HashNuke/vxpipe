@@ -154,7 +154,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
           state
       ) do
-    settle_task(pending)
+    settle_human_preparation_task(pending)
 
     cond do
       deadline_elapsed?(pending) ->
@@ -395,6 +395,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   defp settle_task(pending) do
     Process.demonitor(pending.task.ref, [:flush])
     cancel_timer(pending.timer)
+  end
+
+  defp settle_human_preparation_task(pending) do
+    Process.demonitor(pending.task.ref, [:flush])
   end
 
   defp cancel_timer(timer) do

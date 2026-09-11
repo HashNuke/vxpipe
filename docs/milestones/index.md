@@ -1,12 +1,11 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 15 complete and 9 incomplete. Milestone 15, live mixing and
-presence-driven media policy, is complete. Two humans exchange live WebRTC mix-minus audio, an
-authorized silent monitor receives only allowlisted sources and cannot publish, and presence-driven
-audio/transcript/storage restrictions commit before new or queued data can cross. Concrete mixer
-and transcript-router failure checks tear down the room rather than retain a partially applied
-bridge. Milestone 16, private briefing and human web acceptance, is the current implementation
-slice.
+Status: 24 milestone specifications: 16 complete and 8 incomplete. Milestone 16, private briefing
+and human web acceptance, is complete. A catalog web destination receives an isolated private
+briefing, controls only its exact pending attempt, cannot bridge after timeout, and joins
+bidirectional human audio only after acceptance, media readiness, completed playback, and the
+privacy commit barrier. Milestone 17, Telnyx calls and phone transfers, is the current
+implementation slice.
 The earlier behavior contracts have completed focused review.
 Implementation continues through milestone 22, including the runnable samples and their
 cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain
@@ -55,7 +54,7 @@ progress without claiming the entire milestone is complete.
 13. [x] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
 14. [x] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
 15. [x] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
-16. [ ] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
+16. [x] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
 17. [ ] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
 18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant definitions or room control.
 19. [ ] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
@@ -251,7 +250,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md#specification-review) | Approved | milestone_review_b; Added caller-only playback, readiness cleanup/duplicate greeting, explicit idle exclusions and pinned duration hierarchy tests; re-review approved. |
 | [Allowlisted agent-to-agent transfers](agent-transfers.md#specification-review) | Approved | milestone_review_c; Specified history modes, precommit destination silence/source continuity, empty-list and total-deadline races; re-review approved. |
 | [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md#specification-review) | Approved | milestone_review_a; Distinguished omitted policy fields from denied omitted route sources and added fail-closed policy-apply admission/bridge checks; re-review approved. |
-| [Private briefing and human web acceptance](human-web-transfers.md#specification-review) | Approved | milestone_review_b; Added bidirectional private-lane isolation, transcript/snapshot restrictions and early-acceptance sequencing tests; re-review approved. |
+| [Private briefing and human web acceptance](human-web-transfers.md#specification-review) | Complete; independently reviewed | Exact destination control, total-deadline cleanup, private briefing playback, policy-before-bridge commit, source teardown, preserved Variables/lifecycle, real two-peer audio, and the separate responsive transfer desk are implemented and verified. |
 | [Telnyx calls and phone transfers](telnyx-calls.md#specification-review) | Approved | milestone_review_c; Added dial-only dynamic source, no inbound re-admission for transfer callbacks, PG-outage runtime correlation and provider-reachable ingress checks; re-review approved. |
 | [Twilio through the common telephony contract](twilio-calls.md#specification-review) | Approved | milestone_review_a; Approved initial draft; shared contract order and separate vendor verification, media/acceptance/failure parity sufficient. |
 | [Permitted live recordings streamed to S3](streaming-recordings.md#specification-review) | Approved | milestone_review_b; Corrected provable egress vs remote-playout boundary, room manifest identity and terminal-manifest outage guarantees; re-review approved. |
