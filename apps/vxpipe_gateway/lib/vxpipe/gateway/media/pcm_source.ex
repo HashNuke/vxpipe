@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioOutputPipeline.PCMSource do
+defmodule Vxpipe.Gateway.Media.PCMSource do
   @moduledoc false
 
   use Membrane.Source

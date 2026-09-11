@@ -9,7 +9,8 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioOutputPipeline do
 
   alias Membrane.{Pipeline, RawAudio}
   alias Vxpipe.CallEngine.Media.MixedFrame
-  alias Vxpipe.Gateway.WebRTC.RoomAudioOutputPipeline.{PCMSource, RTPSink}
+  alias Vxpipe.Gateway.Media.PCMSource
+  alias Vxpipe.Gateway.WebRTC.RoomAudioOutputPipeline.RTPSink
 
   @sample_rate 48_000
   @channels 1
