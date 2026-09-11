@@ -19,18 +19,18 @@ Switch a configured telephony service to Twilio and run the same inbound-agent a
 
 ## Implementation checklist
 
-- [ ] Reuse common telephony contract tests with Twilio fakes; add red cases for vendor-specific verification and callback/media correlation.
-- [ ] Implement configured Twilio authentication/control/media adapter in proper gateway/provider boundaries.
-- [ ] Run inbound and outgoing private-transfer acceptance through the existing room mixer and policy barrier.
-- [ ] Exercise AMD/DTMF/timeout/cleanup and parity with the first adapter.
+- [x] Reuse common telephony contract tests with Twilio fakes; add red cases for vendor-specific verification and callback/media correlation.
+- [x] Implement configured Twilio authentication/control/media adapter in proper gateway/provider boundaries.
+- [x] Run inbound and outgoing private-transfer acceptance through the existing room mixer and policy barrier.
+- [x] Exercise AMD/DTMF/timeout/cleanup and parity with the first adapter.
 - [ ] Add tagged real-provider tests and document supported transport/control combinations without untested compatibility claims.
 
 ## Acceptance and failure checks
 
-- [ ] Same portable participant definition works by resolving another configured service; no provider-specific room logic is required.
-- [ ] Tampered/cross-tenant media or callbacks reject; duplicates/out-of-order events keep one mapped attempt and no speculative retries.
-- [ ] Protected-number violations reject before dial; only destination press-1 accepts and briefing remains private.
-- [ ] Machine/unknown/busy/no-answer/timeout outcomes preserve the common source/cleanup rules and privacy restrictions.
+- [x] Same portable participant definition works by resolving another configured service; no provider-specific room logic is required.
+- [x] Tampered/cross-tenant media or callbacks reject; duplicates/out-of-order events keep one mapped attempt and no speculative retries.
+- [x] Protected-number violations reject before dial; only destination press-1 accepts and briefing remains private.
+- [x] Machine/unknown/busy/no-answer/timeout outcomes preserve the common source/cleanup rules and privacy restrictions.
 - [ ] Live audio works in both directions with correct clock/format mapping; provider disconnect is normalized without blanket multiparty hangup.
 
 ## Manual verification
@@ -350,6 +350,46 @@ Credo, all 801 umbrella tests, and the unused-dependency check also pass.
 
 The full signed Twilio inbound-to-outbound harness and guarded tagged provider verification remain.
 This checkpoint does not claim either one.
+
+## Checkpoint 9: signed inbound-to-outbound Twilio harness
+
+The complete deterministic call harness now uses the same provider-independent call plan and room
+runtime setup for Telnyx and Twilio. Thin carrier wrappers supply only credential and identity
+differences. The Twilio test adapter delegates request-signature verification, webhook/media
+decoding, and synchronous incoming-answer preparation to the production adapter; it fakes only
+outbound network control so no real destination is dialed.
+
+One test now sends a correctly signed form request through the real Twilio Voice route, receives
+the generated bidirectional-stream TwiML, and proves a duplicate request neither claims nor answers
+the call twice. It authenticates and consumes the incoming WSS media token, pins the Call and Stream
+SIDs, starts the real PCMU Membrane pipelines, and attaches the caller to main room media. After
+that initial admission, the test disables its backing call store to prove the active room does not
+depend on further synchronous admission storage.
+
+The same call then drives an STT turn into the agent, executes the configured transfer tool, starts
+one outbound Twilio leg, authenticates its separate media socket, and keeps it in isolated transfer
+preparation. Destination DTMF accepts the attempt, but commit waits until the private briefing
+finishes. The source agent then exits, the human destination reaches main admission, both human
+participants remain joined, and the destination receives Twilio PCMU room output through its
+original pinned Stream SID.
+
+The provider-independent scenario extraction preserved the existing Telnyx full-call harness. The
+combined call-harness and outbound-leg regressions pass:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/twilio_call_harness_test.exs \
+  test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
+  test/vxpipe/gateway/telephony/outgoing_leg_test.exs --max-cases 1
+# 13 tests, 0 failures
+```
+
+This completes deterministic private-transfer parity. A guarded tagged test against Twilio itself
+is still required before checking live audio or completing this milestone.
+
+Gateway verification passes all 221 default tests with five integration tests excluded. At the
+umbrella root, formatting, compilation with warnings as errors, strict Credo over 601 source files,
+all 802 tests, and the unused-dependency check pass.
 
 ## Specification review
 

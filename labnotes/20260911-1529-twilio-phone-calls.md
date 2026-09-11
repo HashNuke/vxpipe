@@ -381,3 +381,47 @@ Credo over 601 source files, all 801 umbrella tests, and the unused-dependency c
 
 This is deterministic outbound-transfer parity. It is not the signed Twilio inbound-to-outbound
 harness and is not live-provider evidence.
+
+## Checkpoint 9: full signed Twilio call harness
+
+The older full-call scenario mixed portable call-plan setup with Telnyx credentials and claim
+identity. That reusable content moved to `TelephonyCallScenario`; the existing
+`TelnyxCallScenario` became a thin wrapper, and its original full-call test remained green before
+Twilio was added. A second thin wrapper supplies the Twilio Auth Token and exact Account/Call SID
+shape.
+
+`TwilioFixture` owns only Twilio test-wire concerns: form signatures, Voice POSTs, WSS upgrade
+headers/signatures, start and DTMF messages, and socket-output projection. The test Twilio adapter
+now delegates real verify/decode/incoming-answer behavior to the production adapter while retaining
+fake dial/end network operations observable by the test process.
+
+The new full call starts with an authenticated Voice request through the real endpoint. It proves
+TwiML success, a single claim/answer across a duplicate request, authenticated one-time incoming
+media admission, pinned SID identity, main caller media, and STT capability startup. The backing
+call store is then deliberately made unavailable; the already-running room proceeds without it.
+
+From that inbound call, an STT turn asks the agent to transfer. The configured transfer tool dials
+one outbound Twilio leg. A separately authenticated media socket starts the destination's PCMU
+Membrane paths, preserves transfer-preparation isolation, accepts press-1, and waits for private
+briefing completion. Completion terminates the source agent, promotes only that destination to main
+media, retains caller and destination participants, and emits PCMU media for the pinned destination
+Stream SID.
+
+This verification-only slice passed its first behavioral run after the reusable fixtures were in
+place; it exposed no missing production behavior. The existing Telnyx harness and lower outbound
+leg cases passed beside it:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/twilio_call_harness_test.exs \
+  test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
+  test/vxpipe/gateway/telephony/outgoing_leg_test.exs --max-cases 1
+# 13 tests, 0 failures
+```
+
+Deterministic parity is complete. Live-provider evidence remains pending and is the only unproved
+milestone boundary.
+
+Final checkpoint verification passes all 221 default gateway tests with five integration tests
+excluded. Root formatting, compilation with warnings as errors, strict Credo over 601 source files,
+all 802 umbrella tests, and the unused-dependency check also pass.

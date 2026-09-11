@@ -4,6 +4,7 @@ defmodule Vxpipe.Gateway.TestTwilioTelephonyAdapter do
   @behaviour Vxpipe.CallEngine.Telephony.Adapter
 
   alias Vxpipe.CallEngine.Telephony.{Submission, Webhook}
+  alias Vxpipe.Gateway.Telephony.Twilio.Adapter, as: TwilioAdapter
 
   @call_sid "CA00000000000000000000000000000001"
 
@@ -25,7 +26,10 @@ defmodule Vxpipe.Gateway.TestTwilioTelephonyAdapter do
   end
 
   @impl true
-  def answer(_options, _request), do: {:error, :not_supported}
+  def answer(options, request) do
+    send(observer(options), {:test_twilio_answer, request})
+    TwilioAdapter.answer(options, request)
+  end
 
   @impl true
   def send_media(_options, _request), do: {:error, :not_supported}
@@ -42,13 +46,16 @@ defmodule Vxpipe.Gateway.TestTwilioTelephonyAdapter do
   end
 
   @impl true
-  def verify_webhook(_options, %Webhook{}), do: :ok
+  def verify_webhook(options, %Webhook{} = webhook),
+    do: TwilioAdapter.verify_webhook(options, webhook)
 
   @impl true
-  def decode_webhook(_options, %Webhook{}), do: :ignore
+  def decode_webhook(options, %Webhook{} = webhook),
+    do: TwilioAdapter.decode_webhook(options, webhook)
 
   @impl true
-  def decode_media_message(_options, _message), do: :ignore
+  def decode_media_message(options, message),
+    do: TwilioAdapter.decode_media_message(options, message)
 
   defp observer(options) do
     [_mode, encoded] = options |> Keyword.fetch!(:auth_token) |> String.split(":", parts: 2)
