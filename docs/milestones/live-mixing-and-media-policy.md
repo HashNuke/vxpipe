@@ -11,6 +11,10 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 ## Specification
 
 - Add an engine-owned RoomMixer pipeline for normalized timestamped frames, aligned bounded buffers, per-participant mix-minus, authorized full mix and optional authorized individual-track taps. Gateway owns external monitor transport/auth only; monitoring never reads S3 or publishes audio by implication.
+- Use Membrane elements for codec, RTP, framing, mixing arithmetic, encoding and pacing wherever
+  their contracts fit. Keep only Vxpipe-specific identity, media-policy, mix-minus routing,
+  revision-barrier and bounded-delivery adapters; do not introduce FFmpeg when the negotiated
+  format already matches the room sample rate.
 - Support human-only entry/continued rooms with active agent nil and one runtime participant per catalog key. Keep call duration/lifecycle independent of agent presence.
 - Compile normal media_policy and admitted participant while_present maps: audio_routes and transcript_routes map definition source keys to recipient arrays. Explicit maps are complete allowlists; an omitted policy field adds no restriction, but an omitted source inside an explicit route map is denied. An empty map permits none, with no implicit source/self/monitor grant. Intersect all active restrictions plus host ceiling; never deep-merge to restore omitted routes.
 - record_audio/save_transcripts are independent room-wide interval permissions; false wins. Leaving removes only that contribution; raw transport loss does not clear authoritative presence. Permission never enables unconfigured STT/recording. Stop STT flows if neither permitted live nor storage consumer needs them.
@@ -155,6 +159,22 @@ first and failed at the old agent-only receiver constraint. The complete Call En
 319 tests with one tagged integration exclusion, and the complete database-backed umbrella suite
 passes across all seven child applications. Gateway media normalization and live transport
 subscriptions are still required before this path is browser-runnable.
+
+The Gateway transport-normalization checkpoint now provides a per-track Membrane pipeline.
+Membrane owns jitter buffering, RTP timestamp rollover, Opus depayloading/parsing/decoding, and
+exact 20 ms rechunking. A focused room-timestamp element aligns the first emitted packet to the
+shared VM-relative 20 ms clock, while a channel element passes mono through or averages stereo to
+the mixer's fixed 48 kHz mono s16le format. No FFmpeg dependency is used because Opus decoding is
+already requested at 48 kHz. The pipeline pins and checks tenant, room-incarnation, participant,
+connection, and first-track identity before accepting input. The engine's saturating sample
+addition now uses Membrane's audio-mixer adder; Vxpipe continues to own policy-aware mix-minus,
+full-mix and individual-track routing and bounded subscriptions. Tests were written first and
+failed because the pipeline boundary was absent; four focused pipeline checks now cover 20 ms
+output, two-packet accumulation, stereo normalization, and identity/track rejection. This
+checkpoint is not yet wired into `Connection`, so the transport checklist remains open until live
+ingress, policy-transition purge/restart, bounded subscription drain, and WebRTC egress are
+verified together. The Gateway suite passes 71 tests with four tagged integration exclusions, and
+a fresh database-backed umbrella run passes across all seven child applications.
 
 ## Specification review
 

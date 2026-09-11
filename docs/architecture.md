@@ -1105,9 +1105,18 @@ mix-minus subscription. Per-subscription output queues are bounded inside the mi
 only coalesced availability notices plus opaque-token pulls, keeping slow consumers out of the
 mixing path. Installing any new policy revision clears pending input and output frames before the
 acknowledgement, and every output retains source IDs, timestamp, and policy revision. Transport
-decoding/normalization, WebRTC output encoding, connection subscription orchestration, transcript
-projection, and recording taps are subsequent boundaries; they cannot omit revision provenance or
-bypass this barrier.
+input normalization begins in the Gateway with a per-track Membrane pipeline. Official Membrane
+elements own RTP jitter buffering and rollover-aware timestamps, Opus depayloading/parsing and
+decoding, and exact 20 ms PCM rechunking. The Opus decoder already emits 48 kHz s16le, so Vxpipe
+uses a small Membrane filter only for mono passthrough or stereo-to-mono averaging; FFmpeg is not
+part of this path. A room-timestamp filter supplies the Vxpipe-specific shared-clock offset, and
+the sink restores the pinned tenant, room-incarnation, participant, connection, and track
+identity. The engine's PCM addition delegates to Membrane's audio-mixer adder. Vxpipe retains the
+policy-aware timestamp buckets, mix-minus/full/individual routing, revision barrier, and bounded
+subscriber queues because a generic one-output mixer does not express those room contracts.
+Connection-to-mixer ingestion, policy-transition pipeline restart, output subscription
+orchestration, Membrane-backed WebRTC mix encoding/pacing, and recording taps remain subsequent
+boundaries; they cannot omit revision provenance or bypass this barrier.
 
 `TranscriptRouter` keeps a bounded installed-revision history for source-interval decisions (128
 revisions by default). A current transcript projection reaches only connected, present

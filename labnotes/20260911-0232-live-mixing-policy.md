@@ -211,3 +211,29 @@
 - The complete database-backed umbrella suite passes across all seven child applications using a
   disposable PostgreSQL instance. Formatting, warnings-as-errors compilation, strict Credo, and
   the unused-dependency check also pass.
+
+## 2026-09-11 — Gateway Opus normalization
+
+- A first six-test prototype used the Opus NIF directly and implemented RTP admission, timestamp
+  rollover and PCM framing in Vxpipe. It passed, but duplicated responsibilities already provided
+  by Membrane and was removed before commit.
+- Replaced it with a per-track Membrane pipeline. The first pipeline test run failed because
+  `AudioPipeline` and `PCMFrame` did not exist. After implementation, four focused tests pass for
+  one 20 ms packet, accumulation of two 10 ms packets, stereo-to-mono normalization, and rejection
+  outside the pinned connection/track/room identity.
+- Official Membrane elements now own RTP jitter buffering and rollover-aware PTS, Opus
+  depayloading/parsing/decoding, and exact 20 ms PCM rechunking. A small Vxpipe Membrane filter
+  aligns the stream to the shared VM-relative room clock. Another passes mono through or averages
+  stereo channels; FFmpeg was tried briefly as a converter dependency and removed because Opus is
+  already decoded at 48 kHz and only channel averaging is needed.
+- The existing room mixer remains Vxpipe-owned for policy-aware mix-minus/full/individual routing,
+  policy revision barriers and bounded opaque subscriptions. Its sample addition now delegates to
+  Membrane's public audio-mixer adder instead of maintaining duplicate saturating arithmetic.
+- This checkpoint intentionally stops before connection integration. Mixer push/revision refresh,
+  policy-transition pipeline restart, bounded subscription draining, and Membrane-backed Opus
+  WebRTC output remain next; no browser-runnable two-human path is claimed yet.
+- Verification after replacement: the Gateway suite passes 71 tests with four tagged integration
+  exclusions; the Call Engine suite remains at 319 tests with one tagged integration exclusion.
+  A fresh database-backed umbrella run passes across all seven child applications. Formatting,
+  warnings-as-errors compilation, strict Credo, and the unused-dependency check pass. The
+  disposable PostgreSQL container used for the umbrella run was removed afterward.
