@@ -1111,6 +1111,11 @@ Gateway consumes that token only after validating an RFC-compliant WebSocket upg
 or malformed token receives the same not-found response. An invalid upgrade does not consume a
 valid token. Only the resolved binding—not the token or request data—crosses into the socket
 process, whose frame and idle limits are bounded independently of webhook request limits.
+The socket first accepts Telnyx's connection preamble without changing room state, then requires a
+`start` frame whose call-control ID, call-session ID, client state, and negotiated Opus format match
+the binding. That frame pins the provider stream ID for every later media and DTMF frame. Decoded
+events are dispatched synchronously to the already-running exact leg owner; a mismatched frame,
+binary frame, or unavailable leg closes the socket instead of being guessed or rerouted.
 
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,

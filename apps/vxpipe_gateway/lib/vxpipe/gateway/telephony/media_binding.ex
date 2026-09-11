@@ -25,6 +25,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
     :provider_call_control_id,
     :provider_call_leg_id,
     :provider_call_session_id,
+    :client_state_leg_id,
     :leg
   ]
   defstruct @enforce_keys
@@ -42,6 +43,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
           provider_call_control_id: String.t(),
           provider_call_leg_id: String.t(),
           provider_call_session_id: String.t(),
+          client_state_leg_id: String.t(),
           leg: pid()
         }
 
@@ -60,7 +62,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
           binding.provider_connection_id,
           binding.provider_call_control_id,
           binding.provider_call_leg_id,
-          binding.provider_call_session_id
+          binding.provider_call_session_id,
+          binding.client_state_leg_id
         ],
         &present?/1
       )

@@ -88,8 +88,9 @@ encodes/paces 20 ms frames as the documented Telnyx `media.payload` socket envel
 WebSocket now has a supervised single-use admission primitive that pins every room and provider
 identifier to the exact live leg and revokes admission with that leg. Its bounded HTTP route
 validates the upgrade before atomically consuming the token and gives the socket only the resolved
-binding. Frame handling, room attachment, private briefing, acceptance, cleanup, and runnable
-vendor outcome remain incomplete.
+binding. The socket validates the bound call and client state on `start`, pins the resulting stream
+ID, and dispatches exact media/DTMF events to the existing leg owner. Room pipeline attachment,
+private briefing, acceptance, cleanup, and runnable vendor outcome remain incomplete.
 
 ## Specification review
 

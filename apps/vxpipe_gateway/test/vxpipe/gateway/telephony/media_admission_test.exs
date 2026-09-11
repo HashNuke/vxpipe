@@ -68,6 +68,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
       provider_call_control_id: "call-control-1",
       provider_call_leg_id: "call-leg-1",
       provider_call_session_id: "call-session-1",
+      client_state_leg_id: "leg-1",
       leg: leg
     }
   end

@@ -733,3 +733,31 @@ pipelines.
 The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the unused
 dependency check, the focused two-test HTTP contract, and the full umbrella suite against an
 isolated disposable PostgreSQL 17 instance (711 tests, 0 failures).
+
+## Checkpoint 18: exact socket frame dispatch
+
+A focused socket test first failed because the media binding lacked the internal leg identifier
+carried in Telnyx client state. The binding now pins that identifier separately from the provider's
+call-leg ID. The socket accepts the provider connection preamble, validates the `start` frame's
+call-control/session/client-state/Opus contract, pins the announced stream ID, and requires all
+later media and DTMF frames to match it. Valid decoded events go through the existing exact leg
+owner, preserving its serialized runtime correlation. Invalid text, every binary frame, and a
+failed leg dispatch close the socket; no payload is rerouted by number or looked up in PostgreSQL.
+Outbound envelopes from the Membrane sink travel back over the same socket process.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/media_socket_test.exs \
+  test/vxpipe/gateway/telephony/media_admission_test.exs \
+  test/vxpipe/gateway/http/telnyx_media_test.exs
+# 9 tests, 0 failures
+```
+
+The default live backend still rejects these newly decoded events. The next checkpoint must attach
+the live room ingress/egress and agent-output boundaries before enabling media dispatch there.
+
+The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the unused
+dependency check, the focused nine-test socket/admission/HTTP set, and the full umbrella suite
+against an isolated disposable PostgreSQL 17 instance (714 tests, 0 failures).
