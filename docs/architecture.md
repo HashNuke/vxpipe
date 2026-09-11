@@ -1056,6 +1056,23 @@ tenant, and participant identity from the claim under a database lock. Repeating
 transition is idempotent; a different incarnation or mismatched claim is unavailable rather than
 silently reassigned.
 
+Gateway's default telephony ingress handler starts one temporary OTP leg owner keyed by configured
+service plus provider and provider leg ID. That owner performs the durable claim itself, then
+serializes room startup and lifecycle projection before it accepts later callbacks. Registering
+before the claim closes the retry window between transaction commit and live ownership: concurrent
+copies await the same result and cannot start another room. A persisted `admitting` claim found
+after its live owner has disappeared is marked `startup_unknown` and is not restarted; persisted
+`running` or `failed` claims are acknowledged without repeating the call. Startup failure is also
+projected once and acknowledged rather than becoming an automatic redial signal.
+
+After admission, the leg owner verifies provider connection, call-control, leg, and session IDs on
+every normalized callback and dispatches it through the pinned in-memory claim. These later events
+do not select a definition or query PostgreSQL. Unknown or mismatched legs fail before the live
+backend. The owner is deliberately temporary under a dedicated dynamic supervisor, so an internal
+failure cannot restart a call from stale initialization data. Carrier-specific handling for the
+post-initiation event types is added with the media and call-control checkpoints; unsupported live
+events currently return an explicit processing error rather than being silently discarded.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

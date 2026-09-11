@@ -7,7 +7,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
   alias Vxpipe.CallEngine.Telephony.{Event, Webhook}
   alias Vxpipe.Gateway.HTTP.RawBody
 
-  alias Vxpipe.Gateway.Telephony.{IngressHandler, ServiceRegistry}
+  alias Vxpipe.Gateway.Telephony.{CallIngress, IngressHandler, ServiceRegistry}
   alias Vxpipe.Gateway.Telephony.Telnyx.{WebhookDecoder, WebhookVerifier}
 
   @default_maximum_body_bytes 131_072
@@ -18,7 +18,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
       Keyword.validate!(options,
         enabled: false,
         services: [],
-        handler: nil,
+        handler: {CallIngress, []},
         clock: &__MODULE__.system_time_seconds/0,
         maximum_body_bytes: @default_maximum_body_bytes
       )

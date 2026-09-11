@@ -28,7 +28,7 @@ webhook/media ingress; the development tailnet URL is not assumed publicly reach
 ## Implementation checklist
 
 - [x] Define/test the common telephony adapter contract with fake receive/dial/answer/media/DTMF/AMD/end events before vendor code.
-- [ ] Add Telnyx configured service resolution, verified ingress and provider-leg correlation through Calls/Gateway adapter boundaries.
+- [x] Add Telnyx configured service resolution, verified ingress and provider-leg correlation through Calls/Gateway adapter boundaries.
 - [ ] Implement permitted outbound dialing, media normalization and private briefing/press-1 acceptance.
 - [ ] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or definition semantics.
 - [ ] Add fixtures for vendor webhook/media authentication and a separate tagged real-provider lane using authorized test endpoints.
@@ -76,9 +76,12 @@ atomically project the returned incarnation onto both call and initial leg, or m
 without a start timestamp when room startup fails. The gateway resolves opaque ingress keys to
 application- or tenant-scoped services, authenticates before decoding, bounds request size, rejects
 provider-connection mismatches, and dispatches only safe service identity plus common events.
-Gateway-to-Calls dispatch, provider-leg ownership of the returned room incarnation, commands,
-media, and the runnable vendor outcome remain incomplete; do not mark this slice complete or check
-the second implementation item yet.
+The default Gateway handler now gives each exact incoming leg one temporary supervised owner. That
+owner serializes durable claim, ordinary room startup, and lifecycle projection; retries share it,
+and later callbacks validate the full provider identity against its in-memory pinned claim without
+another database lookup. A recovered `admitting` record without its owner becomes
+`startup_unknown` rather than restarting a crashed call. Provider-specific post-initiation
+commands, media, cleanup, and the runnable vendor outcome remain incomplete.
 
 ## Specification review
 

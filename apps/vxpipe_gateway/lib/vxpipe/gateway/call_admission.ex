@@ -3,8 +3,12 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.JoinParticipant
+  alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.{AdmissionClaim, PreparedCall}
+  alias Vxpipe.Calls.{AdmissionClaim, PreparedCall, TelephonyAdmissionClaim}
+  alias Vxpipe.Gateway.Telephony.{CallIngressBackend, IngressIdentity}
+
+  @behaviour CallIngressBackend
 
   @command_timeout_seconds 5
 
@@ -59,6 +63,31 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   def mark_failed(options, claim, reason) do
     Calls.mark_call_failed(claim, reason, options)
+  end
+
+  @impl CallIngressBackend
+  def claim_incoming(options, %IngressIdentity{} = identity, %Event{} = event) do
+    Calls.claim_incoming_telephony(identity.scope, identity.service_id, event, options)
+  end
+
+  @impl CallIngressBackend
+  def start_incoming(options, %TelephonyAdmissionClaim{} = claim) do
+    CallEngine.start_call(claim.call.plan, archive: archive_options(options))
+  end
+
+  @impl CallIngressBackend
+  def mark_incoming_started(options, claim, incarnation_id, started_at) do
+    Calls.mark_incoming_telephony_started(claim, incarnation_id, started_at, options)
+  end
+
+  @impl CallIngressBackend
+  def mark_incoming_failed(options, claim, reason) do
+    Calls.mark_incoming_telephony_failed(claim, reason, options)
+  end
+
+  @impl CallIngressBackend
+  def handle_live_event(_options, %TelephonyAdmissionClaim{}, %Event{}) do
+    {:error, :telephony_event_not_supported}
   end
 
   defp admit_running_participant(

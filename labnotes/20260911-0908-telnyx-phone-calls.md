@@ -490,3 +490,54 @@ the live provider-leg correlation in memory.
 
 The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
 umbrella test gates passed with 687 tests and zero failures.
+
+## Checkpoint 11: serialized gateway leg ownership
+
+Gateway now supplies `CallIngress` as the default handler for authenticated Telnyx events. An
+incoming event starts one temporary `Leg` process under a dedicated dynamic supervisor and unique
+registry. The process is keyed by provider, configured service, and provider leg ID, and it owns
+the Calls claim, ordinary room startup, and lifecycle projection in sequence.
+
+The first green design claimed in the HTTP process and registered the leg owner afterward. Review
+found a real race: a concurrent retry could see the committed claim before the owner existed and
+misclassify the call as abandoned. Moving the claim into the already-registered leg process closes
+that gap. Concurrent/retried initiation awaits the same process and does not claim or start again.
+After a process/VM loss, an `admitting` duplicate is marked `startup_unknown` and never restarted;
+running and failed duplicates are acknowledged without repeating the call.
+
+The leg owner retains the pinned claim in memory. Later events resolve it without another Calls or
+PostgreSQL operation, then require exact provider connection, control, leg, and session identity
+before reaching the live backend. Mismatches fail closed. The child uses `restart: :temporary`, so
+its initialization data cannot automatically repeat a call after an internal process crash.
+Startup failure is projected once and acknowledged rather than treated as permission to redial.
+The current production backend explicitly rejects post-initiation events until their call-control
+and media checkpoints implement them.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/call_ingress_test.exs
+# 3 tests, 3 failures because CallIngress and LegSupervisor did not exist
+```
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/call_ingress_test.exs
+# 3 tests, 0 failures
+
+mix test test/vxpipe/gateway/telephony/call_ingress_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/http/endpoint_test.exs
+# 25 tests, 0 failures
+```
+
+The remaining milestone work begins with provider command submission and media transport attached
+to this owner; it does not require moving carrier state into Room Authority.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella test gates passed with 690 tests and zero failures. The first umbrella run had one
+unrelated call-lifecycle readiness test fail; its seven-test file passed on an immediate focused
+rerun, followed by the complete clean umbrella result. No timing implementation was changed.
