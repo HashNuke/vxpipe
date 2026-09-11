@@ -3,10 +3,11 @@ defmodule Vxpipe.Gateway.Id do
 
   @prefixes %{
     connection: "conn",
-    session: "sess"
+    session: "sess",
+    telephony_leg: "tleg"
   }
 
-  @type kind :: :connection | :session
+  @type kind :: :connection | :session | :telephony_leg
 
   @spec generate(kind()) :: String.t()
   def generate(kind) when is_map_key(@prefixes, kind) do

@@ -785,3 +785,34 @@ mix test test/vxpipe/gateway/telephony/configured_service_test.exs \
 The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the unused
 dependency check, the focused nine-test configuration/webhook set, and the full umbrella suite
 against an isolated disposable PostgreSQL 17 instance (716 tests, 0 failures).
+
+## Checkpoint 20: incoming answer activation
+
+Focused tests first failed because there was no incoming-leg activator and media admission could
+not be explicitly revoked. The new provider-neutral orchestration boundary checks that configured
+provider, service, tenant scope, and provider connection match the durable claim; generates one
+internal telephony-leg ID; binds and admits the exact media socket; derives WSS from the normalized
+public HTTPS base; and submits one answer command through the configured adapter. A rejected command
+revokes its unconsumed token. The adapter contract continues to preserve unknown submission as an
+outcome rather than retrying. The service secret remains inside adapter options and the media URL
+contains only opaque ingress and admission tokens.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/incoming_leg_activation_test.exs \
+  test/vxpipe/gateway/telephony/media_admission_test.exs
+# 7 tests, 0 failures
+```
+
+This activator is intentionally tested independently before the leg lifecycle invokes it. The next
+checkpoint must inject the immutable service registry into the default handler and make successful
+room startup plus carrier activation one serialized leg transition.
+
+Formatting, compilation with warnings as errors, strict Credo, and the unused dependency check
+passed. The first full umbrella run reported one Call Engine failure while every other lane passed;
+the retained filtered output did not contain the failed assertion. Call Engine passed all 348 tests
+with the exact seed on immediate isolation, and a following complete umbrella run passed 719 tests
+with zero failures against the same isolated disposable PostgreSQL 17 instance. No checkpoint code
+was changed to mask the transient result.

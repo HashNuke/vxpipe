@@ -1,0 +1,40 @@
+defmodule Vxpipe.Gateway.TestTelephonyAdapter do
+  @behaviour Vxpipe.CallEngine.Telephony.Adapter
+
+  alias Vxpipe.CallEngine.Telephony.{Submission, Webhook}
+
+  @impl true
+  def answer(options, request) do
+    send(self(), {:test_telephony_answer, request})
+
+    case Keyword.fetch!(options, :api_key) do
+      "reject" ->
+        {:error, :command_rejected}
+
+      _accepted ->
+        {:ok,
+         %Submission{
+           status: :accepted,
+           provider_call_control_id: request.leg.provider_call_control_id
+         }}
+    end
+  end
+
+  @impl true
+  def dial(_options, _request), do: {:error, :not_supported}
+
+  @impl true
+  def send_media(_options, _request), do: {:error, :not_supported}
+
+  @impl true
+  def end_leg(_options, _request), do: {:error, :not_supported}
+
+  @impl true
+  def verify_webhook(_options, %Webhook{}), do: :ok
+
+  @impl true
+  def decode_webhook(_options, %Webhook{}), do: :ignore
+
+  @impl true
+  def decode_media_message(_options, _message), do: :ignore
+end

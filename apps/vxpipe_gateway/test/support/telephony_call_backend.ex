@@ -22,6 +22,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   end
 
   def backend(agent), do: {__MODULE__, agent}
+  def claim(agent), do: Agent.get(agent, & &1.claim)
   def operations(agent), do: Agent.get(agent, &Enum.reverse(&1.operations))
 
   @impl true

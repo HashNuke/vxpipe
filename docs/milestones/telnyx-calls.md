@@ -94,6 +94,10 @@ private briefing, acceptance, cleanup, and runnable vendor outcome remain incomp
 Configured Telnyx services now fail startup unless webhook verification, command credentials,
 provider connection identity, a provider-reachable TLS base URL, and a bounded media-token lifetime
 form one complete deployment configuration; secret-bearing fields are excluded from inspection.
+The isolated incoming-leg activator now binds that configuration and the pinned call incarnation to
+one internal leg ID, one media token, and one provider-neutral answer command. Rejected commands
+revoke admission and unknown submission outcomes never cause retry; the live leg owner has not yet
+adopted this activator.
 
 ## Specification review
 

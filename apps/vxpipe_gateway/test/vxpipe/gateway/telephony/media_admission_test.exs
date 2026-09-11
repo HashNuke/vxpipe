@@ -54,6 +54,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmissionTest do
              MediaAdmission.consume(context.server, "ingress-primary", token)
   end
 
+  test "allows its owner to revoke an unconsumed leg admission", context do
+    assert {:ok, token} = MediaAdmission.issue(context.server, context.binding, 60_000)
+    assert :ok = MediaAdmission.revoke(context.server, context.leg)
+
+    assert {:error, :invalid_media_token} =
+             MediaAdmission.consume(context.server, "ingress-primary", token)
+  end
+
   defp media_binding(leg) do
     %MediaBinding{
       provider: :telnyx,

@@ -1023,6 +1023,13 @@ vocabulary are acknowledged without dispatch. This is only the provider ingress 
 admission, event deduplication, and exact call/participant/leg correlation are owned by Calls and
 are not implied by authentication or decoding alone.
 
+Incoming leg activation derives one internal telephony-leg ID, constructs the exact media binding,
+issues its short-lived token, and submits one provider-neutral answer command through the pinned
+service adapter. The public HTTPS base becomes WSS while preserving its deployment path prefix.
+If command submission is rejected or the binding does not match the configured provider/service/
+tenant/connection, activation revokes the unconsumed media admission. An unknown carrier submission
+outcome remains a submitted outcome and is resolved only by later exact-leg events; it is not retried.
+
 Saving a definition now derives a separate durable inbound telephony route for each human
 `receive`/`start_call` connection whose service is not `web`. The route binds the immutable
 definition revision and participant ref to the configured service ref plus literal E.164 number;

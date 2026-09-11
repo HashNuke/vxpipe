@@ -42,6 +42,12 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
 
   def consume(_server, _ingress_key, _token), do: {:error, :invalid_media_token}
 
+  @spec revoke(pid()) :: :ok
+  def revoke(leg) when is_pid(leg), do: revoke(__MODULE__, leg)
+
+  @spec revoke(GenServer.server(), pid()) :: :ok
+  def revoke(server, leg) when is_pid(leg), do: GenServer.call(server, {:revoke, leg})
+
   @impl true
   def init(options) do
     options = Keyword.validate!(options, clock: fn -> System.monotonic_time(:millisecond) end)
@@ -69,6 +75,16 @@ defmodule Vxpipe.Gateway.Telephony.MediaAdmission do
       {:ok, entry} -> consume_entry(ingress_key, token, entry, state)
       :error -> {:reply, {:error, :invalid_media_token}, state}
     end
+  end
+
+  def handle_call({:revoke, leg}, _from, state) do
+    state =
+      case Map.fetch(state.tokens_by_leg, leg) do
+        {:ok, token} -> drop_entry(state, token)
+        :error -> state
+      end
+
+    {:reply, :ok, state}
   end
 
   @impl true
