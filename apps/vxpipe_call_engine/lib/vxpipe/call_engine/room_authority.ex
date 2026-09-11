@@ -216,8 +216,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     AgentTransfer.prepared(reference, preparation, state)
   end
 
-  def handle_info({reference, {:error, _reason}}, state) when is_reference(reference) do
-    AgentTransfer.preparation_failed(reference, state)
+  def handle_info({reference, {:error, reason}}, state) when is_reference(reference) do
+    AgentTransfer.preparation_failed(reference, reason, state)
   end
 
   def handle_info({:vxpipe_agent_transfer_deadline, reference}, state)
@@ -415,7 +415,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
-    case AgentTransfer.preparation_down(monitor, state) do
+    case AgentTransfer.preparation_down(monitor, reason, state) do
       {:handled, state} ->
         {:noreply, state}
 

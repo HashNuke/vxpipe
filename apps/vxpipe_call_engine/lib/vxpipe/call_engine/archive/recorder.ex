@@ -173,6 +173,13 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     %{recorder | port: Port.emit_event(recorder.port, event, attributes)}
   end
 
+  @doc false
+  @spec internal_fact(t(), atom(), keyword()) :: t()
+  def internal_fact(%__MODULE__{} = recorder, kind, attributes)
+      when is_atom(kind) and is_list(attributes) do
+    emit(recorder, kind, attributes)
+  end
+
   defp emit(recorder, kind, attributes) do
     %{recorder | port: Port.emit(recorder.port, kind, attributes)}
   end

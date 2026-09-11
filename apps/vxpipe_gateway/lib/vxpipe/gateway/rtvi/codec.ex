@@ -160,7 +160,7 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
 
   @spec encode_event(ToolCallFailed.t(), :metadata | :full) :: {:ok, binary()}
   def encode_event(%ToolCallFailed{} = event, visibility) when visibility in [:metadata, :full] do
-    result = if visibility == :full, do: %{"error" => Atom.to_string(event.reason)}, else: nil
+    result = if visibility == :full, do: %{"error" => public_tool_failure(event)}, else: nil
     {:ok, encode_tool_call_stopped(event, false, result)}
   end
 
@@ -169,6 +169,9 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
       when visibility in [:metadata, :full] do
     {:ok, encode_tool_call_stopped(event, true, nil)}
   end
+
+  defp public_tool_failure(%ToolCallFailed{name: "transfer"}), do: "tool_failed"
+  defp public_tool_failure(%ToolCallFailed{reason: reason}), do: Atom.to_string(reason)
 
   @spec encode_interruption_context(AgentTurnInterrupted.t()) :: {:ok, binary()}
   def encode_interruption_context(%AgentTurnInterrupted{} = event) do

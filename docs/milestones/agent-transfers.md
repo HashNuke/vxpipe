@@ -31,7 +31,7 @@ commit, while the source retains conversation.
 - [x] Integrate private destination history/variable projection and source termination after commit.
 - [x] Preserve a re-entering agent's participant identity while creating a fresh activation and rebinding its private tool authority.
 - [ ] Implement total deadline, late-result exclusion, typed failures and single restoration budget.
-- [ ] Emit private transfer history and safe client outcomes without adding new RTVI-core messages.
+- [x] Emit private transfer history and safe client outcomes without adding new RTVI-core messages.
 
 ## Acceptance and failure checks
 
@@ -195,6 +195,25 @@ this completes the re-entry acceptance item. The complete Call Engine suite rema
 tests with one tagged integration exclusion; root formatting, warnings-as-errors compilation,
 strict Credo, and unused-dependency checks pass. Root tests stop at the unchanged missing
 PostgreSQL SCRAM password before database-backed suites begin.
+
+The transfer event-boundary checkpoint adds private, protocol-neutral
+`participant_transfer_started`, `participant_transfer_completed`, and
+`participant_transfer_failed` archive facts. These facts originate only after room authorization,
+retain the source participant and activation plus caller, invocation, and destination identities,
+and distinguish closed internal preparation causes such as destination-plan unavailability and
+total-deadline expiry. They are separate from the ordinary model-facing tool lifecycle, so no new
+RTVI-core message or client authority was introduced. The successful and failed room flows prove
+the private facts and their activation attribution; the controlled deadline flow proves its
+distinct internal cause. Gateway full visibility now forces every `transfer` tool failure to the
+generic `tool_failed` result even if a future engine event accidentally carries an internal atom.
+The focused Call Engine transfer file passes eight tests and the focused Gateway projection file
+passes four tests. A Calls-owned projection test proves all three private fact kinds cross the
+engine/storage boundary instead of being dropped by its closed vocabulary; the complete Calls suite
+passes 37 tests. The complete Call Engine suite passes 277 tests with one tagged integration
+exclusion, and Gateway passes 67 with four exclusions. Root formatting, warnings-as-errors
+compilation, strict Credo, and unused-dependency checks pass. Root tests stop at the unchanged
+missing PostgreSQL SCRAM password before the database-backed suites begin. The single restoration
+budget remains open.
 
 ## Specification review
 

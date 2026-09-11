@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     Cleanup,
     Committer,
     DestinationParticipant,
+    History,
     Pending,
     Preparation
   }
@@ -47,6 +48,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
       MapSet.member?(state.activated_agent_participant_ids, destination.participant_id)
 
     destination = DestinationParticipant.materialize(destination, previously_activated?)
+    state = History.started(state, request)
 
     case RoomTransferSupervisor.prepare(
            request.incarnation_id,
@@ -77,6 +79,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
         {:noreply, %{state | pending_agent_transfer: pending}}
 
       {:error, :unavailable} ->
+        state = History.failed(state, request, :preparation_supervisor_unavailable)
         {:reply, {:error, :unavailable}, state}
     end
   end
@@ -92,11 +95,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     cond do
       deadline_elapsed?(pending) ->
         Cleanup.discard(preparation, state)
-        fail_pending(pending, %{state | pending_agent_transfer: nil})
+        fail_pending(pending, :deadline_elapsed, %{state | pending_agent_transfer: nil})
 
       Authorizer.authorize(pending.request, state) != :ok ->
         Cleanup.discard(preparation, state)
-        reject_pending(pending, %{state | pending_agent_transfer: nil})
+
+        reject_pending(pending, :source_authority_changed, %{
+          state
+          | pending_agent_transfer: nil
+        })
 
       true ->
         commit_prepared(pending, preparation, state)
@@ -108,17 +115,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     {:noreply, state}
   end
 
-  @spec preparation_failed(reference(), State.t()) :: {:noreply, State.t()}
+  @spec preparation_failed(reference(), History.failure_cause(), State.t()) ::
+          {:noreply, State.t()}
   def preparation_failed(
         reference,
+        reason,
         %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
       ) do
     settle_task(pending)
     Cleanup.discard_destination(pending.request)
-    fail_pending(pending, %{state | pending_agent_transfer: nil})
+    fail_pending(pending, reason, %{state | pending_agent_transfer: nil})
   end
 
-  def preparation_failed(_reference, %State{} = state), do: {:noreply, state}
+  def preparation_failed(_reference, _reason, %State{} = state), do: {:noreply, state}
 
   @spec deadline_elapsed(reference(), State.t()) :: {:noreply, State.t()}
   def deadline_elapsed(
@@ -128,23 +137,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     _ = RoomTransferSupervisor.terminate(pending.request.incarnation_id, pending.task.pid)
     Process.demonitor(reference, [:flush])
     Cleanup.discard_destination(pending.request)
-    fail_pending(pending, %{state | pending_agent_transfer: nil})
+    fail_pending(pending, :deadline_elapsed, %{state | pending_agent_transfer: nil})
   end
 
   def deadline_elapsed(_reference, %State{} = state), do: {:noreply, state}
 
-  @spec preparation_down(reference(), State.t()) :: {:handled, State.t()} | :unhandled
+  @spec preparation_down(reference(), term(), State.t()) :: {:handled, State.t()} | :unhandled
   def preparation_down(
         reference,
+        _reason,
         %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
       ) do
     cancel_timer(pending.timer)
     Cleanup.discard_destination(pending.request)
+    state = History.failed(state, pending.request, :preparation_process_down)
     GenServer.reply(pending.from, {:error, :unavailable})
     {:handled, %{state | pending_agent_transfer: nil}}
   end
 
-  def preparation_down(_reference, %State{}), do: :unhandled
+  def preparation_down(_reference, _reason, %State{}), do: :unhandled
 
   @spec teardown_source(State.t(), pid(), Context.t()) :: State.t()
   def teardown_source(%State{} = state, capability, %Context{} = context)
@@ -185,12 +196,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     System.monotonic_time(:millisecond) >= pending.deadline_ms
   end
 
-  defp fail_pending(pending, state) do
+  defp fail_pending(pending, cause, state) do
+    state = History.failed(state, pending.request, cause)
     GenServer.reply(pending.from, {:error, :unavailable})
     {:noreply, state}
   end
 
-  defp reject_pending(pending, state) do
+  defp reject_pending(pending, cause, state) do
+    state = History.failed(state, pending.request, cause)
     GenServer.reply(pending.from, {:error, :rejected})
     {:noreply, state}
   end

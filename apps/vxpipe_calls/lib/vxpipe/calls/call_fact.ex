@@ -25,6 +25,9 @@ defmodule Vxpipe.Calls.CallFact do
     :tool_call_completed,
     :tool_call_failed,
     :tool_call_cancelled,
+    :participant_transfer_started,
+    :participant_transfer_completed,
+    :participant_transfer_failed,
     :usage_observed,
     :archive_stream_closed
   ]

@@ -306,3 +306,36 @@
   Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   Root `mix test` again stops before database-backed test execution because this shell lacks the
   PostgreSQL SCRAM password; no credential source was inspected.
+
+## 2026-09-11 — private transfer history and safe client failure
+
+- Added the room and Gateway tests first. The transfer-room file failed twice while waiting for
+  missing private `participant_transfer_started` facts. The Gateway projection test failed because
+  full visibility encoded the synthetic internal `destination_participant_unavailable` atom.
+- Room Authority now records a private start fact only after it authorizes the current source and
+  accepts the transfer attempt. Successful commit and every terminal preparation path record one
+  corresponding completed or failed fact. These facts carry the source participant/activation,
+  caller, command/correlation/tool-call IDs, and pinned source/destination definition and
+  participant identities.
+- A dedicated `AgentTransfer.History` module owns the private transfer fact schema. Archive Recorder
+  only supplies its generic internal-fact boundary; public event publication and RTVI do not learn
+  the private schema.
+- Destination preparation now reports a closed internal failure category for plan construction,
+  participant startup, or TTS startup. Room-owned paths add deadline, preparation-supervisor,
+  preparation-process, and changed-source-authority categories. Unknown values collapse to the
+  closed process-failure category rather than archiving arbitrary provider terms.
+- Model/agent behavior remains deliberately generic: the platform tool still returns
+  `tool_failed`. Gateway now also forces a failed tool named `transfer` to that generic result under
+  full visibility, preventing a future detailed internal atom from reaching the sample/debug UI.
+  Other tools retain their existing configured full-error projection.
+- Green evidence covers successful transfer history, destination-plan failure history, and a
+  distinct total-deadline failure cause in the eight-test Call Engine transfer file. The focused
+  Gateway projection file passes four tests. Cross-application review then found the Calls-owned
+  closed fact vocabulary rejected the new kinds. A new focused projection test failed with
+  `invalid_call_fact`; adding the three private kinds made it green and the complete Calls suite
+  passes 37 tests. The complete Call Engine suite passes 277 tests with one tagged integration
+  exclusion; Gateway passes 67 tests with four exclusions. Root formatting, warnings-as-errors
+  compilation, strict Credo, and unused-dependency checks pass. Root `mix test` reaches the
+  unchanged Persistence setup failure because PostgreSQL SCRAM authentication has no password in
+  this shell; no credential source was inspected. No restoration mechanism is claimed by this
+  checkpoint because agent-to-agent preparation has not stopped the still-working source.

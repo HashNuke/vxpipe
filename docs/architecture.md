@@ -1660,6 +1660,15 @@ credential/header exclusions still apply even to full tool visibility.
 The detailed failed-transfer restoration reason is also internal-only: full
 visibility, including samples, cannot expose it through debug tool payloads.
 
+Room-authoritative transfer history is a separate private archive projection. After current-source
+authorization, the engine records `participant_transfer_started` and exactly one terminal
+`participant_transfer_completed` or `participant_transfer_failed` fact with source participant and
+activation, caller, invocation, and pinned destination identity. Failed facts use a closed internal
+cause taxonomy; they are not RTVI events. The ordinary client/model tool lifecycle remains the
+interoperability surface, and every failed `transfer` projection is generic even under full tool
+visibility. This separation preserves operational evidence without granting a browser access to
+internal preparation or restoration causes.
+
 The gateway now implements this boundary for the trusted definition-driven call
 path. Schema `20260910.01` validates the definition policy and resolves participant
 definition keys to runtime participant IDs in the immutable call plan. Trusted

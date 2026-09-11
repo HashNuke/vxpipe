@@ -58,7 +58,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
     variables = CallVariables.whereis(room.incarnation_id)
 
     assert [{source_activation, _value}] =
@@ -101,6 +101,24 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                       }
                     }},
                    2_000
+
+    assert_archived_transfer(
+      :participant_transfer_started,
+      reception,
+      caller,
+      billing,
+      "transfer-to-billing",
+      %{}
+    )
+
+    assert_archived_transfer(
+      :participant_transfer_completed,
+      reception,
+      caller,
+      billing,
+      "transfer-to-billing",
+      %{"outcome" => "completed"}
+    )
 
     assert is_pid(AgentActivationSupervisor.whereis_child(billing.activation_id, :session))
     assert CallVariables.whereis(room.incarnation_id) == variables
@@ -306,7 +324,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
     attach_caller(plan, room, caller)
 
     first = send_command(plan, room, caller, "Please try billing.")
@@ -330,6 +348,27 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                       reason: :tool_failed
                     }},
                    2_000
+
+    assert_archived_transfer(
+      :participant_transfer_started,
+      reception,
+      caller,
+      billing,
+      "failed-transfer-to-billing",
+      %{}
+    )
+
+    assert_archived_transfer(
+      :participant_transfer_failed,
+      reception,
+      caller,
+      billing,
+      "failed-transfer-to-billing",
+      %{
+        "cause" => "destination_plan_unavailable",
+        "outcome" => "failed"
+      }
+    )
 
     reply_to_next_request("The transfer could not be completed.")
     reply_to_next_request("I am still available to help.")
@@ -370,7 +409,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
     attach_caller(plan, room, caller)
 
     initial = send_command(plan, room, caller, "Please try billing.")
@@ -424,6 +463,24 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                     }},
                    3_000
 
+    assert_archived_transfer(
+      :participant_transfer_started,
+      reception,
+      caller,
+      billing,
+      "timed-transfer-to-billing",
+      %{}
+    )
+
+    assert_archived_transfer(
+      :participant_transfer_failed,
+      reception,
+      caller,
+      billing,
+      "timed-transfer-to-billing",
+      %{"cause" => "deadline_elapsed", "outcome" => "failed"}
+    )
+
     reply_to_next_request("The transfer could not be completed.")
 
     assert is_pid(AgentActivationSupervisor.whereis_child(reception.activation_id, :session))
@@ -461,15 +518,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     billing = Map.fetch!(plan.participants, "billing")
     billing_participant_id = billing.participant_id
 
-    archive = [
-      enabled: true,
-      writer: {TestCollectingArchiveWriter, self()},
-      maximum_pending_facts: 64,
-      retry_delay_ms: 5,
-      drain_timeout_ms: 1_000
-    ]
-
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive)
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
     attach_caller(plan, room, caller)
 
     transfer_through_model(
@@ -842,6 +891,63 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
           "timed out waiting for archived participant join #{participant_id} / #{activation_id}"
         )
     end
+  end
+
+  defp assert_archived_transfer(
+         kind,
+         source,
+         caller,
+         destination,
+         tool_call_id,
+         additional_payload
+       ) do
+    receive do
+      {:test_archive_fact,
+       %Fact{
+         kind: ^kind,
+         participant_id: source_participant_id,
+         activation_id: source_activation_id,
+         source_participant_id: caller_participant_id,
+         tool_call_id: ^tool_call_id,
+         public_sequence: nil,
+         payload: payload
+       }} ->
+        assert source_participant_id == source.participant_id
+        assert source_activation_id == source.activation_id
+        assert caller_participant_id == caller.participant_id
+
+        assert payload ==
+                 Map.merge(
+                   %{
+                     "destination_definition_key" => destination.definition_key,
+                     "destination_participant_id" => destination.participant_id,
+                     "source_definition_key" => source.definition_key
+                   },
+                   additional_payload
+                 )
+
+      {:test_archive_fact, %Fact{}} ->
+        assert_archived_transfer(
+          kind,
+          source,
+          caller,
+          destination,
+          tool_call_id,
+          additional_payload
+        )
+    after
+      2_000 -> flunk("timed out waiting for archived #{kind} fact")
+    end
+  end
+
+  defp archive_options do
+    [
+      enabled: true,
+      writer: {TestCollectingArchiveWriter, self()},
+      maximum_pending_facts: 64,
+      retry_delay_ms: 5,
+      drain_timeout_ms: 1_000
+    ]
   end
 
   defp reply_to_next_request(text) do

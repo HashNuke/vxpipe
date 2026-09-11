@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
     State
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{Pending, Preparation}
+  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{History, Pending, Preparation}
 
   @spec commit(Pending.t(), Preparation.t(), State.t()) :: {map(), State.t()}
   def commit(%Pending{} = pending, %Preparation{} = preparation, %State{} = state) do
@@ -59,6 +59,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
         text_to_speech_capability: Startup.activate_text_to_speech(preparation.text_to_speech)
     }
 
+    state = History.completed(state, request)
     state = start_first_message(state, request.caller_participant_id)
 
     _ = Startup.discard_text_to_speech(source_text_to_speech, state)

@@ -8,6 +8,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{Preparation, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
+  @type failure_reason ::
+          :destination_participant_unavailable
+          | :destination_plan_unavailable
+          | :destination_text_to_speech_unavailable
+
   @spec prepare(
           Request.t(),
           Runtime.t(),
@@ -15,7 +20,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
           boolean(),
           [Vxpipe.AgentRuntime.Message.t()]
         ) ::
-          {:ok, Preparation.t()} | {:error, :unavailable}
+          {:ok, Preparation.t()} | {:error, failure_reason()}
   def prepare(
         %Request{} = request,
         %Runtime{} = runtime,
@@ -24,23 +29,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
         initial_messages
       )
       when is_boolean(first_activation?) and is_list(initial_messages) do
-    with {:ok, %AgentDestination{} = destination} <-
-           destination(request, runtime, participant, initial_messages),
-         {:ok, %ParticipantPreparation{} = participant} <-
-           ParticipantLifecycle.prepare(
-             destination.command,
-             request.incarnation_id,
-             agent_activation: destination.agent_activation
-           ) do
-      prepare_text_to_speech(
-        request,
-        runtime,
-        destination,
-        participant,
-        first_activation?
-      )
-    else
-      {:error, _reason} -> {:error, :unavailable}
+    case destination(request, runtime, participant, initial_messages) do
+      {:ok, %AgentDestination{} = destination} ->
+        prepare_participant(request, runtime, destination, first_activation?)
+
+      {:error, _reason} ->
+        {:error, :destination_plan_unavailable}
+    end
+  end
+
+  defp prepare_participant(request, runtime, destination, first_activation?) do
+    case ParticipantLifecycle.prepare(
+           destination.command,
+           request.incarnation_id,
+           agent_activation: destination.agent_activation
+         ) do
+      {:ok, %ParticipantPreparation{} = participant} ->
+        prepare_text_to_speech(
+          request,
+          runtime,
+          destination,
+          participant,
+          first_activation?
+        )
+
+      {:error, _reason} ->
+        {:error, :destination_participant_unavailable}
     end
   end
 
@@ -83,7 +97,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
 
       {:error, _reason} ->
         _ = ParticipantLifecycle.discard(participant, request.incarnation_id)
-        {:error, :unavailable}
+        {:error, :destination_text_to_speech_unavailable}
     end
   end
 end

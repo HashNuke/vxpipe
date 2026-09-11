@@ -62,6 +62,29 @@ defmodule Vxpipe.Gateway.RTVI.ToolProjectionTest do
            }
   end
 
+  test "keeps internal transfer failure details out of full client visibility" do
+    policy = %ToolVisibility{default: :full, overrides: %{}}
+
+    event = %{
+      failed_event("part-reception")
+      | name: "transfer",
+        reason: :destination_participant_unavailable
+    }
+
+    assert {:ok, encoded} = ToolProjection.encode(event, policy)
+
+    assert %{
+             "type" => "llm-function-call-stopped",
+             "data" => %{
+               "tool_call_id" => "tool-1",
+               "function_name" => "transfer",
+               "result" => %{"error" => "tool_failed"}
+             }
+           } = JSON.decode!(encoded)
+
+    refute encoded =~ "destination_participant_unavailable"
+  end
+
   defp started_event(participant_id) do
     fields(participant_id)
     |> Map.put(:arguments, %{"customer_id" => "customer-1"})
