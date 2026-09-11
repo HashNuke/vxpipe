@@ -10,7 +10,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     MediaBinding,
     MediaSupervisor,
     OutgoingLegDialer,
-    OutgoingLegIdentity
+    OutgoingLegIdentity,
+    OutgoingLegLifecycle
   }
 
   @spec start_link(keyword()) :: GenServer.on_start()
@@ -39,6 +40,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   @spec dispatch(pid(), Event.t(), timeout()) :: :ok | {:error, term()}
   def dispatch(leg, %Event{} = event, timeout) when is_pid(leg) do
     GenServer.call(leg, {:event, event}, timeout)
+  catch
+    :exit, _reason -> {:error, :telephony_leg_unavailable}
+  end
+
+  @spec disconnect(pid(), timeout()) :: :ok | {:error, :telephony_leg_unavailable}
+  def disconnect(leg, timeout) when is_pid(leg) do
+    GenServer.call(leg, :disconnect, timeout)
   catch
     :exit, _reason -> {:error, :telephony_leg_unavailable}
   end
@@ -90,6 +98,24 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   def handle_call(:await, from, state) do
     {:noreply, %{state | waiters: [from | state.waiters]}}
   end
+
+  def handle_call(
+        :disconnect,
+        _from,
+        %{binding: %MediaBinding{} = binding, status: :accepted} = state
+      ) do
+    :ok =
+      OutgoingLegLifecycle.end_attempt(
+        binding,
+        state.service,
+        state.leg_id,
+        :transfer_cancelled
+      )
+
+    {:stop, :normal, :ok, state}
+  end
+
+  def handle_call(:disconnect, _from, state), do: {:stop, :normal, :ok, state}
 
   def handle_call({:event, %Event{kind: :outgoing} = event}, _from, %{status: :unknown} = state) do
     case OutgoingLegIdentity.from_event(
@@ -198,6 +224,18 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         else: {:error, :telephony_leg_mismatch}
 
     {:reply, result, state}
+  end
+
+  def handle_call(
+        {:event, %Event{kind: kind} = event},
+        _from,
+        %{binding: %MediaBinding{} = binding, status: :accepted} = state
+      )
+      when kind in [:answered, :answering_machine, :ended] do
+    case OutgoingLegLifecycle.handle(event, binding, state.service, state.leg_id) do
+      {:keep, result} -> {:reply, result, state}
+      {:stop, result} -> {:stop, :normal, result, state}
+    end
   end
 
   def handle_call({:event, _event}, _from, state) do

@@ -30,7 +30,7 @@ webhook/media ingress; the development tailnet URL is not assumed publicly reach
 - [x] Define/test the common telephony adapter contract with fake receive/dial/answer/media/DTMF/AMD/end events before vendor code.
 - [x] Add Telnyx configured service resolution, verified ingress and provider-leg correlation through Calls/Gateway adapter boundaries.
 - [x] Implement permitted outbound dialing, media normalization and private briefing/press-1 acceptance.
-- [ ] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or definition semantics.
+- [x] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or definition semantics.
 - [ ] Add fixtures for vendor webhook/media authentication and a separate tagged real-provider lane using authorized test endpoints.
 
 ## Acceptance and failure checks
@@ -212,6 +212,48 @@ seven-test owning file immediately passed at the same seed.
 
 Exact machine/end-event handling and carrier hangup remain pending within the AMD/cleanup
 checklist item.
+
+## Checkpoint 38: exact outbound lifecycle and cleanup
+
+The outgoing owner now consumes authenticated `answered`, answering-machine, and ended events only
+when every carrier identifier matches its bound leg. A configured machine result submits exactly
+one common end-leg command for that known call-control ID and retires the owner. Human or unknown
+classification keeps waiting for explicit press-1 within the existing transfer deadline. Detection
+events are non-operative when the service disabled detection. Busy, no-answer, timeout, failure and
+ordinary hangup all retire locally without sending a redundant provider hangup.
+
+Explicit engine cleanup now asks the owner to end a known accepted leg before it exits. If the
+owner is already gone or never acquired complete carrier identity, the connector limits cleanup to
+that local temporary child. Provider command rejection/unknown outcomes never trigger another dial.
+
+The full seam test enables detection on the tenant service, begins the ordinary private transfer,
+delivers exact machine evidence, observes one hangup, and then observes the existing generic
+`tool_failed` result while the source agent remains active. The engine still sees only monitored
+owner loss; it neither receives the provider event nor learns carrier-specific detail.
+
+Red evidence:
+
+```text
+mix test test/vxpipe/gateway/telephony/outgoing_leg_test.exs
+# 7 tests, 3 failures: lifecycle events were unsupported
+# 8 tests, 1 failure: connector cleanup retired locally without an end command
+```
+
+Focused green evidence:
+
+```text
+mix test test/vxpipe/gateway/telephony/outgoing_leg_test.exs \
+  test/vxpipe/gateway/telephony/outbound_phone_transfer_test.exs
+# 11 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
+One loaded umbrella run hit a timing-sensitive Gateway failure that did not reproduce in its complete
+175-test owning app at the same seed. A clean root repeat then passed all seven lanes—754 tests with
+zero failures.
+
+The remaining milestone work is deterministic signed-webhook/whole-call harness coverage and an
+authorized tagged real-provider lane.
 
 ## Specification review
 

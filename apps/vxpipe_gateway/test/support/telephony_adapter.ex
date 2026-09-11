@@ -43,7 +43,15 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
   def send_media(_options, _request), do: {:error, :not_supported}
 
   @impl true
-  def end_leg(_options, _request), do: {:error, :not_supported}
+  def end_leg(options, request) do
+    send(observer(options), {:test_telephony_end_leg, request})
+
+    {:ok,
+     %Submission{
+       status: :accepted,
+       provider_call_control_id: request.leg.provider_call_control_id
+     }}
+  end
 
   @impl true
   def verify_webhook(_options, %Webhook{}), do: :ok

@@ -1173,8 +1173,9 @@ responses use that same registration-before-bind operation.
 Call Engine initiates a dial transfer only through a narrow host-supplied outbound-leg connector.
 The engine resolves the participant's literal number or direct protected creation-time Call
 Variable from the immutable plan, builds one request containing the exact tenant, actor, call,
-room incarnation, participant, service, destination, and AMD mode, and gives the connector only
-the remaining shared transfer deadline. The model continues to select only a participant ref.
+room incarnation, participant, service, and destination, and gives the connector only the remaining
+shared transfer deadline. The configured service—not the room request—owns the provider detection
+mode. The model continues to select only a participant ref.
 Provider configuration and submission stay behind the embedding transport implementation. A
 successful connector call yields an opaque cleanup handle retained by the pending human
 preparation; expiry or failed preparation disconnects that handle, while successful transfer
@@ -1202,6 +1203,16 @@ or room-mix egress exists yet. The attached media-session process reports readin
 acceptance because it is the exact process Room Authority recorded as the connection owner; the
 dial owner, webhook process, caller, source agent, and any other socket cannot substitute for it.
 Duplicate control from the same session is idempotent for that attempt.
+
+Authenticated lifecycle events are accepted only when their full carrier identity matches that
+outbound owner's binding. With configured detection, a machine result submits one provider-neutral
+end command for the exact known call-control ID and then retires the temporary owner. Human and
+unknown results keep the original acceptance deadline unchanged; a detection event is non-operative
+when detection is disabled. Busy, no-answer, timeout, failed and ordinary carrier-ended events retire
+the local owner without sending a redundant hangup. Room Authority observes owner loss and uses its
+existing generic failed-transfer path, retaining the source and hiding provider detail. Explicit
+engine cleanup of an accepted pending leg submits one exact end command before retiring it; an
+unknown/unbound attempt can only be cleaned up locally. None of these paths redials.
 
 After the private briefing has completed and the destination has accepted, the room applies the
 privacy barrier, commits the human transfer, and sends the promoted attachment to that same media

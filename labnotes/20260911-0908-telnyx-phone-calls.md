@@ -1465,3 +1465,47 @@ unchanged owning file immediately passed all seven tests with seed `466793`.
 
 The configuration is now pinned correctly, but the outgoing owner does not yet act on machine or
 ended events. That is the next red-green checkpoint.
+
+## Checkpoint 38: lifecycle events end only the exact outbound attempt
+
+Three focused tests first showed that the accepted outgoing owner rejected `answering_machine` and
+`ended` as unsupported. A fourth red test showed that engine cleanup terminated the supervised
+child with `:shutdown` without asking the carrier to end a known accepted leg.
+
+A dedicated `OutgoingLegLifecycle` now owns the event/action decision separately from the leg
+GenServer. It validates the full `MediaBinding` before acting. `answered`, human detection and
+unknown detection keep the owner. A machine result acts only when its configured service selected
+`:detect`: it sends one `EndLeg` using the opaque internal leg ID and exact provider call-control ID,
+then stops normally. Any normalized ended reason stops normally without a second provider command.
+Disabled detection ignores even a machine event, and mismatched lifecycle evidence is rejected.
+
+`OutgoingLeg.disconnect/2` gives engine cleanup a bounded owner call. A known accepted binding sends
+one end command with `:transfer_cancelled` before stopping; an unknown/unbound attempt has no safe
+carrier command identity and stops locally. The connector falls back to terminating only the exact
+supervised child if its owner is already unavailable. End-command errors remain no-retry cleanup;
+they cannot keep a stale local attempt authoritative.
+
+The Gateway/Call Engine seam test enabled detection on the configured tenant service and exercised
+the actual transfer tool path. Exact machine evidence produced one end command and normal owner
+exit. Room Authority's existing monitor converted that into the generic `tool_failed` event and
+kept the source agent active. No second hangup was produced when cleanup encountered the already
+retired owner.
+
+Focused verification:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/outgoing_leg_test.exs \
+  test/vxpipe/gateway/telephony/outbound_phone_transfer_test.exs
+# 11 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+The first loaded umbrella run reported one Gateway failure amid media teardown; the full unchanged
+Gateway lane immediately passed 175 tests at the same seed. A second root attempt showed the same
+non-reproducible loaded-lane symptom, so I captured a low-noise clean run to retain the exact result.
+That repeat passed all seven lanes: MCP 37, Agent Runtime 58, Call Engine 351, Calls 44, Persistence
+30, Gateway 175, and Console 59, for 754 tests and zero failures.
+
+This completes the AMD/exact-cleanup checklist item. The deterministic whole-call harness and
+authorized vendor lane remain.

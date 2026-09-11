@@ -1,8 +1,7 @@
 defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Telephony.OutboundLegRequest
-  alias Vxpipe.CallEngine.Telephony.Event
+  alias Vxpipe.CallEngine.Telephony.{EndLeg, Event, LegReference, OutboundLegRequest}
 
   alias Vxpipe.Gateway.Telephony.{
     CallIngress,
@@ -147,6 +146,94 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert {:ok, ^leg} = LegSupervisor.lookup_outgoing(leg_id)
   end
 
+  test "configured machine detection ends the exact attempted leg once", context do
+    service = service(self(), answering_machine_detection: :detect)
+    leg = start_accepted_leg(context, service)
+    monitor = Process.monitor(leg)
+
+    assert :ok = OutgoingLeg.dispatch(leg, answering_machine_event(:machine), 1_000)
+
+    assert_receive {:test_telephony_end_leg,
+                    %EndLeg{
+                      leg: %LegReference{
+                        leg_id: leg_id,
+                        provider_call_control_id: "outbound-call-control"
+                      },
+                      reason: :answering_machine
+                    }}
+
+    assert leg_id == context.leg_id
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+    refute_receive {:test_telephony_end_leg, _duplicate}
+  end
+
+  test "human and unknown detection keep waiting for explicit acceptance", context do
+    service = service(self(), answering_machine_detection: :detect)
+    leg = start_accepted_leg(context, service)
+
+    assert :ok = OutgoingLeg.dispatch(leg, answering_machine_event(:human), 1_000)
+    assert :ok = OutgoingLeg.dispatch(leg, answering_machine_event(:unknown), 1_000)
+    refute_receive {:test_telephony_end_leg, _request}
+    assert {:ok, ^leg} = LegSupervisor.lookup_outgoing(context.leg_id)
+  end
+
+  test "disabled detection and mismatched lifecycle evidence cannot end the leg", context do
+    leg = start_accepted_leg(context, service(self(), []))
+
+    assert :ok = OutgoingLeg.dispatch(leg, answering_machine_event(:machine), 1_000)
+
+    mismatched = %{
+      ended_event(:failed)
+      | provider_call_control_id: "another-call-control"
+    }
+
+    assert {:error, :telephony_leg_mismatch} = OutgoingLeg.dispatch(leg, mismatched, 1_000)
+    refute_receive {:test_telephony_end_leg, _request}
+    assert {:ok, ^leg} = LegSupervisor.lookup_outgoing(context.leg_id)
+  end
+
+  test "a carrier-ended event retires locally without a redundant hangup", context do
+    leg = start_accepted_leg(context, service(self(), []))
+    monitor = Process.monitor(leg)
+
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:busy), 1_000)
+
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+    refute_receive {:test_telephony_end_leg, _request}
+  end
+
+  test "connector cleanup ends a known exact carrier leg before retiring it", context do
+    registry = ServiceRegistry.init!(enabled: true, services: [service_options(self())])
+
+    connector = [
+      leg_id: fn -> context.leg_id end,
+      leg_supervisor: LegSupervisor,
+      media_admission: context.media_admission,
+      service_registry: registry
+    ]
+
+    assert {:ok, %OutgoingLegReference{leg: leg} = reference} =
+             OutgoingLegConnector.connect(connector, request(), 1_000)
+
+    assert_receive {:test_telephony_dial, _dial}
+    monitor = Process.monitor(leg)
+
+    assert :ok = OutgoingLegConnector.disconnect(connector, reference)
+
+    assert_receive {:test_telephony_end_leg,
+                    %EndLeg{
+                      leg: %LegReference{
+                        leg_id: leg_id,
+                        provider_call_control_id: "outbound-call-control"
+                      },
+                      reason: :transfer_cancelled
+                    }}
+
+    assert leg_id == context.leg_id
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+    refute_receive {:test_telephony_end_leg, _duplicate}
+  end
+
   defp request do
     %OutboundLegRequest{
       tenant_id: "tenantkey1234567",
@@ -182,6 +269,52 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
         adapter: Vxpipe.Gateway.TestTelephonyAdapter
       ],
       overrides
+    )
+  end
+
+  defp start_accepted_leg(context, service) do
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request(),
+               service,
+               context.media_admission
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    assert_receive {:test_telephony_dial, %{leg_id: leg_id}}
+    assert leg_id == context.leg_id
+    leg
+  end
+
+  defp answering_machine_event(result) do
+    lifecycle_event(:answering_machine,
+      answering_machine: result,
+      provider_event_id: "event-amd-#{result}"
+    )
+  end
+
+  defp ended_event(reason) do
+    lifecycle_event(:ended, end_reason: reason, provider_event_id: "event-ended-#{reason}")
+  end
+
+  defp lifecycle_event(kind, overrides) do
+    struct!(
+      Event,
+      Keyword.merge(
+        [
+          kind: kind,
+          provider: :telnyx,
+          provider_event_id: "event-lifecycle",
+          provider_connection_id: "voice-application-1",
+          provider_call_control_id: "outbound-call-control",
+          provider_call_leg_id: "outbound-call-leg",
+          provider_call_session_id: "outbound-call-session",
+          occurred_at: ~U[2026-09-11 14:30:00Z]
+        ],
+        overrides
+      )
     )
   end
 

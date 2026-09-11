@@ -14,6 +14,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
     ServiceRegistry
   }
 
+  @disconnect_timeout 5_000
+
   @impl true
   def connect(options, %OutboundLegRequest{} = request, timeout)
       when is_list(options) and is_integer(timeout) and timeout > 0 do
@@ -35,9 +37,12 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
 
   @impl true
   def disconnect(_options, %OutgoingLegReference{} = reference) do
-    case DynamicSupervisor.terminate_child(reference.supervisor, reference.leg) do
-      :ok -> :ok
-      {:error, :not_found} -> :ok
+    case OutgoingLeg.disconnect(reference.leg, @disconnect_timeout) do
+      :ok ->
+        :ok
+
+      {:error, :telephony_leg_unavailable} ->
+        stop_local_owner(reference)
     end
   catch
     :exit, _reason -> :ok
@@ -48,6 +53,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
   @impl true
   def owner(_options, %OutgoingLegReference{leg: leg}) when is_pid(leg), do: {:ok, leg}
   def owner(_options, _reference), do: {:error, :invalid_outbound_leg_reference}
+
+  defp stop_local_owner(reference) do
+    case DynamicSupervisor.terminate_child(reference.supervisor, reference.leg) do
+      :ok -> :ok
+      {:error, :not_found} -> :ok
+    end
+  end
 
   defp start_leg(options, request, service, leg_id, timeout) do
     supervisor = Keyword.get(options, :leg_supervisor, LegSupervisor)
