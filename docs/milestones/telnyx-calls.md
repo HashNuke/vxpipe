@@ -147,6 +147,11 @@ URL, and submits a single dial. Concurrent starts for the same opaque leg ID sha
 result rather than redialing. An accepted response binds its complete carrier identity to the exact
 tenant/call/incarnation/participant before media can connect; inbound-only service configuration
 fails before submission. Unknown-outcome webhook adoption and transfer control remain pending.
+An unknown immediate dial outcome can now be completed only by a signed outgoing-initiation event
+whose opaque internal leg ID locates the existing owner and whose service/from/to identity matches
+the pinned request. Mismatches do not consume the reservation. Successful response or event
+adoption registers the exact provider leg before releasing media, closing the early-media routing
+race without a retry. Transfer readiness, press-1, and cleanup remain pending.
 
 ## Specification review
 

@@ -3,7 +3,14 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   use GenServer
 
-  alias Vxpipe.Gateway.Telephony.OutgoingLegDialer
+  alias Vxpipe.CallEngine.Telephony.{Event, Submission}
+
+  alias Vxpipe.Gateway.Telephony.{
+    MediaAdmission,
+    MediaBinding,
+    OutgoingLegDialer,
+    OutgoingLegIdentity
+  }
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) do
@@ -28,6 +35,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     :exit, _reason -> {:error, :telephony_leg_unavailable}
   end
 
+  @spec dispatch(pid(), Event.t(), timeout()) :: :ok | {:error, term()}
+  def dispatch(leg, %Event{} = event, timeout) when is_pid(leg) do
+    GenServer.call(leg, {:event, event}, timeout)
+  catch
+    :exit, _reason -> {:error, :telephony_leg_unavailable}
+  end
+
   @impl true
   def init(options) do
     {:ok,
@@ -36,6 +50,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
        request: Keyword.fetch!(options, :request),
        service: Keyword.fetch!(options, :service),
        media_admission: Keyword.fetch!(options, :media_admission),
+       binding: nil,
        result: nil,
        status: :starting,
        waiters: []
@@ -51,15 +66,17 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
            state.media_admission,
            self()
          ) do
-      {:ok, status} ->
-        reply_waiters(state.waiters, :ok)
-        {:noreply, %{state | result: :ok, status: status, waiters: []}}
+      {:ok, %Submission{status: :unknown}} ->
+        {:noreply, succeed(state, :unknown, nil)}
+
+      {:ok, %Submission{status: :accepted} = submission} ->
+        case adopt_submission(state, submission) do
+          {:ok, binding} -> {:noreply, succeed(state, :accepted, binding)}
+          {:error, reason} -> {:noreply, fail(state, reason)}
+        end
 
       {:error, reason} ->
-        result = {:error, reason}
-        reply_waiters(state.waiters, result)
-        Process.send_after(self(), :retire, 1_000)
-        {:noreply, %{state | result: result, status: :failed, waiters: []}}
+        {:noreply, fail(state, reason)}
     end
   end
 
@@ -72,11 +89,101 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     {:noreply, %{state | waiters: [from | state.waiters]}}
   end
 
+  def handle_call({:event, %Event{kind: :outgoing} = event}, _from, %{status: :unknown} = state) do
+    case OutgoingLegIdentity.from_event(
+           event,
+           state.leg_id,
+           state.request,
+           state.service,
+           self()
+         ) do
+      {:ok, binding} ->
+        case register_and_bind(state, binding) do
+          :ok -> {:reply, :ok, %{state | binding: binding, status: :accepted}}
+          {:error, reason} -> {:reply, {:error, reason}, fail(state, reason)}
+        end
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(
+        {:event, %Event{kind: :outgoing} = event},
+        _from,
+        %{status: :accepted} = state
+      ) do
+    case OutgoingLegIdentity.from_event(
+           event,
+           state.leg_id,
+           state.request,
+           state.service,
+           self()
+         ) do
+      {:ok, binding} when binding == state.binding -> {:reply, :ok, state}
+      _mismatch -> {:reply, {:error, :telephony_leg_mismatch}, state}
+    end
+  end
+
+  def handle_call({:event, _event}, _from, state) do
+    {:reply, {:error, :telephony_event_not_supported}, state}
+  end
+
   @impl true
   def handle_info(:retire, %{status: :failed} = state), do: {:stop, :normal, state}
   def handle_info(:retire, state), do: {:noreply, state}
 
   defp reply_waiters(waiters, result), do: Enum.each(waiters, &GenServer.reply(&1, result))
+
+  defp succeed(state, status, binding) do
+    reply_waiters(state.waiters, :ok)
+    %{state | binding: binding, result: :ok, status: status, waiters: []}
+  end
+
+  defp fail(state, reason) do
+    result = {:error, reason}
+    :ok = MediaAdmission.revoke(state.media_admission, self())
+    reply_waiters(state.waiters, result)
+    Process.send_after(self(), :retire, 1_000)
+    %{state | result: result, status: :failed, waiters: []}
+  end
+
+  defp adopt_submission(state, submission) do
+    with {:ok, binding} <-
+           OutgoingLegIdentity.from_submission(
+             submission,
+             state.leg_id,
+             state.request,
+             state.service,
+             self()
+           ),
+         :ok <- register_and_bind(state, binding) do
+      {:ok, binding}
+    end
+  end
+
+  defp register_and_bind(state, %MediaBinding{} = binding) do
+    key = {binding.provider, binding.service_id, binding.provider_call_leg_id}
+
+    case Registry.register(Vxpipe.Gateway.Telephony.LegRegistry, key, :outgoing) do
+      {:ok, _owner} ->
+        bind_registered(state, key, binding)
+
+      {:error, {:already_registered, _owner}} ->
+        {:error, :telephony_leg_already_owned}
+    end
+  end
+
+  defp bind_registered(state, key, binding) do
+    case MediaAdmission.bind(state.media_admission, binding) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Registry.unregister(Vxpipe.Gateway.Telephony.LegRegistry, key)
+        {:error, reason}
+    end
+  end
 
   defp via(leg_id) do
     {:via, Registry, {Vxpipe.Gateway.Telephony.LegRegistry, {:outgoing, leg_id}}}

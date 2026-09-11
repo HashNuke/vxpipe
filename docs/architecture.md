@@ -1161,6 +1161,13 @@ another dial. An accepted command binds the response's complete carrier identity
 tenant, call, room incarnation, participant, and owner before media admission succeeds. An
 inbound-only service or mismatched request fails before carrier submission; a failed owner is not
 restarted by its supervisor.
+When the immediate dial result is unknown, the reservation and the same owner remain pending. A
+signed outgoing-initiation event uses only the opaque internal leg ID to locate that existing owner;
+it cannot start a leg. The owner rechecks provider, configured connection, origination number, and
+authorized destination before adopting the event's complete carrier identity. A mismatch leaves the
+pending attempt unchanged. On success, the owner registers the provider leg before binding media,
+so an early waiting media socket cannot race ahead of subsequent exact-leg event routing. Accepted
+responses use that same registration-before-bind operation.
 Gateway consumes that token only after validating an RFC-compliant WebSocket upgrade at
 `GET /api/telephony/telnyx/:ingress_key/media/:token`. A wrong ingress key, expired/reused token,
 or malformed token receives the same not-found response. An invalid upgrade does not consume a

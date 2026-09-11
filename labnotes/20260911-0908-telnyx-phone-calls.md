@@ -1212,3 +1212,38 @@ pass. The first umbrella run hit the previously recorded startup-readiness timeo
 unchanged Call Engine lifecycle test. Its owning seven-test file and the complete 348-test Call
 Engine lane passed immediately at the same seed. A clean umbrella repeat then passed all seven
 lanes—740 tests with zero failures—against the isolated PostgreSQL 17 test instance.
+
+## Checkpoint 32: unknown-outcome leg adoption
+
+An ambiguous dial response now leaves the single supervised outbound owner and media reservation
+pending. The signed outgoing-initiation webhook dispatches by the opaque internal leg ID only to
+that existing process; it cannot create or redial a destination. The owner reconstructs the exact
+binding only after provider, configured Voice connection, origination number, destination number,
+and complete carrier control/leg/session identity match its pinned request. A mismatched event is
+rejected without consuming or replacing the reservation, so the later correct event can still win.
+
+Both accepted response identity and signed-event identity now pass through one adoption boundary.
+That boundary registers the provider leg against the owner before binding the media reservation.
+Consequently an already-waiting media upgrade is released only after later answered/media/DTMF
+events can resolve back to that exact process. Provider-leg conflicts fail closed and the temporary
+process is not restarted.
+
+The focused test was first red because the outgoing webhook fell through provider-leg lookup before
+the ambiguous attempt had any provider leg. Green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/outgoing_leg_test.exs \
+  test/vxpipe/gateway/telephony/call_ingress_test.exs \
+  test/vxpipe/gateway/telephony/media_admission_test.exs
+# 17 tests, 0 failures
+```
+
+The owner still rejects ordinary outbound lifecycle/media events as unsupported. Connecting those
+events to the existing transfer-preparation contract is the next checkpoint.
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. The first umbrella run hit the previously recorded room-incarnation teardown timing assertion
+in the unchanged Call Engine create-room test. Its owning three-test file and all 348 Call Engine
+tests passed immediately at the same seed. A clean umbrella repeat then passed all seven
+lanes—741 tests with zero failures—against the isolated PostgreSQL 17 test instance.

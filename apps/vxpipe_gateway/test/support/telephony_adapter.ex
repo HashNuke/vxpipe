@@ -24,13 +24,19 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
   def dial(options, request) do
     send(observer(options), {:test_telephony_dial, request})
 
-    {:ok,
-     %Submission{
-       status: :accepted,
-       provider_call_control_id: "outbound-call-control",
-       provider_call_leg_id: "outbound-call-leg",
-       provider_call_session_id: "outbound-call-session"
-     }}
+    case Keyword.fetch!(options, :api_key) do
+      "unknown:" <> _observer ->
+        {:ok, %Submission{status: :unknown, provider_call_control_id: nil}}
+
+      _accepted ->
+        {:ok,
+         %Submission{
+           status: :accepted,
+           provider_call_control_id: "outbound-call-control",
+           provider_call_leg_id: "outbound-call-leg",
+           provider_call_session_id: "outbound-call-session"
+         }}
+    end
   end
 
   @impl true
@@ -51,6 +57,7 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
   defp observer(options) do
     case Keyword.fetch!(options, :api_key) do
       "observer:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
+      "unknown:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       _other -> self()
     end
   end

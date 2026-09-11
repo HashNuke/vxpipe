@@ -55,13 +55,9 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
 
   @spec lookup(atom(), String.t(), String.t()) :: {:ok, pid()} | {:error, :leg_not_found}
   def lookup(provider, service, provider_call_leg_id) do
-    case Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, {
-           provider,
-           service,
-           provider_call_leg_id
-         }) do
-      [{leg, _value}] -> {:ok, leg}
-      [] -> {:error, :leg_not_found}
+    case lookup_entry(provider, service, provider_call_leg_id) do
+      {:ok, leg, _kind} -> {:ok, leg}
+      {:error, :leg_not_found} = error -> error
     end
   end
 
@@ -74,9 +70,17 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
   end
 
   @spec dispatch(String.t(), Event.t(), timeout()) :: :ok | {:error, term()}
+  def dispatch(_service, %Event{kind: :outgoing} = event, timeout) do
+    with {:ok, leg} <- lookup_outgoing(event.leg_id) do
+      OutgoingLeg.dispatch(leg, event, timeout)
+    end
+  end
+
   def dispatch(service, %Event{} = event, timeout) do
-    with {:ok, leg} <- lookup(event.provider, service, event.provider_call_leg_id) do
-      Leg.dispatch(leg, event, timeout)
+    case lookup_entry(event.provider, service, event.provider_call_leg_id) do
+      {:ok, leg, :outgoing} -> OutgoingLeg.dispatch(leg, event, timeout)
+      {:ok, leg, _incoming} -> Leg.dispatch(leg, event, timeout)
+      {:error, :leg_not_found} = error -> error
     end
   end
 
@@ -101,6 +105,17 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
 
       {:error, :leg_not_found} ->
         :ok
+    end
+  end
+
+  defp lookup_entry(provider, service, provider_call_leg_id) do
+    case Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, {
+           provider,
+           service,
+           provider_call_leg_id
+         }) do
+      [{leg, kind}] -> {:ok, leg, kind}
+      [] -> {:error, :leg_not_found}
     end
   end
 end
