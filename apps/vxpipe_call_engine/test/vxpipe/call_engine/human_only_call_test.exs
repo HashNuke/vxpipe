@@ -16,7 +16,6 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.CallEngine.RoomMixer.Subscription
 
   test "starts two human entries without an agent, mixes audio, and retains call lifecycle" do
     plan = compile_plan()
@@ -103,8 +102,18 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
              )
 
     assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
-    assert_mix(Subscription.take(caller_output, 1), receiver.participant_id, receiver_audio)
-    assert_mix(Subscription.take(receiver_output, 1), caller.participant_id, caller_audio)
+
+    assert_mix(
+      CallEngine.take_room_audio(caller_output, 1),
+      receiver.participant_id,
+      receiver_audio
+    )
+
+    assert_mix(
+      CallEngine.take_room_audio(receiver_output, 1),
+      caller.participant_id,
+      caller_audio
+    )
 
     command = send_command(plan, room, caller, "conn-human-caller")
     assert {:error, %Error{code: :agent_not_ready}} = CallEngine.send_text(command)

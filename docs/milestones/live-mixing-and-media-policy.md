@@ -227,6 +227,20 @@ rejection. The pipeline contains no FFmpeg element or process. Bounded subscript
 policy-revision pipeline replacement, and live connection startup remain the next checkpoint, so
 the transport checklist and browser-runnable outcome remain open.
 
+A separate connection-scoped output coordinator now owns bounded delivery between the mixer and
+that Membrane pipeline. It subscribes only when Call Engine explicitly advertises `:mix_minus`,
+pulls at most one frame, and does not pull another until the WebRTC sink acknowledges the first.
+Availability messages received while output is not ready or a frame is in flight coalesce into one
+later drain. The coordinator is also a media-policy barrier enforcer: every later revision stops
+the old pipeline, discards its in-flight identity, starts an empty generation, and only then
+acknowledges the revision; stale acknowledgements cannot unlock the replacement. Output failure is
+reported to the owning connection and ends the coordinator. Call Engine now exposes bounded pulls
+through its façade rather than requiring Gateway to invoke mixer internals. Focused tests cover the
+disabled path, one-frame backpressure, clean policy replacement, stale acknowledgement rejection,
+and failure propagation. `Connection` startup and a two-client WebRTC verification remain open.
+If mixer subscription fails after pipeline launch, activation immediately terminates that pipeline
+instead of leaving a sibling process behind for later connection cleanup.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

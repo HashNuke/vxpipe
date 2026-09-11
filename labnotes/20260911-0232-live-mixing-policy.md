@@ -333,3 +333,32 @@
   exclusions, Agent Runtime 58 with two exclusions, Call Engine 320 with one exclusion, Calls 37,
   Persistence 25, Gateway 77 with four exclusions, and Console 57. Formatting,
   warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
+
+## 2026-09-11 — bounded mixer-output drain
+
+- Switched the human-only vertical test to a new `CallEngine.take_room_audio/2` façade first. The
+  focused red run failed with the expected undefined function; the implementation delegates to the
+  opaque subscription without exposing mixer process/token operations to Gateway.
+- Added coordinator tests before implementation. All four failed at the absent
+  `ConnectionPeerSupervisor.start_room_audio_egress/6` boundary.
+- Added a temporary connection-scoped `RoomAudioEgress` child. Its state, pipeline lifecycle, and
+  delivery decisions live in separate modules. It starts only for an engine-approved `:mix_minus`
+  attachment; direct agent TTS ownership remains unchanged.
+- The coordinator treats mixer notifications as coalesced readiness hints. It takes exactly one
+  bounded frame and waits for the Membrane sink's WebRTC delivery acknowledgement before taking the
+  next. This keeps backlog in the mixer's bounded queue instead of either process mailbox or the
+  media pipeline.
+- The coordinator registers with the existing media-policy barrier. A later revision terminates
+  the old encoder/pacer generation and starts an empty one before acknowledging. Old-generation
+  acknowledgements cannot clear or advance new output, and a current-revision check adds defense in
+  depth before pipeline push.
+- Focused tests now pass for the disabled path, one-frame-in-flight behavior, clean revision
+  replacement, stale acknowledgement rejection, and output-failure propagation. Live `Connection`
+  startup and two-browser transport verification remain next.
+- A final failure-path test showed that subscription rejection after pipeline launch left that
+  sibling alive until the connection supervisor ended. Activation now unwinds the launched
+  pipeline immediately; the five focused coordinator tests are green.
+- The complete Gateway suite passes 81 tests with four tagged integration exclusions; Call Engine
+  remains green at 320 tests with one exclusion. A fresh PostgreSQL-backed umbrella run passes all
+  seven applications, along with formatting, warnings-as-errors compilation, strict Credo, and the
+  unused-dependency check.

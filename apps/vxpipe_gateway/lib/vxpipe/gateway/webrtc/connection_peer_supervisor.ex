@@ -5,7 +5,14 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
 
   alias ExWebRTC.PeerConnection
   alias Vxpipe.CallEngine
-  alias Vxpipe.Gateway.WebRTC.{AudioEgress, AudioPipeline, RoomAudioIngress}
+
+  alias Vxpipe.Gateway.WebRTC.{
+    AudioEgress,
+    AudioPipeline,
+    RoomAudioEgress,
+    RoomAudioIngress,
+    RoomAudioOutputPipeline
+  }
 
   def start_link(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
@@ -65,6 +72,22 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
     DynamicSupervisor.terminate_child(via(connection_id), pipeline)
   end
 
+  def start_room_audio_output_pipeline(connection_id, options) do
+    pipeline_id = Keyword.fetch!(options, :pipeline_id)
+
+    child_spec = %{
+      id: {RoomAudioOutputPipeline, pipeline_id},
+      start: {RoomAudioOutputPipeline, :start_link, [options]},
+      restart: :temporary
+    }
+
+    DynamicSupervisor.start_child(via(connection_id), child_spec)
+  end
+
+  def stop_room_audio_output_pipeline(connection_id, pipeline) when is_pid(pipeline) do
+    DynamicSupervisor.terminate_child(via(connection_id), pipeline)
+  end
+
   def start_room_audio_ingress(connection_id, attachment, identity, options \\ []) do
     engine = Keyword.get(options, :engine, CallEngine)
 
@@ -113,6 +136,72 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
         else
           {:error, reason} ->
             _ = DynamicSupervisor.terminate_child(via(connection_id), ingress)
+            {:error, reason}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def start_room_audio_egress(
+        connection_id,
+        attachment,
+        identity,
+        peer_connection,
+        track_id,
+        options \\ []
+      ) do
+    engine = Keyword.get(options, :engine, CallEngine)
+
+    case engine.room_audio_output_configuration(attachment) do
+      :disabled ->
+        {:ok, nil}
+
+      {:ok, %{mode: :mix_minus}} ->
+        egress_options =
+          identity ++
+            [
+              connection_id: connection_id,
+              attachment: attachment,
+              owner: self(),
+              peer_connection: peer_connection,
+              track_id: track_id,
+              engine: engine,
+              pipeline: Keyword.get(options, :pipeline, RoomAudioOutputPipeline),
+              pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, __MODULE__),
+              pipeline_options: Keyword.get(options, :pipeline_options, [])
+            ]
+
+        start_and_register_room_audio_egress(
+          connection_id,
+          attachment,
+          engine,
+          egress_options
+        )
+
+      {:error, reason} ->
+        {:error, reason}
+
+      _invalid ->
+        {:error, :invalid_room_audio_output_configuration}
+    end
+  end
+
+  defp start_and_register_room_audio_egress(
+         connection_id,
+         attachment,
+         engine,
+         egress_options
+       ) do
+    case DynamicSupervisor.start_child(via(connection_id), {RoomAudioEgress, egress_options}) do
+      {:ok, egress} ->
+        with :ok <- RoomAudioEgress.activate(egress),
+             {:ok, _snapshot} <- engine.register_room_audio_enforcer(attachment, egress) do
+          {:ok, egress}
+        else
+          {:error, reason} ->
+            _ = DynamicSupervisor.terminate_child(via(connection_id), egress)
             {:error, reason}
         end
 

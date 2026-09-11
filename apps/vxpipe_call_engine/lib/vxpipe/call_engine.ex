@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine do
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.RoomSupervisor
   alias Vxpipe.CallEngine.RoomAudioHandle
+  alias Vxpipe.CallEngine.RoomMixer.Subscription
 
   @spec compile_definition(CallDefinition.t(), CallInvocation.t(), map(), keyword()) ::
           {:ok, ResolvedCallPlan.t()} | {:error, Error.t()}
@@ -202,6 +203,13 @@ defmodule Vxpipe.CallEngine do
 
   def subscribe_room_audio(%ConnectionAttachment{}, options) when is_list(options),
     do: {:error, :disabled}
+
+  @spec take_room_audio(Subscription.t(), pos_integer()) ::
+          {:ok, [Vxpipe.CallEngine.Media.MixedFrame.t()]} | {:error, term()}
+  def take_room_audio(%Subscription{} = subscription, maximum_frames)
+      when is_integer(maximum_frames) and maximum_frames > 0 do
+    Subscription.take(subscription, maximum_frames)
+  end
 
   @spec send_text(SendText.t()) :: :ok | {:error, Error.t()}
   def send_text(%SendText{} = command) do
