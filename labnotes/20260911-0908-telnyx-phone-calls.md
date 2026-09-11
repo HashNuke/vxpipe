@@ -946,3 +946,35 @@ mix test test/vxpipe/gateway/telephony/call_ingress_test.exs \
   test/vxpipe/gateway/telephony/telnyx/media_socket_test.exs
 # 8 tests, 0 failures
 ```
+
+## Checkpoint 25: bounded direct phone playout
+
+Direct synthesized speech could not safely reuse the WebRTC output process because that boundary
+constructs RTP headers and owns a peer connection. A new transport-neutral `Media.AudioOutput`
+coordinator instead owns project behavior: identity validation, 20 ms PCM framing, a bounded
+500-frame queue, provider backpressure, one acknowledged frame in flight, playback callbacks, and
+clean pipeline replacement on interruption. The implementation is split into state, validation,
+buffering, delivery, and pipeline-lifecycle modules rather than collecting those concerns in one
+large callback module.
+
+Telnyx supplies a dedicated Membrane pipeline using the shared PCM source, Opus encoder, realtime
+pacer, and socket sink. It emits only payload envelopes over the authenticated socket and does not
+use FFmpeg. The PCM source was extended to accept the small transport-neutral playback frame as
+well as room-mixer frames.
+
+The coordinator test was first red because neither its module nor playback-frame contract existed;
+the Telnyx pipeline test was separately red before its Membrane implementation existed. Focused
+green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/media/audio_output_test.exs \
+  test/vxpipe/gateway/media/room_audio_egress_test.exs \
+  test/vxpipe/gateway/webrtc/room_audio_output_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/audio_egress_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/audio_output_pipeline_test.exs
+# 16 tests, 0 failures
+```
+
+Root formatting, compilation with warnings as errors, and strict Credo also pass. Live-leg
+attachment and complete umbrella verification remain for the next checkpoint.

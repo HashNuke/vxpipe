@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.Media.PCMSource do
 
   alias Membrane.{Buffer, RawAudio, Time}
   alias Vxpipe.CallEngine.Media.MixedFrame
+  alias Vxpipe.Gateway.Media.PlaybackFrame
 
   @sample_rate 48_000
 
@@ -21,6 +22,14 @@ defmodule Vxpipe.Gateway.Media.PCMSource do
 
   @impl true
   def handle_parent_notification({:push, %MixedFrame{} = frame}, _context, state) do
+    push(frame, state)
+  end
+
+  def handle_parent_notification({:push, %PlaybackFrame{} = frame}, _context, state) do
+    push(frame, state)
+  end
+
+  defp push(frame, state) do
     buffer = %Buffer{
       payload: frame.payload,
       pts: div(frame.timestamp * Time.second(), frame.sample_rate)

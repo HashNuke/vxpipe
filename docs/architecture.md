@@ -1126,6 +1126,12 @@ than WebRTC components. They own engine attachment handles, media-policy revisio
 subscription/backpressure, and transport-pipeline replacement. WebRTC and telephony supply their
 own supervised pipeline lifecycle and codec-specific options; neither transport reimplements those
 room-facing semantics.
+Direct synthesized speech uses a separate transport-neutral playout coordinator. It bounds and
+reframes streamed 48 kHz mono PCM, admits only one acknowledged 20 ms transport frame at a time,
+and derives started/progress/completed or interrupted duration from transport acknowledgements.
+The Telnyx implementation supplies a Membrane Opus encoder, realtime pacer, and WebSocket sink; it
+does not invoke FFmpeg. Direct playout and mixer egress remain distinct sources because only direct
+playout owns turn callbacks, while the provider socket remains their common serialized wire sink.
 Before a provider receives a media URL, Gateway issues an opaque, expiring admission token bound to
 the exact live leg process and its tenant, call, incarnation, participant, configured service, and
 provider identifiers. The token is single-use, is valid only under that service's opaque ingress

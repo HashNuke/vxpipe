@@ -109,6 +109,11 @@ The existing policy-aware room ingress/egress coordinators have also moved from 
 to the transport-neutral Gateway media boundary, with their WebRTC behavior unchanged. Telnyx can
 therefore adopt the same policy revision, mixer subscription, and backpressure ownership while
 retaining its own Membrane codecs and socket lifecycle.
+Direct agent speech now has a transport-neutral bounded PCM playout coordinator with acknowledged
+started/progress/completed and interruption semantics. A dedicated Telnyx Membrane pipeline encodes
+and paces those exact 20 ms frames to the authenticated socket without FFmpeg. The coordinator and
+pipeline contracts pass focused framing, backpressure, interruption, failure, codec, pacing, and
+wire-envelope tests; attaching them to the live leg remains pending.
 
 ## Specification review
 
