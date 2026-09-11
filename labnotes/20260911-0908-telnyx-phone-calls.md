@@ -409,3 +409,38 @@ and live in-memory incarnation ownership remain the next checkpoint.
 The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
 umbrella test gates passed. The umbrella run covered 682 tests with zero failures and excluded only
 the existing explicitly tagged integration lanes.
+
+## Checkpoint 9: telephony planned-room startup
+
+The persisted claim could compile a telephony plan, but `PlanStartup` still rejected every
+transport except `web` and every entry caller except a web receive/start connection. Call Engine
+now accepts the closed `telephony` transport and a compiled non-web receive/start entry caller. It
+uses the ordinary planned-room supervision and lifecycle path; no carrier schema, command, or raw
+media enters room control.
+
+The focused test compiles a `20260911.03` incoming-phone definition, starts the call, observes the
+entry caller already joined under the returned room incarnation, and ends it through the pinned
+maximum-duration lifecycle timer. The first run failed with `unsupported_call_plan` at
+`transport.type`, which was the expected red boundary.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/telephony_call_startup_test.exs
+# 1 test, 0 failures
+
+mix test test/vxpipe/call_engine/telephony_call_startup_test.exs \
+  test/vxpipe/call_engine/definition_driven_call_test.exs \
+  test/vxpipe/call_engine/human_only_call_test.exs
+# 25 tests, 0 failures
+```
+
+Gateway still has to bind the claimed provider leg to the returned room incarnation and project
+the durable start. That remains the next checkpoint.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella test gates passed with 683 tests and zero failures. An initial umbrella run exposed one
+failure in the unrelated room-authority termination test; that exact file passed immediately on a
+focused rerun, and the subsequent complete umbrella run passed. No implementation change was made
+for that transient result.

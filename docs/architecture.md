@@ -1041,6 +1041,13 @@ correlation identifiers and never carrier credentials or raw webhook contents. L
 room-incarnation correlation are established by the subsequent startup boundary rather than by a
 database lookup for every provider event.
 
+The ordinary planned-room startup accepts `telephony` as a transport only after compilation has
+resolved the entry caller to a configured non-web `receive`/`start_call` connection intent. It then
+creates the same supervised room, participant, lifecycle, mixer, policy, transcript, variables, and
+agent activation tree used for web calls. This is not a provider adapter inside Room Authority:
+carrier media and control still attach at the gateway boundary using the room incarnation returned
+by startup.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

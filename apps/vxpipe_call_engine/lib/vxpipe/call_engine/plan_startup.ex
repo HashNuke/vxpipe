@@ -184,9 +184,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   defp supported_transport(%ResolvedCallPlan{transport: :web}), do: :ok
+  defp supported_transport(%ResolvedCallPlan{transport: :telephony}), do: :ok
 
   defp supported_transport(_plan) do
-    unsupported(["transport", "type"], "only web transport is supported")
+    unsupported(["transport", "type"], "must be a supported transport")
   end
 
   defp supported_connection(%ResolvedCallPlan.Participant{
@@ -194,10 +195,20 @@ defmodule Vxpipe.CallEngine.PlanStartup do
        }),
        do: :ok
 
+  defp supported_connection(%ResolvedCallPlan.Participant{
+         connection: %ConnectionIntent{
+           service: service,
+           mode: :receive,
+           admission: :start_call
+         }
+       })
+       when is_binary(service),
+       do: :ok
+
   defp supported_connection(caller) do
     unsupported(
       ["participants", caller.definition_key, "connection"],
-      "only web receive/start_call connection intent is supported"
+      "must be a supported receive/start_call connection intent"
     )
   end
 

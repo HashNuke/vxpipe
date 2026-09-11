@@ -69,13 +69,15 @@ tenant lookups remain scoped and ambiguous application-wide matches fail closed.
 normalized incoming event against that route, compiles the pinned revision for telephony transport,
 and atomically persists the call in `admitting` state with its provider leg. Exact event/leg retries
 return the original claim, while a reused event ID naming another leg fails closed and rolls back
-the attempted call. `started_at` remains empty until live room startup succeeds. The gateway
+the attempted call. `started_at` remains empty until live room startup succeeds. Call Engine's
+ordinary planned-room lifecycle now accepts the pinned telephony transport and configured
+receive/start entry caller, while continuing to reject unsupported connection intents. The gateway
 resolves opaque ingress keys to
 application- or tenant-scoped services, authenticates before decoding, bounds request size, rejects
 provider-connection mismatches, and dispatches only safe service identity plus common events.
-Gateway-to-Calls dispatch, live room/incarnation ownership, commands, media, and the runnable vendor
-outcome remain incomplete; do not mark this slice complete or check the second implementation item
-yet.
+Gateway-to-Calls dispatch, provider-leg ownership of the returned room incarnation, commands,
+media, and the runnable vendor outcome remain incomplete; do not mark this slice complete or check
+the second implementation item yet.
 
 ## Specification review
 
