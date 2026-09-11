@@ -761,3 +761,27 @@ the live room ingress/egress and agent-output boundaries before enabling media d
 The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the unused
 dependency check, the focused nine-test socket/admission/HTTP set, and the full umbrella suite
 against an isolated disposable PostgreSQL 17 instance (714 tests, 0 failures).
+
+## Checkpoint 19: complete configured-service boundary
+
+A focused configured-service test first failed because the service accepted only webhook identity
+and verification material. That was insufficient to answer or dial a leg after admission. An
+enabled Telnyx service now pins its provider adapter, secret command options, public callback base,
+and media-token lifetime alongside the prior safe identity and webhook verifier. The public base
+must be HTTPS with a host and no userinfo, query, or fragment; its optional path prefix is normalized
+once. Missing command credentials and ambiguous/non-TLS URLs fail during configuration parsing.
+The struct's derived inspection remains limited to safe identity, so command credentials do not
+appear in logs or crash inspection.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/configured_service_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs
+# 9 tests, 0 failures
+```
+
+The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the unused
+dependency check, the focused nine-test configuration/webhook set, and the full umbrella suite
+against an isolated disposable PostgreSQL 17 instance (716 tests, 0 failures).

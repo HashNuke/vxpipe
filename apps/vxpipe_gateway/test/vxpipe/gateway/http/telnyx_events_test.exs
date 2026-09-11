@@ -28,6 +28,8 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
               provider: :telnyx,
               provider_connection_id: "voice-application-1",
               public_key: Base.encode64(public_key),
+              api_key: "test-api-key",
+              public_base_url: "https://voice.example.test",
               scope: {:tenant, "tenantkey1234567"}
             ]
           ]

@@ -91,6 +91,9 @@ validates the upgrade before atomically consuming the token and gives the socket
 binding. The socket validates the bound call and client state on `start`, pins the resulting stream
 ID, and dispatches exact media/DTMF events to the existing leg owner. Room pipeline attachment,
 private briefing, acceptance, cleanup, and runnable vendor outcome remain incomplete.
+Configured Telnyx services now fail startup unless webhook verification, command credentials,
+provider connection identity, a provider-reachable TLS base URL, and a bounded media-token lifetime
+form one complete deployment configuration; secret-bearing fields are excluded from inspection.
 
 ## Specification review
 

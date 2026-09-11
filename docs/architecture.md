@@ -1010,10 +1010,14 @@ other authenticated but unconsumed Voice API events are acknowledged through `ig
 Gateway exposes this boundary at
 `POST /api/telephony/telnyx/:ingress_key/events`. The deployment configuration resolves the opaque
 ingress key to one enabled application- or tenant-scoped service, its expected Voice API connection
-ID, and its webhook verifier. Credentials and verifier material remain inside that configured
-service and are never passed to the ingress handler; the handler receives only a safe service
-identity and a common event. The route is backend-only for CORS, limits the untouched request body
-to 128 KiB, authenticates before JSON decoding, and rejects an otherwise valid event whose
+ID, and its webhook verifier. The same configured service pins the provider command adapter and
+secret options, a provider-reachable HTTPS public base URL, and the short media-token lifetime.
+Plain HTTP, missing-host, userinfo-bearing, query-bearing, fragment-bearing, and missing-secret
+configurations fail during startup. Credentials and verifier material remain inside that
+configured service and are never passed to the ingress handler or included in its derived
+inspection; the handler receives only a safe service identity and a common event. The route is
+backend-only for CORS, limits the untouched request body to 128 KiB, authenticates before JSON
+decoding, and rejects an otherwise valid event whose
 `connection_id` does not match the selected service. Authenticated events outside the consumed
 vocabulary are acknowledged without dispatch. This is only the provider ingress seam: durable
 admission, event deduplication, and exact call/participant/leg correlation are owned by Calls and
