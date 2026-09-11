@@ -7,14 +7,14 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
 
   alias Vxpipe.Gateway.Telephony.{
     ConfiguredService,
+    IncomingLegActivationResult,
     MediaAdmission,
-    MediaBinding
+    MediaBinding,
+    ProviderEndpoint
   }
 
-  alias Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint
-
   @spec activate(ConfiguredService.t(), TelephonyAdmissionClaim.t(), String.t(), pid(), keyword()) ::
-          {:ok, MediaBinding.t(), Vxpipe.CallEngine.Telephony.Submission.t()} | {:error, term()}
+          {:ok, IncomingLegActivationResult.t()} | {:error, term()}
   def activate(
         %ConfiguredService{} = service,
         %TelephonyAdmissionClaim{} = claim,
@@ -31,9 +31,15 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
          binding <- binding(service, claim, incarnation_id, client_state_leg_id, leg),
          {:ok, token} <-
            MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms),
-         request <- answer_request(service, binding, token),
+         media_url <- ProviderEndpoint.media_url(service, token),
+         request <- answer_request(binding, media_url),
          {:ok, submission} <- Adapter.answer(service.adapter, service.adapter_options, request) do
-      {:ok, binding, submission}
+      {:ok,
+       %IncomingLegActivationResult{
+         binding: binding,
+         media_url: media_url,
+         submission: submission
+       }}
     else
       {:error, reason} = error ->
         :ok = MediaAdmission.revoke(media_admission, leg)
@@ -89,13 +95,13 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
     }
   end
 
-  defp answer_request(service, binding, token) do
+  defp answer_request(binding, media_url) do
     %Answer{
       leg: %LegReference{
         leg_id: binding.client_state_leg_id,
         provider_call_control_id: binding.provider_call_control_id
       },
-      media_url: PublicEndpoint.media_url(service, token)
+      media_url: media_url
     }
   end
 end

@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
   alias Vxpipe.Gateway.Telephony.{
     CallIngressBackend,
     IncomingLegActivation,
+    IncomingLegActivationResult,
     IngressIdentity,
     MediaBinding,
     MediaSupervisor,
@@ -112,7 +113,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
       when is_pid(leg) do
     with {:ok, %ServiceRegistry{} = registry} <- Keyword.fetch(options, :service_registry),
          {:ok, service} <- ServiceRegistry.fetch(registry, identity.ingress_key),
-         {:ok, binding, submission} <-
+         {:ok, %IncomingLegActivationResult{} = activation} <-
            IncomingLegActivation.activate(
              service,
              claim,
@@ -120,7 +121,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
              leg,
              telephony_activation_options(options)
            ) do
-      {:ok, {binding, submission}}
+      {:ok, activation}
     else
       :error -> {:error, :telephony_service_unavailable}
       {:ok, _invalid_registry} -> {:error, :telephony_service_unavailable}
@@ -144,7 +145,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
   def handle_live_event(
         options,
         %TelephonyAdmissionClaim{} = claim,
-        {%MediaBinding{} = binding, _submission},
+        %IncomingLegActivationResult{binding: %MediaBinding{} = binding},
         source,
         %Event{kind: :media_started, stream_id: stream_id}
       )
@@ -160,7 +161,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
   def handle_live_event(
         _options,
         %TelephonyAdmissionClaim{},
-        {%MediaBinding{} = binding, _submission},
+        %IncomingLegActivationResult{binding: %MediaBinding{} = binding},
         source,
         %Event{kind: :media} = event
       )

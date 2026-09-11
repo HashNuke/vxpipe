@@ -5,54 +5,14 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
 
   alias Plug.Conn.Utils
   alias Vxpipe.CallEngine.Telephony.{Event, Webhook}
-  alias Vxpipe.Gateway.CallAdmission
   alias Vxpipe.Gateway.HTTP.RawBody
 
   alias Vxpipe.Gateway.Telephony.{
-    CallIngress,
     IngressHandler,
-    MediaAdmission,
     ServiceRegistry
   }
 
   alias Vxpipe.Gateway.Telephony.Telnyx.{WebhookDecoder, WebhookVerifier}
-
-  @default_maximum_body_bytes 131_072
-
-  @spec init(keyword()) :: map()
-  def init(options) do
-    options =
-      Keyword.validate!(options,
-        enabled: false,
-        services: [],
-        handler: {CallIngress, []},
-        media_admission: MediaAdmission,
-        clock: &__MODULE__.system_time_seconds/0,
-        maximum_body_bytes: @default_maximum_body_bytes
-      )
-
-    registry =
-      ServiceRegistry.init!(
-        enabled: Keyword.fetch!(options, :enabled),
-        services: Keyword.fetch!(options, :services)
-      )
-
-    handler =
-      registry.enabled?
-      |> handler!(Keyword.fetch!(options, :handler))
-      |> configure_default_backend(registry, Keyword.fetch!(options, :media_admission))
-
-    clock = clock!(Keyword.fetch!(options, :clock))
-    maximum_body_bytes = maximum_body_bytes!(Keyword.fetch!(options, :maximum_body_bytes))
-
-    %{
-      registry: registry,
-      handler: handler,
-      media_admission: Keyword.fetch!(options, :media_admission),
-      clock: clock,
-      maximum_body_bytes: maximum_body_bytes
-    }
-  end
 
   @spec route?(Plug.Conn.t()) :: boolean()
   def route?(%Plug.Conn{
@@ -62,10 +22,6 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
       do: true
 
   def route?(%Plug.Conn{}), do: false
-
-  @doc false
-  @spec system_time_seconds() :: non_neg_integer()
-  def system_time_seconds, do: System.system_time(:second)
 
   @spec handle(Plug.Conn.t(), map(), String.t()) :: Plug.Conn.t()
   def handle(conn, options, ingress_key) do
@@ -119,6 +75,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
     if event.provider_connection_id == service.identity.provider_connection_id do
       case IngressHandler.dispatch(handler, service.identity, event) do
         :ok -> send_resp(conn, 200, "ok")
+        {:ok, _result} -> send_resp(conn, 200, "ok")
         {:error, _reason} -> send_resp(conn, 503, "webhook processing unavailable")
       end
     else
@@ -158,33 +115,4 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
       _invalid -> {:error, :invalid_received_at}
     end
   end
-
-  defp handler!(false, _handler), do: nil
-  defp handler!(true, {module, _context} = handler) when is_atom(module), do: handler
-  defp handler!(true, _invalid), do: raise(ArgumentError, "telephony ingress handler is required")
-
-  defp configure_default_backend({CallIngress, options}, registry, media_admission) do
-    backend =
-      options
-      |> Keyword.get(:backend, {CallAdmission, []})
-      |> configure_call_admission(registry, media_admission)
-
-    {CallIngress, Keyword.put(options, :backend, backend)}
-  end
-
-  defp configure_default_backend(handler, _registry, _media_admission), do: handler
-
-  defp configure_call_admission({CallAdmission, options}, registry, media_admission) do
-    {CallAdmission, CallAdmission.configure_telephony(options, registry, media_admission)}
-  end
-
-  defp configure_call_admission(backend, _registry, _media_admission), do: backend
-
-  defp clock!(clock) when is_function(clock, 0), do: clock
-  defp clock!(_invalid), do: raise(ArgumentError, "telephony ingress clock must be a function/0")
-
-  defp maximum_body_bytes!(value) when is_integer(value) and value > 0, do: value
-
-  defp maximum_body_bytes!(_invalid),
-    do: raise(ArgumentError, "telephony maximum_body_bytes must be a positive integer")
 end

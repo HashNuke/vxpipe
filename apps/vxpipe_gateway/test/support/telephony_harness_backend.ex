@@ -9,7 +9,12 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls.TelephonyAdmissionClaim
   alias Vxpipe.Gateway.CallAdmission
-  alias Vxpipe.Gateway.Telephony.{IngressIdentity, MediaBinding}
+
+  alias Vxpipe.Gateway.Telephony.{
+    IncomingLegActivationResult,
+    IngressIdentity,
+    MediaBinding
+  }
 
   def start_link(options) do
     Agent.start_link(fn ->
@@ -111,7 +116,7 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
   def handle_live_event(
         agent,
         %TelephonyAdmissionClaim{} = claim,
-        {%MediaBinding{}, _submission} = activation,
+        %IncomingLegActivationResult{binding: %MediaBinding{}} = activation,
         source,
         %Event{} = event
       ) do

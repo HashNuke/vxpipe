@@ -16,7 +16,14 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
 
   alias Vxpipe.Calls.{AdmissionClaim, PreparedCall}
   alias Vxpipe.Gateway.CallAdmission
-  alias Vxpipe.Gateway.Telephony.{IngressIdentity, MediaAdmission, ServiceRegistry}
+
+  alias Vxpipe.Gateway.Telephony.{
+    IncomingLegActivationResult,
+    IngressIdentity,
+    MediaAdmission,
+    ServiceRegistry
+  }
+
   alias Vxpipe.Gateway.TestTelephonyCallBackend
 
   test "joins the claimed pinned participant beneath an existing call incarnation" do
@@ -146,7 +153,11 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       created_by_command_id: "cmd_phone-start"
     }
 
-    assert {:ok, {binding, submission}} =
+    assert {:ok,
+            %IncomingLegActivationResult{
+              binding: binding,
+              submission: submission
+            }} =
              CallAdmission.activate_incoming(
                [
                  service_registry: registry,

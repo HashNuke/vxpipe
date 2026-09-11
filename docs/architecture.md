@@ -1012,9 +1012,20 @@ oversized, or malformed fields. Only after verification does the adapter normali
 [Voice webhook](https://www.twilio.com/docs/voice/twiml) into the common event. Account SID is
 rechecked against the configured service; Call SID becomes the addressable control/leg identity;
 the stable incoming event key derives from that Call SID. Gateway receipt time is used where the
-initial TwiML request supplies no provider event timestamp. This adapter boundary exists before the
-provider-specific HTTP/TwiML response and media flow and does not by itself advertise live Twilio
-ingress.
+initial TwiML request supplies no provider event timestamp.
+
+Gateway exposes the synchronous Voice ingress at
+`POST /api/telephony/twilio/:ingress_key/voice`. The route preserves the untouched form body for
+signature verification and resolves the configured public URL rather than trusting proxy/request
+headers. After authenticated normalization, the common ingress workflow claims the prepared call,
+starts its pinned room, and activates the incoming leg. Activation returns a typed result containing
+the common media binding and its one-time provider media URL. The HTTP boundary then answers with
+Twilio [`<Connect><Stream>`](https://www.twilio.com/docs/voice/twiml/stream) TwiML pointing to that
+WSS URL; there is no fictitious second answer API command. Telnyx consumes the same typed activation
+result but continues to acknowledge its asynchronous event with an ordinary success response. This
+checkpoint establishes Twilio's authenticated synchronous control handoff only. The WebSocket
+upgrade, bidirectional G.711 media, DTMF, status callbacks, outbound control, and complete transfer
+parity remain unsupported until their owning checkpoints are implemented.
 
 The Telnyx gateway boundary authenticates the untouched request body before any event decoding.
 It verifies the base64 Ed25519 signature over `timestamp <> "|" <> raw_body` with the configured

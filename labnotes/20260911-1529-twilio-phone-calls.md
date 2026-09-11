@@ -106,3 +106,50 @@ mix test test/vxpipe/gateway/telephony/configured_service_test.exs \
 Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
 The complete umbrella run passed MCP 37, Agent Runtime 58, Call Engine 351, Calls 45, Persistence
 31, Gateway 180, and Console 59—761 tests with zero failures.
+
+## Checkpoint 3: synchronous incoming Voice and TwiML
+
+The next red tests sent a signed Twilio form through the real Gateway endpoint and required an XML
+`<Connect><Stream>` response only after dispatch, plus rejection of a changed signed field before
+dispatch. The activation test also required the common incoming workflow to preserve and return the
+generated WSS media URL. The first focused run failed at compilation because there was no typed
+activation result capable of carrying that URL.
+
+Incoming activation now returns `IncomingLegActivationResult` with the common media binding, exact
+private WSS URL, and provider submission. Twilio's synchronous Voice flow validates the configured
+account/token, Call SID, and secure media URL and records an accepted submission without making a
+second answer request. Its HTTP route preserves the raw form body, authenticates against the exact
+configured public Voice URL, starts the common admission path, and builds the TwiML response from the
+result. Telnyx retains its asynchronous `200 ok` behavior while consuming the same result shape.
+
+A provider-neutral `TelephonyIngressConfig` now owns the shared registry/handler/body-limit setup
+that had previously lived in `TelnyxEvents`. Provider endpoint selection is similarly closed and
+small. This avoids making either carrier's HTTP handler the configuration owner for the other.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/http/twilio_voice_test.exs \
+  test/vxpipe/gateway/telephony/incoming_leg_activation_test.exs \
+  test/vxpipe/gateway/telephony/media_session_test.exs \
+  test/vxpipe/gateway/call_admission_adapter_test.exs
+# 19 tests, 0 failures
+
+mix test --max-cases 1
+# 183 tests, 0 failures (5 excluded)
+```
+
+Two concurrent full-suite runs each exposed a different pre-existing media-shutdown assertion whose
+100 ms receive deadline elapsed under Membrane load. The relevant failing test passed five isolated
+runs, and the complete gateway suite passed with one test process. No production change or deadline
+weakening was made for that unrelated observation.
+
+The subsequent ordinary root run passed all seven application lanes: MCP 37, Agent Runtime 58,
+Call Engine 351, Calls 45, Persistence 31, Gateway 183, and Console 59—764 tests with zero failures.
+Formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check also pass.
+
+This checkpoint stops at the authenticated synchronous control handoff. It does not yet expose the
+Twilio media WebSocket or claim bidirectional G.711 audio, DTMF/status/AMD callbacks, outbound calls,
+or private-transfer parity.

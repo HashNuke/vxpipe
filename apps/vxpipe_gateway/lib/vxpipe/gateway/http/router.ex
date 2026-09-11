@@ -5,13 +5,22 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   import Plug.Conn
 
-  alias Vxpipe.Gateway.HTTP.{CallAdmissions, RTVI, Rooms, TelnyxEvents, TelnyxMedia}
+  alias Vxpipe.Gateway.HTTP.{
+    CallAdmissions,
+    RTVI,
+    Rooms,
+    TelephonyIngressConfig,
+    TelnyxEvents,
+    TelnyxMedia,
+    TwilioEvents
+  }
+
   alias Vxpipe.Gateway.CallAdmission
 
   @impl true
   def init(options) do
     telephony = options |> Keyword.get(:telephony, []) |> telephony_options!()
-    telephony_events = telephony |> event_options() |> TelnyxEvents.init()
+    telephony_events = telephony |> event_options() |> TelephonyIngressConfig.init()
 
     call_admission =
       options
@@ -52,6 +61,16 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         options
       ) do
     TelnyxEvents.handle(conn, options.telephony, ingress_key)
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: ["api", "telephony", "twilio", ingress_key, "voice"]
+        } = conn,
+        options
+      ) do
+    TwilioEvents.handle(conn, options.telephony, ingress_key)
   end
 
   def call(

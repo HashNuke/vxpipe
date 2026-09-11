@@ -1,7 +1,13 @@
 defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.Gateway.Telephony.{ConfiguredService, IncomingLegActivation, MediaAdmission}
+  alias Vxpipe.Gateway.Telephony.{
+    ConfiguredService,
+    IncomingLegActivation,
+    IncomingLegActivationResult,
+    MediaAdmission
+  }
+
   alias Vxpipe.Gateway.TestTelephonyCallBackend
 
   setup do
@@ -13,7 +19,12 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
   end
 
   test "answers through the pinned service with one exact media admission", context do
-    assert {:ok, binding, submission} =
+    assert {:ok,
+            %IncomingLegActivationResult{
+              binding: binding,
+              media_url: media_url,
+              submission: submission
+            }} =
              IncomingLegActivation.activate(
                service("accept"),
                context.claim,
@@ -28,6 +39,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
     assert binding.incarnation_id == "rinc_phone-1"
 
     assert_receive {:test_telephony_answer, request}
+    assert media_url == request.media_url
     assert request.leg.leg_id == "tleg-incoming-1"
     assert request.leg.provider_call_control_id == "call-control-1"
 
@@ -39,6 +51,44 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
 
     assert {:ok, ^binding} =
              MediaAdmission.consume(context.admission, "ingress_telnyx_primary", token)
+  end
+
+  test "prepares synchronous Twilio media instructions without inventing a command call",
+       context do
+    claim = %{
+      context.claim
+      | provider: :twilio,
+        provider_connection_id: "AC00000000000000000000000000000000",
+        provider_call_control_id: "CA00000000000000000000000000000000",
+        provider_call_leg_id: "CA00000000000000000000000000000000",
+        provider_call_session_id: nil
+    }
+
+    assert {:ok,
+            %IncomingLegActivationResult{
+              binding: binding,
+              media_url: media_url,
+              submission: %{status: :accepted}
+            }} =
+             IncomingLegActivation.activate(
+               twilio_service(),
+               claim,
+               "rinc_phone-2",
+               context.leg,
+               media_admission: context.admission,
+               leg_id: fn -> "tleg-twilio-incoming-1" end
+             )
+
+    assert binding.provider == :twilio
+    assert binding.provider_call_session_id == nil
+
+    assert %URI{scheme: "wss", host: "voice.example.test", path: path} = URI.parse(media_url)
+
+    assert ["", "voice", "api", "telephony", "twilio", "ingress_twilio_primary", "media", token] =
+             String.split(path, "/")
+
+    assert {:ok, ^binding} =
+             MediaAdmission.consume(context.admission, "ingress_twilio_primary", token)
   end
 
   test "revokes media admission when the carrier rejects the answer", context do
@@ -73,6 +123,21 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
                api_key: api_key,
                public_base_url: "https://voice.example.test/voice",
                adapter: Vxpipe.Gateway.TestTelephonyAdapter
+             )
+
+    service
+  end
+
+  defp twilio_service do
+    assert {:ok, service} =
+             ConfiguredService.new(
+               id: "primary-phone",
+               ingress_key: "ingress_twilio_primary",
+               scope: {:tenant, "AAAAAAAAAAAAAAAA"},
+               provider: :twilio,
+               account_sid: "AC00000000000000000000000000000000",
+               auth_token: "twilio-test-auth-token",
+               public_base_url: "https://voice.example.test/voice"
              )
 
     service

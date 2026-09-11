@@ -11,11 +11,16 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
   }
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
-  alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket}
+  alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket, Submission}
   alias Vxpipe.Calls.{PreparedCall, TelephonyAdmissionClaim}
   alias Vxpipe.Gateway.CallAdmission
   alias Vxpipe.Gateway.Media.AudioOutput
-  alias Vxpipe.Gateway.Telephony.{MediaBinding, MediaSupervisor}
+
+  alias Vxpipe.Gateway.Telephony.{
+    IncomingLegActivationResult,
+    MediaBinding,
+    MediaSupervisor
+  }
 
   @application_voip 2_048
   @automatic_bitrate -1_000
@@ -43,7 +48,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
              CallAdmission.handle_live_event(
                [telephony_media_supervisor: root],
                claim,
-               {binding, :accepted_submission},
+               activation(binding),
                socket,
                media_started_event(binding, "stream-1")
              )
@@ -70,7 +75,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
              CallAdmission.handle_live_event(
                [],
                claim,
-               {binding, :accepted_submission},
+               activation(binding),
                socket,
                media_event(binding, "stream-1")
              )
@@ -79,7 +84,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
              CallAdmission.handle_live_event(
                [],
                claim,
-               {binding, :accepted_submission},
+               activation(binding),
                self(),
                media_event(binding, "stream-1")
              )
@@ -113,7 +118,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
              CallAdmission.handle_live_event(
                [telephony_media_supervisor: root],
                claim,
-               {binding, :accepted_submission},
+               activation(binding),
                socket,
                media_started_event(binding, "stream-1")
              )
@@ -246,6 +251,19 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       provider_call_session_id: "call-session-1",
       client_state_leg_id: unique_id("connection"),
       leg: leg
+    }
+  end
+
+  defp activation(binding) do
+    %IncomingLegActivationResult{
+      binding: binding,
+      media_url: "wss://voice.example.test/api/telephony/telnyx/media/test",
+      submission: %Submission{
+        status: :accepted,
+        provider_call_control_id: binding.provider_call_control_id,
+        provider_call_leg_id: binding.provider_call_leg_id,
+        provider_call_session_id: binding.provider_call_session_id
+      }
     }
   end
 

@@ -8,14 +8,15 @@ defmodule Vxpipe.Gateway.Telephony.IngressHandler do
   @type error_reason :: term()
 
   @callback handle_event(context(), IngressIdentity.t(), Event.t()) ::
-              :ok | {:error, error_reason()}
+              :ok | {:ok, term()} | {:error, error_reason()}
 
   @spec dispatch({module(), context()}, IngressIdentity.t(), Event.t()) ::
-          :ok | {:error, error_reason() | :invalid_ingress_handler_response}
+          :ok | {:ok, term()} | {:error, error_reason() | :invalid_ingress_handler_response}
   def dispatch({module, context}, %IngressIdentity{} = identity, %Event{} = event)
       when is_atom(module) do
     case module.handle_event(context, identity, event) do
       :ok -> :ok
+      {:ok, _result} = result -> result
       {:error, _reason} = error -> error
       _invalid -> {:error, :invalid_ingress_handler_response}
     end

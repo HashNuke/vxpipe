@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
 
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Gateway.CallAdmission
-  alias Vxpipe.Gateway.HTTP.{Endpoint, TelnyxEvents}
+  alias Vxpipe.Gateway.HTTP.{Endpoint, TelephonyIngressConfig}
   alias Vxpipe.Gateway.Telephony.{CallIngress, IngressIdentity, ServiceRegistry}
   alias Vxpipe.Gateway.TestTelephonyIngress
 
@@ -132,7 +132,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     media_admission = self()
 
     options =
-      TelnyxEvents.init(
+      TelephonyIngressConfig.init(
         enabled: true,
         media_admission: media_admission,
         services: [

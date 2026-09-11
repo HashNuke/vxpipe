@@ -118,6 +118,45 @@ mix test test/vxpipe/gateway/telephony/configured_service_test.exs \
 Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency, and all seven
 umbrella lanes pass—761 tests with zero failures.
 
+## Checkpoint 3: synchronous incoming Voice handoff
+
+Gateway now exposes `POST /api/telephony/twilio/:ingress_key/voice` as a raw form route. It resolves
+the configured service, checks the exact form content type and one signature header, bounds the body,
+and passes the untouched bytes plus the configured public URL through the common adapter. Only an
+authenticated, normalized incoming event reaches call admission. A successful production admission
+returns Twilio's WSS media URL and the route responds with XML `<Connect><Stream>` TwiML; tampering is
+rejected before dispatch.
+
+Incoming activation now has a typed provider-neutral result carrying its media binding, private media
+URL, and command submission. Twilio prepares that synchronous result from the Call SID without
+issuing or inventing another answer command. Telnyx continues through the same result contract and
+discards the URL at its asynchronous event response. Shared ingress configuration moved out of the
+Telnyx HTTP handler so neither provider owns the other's runtime setup.
+
+The red HTTP test initially failed to compile because the typed activation result did not exist.
+Focused ingress/activation regressions and the complete gateway suite are green. The latter ran with
+one test process because two pre-existing media-shutdown assertions use 100 ms deadlines and proved
+scheduler-sensitive under the concurrent Membrane suite.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/http/twilio_voice_test.exs \
+  test/vxpipe/gateway/telephony/incoming_leg_activation_test.exs \
+  test/vxpipe/gateway/telephony/media_session_test.exs \
+  test/vxpipe/gateway/call_admission_adapter_test.exs
+# 19 tests, 0 failures
+
+mix test --max-cases 1
+# 183 tests, 0 failures (5 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency, and all seven
+umbrella lanes pass—764 tests with zero failures.
+
+This does not yet claim live Twilio media. The authenticated WebSocket upgrade, G.711 audio path,
+status/AMD/DTMF callbacks, outbound calls, and full private-transfer parity remain pending.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

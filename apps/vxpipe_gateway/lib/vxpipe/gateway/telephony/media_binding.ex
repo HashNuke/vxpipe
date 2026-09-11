@@ -42,14 +42,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
           provider_connection_id: String.t(),
           provider_call_control_id: String.t(),
           provider_call_leg_id: String.t(),
-          provider_call_session_id: String.t(),
+          provider_call_session_id: nil | String.t(),
           client_state_leg_id: String.t(),
           leg: pid()
         }
 
   @spec valid?(t()) :: boolean()
   def valid?(%__MODULE__{} = binding) do
-    binding.provider == :telnyx and is_pid(binding.leg) and
+    binding.provider in [:telnyx, :twilio] and is_pid(binding.leg) and
       Enum.all?(
         [
           binding.service_id,
@@ -62,11 +62,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
           binding.provider_connection_id,
           binding.provider_call_control_id,
           binding.provider_call_leg_id,
-          binding.provider_call_session_id,
           binding.client_state_leg_id
         ],
         &present?/1
-      )
+      ) and optional_identifier?(binding.provider_call_session_id)
   end
 
   @spec matches_event?(t(), Vxpipe.CallEngine.Telephony.Event.t()) :: boolean()
@@ -79,4 +78,6 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
   end
 
   defp present?(value), do: is_binary(value) and value != ""
+  defp optional_identifier?(nil), do: true
+  defp optional_identifier?(value), do: present?(value)
 end

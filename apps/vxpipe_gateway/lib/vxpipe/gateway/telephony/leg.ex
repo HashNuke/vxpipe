@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls.TelephonyAdmissionClaim
+  alias Vxpipe.Gateway.Telephony.IncomingLegActivationResult
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) do
@@ -25,7 +26,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     }
   end
 
-  @spec await(pid(), timeout()) :: :ok | {:error, term()}
+  @spec await(pid(), timeout()) :: :ok | {:ok, term()} | {:error, term()}
   def await(leg, timeout) when is_pid(leg) do
     GenServer.call(leg, :await, timeout)
   catch
@@ -190,7 +191,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
            self()
          ]) do
       {:ok, activation} ->
-        {:answering, state.claim, activation, incarnation_id, :ok}
+        {:answering, state.claim, activation, incarnation_id, activation_result(activation)}
 
       {:error, _reason} ->
         case call_backend(state.backend, :mark_incoming_failed, [
@@ -221,6 +222,11 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
     %{state | claim: claim, status: :running}
   end
+
+  defp activation_result(%IncomingLegActivationResult{media_url: media_url}),
+    do: {:ok, media_url}
+
+  defp activation_result(_custom_activation), do: :ok
 
   defp start_time(%Event{occurred_at: %DateTime{} = occurred_at}, _clock), do: occurred_at
   defp start_time(%Event{kind: :media_started}, clock), do: clock.()

@@ -4,6 +4,11 @@ defmodule Vxpipe.Gateway.TestTelephonyIngress do
   @behaviour Vxpipe.Gateway.Telephony.IngressHandler
 
   @impl true
+  def handle_event({observer, result}, identity, event) do
+    send(observer, {:telephony_event, identity, event})
+    result
+  end
+
   def handle_event(observer, identity, event) do
     send(observer, {:telephony_event, identity, event})
     :ok
