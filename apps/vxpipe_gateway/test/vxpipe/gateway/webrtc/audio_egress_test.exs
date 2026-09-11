@@ -2,7 +2,8 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
   use ExUnit.Case, async: true
 
   alias ExRTP.Packet
-  alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Media.{AudioOutputFrame, NormalizedFrame, OutputSink}
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
   alias Vxpipe.Gateway.TestOpusEncoder
   alias Vxpipe.Gateway.WebRTC.AudioEgress
 
@@ -265,6 +266,61 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     assert_receive {:test_rtp, %Packet{sequence_number: 2, marker: true}}
   end
 
+  test "records only PCM whose RTP packet was accepted before interruption" do
+    test_process = self()
+
+    sender = fn _peer, _track, packet ->
+      send(test_process, {:test_rtp, packet})
+      :ok
+    end
+
+    schedule = fn target, message, milliseconds ->
+      send(test_process, {:test_scheduled, target, message, milliseconds})
+      make_ref()
+    end
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         maximum_packets: 4,
+         send_rtp: sender,
+         schedule: schedule}
+      )
+
+    handoff = recording_handoff("connection-test")
+    assert :ok = OutputSink.bind_recording(egress, handoff)
+
+    first = :binary.copy(<<1, 0>>, 960)
+    queued = :binary.copy(<<2, 0>>, 2 * 960)
+    assert :ok = GenServer.call(egress, {:vxpipe_audio_output, frame(first <> queued)})
+
+    assert_receive {:test_rtp, %Packet{sequence_number: 0}}
+
+    assert_receive {:vxpipe_recording_egress, ^handoff,
+                    %NormalizedFrame{
+                      source_participant_id: "agent-test",
+                      connection_id: "connection-test",
+                      track_id: "agent-egress",
+                      payload: ^first
+                    }}
+
+    :ok = EgressHandoff.release(handoff)
+    assert_receive {:test_scheduled, ^egress, stale_pace, 20}
+
+    assert {:ok, 0} =
+             GenServer.call(
+               egress,
+               {:vxpipe_audio_output_interrupt, "turn-test", self()}
+             )
+
+    send(egress, stale_pace)
+    refute_receive {:vxpipe_recording_egress, ^handoff, %NormalizedFrame{}}
+  end
+
   defp frame(payload) do
     %AudioOutputFrame{
       tenant_id: "tenant-test",
@@ -281,5 +337,31 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
       payload: payload,
       reply_to: self()
     }
+  end
+
+  defp recording_handoff(connection_id) do
+    counters = EgressHandoff.new_counters()
+    :ok = EgressHandoff.install_policy(counters, 0, true)
+
+    EgressHandoff.new(
+      self(),
+      make_ref(),
+      %{
+        tenant_id: "tenant-test",
+        room_id: "room-test",
+        incarnation_id: "incarnation-test"
+      },
+      %{
+        channels: 1,
+        clock: fn -> 0 end,
+        clock_origin_ms: 0,
+        frame_samples: 960,
+        gate: counters,
+        sample_rate: 48_000
+      },
+      connection_id,
+      4,
+      counters
+    )
   end
 end

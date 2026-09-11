@@ -7,23 +7,62 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
 
   @spec deliver(
           [{non_neg_integer(), %{TimestampBuffer.source_key() => NormalizedFrame.t()}}],
+          [{non_neg_integer(), %{TimestampBuffer.source_key() => NormalizedFrame.t()}}],
           SubscriptionCatalog.t(),
           map(),
           map(),
           Snapshot.t(),
           pid()
         ) :: {SubscriptionCatalog.t(), non_neg_integer(), non_neg_integer()}
-  def deliver(buckets, catalog, identity, format, policy, mixer) do
-    Enum.reduce(buckets, {catalog, 0, 0}, fn {timestamp, bucket}, totals ->
-      deliver_bucket(timestamp, bucket, identity, format, policy, mixer, totals)
+  def deliver(buckets, recording_buckets, catalog, identity, format, policy, mixer) do
+    room = Map.new(buckets)
+    recording_only = Map.new(recording_buckets)
+
+    timestamps =
+      room
+      |> Map.keys()
+      |> Kernel.++(Map.keys(recording_only))
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    Enum.reduce(timestamps, {catalog, 0, 0}, fn timestamp, totals ->
+      deliver_bucket(
+        timestamp,
+        Map.get(room, timestamp, %{}),
+        Map.get(recording_only, timestamp, %{}),
+        identity,
+        format,
+        policy,
+        mixer,
+        totals
+      )
     end)
   end
 
-  defp deliver_bucket(timestamp, bucket, identity, format, policy, mixer, totals) do
+  defp deliver_bucket(
+         timestamp,
+         bucket,
+         recording_only,
+         identity,
+         format,
+         policy,
+         mixer,
+         totals
+       ) do
     subscription_ids = Map.keys(elem(totals, 0).entries)
 
     Enum.reduce(subscription_ids, totals, fn id, current ->
-      deliver_subscription(id, timestamp, bucket, identity, format, policy, mixer, current)
+      deliver_subscription(
+        id,
+        timestamp,
+        bucket,
+        recording_only,
+        identity,
+        format,
+        policy,
+        mixer,
+        current
+      )
     end)
   end
 
@@ -31,6 +70,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
          id,
          timestamp,
          bucket,
+         recording_only,
          identity,
          format,
          policy,
@@ -49,7 +89,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
       mixer: mixer
     }
 
-    case sources(entry, bucket, policy) do
+    case sources(entry, bucket, recording_only, policy) do
       {:ok, frames} ->
         deliver_frames(frames, delivery, {catalog, delivered, dropped})
 
@@ -58,13 +98,13 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
     end
   end
 
-  defp sources(%{purpose: :recording, mode: mode}, bucket, policy) do
+  defp sources(%{purpose: :recording, mode: mode}, bucket, recording_only, policy) do
     if policy.effective.record_audio,
-      do: {:ok, Router.recording_sources(bucket, mode)},
+      do: {:ok, Router.recording_sources(Map.merge(bucket, recording_only), mode)},
       else: :skip
   end
 
-  defp sources(%{purpose: :participant} = entry, bucket, policy) do
+  defp sources(%{purpose: :participant} = entry, bucket, _recording_only, policy) do
     if MapSet.member?(policy.present_participant_ids, entry.recipient_id) do
       {:ok, Router.sources(bucket, entry.recipient_id, entry.mode, policy.effective)}
     else

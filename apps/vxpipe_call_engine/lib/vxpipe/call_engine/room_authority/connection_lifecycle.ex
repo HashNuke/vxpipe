@@ -2,9 +2,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
-  alias Vxpipe.CallEngine.Media.Ingress
+  alias Vxpipe.CallEngine.Media.{Ingress, OutputSink}
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
-  alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor}
+  alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, RoomMixer}
   alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, State, TextCapability}
 
   @spec attach(struct(), pid(), pid(), pid() | nil, reference(), State.t()) ::
@@ -227,6 +227,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   defp attachment_ready?(%State{} = state), do: TextCapability.ready?(state)
 
   defp put(command, subscriber, output_sink, room_monitor, state) do
+    case bind_recording_egress(command.connection_id, output_sink, state.room_mixer) do
+      :ok -> put_bound(command, subscriber, output_sink, room_monitor, state)
+      {:error, _reason} -> {:reply, {:error, recording_unavailable()}, state}
+    end
+  end
+
+  defp put_bound(command, subscriber, output_sink, room_monitor, state) do
     monitor = Process.monitor(subscriber)
     role = Map.fetch!(state.participant_roles, command.participant_id)
 
@@ -255,6 +262,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
     {input_mode, output_mode} = media_modes(role, state)
     {:reply, {:ok, role, runtime, :main, input_mode, output_mode, nil}, state}
+  end
+
+  defp bind_recording_egress(_connection_id, nil, _room_mixer), do: :ok
+  defp bind_recording_egress(_connection_id, _output_sink, nil), do: :ok
+
+  defp bind_recording_egress(connection_id, output_sink, room_mixer)
+       when is_binary(connection_id) and is_pid(output_sink) and is_pid(room_mixer) do
+    case RoomMixer.open_recording_egress(room_mixer, connection_id) do
+      :disabled -> :ok
+      {:ok, handoff} -> OutputSink.bind_recording(output_sink, handoff)
+      {:error, _reason} = error -> error
+    end
   end
 
   defp put_transfer_preparation(
@@ -522,6 +541,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     Error.new(
       :speech_to_text_policy_unavailable,
       "Speech-to-text media policy could not be applied.",
+      retryable: true
+    )
+  end
+
+  defp recording_unavailable do
+    Error.new(
+      :recording_unavailable,
+      "The configured recording path is unavailable.",
       retryable: true
     )
   end

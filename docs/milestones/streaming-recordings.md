@@ -21,8 +21,8 @@ During a multi-party call, enabled permitted individual tracks and the already-l
 
 - [ ] Red-test recording lifecycle with tagged audio and fake object writer, exact permitted intervals, gaps, and room/worker failure.
 - [x] Add artifacts application/ports and scoped writer supervision; keep dependency direction and engine database-free.
-- [ ] Implement bounded stream-to-S3 recording plus asynchronous metadata/manifests.
-- [ ] Capture live full mix and selected individual tracks with shared clocks and honest egress provenance.
+- [x] Implement bounded stream-to-S3 recording plus asynchronous metadata/manifests.
+- [x] Capture live full mix and selected individual tracks with shared clocks and honest egress provenance.
 - [ ] Add private operator playback/access mechanism and tagged S3-compatible integration tests without logging signed URLs/secrets.
 
 ## Acceptance and failure checks
@@ -506,6 +506,63 @@ integration, room/writer crash coverage, and operator playback remain pending.
 
 Root formatting, compilation with warnings as errors, strict Credo over 642 source files, all 819
 umbrella tests, and the unused-dependency check pass.
+
+## Checkpoint 13: transport-accepted agent egress
+
+Direct agent and opening audio continues to use the existing connection output path, but recording
+no longer assumes that generated or queued TTS reached that path. When recording is enabled, Room
+Authority obtains a connection-qualified bounded handoff from the mixer and binds it to the direct
+output before connection startup can emit audio. Disabled recording adds no binding. Private
+transfer-preparation output is not bound, so its briefing cannot enter the main-room recording.
+
+WebRTC retains each original 20 ms PCM frame beside its encoded Opus payload only until
+`send_rtp/3` accepts that packet. The shared telephony output retains the same PCM in its existing
+in-flight frame until the provider-specific Membrane pipeline reports the socket send. Only at
+those boundaries does Gateway offer a typed `EgressAcceptedFrame`; encoding, generation, bounded
+queue admission, and the later pacing callback do not count. A successful offer means transport
+egress acceptance, never proof that the browser or phone played or heard the audio.
+
+The engine handoff uses atomics-backed fixed capacity and a non-suspending send, so mixer or
+recording pressure cannot block live output. It stamps accepted PCM against the shared room clock
+and the effective recording-policy revision. The mixer keeps those frames in a separate
+recording-only timestamp buffer: recording subscriptions combine them with ordinary room inputs,
+while participant and monitor playback subscriptions never receive the direct audio a second time.
+Policy denial closes the atomic gate; a frame racing a transition is also rejected by revision at
+the mixer, and permission relaxation cannot replay it. Qualified agent tracks use the destination
+connection plus the stable `agent-egress` track identifier.
+
+The first call-engine test was red because the accepted-egress contract and mixer API did not
+exist. Its green path combines accepted agent PCM with a human input in the recorded full mix,
+proves the ordinary listener receives only the human input, and proves policy denial ignores later
+egress. Separate Gateway tests were red at the absent output binding API. Their green paths prove
+that WebRTC records only a successfully submitted RTP packet and telephony only a
+Membrane-acknowledged in-flight frame, while queued frames discarded by interruption produce no
+recording offer:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs \
+  test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/room_recording_test.exs --max-cases 1
+# 15 tests, 0 failures
+
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/webrtc/audio_egress_test.exs \
+  test/vxpipe/gateway/media/audio_output_test.exs --max-cases 1
+# 11 tests, 0 failures
+
+mix test --max-cases 1
+# 224 tests, 0 failures (6 excluded)
+```
+
+This closes generated-versus-egress-accepted provenance for the implemented WebRTC, Telnyx, and
+Twilio direct-output paths without changing live participant routing. It does not claim remote
+playout confirmation. Room/writer crash coverage, tagged S3-compatible integration, authorized
+operator playback, and final cross-slice manual verification remain pending.
+
+The complete Call Engine suite passes 357 tests, and the root gates pass formatting, compilation
+with warnings as errors, strict Credo over 647 source files, all 823 umbrella tests, and the
+unused-dependency check.
 
 ## Specification review
 

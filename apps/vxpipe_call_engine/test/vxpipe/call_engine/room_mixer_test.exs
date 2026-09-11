@@ -1,8 +1,9 @@
 defmodule Vxpipe.CallEngine.RoomMixerTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
+  alias Vxpipe.CallEngine.Media.{EgressAcceptedFrame, MixedFrame, NormalizedFrame}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
   alias Vxpipe.CallEngine.RoomMixer
   alias Vxpipe.CallEngine.RoomMixer.Subscription
 
@@ -145,6 +146,54 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert_frame(Subscription.take(recording, 1), nil, ["bob"], [7_000, 8_000], 2)
   end
 
+  test "adds accepted direct egress only to permitted recording output" do
+    recording_token = make_ref()
+
+    mixer =
+      start_mixer(
+        recording_token: recording_token,
+        maximum_recording_egress_frames: 2,
+        clock_origin_ms: 1_000,
+        clock: fn -> 1_000 end
+      )
+
+    :ok = apply_policy(mixer, 0, ["alice", "agent", "bob"], record_audio: true)
+    assert {:ok, listener} = subscribe(mixer, "alice-output", "alice", :full_mix)
+    assert {:ok, recording} = subscribe_recording(mixer, recording_token, :full_mix)
+
+    assert {:ok, handoff} = RoomMixer.open_recording_egress(mixer, "connection-alice")
+
+    assert :ok =
+             EgressHandoff.offer(
+               handoff,
+               egress_frame("agent", "connection-alice", [300, 400])
+             )
+
+    _ = :sys.get_state(mixer)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200]))
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+
+    assert_frame(Subscription.take(listener, 1), "alice", ["bob"], [100, 200], 0)
+
+    assert_frame(
+      Subscription.take(recording, 1),
+      nil,
+      ["agent", "bob"],
+      [400, 600],
+      0
+    )
+
+    :ok = apply_policy(mixer, 1, ["alice", "agent", "bob"], record_audio: false)
+
+    assert :ignored =
+             EgressHandoff.offer(
+               handoff,
+               egress_frame("agent", "connection-alice", [500, 600])
+             )
+
+    assert %{recording_egress_rejected_frames: 0} = RoomMixer.stats(mixer)
+  end
+
   test "bounds timestamp alignment and every subscriber queue without blocking the mixer" do
     mixer = start_mixer(maximum_buffered_timestamps: 1, maximum_sink_frames: 1)
     :ok = apply_policy(mixer, 0, ["alice", "bob"])
@@ -164,6 +213,17 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
              RoomMixer.push(mixer, frame("bob", 3, 2, [500, 600]))
 
     assert %{buffer_overflows: 1, sink_overflows: 1} = RoomMixer.stats(mixer)
+  end
+
+  test "rejects an invalid enabled recording egress bound" do
+    assert {:error, {{:invalid_room_mixer_option, :maximum_recording_egress_frames}, _child}} =
+             start_supervised(
+               {RoomMixer,
+                mixer_options(
+                  recording_token: make_ref(),
+                  maximum_recording_egress_frames: 0
+                )}
+             )
   end
 
   test "rejects cross-room, absent-recipient, and conflicting monitor subscriptions" do
@@ -263,23 +323,24 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
   end
 
   defp start_mixer(overrides \\ []) do
-    options =
-      Keyword.merge(
-        [
-          tenant_id: @identity.tenant_id,
-          room_id: @identity.room_id,
-          incarnation_id: @identity.incarnation_id,
-          sample_rate: 8_000,
-          channels: 1,
-          frame_samples: 2,
-          maximum_buffered_timestamps: 2,
-          maximum_sink_frames: 4,
-          register: false
-        ],
-        overrides
-      )
+    start_supervised!({RoomMixer, mixer_options(overrides)})
+  end
 
-    start_supervised!({RoomMixer, options})
+  defp mixer_options(overrides) do
+    Keyword.merge(
+      [
+        tenant_id: @identity.tenant_id,
+        room_id: @identity.room_id,
+        incarnation_id: @identity.incarnation_id,
+        sample_rate: 8_000,
+        channels: 1,
+        frame_samples: 2,
+        maximum_buffered_timestamps: 2,
+        maximum_sink_frames: 4,
+        register: false
+      ],
+      overrides
+    )
   end
 
   defp apply_policy(mixer, revision, participants, overrides \\ []) do
@@ -353,6 +414,19 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
       |> Map.merge(Map.new(overrides))
 
     struct!(NormalizedFrame, fields)
+  end
+
+  defp egress_frame(source, connection_id, samples) do
+    %EgressAcceptedFrame{
+      tenant_id: @identity.tenant_id,
+      room_id: @identity.room_id,
+      incarnation_id: @identity.incarnation_id,
+      source_participant_id: source,
+      connection_id: connection_id,
+      sample_rate: 8_000,
+      channels: 1,
+      payload: encode_samples(samples)
+    }
   end
 
   defp assert_frame({:ok, [%MixedFrame{} = frame]}, recipient, sources, samples, revision) do

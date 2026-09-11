@@ -26,6 +26,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
                 pipeline_ready?: false,
                 queue: {[], []},
                 ready_waiters: [],
+                recording_egress: nil,
                 remainder: <<>>
               ]
 

@@ -5,7 +5,9 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
   alias ExRTP.Packet
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
-  alias Vxpipe.Gateway.WebRTC.OpusEncoder
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
+  alias Vxpipe.Gateway.Media.EgressAcceptance
+  alias Vxpipe.Gateway.WebRTC.{EncodedAudioFrame, OpusEncoder}
 
   @frame_bytes 1_920
   @frame_duration_ms 20
@@ -40,6 +42,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
            peer_connection: Keyword.fetch!(options, :peer_connection),
            progress_interval_packets: Keyword.get(options, :progress_interval_packets, 5),
            queue: :queue.new(),
+           recording_egress: nil,
            remainder: <<>>,
            rtp_sequence: 0,
            rtp_timestamp: 0,
@@ -84,6 +87,18 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
+  end
+
+  def handle_call(
+        {:vxpipe_bind_recording_egress, %EgressHandoff{} = handoff},
+        _from,
+        %{current: nil, recording_egress: nil} = state
+      ) do
+    {:reply, :ok, %{state | recording_egress: handoff}}
+  end
+
+  def handle_call({:vxpipe_bind_recording_egress, %EgressHandoff{}}, _from, state) do
+    {:reply, {:error, :recording_already_bound}, state}
   end
 
   def handle_call({:vxpipe_audio_output, %AudioOutputFrame{}}, _from, state) do
@@ -177,6 +192,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
       callback: frame.reply_to,
       command_id: frame.command_id,
       correlation_id: frame.correlation_id,
+      incarnation_id: frame.incarnation_id,
+      room_id: frame.room_id,
+      source_participant_id: frame.participant_id,
+      tenant_id: frame.tenant_id,
       finished: false,
       last_progress_packets: 0,
       packet_count: 0,
@@ -191,7 +210,9 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     current = state.current
 
     if current.correlation_id == frame.correlation_id and current.command_id == frame.command_id and
-         current.callback == frame.reply_to and not current.finished do
+         current.callback == frame.reply_to and current.tenant_id == frame.tenant_id and
+         current.room_id == frame.room_id and current.incarnation_id == frame.incarnation_id and
+         current.source_participant_id == frame.participant_id and not current.finished do
       {:ok, state}
     else
       {:error, :busy}
@@ -229,8 +250,11 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   defp encode_frames(frames, state) do
     Enum.reduce_while(frames, {:ok, []}, fn frame, {:ok, packets} ->
       case state.encoder_module.encode(state.encoder, frame) do
-        {:ok, packet} -> {:cont, {:ok, [packet | packets]}}
-        {:error, _reason} -> {:halt, {:error, :encode_failed}}
+        {:ok, payload} ->
+          {:cont, {:ok, [%EncodedAudioFrame{payload: payload, pcm: frame} | packets]}}
+
+        {:error, _reason} ->
+          {:halt, {:error, :encode_failed}}
       end
     end)
     |> case do
@@ -287,14 +311,15 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
       pcm = state.remainder <> :binary.copy(<<0>>, padding_bytes)
 
       case state.encoder_module.encode(state.encoder, pcm) do
-        {:ok, packet} ->
+        {:ok, payload} ->
           current = %{state.current | packet_count: state.current.packet_count + 1}
+          frame = %EncodedAudioFrame{payload: payload, pcm: pcm}
 
           {:ok,
            %{
              state
              | current: current,
-               queue: :queue.in(packet, state.queue),
+               queue: :queue.in(frame, state.queue),
                remainder: <<>>
            }}
 
@@ -318,9 +343,9 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
   defp send_next(state) do
     case :queue.out(state.queue) do
-      {{:value, payload}, queue} ->
+      {{:value, %EncodedAudioFrame{} = frame}, queue} ->
         packet =
-          Packet.new(payload,
+          Packet.new(frame.payload,
             payload_type: 111,
             sequence_number: state.rtp_sequence,
             timestamp: state.rtp_timestamp,
@@ -330,6 +355,14 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
         case state.send_rtp.(state.peer_connection, state.track_id, packet) do
           :ok ->
+            :ok =
+              EgressAcceptance.record(
+                state.recording_egress,
+                state.current,
+                state.connection_id,
+                frame.pcm
+              )
+
             state = maybe_notify_started(state)
             pace_ref = make_ref()
             _timer = state.schedule.(self(), {:vxpipe_audio_pace, pace_ref}, @frame_duration_ms)

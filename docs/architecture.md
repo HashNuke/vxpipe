@@ -2402,6 +2402,24 @@ policy. A bounded pull handles at most 16 mixer frames at once, and the writer a
 pending chunks—about two seconds at the repository's 20 ms room frame—before rejecting later chunks
 and reporting incomplete evidence. Writer drain is independently bounded at 30 seconds.
 
+Direct agent output remains a connection egress path rather than being replayed through the
+participant mixer. For an enabled recording, Room Authority binds an engine-owned recording handoff
+to that direct output before connection startup can generate speech. WebRTC retains original PCM
+beside each queued encoded packet and offers it only after the peer connection accepts the RTP
+packet. The shared telephony output offers the PCM only when its provider-specific Membrane pipeline
+acknowledges the in-flight socket send. Generated, encoded, queued, interrupted, or transport-failed
+audio is therefore absent. This boundary proves egress acceptance, not remote playout or hearing.
+
+That handoff has atomics-backed fixed capacity and never suspends live output. It shares the
+mixer's room clock and an atomic projection of the effective recording policy, then sends accepted
+frames to a separate mixer buffer used only by recording subscriptions. Full-mix recordings combine
+those frames with concurrent room inputs, and selected agent tracks retain the source participant,
+destination connection, and stable direct-egress track identity. Ordinary participant/monitor
+subscriptions never receive the recording-only input, avoiding duplicate live audio. Policy
+revision validation is repeated at mixer admission, so a transition race fails closed and denied
+audio cannot be replayed after relaxation. Private transfer-preparation output never receives the
+main-room handoff.
+
 Development runtime settings use `VXPIPE_RECORDING_ENABLED`, `VXPIPE_RECORDING_S3_BUCKET`, and
 optional `VXPIPE_RECORDING_S3_REGION` / `VXPIPE_RECORDING_S3_ENDPOINT`. The endpoint parser accepts
 only root HTTP(S) origins and forces S3 path-style requests for compatible local stores. Credentials

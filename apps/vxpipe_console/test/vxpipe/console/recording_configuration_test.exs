@@ -22,6 +22,7 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
     assert [
              enabled: true,
              targets: [:full_mix, :individual_tracks],
+             maximum_egress_frames: 100,
              maximum_pull_frames: 16,
              writer: {Vxpipe.Artifacts.RecordingWriter, writer_options}
            ] = recording

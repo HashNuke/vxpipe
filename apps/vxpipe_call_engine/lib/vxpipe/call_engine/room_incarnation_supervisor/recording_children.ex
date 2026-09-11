@@ -22,12 +22,17 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor.RecordingChildren do
 
     options =
       Keyword.update!(options, :room_mixer, fn mixer_options ->
-        Keyword.put(mixer_options, :recording_token, recording_token)
+        mixer_options
+        |> Keyword.put(:recording_token, recording_token)
+        |> Keyword.put(
+          :maximum_recording_egress_frames,
+          Keyword.get(settings, :maximum_egress_frames, 100)
+        )
       end)
 
     recording_options =
       settings
-      |> Keyword.drop([:enabled])
+      |> Keyword.drop([:enabled, :maximum_egress_frames])
       |> Keyword.merge(recording_options(plan, incarnation_id, recording_token))
 
     {options, [{RoomRecording, recording_options}]}

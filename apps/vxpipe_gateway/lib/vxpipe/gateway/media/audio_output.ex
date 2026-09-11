@@ -4,6 +4,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   use GenServer
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
+  alias Vxpipe.Gateway.Media.EgressAcceptance
 
   alias Vxpipe.Gateway.Media.AudioOutput.{
     Buffering,
@@ -64,6 +66,18 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
 
   def handle_call(:await_ready, from, state) do
     {:noreply, %{state | ready_waiters: [from | state.ready_waiters]}}
+  end
+
+  def handle_call(
+        {:vxpipe_bind_recording_egress, %EgressHandoff{} = handoff},
+        _from,
+        %{current: nil, recording_egress: nil} = state
+      ) do
+    {:reply, :ok, %{state | recording_egress: handoff}}
+  end
+
+  def handle_call({:vxpipe_bind_recording_egress, %EgressHandoff{}}, _from, state) do
+    {:reply, {:error, :recording_already_bound}, state}
   end
 
   def handle_call(
@@ -194,6 +208,14 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
 
   defp acknowledge_playout(state) do
     current = state.current
+
+    :ok =
+      EgressAcceptance.record(
+        state.recording_egress,
+        current,
+        state.connection_id,
+        state.in_flight.payload
+      )
 
     current =
       if current.started? do

@@ -2,6 +2,7 @@ defmodule Vxpipe.Console.RecordingConfiguration do
   @moduledoc false
 
   @maximum_pull_frames 16
+  @maximum_egress_frames 100
   @maximum_pending_chunks 100
   @drain_timeout_ms 30_000
 
@@ -33,6 +34,7 @@ defmodule Vxpipe.Console.RecordingConfiguration do
        [
          enabled: true,
          targets: [:full_mix, :individual_tracks],
+         maximum_egress_frames: @maximum_egress_frames,
          maximum_pull_frames: @maximum_pull_frames,
          writer:
            {Vxpipe.Artifacts.RecordingWriter,

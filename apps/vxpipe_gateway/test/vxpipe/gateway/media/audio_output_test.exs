@@ -1,7 +1,8 @@
 defmodule Vxpipe.Gateway.Media.AudioOutputTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Media.{AudioOutputFrame, NormalizedFrame, OutputSink}
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
   alias Vxpipe.Gateway.Media.{AudioOutput, PlaybackFrame}
 
   test "frames streamed PCM and reports only transport-acknowledged playout" do
@@ -93,6 +94,46 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
     assert_receive {:test_audio_output_pipeline_push, ^second_id, %PlaybackFrame{timestamp: 0}}
   end
 
+  test "records only PCM acknowledged by the telephony output pipeline" do
+    {output, connection_id} = start_output(maximum_frames: 4)
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, _pipeline, ^output}
+    send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+
+    handoff = recording_handoff(connection_id)
+    assert :ok = OutputSink.bind_recording(output, handoff)
+
+    accepted = :binary.copy(<<1, 0>>, 960)
+    queued = :binary.copy(<<2, 0>>, 960)
+    assert :ok = push(output, connection_id, accepted <> queued)
+
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id, %PlaybackFrame{timestamp: 0}}
+
+    refute_receive {:vxpipe_recording_egress, ^handoff, %NormalizedFrame{}}
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 0})
+
+    assert_receive {:vxpipe_recording_egress, ^handoff,
+                    %NormalizedFrame{
+                      source_participant_id: "agent-test",
+                      connection_id: ^connection_id,
+                      track_id: "agent-egress",
+                      payload: ^accepted
+                    }}
+
+    :ok = EgressHandoff.release(handoff)
+
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id,
+                    %PlaybackFrame{timestamp: 960}}
+
+    assert {:ok, 20} = interrupt(output)
+    assert_receive {:test_audio_output_pipeline_stopped, ^pipeline_id, _pipeline}
+    assert_receive {:test_remote_playback_cleared, _pipeline_options}
+    assert_receive {:test_audio_output_pipeline_started, replacement_id, _pipeline, ^output}
+
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 960})
+    refute replacement_id == pipeline_id
+    refute_receive {:vxpipe_recording_egress, ^handoff, %NormalizedFrame{}}
+  end
+
   test "rejects mismatched identity and stops when the transport pipeline fails" do
     {output, connection_id} = start_output(maximum_frames: 1)
     assert_receive {:test_audio_output_pipeline_started, pipeline_id, pipeline, ^output}
@@ -159,5 +200,31 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
 
   defp unique_id(prefix) do
     "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+  end
+
+  defp recording_handoff(connection_id) do
+    counters = EgressHandoff.new_counters()
+    :ok = EgressHandoff.install_policy(counters, 0, true)
+
+    EgressHandoff.new(
+      self(),
+      make_ref(),
+      %{
+        tenant_id: "tenant-test",
+        room_id: "room-test",
+        incarnation_id: "incarnation-test"
+      },
+      %{
+        channels: 1,
+        clock: fn -> 0 end,
+        clock_origin_ms: 0,
+        frame_samples: 960,
+        gate: counters,
+        sample_rate: 48_000
+      },
+      connection_id,
+      4,
+      counters
+    )
   end
 end

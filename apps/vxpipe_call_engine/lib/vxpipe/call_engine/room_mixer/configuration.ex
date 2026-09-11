@@ -1,7 +1,13 @@
 defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.RoomMixer.{Playout, State, SubscriptionCatalog, TimestampBuffer}
+  alias Vxpipe.CallEngine.RoomMixer.{
+    Playout,
+    RecordingEgress,
+    State,
+    SubscriptionCatalog,
+    TimestampBuffer
+  }
 
   @spec new(keyword()) :: {:ok, State.t()} | {:error, term()}
   def new(options) when is_list(options) do
@@ -10,13 +16,23 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
          {:ok, format} <- format(options),
          {:ok, playout} <- Playout.new(options, clock_origin_ms, format),
          {:ok, maximum_buffered_timestamps} <- positive(options, :maximum_buffered_timestamps),
-         {:ok, maximum_sink_frames} <- positive(options, :maximum_sink_frames) do
+         {:ok, maximum_sink_frames} <- positive(options, :maximum_sink_frames),
+         recording_token = recording_token(options),
+         {:ok, recording_egress} <-
+           RecordingEgress.new(
+             Keyword.put(options, :recording_token, recording_token),
+             identity,
+             format,
+             clock_origin_ms,
+             maximum_buffered_timestamps
+           ) do
       {:ok,
        %State{
          identity: identity,
          clock_origin_ms: clock_origin_ms,
          format: format,
-         recording_token: recording_token(options),
+         recording_token: recording_token,
+         recording_egress: recording_egress,
          playout: playout,
          policy: nil,
          buffer: TimestampBuffer.new(maximum_buffered_timestamps),

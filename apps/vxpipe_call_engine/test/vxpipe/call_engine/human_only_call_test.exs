@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     DefinitionCompiler,
     Error,
     RoomMixer,
+    TestAudioOutputSink,
     TestCallLifecycleTimer,
     TestMediaPolicyEnforcer,
     TestRecordingWriter
@@ -162,7 +163,12 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
-    caller_attachment = attach(plan, room, caller, "conn-recording-caller")
+    caller_sink = start_supervised!({TestAudioOutputSink, observer: self()})
+
+    caller_attachment =
+      attach(plan, room, caller, "conn-recording-caller", caller_sink)
+
+    assert_receive {:test_audio_recording_bound, ^caller_sink, _handoff}
     receiver_attachment = attach(plan, room, receiver, "conn-recording-receiver")
 
     caller_audio = :binary.copy(<<100::little-signed-16>>, 960)
@@ -256,7 +262,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     }
   end
 
-  defp attach(plan, room, participant, connection_id) do
+  defp attach(plan, room, participant, connection_id, output_sink \\ nil) do
     assert {:ok, command} =
              AttachConnection.new(
                tenant_id: plan.tenant_id,
@@ -268,7 +274,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    assert {:ok, attachment} = CallEngine.attach_connection(command)
+    assert {:ok, attachment} = CallEngine.attach_connection(command, output_sink)
     attachment
   end
 

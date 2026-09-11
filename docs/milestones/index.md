@@ -4,8 +4,10 @@ Status: 24 milestone specifications: 17 complete and 7 incomplete. Milestone 17,
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
-Milestone 18, Twilio through the common telephony contract, is the current implementation slice.
-The earlier behavior contracts have completed focused review.
+Milestone 18, Twilio through the common telephony contract, remains formally incomplete only because
+its guarded live-provider audio check still needs credentials and an approved destination. Milestone
+19, permitted live recordings streamed to S3, is the current implementation slice. The earlier
+behavior contracts have completed focused review.
 Implementation continues through milestone 22, including the runnable samples and their
 cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain
 unimplemented until the user has exercised the working platform and decided which fixes or

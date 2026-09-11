@@ -21,11 +21,17 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
        callback: nil,
        observer: Keyword.fetch!(options, :observer),
        pending_output: nil,
-       played_ms: 0
+       played_ms: 0,
+       recording_egress: nil
      }}
   end
 
   @impl true
+  def handle_call({:vxpipe_bind_recording_egress, handoff}, _from, state) do
+    send(state.observer, {:test_audio_recording_bound, self(), handoff})
+    {:reply, :ok, %{state | recording_egress: handoff}}
+  end
+
   def handle_call({:vxpipe_audio_output, frame}, from, state) do
     send(state.observer, {:test_audio_output, self(), frame})
     state = %{state | callback: {frame.reply_to, frame.correlation_id}}

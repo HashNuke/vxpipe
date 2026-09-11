@@ -2,12 +2,19 @@ defmodule Vxpipe.CallEngine.Media.OutputSink do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Recording.EgressHandoff
 
   @call_timeout 15_000
 
   @spec push(pid(), AudioOutputFrame.t()) :: :ok | {:error, term()}
   def push(sink, %AudioOutputFrame{} = frame) when is_pid(sink) do
     safe_call(sink, {:vxpipe_audio_output, frame})
+  end
+
+  @doc false
+  @spec bind_recording(pid(), EgressHandoff.t()) :: :ok | {:error, term()}
+  def bind_recording(sink, %EgressHandoff{} = handoff) when is_pid(sink) do
+    safe_call(sink, {:vxpipe_bind_recording_egress, handoff})
   end
 
   @spec finish(pid(), String.t(), pid()) :: :ok | {:error, term()}

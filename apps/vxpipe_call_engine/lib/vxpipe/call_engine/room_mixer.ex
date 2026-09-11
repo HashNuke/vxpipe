@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     FrameAdmission,
     Playout,
     Policy,
+    RecordingEgress,
     State,
     Subscription,
     SubscriptionCatalog,
@@ -64,6 +65,13 @@ defmodule Vxpipe.CallEngine.RoomMixer do
           {:ok, Subscription.t()} | {:error, term()}
   def subscribe_recording(server, options) when is_list(options) do
     safe_call(server, {:subscribe_recording, options})
+  end
+
+  @doc false
+  @spec open_recording_egress(GenServer.server(), String.t()) ::
+          :disabled | {:ok, Vxpipe.CallEngine.Recording.EgressHandoff.t()} | {:error, term()}
+  def open_recording_egress(server, connection_id) when is_binary(connection_id) do
+    safe_call(server, {:open_recording_egress, connection_id})
   end
 
   @doc false
@@ -139,6 +147,10 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     end
   end
 
+  def handle_call({:open_recording_egress, connection_id}, _from, state) do
+    {:reply, RecordingEgress.open(state.recording_egress, self(), connection_id), state}
+  end
+
   def handle_call({:flush_through, timestamp}, _from, state) do
     case flush(state, timestamp) do
       {:ok, result, state} -> {:reply, {:ok, result}, state}
@@ -189,14 +201,40 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     {:noreply, %{state | subscriptions: subscriptions}}
   end
 
+  def handle_info(
+        {:vxpipe_recording_egress, handoff, %NormalizedFrame{} = frame},
+        state
+      ) do
+    recording_egress =
+      case RecordingEgress.put(
+             state.recording_egress,
+             handoff,
+             frame,
+             state.policy,
+             state.subscriptions
+           ) do
+        {:ok, recording_egress} -> recording_egress
+        {:error, _reason, recording_egress} -> recording_egress
+      end
+
+    :ok = Vxpipe.CallEngine.Recording.EgressHandoff.release(handoff)
+    {:noreply, %{state | recording_egress: recording_egress}}
+  end
+
   defp state_stats(%State{} = state) do
+    egress_stats = RecordingEgress.stats(state.recording_egress)
+
     %{
       buffered_timestamps: map_size(state.buffer.buckets),
       buffer_overflows: state.buffer_overflows,
       policy_dropped_frames: state.policy_dropped_frames,
       policy_revision: policy_revision(state.policy),
       sink_overflows: state.subscriptions.overflows,
-      subscriptions: map_size(state.subscriptions.entries)
+      subscriptions: map_size(state.subscriptions.entries),
+      recording_egress_buffered_timestamps: egress_stats.buffered_timestamps,
+      recording_egress_buffer_overflows: egress_stats.buffer_overflows,
+      recording_egress_pending_frames: egress_stats.pending_frames,
+      recording_egress_rejected_frames: egress_stats.rejected_frames
     }
   end
 
@@ -206,23 +244,41 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   defp flush(state, timestamp) do
     case TimestampBuffer.take_through(state.buffer, timestamp) do
       {:ok, buckets, buffer} ->
-        {subscriptions, delivered, dropped} =
-          Fanout.deliver(
-            buckets,
-            state.subscriptions,
-            state.identity,
-            state.format,
-            state.policy,
-            self()
-          )
+        case RecordingEgress.take_through(state.recording_egress, timestamp) do
+          {:ok, recording_buckets, recording_egress} ->
+            {subscriptions, delivered, dropped} =
+              Fanout.deliver(
+                buckets,
+                recording_buckets,
+                state.subscriptions,
+                state.identity,
+                state.format,
+                state.policy,
+                self()
+              )
 
-        result = %{
-          delivered: delivered,
-          dropped: dropped,
-          flushed_timestamps: length(buckets)
-        }
+            result = %{
+              delivered: delivered,
+              dropped: dropped,
+              flushed_timestamps:
+                buckets
+                |> Kernel.++(recording_buckets)
+                |> Enum.map(&elem(&1, 0))
+                |> Enum.uniq()
+                |> length()
+            }
 
-        {:ok, result, %{state | buffer: buffer, subscriptions: subscriptions}}
+            {:ok, result,
+             %{
+               state
+               | buffer: buffer,
+                 recording_egress: recording_egress,
+                 subscriptions: subscriptions
+             }}
+
+          {:error, reason} ->
+            {:error, reason, state}
+        end
 
       {:error, reason} ->
         {:error, reason, state}

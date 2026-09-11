@@ -27,6 +27,10 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Validation do
       callback: frame.reply_to,
       command_id: frame.command_id,
       correlation_id: frame.correlation_id,
+      incarnation_id: frame.incarnation_id,
+      room_id: frame.room_id,
+      source_participant_id: frame.participant_id,
+      tenant_id: frame.tenant_id,
       finished?: false,
       frame_count: 0,
       last_progress_frames: 0,
@@ -41,7 +45,9 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Validation do
     current = state.current
 
     if current.correlation_id == frame.correlation_id and current.command_id == frame.command_id and
-         current.callback == frame.reply_to and not current.finished? do
+         current.callback == frame.reply_to and current.tenant_id == frame.tenant_id and
+         current.room_id == frame.room_id and current.incarnation_id == frame.incarnation_id and
+         current.source_participant_id == frame.participant_id and not current.finished? do
       {:ok, state}
     else
       {:error, :busy}

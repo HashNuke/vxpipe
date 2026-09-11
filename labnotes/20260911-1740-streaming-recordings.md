@@ -473,3 +473,55 @@ integration, and playback remain pending.
 
 Root formatting, compilation with warnings as errors, strict Credo over 642 source files, all 819
 umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: transport-accepted direct output
+
+Tracing the implemented speech path showed that direct output did not enter the room mixer. Feeding
+generated audio into recording would have been incorrect because interruption can discard queued
+frames. Feeding it back into ordinary mixer fanout would also have duplicated live audio. The
+chosen boundary therefore keeps live delivery unchanged and adds a distinct recording-only input.
+
+The first engine test failed at the missing accepted-egress frame and handoff modules. The engine
+now creates one connection-qualified handoff only for an enabled recording and binds it to a direct
+output before connection startup can emit speech. The handoff reserves fixed capacity through
+atomics, performs only a non-suspending send, and aligns each frame to the existing room clock. Its
+recording gate carries the current policy revision. A denial prevents offers immediately, while the
+mixer repeats revision and presence checks to fail closed across a transition race.
+
+The mixer holds accepted direct output in a recording-only timestamp buffer. Recording subscribers
+combine it with ordinary room input at the same timestamp; participant and monitor output ignore
+that buffer. This preserves one live delivery while making the recorded full mix contain the audio
+the transport actually accepted. Individual output identifies the source participant, destination
+connection, and `agent-egress` track.
+
+Gateway tests then failed at the absent recording-bind output contract. WebRTC now keeps the source
+PCM beside each encoded packet and offers it only after RTP submission succeeds. The shared phone
+output offers the exact in-flight PCM only after its Membrane pipeline acknowledges sending it.
+Frames waiting in either bounded output queue are discarded by interruption without a recording
+offer. This is deliberately called egress acceptance; nothing in this path proves remote playback.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs \
+  test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/room_recording_test.exs --max-cases 1
+# 15 tests, 0 failures
+
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/webrtc/audio_egress_test.exs \
+  test/vxpipe/gateway/media/audio_output_test.exs --max-cases 1
+# 11 tests, 0 failures
+
+mix test --max-cases 1
+# 224 tests, 0 failures (6 excluded)
+```
+
+The complete Call Engine suite passes 357 tests. The first root suite run retained one failed Call
+Engine target after exiting nonzero; rerunning that exact retained target passed, and a subsequent
+complete run passed all 823 umbrella tests. Root formatting, compilation with warnings as errors,
+strict Credo over 647 source files, and the unused-dependency check also pass.
+
+Pending milestone work remains room/writer crash behavior, tagged object-store integration,
+authorized operator playback, and final cross-slice manual verification.
