@@ -32,7 +32,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 participant_roles: %{},
                 speech_to_text_monitors: %{},
                 text_capability: nil,
-                text_to_speech_capability: nil
+                text_to_speech_capability: nil,
+                text_to_speech_runtime: nil
               ]
 
   @type t :: %__MODULE__{
@@ -47,7 +48,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           background_tool_calls: map(),
           next_sequence: pos_integer(),
           opening_audio: OpeningAudio.t(),
-          pending_agent_transfer: nil | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Pending.t(),
+          pending_agent_transfer:
+            nil
+            | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Pending.t()
+            | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Restoration.t(),
           pending_agent_teardowns: %{optional(pid()) => map()},
           participant_monitors: %{optional(reference()) => String.t()},
           participant_supervisors: %{optional(String.t()) => pid()},
@@ -59,7 +63,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           startup_ready?: boolean(),
           speech_to_text_monitors: %{optional(reference()) => String.t()},
           text_capability: nil | map(),
-          text_to_speech_capability: nil | map()
+          text_to_speech_capability: nil | map(),
+          text_to_speech_runtime: nil | Vxpipe.CallEngine.TextToSpeechRuntime.t()
         }
 
   @spec new(

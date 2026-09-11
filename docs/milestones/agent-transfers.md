@@ -30,7 +30,7 @@ commit, while the source retains conversation.
 - [x] Implement room prepare/commit lifecycle, distinct participant/activation identities, and supervised destination/source ownership.
 - [x] Integrate private destination history/variable projection and source termination after commit.
 - [x] Preserve a re-entering agent's participant identity while creating a fresh activation and rebinding its private tool authority.
-- [ ] Implement total deadline, late-result exclusion, typed failures and single restoration budget.
+- [x] Implement total deadline, late-result exclusion, typed failures and single restoration budget.
 - [x] Emit private transfer history and safe client outcomes without adding new RTVI-core messages.
 
 ## Acceptance and failure checks
@@ -39,7 +39,7 @@ commit, while the source retains conversation.
 - [x] Destination startup fails or deadline expires: source remains responsible, no completed event, destination cleaned up.
 - [ ] Commit preserves call/variables/entry refs; source capability/tool workers terminate, old output cannot reach new activation.
 - [x] Re-enter agent: same participant ID, new activation, no greeting replay; permitted history only.
-- [ ] Restoration attempts exactly once; detailed failure does not leak through speech or full-debug events.
+- [x] Restoration attempts exactly once; detailed failure does not leak through speech or full-debug events.
 - [ ] Empty transfers expose no tool. Every history mode excludes private prompts/tool data
   and generated-but-unplayed text; selected contains only allowed variables/reason.
 - [ ] Block destination preparation: source can converse and destination cannot speak to caller.
@@ -212,8 +212,31 @@ engine/storage boundary instead of being dropped by its closed vocabulary; the c
 passes 37 tests. The complete Call Engine suite passes 277 tests with one tagged integration
 exclusion, and Gateway passes 67 with four exclusions. Root formatting, warnings-as-errors
 compilation, strict Credo, and unused-dependency checks pass. Root tests stop at the unchanged
-missing PostgreSQL SCRAM password before the database-backed suites begin. The single restoration
-budget remains open.
+missing PostgreSQL SCRAM password before the database-backed suites begin. The source-restoration
+checkpoint below completes the remaining single-attempt budget.
+
+The source-restoration checkpoint retains the active agent's resolved TTS runtime independently
+from its temporary capability process. If that capability disappears while destination preparation
+is pending and the transfer then fails, Room Authority leaves startup to one room-supervised task
+with a fixed 750 ms restoration budget. This stays within the transfer tool's existing one-second
+envelope beyond the authored attempt deadline instead of creating a second unbounded phase.
+Successful restoration installs a freshly monitored source TTS capability before the transfer
+worker receives its generic failure. Failure, task death, or
+expiry records one terminal restoration outcome and never starts another attempt. A source whose
+speech capability remains present performs no restoration. The retained runtime changes only after
+a successful transfer commit, so a later source uses its own pinned voice/provider selection.
+
+The focused room test disconnects source TTS during controlled failing destination preparation,
+observes exactly one replacement transport before the generic `tool_failed` event, and verifies the
+private failed-transfer fact records `restoration: completed`. Disconnecting the replacement starts
+no third transport. Existing failed and deadline attempts now record `restoration: not_required`;
+the internal failure cause remains absent from the model/client event. A separate inspection test
+proves the retained runtime exposes neither provider nor transport credentials in crash-state
+formatting. The nine-test transfer-room file and complete 279-test Call Engine suite pass with one
+tagged integration exclusion. Root
+formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. Root
+tests stop at the unchanged Persistence setup failure because PostgreSQL SCRAM authentication needs
+a password absent from this shell; no credential source was inspected.
 
 ## Specification review
 

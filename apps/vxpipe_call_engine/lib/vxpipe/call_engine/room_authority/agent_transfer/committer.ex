@@ -56,7 +56,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
         pending_agent_teardowns: pending_agent_teardowns,
         pending_agent_transfer: nil,
         text_capability: destination_capability,
-        text_to_speech_capability: Startup.activate_text_to_speech(preparation.text_to_speech)
+        text_to_speech_capability: Startup.activate_text_to_speech(preparation.text_to_speech),
+        text_to_speech_runtime: preparation.destination.text_to_speech
     }
 
     state = History.completed(state, request)

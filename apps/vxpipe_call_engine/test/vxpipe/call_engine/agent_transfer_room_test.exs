@@ -14,7 +14,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     DefinitionCompiler,
     RoomAuthority,
     TestCollectingArchiveWriter,
-    TestSelectiveAgentRuntimeModelProvider
+    TestSelectiveAgentRuntimeModelProvider,
+    TestTextToSpeechTransport
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
@@ -28,6 +29,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -366,7 +368,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       "failed-transfer-to-billing",
       %{
         "cause" => "destination_plan_unavailable",
-        "outcome" => "failed"
+        "outcome" => "failed",
+        "restoration" => "not_required"
       }
     )
 
@@ -478,7 +481,11 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       caller,
       billing,
       "timed-transfer-to-billing",
-      %{"cause" => "deadline_elapsed", "outcome" => "failed"}
+      %{
+        "cause" => "deadline_elapsed",
+        "outcome" => "failed",
+        "restoration" => "not_required"
+      }
     )
 
     reply_to_next_request("The transfer could not be completed.")
@@ -503,6 +510,93 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert {:ok, next_response} = ModelResponse.new(text: "Yes.")
     send(next_provider, {:test_agent_runtime_response, {:ok, next_response}})
+  end
+
+  test "restores a lost source speech capability once after preparation fails" do
+    configure_text_to_speech()
+
+    plan =
+      compile_plan(
+        billing_model: "test:blocked-unavailable",
+        text_to_speech: true
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    reception = Map.fetch!(plan.participants, "reception")
+    billing = Map.fetch!(plan.participants, "billing")
+
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+
+    assert_receive {:test_tts_transport_started, source_transport, _connection}, 2_000
+
+    attach_caller(plan, room, caller)
+
+    assert :ok =
+             CallEngine.send_text(send_command(plan, room, caller, "Please try billing."))
+
+    assert_receive {:test_agent_runtime_stream, source_provider, _source_request}, 2_000
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: "restore-source-after-failure",
+               name: "transfer",
+               arguments: %{"destination" => "billing"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_model_preparing, blocked_preparer}, 2_000
+
+    authority = room_authority(plan)
+    %{text_to_speech_capability: %{pid: source_capability}} = :sys.get_state(authority)
+    source_monitor = Process.monitor(source_capability)
+
+    TestTextToSpeechTransport.disconnect(source_transport, :test_disconnect)
+    assert_receive {:DOWN, ^source_monitor, :process, ^source_capability, _reason}, 2_000
+    assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
+
+    send(blocked_preparer, :release_test_agent_runtime_model)
+
+    assert_receive {:test_tts_transport_started, restored_transport, _connection}, 2_000
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallFailed{
+                      tool_call_id: "restore-source-after-failure",
+                      name: "transfer",
+                      reason: :tool_failed
+                    }},
+                   2_000
+
+    assert_archived_transfer(
+      :participant_transfer_started,
+      reception,
+      caller,
+      billing,
+      "restore-source-after-failure",
+      %{}
+    )
+
+    assert_archived_transfer(
+      :participant_transfer_failed,
+      reception,
+      caller,
+      billing,
+      "restore-source-after-failure",
+      %{
+        "cause" => "destination_plan_unavailable",
+        "outcome" => "failed",
+        "restoration" => "completed"
+      }
+    )
+
+    %{text_to_speech_capability: %{pid: restored_capability}} = :sys.get_state(authority)
+    restored_monitor = Process.monitor(restored_capability)
+    TestTextToSpeechTransport.disconnect(restored_transport, :test_disconnect)
+
+    assert_receive {:DOWN, ^restored_monitor, :process, ^restored_capability, _reason}, 2_000
+    assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
+    refute_receive {:test_tts_transport_started, _third_transport, _connection}, 100
   end
 
   test "agent re-entry keeps identity, refreshes activation, and does not replay its greeting" do
@@ -620,6 +714,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     transfer_timeout_ms = Keyword.get(options, :transfer_timeout_ms, 30_000)
     transfer_history = Keyword.get(options, :transfer_history, %{mode: "fresh"})
+    text_to_speech? = Keyword.get(options, :text_to_speech, false)
 
     {call_variables, initial_variables, reception_permissions, billing_permissions} =
       variable_setup(options)
@@ -647,7 +742,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      prompt: "Route callers safely.",
                      transfer_history: reception_transfer_history,
                      first_message: %{mode: "wait_for_input"},
-                     capabilities: %{model_inference: "test-model"},
+                     capabilities: agent_capabilities("test-model", text_to_speech?),
                      tools: %{},
                      variable_permissions: reception_permissions,
                      transfers: ["billing"]
@@ -658,7 +753,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      prompt: "Handle billing requests.",
                      transfer_history: transfer_history,
                      first_message: billing_first_message,
-                     capabilities: %{model_inference: "billing-model"},
+                     capabilities: agent_capabilities("billing-model", text_to_speech?),
                      tools: %{},
                      variable_permissions: billing_permissions,
                      transfers: billing_transfers
@@ -695,12 +790,50 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                    kind: :model_inference,
                    provider: :req_llm,
                    options: %{model: billing_model}
+                 },
+                 "test-voice" => %{
+                   kind: :text_to_speech,
+                   provider: FluxTextToSpeech,
+                   options: %{
+                     model: "flux-test-voice",
+                     encoding: :linear16,
+                     sample_rate: 48_000
+                   }
                  }
                },
                host_tools: %{}
              })
 
     plan
+  end
+
+  defp agent_capabilities(model_profile, true) do
+    %{model_inference: model_profile, text_to_speech: "test-voice"}
+  end
+
+  defp agent_capabilities(model_profile, false), do: %{model_inference: model_profile}
+
+  defp configure_text_to_speech do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    text_to_speech = [
+      enabled: true,
+      provider: FluxTextToSpeech,
+      provider_options: [
+        api_key: "runtime-test-secret",
+        model: "flux-application-voice",
+        encoding: :linear16,
+        sample_rate: 48_000
+      ],
+      transport: {TestTextToSpeechTransport, [observer: self()]},
+      maximum_requests: 2
+    ]
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(settings, :text_to_speech, text_to_speech)
+    )
   end
 
   defp variable_setup(options) do
@@ -856,6 +989,16 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, key)
 
     Process.monitor(participant_supervisor)
+  end
+
+  defp room_authority(plan) do
+    assert [{authority, _value}] =
+             Registry.lookup(
+               Vxpipe.CallEngine.RoomRegistry,
+               {plan.tenant_id, plan.room_id}
+             )
+
+    authority
   end
 
   defp active_activation_id(plan, participant_id) do

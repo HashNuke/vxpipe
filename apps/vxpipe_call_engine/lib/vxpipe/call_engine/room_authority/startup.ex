@@ -248,7 +248,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
 
   defp start_selected_text_to_speech(runtime, participant_id, state) do
     with {:ok, capability} <- prepare_text_to_speech(runtime, participant_id, state) do
-      {:ok, %{state | text_to_speech_capability: activate_text_to_speech(capability)}}
+      {:ok,
+       %{
+         state
+         | text_to_speech_capability: activate_text_to_speech(capability),
+           text_to_speech_runtime: runtime
+       }}
     end
   end
 

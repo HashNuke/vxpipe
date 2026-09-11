@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   @moduledoc false
 
+  @derive {Inspect, only: [:maximum_requests, :asset_cache_identity]}
   @enforce_keys [:provider, :transport, :maximum_requests, :asset_cache_identity]
   defstruct @enforce_keys
 

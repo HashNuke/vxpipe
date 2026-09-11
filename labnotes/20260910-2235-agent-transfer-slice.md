@@ -339,3 +339,40 @@
   unchanged Persistence setup failure because PostgreSQL SCRAM authentication has no password in
   this shell; no credential source was inspected. No restoration mechanism is claimed by this
   checkpoint because agent-to-agent preparation has not stopped the still-working source.
+
+## 2026-09-11 — bounded source TTS restoration
+
+- Added the focused room test before implementation. It disconnected the source TTS transport while
+  a destination model preparation was deliberately blocked, then released that preparation into a
+  definite failure. The test failed waiting for a replacement transport: the room archived and
+  returned the transfer failure immediately.
+- Room state now retains the current agent's resolved TTS runtime separately from the temporary
+  capability. Initial startup installs it, and successful transfer commit replaces it with the
+  destination's pinned runtime. Provider credentials remain inside the existing redacted runtime
+  structures and are not added to events or inspection output.
+- A dedicated `SourceRestorer` owns eligibility and one fixed 750 ms restoration budget. The bound
+  fits inside the transfer invocation's existing one-second envelope beyond the authored attempt
+  deadline, so recovery cannot introduce a second open-ended phase. Restoration is permitted only
+  while the original source activation and caller connection remain authoritative,
+  source TTS is absent, and that source has a resolved TTS runtime. It starts through the existing
+  room transfer `Task.Supervisor`; no provider or capability startup runs in a Room Authority
+  callback.
+- Preparation failure, process death, or total-deadline expiry either skips restoration when it is
+  unnecessary or replaces the pending preparation with exactly one restoration task. Success
+  activates a fresh monitor before replying to the original tool worker. Error, task death, or
+  restoration expiry cleans any partial source TTS and terminates without retry. Late prepared TTS
+  is discarded instead of acquiring room authority.
+- Private failed-transfer history now records the closed restoration outcome `not_required`,
+  `completed`, `failed`, or `timed_out`. The model/client still receives only `tool_failed`, including
+  the successful-restoration scenario.
+- The green test observes one replacement TTS transport and `restoration: completed`, then disconnects
+  that replacement and proves no third start occurs. Existing ordinary failure/deadline checks record
+  `not_required`. The complete nine-test transfer-room file passes.
+- Diff review found that retaining the runtime made arbitrary provider/transport values available to
+  Room Authority crash-state inspection. A focused test first failed by exposing a credential
+  sentinel. `TextToSpeechRuntime` now exposes only its bounded request count and non-secret asset
+  cache identity through `Inspect`; the provider and transport configuration stay private.
+- The complete Call Engine suite passes 279 tests with one tagged integration exclusion. Root
+  formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  Root `mix test` stops at the unchanged Persistence database-creation failure because PostgreSQL
+  SCRAM authentication needs a password absent from this shell; no credential source was inspected.

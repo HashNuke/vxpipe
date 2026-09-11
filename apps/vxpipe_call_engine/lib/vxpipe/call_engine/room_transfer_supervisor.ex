@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
+  alias Vxpipe.CallEngine.{TextToSpeechRuntime, RoomAuthority.Startup}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   def start_link(options) do
@@ -43,6 +44,32 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
         AgentTransfer.DestinationPreparer,
         :prepare,
         [request, runtime, destination, first_activation?, initial_messages]
+      )
+
+    {:ok, task}
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @spec restore_text_to_speech(
+          String.t(),
+          TextToSpeechRuntime.t(),
+          String.t(),
+          pid()
+        ) :: {:ok, Task.t()} | {:error, :unavailable}
+  def restore_text_to_speech(
+        incarnation_id,
+        %TextToSpeechRuntime{} = runtime,
+        participant_id,
+        owner
+      )
+      when is_binary(incarnation_id) and is_binary(participant_id) and is_pid(owner) do
+    task =
+      Task.Supervisor.async_nolink(
+        via(incarnation_id),
+        Startup,
+        :prepare_text_to_speech,
+        [runtime, participant_id, incarnation_id, owner]
       )
 
     {:ok, task}

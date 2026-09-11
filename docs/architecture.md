@@ -994,8 +994,20 @@ This checkpoint supports fresh, all-spoken, and bounded-last-spoken destination 
 implements preparation failure, total-deadline cleanup, duplicate-attempt rejection, and late-result
 exclusion. Selected transfers now require and privately deliver a bounded reason alongside only
 the destination-readable variables. Variable projections refresh before every generation, and the
-variable-tool continuation observes its newly accepted revision. Re-entry with a fresh activation
-and the bounded source-capability restoration rule remain follow-up work.
+variable-tool continuation observes its newly accepted revision. Re-entry keeps the participant
+identity, creates a fresh activation, and does not replay its first greeting.
+
+The current agent-only transfer path retains the active source's resolved TTS runtime separately
+from its temporary capability process. If source TTS disappears during destination preparation and
+that preparation fails, one room-supervised task may rebuild source TTS within a fixed 750 ms
+budget. That bound fits inside the transfer tool's existing one-second allowance beyond the
+authored attempt deadline, rather than resetting the main attempt budget. Room Authority coordinates
+only the task result; it does not start the capability inline.
+The transfer returns its generic failure after restoration settles, while private history records
+whether restoration was unnecessary, completed, failed, or timed out. The replacement is not
+restarted again if it later fails. Successful transfer commit replaces the retained runtime with
+the destination's pinned selection. The runtime's inspection representation excludes its provider
+and transport values so retaining it does not add credentials to Room Authority crash reports.
 
 ### Presence-driven media and transcript policy — approved R38
 

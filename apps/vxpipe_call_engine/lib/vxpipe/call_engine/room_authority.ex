@@ -216,13 +216,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     AgentTransfer.prepared(reference, preparation, state)
   end
 
+  def handle_info({reference, {:ok, capability}}, state)
+      when is_reference(reference) and is_map(capability) do
+    AgentTransfer.restored(reference, capability, state)
+  end
+
   def handle_info({reference, {:error, reason}}, state) when is_reference(reference) do
-    AgentTransfer.preparation_failed(reference, reason, state)
+    AgentTransfer.worker_failed(reference, reason, state)
   end
 
   def handle_info({:vxpipe_agent_transfer_deadline, reference}, state)
       when is_reference(reference) do
     AgentTransfer.deadline_elapsed(reference, state)
+  end
+
+  def handle_info({:vxpipe_agent_transfer_restoration_deadline, reference}, state)
+      when is_reference(reference) do
+    AgentTransfer.restoration_deadline_elapsed(reference, state)
   end
 
   def handle_info(
@@ -415,7 +425,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
-    case AgentTransfer.preparation_down(monitor, reason, state) do
+    case AgentTransfer.worker_down(monitor, reason, state) do
       {:handled, state} ->
         {:noreply, state}
 

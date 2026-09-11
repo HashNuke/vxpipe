@@ -11,8 +11,9 @@ Authority, enforces that deadline, cleans up failed/expired destinations, and ex
 confirmed spoken-history projection is active, and selected destinations now receive their private
 bounded transfer reason plus only destination-readable variables. Re-entry preserves participant
 identity with fresh activation and no greeting replay. Private transfer attempts/outcomes are
-archived with activation attribution while client failures remain generic; restoration checks
-remain pending.
+archived with activation attribution while client failures remain generic. A failed preparation
+now makes at most one bounded room-supervised attempt to restore lost source TTS and records its
+private outcome without exposing the cause.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

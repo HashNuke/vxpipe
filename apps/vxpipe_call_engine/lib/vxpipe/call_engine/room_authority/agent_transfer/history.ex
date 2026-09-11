@@ -25,6 +25,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.History do
           | :preparation_supervisor_unavailable
           | :source_authority_changed
 
+  @type restoration_outcome :: :not_required | :completed | :failed | :timed_out
+
   @spec started(State.t(), Request.t()) :: State.t()
   def started(%State{} = state, %Request{} = request) do
     record(state, :participant_transfer_started, request, identity_payload(request))
@@ -42,11 +44,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.History do
 
   @spec failed(State.t(), Request.t(), failure_cause()) :: State.t()
   def failed(%State{} = state, %Request{} = request, cause) do
+    failed(state, request, cause, :not_required)
+  end
+
+  @spec failed(State.t(), Request.t(), failure_cause(), restoration_outcome()) :: State.t()
+  def failed(%State{} = state, %Request{} = request, cause, restoration) do
     payload =
       request
       |> identity_payload()
       |> Map.put("cause", cause |> normalize_cause() |> Atom.to_string())
       |> Map.put("outcome", "failed")
+      |> Map.put("restoration", restoration |> normalize_restoration() |> Atom.to_string())
 
     record(state, :participant_transfer_failed, request, payload)
   end
@@ -79,4 +87,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.History do
 
   defp normalize_cause(cause) when cause in @failure_causes, do: cause
   defp normalize_cause(_cause), do: :preparation_process_down
+
+  defp normalize_restoration(restoration)
+       when restoration in [:not_required, :completed, :failed, :timed_out],
+       do: restoration
+
+  defp normalize_restoration(_restoration), do: :failed
 end

@@ -43,5 +43,13 @@ defmodule Vxpipe.CallEngine.TestSelectiveAgentRuntimeModelProvider do
     end
   end
 
+  defp prepare("test:blocked-unavailable", owner) do
+    send(owner, {:test_agent_runtime_model_preparing, self()})
+
+    receive do
+      :release_test_agent_runtime_model -> {:error, :invalid_configuration}
+    end
+  end
+
   defp prepare(model, owner), do: {:ok, %{model: model, owner: owner}}
 end
