@@ -1,12 +1,18 @@
 # Whole-call retention and deletion
 
-Status: not implemented. Specification review: approved (2026-09-08).
-Prerequisites: [Call-details publications](call-details-publications.md), including all persisted history/artifact owners; [Embedded/container delivery](embedded-and-container-delivery.md). This is intentionally the final implementation milestone.
+Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
+Prerequisites: [Call-details publications](call-details-publications.md), including all persisted history/artifact owners; the [pre-delivery review hold](index.md#pre-delivery-review-hold); and [Embedded/container delivery](embedded-and-container-delivery.md). This is intentionally the final implementation milestone.
 Sources: [Retention](../../labnotes/20260905-0405-call-definition-design.md#retention-periods--approved-application-and-tenant-policy); [R19–R21](../call-definition-gap-review.md).
 
 ## Runnable outcome
 
 A periodic sweep removes an expired completed call's objects first, then all database data. Changing tenant/application retention affects already-ended calls too, while active and unstarted calls remain untouched.
+
+## Implementation hold
+
+Do not begin retention/deletion during the pre-delivery review. It remains the final milestone and
+starts only after the user has reviewed the working pre-packaging system, any approved corrections
+have landed, and embedded/container delivery is complete.
 
 ## Specification
 

@@ -1,13 +1,20 @@
 # Embedded and JSON-configured container delivery
 
-Status: not implemented. Specification review: approved (2026-09-08).
-Prerequisites: [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries before release acceptance. Whole-call retention deliberately follows delivery as the final milestone.
+Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
+Prerequisites: [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
 Sources: [Container/OTP architecture](../architecture.md#configuration-and-container-boundary); [canonical definition boundary](../../labnotes/20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../../labnotes/20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 See also the approved [gateway/console boundary](../gateway-console-boundary.md).
 
 ## Runnable outcome
 
 The same approved call flow runs embedded in an Elixir host and in a built Docker image using a mounted versioned JSON configuration. Operators can migrate/bootstrap, check readiness, join through configured ingress and shut down without silently losing or resurrecting work.
+
+## Implementation hold
+
+Do not begin Docker/image packaging as part of the current implementation run. First finish and
+exercise the pre-packaging framework and platform through the runnable samples, then let the user
+review that working system and choose any fixes or changes. Begin this milestone only after the
+user explicitly releases that hold.
 
 ## Specification
 

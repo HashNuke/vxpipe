@@ -8,6 +8,10 @@ only later conversation. Deterministic coverage proves authorization, prepare/co
 restoration, history/privacy, re-entry, and late-result failure boundaries. Milestone 15, live mixing
 and presence-driven media policy, is the current implementation slice.
 The earlier behavior contracts have completed focused review.
+Implementation continues through milestone 22, including the runnable samples and their
+cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain
+unimplemented until the user has exercised the working platform and decided which fixes or
+changes should precede packaging and retention.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
 2026-09-08. The 2026-09-10 [runtime decision](../reqllm-agent-runtime.md) inserts a separate
@@ -60,6 +64,19 @@ progress without claiming the entire milestone is complete.
 22. [ ] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
 23. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Run the same platform through host application settings or a standalone JSON-configured image.
 24. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+
+## Pre-delivery review hold
+
+After milestone 22 passes its acceptance gates, stop implementation and present the complete
+pre-packaging platform for user review. Exercise the runnable samples and the relevant framework,
+provider, transfer, media, recording, inspection, publication, and fallback paths as one working
+system. Record any discovered fixes or approved design changes in their owning milestone before
+release work begins.
+
+Do not start milestone 23 (Docker/container packaging) or milestone 24 (retention/deletion) until
+that review is complete and the user explicitly chooses to proceed. This is a sequencing hold,
+not a change to either milestone's approved scope or completion state. Retention/deletion remains
+the final milestone.
 
 ## Common implementation and verification gates
 
