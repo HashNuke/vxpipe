@@ -425,3 +425,38 @@ milestone boundary.
 Final checkpoint verification passes all 221 default gateway tests with five integration tests
 excluded. Root formatting, compilation with warnings as errors, strict Credo over 601 source files,
 all 802 umbrella tests, and the unused-dependency check also pass.
+
+## Checkpoint 10: guarded live control test
+
+The real-provider boundary now has a separate `:integration`/`:twilio_live` test. It cannot make a
+call during an ordinary suite run: integration tests are excluded globally, and this test also
+skips unless `VXPIPE_TWILIO_LIVE=1`. Enabling it requires the account credentials, controlled
+origin and destination, and operator-owned public TLS callback/media URLs. No values are embedded
+in source or emitted by the test.
+
+The live lane uses the production adapter to submit one outbound call, checks the returned Call SID
+shape, and registers exact-call cleanup. This is intentionally a control-plane smoke test. It does
+not treat provider acceptance as proof that a WebSocket connected or that a human heard audio.
+
+The test compiled and exercised its safe skip path:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/integration/twilio_voice_api_test.exs --include integration
+# 1 test, 0 failures, 1 skipped
+```
+
+No live-test settings are present in this checkout, so no carrier call was placed. The final open
+milestone item remains a manually authorized call proving audible media in both directions and
+exact-leg disconnect behavior.
+
+During the root gate, the Twilio-owned lane stayed green but an existing model-inference receive
+assertion timed out under the concurrent suite; its focused same-seed rerun passed. A subsequent
+serial root run exposed the same kind of scheduling sensitivity in a call-lifecycle test's implicit
+100 ms ExUnit receive limit. Its monitored process performs supervised teardown before sending
+`:DOWN`; all three lifecycle termination assertions now use an explicit bounded 1 second receive
+window. This adds no sleep and changes no runtime behavior.
+
+The final serial root run passes all 802 tests. Formatting, compilation with warnings as errors,
+strict Credo over 601 source files, and the unused-dependency check also pass. Gateway contributes
+221 passing default tests with six integration tests excluded.
