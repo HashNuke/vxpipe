@@ -129,6 +129,46 @@ to an artifact writer, or enable recording in a call definition.
 Root formatting, compilation with warnings as errors, strict Credo over 612 source files, all 804
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 3: storage-neutral room recording coordinator
+
+The call engine now owns a temporary `RoomRecording` coordinator and a small recording writer port.
+The port accepts a typed immutable stream identity at open time and typed clock-aligned chunks
+afterward. Its contract permits only supervised-worker setup and bounded in-memory handoff in the
+callbacks; concrete implementations must perform no network, disk, or database work inline. This
+keeps the live-media contract in the engine without adding a dependency on the artifacts app.
+
+The coordinator reads the mixer's established PCM format, creates an authorized full-mix recording
+subscription using the room-local token, and opens the injected writer. An audio-available
+notification pulls no more than the configured frame limit. Each resulting chunk preserves
+room-clock offset, policy revision, contributing participant IDs, per-channel sample count, and PCM
+bytes. Its sequence number advances even when a writer rejects an offer, so a later accepted
+interval and its offset retain honest gap evidence. Writer rejection is counted locally and cannot
+enter the mixer call path. Individual-track configuration remains deliberately unavailable until
+it can carry the required participant, connection, and track identity.
+
+The focused test was first red because `RoomRecording` did not exist. Its green path mixes two
+participants, observes the exact permitted full-mix bytes, denies recording for the middle
+interval, then resumes at a later clock offset without replaying the denied audio:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/room_recording_test.exs --max-cases 1
+# 1 test, 0 failures
+
+mix test test/vxpipe/call_engine/room_recording_test.exs \
+  test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/media_policy_room_test.exs \
+  test/vxpipe/call_engine/silent_monitor_call_test.exs --max-cases 1
+# 11 tests, 0 failures
+```
+
+This checkpoint does not yet wire a concrete artifact writer, select recordings from a call
+definition, capture connection-qualified individual tracks, publish metadata, or add operator
+playback. Those remain required before the milestone checklist can advance.
+
+Root formatting, compilation with warnings as errors, strict Credo over 619 source files, all 805
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

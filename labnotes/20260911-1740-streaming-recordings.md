@@ -76,3 +76,43 @@ artifact chunks.
 
 Root formatting, compilation with warnings as errors, strict Credo over 612 source files, all 804
 umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: room recording coordinator
+
+The next test specified the storage-neutral engine boundary. Its red run failed because
+`Vxpipe.CallEngine.RoomRecording` did not exist. The implementation adds that temporary
+room-scoped process plus cohesive stream, chunk, writer-port, and process-state modules. The call
+engine does not depend on the artifacts application.
+
+At startup, the coordinator validates pinned tenant/call/room/incarnation identity, reads the
+mixer's established PCM format, uses the room-local recording reference to subscribe, and opens an
+injected writer. The writer contract is deliberately non-blocking: callback implementations may
+start supervised workers or allocate a bounded handoff, but external I/O belongs outside the
+engine process.
+
+Each mixer availability message causes one bounded pull. Frames become typed chunks carrying a
+per-stream sequence, room-clock offset, sample count, policy revision, contributing participant
+IDs, and PCM payload. Sequence advances even for a rejected offer while the clock offset remains
+authoritative, allowing downstream manifests to expose loss rather than close over it. Writer
+errors increment a local rejection count instead of reaching the mixer.
+
+The focused green test observed the exact two-source full mix at offset zero, no chunk while the
+next policy revision denied recording, and only newly admitted audio at offset four after policy
+relaxation. Adjacent mixer, media-policy, and silent-monitor tests also stayed green:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/room_recording_test.exs --max-cases 1
+# 1 test, 0 failures
+
+mix test test/vxpipe/call_engine/room_recording_test.exs \
+  test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/media_policy_room_test.exs \
+  test/vxpipe/call_engine/silent_monitor_call_test.exs --max-cases 1
+# 11 tests, 0 failures
+```
+
+Formatting and compilation with warnings as errors pass. Root strict Credo checks 619 source files
+without findings; all 805 umbrella tests and the unused-dependency check pass. The concrete
+artifacts adapter, capacity rejection/lifecycle proof, connection-qualified individual tracks,
+metadata, S3 integration, and playback remain pending.

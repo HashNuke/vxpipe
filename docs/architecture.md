@@ -2292,8 +2292,8 @@ write plus queued chunks cannot grow an unbounded mailbox or push object latency
 Overflow rejects the newest chunk and increments terminal incompleteness evidence. Closing the
 handoff rejects later audio while already-accepted chunks drain. Object-store operations run in the
 artifacts-owned task supervisor. This boundary does not yet enable recording or implement S3: the
-future `RoomRecording` capability remains responsible for policy-filtered mixer subscriptions and
-for constructing exact interval/chunk metadata before it calls the handoff.
+engine-owned `RoomRecording` capability remains responsible for policy-filtered mixer subscriptions
+and for constructing exact interval/chunk metadata before it calls an injected writer handoff.
 
 The mixer now has a distinct internal recording-subscription path guarded by a fresh room-local
 reference shared only with its sibling recording capability. A recorder is therefore not modeled
@@ -2304,6 +2304,22 @@ permission is false. Private preparation media remains outside the main mixer an
 these taps. Policy installation clears mixer input and subscription queues before acknowledgement;
 denied or formerly queued intervals cannot arrive after the barrier or be replayed when permission
 later returns.
+
+`RoomRecording` is a temporary room-scoped coordinator, not an object-store client. Its first
+checkpoint reads the mixer's established PCM format, opens the configured full-mix subscription,
+and assigns it a stable identity under the pinned tenant, call, room, and incarnation. A bounded
+availability notification causes it to pull at most the configured number of mixer frames and
+project them into typed chunks containing the room-clock offset, per-stream sequence, sample count,
+policy revision, contributing participant IDs, and PCM payload. The writer port's `open` and
+`offer` callbacks are explicitly non-blocking: implementations may start supervised workers and
+allocate bounded handoffs there, but network, disk, and database work belongs beyond that handoff.
+
+Rejected writer offers increment room-local recording evidence and do not fail or block the mixer.
+Sequences advance for every pulled interval, including a rejected one, while room-clock offsets
+make policy-denied or capacity-lost gaps independently observable. If the mixer disappears, the
+temporary recording source exits; an independently supervised artifact writer can detect that
+source termination, drain already accepted chunks, and finalize honestly. The call engine owns
+these live-media semantics without depending on `vxpipe_artifacts` or any concrete storage adapter.
 
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
