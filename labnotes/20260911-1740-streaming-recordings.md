@@ -689,3 +689,45 @@ authorization and the S3-compatible reader in a later checkpoint.
 
 Root formatting, compilation with warnings as errors, strict Credo over 654 source files, all 830
 default umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: private recording response
+
+The browser playback path is now reachable through a calls-scoped operator session. Its URL carries
+only the call public ID and artifact public ID. Console resolves those values through the exact
+tenant-authorized Calls operation, then binds the persisted private object reference to trusted host
+storage settings. The browser cannot supply or receive a bucket, object key, endpoint, credential,
+or direct storage location.
+
+Playback configuration is separate from the switch that enables new capture. This keeps existing
+artifacts available for authorized inspection after capture is disabled, while sharing the same
+validated bucket, region, and endpoint interpretation. Credential discovery and request signing
+remain inside the existing storage client.
+
+The HTTP response concern is separate from authorization, artifact lookup, storage adaptation, and
+virtual-WAVE projection. It supports one complete or partial response, declares the exact response
+length, and repeatedly requests no more than one MiB. Invalid ranges return `416`; missing or
+cross-tenant artifacts share a generic `404`; an object failure before streaming begins returns a
+generic `502`. Responses are private and non-cacheable. No room, mixer, monitor, or live-call
+process participates in post-call playback.
+
+The tests followed three red-green steps: playback configuration was initially undefined, the
+private backend modules were absent, and the route produced no match. The focused backend/endpoint
+suite and the complete Console suite then passed:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/call_recording_endpoint_test.exs \
+  test/vxpipe/console/call_recording_test.exs \
+  test/vxpipe/console/recording_configuration_test.exs --max-cases 1
+# 13 tests, 0 failures
+
+mix test --max-cases 1
+# 76 tests, 0 failures
+```
+
+The rendered recording list/player and final cross-slice verification remain pending.
+
+Root formatting, compilation with warnings as errors, strict Credo over 660 source files, all 839
+default umbrella tests, and the unused-dependency check pass. The first unconfigured root test
+invocation failed before test execution because the workstation database expected a password; the
+prescribed `VXPIPE_TEST_DATABASE_URL` lane completed successfully.

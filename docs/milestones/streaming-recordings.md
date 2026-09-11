@@ -743,6 +743,47 @@ The authenticated streaming controller and rendered recording controls remain pe
 Root formatting, compilation with warnings as errors, strict Credo over 654 source files, all 830
 default umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 19: tenant-authorized private WAV streaming
+
+Console now exposes a private recording response beneath its existing calls-scoped operator
+session. The route accepts only call and artifact public IDs. A focused backend obtains the artifact
+through the exact tenant-authorized Calls workflow and binds its private persisted object reference
+to host-owned S3-compatible settings. Browser input cannot select a bucket, object key, ETag,
+endpoint, credential, or provider URL.
+
+Playback settings are derived independently of capture enablement so an operator can inspect an
+existing artifact after new recording has been disabled. The capture and playback paths reuse the
+same validated bucket/region/endpoint interpretation; ExAws retains credential discovery and
+request signing.
+
+The controller delegates response mechanics to a separate bounded streamer. It advertises one-byte
+range support, emits exact `200` or `206` virtual-WAVE intervals with a declared content length, and
+repeats reads of no more than one MiB without accumulating the complete object. Invalid or multiple
+ranges receive `416`; a first object-read failure receives a generic `502`. Cross-tenant and missing
+call/artifact outcomes are indistinguishable `404` responses. All playback responses are private
+and non-cacheable, and no signed or direct storage URL is generated.
+
+The configuration test was first red because no playback configuration existed. Backend tests were
+then red for the absent private recording boundary, and endpoint tests were red at the absent route.
+The green focused and complete Console runs are:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/call_recording_endpoint_test.exs \
+  test/vxpipe/console/call_recording_test.exs \
+  test/vxpipe/console/recording_configuration_test.exs --max-cases 1
+# 13 tests, 0 failures
+
+mix test --max-cases 1
+# 76 tests, 0 failures
+```
+
+The recording list and rendered playback controls remain pending, so this checkpoint does not yet
+claim the operator-facing runnable outcome.
+
+Root formatting, compilation with warnings as errors, strict Credo over 660 source files, all 839
+default umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

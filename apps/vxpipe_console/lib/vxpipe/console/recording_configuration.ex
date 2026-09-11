@@ -15,6 +15,21 @@ defmodule Vxpipe.Console.RecordingConfiguration do
 
   def build(_settings), do: {:error, :invalid_recording_configuration}
 
+  @spec playback(keyword()) :: {:ok, keyword()} | {:error, atom()}
+  def playback(settings) when is_list(settings) do
+    with {:ok, bucket} <- nonempty(settings, :bucket, :recording_bucket_required),
+         {:ok, region_options} <- region_options(settings),
+         {:ok, endpoint_options} <- endpoint_options(settings) do
+      {:ok,
+       [
+         bucket: bucket,
+         client_options: [request_options: region_options ++ endpoint_options]
+       ]}
+    end
+  end
+
+  def playback(_settings), do: {:error, :invalid_recording_configuration}
+
   defp enabled(settings) do
     case Keyword.get(settings, :enabled) do
       value when value in [nil, false, "", "0", "false"] -> {:ok, false}
@@ -25,11 +40,7 @@ defmodule Vxpipe.Console.RecordingConfiguration do
 
   defp enabled_configuration(settings) do
     with :ok <- persistence_enabled(settings),
-         {:ok, bucket} <- nonempty(settings, :bucket, :recording_bucket_required),
-         {:ok, region_options} <- region_options(settings),
-         {:ok, endpoint_options} <- endpoint_options(settings) do
-      request_options = region_options ++ endpoint_options
-
+         {:ok, object_store_options} <- playback(settings) do
       {:ok,
        [
          enabled: true,
@@ -40,10 +51,7 @@ defmodule Vxpipe.Console.RecordingConfiguration do
            {Vxpipe.Artifacts.RecordingWriter,
             [
               object_store: Vxpipe.Artifacts.S3ObjectStore,
-              object_store_options: [
-                bucket: bucket,
-                client_options: [request_options: request_options]
-              ],
+              object_store_options: object_store_options,
               maximum_pending_chunks: @maximum_pending_chunks,
               drain_timeout_ms: @drain_timeout_ms,
               metadata: [

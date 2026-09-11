@@ -71,6 +71,31 @@ defmodule Vxpipe.Console.RecordingConfigurationTest do
              object_store_options
   end
 
+  test "builds trusted playback reads independently of capture enablement" do
+    settings = [
+      enabled: false,
+      bucket: "vxpipe-call-artifacts",
+      region: "eu-west-2",
+      endpoint: "http://127.0.0.1:9000"
+    ]
+
+    assert {:ok,
+            [
+              bucket: "vxpipe-call-artifacts",
+              client_options: [
+                request_options: [
+                  region: "eu-west-2",
+                  scheme: "http://",
+                  host: "127.0.0.1",
+                  port: 9000,
+                  virtual_host: false
+                ]
+              ]
+            ]} = RecordingConfiguration.playback(settings)
+
+    assert {:error, :recording_bucket_required} = RecordingConfiguration.playback(enabled: false)
+  end
+
   test "rejects incomplete or malformed enabled host settings" do
     assert {:error, :recording_persistence_required} =
              RecordingConfiguration.build(enabled: "true", bucket: "calls")

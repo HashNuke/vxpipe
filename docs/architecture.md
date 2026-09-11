@@ -2462,6 +2462,22 @@ metadata. A single-range HTTP parser supports complete, bounded, open-ended, and
 multiple or unsatisfiable ranges fail closed. Both header and silence are generated in bounded
 chunks, while recorded bytes continue through the artifacts-owned range port.
 
+The Console playback route remains behind the signed, calls-scoped operator session. Its public
+path carries only a call public ID and artifact public ID. A Console backend resolves that pair
+through the exact tenant-authorized Calls operation, binds the resulting private object reference
+to host-owned object-storage settings, and constructs the virtual WAVE source. Bucket, object key,
+ETag, endpoint, credentials, and provider-returned locations are never accepted from the browser or
+returned as playback authorization. Capture enablement controls new recording production; it does
+not prevent an authorized operator from reading an existing artifact when trusted playback storage
+settings remain configured.
+
+The response layer advertises single byte ranges and streams with a declared length through
+repeated reads capped at one MiB; it never buffers the whole recording. Satisfiable ranges receive
+the exact virtual-file interval, malformed or multiple ranges receive `416`, and an object failure
+before response streaming begins receives a generic storage error. Cross-tenant and nonexistent
+call/artifact lookups share a generic not-found response. Responses are private and non-cacheable,
+and ordinary room, mixer, monitor, and call-control processes are absent from this playback path.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

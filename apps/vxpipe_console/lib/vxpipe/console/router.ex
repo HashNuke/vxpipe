@@ -46,6 +46,8 @@ defmodule Vxpipe.Console.Router do
   scope "/calls" do
     pipe_through [:browser, :operator]
 
+    get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show
+
     live_session :vxpipe_call_inspection,
       root_layout: {Vxpipe.Console.CallInspectionLayout, :root},
       session: {Vxpipe.Console.OperatorSession, :live_session, []},
