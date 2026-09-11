@@ -18,6 +18,7 @@ defmodule Vxpipe.Gateway.Application do
       SessionSupervisor,
       {Registry, keys: :unique, name: Vxpipe.Gateway.Telephony.LegRegistry},
       LegSupervisor,
+      {Registry, keys: :unique, name: Vxpipe.Gateway.Media.Registry},
       {Registry, keys: :unique, name: Vxpipe.Gateway.WebRTC.Registry},
       ConnectionSupervisor
     ]

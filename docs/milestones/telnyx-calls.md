@@ -81,7 +81,10 @@ owner serializes durable claim, ordinary room startup, and lifecycle projection;
 and later callbacks validate the full provider identity against its in-memory pinned claim without
 another database lookup. A recovered `admitting` record without its owner becomes
 `startup_unknown` rather than restarting a crashed call. Provider-specific post-initiation
-commands, media, cleanup, and the runnable vendor outcome remain incomplete.
+commands now submit through a bounded no-retry Telnyx Voice API client, and authenticated headerless
+Opus media has a Membrane ingress normalizer that emits exact 20 ms, 48 kHz mono room-clock frames
+without FFmpeg. The live media WebSocket, room attachment, outbound mixer path, private briefing,
+acceptance, cleanup, and runnable vendor outcome remain incomplete.
 
 ## Specification review
 

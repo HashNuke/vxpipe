@@ -609,3 +609,44 @@ The root format, warnings-as-errors compile, strict Credo, unused-dependency, an
 umbrella test gates passed with 701 tests and zero failures. The umbrella has no `ecto.setup` alias;
 the disposable test database was therefore initialized with the existing `ecto.create` and
 `ecto.migrate` tasks before the clean test run.
+
+## Checkpoint 14: Membrane Telnyx ingress normalization
+
+The room-ready PCM value, mono mixer, and PCM sink were moved from the WebRTC namespace into the
+transport-neutral Gateway media namespace before adding the carrier path. The mechanical extraction
+kept the existing WebRTC decode and room-ingress tests green and was committed separately.
+
+The new Telnyx ingress test was written next and failed because `AudioIngressPipeline` did not yet
+exist. The implemented pipeline accepts only the pinned tenant, room incarnation, participant,
+connection, and stream identity with Opus/16 kHz/mono metadata. Media chunks must increase strictly,
+and their provider timestamps cannot regress. The packet source assigns the provider millisecond
+timestamp as PTS, a Telnyx-owned Membrane filter aligns the first packet to the closest preceding
+20 ms room-clock point based on monotonic arrival time, and the official Membrane Opus decoder emits
+48 kHz PCM. Shared mono/framing/sink elements then produce exact room-ready 20 ms frames. This path
+does not launch FFmpeg and does not use a custom resampler.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/audio_ingress_pipeline_test.exs \
+  test/vxpipe/gateway/webrtc/audio_pipeline_test.exs \
+  test/vxpipe/gateway/webrtc/room_audio_ingress_test.exs
+# 10 tests, 0 failures
+
+cd ../..
+mix compile --warnings-as-errors
+mix credo --strict
+# clean
+```
+
+This is still an isolated normalization boundary. The provider WebSocket owner must next bind one
+admitted stream to the live leg, apply room media policy, and feed these PCM frames through the
+existing engine attachment. The reverse mixer-to-Telnyx Opus path also remains pending.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella gates passed with 703 tests and zero failures. One initial umbrella invocation returned a
+nonzero status after its retained output showed the final Console lane green but omitted the earlier
+failure block. The Gateway lane passed all 127 tests with the same seed on immediate isolation, and
+the following complete umbrella run passed every lane. No implementation was changed for that
+transient result.

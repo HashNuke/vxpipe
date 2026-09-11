@@ -1090,8 +1090,14 @@ state, stream identity, and declared Opus/16 kHz/mono format match the in-memory
 inbound media is base64-decoded into a provider-neutral packet ordered by media chunk; DTMF is
 given the same exact leg identity and its provider occurrence time. Another call, session, stream,
 direction, codec, or malformed payload fails before entering a pipeline. The Membrane Opus path
-will decode directly to the existing 48 kHz room PCM clock, avoiding FFmpeg and a separate raw-PCM
-resampler.
+decodes the headerless payload directly to the existing 48 kHz room PCM contract, avoiding FFmpeg
+and a separate raw-PCM resampler. Its first accepted provider timestamp is aligned to the nearest
+20 ms room-clock boundary using the packet's monotonic arrival time; later packets retain their
+provider timing. Exact pinned call identity and strictly increasing media chunks are checked before
+Membrane receives a packet. Stale chunks and regressing timestamps are rejected rather than replayed
+into the room. The decoded PCM frame, mono mixer, and PCM sink are transport-neutral Gateway media
+components shared with WebRTC, while RTP handling and Telnyx clock alignment remain in their owning
+transport adapters.
 
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,

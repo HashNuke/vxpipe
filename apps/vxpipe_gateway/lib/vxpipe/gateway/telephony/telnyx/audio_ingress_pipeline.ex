@@ -1,6 +1,6 @@
-defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
+defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline do
   @moduledoc """
-  Normalizes one WebRTC audio track into room-clock-aligned mixer frames.
+  Normalizes one authenticated Telnyx Opus stream into room-ready PCM frames.
   """
 
   use Membrane.Pipeline
@@ -10,7 +10,11 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
   alias Membrane.{Buffer, Pipeline, Time}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.Gateway.Media.{MonoMixer, PCMFrame, PCMSink}
-  alias Vxpipe.Gateway.WebRTC.AudioPipeline.{PacketSource, RoomTimestamp}
+
+  alias Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline.{
+    ClockAligner,
+    PacketSource
+  }
 
   @sample_rate 48_000
   @channels 1
@@ -36,24 +40,18 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
       incarnation_id: Keyword.fetch!(options, :incarnation_id),
       participant_id: Keyword.fetch!(options, :participant_id),
       connection_id: Keyword.fetch!(options, :connection_id),
-      track_id: nil
+      track_id: Keyword.fetch!(options, :track_id),
+      last_sequence_number: nil,
+      last_timestamp: nil
     }
-
-    jitter_latency = options |> Keyword.fetch!(:jitter_latency) |> Time.milliseconds()
 
     specification =
       child(:source, PacketSource)
-      |> child(:jitter_buffer, %Membrane.RTP.JitterBuffer{
-        clock_rate: @sample_rate,
-        latency: jitter_latency
-      })
-      |> child(:room_timestamp, %RoomTimestamp{
+      |> child(:clock_aligner, %ClockAligner{
         clock_origin_ms: Keyword.fetch!(options, :clock_origin_ms)
       })
-      |> child(:depayloader, Membrane.RTP.Opus.Depayloader)
-      |> child(:parser, Membrane.Opus.Parser)
       |> child(:decoder, %Membrane.Opus.Decoder{sample_rate: @sample_rate})
-      |> child(:channel_mixer, MonoMixer)
+      |> child(:mono_mixer, MonoMixer)
       |> child(:frame_parser, %Membrane.RawAudioParser{
         chunk_duration: Time.milliseconds(20)
       })
@@ -64,7 +62,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
 
   @impl true
   def handle_playing(_context, state) do
-    send(state.owner, {:vxpipe_audio_pipeline_ready, state.pipeline_id})
+    send(state.owner, {:vxpipe_telnyx_audio_ingress_ready, state.pipeline_id})
     {[], state}
   end
 
@@ -72,7 +70,12 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
   def handle_call({:push, %AudioFrame{} = frame}, _context, state) do
     case validate(frame, state) do
       :ok ->
-        state = %{state | track_id: state.track_id || frame.track_id}
+        state = %{
+          state
+          | last_sequence_number: frame.sequence_number,
+            last_timestamp: frame.timestamp
+        }
+
         {[notify_child: {:source, {:push, frame}}, reply: :ok], state}
 
       {:error, reason} ->
@@ -95,40 +98,49 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
       payload: buffer.payload
     }
 
-    send(state.owner, {:vxpipe_audio_pipeline, state.pipeline_id, frame})
+    send(state.owner, {:vxpipe_telnyx_audio_ingress, state.pipeline_id, frame})
     {[], state}
   end
 
-  defp validate(%AudioFrame{connection_id: connection_id}, %{connection_id: expected})
-       when connection_id != expected,
+  defp validate(%AudioFrame{connection_id: value}, %{connection_id: expected})
+       when value != expected,
        do: {:error, :wrong_connection}
 
-  defp validate(%AudioFrame{tenant_id: tenant_id}, %{tenant_id: expected})
-       when tenant_id != expected,
-       do: {:error, :wrong_tenant}
+  defp validate(%AudioFrame{tenant_id: value}, %{tenant_id: expected}) when value != expected,
+    do: {:error, :wrong_tenant}
 
-  defp validate(%AudioFrame{room_id: room_id}, %{room_id: expected})
-       when room_id != expected,
-       do: {:error, :wrong_room}
+  defp validate(%AudioFrame{room_id: value}, %{room_id: expected}) when value != expected,
+    do: {:error, :wrong_room}
 
-  defp validate(%AudioFrame{incarnation_id: incarnation_id}, %{incarnation_id: expected})
-       when incarnation_id != expected,
+  defp validate(%AudioFrame{incarnation_id: value}, %{incarnation_id: expected})
+       when value != expected,
        do: {:error, :wrong_incarnation}
 
-  defp validate(%AudioFrame{participant_id: participant_id}, %{participant_id: expected})
-       when participant_id != expected,
+  defp validate(%AudioFrame{participant_id: value}, %{participant_id: expected})
+       when value != expected,
        do: {:error, :wrong_participant}
 
-  defp validate(%AudioFrame{track_id: track_id}, %{track_id: expected})
-       when not is_nil(expected) and track_id != expected,
-       do: {:error, :wrong_track}
+  defp validate(%AudioFrame{track_id: value}, %{track_id: expected}) when value != expected,
+    do: {:error, :wrong_track}
 
-  defp validate(%AudioFrame{codec: codec}, _state) when codec != :opus,
-    do: {:error, :unsupported_codec}
+  defp validate(%AudioFrame{codec: :opus, sample_rate: 16_000, channels: 1} = frame, state),
+    do: validate_order(frame, state)
 
-  defp validate(_frame, _state), do: :ok
+  defp validate(%AudioFrame{}, _state), do: {:error, :unsupported_audio}
+
+  defp validate_order(_frame, %{last_sequence_number: nil}), do: :ok
+
+  defp validate_order(%AudioFrame{sequence_number: sequence}, %{last_sequence_number: previous})
+       when sequence <= previous,
+       do: {:error, :stale_sequence}
+
+  defp validate_order(%AudioFrame{timestamp: timestamp}, %{last_timestamp: previous})
+       when timestamp < previous,
+       do: {:error, :stale_timestamp}
+
+  defp validate_order(_frame, _state), do: :ok
 
   defp via(pipeline_id) do
-    {:via, Registry, {Vxpipe.Gateway.WebRTC.Registry, {:audio_pipeline, pipeline_id}}}
+    {:via, Registry, {Vxpipe.Gateway.Media.Registry, {:telnyx_audio_ingress, pipeline_id}}}
   end
 end

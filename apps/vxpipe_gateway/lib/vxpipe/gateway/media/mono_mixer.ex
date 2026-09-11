@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.AudioPipeline.ChannelMixer do
+defmodule Vxpipe.Gateway.Media.MonoMixer do
   @moduledoc false
 
   use Membrane.Filter

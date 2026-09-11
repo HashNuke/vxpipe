@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.AudioPipeline.PCMSink do
+defmodule Vxpipe.Gateway.Media.PCMSink do
   @moduledoc false
 
   use Membrane.Sink
