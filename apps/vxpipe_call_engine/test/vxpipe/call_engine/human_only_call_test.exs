@@ -58,6 +58,12 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     assert {:ok, %{clock_origin_ms: ^clock_origin_ms}} =
              CallEngine.room_audio_configuration(receiver_attachment)
 
+    assert {:ok, %{mode: :mix_minus}} =
+             CallEngine.room_audio_output_configuration(caller_attachment)
+
+    assert {:ok, %{mode: :mix_minus}} =
+             CallEngine.room_audio_output_configuration(receiver_attachment)
+
     assert [{authority, _value}] =
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
@@ -75,8 +81,11 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     mixer = RoomMixer.whereis(room.incarnation_id)
     assert %{policy_revision: 2} = RoomMixer.stats(mixer)
 
-    caller_output = subscribe(mixer, plan, room, caller.participant_id, "caller-output")
-    receiver_output = subscribe(mixer, plan, room, receiver.participant_id, "receiver-output")
+    caller_output =
+      subscribe(caller_attachment, plan, room, caller.participant_id, "caller-output")
+
+    receiver_output =
+      subscribe(receiver_attachment, plan, room, receiver.participant_id, "receiver-output")
 
     caller_audio = :binary.copy(<<100::little-signed-16>>, 960)
     receiver_audio = :binary.copy(<<200::little-signed-16>>, 960)
@@ -168,9 +177,9 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     attachment
   end
 
-  defp subscribe(mixer, plan, room, participant_id, id) do
+  defp subscribe(attachment, plan, room, participant_id, id) do
     assert {:ok, subscription} =
-             RoomMixer.subscribe(mixer,
+             CallEngine.subscribe_room_audio(attachment,
                id: id,
                tenant_id: plan.tenant_id,
                room_id: plan.room_id,

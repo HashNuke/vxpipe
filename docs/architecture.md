@@ -1142,6 +1142,15 @@ which preserves deterministic manual flushing for focused tests and embedding-sp
 Subscription draining, Opus egress, and the browser-runnable multi-human path remain subsequent
 work.
 
+The attachment also makes the currently safe output path explicit. A room whose entry receiver is
+human and therefore has no active text/TTS capability advertises `:mix_minus`; the transport may
+create exactly one policy-authorized mixer subscription for that participant through the opaque
+Call Engine API. Legacy rooms and planned rooms with an active agent advertise room output as
+disabled and retain their direct TTS sink. This avoids deriving output ownership from whether STT
+happens to be configured and prevents two RTP producers from silently claiming one WebRTC track.
+Later human-transfer work owns the explicit transition between those modes when agent capability
+ownership changes mid-call.
+
 `TranscriptRouter` keeps a bounded installed-revision history for source-interval decisions (128
 revisions by default). A current transcript projection reaches only connected, present
 participant identities permitted by `transcript_routes`; a projection tagged with an older

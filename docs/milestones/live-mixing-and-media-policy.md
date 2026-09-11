@@ -204,6 +204,16 @@ warnings-as-errors compilation, strict Credo, and the unused-dependency check pa
 Bounded mix-minus subscription drain and WebRTC Opus egress remain open, so the transport/harness
 checklist and browser-runnable outcome are not yet claimed.
 
+The output attachment checkpoint distinguishes mixer output from direct agent TTS explicitly.
+Human-entry rooms with no active agent advertise one `:mix_minus` subscription through an opaque
+Call Engine operation. Legacy and active-agent attachments keep mixer output disabled, so the
+Gateway cannot accidentally infer output ownership from optional STT or start a second RTP
+producer for the same track. The human-only vertical test now obtains both subscriptions only
+through that public boundary and still proves reciprocal mix-minus output. Dynamic output-mode
+switching belongs to the later human-transfer milestone; Gateway draining and Opus egress remain
+open here. The Call Engine suite remains green at 320 tests with one tagged integration exclusion,
+and the fresh PostgreSQL-backed umbrella run and all quality gates pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

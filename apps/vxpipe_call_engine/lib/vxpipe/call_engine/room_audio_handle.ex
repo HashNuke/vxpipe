@@ -49,4 +49,10 @@ defmodule Vxpipe.CallEngine.RoomAudioHandle do
   def push(%__MODULE__{} = handle, %NormalizedFrame{} = frame) do
     RoomMixer.push(handle.mixer, frame)
   end
+
+  @spec subscribe(t(), keyword()) ::
+          {:ok, Vxpipe.CallEngine.RoomMixer.Subscription.t()} | {:error, term()}
+  def subscribe(%__MODULE__{} = handle, options) when is_list(options) do
+    RoomMixer.subscribe(handle.mixer, options)
+  end
 end

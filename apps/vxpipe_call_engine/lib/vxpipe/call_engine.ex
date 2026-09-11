@@ -95,14 +95,16 @@ defmodule Vxpipe.CallEngine do
              Keyword.fetch!(settings, :speech_to_text),
              output_sink
            ) do
-        {:ok, room_authority, media_ingress} ->
+        {:ok, room_authority, media_ingress, room_audio_output_mode} ->
           case RoomAudioHandle.resolve(command.incarnation_id) do
             {:ok, room_audio} ->
               {:ok,
                %ConnectionAttachment{
                  room_monitor: Process.monitor(room_authority),
                  media_ingress: media_ingress,
-                 room_audio: room_audio
+                 room_audio: room_audio,
+                 room_audio_output_mode:
+                   room_audio_output_mode(room_audio, room_audio_output_mode)
                }}
 
             {:error, :unavailable} ->
@@ -177,6 +179,30 @@ defmodule Vxpipe.CallEngine do
     RoomAudioHandle.push(handle, frame)
   end
 
+  @spec room_audio_output_configuration(ConnectionAttachment.t()) ::
+          {:ok, %{mode: :mix_minus}} | :disabled
+  def room_audio_output_configuration(%ConnectionAttachment{room_audio_output_mode: :disabled}),
+    do: :disabled
+
+  def room_audio_output_configuration(%ConnectionAttachment{room_audio_output_mode: :mix_minus}),
+    do: {:ok, %{mode: :mix_minus}}
+
+  @spec subscribe_room_audio(ConnectionAttachment.t(), keyword()) ::
+          {:ok, Vxpipe.CallEngine.RoomMixer.Subscription.t()} | {:error, term()}
+  def subscribe_room_audio(
+        %ConnectionAttachment{
+          room_audio_output_mode: :mix_minus,
+          room_audio: %RoomAudioHandle{} = handle
+        },
+        options
+      )
+      when is_list(options) do
+    RoomAudioHandle.subscribe(handle, Keyword.put(options, :mode, :mix_minus))
+  end
+
+  def subscribe_room_audio(%ConnectionAttachment{}, options) when is_list(options),
+    do: {:error, :disabled}
+
   @spec send_text(SendText.t()) :: :ok | {:error, Error.t()}
   def send_text(%SendText{} = command) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
@@ -189,6 +215,9 @@ defmodule Vxpipe.CallEngine do
        )}
     end
   end
+
+  defp room_audio_output_mode(%RoomAudioHandle{}, :mix_minus), do: :mix_minus
+  defp room_audio_output_mode(_room_audio, _mode), do: :disabled
 
   defp catalog_snapshot(catalog_store) do
     case CatalogStore.snapshot(catalog_store) do

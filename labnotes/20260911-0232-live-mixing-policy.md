@@ -292,3 +292,19 @@
   PostgreSQL-backed umbrella run passes across all seven child applications; formatting,
   warnings-as-errors compilation, strict Credo, and the unused-dependency check pass. The exact
   disposable database container was removed afterward.
+
+## 2026-09-11 — explicit room-output ownership
+
+- Tightened the human-only vertical test before implementation. The red run failed because Call
+  Engine exposed neither a room-output mode nor an attachment-scoped subscription operation.
+- Connection attachment now carries an explicit output decision produced by Room Authority. A
+  human-entry room without an active text/TTS capability exposes `:mix_minus`; legacy and
+  active-agent rooms expose room output as disabled and keep their direct TTS sink. This does not
+  infer output behavior from whether the participant happens to have STT configured.
+- The attachment-scoped subscribe operation fixes the mode to `:mix_minus` inside Call Engine. The
+  Gateway therefore cannot request a more privileged monitor/full/individual route through this
+  participant connection boundary. The existing human-only test obtains both reciprocal outputs
+  through this operation and remains green.
+- The Call Engine suite remains green at 320 tests with one tagged integration exclusion. A fresh
+  PostgreSQL-backed umbrella run and every formatting, compile, Credo, and dependency gate pass;
+  the exact disposable database container was removed afterward.
