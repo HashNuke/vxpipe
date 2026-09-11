@@ -36,6 +36,14 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
   defp deliver(frame, options) do
     attachment = Keyword.fetch!(options, :attachment)
 
+    if receive_only?(attachment) do
+      :drop
+    else
+      deliver_to_inputs(attachment, frame, options)
+    end
+  end
+
+  defp deliver_to_inputs(attachment, frame, options) do
     results = [
       deliver_speech_audio(attachment, frame),
       RoomAudioIngress.push(Keyword.get(options, :room_audio_ingress), frame)
@@ -48,6 +56,14 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
       true -> :unavailable
     end
   end
+
+  defp receive_only?(%ConnectionAttachment{
+         media_ingress: nil,
+         room_audio_input_mode: :disabled
+       }),
+       do: true
+
+  defp receive_only?(%ConnectionAttachment{}), do: false
 
   defp deliver_speech_audio(%ConnectionAttachment{media_ingress: nil}, _frame), do: :disabled
 

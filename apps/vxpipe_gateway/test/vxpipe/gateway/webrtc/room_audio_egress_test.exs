@@ -29,6 +29,17 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgressTest do
     assert_receive {:test_room_audio_output_pipeline_stopped, ^pipeline_id, ^pipeline}
   end
 
+  test "starts an authorized full-mix egress for a silent monitor" do
+    connection_id = unique_id("conn-monitor")
+    start_supervised!({ConnectionPeerSupervisor, connection_id: connection_id})
+    attachment = attachment({:ok, %{mode: :full_mix}}, snapshot(4), [])
+
+    assert {:ok, egress} = start_egress(connection_id, attachment)
+
+    assert_receive {:test_room_audio_output_pipeline_started, _pipeline_id, _pipeline, ^egress}
+    assert_receive {:test_room_audio_output_subscribed, _subscription_id, ^egress}
+  end
+
   test "keeps at most one mixer frame in flight until WebRTC delivery is acknowledged" do
     first = frame(0, 4)
     second = frame(960, 4)

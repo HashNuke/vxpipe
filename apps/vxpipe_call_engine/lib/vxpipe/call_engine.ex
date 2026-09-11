@@ -96,7 +96,7 @@ defmodule Vxpipe.CallEngine do
              Keyword.fetch!(settings, :speech_to_text),
              output_sink
            ) do
-        {:ok, room_authority, media_ingress, room_audio_output_mode} ->
+        {:ok, room_authority, media_ingress, room_audio_input_mode, room_audio_output_mode} ->
           case RoomAudioHandle.resolve(command.incarnation_id) do
             {:ok, room_audio} ->
               {:ok,
@@ -104,6 +104,7 @@ defmodule Vxpipe.CallEngine do
                  room_monitor: Process.monitor(room_authority),
                  media_ingress: media_ingress,
                  room_audio: room_audio,
+                 room_audio_input_mode: room_audio_input_mode(room_audio, room_audio_input_mode),
                  room_audio_output_mode:
                    room_audio_output_mode(room_audio, room_audio_output_mode)
                }}
@@ -148,9 +149,13 @@ defmodule Vxpipe.CallEngine do
   end
 
   @spec room_audio_configuration(ConnectionAttachment.t()) :: {:ok, map()} | :disabled
-  def room_audio_configuration(%ConnectionAttachment{room_audio: nil}), do: :disabled
+  def room_audio_configuration(%ConnectionAttachment{room_audio_input_mode: :disabled}),
+    do: :disabled
 
-  def room_audio_configuration(%ConnectionAttachment{room_audio: %RoomAudioHandle{} = handle}) do
+  def room_audio_configuration(%ConnectionAttachment{
+        room_audio_input_mode: :enabled,
+        room_audio: %RoomAudioHandle{} = handle
+      }) do
     {:ok, handle.configuration}
   end
 
@@ -170,35 +175,44 @@ defmodule Vxpipe.CallEngine do
 
   @spec push_room_audio(ConnectionAttachment.t(), NormalizedFrame.t()) ::
           :ok | {:error, :disabled | term()}
-  def push_room_audio(%ConnectionAttachment{room_audio: nil}, %NormalizedFrame{}),
-    do: {:error, :disabled}
+  def push_room_audio(
+        %ConnectionAttachment{room_audio_input_mode: :disabled},
+        %NormalizedFrame{}
+      ),
+      do: {:error, :disabled}
 
   def push_room_audio(
-        %ConnectionAttachment{room_audio: %RoomAudioHandle{} = handle},
+        %ConnectionAttachment{
+          room_audio_input_mode: :enabled,
+          room_audio: %RoomAudioHandle{} = handle
+        },
         %NormalizedFrame{} = frame
       ) do
     RoomAudioHandle.push(handle, frame)
   end
 
   @spec room_audio_output_configuration(ConnectionAttachment.t()) ::
-          {:ok, %{mode: :mix_minus}} | :disabled
+          {:ok, %{mode: :full_mix | :mix_minus}} | :disabled
   def room_audio_output_configuration(%ConnectionAttachment{room_audio_output_mode: :disabled}),
     do: :disabled
 
   def room_audio_output_configuration(%ConnectionAttachment{room_audio_output_mode: :mix_minus}),
     do: {:ok, %{mode: :mix_minus}}
 
+  def room_audio_output_configuration(%ConnectionAttachment{room_audio_output_mode: :full_mix}),
+    do: {:ok, %{mode: :full_mix}}
+
   @spec subscribe_room_audio(ConnectionAttachment.t(), keyword()) ::
           {:ok, Vxpipe.CallEngine.RoomMixer.Subscription.t()} | {:error, term()}
   def subscribe_room_audio(
         %ConnectionAttachment{
-          room_audio_output_mode: :mix_minus,
+          room_audio_output_mode: mode,
           room_audio: %RoomAudioHandle{} = handle
         },
         options
       )
-      when is_list(options) do
-    RoomAudioHandle.subscribe(handle, Keyword.put(options, :mode, :mix_minus))
+      when mode in [:full_mix, :mix_minus] and is_list(options) do
+    RoomAudioHandle.subscribe(handle, Keyword.put(options, :mode, mode))
   end
 
   def subscribe_room_audio(%ConnectionAttachment{}, options) when is_list(options),
@@ -224,6 +238,10 @@ defmodule Vxpipe.CallEngine do
     end
   end
 
+  defp room_audio_input_mode(%RoomAudioHandle{}, :enabled), do: :enabled
+  defp room_audio_input_mode(_room_audio, _mode), do: :disabled
+
+  defp room_audio_output_mode(%RoomAudioHandle{}, :full_mix), do: :full_mix
   defp room_audio_output_mode(%RoomAudioHandle{}, :mix_minus), do: :mix_minus
   defp room_audio_output_mode(_room_audio, _mode), do: :disabled
 

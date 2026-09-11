@@ -79,7 +79,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
       pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, ConnectionPeerSupervisor),
       policy: nil,
       subscription: nil,
-      subscription_id: "#{connection_id}:mix-minus",
+      subscription_id: "#{connection_id}:room-output",
       track_id: Keyword.fetch!(options, :track_id)
     }
   end

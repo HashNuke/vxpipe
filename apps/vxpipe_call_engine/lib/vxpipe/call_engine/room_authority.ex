@@ -171,7 +171,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         state
       ) do
     case ConnectionLifecycle.attach(command, caller, subscriber, output_sink, state) do
-      {:reply, {:ok, _role, _runtime, _output_mode} = reply, state} ->
+      {:reply, {:ok, _role, _runtime, _input_mode, _output_mode} = reply, state} ->
         case begin_connection_startup(command, state) do
           {:ok, state} ->
             {:reply, reply, CallerIdle.reconcile(state)}

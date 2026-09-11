@@ -164,7 +164,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
       :disabled ->
         {:ok, nil}
 
-      {:ok, %{mode: :mix_minus}} ->
+      {:ok, %{mode: mode}} when mode in [:full_mix, :mix_minus] ->
         egress_options =
           identity ++
             [

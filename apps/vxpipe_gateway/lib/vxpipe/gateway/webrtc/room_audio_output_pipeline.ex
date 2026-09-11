@@ -123,7 +123,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioOutputPipeline do
        when participant_id != expected,
        do: {:error, :wrong_participant}
 
-  defp validate(%MixedFrame{mode: mode}, _state) when mode != :mix_minus,
+  defp validate(%MixedFrame{mode: mode}, _state) when mode not in [:full_mix, :mix_minus],
     do: {:error, :unsupported_mode}
 
   defp validate(%MixedFrame{sample_rate: sample_rate}, _state)

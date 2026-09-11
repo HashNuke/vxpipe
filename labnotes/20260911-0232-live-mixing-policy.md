@@ -488,3 +488,33 @@
   milestone.
 - The focused planned-room module passes two tests. Silent-monitor transport, fail-closed concrete
   consumer integration, broader gates, and manual sample verification remain open.
+
+## 2026-09-11 — authorized silent-monitor transport
+
+- Added the engine attachment test first. Its red run failed because connection attachments had no
+  independent room-audio input grant. Attachments now carry separate input and output modes:
+  humans can publish and receive mix-minus in a human-only room, while an admitted monitor receives
+  full mix with both room-audio input and STT disabled.
+- Subscription callers cannot choose or weaken this authorization. Call Engine overwrites the
+  requested mixer mode with the attachment's grant, and rejects room-audio pushes through a
+  receive-only attachment.
+- Gateway red tests initially rejected `:full_mix` output as an invalid configuration and treated
+  an incoming monitor RTP packet as a fatal absence of consumers. The owning peer supervisor now
+  starts the existing bounded output coordinator for either authorized output mode, while incoming
+  monitor audio is discarded without closing the listening connection.
+- The first three-client WebRTC run found the output Membrane pipeline still accepted only
+  mix-minus frames. A delivered full-mix frame ended the monitor egress, which correctly triggered
+  the fail-closed policy authority and tore down the room. Allowing both authorized mixer output
+  modes fixed that boundary.
+- The final ExWebRTC check starts caller and receiver connections, admits a separate monitor role,
+  and uses explicit routes that let the monitor hear only the caller. Caller audio reaches both
+  receiver and monitor; receiver audio reaches the caller but not the monitor; monitor audio
+  reaches neither human; and a project-owned connection acknowledgement proves the monitor remains
+  connected after its input is dropped. The three HTTP/WebRTC scenarios pass together.
+- No monitor UI or public monitor-token issuance was added. The existing internal session harness
+  supplies the authorized participant identity; externally exposing monitor admission and token
+  policy remains an owning Gateway/Console concern.
+- Full verification passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two, Call
+  Engine 328 with one, Calls 37, Persistence 25, Gateway 87 with four, and Console 57. Formatting,
+  warnings-as-errors compilation, strict Credo over 4,509 modules/functions, and the unused-lock
+  check pass against a disposable PostgreSQL 17 database.

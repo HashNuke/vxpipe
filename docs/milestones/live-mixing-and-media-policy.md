@@ -27,7 +27,7 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 - [x] Implement mixer/pipeline supervision and bounded sinks independently of RoomAuthority and storage adapters.
 - [x] Compile/intersect presence policies and apply an authoritative media commit barrier.
 - [ ] Connect transcript, STT-demand, archive and future recorder taps to the same interval permissions.
-- [ ] Expose existing transport/harness paths for multiple authorized participants and silent monitoring without redesigning the sample console.
+- [x] Expose existing transport/harness paths for multiple authorized participants and silent monitoring without redesigning the sample console.
 
 ## Acceptance and failure checks
 
@@ -308,6 +308,19 @@ provider request. Together with the WebRTC queued-audio transition, retained-rev
 and router no-replay-after-relaxation checks, this closes both restrictive-transition and
 live-only-STT acceptance items. The remaining milestone work is authorized silent-monitor
 transport plus explicit fail-closed consumer integration and manual sample verification.
+
+The silent-monitor transport checkpoint gives every connection attachment separate engine-owned
+input and output modes. An admitted monitor has no STT, no room-audio ingress, and an authorized
+`:full_mix` output; the engine overrides any caller-supplied subscription mode with that grant.
+Gateway accepts full-mix frames through the existing Membrane Opus/RTP output pipeline and drops
+monitor RTP input without ending its receive-only connection. A three-client ExWebRTC check proves
+that the monitor hears caller audio, does not hear a receiver omitted from its route, cannot send
+audio to either human, and remains connected afterward. Focused engine and Gateway tests also
+cover the attachment contract, disabled ingress, full-mix startup, and output encoding. Explicit
+fail-closed consumer integration and manual sample verification remain before milestone completion.
+The full umbrella suite passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two,
+Call Engine 328 with one, Calls 37, Persistence 25, Gateway 87 with four, and Console 57. Formatting,
+warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
 
 ## Specification review
 

@@ -166,9 +166,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     state = %{state | archive_recorder: archive_recorder}
     runtime = selected_speech_to_text_runtime(command.participant_id, state)
 
-    output_mode = if state.text_capability_required?, do: :direct, else: :mix_minus
-    {:reply, {:ok, role, runtime, output_mode}, state}
+    {input_mode, output_mode} = media_modes(role, state)
+    {:reply, {:ok, role, runtime, input_mode, output_mode}, state}
   end
+
+  defp media_modes(:monitor, _state), do: {:disabled, :full_mix}
+
+  defp media_modes(_role, %{text_capability_required?: true}),
+    do: {:enabled, :direct}
+
+  defp media_modes(_role, %{text_capability_required?: false}),
+    do: {:enabled, :mix_minus}
 
   defp selected_speech_to_text_runtime(_participant_id, %{speech_to_text_runtime: :application}),
     do: :application

@@ -87,12 +87,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     case lookup_room(command.tenant_id, command.room_id) do
       {:ok, room_authority} ->
         case RoomAuthority.attach_connection(room_authority, command, self(), output_sink) do
-          {:ok, role, selected_runtime, output_mode} ->
+          {:ok, role, selected_runtime, input_mode, output_mode} ->
             start_connection_speech_to_text(
               room_authority,
               command,
               role,
               selected_runtime,
+              input_mode,
               output_mode,
               speech_to_text_options
             )
@@ -111,6 +112,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          command,
          :human,
          :application,
+         input_mode,
          output_mode,
          options
        ) do
@@ -133,13 +135,14 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
           command,
           capability,
           ingress,
+          input_mode,
           output_mode
         )
       else
         _error -> attachment_speech_to_text_failed(room_authority, command)
       end
     else
-      {:ok, room_authority, nil, output_mode}
+      {:ok, room_authority, nil, input_mode, output_mode}
     end
   end
 
@@ -148,6 +151,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          command,
          :human,
          %SpeechToTextRuntime{} = runtime,
+         input_mode,
          output_mode,
          _application_options
        ) do
@@ -165,6 +169,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
         command,
         capability,
         ingress,
+        input_mode,
         output_mode
       )
     else
@@ -177,10 +182,11 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          _command,
          _role,
          _selected_runtime,
+         input_mode,
          output_mode,
          _application_options
        ) do
-    {:ok, room_authority, nil, output_mode}
+    {:ok, room_authority, nil, input_mode, output_mode}
   end
 
   defp bind_connection_speech_to_text(
@@ -188,6 +194,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          command,
          capability,
          ingress,
+         input_mode,
          output_mode
        ) do
     case RoomAuthority.bind_speech_to_text(
@@ -198,7 +205,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
            ingress
          ) do
       :ok ->
-        {:ok, room_authority, ingress, output_mode}
+        {:ok, room_authority, ingress, input_mode, output_mode}
 
       {:error, _reason} ->
         :ok =

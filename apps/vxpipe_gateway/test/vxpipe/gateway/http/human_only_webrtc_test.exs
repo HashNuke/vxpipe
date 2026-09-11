@@ -12,6 +12,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.SessionSupervisor
+  alias Vxpipe.Gateway.WebRTC.Connection
 
   @moduletag capture_log: true
 
@@ -85,6 +86,37 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     refute_receive {:ex_webrtc, ^receiver_peer, {:rtp, ^receiver_track, _rid, %Packet{}}},
                    500
+  end
+
+  test "an authorized silent monitor hears permitted WebRTC sources and cannot publish" do
+    plan = compile_monitor_plan()
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    monitor = Map.fetch!(plan.participants, "monitor")
+
+    caller_client = connect(issue_session(plan, room, caller.participant_id).session_id)
+    receiver_client = connect(issue_session(plan, room, receiver.participant_id).session_id)
+
+    assert {:ok, command} = join_command(plan, monitor.participant_id, :monitor)
+    assert {:ok, _participant} = CallEngine.join_participant(command)
+
+    monitor_client = connect(issue_session(plan, room, monitor.participant_id).session_id)
+
+    :ok = send_audio(caller_client, 1, 960, 8_000)
+    assert receiver_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+    assert monitor_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    :ok = send_audio(receiver_client, 1, 960, -8_000)
+    assert caller_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+    refute_audio(monitor_client, 500)
+
+    :ok = send_audio(monitor_client, 1, 960, 5_000)
+    refute_audio(caller_client, 500)
+    refute_audio(receiver_client, 500)
+    assert :ok = Connection.add_ice_candidates(monitor_client.connection_id, [])
   end
 
   defp compile_plan do
@@ -174,13 +206,58 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     plan
   end
 
-  defp join_command(plan, participant_id) do
+  defp compile_monitor_plan do
+    resource_id = unique_id("monitor-webrtc")
+    room_id = unique_id("room-monitor-webrtc")
+
+    input = %{
+      schema_version: CallDefinition.schema_version(),
+      entry_caller: "caller",
+      entry_receiver: "receiver",
+      defaults: %{capabilities: %{}},
+      call_variables: %{sections: %{}},
+      media_policy: %{
+        audio_routes: %{
+          "caller" => ["receiver", "monitor"],
+          "receiver" => ["caller"],
+          "monitor" => []
+        }
+      },
+      participants: %{
+        "caller" => human_participant(),
+        "receiver" => human_participant(),
+        "monitor" => human_participant()
+      },
+      limits: %{max_duration_ms: 30_000}
+    }
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+
+    assert {:ok, invocation} =
+             CallInvocation.new(
+               %{
+                 call_definition: %{id: resource_id, revision: 1},
+                 initial_variables: %{},
+                 transport: %{type: "web"}
+               },
+               tenant_id: "tenant-monitor-webrtc",
+               actor_id: "actor-monitor-webrtc",
+               call_id: unique_id("call-monitor-webrtc"),
+               room_id: room_id
+             )
+
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    plan
+  end
+
+  defp join_command(plan, participant_id, role \\ :human) do
     JoinParticipant.new(
       tenant_id: plan.tenant_id,
       actor_id: plan.actor_id,
       room_id: plan.room_id,
       participant_id: participant_id,
-      role: :human,
+      role: role,
       deadline: DateTime.add(DateTime.utc_now(), 5, :second)
     )
   end
@@ -319,6 +396,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     after
       timeout_ms -> flunk("timed out waiting for mixed WebRTC audio")
     end
+  end
+
+  defp refute_audio(connection, timeout_ms) do
+    client = connection.client
+    output_track_id = connection.output_track_id
+
+    refute_receive {:ex_webrtc, ^client, {:rtp, ^output_track_id, _rid, %Packet{}}}, timeout_ms
   end
 
   defp decodable_pcm_size(packet) do

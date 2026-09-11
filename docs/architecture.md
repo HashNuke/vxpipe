@@ -1114,13 +1114,14 @@ the sink restores the pinned tenant, room-incarnation, participant, connection, 
 identity. The engine's PCM addition delegates to Membrane's audio-mixer adder. Vxpipe retains the
 policy-aware timestamp buckets, mix-minus/full/individual routing, revision barrier, and bounded
 subscriber queues because a generic one-output mixer does not express those room contracts.
-Output subscription orchestration, Membrane-backed WebRTC mix encoding/pacing, and recording taps
-remain subsequent boundaries; they cannot omit revision provenance or bypass this barrier.
+Connection-scoped output orchestration and Membrane-backed WebRTC mix encoding/pacing consume these
+opaque subscriptions without exposing mixer ownership to the Gateway. Recording taps remain a
+subsequent boundary; they cannot omit revision provenance or bypass this barrier.
 
 The connection-to-mixer ingress boundary is now implemented without exposing mixer or policy
 processes as transport APIs. A planned-room `ConnectionAttachment` carries an opaque room-audio
 handle and the mixer's one VM-relative clock origin; legacy ad-hoc attachments explicitly report
-that room audio is disabled. Each planned WebRTC connection supervises a separate
+that room audio is disabled. Each writable planned WebRTC connection supervises a separate
 `RoomAudioIngress` coordinator and Membrane normalizer. The coordinator registers with the same
 media-policy authority as the mixer and transcript router. Before acknowledging any later policy
 revision, it terminates and replaces the entire jitter/decode/framing pipeline, discards late
@@ -1150,6 +1151,14 @@ disabled and retain their direct TTS sink. This avoids deriving output ownership
 happens to be configured and prevents two RTP producers from silently claiming one WebRTC track.
 Later human-transfer work owns the explicit transition between those modes when agent capability
 ownership changes mid-call.
+
+Silent-monitor authority is carried by the engine-issued connection attachment rather than by a
+client-supplied mixer option. An admitted monitor receives `:full_mix`, has no STT or room-audio
+ingress, and any RTP it sends is discarded without terminating its receive-only connection. The
+Gateway starts no normalizer for that attachment and cannot downgrade or broaden the output mode:
+the engine replaces the requested subscription mode with the granted one. The same `audio_routes`
+snapshot filters full-mix sources, so monitor admission alone grants neither publication nor
+unrestricted listening.
 
 `TranscriptRouter` keeps a bounded installed-revision history for source-interval decisions (128
 revisions by default). A current transcript projection reaches only connected, present
