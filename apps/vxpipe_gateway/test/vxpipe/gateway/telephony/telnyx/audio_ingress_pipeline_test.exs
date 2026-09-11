@@ -17,7 +17,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipelineTest do
 
     assert :ok = AudioIngressPipeline.push(pipeline_id, frame(4, 60, 1_043, packet))
 
-    assert_receive {:vxpipe_telnyx_audio_ingress, ^pipeline_id,
+    assert_receive {:vxpipe_audio_pipeline, ^pipeline_id,
                     %PCMFrame{
                       track_id: "stream-1",
                       timestamp: 1_920,
@@ -86,7 +86,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipelineTest do
          clock_origin_ms: 1_000}
       )
 
-    assert_receive {:vxpipe_telnyx_audio_ingress_ready, ^pipeline_id}, @pipeline_timeout
+    assert_receive {:vxpipe_audio_pipeline_ready, ^pipeline_id}, @pipeline_timeout
     pipeline_id
   end
 

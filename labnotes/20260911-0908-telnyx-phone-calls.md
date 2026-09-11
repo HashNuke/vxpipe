@@ -907,3 +907,23 @@ an owning telephony supervisor into these coordinators instead of cloning their 
 The mechanical checkpoint passed formatting, compilation with warnings as errors, strict Credo,
 the unused-dependency check, the focused 14-test regression set, and the complete 723-test umbrella
 suite against a fresh disposable PostgreSQL 17 instance.
+
+## Checkpoint 23: shared media pipeline signals
+
+The Telnyx Membrane ingress and room-mix egress pipelines now publish the same ready, PCM-frame,
+and delivery-acknowledgement messages consumed by the transport-neutral room media coordinators.
+This removes a Telnyx-only message dialect without changing the provider wire format, codec chain,
+or process registration. A focused red test first demonstrated that both pipelines still emitted
+their old transport-prefixed signals; the smallest implementation change then made the four
+pipeline tests pass.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/audio_ingress_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/audio_egress_pipeline_test.exs
+# 4 tests, 0 failures
+```
+
+The checkpoint also passed root formatting, compilation with warnings as errors, strict Credo,
+the unused-dependency check, and all 723 umbrella tests against a fresh disposable PostgreSQL 17
+instance.

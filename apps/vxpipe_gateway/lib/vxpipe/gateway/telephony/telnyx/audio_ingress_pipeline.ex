@@ -62,7 +62,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline do
 
   @impl true
   def handle_playing(_context, state) do
-    send(state.owner, {:vxpipe_telnyx_audio_ingress_ready, state.pipeline_id})
+    send(state.owner, {:vxpipe_audio_pipeline_ready, state.pipeline_id})
     {[], state}
   end
 
@@ -98,7 +98,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline do
       payload: buffer.payload
     }
 
-    send(state.owner, {:vxpipe_telnyx_audio_ingress, state.pipeline_id, frame})
+    send(state.owner, {:vxpipe_audio_pipeline, state.pipeline_id, frame})
     {[], state}
   end
 

@@ -62,7 +62,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioEgressPipeline do
     playing_children = MapSet.put(state.playing_children, child)
 
     if MapSet.equal?(playing_children, @children) do
-      send(state.owner, {:vxpipe_telnyx_audio_egress_ready, state.pipeline_id})
+      send(state.owner, {:vxpipe_room_audio_output_ready, state.pipeline_id})
     end
 
     {[], %{state | playing_children: playing_children}}
@@ -78,7 +78,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioEgressPipeline do
 
   @impl true
   def handle_child_notification({:sent, timestamp}, :sink, _context, state) do
-    send(state.owner, {:vxpipe_telnyx_audio_egress_sent, state.pipeline_id, timestamp})
+    send(state.owner, {:vxpipe_room_audio_output_sent, state.pipeline_id, timestamp})
     {[], state}
   end
 

@@ -23,8 +23,8 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioEgressPipelineTest do
     assert byte_size(Native.decode_packet(decoder, first_packet)) == 1_920
     assert byte_size(Native.decode_packet(decoder, second_packet)) == 1_920
 
-    assert_receive {:vxpipe_telnyx_audio_egress_sent, ^pipeline_id, 0}, @pipeline_timeout
-    assert_receive {:vxpipe_telnyx_audio_egress_sent, ^pipeline_id, 960}, @pipeline_timeout
+    assert_receive {:vxpipe_room_audio_output_sent, ^pipeline_id, 0}, @pipeline_timeout
+    assert_receive {:vxpipe_room_audio_output_sent, ^pipeline_id, 960}, @pipeline_timeout
   end
 
   test "rejects mixer output outside the pinned subscription and room format" do
@@ -64,7 +64,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioEgressPipelineTest do
          participant_id: "part-human"}
       )
 
-    assert_receive {:vxpipe_telnyx_audio_egress_ready, ^pipeline_id}, @pipeline_timeout
+    assert_receive {:vxpipe_room_audio_output_ready, ^pipeline_id}, @pipeline_timeout
     pipeline_id
   end
 
