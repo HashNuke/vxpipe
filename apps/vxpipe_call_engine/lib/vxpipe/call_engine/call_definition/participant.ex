@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :type,
     :description,
     :connection,
+    :transfer_notice,
     :prompt,
     :first_message,
     :capabilities,
@@ -25,7 +26,14 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :transfer_history,
     :variable_permissions
   ]
-  @human_fields [:type, :description, :connection, :capabilities, :while_present]
+  @human_fields [
+    :type,
+    :description,
+    :connection,
+    :transfer_notice,
+    :capabilities,
+    :while_present
+  ]
   @agent_fields [
     :type,
     :description,
@@ -44,6 +52,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :kind,
     :description,
     :connection,
+    :transfer_notice,
     :prompt,
     :first_message,
     :first_message_text,
@@ -61,6 +70,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
           kind: :human | :agent,
           description: nil | String.t(),
           connection: nil | ConnectionIntent.t(),
+          transfer_notice: nil | String.t(),
           prompt: nil | String.t(),
           first_message: nil | :wait_for_input | :generated | :fixed,
           first_message_text: nil | String.t(),
@@ -144,10 +154,19 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   defp kind_attributes(:human, input, code, message, path) do
     with {:ok, connection_input} <-
            DefinitionValidation.fetch(input, :connection, code, message, path),
-         {:ok, connection} <- ConnectionIntent.new(connection_input, path ++ ["connection"]) do
+         {:ok, connection} <- ConnectionIntent.new(connection_input, path ++ ["connection"]),
+         {:ok, transfer_notice} <-
+           DefinitionValidation.optional_string(
+             Map.get(input, :transfer_notice),
+             code,
+             message,
+             path ++ ["transfer_notice"],
+             maximum: 4_096
+           ) do
       {:ok,
        %{
          connection: connection,
+         transfer_notice: transfer_notice,
          prompt: nil,
          first_message: nil,
          first_message_text: nil,
@@ -184,6 +203,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
       {:ok,
        %{
          connection: nil,
+         transfer_notice: nil,
          prompt: prompt,
          first_message: first_message,
          first_message_text: first_message_text,

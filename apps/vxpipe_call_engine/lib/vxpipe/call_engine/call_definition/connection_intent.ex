@@ -6,7 +6,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
   @enforce_keys [:service, :mode, :admission]
   defstruct @enforce_keys
 
-  @type t :: %__MODULE__{service: :web, mode: :receive, admission: :start_call}
+  @type t :: %__MODULE__{
+          service: :web,
+          mode: :receive,
+          admission: :start_call | :transfer
+        }
 
   def new(value, path) do
     code = :invalid_call_definition
@@ -44,7 +48,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.ConnectionIntent do
          {:ok, admission} <-
            DefinitionValidation.enum(
              admission_input,
-             [start_call: "start_call"],
+             [start_call: "start_call", transfer: "transfer"],
              code,
              message,
              path ++ ["admission"]

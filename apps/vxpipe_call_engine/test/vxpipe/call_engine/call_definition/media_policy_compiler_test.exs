@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.MediaPolicyCompilerTest do
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy, as: ResolvedMediaPolicy
 
-  @schema_version "20260911.01"
+  @schema_version "20260911.02"
 
   test "preserves omitted fields and explicit empty route maps" do
     input =

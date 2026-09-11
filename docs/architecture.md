@@ -955,6 +955,16 @@ or mode-specific field is silently accepted. This placement prevents a source mo
 how much prior conversation another participant may receive. The compiler pins the policy into the
 destination participant in the immutable call plan.
 
+Schema `20260911.02` opens the previously agent-only destination allowlist to a web human whose
+connection intent is exactly `receive`/`transfer`. Entry admissions and transfer admissions remain
+distinct: a human with `start_call` admission cannot be selected by the transfer tool. The human
+destination may carry one optional fixed `transfer_notice`. A transfer to a human always requires
+a non-empty bounded `reason`, which is the private caller/purpose briefing supplied to that
+destination; it is not a free-form address, public client event, or full variable/history snapshot.
+The resolved plan pins the connection intent and notice. This checkpoint defines the authoring and
+compilation boundary; pending connection, private playback, authenticated acceptance, and commit
+remain room/gateway runtime responsibilities below.
+
 Agent Runtime accepts an internal initial-conversation seed for activation construction. That
 boundary retains the destination's independently configured system prompt and accepts only plain
 caller-origin user messages and tool-free assistant messages. It rejects system messages, engine

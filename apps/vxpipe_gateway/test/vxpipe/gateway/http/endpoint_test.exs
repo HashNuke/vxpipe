@@ -342,7 +342,7 @@ defmodule Vxpipe.Gateway.HTTP.EndpointTest do
       resource_id: "sample-call",
       revision: 1,
       definition: %{
-        schema_version: "20260911.01",
+        schema_version: "20260911.02",
         entry_caller: "caller",
         entry_receiver: "receiver",
         defaults: %{capabilities: %{}},

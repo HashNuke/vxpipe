@@ -186,6 +186,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          kind: participant.kind,
          description: participant.description,
          connection: participant.connection,
+         transfer_notice: participant.transfer_notice,
          prompt: participant.prompt,
          first_message: participant.first_message,
          first_message_text: participant.first_message_text,
@@ -279,7 +280,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
            definition_key: definition_key,
            participant_id: destination.participant_id,
            description: destination.description,
-           reason_required: destination.transfer_history.mode == :selected
+           reason_required:
+             destination.kind == :human or destination.transfer_history.mode == :selected
          }}
       end)
 

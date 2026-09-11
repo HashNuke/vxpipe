@@ -50,7 +50,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
     assert {:ok, descriptors} = ToolDescriptors.compile(reception.tools)
     assert [%ToolDescriptor{} = descriptor] = descriptors
     assert descriptor.name == "transfer"
-    assert descriptor.description == "Transfer the caller to one permitted agent participant."
+    assert descriptor.description == "Transfer the caller to one permitted participant."
 
     assert descriptor.input_schema == %{
              "type" => "object",
@@ -225,6 +225,73 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
     assert {:error, :invalid_arguments} =
              ToolRegistry.resolve(registry, "transfer", %{"destination" => "billing"})
+  end
+
+  test "pins a web human transfer destination and requires a private briefing reason" do
+    input =
+      transfer_definition()
+      |> put_in([:participants, "reception", :transfers], ["human-support"])
+      |> put_in(
+        [:participants, "human-support"],
+        %{
+          type: "human",
+          description: "A human support specialist",
+          connection: %{service: "web", mode: "receive", admission: "transfer"},
+          transfer_notice: "This call is recorded."
+        }
+      )
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "support", revision: 7)
+
+    assert definition.participants["human-support"].connection.admission == :transfer
+    assert definition.participants["human-support"].transfer_notice == "This call is recorded."
+
+    assert {:ok, plan} =
+             DefinitionCompiler.compile(definition, invocation(), registries())
+
+    reception = plan.participants["reception"]
+    support = plan.participants["human-support"]
+    assert support.connection.admission == :transfer
+    assert support.transfer_notice == "This call is recorded."
+
+    assert %{reason_required: true, participant_id: support_participant_id} =
+             reception.tools["transfer"].transfer.targets["human-support"]
+
+    assert support_participant_id == support.participant_id
+
+    assert {:ok, [descriptor]} = ToolDescriptors.compile(reception.tools)
+    assert {:ok, registry} = ToolRegistry.new([descriptor])
+
+    assert {:error, :invalid_arguments} =
+             ToolRegistry.resolve(registry, "transfer", %{"destination" => "human-support"})
+
+    assert {:ok, ^descriptor} =
+             ToolRegistry.resolve(registry, "transfer", %{
+               "destination" => "human-support",
+               "reason" => "Taylor is calling about order 17."
+             })
+  end
+
+  test "rejects a human transfer target whose connection is an entry admission" do
+    input =
+      transfer_definition()
+      |> put_in([:participants, "reception", :transfers], ["human-support"])
+      |> put_in(
+        [:participants, "human-support"],
+        %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"}
+        }
+      )
+
+    assert {:error,
+            %Error{
+              code: :invalid_call_definition,
+              details: %{
+                "path" => ["participants", "reception", "transfers", "0"]
+              }
+            }} = CallDefinition.new(input, resource_id: "support", revision: 7)
   end
 
   test "rejects malformed destination transfer history policies at their exact path" do

@@ -81,6 +81,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       kind: :human,
       description: nil,
       connection: %ConnectionIntent{service: :web, mode: :receive, admission: :start_call},
+      transfer_notice: nil,
       prompt: nil,
       first_message: nil,
       first_message_text: nil,
@@ -95,7 +96,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     %ResolvedCallPlan{
       definition_id: unique_id("definition"),
       definition_revision: 1,
-      schema_version: "20260911.01",
+      schema_version: "20260911.02",
       tenant_id: tenant_id,
       actor_id: unique_id("actor"),
       call_id: unique_id("call"),

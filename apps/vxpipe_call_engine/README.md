@@ -52,8 +52,11 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260911.01`. It adds the normal call-wide
-`media_policy` and each participant's optional `while_present` contribution. Each independently
+The definition-driven compiler's current schema is `20260911.02`. It adds web human transfer
+destinations alongside the normal call-wide `media_policy` and each participant's optional
+`while_present` contribution. A human transfer destination uses an exact web
+`receive`/`transfer` connection intent, may configure one fixed `transfer_notice`, and makes the
+generated transfer tool require a bounded private briefing reason. Each independently
 optional policy field preserves omission as `:inherit`; explicit audio/transcript route maps are
 complete direct participant-key allowlists, including meaningful empty maps and recipient arrays.
 Unknown or duplicate references and malformed storage booleans fail at their exact definition path.
@@ -66,7 +69,7 @@ membership; transport detach does not clear presence, while authoritative partic
 only that participant's contribution. Losing the policy authority ends the room rather than
 continuing without privacy state. Mixer, transcript, and archive enforcement remain incomplete.
 
-The schema also accepts validated definition-local agent transfer allowlists, derives one private default-blocking transfer binding
+The schema also accepts validated definition-local participant transfer allowlists, derives one private default-blocking transfer binding
 for each non-empty list, pins the call-level total transfer-attempt deadline, and pins each agent's
 inbound `transfer_history` policy. Omission selects the privacy-safe `fresh` mode; the closed set is
 `fresh`, `all_spoken`, `last_n_spoken` with a positive `turns` value, and `selected`.

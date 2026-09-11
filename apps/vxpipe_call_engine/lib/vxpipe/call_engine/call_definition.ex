@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260911.01"
+  @schema_version "20260911.02"
   @fields [
     :schema_version,
     :name,
@@ -297,12 +297,23 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           {:ok, %{kind: :agent}} ->
             :ok
 
+          {:ok,
+           %{
+             kind: :human,
+             connection: %Vxpipe.CallEngine.CallDefinition.ConnectionIntent{
+               service: :web,
+               mode: :receive,
+               admission: :transfer
+             }
+           }} ->
+            :ok
+
           {:ok, _destination} ->
             DefinitionValidation.invalid(
               code,
               message,
               path,
-              "must reference an agent participant in this schema subset"
+              "must reference an agent or transfer-admission human participant"
             )
         end
 

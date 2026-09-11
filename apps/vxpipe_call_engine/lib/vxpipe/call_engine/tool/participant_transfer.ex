@@ -20,7 +20,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
 
     %Definition{
       name: "transfer",
-      description: "Transfer the caller to one permitted agent participant.",
+      description: "Transfer the caller to one permitted participant.",
       parameters: parameters
     }
   end
