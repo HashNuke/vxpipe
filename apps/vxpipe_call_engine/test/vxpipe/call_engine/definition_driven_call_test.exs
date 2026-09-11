@@ -16,7 +16,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     Error,
     PlanStartup,
     RoomAuthority,
-    RoomMixer
+    RoomMixer,
+    TranscriptRouter
   }
 
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
@@ -345,6 +346,81 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              public_sequence: nil,
              payload: %{"output_id" => ^output_id, "text" => "Hello back."}
            } = fact!(facts, :agent_output_delivered)
+  end
+
+  test "applies a present participant's transcript routes and storage denial" do
+    configure_agent_runtime_provider(self())
+    room_id = unique_id("room-transcript-policy")
+
+    transform = fn input ->
+      put_in(input, [:participants, "unused-agent", :while_present], %{
+        transcript_routes: %{"receiver" => []},
+        save_transcripts: false
+      })
+    end
+
+    plan = compile_plan(room_id, definition_transform: transform)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    restricted = Map.fetch!(plan.participants, "unused-agent")
+
+    archive =
+      archive_options(
+        writer: {TestCollectingArchiveWriter, self()},
+        maximum_pending_facts: 32
+      )
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
+
+    attach_caller(plan, room, caller, "conn-transcript-policy")
+
+    assert {:ok, join} =
+             JoinParticipant.new(
+               tenant_id: plan.tenant_id,
+               actor_id: plan.actor_id,
+               room_id: plan.room_id,
+               participant_id: restricted.participant_id,
+               role: :agent,
+               deadline: future_deadline()
+             )
+
+    assert {:ok, _participant} = CallEngine.join_participant(join)
+
+    command =
+      send_command(
+        plan,
+        room,
+        caller,
+        "conn-transcript-policy",
+        "Do not archive this text."
+      )
+
+    assert :ok = CallEngine.send_text(command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    assert {:ok, response} = ModelResponse.new(text: "This output is private.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    refute_receive {:vxpipe_event, %TextOutput{text: "This output is private."}}
+
+    facts = collect_archive_facts_through(:agent_turn_completed)
+
+    assert %Fact{
+             kind: :accepted_input,
+             source_policy: %{
+               "media_policy_revision" => 3,
+               "save_transcripts" => false
+             },
+             payload: %{"modality" => "text"}
+           } = fact!(facts, :accepted_input)
+
+    assert %Fact{
+             kind: :agent_output_generated,
+             source_policy: %{
+               "media_policy_revision" => 3,
+               "save_transcripts" => false
+             },
+             payload: %{"aggregated_by" => "sentence", "will_be_spoken" => false}
+           } = fact!(facts, :agent_output_generated)
   end
 
   test "archives authoritative connection and participant departures" do
@@ -718,6 +794,24 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     room_mixer = RoomMixer.whereis(room.incarnation_id)
 
     Process.exit(room_mixer, :kill)
+
+    assert_receive {:DOWN, ^room_monitor, :process, ^room_authority, :shutdown}, 2_000
+  end
+
+  test "supervises transcript policy with the room and fails closed if it exits" do
+    room_id = unique_id("room-transcript-router-exit")
+    plan = compile_plan(room_id)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+
+    assert [{room_authority, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
+
+    room_monitor = Process.monitor(room_authority)
+    transcript_router = TranscriptRouter.whereis(room.incarnation_id)
+
+    assert %{policy_revision: 2} = TranscriptRouter.stats(transcript_router)
+    Process.exit(transcript_router, :kill)
 
     assert_receive {:DOWN, ^room_monitor, :process, ^room_authority, :shutdown}, 2_000
   end

@@ -203,7 +203,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       occurred_at: DateTime.utc_now(:millisecond)
     }
 
-    state = EventPublisher.publish(state, connection.pid, event)
+    {state, _source_policy} =
+      EventPublisher.publish_transcript(state, connection.pid, event)
+
     %{state | next_sequence: state.next_sequence + 1}
   end
 
@@ -257,8 +259,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
           {:ok, state} ->
             case TextCapability.respond(state.text_capability, command) do
               :ok ->
+                source_policy =
+                  EventPublisher.transcript_source_policy(state, command.participant_id)
+
                 archive_recorder =
-                  ArchiveRecorder.accepted_input(state.archive_recorder, command, :audio)
+                  ArchiveRecorder.accepted_input(
+                    state.archive_recorder,
+                    command,
+                    :audio,
+                    source_policy
+                  )
 
                 state
                 |> Map.put(:archive_recorder, archive_recorder)
@@ -332,7 +342,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       )
 
     state = EventPublisher.publish(state, connection.pid, started)
-    archive_recorder = ArchiveRecorder.accepted_input(state.archive_recorder, command, :text)
+    source_policy = EventPublisher.transcript_source_policy(state, command.participant_id)
+
+    archive_recorder =
+      ArchiveRecorder.accepted_input(
+        state.archive_recorder,
+        command,
+        :text,
+        source_policy
+      )
+
     state = %{state | archive_recorder: archive_recorder}
     state = confirm_user(state, command.content)
     state = EventPublisher.publish(state, connection.pid, completed)

@@ -135,9 +135,14 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     )
   end
 
-  @spec accepted_input(t(), SendText.t(), :audio | :text) :: t()
-  def accepted_input(%__MODULE__{} = recorder, %SendText{} = command, modality)
-      when modality in [:audio, :text] do
+  @spec accepted_input(t(), SendText.t(), :audio | :text, map()) :: t()
+  def accepted_input(
+        %__MODULE__{} = recorder,
+        %SendText{} = command,
+        modality,
+        source_policy \\ %{}
+      )
+      when modality in [:audio, :text] and is_map(source_policy) do
     emit(recorder, :accepted_input,
       id: Id.generate(:event),
       participant_id: command.participant_id,
@@ -146,6 +151,7 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
       command_id: command.id,
       correlation_id: command.correlation_id,
       occurred_at: DateTime.utc_now(:millisecond),
+      source_policy: source_policy,
       payload: %{"content" => command.content, "modality" => modality}
     )
   end
@@ -161,6 +167,7 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
       command_id: request.command_id,
       correlation_id: request.correlation_id,
       occurred_at: DateTime.utc_now(:millisecond),
+      source_policy: request.source_policy,
       payload: %{"output_id" => request.output_id, "text" => request.text}
     )
   end

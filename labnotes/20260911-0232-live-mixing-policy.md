@@ -153,3 +153,36 @@
   as the preceding checkpoint except for the expanded Call Engine suite. The disposable database
   was removed afterward. Transport PCM normalization, connection-to-mixer input/output wiring,
   transcript/archive policy consumers, and human-only startup remain open.
+
+## 2026-09-11 — transcript routing and archive source policy
+
+- Added the transcript-router and archive override tests before implementation. The red run failed
+  while expanding the absent decision struct; after the standalone policy boundary existed, a
+  live planned-room regression still received agent text despite a present participant's explicit
+  empty route.
+- Added one temporary, significant `TranscriptRouter` per planned room. Room Authority registers it
+  with the policy authority before the mixer and before entry admission. It installs the same
+  monotonic snapshots, filters connected/present recipient identities through
+  `transcript_routes`, and retains prior snapshots for source-interval storage decisions. That
+  history is bounded to 128 revisions by default; a projection older than the retained window is
+  rejected rather than assigned a guessed policy.
+- A projection tagged with an older policy revision receives no live recipients. Relaxing policy
+  later therefore cannot replay a queued denied interval. The source revision still determines
+  `save_transcripts`, independently of current live sharing.
+- Participant-transcription and generated-agent-text events now pass through this boundary.
+  Transcript-bearing typed/audio input and generated/delivered output facts carry the effective
+  media revision and storage permission into `Archive.Port`. The port merges that decision with
+  the base source policy and removes denied text before offering the fact to either archive or live
+  inspection queues; the delayed Calls-side filter remains defense in depth.
+- Router unavailability denies both live transcript projection and transcript storage, and loss of
+  the significant router ends the room through the existing fail-closed supervision policy.
+- Focused checks cover unrestricted and explicit routing, independent storage denial, stale
+  revision non-replay, bounded revision eviction, invalid identity/revision/source, pre-handoff
+  payload filtering, the full room regression, and router-loss teardown. The complete Call Engine
+  suite passes 317 tests with one tagged integration exclusion.
+- The complete database-backed umbrella suite passes across all seven child applications using a
+  disposable PostgreSQL instance. Formatting, warnings-as-errors compilation, strict Credo, and
+  the umbrella lockfile unused-dependency check also pass.
+- Provider STT sessions do not yet carry/pivot source revisions across a presence transition. That
+  lifecycle work, demand-based STT stopping, future recorder policy, mixer transport wiring, and
+  human-only startup remain open; this checkpoint does not claim the in-flight provider boundary.

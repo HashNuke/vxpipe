@@ -150,6 +150,43 @@ defmodule Vxpipe.CallEngine.Archive.PortTest do
     assert output_payload == %{"will_be_spoken" => true}
   end
 
+  test "applies a source-interval policy before a transcript enters the handoff" do
+    handoff = open_archive()
+
+    port =
+      Port.new(
+        handoff,
+        %{
+          tenant_id: "tenant-archive",
+          call_id: "call-archive",
+          room_id: "room-archive",
+          incarnation_id: "rinc-archive"
+        },
+        %{"revision" => 7}
+      )
+
+    _port =
+      Port.emit(port, :participant_transcription_final,
+        id: "evt-policy-interval",
+        occurred_at: ~U[2026-09-11 03:00:00.000Z],
+        source_policy: %{
+          "media_policy_revision" => 3,
+          "save_transcripts" => false
+        },
+        payload: %{"final" => true, "text" => "must-not-enter-the-queue"}
+      )
+
+    assert_receive {:test_archive_fact,
+                    %Fact{
+                      source_policy: %{
+                        "media_policy_revision" => 3,
+                        "revision" => 7,
+                        "save_transcripts" => false
+                      },
+                      payload: %{"final" => true}
+                    }}
+  end
+
   defp open_archive do
     assert {:ok, handoff} =
              Supervisor.open(

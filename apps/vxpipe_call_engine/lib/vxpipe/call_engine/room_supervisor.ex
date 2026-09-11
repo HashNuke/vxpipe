@@ -252,6 +252,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       call_lifecycle: call_lifecycle_options(runtime_options),
       live_inspection: live_inspection_options(),
       room_mixer: room_mixer_options(),
+      transcript_router: transcript_router_options(),
       opening_audio: Keyword.fetch!(runtime_options, :opening_audio),
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       remote_mcp_connection_provider:
@@ -373,6 +374,12 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     :vxpipe_call_engine
     |> Application.fetch_env!(Vxpipe.CallEngine.Application)
     |> Keyword.fetch!(:room_mixer)
+  end
+
+  defp transcript_router_options do
+    :vxpipe_call_engine
+    |> Application.fetch_env!(Vxpipe.CallEngine.Application)
+    |> Keyword.fetch!(:transcript_router)
   end
 
   defp lookup_room(tenant_id, room_id) do

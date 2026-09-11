@@ -61,6 +61,9 @@ defmodule Vxpipe.CallEngine.Archive.Port do
   def emit(nil, _kind, _attributes), do: nil
 
   def emit(%__MODULE__{} = port, kind, attributes) when is_atom(kind) and is_list(attributes) do
+    source_policy =
+      Map.merge(port.source_policy, Keyword.get(attributes, :source_policy, %{}))
+
     fact =
       Fact.new!(
         id: Keyword.fetch!(attributes, :id),
@@ -79,12 +82,12 @@ defmodule Vxpipe.CallEngine.Archive.Port do
         tool_call_id: Keyword.get(attributes, :tool_call_id),
         public_sequence: Keyword.get(attributes, :public_sequence),
         occurred_at: Keyword.fetch!(attributes, :occurred_at),
-        source_policy: port.source_policy,
+        source_policy: source_policy,
         payload:
           Policy.filter_payload(
             kind,
             Keyword.get(attributes, :payload, %{}),
-            port.source_policy
+            source_policy
           )
       )
 

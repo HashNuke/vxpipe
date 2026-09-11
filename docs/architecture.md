@@ -1079,11 +1079,12 @@ barrier cannot apply before commit. New delivery, queued/late old output, later
 reactivation, and retrospective replay must not bypass a restricted interval.
 Source responsibility, total transfer deadline, and restoration rules remain.
 
-The implemented media-policy runtime has one significant policy authority and one significant
-`RoomMixer` per planned room. The authority composes immutable effective snapshots and commits a
-new revision only after every registered enforcer installs it. Rejection, timeout, malformed
-acknowledgement, or enforcer loss ends the room. The mixer is registered before entry participants
-are admitted, so startup revisions and later presence transitions pass through the same barrier.
+The implemented media-policy runtime has one significant policy authority, one significant
+`RoomMixer`, and one significant `TranscriptRouter` per planned room. The authority composes
+immutable effective snapshots and commits a new revision only after every registered enforcer
+installs it. Rejection, timeout, malformed acknowledgement, or enforcer loss ends the room. Both
+consumers are registered before entry participants are admitted, so startup revisions and later
+presence transitions pass through the same barrier.
 
 `RoomMixer` accepts normalized, timestamped s16le PCM frames tagged with the installed policy
 revision. It rejects wrong-room, absent/output-only source, stale revision, stale sequence, stale
@@ -1098,6 +1099,20 @@ acknowledgement, and every output retains source IDs, timestamp, and policy revi
 decoding/normalization, WebRTC output encoding, connection subscription orchestration, transcript
 projection, and recording taps are subsequent boundaries; they cannot omit revision provenance or
 bypass this barrier.
+
+`TranscriptRouter` keeps a bounded installed-revision history for source-interval decisions (128
+revisions by default). A current transcript projection reaches only connected, present
+participant identities permitted by `transcript_routes`; a projection tagged with an older
+revision is never delivered later, even
+after policy relaxation. Its source revision independently supplies `save_transcripts` provenance.
+Room-generated participant transcriptions and agent text output pass through this router, while
+typed input and generated/delivered transcript-bearing archive facts receive the same current
+source policy before entering the bounded archive handoff. A denied payload is stripped at the
+engine boundary and the delayed Calls projection repeats that check. Policy-router failure denies
+delivery/storage while the significant-child failure tears down the room. Provider-session
+revision pinning and STT demand/restart at policy boundaries remain required before claiming that
+late provider results spanning a presence transition are completely source-interval accurate.
+If a delayed projection outlives the retained history, it fails closed instead of inferring policy.
 
 Dial destinations may be literal participant `connection.number` values or come
 from a declared creation-time variable, using the candidate alternative

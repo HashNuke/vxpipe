@@ -18,7 +18,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request, as: TransferRequest
 
-  alias Vxpipe.CallEngine.{Error, ResolvedCallPlan, RoomMixer, TextToSpeechRequest}
+  alias Vxpipe.CallEngine.{
+    Error,
+    ResolvedCallPlan,
+    RoomMixer,
+    TextToSpeechRequest,
+    TranscriptRouter
+  }
 
   alias Vxpipe.CallEngine.Room.Snapshot
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
@@ -118,6 +124,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     with {:ok, call_lifecycle} <- StartupReadiness.bind(room_source, incarnation_id),
          {:ok, media_policy_authority} <-
            bind_media_policy_authority(room_source, incarnation_id),
+         {:ok, transcript_router} <-
+           bind_transcript_router(room_source, incarnation_id, media_policy_authority),
          {:ok, room_mixer} <-
            bind_room_mixer(room_source, incarnation_id, media_policy_authority) do
       state =
@@ -129,6 +137,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           FirstMessage.new(room_source),
           call_lifecycle,
           media_policy_authority,
+          transcript_router,
           room_mixer
         )
 
@@ -482,6 +491,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     case MediaPolicyAuthority.whereis(incarnation_id) do
       authority when is_pid(authority) -> {:ok, authority}
       nil -> {:error, :media_policy_unavailable}
+    end
+  end
+
+  defp bind_transcript_router(%CreateRoom{}, _incarnation_id, nil), do: {:ok, nil}
+
+  defp bind_transcript_router(%ResolvedCallPlan{}, incarnation_id, media_policy_authority) do
+    case TranscriptRouter.whereis(incarnation_id) do
+      router when is_pid(router) ->
+        case MediaPolicyAuthority.register_enforcer(media_policy_authority, router) do
+          {:ok, _snapshot} -> {:ok, router}
+          {:error, _reason} -> {:error, :media_policy_unavailable}
+        end
+
+      nil ->
+        {:error, :transcript_router_unavailable}
     end
   end
 

@@ -124,6 +124,25 @@ integration exclusion. A fresh database-backed umbrella run also passes across a
 applications. Gateway normalization/encoding, live connection subscription, transcript and
 archive enforcement, and human-only startup remain open.
 
+A significant room-scoped `TranscriptRouter` is now the second concrete barrier enforcer. It
+installs the same immutable policy revisions as the mixer, retains a bounded 128-revision default
+history for storage provenance, filters current transcript recipients by authoritative presence and
+`transcript_routes`, and never delivers a stale-revision projection after later restriction or
+relaxation. Participant transcription and generated agent text now cross this boundary before
+client delivery. Transcript-bearing input/output facts receive the router's
+`media_policy_revision` and `save_transcripts` decision before archive handoff; denied text is
+removed before it can enter the bounded queue, and the delayed Calls sink still repeats the source
+policy check. A live planned-room regression first demonstrated that a restrictive participant's
+empty agent-output route still leaked text to the caller; the same scenario now delivers no text
+and archives only non-content metadata under revision three. Unit tests also cover explicit routes,
+storage independence, stale interval non-replay, bounded-history eviction,
+wrong-room/unknown-revision rejection, and room teardown when the router is lost. The Call Engine
+suite passes 317 tests with one tagged integration exclusion. STT provider-session revision
+pinning, demand/restart on policy changes,
+future recording taps, transport-to-mixer wiring, and human-only startup remain open, so the
+broader transcript/archive checklist and in-flight-transition acceptance checks are not yet marked
+complete.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

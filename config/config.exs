@@ -53,6 +53,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     maximum_buffered_timestamps: 8,
     maximum_sink_frames: 50
   ],
+  transcript_router: [maximum_retained_revisions: 128],
   opening_audio: [
     fetcher: {Vxpipe.CallEngine.OpeningAudio.ReqFetcher, []},
     maximum_bytes: 6_291_456,

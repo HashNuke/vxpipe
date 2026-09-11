@@ -67,7 +67,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
         occurred_at: occurred_at
       }
 
-      state = EventPublisher.publish(state, connection.pid, output)
+      {state, source_policy} =
+        EventPublisher.publish_transcript(state, connection.pid, output)
+
       state = %{state | next_sequence: state.next_sequence + 1}
 
       if will_be_spoken do
@@ -82,7 +84,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
           correlation_id: command.correlation_id,
           output_id: output.id,
           text: text,
-          output_sink: connection.output_sink
+          output_sink: connection.output_sink,
+          source_policy: source_policy
         }
 
         case TextToSpeech.synthesize(state.text_to_speech_capability.pid, request) do
@@ -257,6 +260,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
     state =
       EventPublisher.publish(state, connection.pid, event,
+        source_policy: request.source_policy,
         payload: %{"output_id" => request.output_id, "text" => request.text}
       )
 
@@ -272,6 +276,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
     state =
       EventPublisher.publish(state, connection.pid, event,
+        source_policy: request.source_policy,
         payload: %{"output_id" => request.output_id, "text" => request.text}
       )
 
