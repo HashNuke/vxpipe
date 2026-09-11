@@ -8,7 +8,12 @@ defmodule Vxpipe.Artifacts.Application do
     children = [
       {Registry, keys: :unique, name: Vxpipe.Artifacts.Registry},
       {Task.Supervisor, name: Vxpipe.Artifacts.WriterTaskSupervisor},
-      {DynamicSupervisor, strategy: :one_for_one, name: Vxpipe.Artifacts.WriterSupervisor}
+      {DynamicSupervisor, strategy: :one_for_one, name: Vxpipe.Artifacts.WriterSupervisor},
+      {Task.Supervisor, name: Vxpipe.Artifacts.MetadataTaskSupervisor},
+      {DynamicSupervisor,
+       strategy: :one_for_one,
+       name: Vxpipe.Artifacts.MetadataPublisherSupervisor,
+       max_children: 1_024}
     ]
 
     Supervisor.start_link(children,

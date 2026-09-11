@@ -2373,6 +2373,16 @@ not exist at room creation, and keeps an independent sequence per artifact. Its 
 the artifacts adapter preserve all three source identifiers; full-mix and individual objects remain
 different artifact kinds under the same room clock.
 
+Terminal artifact metadata has a separate asynchronous lifecycle from both room recording and
+object upload. After an artifact writer completes or exhausts its upload path, it hands the exact
+manifest plus any stored-object reference to an artifacts-owned metadata publisher. The publisher
+runs the configured metadata adapter in its own bounded-time task, may retry only up to its trusted
+attempt limit, and can outlive the artifact writer. A bounded dynamic-supervisor ceiling prevents a
+database outage from accumulating unlimited publisher processes. Exhaustion, invalid adapter
+responses, and publisher-capacity failures are reported as unavailable/discarded evidence; they do
+not revise the artifact manifest or stop a call. The artifacts application defines this port but
+does not depend on Calls or Ecto. A later adapter checkpoint projects the result into PostgreSQL.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

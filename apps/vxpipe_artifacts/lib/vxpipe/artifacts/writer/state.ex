@@ -8,6 +8,7 @@ defmodule Vxpipe.Artifacts.Writer.State do
     :object_store,
     :object_store_options,
     :observer,
+    :metadata,
     :drain_timeout_ms,
     :pending,
     :progress

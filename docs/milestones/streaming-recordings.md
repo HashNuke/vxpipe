@@ -352,6 +352,41 @@ agent-egress provenance, tagged storage integration, and operator playback remai
 Root formatting, compilation with warnings as errors, strict Credo over 630 source files, all 811
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 9: asynchronous terminal metadata publication
+
+An artifact writer now treats terminal metadata as a separate lifecycle after object completion.
+When configured, it starts a temporary artifacts-owned metadata publisher with the exact terminal
+manifest and stored-object reference, then exits normally. The publisher performs adapter work in a
+dedicated task supervisor, applies a bounded write timeout, and retries only up to its trusted
+attempt limit. Neither a slow metadata sink nor its retries keep the artifact writer or room alive.
+
+The publisher tree has a fixed maximum child count. Capacity exhaustion, invalid writer replies,
+write timeout, retry exhaustion, and explicit discard are observable terminal outcomes instead of
+unbounded retained processes or invented persistence. Metadata publication remains disabled when no
+adapter is configured. The port and publisher stay in `vxpipe_artifacts`; they introduce no Calls,
+Ecto, or call-engine dependency.
+
+The test was first red because the completed artifact produced only the existing observer result.
+Its green path completes an object, proves the artifact writer has already stopped, returns a
+retryable database-style failure from a fake metadata adapter, and then observes the same immutable
+result published successfully on the second attempt:
+
+```text
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 2 tests, 0 failures
+
+mix test --max-cases 1
+# 5 tests, 0 failures
+```
+
+This checkpoint does not yet add PostgreSQL artifact records, select runtime adapters, prove
+terminal upload-failure projection, run tagged object-store integration, or expose operator
+playback.
+
+Root formatting, compilation with warnings as errors, strict Credo over 635 source files, all 812
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

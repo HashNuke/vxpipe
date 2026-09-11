@@ -324,3 +324,39 @@ and a one-second outcome assertion. Its focused 11-test module and the recording
 
 Root formatting, compilation with warnings as errors, strict Credo over 630 source files, all 811
 umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: asynchronous artifact metadata publisher
+
+The artifact writer previously sent its terminal result only to an optional observer and then
+exited. Calling a database adapter from that process would couple terminal object handling to SQL
+latency, while routing the result through the room archive subscriber would lose results that finish
+after the room and its archive drain.
+
+A new artifacts-owned metadata port and temporary publisher separate this lifecycle. The artifact
+writer starts a publisher with its immutable result and exits. The publisher invokes the configured
+adapter in a dedicated task, bounds each attempt by time, and bounds total attempts. A maximum child
+count on the publisher supervisor prevents an extended sink outage from retaining unlimited retry
+processes. Observer outcomes distinguish success, explicit discard, invalid adapter response,
+timeout, retry exhaustion, and inability to start a publisher.
+
+The initial test failed after object completion because no metadata write message existed. The
+green case proves the writer has stopped before the fake metadata adapter returns, then makes the
+adapter request a retry and observes the identical result succeed on attempt two:
+
+```text
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 2 tests, 0 failures
+
+mix test --max-cases 1
+# 5 tests, 0 failures
+```
+
+No relational record, Calls workflow, runtime adapter selection, object-store integration, or
+playback route is part of this checkpoint.
+
+The first umbrella run also exposed a test-only two-second deadline in the existing native media
+pipeline coverage while the suite was under concurrent load. That test now permits five seconds;
+its focused two-test suite passes and no production deadline changed. The complete root rerun passes
+formatting, compilation with warnings as errors, strict Credo over 635 source files, all 812 umbrella
+tests, and the unused-dependency check.

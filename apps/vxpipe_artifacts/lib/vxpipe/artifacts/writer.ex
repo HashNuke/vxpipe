@@ -4,6 +4,7 @@ defmodule Vxpipe.Artifacts.Writer do
   use GenServer
 
   alias Vxpipe.Artifacts.{ArtifactSpec, Chunk, Handoff, ObjectStore, Result}
+  alias Vxpipe.Artifacts.Metadata.{Configuration, Publishers}
   alias Vxpipe.Artifacts.Writer.{Progress, State}
 
   @call_timeout 1_000
@@ -33,7 +34,8 @@ defmodule Vxpipe.Artifacts.Writer do
          true <- ObjectStore.valid?(object_store),
          {:ok, maximum} <- positive_integer(options, :maximum_pending_chunks),
          {:ok, drain_timeout_ms} <- positive_integer(options, :drain_timeout_ms),
-         {:ok, observer} <- optional_pid(options, :observer) do
+         {:ok, observer} <- optional_pid(options, :observer),
+         {:ok, metadata} <- Configuration.new(Keyword.get(options, :metadata)) do
       handoff = Handoff.new(self(), maximum)
 
       state = %State{
@@ -43,6 +45,7 @@ defmodule Vxpipe.Artifacts.Writer do
         object_store: object_store,
         object_store_options: Keyword.get(options, :object_store_options, []),
         observer: observer,
+        metadata: metadata,
         drain_timeout_ms: drain_timeout_ms,
         pending: :queue.new(),
         progress: Progress.new()
@@ -229,8 +232,24 @@ defmodule Vxpipe.Artifacts.Writer do
 
   defp finish(state, %Result{} = result) do
     cancel_timer(state.drain_timer)
+    publish_metadata(state, result)
     notify(state.observer, {:vxpipe_artifact_writer_finished, self(), result})
     {:stop, :normal, state}
+  end
+
+  defp publish_metadata(%State{metadata: nil}, _result), do: :ok
+
+  defp publish_metadata(state, result) do
+    case Publishers.publish(result, state.metadata, observer: state.observer) do
+      {:ok, _publisher} ->
+        :ok
+
+      {:error, reason} ->
+        notify(
+          state.observer,
+          {:vxpipe_artifact_metadata_unavailable, self(), result, 0, reason}
+        )
+    end
   end
 
   defp start_operation(state, operation, work) do
