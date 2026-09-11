@@ -669,6 +669,47 @@ playback/access checklist item therefore remains open.
 Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
 default umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 17: bounded S3-compatible object reads
+
+The artifacts application now owns a read boundary separate from its multipart upload sessions.
+`S3ObjectReader` validates the persisted object reference, bucket, client, and inclusive byte
+range, then limits each response to one MiB. The concrete ExAws read client adds an `If-Match`
+condition when metadata includes an ETag, preserving the exact completed object while retaining
+ExAws credential discovery and request signing.
+
+A response with fewer or more bytes than the requested range is rejected. Console can therefore
+stream a long recording through repeated bounded reads without loading the whole object in memory,
+and no room, mixer, writer, HTTP, or authorization concern enters this module.
+
+The unit test was first red because the reader and read-client behavior did not exist. It now
+proves exact range data, ETag forwarding, malformed-reference rejection, and the one-MiB bound:
+
+```text
+cd apps/vxpipe_artifacts
+mix test --max-cases 1
+# 9 tests, 0 failures (1 excluded)
+```
+
+The tagged S3-compatible lane now also reads a six-byte range spanning the multipart boundary
+through the production reader. It passed against a disposable server whose container and storage
+were removed after the run:
+
+```text
+VXPIPE_S3_LIVE=1 \
+VXPIPE_S3_INTEGRATION_ENDPOINT=<authorized-root-origin> \
+VXPIPE_S3_INTEGRATION_BUCKET=<authorized-test-bucket> \
+VXPIPE_S3_INTEGRATION_REGION=<region> \
+mix test test/integration/s3_compatible_object_store_test.exs \
+  --include integration --max-cases 1
+# 1 test, 0 failures
+```
+
+The browser route, WAV projection, and call-inspection controls remain pending, so operator
+playback is not yet claimed.
+
+Root formatting, compilation with warnings as errors, strict Credo over 650 source files, all 826
+default umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

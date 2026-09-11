@@ -1,7 +1,7 @@
 defmodule Vxpipe.Artifacts.Integration.S3CompatibleObjectStoreTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.Artifacts.{ArtifactSpec, Chunk, Manifest, S3ObjectStore}
+  alias Vxpipe.Artifacts.{ArtifactSpec, Chunk, Manifest, S3ObjectReader, S3ObjectStore}
 
   @moduletag :integration
   @moduletag :s3_live
@@ -75,6 +75,17 @@ defmodule Vxpipe.Artifacts.Integration.S3CompatibleObjectStoreTest do
              |> ExAws.request(context.request_options)
 
     assert body == expected
+
+    object_reference = %{"object_key" => object_key, "etag" => artifact.etag}
+
+    assert {:ok, <<1, 0, 2, 0, 3, 0>>} =
+             S3ObjectReader.read_range(
+               object_reference,
+               @part_size_bytes - 2,
+               @part_size_bytes + 3,
+               bucket: context.bucket,
+               client_options: [request_options: context.request_options]
+             )
   end
 
   defp ensure_bucket(bucket, region, request_options) do

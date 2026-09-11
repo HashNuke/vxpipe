@@ -631,3 +631,30 @@ without letting a browser choose a bucket or object key.
 
 Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
 default umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: bounded object read port
+
+Storage reads now live in the artifacts application instead of Console. A dedicated S3 read-client
+behavior keeps provider calls separate from `S3ObjectReader`, which owns the persisted-reference,
+range, and response-size contract. Each inclusive read is capped at one MiB, and an exact byte
+count is required. The saved ETag is forwarded as an `If-Match` condition when available.
+
+The focused test was written first and failed because neither reader module existed. Its fake
+client now proves the exact bucket, object key, byte range, and ETag that would be used. Additional
+cases reject a malformed reference and a range one byte beyond the bound before any client call.
+
+```text
+cd apps/vxpipe_artifacts
+mix test --max-cases 1
+# 9 tests, 0 failures (1 excluded)
+```
+
+The existing tagged storage lane was extended to read six bytes across the boundary between the
+five-MiB multipart part and the final short part through the production reader. It passed against
+a disposable compatible server; the container and its ephemeral data were removed on exit.
+
+No HTTP response, WAV header, range-header parser, or playback control was added. Those remain
+Console responsibilities built on this bounded port.
+
+Root formatting, compilation with warnings as errors, strict Credo over 650 source files, all 826
+default umbrella tests, and the unused-dependency check pass.

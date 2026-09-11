@@ -2445,6 +2445,14 @@ from ExAws's standard environment/provider chain, performs a real multipart uplo
 finished raw PCM object byte-for-byte, and deletes that unique test object. The default suite makes
 no network request and never prints credential values or signed requests.
 
+Playback reads use a separate artifacts-owned S3 read port rather than extending the upload
+session or letting Console issue provider operations. Every request is an inclusive byte range of
+at most one MiB. The persisted ETag, when present, becomes an `If-Match` condition, and a short or
+otherwise malformed response fails instead of fabricating missing audio. ExAws still owns
+credential discovery, request signing, endpoint configuration, and S3 response handling. Higher
+layers may stream a recording through repeated bounded reads without loading the object into a
+room process or a single application buffer.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped
