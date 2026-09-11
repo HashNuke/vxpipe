@@ -19,7 +19,7 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 
 ## Implementation checklist
 
-- [ ] Red-test synthetic tagged PCM sources, timestamp alignment/mix-minus, monitor authorization, and human-only lifecycle.
+- [x] Red-test synthetic tagged PCM sources, timestamp alignment/mix-minus, monitor authorization, and human-only lifecycle.
 - [x] Implement mixer/pipeline supervision and bounded sinks independently of RoomAuthority and storage adapters.
 - [x] Compile/intersect presence policies and apply an authoritative media commit barrier.
 - [ ] Connect transcript, STT-demand, archive and future recorder taps to the same interval permissions.
@@ -31,7 +31,7 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 - [x] Explicit omitted publisher/recipient, empty maps, multiple simultaneous restrictions, leave and transport-loss cases behave differently as specified.
 - [ ] Admit a restrictive participant: no forbidden in-flight audio/transcript crosses the commit barrier; queued output and later relaxation cannot replay that interval.
 - [ ] Live transcript sharing can continue with save_transcripts false; no-save is not no-processing. Stop STT when no permitted consumer remains.
-- [ ] Human-only calls still route/end correctly; slow monitors/storage and process failure do not put mixing into authority or database work.
+- [x] Human-only calls still route/end correctly; slow monitors/storage and process failure do not put mixing into authority or database work.
 - [ ] Fail mixer/transcript/archive policy application during admission/transfer: the bridge
   fails closed without destination media or queued old output crossing under stale policy.
 
@@ -138,10 +138,23 @@ and archives only non-content metadata under revision three. Unit tests also cov
 storage independence, stale interval non-replay, bounded-history eviction,
 wrong-room/unknown-revision rejection, and room teardown when the router is lost. The Call Engine
 suite passes 317 tests with one tagged integration exclusion. STT provider-session revision
-pinning, demand/restart on policy changes,
-future recording taps, transport-to-mixer wiring, and human-only startup remain open, so the
+pinning, demand/restart on policy changes, future recording taps, transport-to-mixer wiring, and
+human-only startup remain open, so the
 broader transcript/archive checklist and in-flight-transition acceptance checks are not yet marked
 complete.
+
+Human-only planned startup is now executable. Schema `20260911.01` accepts a human
+`entry_receiver`; compilation gives both human entries stable runtime participant identities and
+no activation ID. Startup admits exactly those two definitions through the existing policy
+barrier, selects STT independently per human identity, and permits attachment without fabricating
+an agent/text capability. The dedicated vertical test sends normalized PCM from both humans
+through the room's revision-two mixer, proves each mix-minus output contains only the other
+speaker, confirms text remains unavailable, and fires the pinned maximum-duration timer to end the
+room. Legacy ad-hoc attachment still requires an agent. The schema and room tests were written
+first and failed at the old agent-only receiver constraint. The complete Call Engine suite passes
+319 tests with one tagged integration exclusion, and the complete database-backed umbrella suite
+passes across all seven child applications. Gateway media normalization and live transport
+subscriptions are still required before this path is browser-runnable.
 
 ## Specification review
 

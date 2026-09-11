@@ -23,7 +23,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    for_agent_activation(receiver, caller.participant_id, true)
+    case receiver.kind do
+      :agent -> for_agent_activation(receiver, caller.participant_id, true)
+      :human -> completed(caller.participant_id)
+    end
   end
 
   @spec for_agent_activation(ResolvedCallPlan.Participant.t(), String.t(), boolean()) :: t()

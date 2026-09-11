@@ -18,11 +18,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, State}
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime, as: AgentTransferRuntime
 
-  @spec start_agent(CreateRoom.t() | ResolvedCallPlan.t(), keyword(), State.t()) ::
-          {:ok, State.t()} | {:error, :agent_start_failed}
-  def start_agent(%CreateRoom{agent: nil}, _options, %State{} = state), do: {:ok, state}
+  @spec start_entries(CreateRoom.t() | ResolvedCallPlan.t(), keyword(), State.t()) ::
+          {:ok, State.t()} | {:error, :agent_start_failed | :entry_start_failed}
+  def start_entries(%CreateRoom{agent: nil}, _options, %State{} = state), do: {:ok, state}
 
-  def start_agent(%CreateRoom{} = command, _options, %State{} = state) do
+  def start_entries(%CreateRoom{} = command, _options, %State{} = state) do
     with {:ok, join_command} <-
            JoinParticipant.new(
              tenant_id: command.tenant_id,
@@ -50,7 +50,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
     end
   end
 
-  def start_agent(%ResolvedCallPlan{} = plan, options, %State{} = state) do
+  def start_entries(%ResolvedCallPlan{} = plan, options, %State{} = state) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     startup_options = [
@@ -74,39 +74,56 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
            ParticipantLifecycle.start(
              startup.receiver_command,
              state,
-             agent_activation: startup.agent_activation
+             entry_activation_options(startup.agent_activation)
            ) do
-      coordinator_ref =
-        AgentActivationSupervisor.child_ref(startup.receiver.activation_id, :coordinator)
-
-      text_capability = %{
-        activation_id: startup.receiver.activation_id,
-        module: AgentRuntimeCoordinator,
-        monitor: nil,
-        participant_id: receiver_snapshot.participant_id,
-        pid: coordinator_ref
-      }
-
       state = %{
         state
-        | speech_to_text_runtime: %{
-            startup.caller.participant_id => startup.speech_to_text
-          },
-          text_capability: text_capability
+        | speech_to_text_runtime: startup.speech_to_text_runtimes
       }
 
-      with {:ok, state} <-
-             start_selected_text_to_speech(
-               startup.text_to_speech,
-               receiver_snapshot.participant_id,
-               state
-             ) do
+      with {:ok, state} <- activate_entry_receiver(startup, receiver_snapshot, state) do
         runtime = %AgentTransferRuntime{plan: plan, startup_options: startup_options}
         {:ok, %{state | agent_transfer_runtime: runtime}}
       end
     else
-      _error -> {:error, :agent_start_failed}
+      _error -> {:error, :entry_start_failed}
     end
+  end
+
+  defp entry_activation_options(nil), do: []
+  defp entry_activation_options(options) when is_list(options), do: [agent_activation: options]
+
+  defp activate_entry_receiver(
+         %PlanStartup{receiver: %ResolvedCallPlan.Participant{kind: :human}},
+         _receiver_snapshot,
+         state
+       ) do
+    {:ok, %{state | text_capability_required?: false}}
+  end
+
+  defp activate_entry_receiver(
+         %PlanStartup{receiver: %ResolvedCallPlan.Participant{kind: :agent}} = startup,
+         receiver_snapshot,
+         state
+       ) do
+    coordinator_ref =
+      AgentActivationSupervisor.child_ref(startup.receiver.activation_id, :coordinator)
+
+    text_capability = %{
+      activation_id: startup.receiver.activation_id,
+      module: AgentRuntimeCoordinator,
+      monitor: nil,
+      participant_id: receiver_snapshot.participant_id,
+      pid: coordinator_ref
+    }
+
+    state = %{state | text_capability: text_capability}
+
+    start_selected_text_to_speech(
+      startup.text_to_speech,
+      receiver_snapshot.participant_id,
+      state
+    )
   end
 
   defp start_text_capability(:deterministic_text, participant_id, state) do

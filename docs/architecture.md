@@ -783,6 +783,15 @@ ends the attempted planned room immediately while returning a bounded attachment
 ad-hoc rooms preserve their detach-only behavior. Deeper provider-specific ready handshakes remain
 to be implemented where a transport's successful start does not already establish readiness.
 
+Planned startup accepts either a human or an agent as `entry_receiver`. A human receiver is
+admitted through the same participant and media-policy commit barrier as the human caller but gets
+no activation ID, agent subtree, text capability, greeting, or TTS capability. Speech-to-text
+runtimes are selected by participant identity for both human entries rather than being a
+caller-only singleton. Both humans may attach without a fabricated agent; text input still fails
+with `agent_not_ready`. The room mixer then routes policy-permitted PCM between the two identities,
+and the ordinary readiness and maximum-duration lifecycle continues to own room termination.
+Legacy ad-hoc rooms still require their configured agent path before attachment.
+
 When an agent genuinely waits for caller input, a configurable 15-second idle
 notification lets its instructions decide whether to nudge, wait, or use a
 permitted end-call tool. No automatic silence hangup or repeated-announcement

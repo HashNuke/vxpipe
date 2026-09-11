@@ -128,7 +128,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       not MapSet.member?(state.participant_ids, command.participant_id) ->
         {:error, participant_not_found(command.participant_id)}
 
-      not TextCapability.ready?(state) ->
+      not attachment_ready?(state) ->
         {:error, agent_not_ready()}
 
       Map.has_key?(state.connections, command.connection_id) ->
@@ -138,6 +138,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         :ok
     end
   end
+
+  defp attachment_ready?(%State{text_capability_required?: false}), do: true
+  defp attachment_ready?(%State{} = state), do: TextCapability.ready?(state)
 
   defp put(command, subscriber, output_sink, state) do
     monitor = Process.monitor(subscriber)

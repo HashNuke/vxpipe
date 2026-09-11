@@ -186,3 +186,28 @@
 - Provider STT sessions do not yet carry/pivot source revisions across a presence transition. That
   lifecycle work, demand-based STT stopping, future recorder policy, mixer transport wiring, and
   human-only startup remain open; this checkpoint does not claim the in-flight provider boundary.
+
+## 2026-09-11 — human-only planned startup
+
+- Added schema and live-room tests first. Both failed at the old requirement that
+  `entry_receiver` resolve to an agent participant.
+- The dated schema now permits a human receiver while retaining the existing requirements that the
+  caller be human and that the two entry refs be different declared participants. Compilation
+  continues to assign activation IDs only to agents.
+- Planned startup now carries STT runtime selections by human participant ID. An agent receiver
+  follows the unchanged activation/coordinator/TTS path; a human receiver is admitted without an
+  activation, text capability, greeting, or TTS process. The explicit
+  `text_capability_required?` state keeps legacy rooms and agent-backed planned rooms fail-closed
+  while allowing intentional human-only attachments. `send_text` still rejects the absence of an
+  agent.
+- Moved the vertical behavior into `HumanOnlyCallTest` rather than expanding the already broad
+  definition-driven test module. It starts exactly two human entries, attaches both, verifies
+  policy revision two, sends fixed-size normalized PCM in both directions, proves mix-minus output
+  contains only the other participant, and ends the room through its pinned maximum-duration
+  timer.
+- The focused checks and complete Call Engine suite pass: 319 tests, zero failures, and one tagged
+  integration exclusion. Browser transport normalization/subscription remains a later checkpoint;
+  this test exercises the live supervised engine and mixer boundary directly.
+- The complete database-backed umbrella suite passes across all seven child applications using a
+  disposable PostgreSQL instance. Formatting, warnings-as-errors compilation, strict Credo, and
+  the unused-dependency check also pass.

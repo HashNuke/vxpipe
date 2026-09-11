@@ -16,7 +16,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
     :snapshot,
     :spoken_history,
     :speech_to_text_runtime,
-    :startup_ready?
+    :startup_ready?,
+    :text_capability_required?
   ]
   defstruct @enforce_keys ++
               [
@@ -67,6 +68,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           spoken_history: SpokenHistory.t(),
           speech_to_text_runtime: :application | map(),
           startup_ready?: boolean(),
+          text_capability_required?: boolean(),
           speech_to_text_monitors: %{optional(reference()) => String.t()},
           text_capability: nil | map(),
           text_to_speech_capability: nil | map(),
@@ -106,7 +108,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
       snapshot: snapshot,
       spoken_history: SpokenHistory.new(),
       speech_to_text_runtime: speech_to_text_runtime,
-      startup_ready?: is_nil(call_lifecycle)
+      startup_ready?: is_nil(call_lifecycle),
+      text_capability_required?: true
     }
   end
 end

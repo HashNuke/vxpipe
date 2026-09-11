@@ -236,14 +236,6 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           "must reference a human participant"
         )
 
-      participants[receiver].kind != :agent ->
-        DefinitionValidation.invalid(
-          code,
-          message,
-          ["entry_receiver"],
-          "must reference an agent participant in this schema subset"
-        )
-
       true ->
         :ok
     end

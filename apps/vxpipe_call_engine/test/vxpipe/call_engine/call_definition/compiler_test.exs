@@ -75,6 +75,40 @@ defmodule Vxpipe.CallEngine.CallDefinition.CompilerTest do
     end
   end
 
+  test "accepts a human entry receiver without inventing an agent activation" do
+    input =
+      put_in(definition_input(), [:participants, "reception"], %{
+        type: "human",
+        description: "The receiving person",
+        connection: %{
+          service: "web",
+          mode: "receive",
+          admission: "start_call"
+        }
+      })
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "human-support", revision: 1)
+
+    assert definition.participants["reception"].kind == :human
+
+    assert {:ok, invocation} =
+             CallInvocation.new(invocation_input(),
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo"
+             )
+
+    invocation = %{
+      invocation
+      | definition_id: "human-support",
+        definition_revision: 1
+    }
+
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    assert plan.participants["reception"].kind == :human
+    assert plan.participants["reception"].activation_id == nil
+  end
+
   test "rejects unsupported schema versions, fields, and participant options" do
     cases = [
       {%{definition_input() | schema_version: "20260906.02"}, ["schema_version"]},

@@ -1145,6 +1145,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
   test "resolves explicitly registered alternate speech providers without changing defaults" do
     plan = compile_plan(unique_id("room-morse-runtime"), speech?: true, speech_profile: :morse)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     default_stt = [
@@ -1192,10 +1193,13 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                text_to_speech: text_to_speech
              )
 
-    assert {MorseCodeSTT, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
-             startup.speech_to_text.provider
+    speech_to_text =
+      Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
 
-    assert startup.speech_to_text.transport == {MorseCodeSTT.Transport, []}
+    assert {MorseCodeSTT, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
+             speech_to_text.provider
+
+    assert speech_to_text.transport == {MorseCodeSTT.Transport, []}
 
     assert {MorseCodeTTS, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
              startup.text_to_speech.provider

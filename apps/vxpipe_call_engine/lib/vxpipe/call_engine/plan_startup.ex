@@ -29,7 +29,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     :receiver,
     :receiver_command,
     :agent_activation,
-    :speech_to_text,
+    :speech_to_text_runtimes,
     :text_to_speech
   ]
   defstruct @enforce_keys
@@ -39,8 +39,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           caller_command: JoinParticipant.t(),
           receiver: ResolvedCallPlan.Participant.t(),
           receiver_command: JoinParticipant.t(),
-          agent_activation: keyword(),
-          speech_to_text: nil | SpeechToTextRuntime.t(),
+          agent_activation: nil | keyword(),
+          speech_to_text_runtimes: %{
+            required(String.t()) => nil | SpeechToTextRuntime.t()
+          },
           text_to_speech: nil | TextToSpeechRuntime.t()
         }
 
@@ -57,10 +59,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   def new(%ResolvedCallPlan{} = plan, options) when is_list(options) do
     with {:ok, caller} <- entry_participant(plan, :entry_caller, plan.entry_caller, :human),
          {:ok, receiver} <-
-           entry_participant(plan, :entry_receiver, plan.entry_receiver, :agent),
+           entry_participant(plan, :entry_receiver, plan.entry_receiver, [:human, :agent]),
          :ok <- supported_features(plan, caller, receiver),
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
-         {:ok, speech_to_text} <- speech_to_text_runtime(caller, plan.opening_audio, options),
+         {:ok, speech_to_text_runtimes} <-
+           speech_to_text_runtimes([caller, receiver], plan.opening_audio, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(receiver, options),
          :ok <- supported_opening_audio(plan.opening_audio, text_to_speech, options),
          {:ok, caller_command} <- participant_command(plan, caller),
@@ -72,7 +75,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          receiver: receiver,
          receiver_command: receiver_command,
          agent_activation: activation_options,
-         speech_to_text: speech_to_text,
+         speech_to_text_runtimes: speech_to_text_runtimes,
          text_to_speech: text_to_speech
        }}
     end
@@ -114,23 +117,39 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     )
   end
 
-  defp entry_participant(plan, field, definition_key, kind) do
+  defp entry_participant(plan, field, definition_key, expected_kinds) do
+    expected_kinds = List.wrap(expected_kinds)
+
     case Map.fetch(plan.participants, definition_key) do
-      {:ok, %ResolvedCallPlan.Participant{kind: ^kind} = participant} ->
-        {:ok, participant}
+      {:ok, %ResolvedCallPlan.Participant{} = participant} ->
+        if participant.kind in expected_kinds,
+          do: {:ok, participant},
+          else: unsupported_entry(field)
 
       _missing_or_wrong_kind ->
-        unsupported([Atom.to_string(field)], "must resolve to the supported participant type")
+        unsupported_entry(field)
     end
+  end
+
+  defp unsupported_entry(field) do
+    unsupported([Atom.to_string(field)], "must resolve to the supported participant type")
   end
 
   defp supported_features(plan, caller, receiver) do
     with :ok <- supported_transport(plan),
          :ok <- supported_connection(caller),
-         :ok <- supported_first_message(receiver),
+         :ok <- supported_receiver(receiver),
          :ok <- supported_tools(plan) do
       :ok
     end
+  end
+
+  defp supported_receiver(%ResolvedCallPlan.Participant{kind: :agent} = receiver) do
+    supported_first_message(receiver)
+  end
+
+  defp supported_receiver(%ResolvedCallPlan.Participant{kind: :human} = receiver) do
+    supported_connection(receiver)
   end
 
   defp supported_transport(%ResolvedCallPlan{transport: :web}), do: :ok
@@ -232,6 +251,26 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         )
     end
   end
+
+  defp speech_to_text_runtimes(participants, opening_audio, options) do
+    Enum.reduce_while(participants, {:ok, %{}}, fn participant, {:ok, runtimes} ->
+      case speech_to_text_runtime(participant, opening_audio, options) do
+        {:ok, runtime} ->
+          {:cont, {:ok, Map.put(runtimes, participant.participant_id, runtime)}}
+
+        {:error, %Error{}} = error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  defp agent_activation_options(
+         %ResolvedCallPlan{},
+         %ResolvedCallPlan.Participant{kind: :human},
+         options
+       )
+       when is_list(options),
+       do: {:ok, nil}
 
   defp agent_activation_options(plan, receiver, options) do
     AgentActivationOptions.new(plan, receiver, options)

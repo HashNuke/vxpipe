@@ -141,7 +141,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           room_mixer
         )
 
-      case Startup.start_agent(room_source, options, state) do
+      case Startup.start_entries(room_source, options, state) do
         {:ok, state} ->
           archive_recorder = ArchiveRecorder.room_opened(state.archive_recorder, state.snapshot)
           {:ok, %{state | archive_recorder: archive_recorder}}
