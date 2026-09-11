@@ -2284,8 +2284,8 @@ The first implemented artifacts boundary lives in the independent `vxpipe_artifa
 Its application tree owns a unique writer registry, an object-I/O task supervisor, and a dynamic
 writer supervisor. Call-scoped writers are keyed by tenant, call, and artifact; they monitor their
 recording source and may drain after that source exits. A small object-store port owns upload open,
-bounded PCM-chunk writes, and manifest completion. No module in this application depends on the call
-engine, Calls, Ecto, or Gateway.
+bounded PCM-chunk writes, and manifest completion. These core artifact modules do not depend on the
+call engine, Calls, Ecto, or Gateway.
 
 The writer handoff reserves a fixed shared capacity before a non-suspending send, so an active slow
 write plus queued chunks cannot grow an unbounded mailbox or push object latency into live media.
@@ -2320,6 +2320,16 @@ make policy-denied or capacity-lost gaps independently observable. If the mixer 
 temporary recording source exits; an independently supervised artifact writer can detect that
 source termination, drain already accepted chunks, and finalize honestly. The call engine owns
 these live-media semantics without depending on `vxpipe_artifacts` or any concrete storage adapter.
+
+The outer artifacts application supplies `Vxpipe.Artifacts.RecordingWriter` as an implementation of
+the engine-owned writer port. This one-way, compile-time-only dependency lets the adapter translate
+an engine stream into an artifact specification, start the artifact-owned supervised writer, and
+return its bounded handoff. Starting the artifacts application does not start the engine
+supervision tree. The adapter creates an opaque artifact ID and an object key from encoded tenant,
+call, and incarnation segments; raw identifiers cannot introduce object-key path segments. PCM
+chunks carry channel count as well as per-channel sample count, so offsets, durations, and manifest
+gaps retain the shared room-clock meaning for mono and multichannel audio. This adapter still does
+not choose or implement an object store.
 
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an

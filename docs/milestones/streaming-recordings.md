@@ -169,6 +169,38 @@ playback. Those remain required before the milestone checklist can advance.
 Root formatting, compilation with warnings as errors, strict Credo over 619 source files, all 805
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 4: bounded artifact adapter
+
+`Vxpipe.Artifacts.RecordingWriter` now implements the call engine's writer port as an outer adapter.
+The artifacts application has a compile-time-only dependency on the engine contract; the engine
+retains no dependency on artifacts, and starting artifacts does not start the engine supervision
+tree. The adapter translates an engine stream to an artifact specification, creates an opaque
+artifact ID and encoded object-key path, starts the artifact-owned writer, and returns its bounded
+handoff. It performs no object-store request itself.
+
+Artifact chunks now carry channel count. Their `sample_count` is the number of per-channel clock
+frames, and validation requires exactly `sample_count * channels * 2` bytes for signed 16-bit PCM.
+Writer progress and manifest offsets therefore preserve room-clock duration for both mono and
+multichannel audio.
+
+The focused test was first red because the adapter did not exist. Its green path opens a stereo
+full-mix stream, hands off two clock frames/four scalar samples, drains after the source exits, and
+completes a manifest whose duration is exactly two sample frames:
+
+```text
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/recording_writer_test.exs \
+  test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 2 tests, 0 failures
+```
+
+This checkpoint uses the existing fake object-store boundary. A concrete S3-compatible adapter,
+room-supervision wiring, recording selection, individual connection tracks, relational metadata,
+and operator playback remain pending.
+
+Root formatting, compilation with warnings as errors, strict Credo over 622 source files, all 806
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

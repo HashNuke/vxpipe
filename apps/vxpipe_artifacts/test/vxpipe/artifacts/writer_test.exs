@@ -75,6 +75,7 @@ defmodule Vxpipe.Artifacts.WriterTest do
       sequence: sequence,
       offset_samples: offset_samples,
       sample_count: 960,
+      channels: 1,
       timestamp: offset_samples,
       policy_revision: 0,
       source_participant_ids: [],

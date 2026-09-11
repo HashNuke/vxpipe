@@ -116,3 +116,35 @@ Formatting and compilation with warnings as errors pass. Root strict Credo check
 without findings; all 805 umbrella tests and the unused-dependency check pass. The concrete
 artifacts adapter, capacity rejection/lifecycle proof, connection-qualified individual tracks,
 metadata, S3 integration, and playback remain pending.
+
+## 2026-09-11: artifact recording adapter
+
+The next test established the one-way integration boundary and initially failed because
+`Vxpipe.Artifacts.RecordingWriter` did not exist. The artifacts application now has a
+compile-time-only dependency on the engine's recording contract. The engine remains independent of
+artifacts, and starting artifacts does not start the engine application.
+
+The adapter turns the pinned recording stream into an artifact specification, generates a short
+opaque artifact ID, encodes each external identity before building the object-key path, starts a
+writer through the artifacts-owned dynamic supervisor, and returns its bounded handoff. It does not
+perform external object operations. A small handle retains the writer PID, handoff, and channel
+count; the latter is needed to validate PCM chunks without changing room-clock sample semantics.
+
+The prior artifact chunk validation assumed mono. Chunks now state their channel count and validate
+`sample_count * channels * 2` payload bytes. The new stereo test offers two per-channel frames/four
+scalar samples, lets the writer drain after its source exits, and verifies that the manifest ends at
+offset two rather than incorrectly treating the stream as four frames long. The existing bounded
+writer lifecycle remains green:
+
+```text
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/recording_writer_test.exs \
+  test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 2 tests, 0 failures
+```
+
+No concrete S3-compatible request, room-supervisor wiring, recording selection, individual-track
+identity, relational metadata, or playback was added in this checkpoint.
+
+Root formatting, compilation with warnings as errors, strict Credo over 622 source files, all 806
+umbrella tests, and the unused-dependency check pass.
