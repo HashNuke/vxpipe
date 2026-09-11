@@ -68,6 +68,16 @@ passes after correcting the independently observed stale transfer-registration r
 intersection, authoritative presence, the
 commit barrier, mixer, transcript/archive enforcement, and human-only routing remain open.
 
+The next checkpoint adds the pure effective-policy composer. It intersects the resolved host
+ceiling, normal policy, and a participant-ID-keyed map of authoritative presence contributions.
+All-inherited routes become unrestricted; otherwise explicit maps remain complete allowlists and
+their sources/recipient sets intersect. False wins for the two storage permissions, and removing
+one owner before recomposition removes only that contribution. Resolved-policy representation
+validation rejects malformed trusted inputs so the later commit barrier can fail closed. Five
+focused composer tests pass; authoritative presence state and media enforcement remain open.
+The expanded Call Engine suite passes 291 tests with one tagged integration exclusion, and the
+database-backed umbrella suite passes across every child application.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

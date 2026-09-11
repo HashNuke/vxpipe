@@ -44,6 +44,16 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy do
     }
   end
 
+  @spec valid?(term()) :: boolean()
+  def valid?(%__MODULE__{} = policy) do
+    valid_routes?(policy.audio_routes) and
+      valid_routes?(policy.transcript_routes) and
+      validate_permission(policy.record_audio) == :ok and
+      validate_permission(policy.save_transcripts) == :ok
+  end
+
+  def valid?(_policy), do: false
+
   defp resolve_routes(:inherit, _participant_ids), do: {:ok, :inherit}
 
   defp resolve_routes(routes, participant_ids) when is_map(routes) do
@@ -69,6 +79,20 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy do
   end
 
   defp resolve_recipients(_recipients, _participant_ids), do: :error
+
+  defp valid_routes?(:inherit), do: true
+
+  defp valid_routes?(routes) when is_map(routes) do
+    Enum.all?(routes, fn
+      {source_id, %MapSet{} = recipients} when is_binary(source_id) ->
+        Enum.all?(recipients, &is_binary/1)
+
+      {_source_id, _recipients} ->
+        false
+    end)
+  end
+
+  defp valid_routes?(_routes), do: false
 
   defp validate_permission(:inherit), do: :ok
   defp validate_permission(value) when is_boolean(value), do: :ok
