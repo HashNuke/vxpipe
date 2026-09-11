@@ -27,6 +27,12 @@
         "value": "0.95rem",
         "createdAt": "2026-09-08T21:32:39.102Z",
         "reason": "The committed create-room error treatment intentionally uses this size; the current contract integration preserves its visual design."
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "createdAt": "2026-09-11T08:47:42.846Z",
+        "reason": "DESIGN.md prescribes Geist Mono for labels and operational readouts; the transfer desk intentionally extends that existing system."
       }
     ]
   }

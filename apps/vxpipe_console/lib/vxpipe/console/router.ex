@@ -36,6 +36,7 @@ defmodule Vxpipe.Console.Router do
     pipe_through :browser
 
     get "/", Vxpipe.Console.PageController, :index
+    get "/transfer", Vxpipe.Console.PageController, :index
     get "/operator/sign-in", Vxpipe.Console.OperatorSessionController, :new
     post "/operator/session", Vxpipe.Console.OperatorSessionController, :create
     post "/operator/sign-out", Vxpipe.Console.OperatorSessionController, :delete

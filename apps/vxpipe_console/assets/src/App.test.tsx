@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 vi.mock("@pipecat-ai/voice-ui-kit", () => ({
   ConsoleTemplate: ({
@@ -30,6 +30,10 @@ vi.mock("@pipecat-ai/voice-ui-kit", () => ({
 
 import App from "./App";
 
+beforeEach(() => {
+  window.history.replaceState({}, "", "/");
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -40,6 +44,16 @@ test("starts on a dedicated room-creation page", () => {
   render(<App />);
 
   expect(screen.getByRole("button", { name: "Create room" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "RTVI console" })).not.toBeInTheDocument();
+});
+
+test("keeps transfer acceptance on its own destination page", () => {
+  window.history.replaceState({}, "", "/transfer");
+
+  render(<App />);
+
+  expect(screen.getByRole("button", { name: "Connect transfer desk" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Create room" })).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "RTVI console" })).not.toBeInTheDocument();
 });
 

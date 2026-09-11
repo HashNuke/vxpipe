@@ -65,6 +65,30 @@ The development system prompt requires the model to call this tool for current
 date or time questions, so a guessed answer without the two function-call events
 is a failed test.
 
+## Manual human-transfer test
+
+1. Configure and migrate `VXPIPE_DATABASE_URL`, provide valid Gemini and Deepgram
+   development keys, and start `bin/dev`.
+2. Open `/` as the caller, choose **Create room**, then connect the Pipecat console.
+3. Open `/transfer` in a second browser or device. Use headphones when both clients are on one
+   machine so the two live microphones do not feed each other.
+4. In the caller console, type or say: `Please transfer me to human support. I need help with my
+   sample order.` The development agent must invoke its catalog-bound transfer tool; a model reply
+   that merely promises a transfer is not sufficient.
+5. Within the transfer's 30-second deadline, choose **Connect transfer desk** on the destination
+   page. Verify its status becomes **Private briefing line open**, the destination alone hears the
+   agent's bounded reason and configured development notice, and the caller hears neither. Before
+   acceptance, caller speech must not reach the destination and destination speech must not reach
+   the caller.
+6. Choose **Accept transfer**. Verify the destination status becomes **Main room active**, the
+   source agent exits, and caller and destination can hear one another in both directions.
+7. Disconnect the destination and verify the control ledger records the bounded state changes
+   without displaying the private briefing, API key, Call Variables, or unrestricted history.
+
+The transfer page is a Vxpipe development client, not an RTVI extension or a second Pipecat
+console. It uses the authenticated `vxpipe` WebRTC sideband for exact-attempt acceptance and the
+ordinary negotiated audio tracks for private briefing and active room media.
+
 ## Manual provider-fixture test
 
 1. Put a valid `DEEPGRAM_API_KEY` in the repository-root `.env`, set

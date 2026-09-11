@@ -2,7 +2,7 @@
 
 Status: partially implemented. The protocol-neutral private room lane, exact destination control,
 briefing playback barrier, authenticated gateway sideband/session routing, human-only commit, and
-dropped-destination cleanup are implemented. The rendered two-browser sample path and remaining
+dropped-destination cleanup and rendered two-browser sample path are implemented. The remaining
 failure checks remain. Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Agent transfers](agent-transfers.md); [Live mixing/media policy](live-mixing-and-media-policy.md).
 Sources: [Human transfer acceptance/briefing](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [commit barrier](../../labnotes/20260905-0405-call-definition-design.md#retained-transfer-and-media-enforcement-invariants).
@@ -26,7 +26,7 @@ Reception prepares a human web destination. That person privately hears permitte
 - [x] Implement human preparation/readiness on common room transfer state machine and token/session mapping.
 - [x] Specify narrow authenticated web acceptance wire contract and client fixture without changing RTVI-core semantics.
 - [x] Connect minimum-necessary briefing/notice output, privacy commit barrier and human-only continuation.
-- [ ] Add an isolated sample/test client entry point for destination acceptance only if needed; keep developer console uncluttered.
+- [x] Add an isolated sample/test client entry point for destination acceptance only if needed; keep developer console uncluttered.
 
 ## Acceptance and failure checks
 
@@ -42,10 +42,18 @@ Reception prepares a human web destination. That person privately hears permitte
 
 ## Manual verification
 
-1. Start a caller/reception/support definition with a permitted briefing and restrictive support while_present policy.
-2. Open a separate authenticated destination client; listen privately and verify the caller hears none of the briefing.
-3. Accept through the client control, then converse human-to-human and inspect absence of the agent subtree.
-4. Repeat with decline/no acceptance, stale acceptance, and privacy-apply failure using controlled fixtures.
+1. Configure and migrate `VXPIPE_DATABASE_URL`, provide valid Gemini and Deepgram development
+   keys, then start `bin/dev`.
+2. Open `/`, create a room, connect the Pipecat caller console, and ask to be transferred to human
+   support with a concise purpose.
+3. Open `/transfer` in a second browser/device and connect within the 30-second attempt deadline.
+   Verify only the destination hears the private briefing and configured notice; neither web human
+   can exchange main-room audio before acceptance.
+4. Accept on the destination page. Verify it reports `Main room active`, the source agent exits,
+   and the two humans exchange audio in both directions. The detailed browser steps and expected
+   data boundaries are in the [Console asset README](../../apps/vxpipe_console/assets/README.md#manual-human-transfer-test).
+5. Repeat with decline/no acceptance, stale acceptance, and privacy-apply failure using controlled
+   fixtures.
 
 ## Scope boundaries
 
@@ -73,9 +81,19 @@ RTVI `chat` channel remains unchanged. A full Gateway test drives the caller's t
 through RTVI and two real ExWebRTC peer connections. It proves destination input/output isolation,
 exact-attempt acceptance, private briefing delivery, source teardown, Membrane pipeline readiness,
 and bidirectional Opus room audio after activation. All 94 Gateway tests pass (four excluded).
-This does not mark the milestone complete: rendered sample verification,
-timeout/late-control coverage, explicit failed-policy-barrier coverage, and the remaining combined
-lifecycle assertions above remain.
+This does not mark the milestone complete: timeout/late-control coverage, explicit
+failed-policy-barrier coverage, and the remaining combined lifecycle assertions above remain.
+
+The Console sample checkpoint adds a dedicated `/transfer` destination page beside the unchanged
+Pipecat caller console. It obtains only a public locator plus expiring participant token, claims the
+provisional gateway session, negotiates browser audio directly, and uses the bounded `vxpipe`
+sideband for exact-attempt acceptance. Component and browser-transport tests cover the admission,
+offer, trickle ICE, projected controls, acceptance envelope, remote audio, and cleanup. The React
+suite passes 7 tests across 3 files; TypeScript checking passes. Rendered Chrome inspection at
+1440x1000 and 390x844 confirms the responsive empty and error states; axe reports zero WCAG A/AA
+violations or incomplete checks. The full two-human runtime remains covered by the real ExWebRTC
+gateway integration test above, while the README now gives the manual two-browser verification
+flow.
 
 ## Specification review
 

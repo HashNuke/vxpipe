@@ -164,3 +164,291 @@ body {
     margin-bottom: 2rem;
   }
 }
+
+.transfer-page {
+  --transfer-ink: oklch(0.141 0.005 285.823);
+  --transfer-panel: oklch(0.21 0.006 285.885);
+  --transfer-raised: oklch(0.274 0.006 286.033);
+  --transfer-muted: oklch(0.705 0.015 286.067);
+  --transfer-divider: oklch(0.36 0.009 286);
+  --transfer-paper: oklch(0.985 0 0);
+  --transfer-signal: oklch(0.72 0.17 151);
+  --transfer-fault: oklch(0.68 0.17 22.23);
+  --transfer-client: oklch(0.7 0.14 259.815);
+
+  min-height: 100%;
+  overflow: auto;
+  color: var(--transfer-paper);
+  background: var(--transfer-ink);
+  scrollbar-color: var(--transfer-divider) var(--transfer-ink);
+}
+
+.transfer-page ::selection {
+  color: var(--transfer-ink);
+  background: var(--transfer-signal);
+}
+
+.transfer-shell {
+  width: min(100%, 72rem);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.transfer-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3rem;
+  border-bottom: 1px solid var(--transfer-divider);
+}
+
+.transfer-header a {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--transfer-divider);
+  border-radius: 4px;
+  color: var(--transfer-paper);
+  font-family: "Geist Mono", SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.transfer-header a:hover {
+  border-color: var(--transfer-muted);
+  background: var(--transfer-raised);
+}
+
+.transfer-header a:focus-visible,
+.transfer-action:focus-visible {
+  outline: 3px solid oklch(0.623 0.214 259.815 / 0.48);
+  outline-offset: 2px;
+}
+
+.transfer-header p {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.transfer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--transfer-divider);
+  border-radius: 4px;
+  background: var(--transfer-panel);
+}
+
+.transfer-status > span {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--transfer-muted);
+}
+
+.transfer-status--connecting > span {
+  background: var(--transfer-client);
+  animation: transfer-pulse 1.4s ease-in-out infinite;
+}
+
+.transfer-status--briefing > span,
+.transfer-status--accepting > span,
+.transfer-status--active > span {
+  background: var(--transfer-signal);
+}
+
+.transfer-status--closed > span,
+.transfer-status--error > span {
+  background: var(--transfer-fault);
+}
+
+.transfer-status p,
+.transfer-status strong {
+  display: block;
+  margin: 0;
+}
+
+.transfer-status p,
+.transfer-ledger h2 {
+  color: var(--transfer-muted);
+  font-family: "Geist Mono", SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3333;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.transfer-status strong {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4286;
+}
+
+.transfer-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr);
+  min-height: 28rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--transfer-divider);
+  border-radius: 4px;
+  background: var(--transfer-panel);
+}
+
+.transfer-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.transfer-panel h1 {
+  max-width: 18ch;
+  margin: 0 0 0.75rem;
+  font-family: "Geist Mono", SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.transfer-panel > div > p {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--transfer-muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.transfer-action {
+  min-width: 12rem;
+  min-height: 2.5rem;
+  padding: 0.5rem 1.125rem;
+  border: 1px solid var(--transfer-signal);
+  border-radius: 6px;
+  color: var(--transfer-ink);
+  background: var(--transfer-signal);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4286;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+.transfer-action:hover:not(:disabled) {
+  border-color: var(--transfer-paper);
+  background: var(--transfer-paper);
+}
+
+.transfer-action:disabled {
+  color: var(--transfer-muted);
+  border-color: var(--transfer-divider);
+  background: var(--transfer-raised);
+  cursor: wait;
+}
+
+.transfer-action--quiet {
+  color: var(--transfer-paper);
+  border-color: var(--transfer-divider);
+  background: transparent;
+}
+
+.transfer-error {
+  max-width: 62ch;
+  margin: -0.75rem 0 0;
+  color: var(--transfer-fault);
+  font-size: 0.875rem;
+  line-height: 1.4286;
+}
+
+.transfer-ledger {
+  border-left: 1px solid var(--transfer-divider);
+  background: var(--transfer-raised);
+}
+
+.transfer-ledger h2,
+.transfer-ledger > p,
+.transfer-ledger li {
+  margin: 0;
+  padding: 0.75rem 1rem;
+}
+
+.transfer-ledger h2 {
+  border-bottom: 1px solid var(--transfer-divider);
+}
+
+.transfer-ledger > p {
+  color: var(--transfer-muted);
+  font-size: 0.875rem;
+  line-height: 1.4286;
+}
+
+.transfer-ledger ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.transfer-ledger li {
+  border-bottom: 1px solid var(--transfer-divider);
+  color: var(--transfer-paper);
+  font-family: "Geist Mono", SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+@keyframes transfer-pulse {
+  50% {
+    box-shadow: 0 0 0 0.25rem oklch(0.623 0.214 259.815 / 0.28);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transfer-status--connecting > span {
+    animation: none;
+  }
+
+  .transfer-action {
+    transition: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .transfer-shell {
+    padding: 0.75rem;
+  }
+
+  .transfer-workbench {
+    grid-template-columns: 1fr;
+    min-height: calc(100vh - 7.5rem);
+  }
+
+  .transfer-panel {
+    min-height: 22rem;
+    padding: 1.5rem;
+  }
+
+  .transfer-action {
+    width: 100%;
+  }
+
+  .transfer-ledger {
+    border-top: 1px solid var(--transfer-divider);
+    border-left: 0;
+  }
+}

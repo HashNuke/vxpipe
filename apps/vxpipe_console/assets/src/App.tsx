@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ConsoleTemplate } from "@pipecat-ai/voice-ui-kit";
 
 import CreateRoomPage, { type RoomConnection } from "./CreateRoomPage";
+import TransferPage from "./TransferPage";
 
 const DEFAULT_OFFER_URL = "/api/rtvi/offer";
 
@@ -11,6 +12,10 @@ function offerUrl(sessionEndpoint: string): string {
 
 export default function App() {
   const [connection, setConnection] = useState<RoomConnection>();
+
+  if (window.location.pathname === "/transfer") {
+    return <TransferPage />;
+  }
 
   if (!connection) {
     return <CreateRoomPage onCreated={setConnection} />;

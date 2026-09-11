@@ -24,6 +24,9 @@ defmodule Vxpipe.Console.EndpointTest do
     refute html =~ "/src/main.tsx"
     assert Plug.Conn.get_resp_header(console_conn, "cache-control") == ["no-store"]
 
+    transfer_conn = get(build_conn(), "/transfer")
+    assert html_response(transfer_conn, 200) =~ "Vxpipe RTVI Playground"
+
     gateway_conn = get(build_conn(), "/healthz")
 
     assert response(gateway_conn, 200) == "ok"

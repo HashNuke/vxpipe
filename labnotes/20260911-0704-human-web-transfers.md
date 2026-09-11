@@ -127,3 +127,51 @@
   unused dependency-lock checks, and the full umbrella suite (MCP 37/3 excluded, Agent Runtime
   58/2, Call Engine 336/1, Calls 37, Persistence 25, Gateway 95/4, and Console 59). The disposable
   test database was stopped again after the run.
+
+## Checkpoint: separate browser transfer desk
+
+- Added the route contract first: `/transfer` initially rendered the caller room-creation page.
+  The route now renders a dedicated human-destination surface and leaves `/` plus the responsive
+  Pipecat console unchanged.
+- Extracted the shared sample admission and participant-session validation from the caller page so
+  both browser roles use the same public locator plus expiring-token workflow without sharing UI
+  or transport responsibilities.
+- Added the transfer-page behavior test before its connection logic. It proves the page requests
+  `/sample/transfers`, claims the exact tenant/call/participant session with the join token, waits
+  for preparation, sends acceptance for that attempt, and reports active only after the gateway's
+  activation control. Neither the private application API key nor briefing content enters its
+  request surface.
+- Added the browser WebRTC adapter test before implementing the transport. The adapter now owns
+  microphone capture, offer/answer and trickle-ICE requests, remote audio playback, bounded
+  sideband decoding, exact-attempt acceptance framing, and idempotent media cleanup. An empty
+  server endpoint uses the same-origin `/api/rtvi/offer` default rather than issuing an invalid
+  request.
+- The separate page extends the existing Operator's Bench instead of reproducing the Pipecat chat
+  console. Its single current action moves from connect, through private briefing and acceptance,
+  to active/disconnect; a bounded five-entry ledger exposes only safe control-state changes.
+- Focused red/green evidence: the App route test, TransferPage behavior test, WebRTC adapter test,
+  and Phoenix `/transfer` route test each failed at their missing boundary before implementation.
+  The frontend suite now passes 7 tests across 3 files and `npm run check` passes.
+- Rendered the caller and transfer pages with Chrome. The transfer surface was inspected at
+  1440x1000 and 390x844, including its no-pending-transfer error path; the caller landing remained
+  visually unchanged. Axe reports 0 WCAG A/AA violations and 0 incomplete checks. Browser console
+  output contained only the existing Pipecat dependency's Jotai deprecation warning, with no
+  page-owned runtime error.
+- The design detector flagged Geist Mono even though it is the label/operational face prescribed
+  by `DESIGN.md`. Recorded that exact font value as a sanctioned detector exception; no new type
+  family was introduced.
+- Added a bounded manual two-browser flow to the Console asset README. It calls out the 30-second
+  attempt deadline, private-audio isolation before acceptance, exact destination acceptance, source
+  agent exit, and bidirectional human audio after activation.
+- The independent finish review found only a persisted-brief wording mismatch: the desktop ledger
+  is beside the action panel, not below it. After correcting that development contract, its verdict
+  was `ship`. The design documenter confirmed this surface reuses the existing Operator's Bench
+  rails, ledgers, palette, action states, and 760px workbench reflow, so no global `DESIGN.md` or
+  sidecar change was warranted.
+- Completion checks pass: release assets build, formatting is clean, compilation has no warnings,
+  strict Credo reports no issues across 4,659 modules/functions, the frontend passes 7 tests and
+  TypeScript checking, all umbrella suites pass (MCP 37/3 excluded, Agent Runtime 58/2, Call Engine
+  336/1, Calls 37, Persistence 25, Gateway 95/4, Console 59), and the dependency lock has no unused
+  entries. The first umbrella attempt reused the database exercised by the rendered browser and a
+  persistence test correctly observed that extra definition revision; the clean pass used a fresh
+  database in the same disposable PostgreSQL container.
