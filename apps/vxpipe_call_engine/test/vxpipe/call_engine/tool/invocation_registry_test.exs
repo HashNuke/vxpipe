@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
   @stop_event [:vxpipe, :call_engine, :background_tool, :stop]
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.TestSubmittedInlineTool
+  alias Vxpipe.CallEngine.TestSubmittedHostTool
 
   alias Vxpipe.CallEngine.Tool.{
     CompletionLease,
@@ -18,10 +18,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
   }
 
   setup do
-    Application.put_env(:vxpipe_call_engine, :submitted_inline_tool_observer, self())
+    Application.put_env(:vxpipe_call_engine, :submitted_host_tool_observer, self())
 
     on_exit(fn ->
-      Application.delete_env(:vxpipe_call_engine, :submitted_inline_tool_observer)
+      Application.delete_env(:vxpipe_call_engine, :submitted_host_tool_observer)
     end)
   end
 
@@ -44,13 +44,13 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
                "invocation-one"
              )
 
-    assert_receive {:submitted_inline_tool_started, execution, "first"}
+    assert_receive {:submitted_host_tool_started, execution, "first"}
 
     assert {:ok,
             [
               %InvocationStatus{
                 invocation_id: "invocation-one",
-                tool_name: "submitted_inline_tool",
+                tool_name: "submitted_host_tool",
                 conversation_mode: :blocking,
                 source_turn_id: "turn-demo",
                 status: :running
@@ -66,7 +66,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
                "invocation-one"
              )
 
-    refute_receive {:submitted_inline_tool_started, _duplicate, "first"}
+    refute_receive {:submitted_host_tool_started, _duplicate, "first"}
 
     assert {:error, :rejected} =
              InvocationRegistry.submit(
@@ -86,7 +86,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
                "invocation-two"
              )
 
-    send(execution, :release_submitted_inline_tool)
+    send(execution, :release_submitted_host_tool)
     assert_receive {:vxpipe_tool_completion_available, ^registry, "invocation-one"}
 
     assert {:ok, [%InvocationStatus{invocation_id: "invocation-one", status: :terminal_queued}]} =
@@ -160,8 +160,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
                "invocation-two"
              )
 
-    assert_receive {:submitted_inline_tool_started, second_execution, "second"}
-    send(second_execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, second_execution, "second"}
+    send(second_execution, :release_submitted_host_tool)
   end
 
   test "does not start work after bounded submission reports unavailable" do
@@ -191,7 +191,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
 
     :ok = :sys.resume(registry)
     assert {:ok, []} = InvocationRegistry.snapshot(registry)
-    refute_receive {:submitted_inline_tool_started, _execution, "must-not-start"}
+    refute_receive {:submitted_host_tool_started, _execution, "must-not-start"}
   end
 
   test "emits bounded telemetry as submitted work is admitted, settled, and consumed" do
@@ -210,8 +210,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
     assert_receive {:invocation_telemetry, @admission_event, %{count: 1, reserved: 1, limit: 1},
                     %{outcome: :accepted}}
 
-    assert_receive {:submitted_inline_tool_started, execution, "telemetry-private-value"}
-    send(execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, execution, "telemetry-private-value"}
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:invocation_telemetry, @stop_event, %{count: 1, duration: duration},
                     %{outcome: :ok}}
@@ -262,10 +262,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
 
   defp host_binding(conversation_mode) do
     resolved = %ToolBinding{
-      name: "submitted_inline_tool",
+      name: "submitted_host_tool",
       type: :host,
       conversation_mode: conversation_mode,
-      action: TestSubmittedInlineTool,
+      action: TestSubmittedHostTool,
       remote: nil
     }
 

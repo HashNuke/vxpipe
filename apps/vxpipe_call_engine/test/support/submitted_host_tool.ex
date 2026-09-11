@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.TestSubmittedInlineTool do
+defmodule Vxpipe.CallEngine.TestSubmittedHostTool do
   @moduledoc false
 
   @behaviour Vxpipe.CallEngine.Tool
@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.TestSubmittedInlineTool do
   @impl true
   def definition do
     %Definition{
-      name: "submitted_inline_tool",
+      name: "submitted_host_tool",
       description: "Wait for a test-controlled release.",
       parameters: %{
         "type" => "object",
@@ -21,11 +21,11 @@ defmodule Vxpipe.CallEngine.TestSubmittedInlineTool do
 
   @impl true
   def execute(%{"value" => value}, %Context{}) when is_binary(value) do
-    observer = Application.fetch_env!(:vxpipe_call_engine, :submitted_inline_tool_observer)
-    send(observer, {:submitted_inline_tool_started, self(), value})
+    observer = Application.fetch_env!(:vxpipe_call_engine, :submitted_host_tool_observer)
+    send(observer, {:submitted_host_tool_started, self(), value})
 
     receive do
-      :release_submitted_inline_tool -> {:ok, %{"value" => value}}
+      :release_submitted_host_tool -> {:ok, %{"value" => value}}
     end
   end
 

@@ -28,7 +28,9 @@ Tool bindings have a separate conversation mode:
 
 There is no inline execution alternative behind this setting. `conversation_mode` changes
 only Call Engine conversation admission after submission; it does not change how or where the
-operation runs.
+operation runs. The engine-owned tool-definition contract therefore has no execution-mode field;
+it describes the operation while the participant-local call-definition binding owns only the
+conversation mode.
 
 ## Call-definition shape
 

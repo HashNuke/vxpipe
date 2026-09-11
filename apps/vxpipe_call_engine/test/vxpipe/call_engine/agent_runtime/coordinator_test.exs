@@ -12,7 +12,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.TestAgentRuntimeModelProvider
-  alias Vxpipe.CallEngine.TestSubmittedInlineTool
+  alias Vxpipe.CallEngine.TestSubmittedHostTool
 
   alias Vxpipe.CallEngine.Tool.{
     Context,
@@ -26,10 +26,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
 
   setup do
-    Application.put_env(:vxpipe_call_engine, :submitted_inline_tool_observer, self())
+    Application.put_env(:vxpipe_call_engine, :submitted_host_tool_observer, self())
 
     on_exit(fn ->
-      Application.delete_env(:vxpipe_call_engine, :submitted_inline_tool_observer)
+      Application.delete_env(:vxpipe_call_engine, :submitted_host_tool_observer)
     end)
   end
 
@@ -183,7 +183,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     command = command("blocked-runtime", "Can we discuss something else?")
 
     assert {:accepted, :blocking} = submit_invocation(runtime, :blocking, "blocking-call")
-    assert_receive {:submitted_inline_tool_started, execution, "blocking-call"}
+    assert_receive {:submitted_host_tool_started, execution, "blocking-call"}
 
     assert :ok = Coordinator.respond(runtime.coordinator, command)
 
@@ -194,7 +194,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
     refute_receive {:test_agent_runtime_stream, _provider, _request}
 
-    send(execution, :release_submitted_inline_tool)
+    send(execution, :release_submitted_host_tool)
     assert_receive {:vxpipe_tool_completion_available, registry, "blocking-call"}
     assert registry == GenServer.whereis(runtime.registry)
 
@@ -226,7 +226,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "non-blocking-call")
 
-    assert_receive {:submitted_inline_tool_started, _execution, "non-blocking-call"}
+    assert_receive {:submitted_host_tool_started, _execution, "non-blocking-call"}
     assert :ok = Coordinator.respond(runtime.coordinator, command)
 
     assert_receive {:test_agent_runtime_stream, provider, request}
@@ -258,7 +258,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :blocking} =
              submit_invocation(runtime, :blocking, "blocking-acknowledgement-call")
 
-    assert_receive {:submitted_inline_tool_started, _execution, "blocking-acknowledgement-call"}
+    assert_receive {:submitted_host_tool_started, _execution, "blocking-acknowledgement-call"}
     assert :ok = Coordinator.respond(runtime.coordinator, later)
 
     assert_receive {:vxpipe_capability_text, coordinator, ^later,
@@ -283,9 +283,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "completion-call")
 
-    assert_receive {:submitted_inline_tool_started, execution, "completion-call"}
+    assert_receive {:submitted_host_tool_started, execution, "completion-call"}
     assert :ok = Coordinator.respond(runtime.coordinator, queued)
-    send(execution, :release_submitted_inline_tool)
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_tool_completion_available, registry, "completion-call"}
     send(runtime.coordinator, {:vxpipe_tool_completion_available, registry, "completion-call"})
@@ -333,8 +333,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "completion-race-call")
 
-    assert_receive {:submitted_inline_tool_started, execution, "completion-race-call"}
-    send(execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, execution, "completion-race-call"}
+    send(execution, :release_submitted_host_tool)
     assert_receive {:vxpipe_tool_completion_available, _registry, "completion-race-call"}
 
     assert :ok = Coordinator.respond(runtime.coordinator, caller)
@@ -363,14 +363,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "completion-first")
 
-    assert_receive {:submitted_inline_tool_started, first_execution, "completion-first"}
+    assert_receive {:submitted_host_tool_started, first_execution, "completion-first"}
 
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "completion-second")
 
-    assert_receive {:submitted_inline_tool_started, second_execution, "completion-second"}
+    assert_receive {:submitted_host_tool_started, second_execution, "completion-second"}
 
-    send(second_execution, :release_submitted_inline_tool)
+    send(second_execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_capability_continuation_started, coordinator,
                     %ContinueAgent{} = second_continuation}
@@ -380,7 +380,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert_receive {:test_agent_runtime_stream, second_provider, second_request}
     assert List.last(second_request.messages).content =~ ~s("invocation_id":"completion-second")
 
-    send(first_execution, :release_submitted_inline_tool)
+    send(first_execution, :release_submitted_host_tool)
     refute_receive {:vxpipe_capability_continuation_started, ^coordinator, _while_busy}
 
     assert {:ok, response} = ModelResponse.new(text: "The second request completed.")
@@ -407,8 +407,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :blocking} =
              submit_invocation(runtime, :blocking, "failed-continuation-call")
 
-    assert_receive {:submitted_inline_tool_started, execution, "failed-continuation-call"}
-    send(execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, execution, "failed-continuation-call"}
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_tool_completion_available, registry, "failed-continuation-call"}
     monitor = Process.monitor(runtime.coordinator)
@@ -509,7 +509,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "interrupt-surviving-call")
 
-    assert_receive {:submitted_inline_tool_started, execution, "interrupt-surviving-call"}
+    assert_receive {:submitted_host_tool_started, execution, "interrupt-surviving-call"}
 
     assert {:ok, [^current]} = Coordinator.interrupt(runtime.coordinator, [])
 
@@ -521,7 +521,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
               }
             ]} = InvocationRegistry.snapshot(runtime.registry)
 
-    send(execution, :release_submitted_inline_tool)
+    send(execution, :release_submitted_host_tool)
     assert_receive {:vxpipe_tool_completion_available, _registry, "interrupt-surviving-call"}
   end
 
@@ -531,8 +531,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "interrupted-completion-call")
 
-    assert_receive {:submitted_inline_tool_started, execution, "interrupted-completion-call"}
-    send(execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, execution, "interrupted-completion-call"}
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_capability_continuation_started, coordinator,
                     %ContinueAgent{} = interrupted_continuation}
@@ -579,9 +579,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :blocking} =
              submit_invocation(runtime, :blocking, "interrupted-blocking-completion")
 
-    assert_receive {:submitted_inline_tool_started, execution, "interrupted-blocking-completion"}
+    assert_receive {:submitted_host_tool_started, execution, "interrupted-blocking-completion"}
 
-    send(execution, :release_submitted_inline_tool)
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_capability_continuation_started, coordinator,
                     %ContinueAgent{} = interrupted_continuation}
@@ -621,8 +621,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     assert {:accepted, :non_blocking} =
              submit_invocation(runtime, :non_blocking, "durable-completion-call")
 
-    assert_receive {:submitted_inline_tool_started, execution, "durable-completion-call"}
-    send(execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, execution, "durable-completion-call"}
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_capability_continuation_started, coordinator, %ContinueAgent{}}
     assert_receive {:test_agent_runtime_stream, completion_provider, _request}
@@ -630,14 +630,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     {:ok, nested_call} =
       ToolCall.new(
         id: "nested-tool-call",
-        name: "submitted_inline_tool",
+        name: "submitted_host_tool",
         arguments: %{"value" => "nested"}
       )
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [nested_call])
     send(completion_provider, {:test_agent_runtime_response, {:ok, response}})
 
-    assert_receive {:submitted_inline_tool_started, nested_execution, "nested"}
+    assert_receive {:submitted_host_tool_started, nested_execution, "nested"}
     assert_receive {:test_agent_runtime_stream, _acknowledgement_provider, _request}
 
     assert {:ok, []} = Coordinator.interrupt(coordinator, [])
@@ -650,7 +650,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
               }
             ]} = InvocationRegistry.snapshot(runtime.registry)
 
-    send(nested_execution, :release_submitted_inline_tool)
+    send(nested_execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_capability_continuation_started, ^coordinator,
                     %ContinueAgent{} = nested_continuation}
@@ -722,10 +722,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
   defp submit_invocation(runtime, conversation_mode, invocation_id) do
     resolved = %ToolBinding{
-      name: "submitted_inline_tool",
+      name: "submitted_host_tool",
       type: :host,
       conversation_mode: conversation_mode,
-      action: TestSubmittedInlineTool,
+      action: TestSubmittedHostTool,
       remote: nil
     }
 
@@ -758,10 +758,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
   defp runtime_tool_descriptor(conversation_mode) do
     resolved = %ToolBinding{
-      name: "submitted_inline_tool",
+      name: "submitted_host_tool",
       type: :host,
       conversation_mode: conversation_mode,
-      action: TestSubmittedInlineTool,
+      action: TestSubmittedHostTool,
       remote: nil
     }
 
@@ -769,7 +769,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
 
     assert {:ok, descriptor} =
              ToolDescriptor.new(
-               name: "submitted_inline_tool",
+               name: "submitted_host_tool",
                description: "Complete a controlled test operation",
                input_schema: %{
                  "type" => "object",

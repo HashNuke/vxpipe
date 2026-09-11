@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.InvocationAdaptersTest do
   alias Vxpipe.AgentRuntime.{Executor, PendingContext, PendingInvocation}
   alias Vxpipe.CallEngine.AgentRuntime.{Correlation, InvocationExecutor, PendingContextSource}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.TestSubmittedInlineTool
+  alias Vxpipe.CallEngine.TestSubmittedHostTool
 
   alias Vxpipe.CallEngine.Tool.{
     Context,
@@ -14,10 +14,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.InvocationAdaptersTest do
   }
 
   setup do
-    Application.put_env(:vxpipe_call_engine, :submitted_inline_tool_observer, self())
+    Application.put_env(:vxpipe_call_engine, :submitted_host_tool_observer, self())
 
     on_exit(fn ->
-      Application.delete_env(:vxpipe_call_engine, :submitted_inline_tool_observer)
+      Application.delete_env(:vxpipe_call_engine, :submitted_host_tool_observer)
     end)
   end
 
@@ -35,13 +35,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.InvocationAdaptersTest do
                "invocation-one"
              )
 
-    assert_receive {:submitted_inline_tool_started, execution, "private-result"}
+    assert_receive {:submitted_host_tool_started, execution, "private-result"}
 
     assert {:ok,
             [
               %PendingInvocation{
                 invocation_id: "invocation-one",
-                tool_name: "submitted_inline_tool",
+                tool_name: "submitted_host_tool",
                 conversation_mode: :non_blocking,
                 source_turn_id: "turn-demo",
                 status: :running
@@ -54,7 +54,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.InvocationAdaptersTest do
                maximum_invocations: 4
              )
 
-    send(execution, :release_submitted_inline_tool)
+    send(execution, :release_submitted_host_tool)
     assert_receive {:vxpipe_tool_completion_available, ^registry, "invocation-one"}
 
     assert {:ok, [%PendingInvocation{status: :terminal_queued}]} =
@@ -91,10 +91,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.InvocationAdaptersTest do
 
   defp host_binding(conversation_mode) do
     resolved = %ToolBinding{
-      name: "submitted_inline_tool",
+      name: "submitted_host_tool",
       type: :host,
       conversation_mode: conversation_mode,
-      action: TestSubmittedInlineTool,
+      action: TestSubmittedHostTool,
       remote: nil
     }
 

@@ -26,8 +26,7 @@ defmodule Vxpipe.CallEngine.Tool.DelayedReport do
         },
         "required" => ["topic"],
         "additionalProperties" => false
-      },
-      execution: :background
+      }
     }
   end
 

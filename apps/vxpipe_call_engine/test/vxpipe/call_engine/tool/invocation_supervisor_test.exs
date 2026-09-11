@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
   alias Vxpipe.CallEngine.{
     TestRemoteMCPConnectionProvider,
     TestRemoteMCPProtocolClient,
-    TestSubmittedInlineTool
+    TestSubmittedHostTool
   }
 
   alias Vxpipe.CallEngine.CallVariables.Binding
@@ -21,10 +21,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
   }
 
   setup do
-    Application.put_env(:vxpipe_call_engine, :submitted_inline_tool_observer, self())
+    Application.put_env(:vxpipe_call_engine, :submitted_host_tool_observer, self())
 
     on_exit(fn ->
-      Application.delete_env(:vxpipe_call_engine, :submitted_inline_tool_observer)
+      Application.delete_env(:vxpipe_call_engine, :submitted_host_tool_observer)
     end)
   end
 
@@ -44,7 +44,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
                maximum_result_bytes: 4_096
              )
 
-    assert_receive {:submitted_inline_tool_started, execution, "first"}
+    assert_receive {:submitted_host_tool_started, execution, "first"}
     refute execution == self()
 
     assert Enum.any?(DynamicSupervisor.which_children(supervisor), fn
@@ -64,12 +64,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
              )
 
     monitor = Process.monitor(worker)
-    send(execution, :release_submitted_inline_tool)
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_tool_invocation_finished, ^worker,
                     %InvocationCompletion{
                       invocation_id: "invocation-one",
-                      tool_name: "submitted_inline_tool",
+                      tool_name: "submitted_host_tool",
                       conversation_mode: :blocking,
                       context: completed_context,
                       outcome: {:ok, %{"value" => "first"}}
@@ -94,7 +94,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
                maximum_result_bytes: 4_096
              )
 
-    assert_receive {:submitted_inline_tool_started, execution, "slow"}
+    assert_receive {:submitted_host_tool_started, execution, "slow"}
     execution_monitor = Process.monitor(execution)
 
     assert_receive {:vxpipe_tool_invocation_finished, ^worker,
@@ -123,8 +123,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
                maximum_result_bytes: 8
              )
 
-    assert_receive {:submitted_inline_tool_started, execution, "larger-than-eight-bytes"}
-    send(execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, execution, "larger-than-eight-bytes"}
+    send(execution, :release_submitted_host_tool)
 
     assert_receive {:vxpipe_tool_invocation_finished, ^worker,
                     %InvocationCompletion{
@@ -149,7 +149,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
                maximum_result_bytes: 4_096
              )
 
-    assert_receive {:submitted_inline_tool_started, execution, "private-failure-input"}
+    assert_receive {:submitted_host_tool_started, execution, "private-failure-input"}
     Process.exit(execution, :kill)
 
     assert_receive {:vxpipe_tool_invocation_finished, ^worker,
@@ -175,10 +175,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
                maximum_result_bytes: 4_096
              )
 
-    refute_receive {:submitted_inline_tool_started, _execution, "prepared"}
+    refute_receive {:submitted_host_tool_started, _execution, "prepared"}
     assert :ok = InvocationSupervisor.begin_invocation(worker)
-    assert_receive {:submitted_inline_tool_started, execution, "prepared"}
-    send(execution, :release_submitted_inline_tool)
+    assert_receive {:submitted_host_tool_started, execution, "prepared"}
+    send(execution, :release_submitted_host_tool)
   end
 
   test "hands a Call Variables read to the same supervised worker boundary" do
@@ -293,10 +293,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
 
   defp host_binding(conversation_mode) do
     resolved = %ToolBinding{
-      name: "submitted_inline_tool",
+      name: "submitted_host_tool",
       type: :host,
       conversation_mode: conversation_mode,
-      action: TestSubmittedInlineTool,
+      action: TestSubmittedHostTool,
       remote: nil
     }
 

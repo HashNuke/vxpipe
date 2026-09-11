@@ -6,19 +6,19 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
   alias Vxpipe.CallEngine.CallVariables.Binding
   alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.{TestAgentTool, TestSubmittedInlineTool}
+  alias Vxpipe.CallEngine.{TestAgentTool, TestSubmittedHostTool}
   alias Vxpipe.CallEngine.Tool.InvocationBinding
 
   test "compiles resolved host bindings into ordered descriptors with private conversation policy" do
     bindings = %{
       "test_agent_tool" => host_binding("test_agent_tool", TestAgentTool, :blocking),
-      "submitted_inline_tool" =>
-        host_binding("submitted_inline_tool", TestSubmittedInlineTool, :non_blocking)
+      "submitted_host_tool" =>
+        host_binding("submitted_host_tool", TestSubmittedHostTool, :non_blocking)
     }
 
     assert {:ok,
             [
-              %ToolDescriptor{name: "submitted_inline_tool"} = non_blocking,
+              %ToolDescriptor{name: "submitted_host_tool"} = non_blocking,
               %ToolDescriptor{name: "test_agent_tool"} = blocking
             ]} = ToolDescriptors.compile(bindings)
 
@@ -32,16 +32,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
            }
 
     assert %InvocationBinding{
-             name: "submitted_inline_tool",
+             name: "submitted_host_tool",
              conversation_mode: :non_blocking,
-             handler: {:host, TestSubmittedInlineTool}
+             handler: {:host, TestSubmittedHostTool}
            } = non_blocking.binding
 
     assert %InvocationBinding{conversation_mode: :blocking} = blocking.binding
 
     inspected = inspect(non_blocking)
     refute inspected =~ "InvocationBinding"
-    refute inspected =~ "TestSubmittedInlineTool"
+    refute inspected =~ "TestSubmittedHostTool"
   end
 
   test "rejects a resolved binding stored under a different tool name" do

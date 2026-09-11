@@ -10,8 +10,7 @@ defmodule Vxpipe.CallEngine.TestBlockingTool do
     %Definition{
       name: "wait_for_test",
       description: "Wait until a test releases this tool.",
-      parameters: %{"type" => "object", "properties" => %{}},
-      execution: :background
+      parameters: %{"type" => "object", "properties" => %{}}
     }
   end
 

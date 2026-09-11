@@ -486,3 +486,20 @@
   three tagged exclusions, Agent Runtime 58 with two exclusions, Call Engine 282 with one
   exclusion, Calls 37, Persistence 25, Gateway 67 with four exclusions, and Console 57. The
   disposable database was removed immediately after the run.
+
+## 2026-09-11 — one tool execution path
+
+- Rechecked the clarified tool contract against the runtime. Every accepted platform, variables,
+  host, MCP, hangup, and transfer invocation already starts beneath the activation-owned bounded
+  invocation supervisor. The participant binding's `conversation_mode` controls only whether later
+  caller turns may enter the LLM while that worker remains pending; omission stays blocking.
+- Removed the unused `execution: :inline | :background` field from engine tool definitions and the
+  remaining test fixture terminology built around it. No production code read the field, so this
+  removes a contradictory second model without changing runtime behavior.
+- The durable execution document now states that operation definitions have no execution selector.
+  The pending invocation projection and committed running acknowledgement continue to inform every
+  admitted later LLM request about non-blocking work in progress.
+- Verification passes 34 focused invocation-boundary tests, all 282 Call Engine tests with one
+  tagged integration exclusion, and the complete database-backed umbrella suite against a
+  disposable PostgreSQL 17 instance. Formatting, warnings-as-errors compilation, strict Credo, and
+  the unused-dependency check also pass; the disposable database was removed after the run.
