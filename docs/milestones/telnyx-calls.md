@@ -27,7 +27,7 @@ webhook/media ingress; the development tailnet URL is not assumed publicly reach
 
 ## Implementation checklist
 
-- [ ] Define/test the common telephony adapter contract with fake receive/dial/answer/media/DTMF/AMD/end events before vendor code.
+- [x] Define/test the common telephony adapter contract with fake receive/dial/answer/media/DTMF/AMD/end events before vendor code.
 - [ ] Add Telnyx configured service resolution, verified ingress and provider-leg correlation through Calls/Gateway adapter boundaries.
 - [ ] Implement permitted outbound dialing, media normalization and private briefing/press-1 acceptance.
 - [ ] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or definition semantics.

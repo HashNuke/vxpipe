@@ -975,6 +975,18 @@ still receives a participant ref rather than a telephone number or provider sele
 checkpoint defines pinned intent, not a live provider leg. Calls metadata preserves the same safe
 intent and creates browser join routes only for web participants.
 
+The provider-neutral telephony runtime contract lives in Call Engine so embedded hosts, Gateway,
+Calls, and later carrier adapters share one dependency direction. Carrier modules implement dial,
+answer, outbound-media, exact-leg end, authenticated-webhook decode, and media-message decode
+callbacks. Dial/answer/end submissions report either `accepted` or `unknown`; an unknown immediate
+outcome is deliberately not a retry instruction. Raw webhook bytes and normalized headers remain
+intact until the adapter verifies them, and the common wrapper will not decode an unverified body.
+Adapters emit only the closed normalized lifecycle vocabulary: incoming, answered, media started,
+media packet, DTMF, answering-machine result, and ended. Sparse or malformed adapter results fail at
+this boundary before room control sees them. Provider media remains a packet with its authenticated
+codec/clock/sequence metadata until a Membrane gateway pipeline converts it into the existing room
+PCM clock; raw carrier packets do not enter Room Authority.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

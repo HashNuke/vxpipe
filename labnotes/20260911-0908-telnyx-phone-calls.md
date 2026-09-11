@@ -100,8 +100,41 @@ All checks passed. The default test lanes completed 37 MCP tests (3 excluded), 5
 (2 excluded), 342 Call Engine tests (1 excluded), 38 Calls tests, 25 Persistence tests, 95 Gateway
 tests (4 excluded), and 59 Console tests.
 
-## Next checkpoint
+## Checkpoint 2: common adapter contract
 
-Define and exercise the common adapter command/event contract with a deterministic fake before
-adding Telnyx webhook, command, or media code. Then connect verified ingress and provider-leg
-correlation through Calls and Gateway.
+Red test:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/telephony/adapter_test.exs
+```
+
+The test initially failed while compiling the test adapter because the common `Submission` type did
+not exist. The green implementation adds small single-purpose command/value modules plus one adapter
+contract. Its deterministic fake covers:
+
+- dial submission with an `unknown` immediate outcome, preserving the no-speculative-redial rule;
+- answer and exact-leg end submissions;
+- authorized mixed-room frames sent to one exact leg;
+- raw webhook verification before decoding;
+- incoming, answered, media-started, media, DTMF, human/machine/unknown AMD, and ended events; and
+- rejection of output that does not conform to the common contract.
+
+Sensitive raw webhook bytes, phone numbers, DTMF digits, and audio payloads are excluded from the
+new structs' inspection representations. Provider media retains codec, sample rate, sequence, and
+timestamp until the Gateway's Membrane pipeline can normalize it into the existing room format.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/telephony/adapter_test.exs
+# 4 tests, 0 failures
+```
+
+The complete format, warnings-as-errors compile, strict Credo, unused-dependency, and umbrella test
+gates also passed. The Call Engine lane now runs 346 tests with one tagged exclusion; all other
+application counts remain the same as checkpoint 1.
+
+The next checkpoint is concrete Telnyx webhook verification/normalization and configured service
+resolution. No Telnyx module or network request exists yet.
