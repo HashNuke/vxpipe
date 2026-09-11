@@ -93,13 +93,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   defp apply_speech_to_text_signal(_signal, _connection_id, _connection, state), do: state
 
   defp begin_audio_turn(signal, connection_id, connection, state) do
-    if connection.speech_to_text.turn == nil and is_binary(signal.text) do
+    if new_policy_session?(connection.speech_to_text.turn, signal) and is_binary(signal.text) do
       state = CallerIdle.activity(state)
 
       turn = %{
         command_id: Id.generate(:command),
         id: Id.generate(:turn),
         last_text: signal.text,
+        policy_revision: signal.policy_revision,
         provider_turn_index: signal.provider_turn_index
       }
 
@@ -204,7 +205,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     }
 
     {state, _source_policy} =
-      EventPublisher.publish_transcript(state, connection.pid, event)
+      EventPublisher.publish_transcript(state, connection.pid, event,
+        media_policy_revision: turn.policy_revision
+      )
 
     %{state | next_sequence: state.next_sequence + 1}
   end
@@ -260,7 +263,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
             case TextCapability.respond(state.text_capability, command) do
               :ok ->
                 source_policy =
-                  EventPublisher.transcript_source_policy(state, command.participant_id)
+                  transcript_source_policy(state, command.participant_id, turn.policy_revision)
 
                 archive_recorder =
                   ArchiveRecorder.accepted_input(
@@ -303,7 +306,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   defp matching_active_turn?(nil, _signal), do: false
 
   defp matching_active_turn?(turn, signal) do
-    turn.provider_turn_index == signal.provider_turn_index
+    turn.policy_revision == signal.policy_revision and
+      turn.provider_turn_index == signal.provider_turn_index
+  end
+
+  defp new_policy_session?(nil, _signal), do: true
+
+  defp new_policy_session?(turn, signal) do
+    turn.policy_revision != signal.policy_revision
+  end
+
+  defp transcript_source_policy(state, participant_id, nil) do
+    EventPublisher.transcript_source_policy(state, participant_id)
+  end
+
+  defp transcript_source_policy(state, participant_id, policy_revision) do
+    EventPublisher.transcript_source_policy(state, participant_id, policy_revision)
   end
 
   defp put_connection_turn(state, connection_id, turn) do

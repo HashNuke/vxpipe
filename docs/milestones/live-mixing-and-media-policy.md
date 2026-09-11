@@ -291,6 +291,15 @@ consumers closes its newly opened provider transport before attachment returns a
 dropped without disconnecting the caller. Legacy ad-hoc rooms keep their existing unversioned STT
 path. A focused planned-room test passes; revision-aware provider-result projection remains open.
 
+Provider transcript handling now carries the session-pinned policy revision into the active input
+turn, transcript projection, and accepted-input archive decision. A result from an older source
+interval is evaluated against that retained snapshot for storage provenance but receives no live
+recipient after the room has committed a later revision. Provider sessions may reset their turn
+index after restart: a different policy revision replaces an unfinished old input turn instead of
+merging the two sessions. Focused red/green tests cover both source-revision projection and
+same-index session rollover. A composed room transition still needs to exercise the transcript
+path before its acceptance item is marked complete.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

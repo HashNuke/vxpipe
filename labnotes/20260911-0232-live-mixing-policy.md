@@ -455,3 +455,20 @@
   behavior.
 - The focused planned-room test passes. Provider-result projection still needs to consume the
   session-pinned revision before the transcript transition acceptance can be closed.
+
+## 2026-09-11 — revision-aware transcript projection
+
+- Added focused Event Publisher and Input Turns tests before implementation. The red run projected
+  an old provider result through the current revision and refused to begin a replacement turn when
+  the restarted provider reused turn index zero.
+- Input turns now retain `policy_revision` from every normalized provider signal. Transcript events
+  and accepted audio input use that exact revision for routing and archive source policy, while
+  text-originated turns continue to use the current room revision.
+- Transcript Router already retains bounded snapshot history. Event Publisher now constructs an
+  explicit projection for provider results: an older source revision preserves its historical
+  `save_transcripts` value but receives no live recipients after any later room transition.
+- A turn from a different provider policy session replaces an unfinished older turn even when the
+  provider resets and reuses the same turn index. Updates and completion must match both session
+  revision and provider turn index.
+- Both focused red/green tests pass. A composed planned-room transition remains necessary before
+  claiming the restrictive transcript acceptance item.
