@@ -525,3 +525,39 @@ strict Credo over 647 source files, and the unused-dependency check also pass.
 
 Pending milestone work remains room/writer crash behavior, tagged object-store integration,
 authorized operator playback, and final cross-slice manual verification.
+
+## 2026-09-11: recording failure isolation evidence
+
+The room recorder is already a temporary, non-significant sibling of Room Authority, while each
+artifact writer is independently supervised and monitors the recorder as its source. Focused
+coverage now terminates the recorder after it has produced audio, observes its `DOWN`, and then
+successfully reads the live room snapshot before ending the room through its normal lifecycle.
+Recording failure therefore does not become call failure.
+
+A separate artifact test accepts one chunk, kills the unlinked object-store task processing the
+next chunk, and accepts a later chunk. The writer continues after the task failure. When its source
+then exits abnormally, the writer drains and completes an incomplete manifest with two surviving
+chunks, one rejected chunk, and the exact 960-sample gap between them. The source exit reason is
+retained as terminal evidence. This depends on object completion remaining available; a total
+object and metadata outage still cannot guarantee a durable manifest.
+
+No production change was needed because the intended temporary-child, monitor, and unlinked-task
+boundaries were already present. The first room test run failed only because the assertion expected
+an `{:ok, snapshot}` tuple from an existing API that returns the snapshot directly; correcting the
+test to the public contract produced the intended failure-isolation evidence.
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs --max-cases 1
+# 2 tests, 0 failures
+
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 4 tests, 0 failures
+```
+
+The remaining milestone work is tagged object-store integration, authorized operator playback,
+and final cross-slice manual verification.
+
+Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
+umbrella tests, and the unused-dependency check pass.

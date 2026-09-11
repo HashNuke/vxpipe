@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     CallInvocation,
     DefinitionCompiler,
     Error,
+    RoomAuthority,
     RoomMixer,
     TestAudioOutputSink,
     TestCallLifecycleTimer,
@@ -210,6 +211,13 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     individual_stream_id = individual_stream.stream_id
     assert_receive {:test_recording_chunk, ^individual_stream_id, individual_chunk}
     assert individual_chunk.payload == caller_audio
+
+    recording_monitor = Process.monitor(recording)
+    Process.exit(recording, :kill)
+    assert_receive {:DOWN, ^recording_monitor, :process, ^recording, :killed}
+
+    snapshot = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
+    assert snapshot.incarnation_id == room.incarnation_id
 
     :ok = TestCallLifecycleTimer.fire(maximum_timer)
 

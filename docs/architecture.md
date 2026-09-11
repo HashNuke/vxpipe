@@ -2357,6 +2357,15 @@ temporary sibling: its startup failure prevents an enabled recording call from p
 recording, while a later recorder or storage failure does not terminate the significant room
 authority. Disabled calls create neither a recording token nor a recorder.
 
+That failure isolation has two explicit drain paths. If the temporary `RoomRecording` coordinator
+terminates after opening streams, the independently supervised artifact writers observe their
+source monitor, close admission, drain already accepted chunks, and finalize with the coordinator's
+exit reason. If an object-store operation task crashes, its artifact writer counts the in-flight
+chunk as failed, continues with later accepted chunks, and publishes an incomplete manifest with
+the resulting aligned gap after its source ends. Neither event restarts or terminates the live room.
+An outage that also prevents object completion or metadata publication still cannot promise durable
+terminal evidence.
+
 Normalized room audio retains its authenticated `connection_id` as well as participant and track
 identity. Mixer timestamp buckets and monotonic source sequences are keyed by that complete triple,
 so simultaneous connections or tracks owned by one participant do not overwrite or reject one

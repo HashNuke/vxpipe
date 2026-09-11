@@ -165,6 +165,62 @@ defmodule Vxpipe.Artifacts.WriterTest do
     assert_receive {:vxpipe_artifact_metadata_published, _publisher, ^result, 1}
   end
 
+  test "continues after an object worker crashes and drains after its source crashes" do
+    source = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
+    spec = specification("artifact-worker-crashed")
+
+    options = [
+      source: source,
+      spec: spec,
+      object_store: TestObjectStore,
+      object_store_options: [observer: self()],
+      maximum_pending_chunks: 2,
+      drain_timeout_ms: 1_000,
+      observer: self()
+    ]
+
+    assert {:ok, writer} = Writers.start_writer(options)
+    writer_monitor = Process.monitor(writer)
+    handoff = Writer.handoff(writer)
+
+    assert_receive {:test_object_store_opened, _task, _spec}
+    first = chunk(0, 0)
+    failed = chunk(1, 960)
+    surviving = chunk(2, 1_920)
+
+    assert :ok = Handoff.offer(handoff, first)
+    assert_receive {:test_object_store_write, first_task, first_reference, ^first}
+    send(first_task, {:test_object_store_continue, first_reference})
+
+    assert :ok = Handoff.offer(handoff, failed)
+    assert_receive {:test_object_store_write, failed_task, _failed_reference, ^failed}
+    Process.exit(failed_task, :kill)
+
+    assert :ok = Handoff.offer(handoff, surviving)
+    assert_receive {:test_object_store_write, surviving_task, surviving_reference, ^surviving}
+    send(surviving_task, {:test_object_store_continue, surviving_reference})
+
+    source_monitor = Process.monitor(source)
+    Process.exit(source, :kill)
+    assert_receive {:DOWN, ^source_monitor, :process, ^source, :killed}
+    assert_receive {:vxpipe_artifact_writer_draining, ^writer}
+
+    assert_receive {:test_object_store_completed, _task, manifest}
+    assert manifest.status == :incomplete
+    assert manifest.terminal_reason == :killed
+    assert manifest.accepted_chunks == 2
+    assert manifest.rejected_chunks == 1
+    assert manifest.sample_count == 1_920
+    assert manifest.started_offset_samples == 0
+    assert manifest.ended_offset_samples == 2_880
+    assert manifest.gaps == [%{offset_samples: 960, sample_count: 960}]
+
+    assert_receive {:vxpipe_artifact_writer_finished, ^writer, result}
+    assert result.manifest == manifest
+    assert result.artifact.object_key == spec.object_key
+    assert_receive {:DOWN, ^writer_monitor, :process, ^writer, :normal}
+  end
+
   defp chunk(sequence, offset_samples) do
     %Chunk{
       sequence: sequence,

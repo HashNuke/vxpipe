@@ -19,7 +19,7 @@ During a multi-party call, enabled permitted individual tracks and the already-l
 
 ## Implementation checklist
 
-- [ ] Red-test recording lifecycle with tagged audio and fake object writer, exact permitted intervals, gaps, and room/worker failure.
+- [x] Red-test recording lifecycle with tagged audio and fake object writer, exact permitted intervals, gaps, and room/worker failure.
 - [x] Add artifacts application/ports and scoped writer supervision; keep dependency direction and engine database-free.
 - [x] Implement bounded stream-to-S3 recording plus asynchronous metadata/manifests.
 - [x] Capture live full mix and selected individual tracks with shared clocks and honest egress provenance.
@@ -30,7 +30,7 @@ During a multi-party call, enabled permitted individual tracks and the already-l
 - [ ] Reconstruct duration/alignment from manifests; combined object matches live mix and excludes generated-but-discarded/not-egress-accepted TTS. Test interrupted/discarded output without equating egress acceptance with remote playout.
 - [ ] Deny recording mid-call: no tracks/mix/derivatives from that interval enter tap/queue/object; relaxation cannot replay it.
 - [ ] Slow/failing object store and saturated writer queue leave live calls/monitor responsive; gaps/incomplete state are explicit.
-- [ ] Room/writer crash preserves surviving evidence and records final/incomplete manifests when storage succeeds; a total outage cannot guarantee persisted manifests or successful finalization. Post-call draining is independent of reporting wait.
+- [x] Room/writer crash preserves surviving evidence and records final/incomplete manifests when storage succeeds; a total outage cannot guarantee persisted manifests or successful finalization. Post-call draining is independent of reporting wait.
 - [ ] Cross-tenant reads and ungranted recording/monitor taps fail; metadata alone is not claimed to restore lost audio.
 
 ## Manual verification
@@ -563,6 +563,42 @@ operator playback, and final cross-slice manual verification remain pending.
 The complete Call Engine suite passes 357 tests, and the root gates pass formatting, compilation
 with warnings as errors, strict Credo over 647 source files, all 823 umbrella tests, and the
 unused-dependency check.
+
+## Checkpoint 14: isolated recording failure and drain
+
+The existing supervision and writer boundaries now have explicit crash evidence. `RoomRecording`
+is a temporary, non-significant room child: terminating it after audio capture does not restart or
+terminate Room Authority, and the live room still answers its authoritative snapshot request.
+Artifact writers remain independently supervised and monitor that coordinator as their source, so
+they can close admission and drain already accepted chunks after it exits.
+
+Object-store calls already run in artifacts-owned, unlinked tasks. A new failure case kills an
+in-flight write task between two successful chunks. The writer counts that interval as failed,
+continues with the next queued chunk, and then observes an abnormal source exit. With storage still
+available, it completes normally and emits an incomplete manifest containing the surviving two
+chunks, the exact missing 960-sample interval, and the source exit reason. This proves operation
+failure isolation; it does not claim terminal evidence when object completion and metadata storage
+are both unavailable.
+
+These were verification-only additions because the intended monitor/task isolation was already
+implemented. The first room-focused run used the wrong public return envelope for the snapshot
+assertion; matching the existing direct snapshot contract made the intended liveness check green.
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs --max-cases 1
+# 2 tests, 0 failures
+
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 4 tests, 0 failures
+```
+
+Tagged S3-compatible integration, authorized operator playback, and final cross-slice manual
+verification remain pending.
+
+The root gates pass formatting, compilation with warnings as errors, strict Credo over 647 source
+files, all 824 umbrella tests, and the unused-dependency check.
 
 ## Specification review
 
