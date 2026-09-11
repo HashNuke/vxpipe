@@ -1129,8 +1129,18 @@ replacement boundary. Only current-generation PCM is assigned the installed revi
 connection-stable monotonic source sequence before crossing the engine's opaque handle into the
 mixer. Raw Opus continues independently to configured STT, so human-only planned calls can use
 the mixer without fabricating an STT capability while legacy rooms retain their STT-only route.
-The default WebRTC jitter latency for this path is 200 ms. Mixer playout scheduling, subscription
-draining, Opus egress, and the browser-runnable multi-human path remain subsequent work.
+The default WebRTC jitter latency for this path is 200 ms.
+
+Planned rooms enable the mixer's room-clock scheduler with a 300 ms playout delay. Every PCM frame
+keeps a sample timestamp relative to the mixer's monotonic clock origin. On each frame-duration
+tick, the mixer converts elapsed monotonic time minus that delay into an aligned sample timestamp
+and finalizes every bucket through that point. Packet arrival does not advance or pause the room
+clock, so a stopped or silent publisher cannot strand another participant's final frames. The
+delay covers the Gateway's default 200 ms RTP jitter window and leaves 100 ms for cross-connection
+arrival skew. Directly constructed mixers omit scheduling unless `playout_delay_ms` is supplied,
+which preserves deterministic manual flushing for focused tests and embedding-specific control.
+Subscription draining, Opus egress, and the browser-runnable multi-human path remain subsequent
+work.
 
 `TranscriptRouter` keeps a bounded installed-revision history for source-interval decisions (128
 revisions by default). A current transcript projection reaches only connected, present

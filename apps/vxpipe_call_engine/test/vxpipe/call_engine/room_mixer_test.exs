@@ -164,6 +164,40 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert {:ok, []} = Subscription.take(alice, 4)
   end
 
+  test "flushes due timestamps from the room clock and keeps playout scheduled" do
+    test_process = self()
+    clock = start_supervised!({Agent, fn -> 1_000 end})
+
+    schedule = fn target, message, delay_ms ->
+      send(test_process, {:test_mixer_scheduled, target, message, delay_ms})
+      make_ref()
+    end
+
+    mixer =
+      start_mixer(
+        clock_origin_ms: 1_000,
+        clock: fn -> Agent.get(clock, & &1) end,
+        playout_delay_ms: 40,
+        schedule: schedule
+      )
+
+    assert_receive {:test_mixer_scheduled, ^mixer, first_tick, 1}
+    :ok = apply_policy(mixer, 0, ["alice", "bob"])
+    assert {:ok, alice} = subscribe(mixer, "alice-output", "alice", :mix_minus)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200]))
+
+    send(mixer, first_tick)
+    refute_receive {:vxpipe_room_audio_available, ^mixer, "alice-output"}
+    assert_receive {:test_mixer_scheduled, ^mixer, due_tick, 1}
+
+    Agent.update(clock, fn _now -> 1_040 end)
+    send(mixer, due_tick)
+
+    assert_receive {:vxpipe_room_audio_available, ^mixer, "alice-output"}
+    assert_frame(Subscription.take(alice, 1), "alice", ["bob"], [100, 200], 0)
+    assert_receive {:test_mixer_scheduled, ^mixer, _next_tick, 1}
+  end
+
   defp start_mixer(overrides \\ []) do
     options =
       Keyword.merge(

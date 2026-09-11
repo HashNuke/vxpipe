@@ -50,6 +50,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     sample_rate: 48_000,
     channels: 1,
     frame_samples: 960,
+    playout_delay_ms: 300,
     maximum_buffered_timestamps: 8,
     maximum_sink_frames: 50
   ],

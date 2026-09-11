@@ -275,3 +275,20 @@
   warnings-as-errors compilation, strict Credo, and the unused-dependency check pass. The disposable
   PostgreSQL container used for the umbrella run was removed afterward. The runtime path uses
   Membrane elements and no FFmpeg dependency or process.
+
+## 2026-09-11 — room-clock mixer playout
+
+- Added the fake-clock/fake-scheduler behavior test before implementation. Its red run timed out
+  waiting for a mixer tick because `RoomMixer` only supported caller-driven `flush_through/2`.
+- Added a focused `RoomMixer.Playout` clock policy. When `playout_delay_ms` is configured, it arms
+  one frame-duration tick at a time, subtracts the delay from elapsed monotonic room time, aligns
+  the result to a PCM frame boundary, and finalizes every due timestamp. It does not use packet
+  arrival as the playout clock, so a quiet or stopped source cannot strand already buffered media.
+- Planned rooms use a 300 ms delay: the current 200 ms Gateway jitter window plus 100 ms for
+  cross-connection arrival skew. A directly constructed mixer stays manually flushable unless it
+  opts into this scheduler. The green test proves no delivery before the delay, delivery at the
+  exact cutoff, and continued scheduling without sleeping.
+- The complete Call Engine suite passes 320 tests with one tagged integration exclusion. A fresh
+  PostgreSQL-backed umbrella run passes across all seven child applications; formatting,
+  warnings-as-errors compilation, strict Credo, and the unused-dependency check pass. The exact
+  disposable database container was removed afterward.

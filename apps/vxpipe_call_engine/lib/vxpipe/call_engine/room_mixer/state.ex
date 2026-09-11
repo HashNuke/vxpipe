@@ -2,12 +2,13 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
   @moduledoc false
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.CallEngine.RoomMixer.{SubscriptionCatalog, TimestampBuffer}
+  alias Vxpipe.CallEngine.RoomMixer.{Playout, SubscriptionCatalog, TimestampBuffer}
 
   @enforce_keys [
     :identity,
     :clock_origin_ms,
     :format,
+    :playout,
     :policy,
     :buffer,
     :subscriptions,
@@ -25,6 +26,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
             channels: pos_integer(),
             frame_samples: pos_integer()
           },
+          playout: Playout.t() | nil,
           policy: nil | Snapshot.t(),
           buffer: TimestampBuffer.t(),
           subscriptions: SubscriptionCatalog.t(),

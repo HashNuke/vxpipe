@@ -192,8 +192,17 @@ The Gateway suite passes 75 tests with four tagged integration exclusions; the C
 passes 319 tests with one tagged integration exclusion. A fresh PostgreSQL-backed umbrella run
 passes across all seven child applications. Formatting, warnings-as-errors compilation, strict
 Credo, and the unused-dependency check pass, and the disposable PostgreSQL container was removed.
-Mixer clock-driven flushing, bounded mix-minus subscription drain and WebRTC Opus egress remain
-open, so the transport/harness checklist and browser-runnable outcome are not yet claimed.
+The next checkpoint makes planned-room flushing clock-driven. A configurable 300 ms playout delay
+covers the default 200 ms Gateway jitter window plus 100 ms of cross-connection arrival skew. Each
+frame-duration tick derives an aligned sample cutoff from the shared monotonic room clock and
+flushes through it whether or not a new packet arrived, preventing silence or a stopped publisher
+from stranding another source's final frames. A focused fake-clock/fake-scheduler test proves that
+frames remain buffered before the delay, become available at the cutoff, and keep the timer armed.
+The Call Engine suite passes 320 tests with one tagged integration exclusion, and a fresh
+PostgreSQL-backed umbrella run passes across all seven child applications. Formatting,
+warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
+Bounded mix-minus subscription drain and WebRTC Opus egress remain open, so the transport/harness
+checklist and browser-runnable outcome are not yet claimed.
 
 ## Specification review
 

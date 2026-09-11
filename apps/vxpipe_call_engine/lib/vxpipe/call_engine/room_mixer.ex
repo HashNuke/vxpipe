@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     Configuration,
     Fanout,
     FrameAdmission,
+    Playout,
     Policy,
     State,
     Subscription,
@@ -71,7 +72,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   @impl true
   def init(options) do
     case Configuration.new(options) do
-      {:ok, state} -> {:ok, state}
+      {:ok, state} -> {:ok, arm_playout(state)}
       {:error, reason} -> {:stop, reason}
     end
   end
@@ -109,28 +110,9 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   def handle_call({:flush_through, timestamp}, _from, state) do
-    case TimestampBuffer.take_through(state.buffer, timestamp) do
-      {:ok, buckets, buffer} ->
-        {subscriptions, delivered, dropped} =
-          Fanout.deliver(
-            buckets,
-            state.subscriptions,
-            state.identity,
-            state.format,
-            state.policy,
-            self()
-          )
-
-        result = %{
-          delivered: delivered,
-          dropped: dropped,
-          flushed_timestamps: length(buckets)
-        }
-
-        {:reply, {:ok, result}, %{state | buffer: buffer, subscriptions: subscriptions}}
-
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
+    case flush(state, timestamp) do
+      {:ok, result, state} -> {:reply, {:ok, result}, state}
+      {:error, reason, state} -> {:reply, {:error, reason}, state}
     end
   end
 
@@ -151,6 +133,27 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_room_mixer_tick, tick_ref},
+        %{playout: %Playout{tick_ref: tick_ref} = playout} = state
+      ) do
+    state = %{state | playout: %{playout | tick_ref: nil}}
+
+    state =
+      case Playout.due_timestamp(playout, state.buffer.last_flushed_timestamp) do
+        {:ok, timestamp} ->
+          case flush(state, timestamp) do
+            {:ok, _result, state} -> state
+            {:error, :stale_timestamp, state} -> state
+          end
+
+        :not_due ->
+          state
+      end
+
+    {:noreply, arm_playout(state)}
+  end
+
   def handle_info({:DOWN, monitor, :process, _subscriber, _reason}, state) do
     subscriptions = SubscriptionCatalog.remove_monitor(state.subscriptions, monitor)
     {:noreply, %{state | subscriptions: subscriptions}}
@@ -169,6 +172,36 @@ defmodule Vxpipe.CallEngine.RoomMixer do
 
   defp policy_revision(nil), do: nil
   defp policy_revision(snapshot), do: snapshot.revision
+
+  defp flush(state, timestamp) do
+    case TimestampBuffer.take_through(state.buffer, timestamp) do
+      {:ok, buckets, buffer} ->
+        {subscriptions, delivered, dropped} =
+          Fanout.deliver(
+            buckets,
+            state.subscriptions,
+            state.identity,
+            state.format,
+            state.policy,
+            self()
+          )
+
+        result = %{
+          delivered: delivered,
+          dropped: dropped,
+          flushed_timestamps: length(buckets)
+        }
+
+        {:ok, result, %{state | buffer: buffer, subscriptions: subscriptions}}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  defp arm_playout(%State{} = state) do
+    %{state | playout: Playout.arm(state.playout, self())}
+  end
 
   defp safe_call(server, message) do
     try do
