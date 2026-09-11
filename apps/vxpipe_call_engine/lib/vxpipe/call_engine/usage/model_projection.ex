@@ -17,7 +17,10 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
   def project(data, correlation, provider, options)
       when is_map(data) and is_struct(correlation, Correlation) and
              is_struct(provider, ProviderContext) and is_list(options) do
-    options = Keyword.put_new(options, :observed_at, DateTime.utc_now(:millisecond))
+    options =
+      options
+      |> Keyword.put_new(:observed_at, DateTime.utc_now(:millisecond))
+      |> Keyword.put_new(:outcome, :succeeded)
 
     with {:ok, options} <- validate_options(options),
          {:ok, attribution} <- attribution(correlation, options),
@@ -40,12 +43,15 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
              :activation_id,
              :attempt_id,
              :observed_at,
+             :outcome,
              tool_call_id: nil
            ]),
          {:ok, _call_id} <- Keyword.fetch(options, :call_id),
          {:ok, _activation_id} <- Keyword.fetch(options, :activation_id),
          {:ok, _attempt_id} <- Keyword.fetch(options, :attempt_id),
-         {:ok, _observed_at} <- Keyword.fetch(options, :observed_at) do
+         {:ok, _observed_at} <- Keyword.fetch(options, :observed_at),
+         outcome when outcome in [:succeeded, :failed, :cancelled] <-
+           Keyword.get(options, :outcome) do
       {:ok, options}
     end
   end
@@ -103,7 +109,7 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
              provider: provider,
              attribution: attribution,
              measurement: measurement,
-             outcome: :succeeded,
+             outcome: Keyword.fetch!(options, :outcome),
              observed_at: Keyword.fetch!(options, :observed_at)
            ) do
         {:ok, observation} -> {:cont, {:ok, [observation | observations]}}

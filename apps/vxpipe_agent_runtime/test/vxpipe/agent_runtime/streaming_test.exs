@@ -56,7 +56,23 @@ defmodule Vxpipe.AgentRuntime.StreamingTest do
 
     refute_receive {:agent_runtime_event, %Event{kind: :text_delta, data: %{text: "hello"}}}
 
-    reply_with_text(provider, "hello")
+    {:ok, response} =
+      ModelResponse.new(
+        text: "hello",
+        usage: %{input_tokens: 5, output_tokens: 2},
+        provider_metadata: %{request_id: "provider-oversized-output"}
+      )
+
+    send(provider, {:test_stream_response, {:ok, response}})
+
+    assert_receive {:agent_runtime_event,
+                    %Event{
+                      kind: :model_usage,
+                      data: %{
+                        usage: %{input_tokens: 5, output_tokens: 2},
+                        provider_metadata: %{request_id: "provider-oversized-output"}
+                      }
+                    }}
 
     assert {:ok, %Result{status: :failed, reason: :output_too_large}} = Task.await(caller)
   end

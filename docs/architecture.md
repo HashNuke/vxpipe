@@ -2665,8 +2665,21 @@ incarnation. It projects each accepted observation as a private `usage_observed`
 inspection fact through the existing bounded asynchronous port; no client protocol event is
 created. Genuine response/request/session IDs remain in that private fact. An operation may carry
 provider identity with no measurement, so lack of token or price evidence does not erase the
-operation and is not rewritten as zero. Failed/interrupted model attempts and the remaining speech,
-tool, and carrier boundaries are still later parts of the usage milestone.
+operation and is not rewritten as zero.
+
+Agent Runtime emits `model_attempt_started` only after pending invocation/context lookup succeeds
+and immediately before calling the provider. It emits `model_usage` for every valid completed
+provider response, including an empty usage/metadata pair. The Call Engine round tracker therefore
+creates an attempt ID only for work that reached the provider boundary, closes it on the matching
+usage event, and records a measurement-free `failed` or `cancelled` observation if the runtime ends
+while that attempt is still open. Setup failures before provider invocation create no provider
+attempt. Each restarted request gets fresh attempt IDs, even if it reuses a command/correlation.
+Usage already handed off remains independent of stale text suppression, and cancelling an in-flight
+provider request retains the operation with unknown measurements rather than pretending its cost
+was zero. If a streaming provider returns a valid final response after a local text/event budget has
+already rejected its output, Agent Runtime hands off the response's usage before returning the local
+failure; rejected conversational output therefore cannot erase known incurred usage. Hosted speech,
+tool, and carrier capture remain later parts of the usage milestone.
 
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports

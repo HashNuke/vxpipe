@@ -142,9 +142,20 @@ defmodule Vxpipe.AgentRuntime.Session do
         )
       end
 
+      emit_model_attempt_started = fn ->
+        emit_request_event(
+          session,
+          token,
+          :model_attempt_started,
+          %{},
+          state.configuration.event_handoff_timeout_ms
+        )
+      end
+
       callbacks = %{
         begin_submission: begin_submission,
         commit: commit,
+        emit_model_attempt_started: emit_model_attempt_started,
         emit_model_usage: emit_model_usage,
         emit_text_delta: emit_text_delta
       }
@@ -242,7 +253,7 @@ defmodule Vxpipe.AgentRuntime.Session do
         {:agent_runtime_request_event, worker, token, event_ref, kind, data},
         %{active_task: %{pid: worker}, active_token: token} = state
       )
-      when kind in [:text_delta, :model_usage] and is_map(data) do
+      when kind in [:model_attempt_started, :text_delta, :model_usage] and is_map(data) do
     emit(state.configuration.event_destination, Event.new(kind, state.correlation, data))
 
     send(worker, {:agent_runtime_request_event_emitted, token, event_ref})

@@ -20,6 +20,13 @@ defmodule Vxpipe.AgentRuntime.UsageEventTest do
 
     assert_receive {:pending_context_requested, source, %{request_id: "req_usage_1"}, 1_000}
     send(source, {:release, {:ok, []}})
+
+    assert_receive {:agent_runtime_event,
+                    %Event{
+                      kind: :model_attempt_started,
+                      correlation: %{request_id: "req_usage_1"}
+                    }}
+
     assert_receive {:model_provider_process, provider, _request}
 
     {:ok, response} =
@@ -45,6 +52,44 @@ defmodule Vxpipe.AgentRuntime.UsageEventTest do
                     } = event}
 
     refute inspect(event) =~ "provider_request_1"
+    assert {:ok, %Result{status: :completed, output: "Hello."}} = Task.await(caller)
+  end
+
+  test "emits a completed model attempt when the provider reports no measurements" do
+    session =
+      start_supervised!(
+        {Session,
+         instructions: "Be concise",
+         model_provider: Vxpipe.AgentRuntime.TestModelProvider,
+         model: %{mode: :scripted, test_owner: self()},
+         pending_context_source:
+           {Vxpipe.AgentRuntime.TestPendingContextSource, %{owner: self(), result: :block}},
+         event_destination: self()}
+      )
+
+    caller =
+      Task.async(fn -> Session.request(session, "Hello", %{request_id: "req_usage_empty"}) end)
+
+    assert_receive {:pending_context_requested, source, %{request_id: "req_usage_empty"}, 1_000}
+    send(source, {:release, {:ok, []}})
+
+    assert_receive {:agent_runtime_event,
+                    %Event{
+                      kind: :model_attempt_started,
+                      correlation: %{request_id: "req_usage_empty"}
+                    }}
+
+    assert_receive {:model_provider_process, provider, _request}
+    {:ok, response} = ModelResponse.new(text: "Hello.")
+    send(provider, {:test_model_response, {:ok, response}})
+
+    assert_receive {:agent_runtime_event,
+                    %Event{
+                      kind: :model_usage,
+                      correlation: %{request_id: "req_usage_empty"},
+                      data: %{usage: %{}, provider_metadata: %{}}
+                    }}
+
     assert {:ok, %Result{status: :completed, output: "Hello."}} = Task.await(caller)
   end
 end

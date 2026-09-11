@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Id do
     call: "call",
     command: "cmd",
     event: "evt",
+    model_attempt: "matt",
     participant: "part",
     room: "room",
     room_incarnation: "rinc",
@@ -21,6 +22,7 @@ defmodule Vxpipe.CallEngine.Id do
           | :call
           | :command
           | :event
+          | :model_attempt
           | :participant
           | :room
           | :room_incarnation

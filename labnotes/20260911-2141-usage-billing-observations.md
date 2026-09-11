@@ -100,3 +100,49 @@ Call Engine suite passes 369 tests with one existing integration exclusion. All 
 the eight umbrella apps pass, as do the formatting, warnings-as-errors compilation, strict Credo,
 and unused-dependency gates. Failed/interrupted model attempt capture, hosted speech, tools,
 carriers, operator totals, and billing lookup remain.
+
+## 2026-09-11: failed and cancelled model attempts
+
+The successful-response path alone could not prove that a failed or cancelled request had reached
+the provider. Recording every request start would be dishonest because pending invocation or model
+context lookup can fail before a provider is called. Agent Runtime now emits a
+`model_attempt_started` event immediately before provider generation, after those prerequisites
+succeed. Every valid provider response emits its completion metadata, even when both bounded maps
+are empty.
+
+`UsageRounds` now opens an attempt on the start event and closes it on response usage. A terminal
+failure or cancellation closes any still-open attempt as a measurement-free observation. This
+retains the known provider operation without manufacturing token or price values. A setup failure
+with no start event produces no operation. Attempt IDs are generated per actual start, so a retry
+that reuses a command/correlation cannot collide with the interrupted attempt.
+
+The round tracker remains independent of the coordinator's current text task. Consequently, usage
+that Agent Runtime has already handed off remains recordable even if stale conversational output is
+subsequently suppressed. Cancellation may prevent the provider from returning final measurements;
+the operation still remains visible with a `cancelled` outcome and unknown measurement.
+
+The stream-budget path needed a separate red/green pass. A provider can return a valid final
+response with usage even after the local output byte/event budget rejects its text. Agent Runtime
+now emits that known usage before returning the local failure, while continuing to suppress the
+rejected text.
+
+Red evidence:
+
+- Both Agent Runtime usage tests timed out waiting for the absent attempt-start event.
+- The coordinator failure and cancellation tests timed out waiting for their absent private usage
+  observations while the existing capability failure events were present.
+- The streaming-budget test timed out waiting for the usage attached to a valid but locally rejected
+  provider response.
+
+Green evidence so far:
+
+- Agent Runtime usage boundary: 2 tests, 0 failures.
+- Agent Runtime streaming-budget case: 1 test, 0 failures.
+- Coordinator: 22 tests, 0 failures.
+- Complete Agent Runtime suite: 59 tests, 0 failures, 2 integration exclusions.
+- Complete Call Engine suite: 371 tests, 0 failures, 1 integration exclusion.
+- Root gates: formatting, warnings-as-errors compilation, strict Credo over 676 source files, all
+  860 tests across eight apps, and the unused-dependency check pass.
+
+Hosted speech, tool and carrier capture, persisted settlement/operator totals, and billing lookup
+remain.

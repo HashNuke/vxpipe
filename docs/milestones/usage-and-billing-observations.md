@@ -1,9 +1,8 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation/settlement and successful model-round capture into the
-private archive are implemented (2026-09-11); failed/interrupted model attempts, other provider
-boundaries, operator totals, and billing enrichment remain. Specification review: approved
-(2026-09-08).
+Status: in progress. Typed observation/settlement and successful, failed, or cancelled model-attempt
+capture into the private archive are implemented (2026-09-11); other provider boundaries, operator
+totals, and billing enrichment remain. Specification review: approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
 
@@ -113,12 +112,38 @@ Implementation evidence (2026-09-11, completed model-round capture checkpoint):
   formatting, warnings-as-errors compilation, strict Credo over 676 source files, all 857 tests
   across the eight umbrella apps, and the unused-dependency check.
 
-This remains a partial milestone. Hosted speech, tool and carrier capture, failed/interrupted model
-attempts, persisted settlement/operator totals, and billing enrichment are not claimed yet.
+This remained a partial checkpoint. At that point, hosted speech, tool and carrier capture,
+failed/interrupted model attempts, persisted settlement/operator totals, and billing enrichment
+were not claimed.
+
+Implementation evidence (2026-09-11, model-attempt lifecycle checkpoint):
+
+- Agent Runtime now emits an attempt-start event immediately before each actual provider call and a
+  completion event even when a valid model response has no supported usage or provider metadata.
+  Pending-context/model-context failures therefore do not invent provider attempts.
+- Call Engine opens a fresh attempt on that start event. A usage event closes it as succeeded; a
+  terminal failure or cancellation closes an otherwise-open attempt with no measurement. Unknown
+  usage remains unknown, while the fact that provider work began survives cancellation. Retries
+  receive fresh attempt IDs even when their command/correlation is reused.
+- A valid streaming-provider response still hands off its usage when a local output/event budget
+  rejects the response. The request reports the local failure and publishes no rejected text, but
+  known incurred usage is not discarded.
+- Red evidence: both Agent Runtime usage tests first timed out waiting for the absent start event;
+  the Call Engine coordinator tests then timed out waiting for failed and cancelled observations;
+  and the streaming-budget test timed out waiting for known usage from its rejected response.
+- Focused green evidence: 2 Agent Runtime usage tests, the streaming-budget case, and 22 coordinator
+  tests pass. The complete Agent Runtime suite passes 59 tests with two integration exclusions, and
+  the complete Call Engine suite passes 371 tests with one integration exclusion. All root gates
+  pass: formatting, warnings-as-errors compilation, strict Credo over 676 source files, all 860
+  tests across the eight umbrella apps, and the unused-dependency check.
+
+This remains a partial milestone. Hosted speech, tool and carrier capture, persisted
+settlement/operator totals, and billing enrichment are not claimed yet.
 
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added final delta vs cumulative arithmetic, stale provenance handling and no prohibited STT for accounting; re-review approved.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+The independent review is specification evidence; the implemented checkpoints and their runtime
+verification are recorded above.

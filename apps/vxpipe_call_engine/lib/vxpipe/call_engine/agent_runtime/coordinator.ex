@@ -238,6 +238,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   def handle_info(
+        {:agent_runtime_event, %Event{kind: :model_attempt_started, correlation: correlation}},
+        %State{} = state
+      ) do
+    {:noreply, ModelUsage.start(state, correlation)}
+  end
+
+  def handle_info(
         {:agent_runtime_event, %Event{kind: :model_usage, correlation: correlation, data: data}},
         %State{} = state
       ) do
@@ -249,7 +256,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         %State{} = state
       )
       when kind in [:response_completed, :request_failed, :request_cancelled] do
-    {:noreply, ModelUsage.complete(state, correlation)}
+    {:noreply, ModelUsage.complete(state, correlation, usage_outcome(kind))}
   end
 
   def handle_info(
@@ -435,4 +442,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   defp put_current(state, current) do
     %{state | current: current, usage_rounds: UsageRounds.register(state.usage_rounds, current)}
   end
+
+  defp usage_outcome(:response_completed), do: :succeeded
+  defp usage_outcome(:request_failed), do: :failed
+  defp usage_outcome(:request_cancelled), do: :cancelled
 end

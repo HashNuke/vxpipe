@@ -41,8 +41,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              model_context,
              request.correlation
            ),
-         {:ok, response} <- generate_response(config, model_request, output),
-         :ok <- emit_model_usage(response, config) do
+         :ok <- config.emit_model_attempt_started.(),
+         {:ok, response} <- generate_observed_response(config, model_request, output) do
       handle_response(
         response,
         conversation,
@@ -213,6 +213,13 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
         {:runtime_error, reason} ->
           {:error, reason}
 
+        {:runtime_error, reason, %ModelResponse{} = response} ->
+          if ModelResponse.valid?(response) do
+            {:error, reason, response}
+          else
+            {:error, :invalid_provider_response}
+          end
+
         {:ok, %ModelResponse{} = response} ->
           if ModelResponse.valid?(response) do
             {:ok, response}
@@ -233,6 +240,19 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
       _error -> {:error, :provider_unavailable}
     catch
       _kind, _reason -> {:error, :provider_unavailable}
+    end
+  end
+
+  defp generate_observed_response(config, model_request, output) do
+    case generate_response(config, model_request, output) do
+      {:ok, %ModelResponse{} = response} ->
+        with :ok <- emit_model_usage(response, config), do: {:ok, response}
+
+      {:error, reason, %ModelResponse{} = response} ->
+        with :ok <- emit_model_usage(response, config), do: {:error, reason}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -263,18 +283,20 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     response =
       config.model_provider.stream(config.model, model_request, &StreamBudget.emit(budget, &1))
 
-    case StreamBudget.outcome(budget) do
-      :ok -> response
-      {:error, reason} -> {:runtime_error, reason}
+    case {StreamBudget.outcome(budget), response} do
+      {:ok, response} ->
+        response
+
+      {{:error, reason}, {:ok, %ModelResponse{} = response}} ->
+        {:runtime_error, reason, response}
+
+      {{:error, reason}, _response} ->
+        {:runtime_error, reason}
     end
   end
 
   defp emit_model_usage(%ModelResponse{} = response, config) do
-    if response.usage == %{} and response.provider_metadata == %{} do
-      :ok
-    else
-      config.emit_model_usage.(response.usage, response.provider_metadata)
-    end
+    config.emit_model_usage.(response.usage, response.provider_metadata)
   end
 
   defp running_result(call),

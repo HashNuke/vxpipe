@@ -155,6 +155,45 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     send(execution, :release_submitted_host_tool)
   end
 
+  test "retains a failed provider attempt without inventing usage" do
+    runtime = start_runtime()
+    command = command("failed-model-usage", "Try this provider request")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_response, {:error, :provider_unavailable}})
+
+    assert_receive {:vxpipe_usage_observations, coordinator, [observation]}
+    assert coordinator == runtime.coordinator
+    assert observation.capability == :model_inference
+    assert observation.outcome == :failed
+    assert observation.measurement == nil
+    assert String.starts_with?(observation.attempt_id, "matt_")
+    assert observation.attribution.turn_id == command.correlation_id
+    assert_receive {:vxpipe_capability_failed, ^coordinator, ^command, :provider_unavailable}
+  end
+
+  test "retains a cancelled in-flight provider attempt without publishing stale output" do
+    runtime = start_runtime()
+    command = command("cancelled-model-usage", "Stop this provider request")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    provider_monitor = Process.monitor(provider)
+
+    assert {:ok, [^command]} = Coordinator.interrupt(runtime.coordinator, [])
+    assert_receive {:DOWN, ^provider_monitor, :process, ^provider, _reason}
+
+    assert_receive {:vxpipe_usage_observations, coordinator, [observation]}
+    assert coordinator == runtime.coordinator
+    assert observation.capability == :model_inference
+    assert observation.outcome == :cancelled
+    assert observation.measurement == nil
+    assert String.starts_with?(observation.attempt_id, "matt_")
+    assert observation.attribution.turn_id == command.correlation_id
+    refute_receive {:vxpipe_capability_text, ^coordinator, ^command, _text}
+  end
+
   test "reports payload-free first output and successful model telemetry once" do
     attach_telemetry_events([
       @model_first_token_event,

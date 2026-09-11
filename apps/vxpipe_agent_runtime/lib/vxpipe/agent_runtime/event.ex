@@ -7,6 +7,7 @@ defmodule Vxpipe.AgentRuntime.Event do
 
   @type kind ::
           :request_started
+          | :model_attempt_started
           | :text_delta
           | :model_usage
           | :response_completed
@@ -18,6 +19,7 @@ defmodule Vxpipe.AgentRuntime.Event do
   def new(kind, correlation, data \\ %{})
       when kind in [
              :request_started,
+             :model_attempt_started,
              :text_delta,
              :model_usage,
              :response_completed,
