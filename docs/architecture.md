@@ -2436,6 +2436,12 @@ remain in ExAws's standard provider chain; Console does not copy them into a cal
 prepared-call record, client response, or inspectable recording state. An embedding host can supply
 the same engine recording options directly without including Console.
 
+The artifacts application keeps real object-store interoperability in an opt-in `:integration` /
+`:s3_live` lane. It requires an explicitly authorized endpoint and bucket, obtains credentials only
+from ExAws's standard environment/provider chain, performs a real multipart upload, reads the
+finished raw PCM object byte-for-byte, and deletes that unique test object. The default suite makes
+no network request and never prints credential values or signed requests.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

@@ -561,3 +561,41 @@ and final cross-slice manual verification.
 
 Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
 umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: S3-compatible multipart integration
+
+The artifacts test helper now excludes `:integration` by default, matching the other networked
+lanes. A new `:s3_live` test requires an explicitly enabled endpoint and bucket, uses the production
+multipart adapter, uploads an exact five-MiB part plus a short final part, completes the object,
+reads it back, and compares the entire PCM payload. Cleanup targets only the random object key made
+by the test. Credentials remain in the standard ExAws provider chain and are not printed.
+
+The default child suite remained green with the network test excluded:
+
+```text
+cd apps/vxpipe_artifacts
+mix test --max-cases 1
+# 7 tests, 0 failures (1 excluded)
+```
+
+The tagged lane was then run against a disposable MinIO server. The current container image was
+pulled, the production code created the absent authorized test bucket, the multipart round trip
+passed, and the test removed its unique object. The disposable container and its ephemeral storage
+were removed by the command's exit trap:
+
+```text
+VXPIPE_S3_LIVE=1 \
+VXPIPE_S3_INTEGRATION_ENDPOINT=<authorized-root-origin> \
+VXPIPE_S3_INTEGRATION_BUCKET=<authorized-test-bucket> \
+VXPIPE_S3_INTEGRATION_REGION=<region> \
+mix test test/integration/s3_compatible_object_store_test.exs \
+  --include integration --max-cases 1
+# 1 test, 0 failures
+```
+
+The tagged network boundary is now covered. Authorized operator playback and final cross-slice
+manual verification remain.
+
+Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
+default umbrella tests, and the unused-dependency check pass. The tagged object-store test is
+excluded from that total and passed separately above.
