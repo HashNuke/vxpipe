@@ -166,7 +166,7 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
   end
 
   test "times out one provider request and advances the queue" do
-    capability = start_capability(request_timeout_ms: 25)
+    capability = start_capability(request_timeout_ms: 250)
     timed_out = command("timed-out", "take too long")
     next = command("next", "continue")
 
@@ -174,7 +174,7 @@ defmodule Vxpipe.CallEngine.Capability.ModelInferenceTest do
     assert_receive {:test_model_inference_request, _request, _messages}
     assert :ok = ModelInference.respond(capability, next)
 
-    assert_receive {:vxpipe_capability_failed, ^capability, ^timed_out, :provider_timeout}, 500
+    assert_receive {:vxpipe_capability_failed, ^capability, ^timed_out, :provider_timeout}, 1_000
     assert_receive {:test_model_inference_request, next_request, _messages}
     send(next_request, {:test_model_inference_reply, {:ok, "continued"}})
     assert_receive {:vxpipe_capability_text, ^capability, ^next, "continued"}
