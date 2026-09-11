@@ -60,7 +60,8 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     }
 
     assert :ok = CallIngress.handle_event(context.options, identity(), dtmf)
-    assert_receive {:test_live_telephony_event, ^dtmf}
+    assert_receive {:test_live_telephony_event, ^dtmf, source}
+    assert source == self()
 
     assert Enum.count(TestTelephonyCallBackend.operations(context.backend), fn
              {:claim_incoming, _scope, _service, _leg} -> true
@@ -72,7 +73,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert {:error, :telephony_leg_mismatch} =
              CallIngress.handle_event(context.options, identity(), mismatched)
 
-    refute_receive {:test_live_telephony_event, ^mismatched}
+    refute_receive {:test_live_telephony_event, ^mismatched, _source}
   end
 
   test "uses admitted media start as live evidence when it arrives before answered", context do
@@ -94,7 +95,8 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
              {:handle_live_event, "30000000-0000-4000-8000-000000000003", :media_started, nil}
            ] = Enum.take(TestTelephonyCallBackend.operations(context.backend), -2)
 
-    assert_receive {:test_live_telephony_event, ^media_started}
+    assert_receive {:test_live_telephony_event, ^media_started, source}
+    assert source == self()
   end
 
   test "records one startup failure and does not restart the crashed call" do

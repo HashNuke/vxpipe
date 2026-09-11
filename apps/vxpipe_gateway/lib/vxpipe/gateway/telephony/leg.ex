@@ -90,14 +90,14 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   def handle_call(
         {:event, %Event{kind: kind} = event},
-        _from,
+        {source, _tag},
         %{status: :answering} = state
       )
       when kind in [:answered, :media_started] do
     with :ok <- matching_event(state.claim, event) do
       state = project_started(state, event)
 
-      case dispatch_start_event(state, event) do
+      case dispatch_start_event(state, source, event) do
         :ok -> {:reply, :ok, state}
         {:error, reason} -> {:reply, {:error, reason}, state}
       end
@@ -113,12 +113,13 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     end
   end
 
-  def handle_call({:event, event}, _from, %{status: :running} = state) do
+  def handle_call({:event, event}, {source, _tag}, %{status: :running} = state) do
     with :ok <- matching_event(state.claim, event),
          :ok <-
            call_backend(state.backend, :handle_live_event, [
              state.claim,
              state.activation,
+             source,
              event
            ]) do
       {:reply, :ok, state}
@@ -224,10 +225,10 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   defp start_time(%Event{occurred_at: %DateTime{} = occurred_at}, _clock), do: occurred_at
   defp start_time(%Event{kind: :media_started}, clock), do: clock.()
 
-  defp dispatch_start_event(_state, %Event{kind: :answered}), do: :ok
+  defp dispatch_start_event(_state, _source, %Event{kind: :answered}), do: :ok
 
-  defp dispatch_start_event(state, %Event{kind: :media_started} = event) do
-    call_backend(state.backend, :handle_live_event, [state.claim, state.activation, event])
+  defp dispatch_start_event(state, source, %Event{kind: :media_started} = event) do
+    call_backend(state.backend, :handle_live_event, [state.claim, state.activation, source, event])
   end
 
   defp matching_event(claim, event) do

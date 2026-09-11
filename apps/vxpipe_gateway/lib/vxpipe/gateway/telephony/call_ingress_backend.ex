@@ -34,6 +34,6 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
   @callback mark_incoming_failed(context(), TelephonyAdmissionClaim.t(), atom()) ::
               {:ok, TelephonyAdmissionClaim.t()} | {:error, term()}
 
-  @callback handle_live_event(context(), TelephonyAdmissionClaim.t(), term(), Event.t()) ::
+  @callback handle_live_event(context(), TelephonyAdmissionClaim.t(), term(), pid(), Event.t()) ::
               :ok | {:error, term()}
 end

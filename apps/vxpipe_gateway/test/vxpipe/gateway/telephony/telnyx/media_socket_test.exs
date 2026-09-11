@@ -34,7 +34,9 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocketTest do
              MediaSocket.handle_in({JSON.encode!(start_message()), opcode: :text}, context.socket)
 
     assert_receive {:test_live_telephony_event,
-                    %Event{kind: :media_started, stream_id: "stream-1"}}
+                    %Event{kind: :media_started, stream_id: "stream-1"}, source}
+
+    assert source == self()
 
     assert {:ok, _socket} =
              MediaSocket.handle_in({JSON.encode!(media_message()), opcode: :text}, socket)
@@ -44,7 +46,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocketTest do
                       kind: :media,
                       stream_id: "stream-1",
                       provider_call_leg_id: "call-leg-1"
-                    }}
+                    }, ^source}
   end
 
   test "closes on a frame that does not belong to the pinned call", context do

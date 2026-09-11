@@ -927,3 +927,22 @@ mix test test/vxpipe/gateway/telephony/telnyx/audio_ingress_pipeline_test.exs \
 The checkpoint also passed root formatting, compilation with warnings as errors, strict Credo,
 the unused-dependency check, and all 723 umbrella tests against a fresh disposable PostgreSQL 17
 instance.
+
+## Checkpoint 24: authenticated live-event provenance
+
+The provider-neutral live-event callback now receives the PID that synchronously submitted the
+event to the exact leg owner. For Telnyx media this is the already-authenticated WebSocket process,
+which gives the upcoming media session a safe egress target without embedding connection identity
+in RTVI or trusting another provider field. The source remains internal runtime context; webhook
+and media payload schemas are unchanged.
+
+The focused tests first failed because the backend observer received no source, then passed after
+the leg preserved its `GenServer.call/3` caller across both the initial media-start transition and
+later running events:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/call_ingress_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/media_socket_test.exs
+# 8 tests, 0 failures
+```

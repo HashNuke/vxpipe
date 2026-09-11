@@ -90,9 +90,9 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   end
 
   @impl true
-  def handle_live_event(agent, claim, _activation, event) do
+  def handle_live_event(agent, claim, _activation, source, event) do
     operation(agent, {:handle_live_event, claim.call.id, event.kind, event.provider_event_id})
-    send(Agent.get(agent, & &1.observer), {:test_live_telephony_event, event})
+    send(Agent.get(agent, & &1.observer), {:test_live_telephony_event, event, source})
     :ok
   end
 

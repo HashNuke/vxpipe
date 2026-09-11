@@ -122,7 +122,8 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   @impl CallIngressBackend
-  def handle_live_event(_options, %TelephonyAdmissionClaim{}, _activation, %Event{}) do
+  def handle_live_event(_options, %TelephonyAdmissionClaim{}, _activation, source, %Event{})
+      when is_pid(source) do
     {:error, :telephony_event_not_supported}
   end
 
