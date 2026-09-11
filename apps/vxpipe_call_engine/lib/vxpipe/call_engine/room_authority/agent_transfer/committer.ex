@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     EventPublisher,
+    FirstMessage,
     ParticipantLifecycle,
     Startup,
     State
@@ -46,11 +47,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
     state = %{
       state
       | agent_turns: %{},
+        first_message:
+          FirstMessage.for_agent_activation(
+            preparation.destination.participant,
+            request.caller_participant_id,
+            preparation.first_activation?
+          ),
         pending_agent_teardowns: pending_agent_teardowns,
         pending_agent_transfer: nil,
         text_capability: destination_capability,
         text_to_speech_capability: Startup.activate_text_to_speech(preparation.text_to_speech)
     }
+
+    state = start_first_message(state, request.caller_participant_id)
 
     _ = Startup.discard_text_to_speech(source_text_to_speech, state)
 
@@ -60,6 +69,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
     }
 
     {result, publish_completed(request, result, state)}
+  end
+
+  defp start_first_message(state, caller_participant_id) do
+    case FirstMessage.start(state) do
+      {:ok, state} -> state
+      {:error, _error} -> %{state | first_message: FirstMessage.completed(caller_participant_id)}
+    end
   end
 
   defp publish_completed(request, result, state) do

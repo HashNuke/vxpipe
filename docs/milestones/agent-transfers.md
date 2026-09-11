@@ -38,7 +38,7 @@ commit, while the source retains conversation.
 - [ ] Allowed transfer succeeds; injected target, wrong/stale source, duplicate preparations, and generated-tool alias collision fail before unauthorized startup.
 - [x] Destination startup fails or deadline expires: source remains responsible, no completed event, destination cleaned up.
 - [ ] Commit preserves call/variables/entry refs; source capability/tool workers terminate, old output cannot reach new activation.
-- [ ] Re-enter agent: same participant ID, new activation, no greeting replay; permitted history only.
+- [x] Re-enter agent: same participant ID, new activation, no greeting replay; permitted history only.
 - [ ] Restoration attempts exactly once; detailed failure does not leak through speech or full-debug events.
 - [ ] Empty transfers expose no tool. Every history mode excludes private prompts/tool data
   and generated-but-unplayed text; selected contains only allowed variables/reason.
@@ -183,6 +183,18 @@ still pending, so the combined re-entry acceptance checkbox remains open. The co
 suite passes 277 tests with one tagged integration exclusion. Umbrella formatting,
 warnings-as-errors compilation, strict Credo, and unused-dependency checks pass; umbrella tests stop
 at the unchanged missing PostgreSQL SCRAM password before the database-backed suites begin.
+
+Transferred participants now use the same first-message owner as the entry receiver. The room pins
+whether a destination is entering its first committed activation before asynchronous preparation;
+after control commit, `wait_for_input`, fixed, or generated behavior starts against the attached
+entry caller. A later activation installs a completed first-message state with the same caller target
+instead of replaying the configured greeting. The re-entry room flow observes billing's fixed
+greeting on first activation and no greeting when billing is entered again. Together with stable
+identity, fresh activation, archive attribution, rebound authority, and permitted-history checks,
+this completes the re-entry acceptance item. The complete Call Engine suite remains green at 277
+tests with one tagged integration exclusion; root formatting, warnings-as-errors compilation,
+strict Credo, and unused-dependency checks pass. Root tests stop at the unchanged missing
+PostgreSQL SCRAM password before database-backed suites begin.
 
 ## Specification review
 

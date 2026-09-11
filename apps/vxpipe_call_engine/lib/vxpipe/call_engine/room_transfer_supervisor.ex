@@ -24,6 +24,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
           Request.t(),
           Runtime.t(),
           Participant.t(),
+          boolean(),
           [Vxpipe.AgentRuntime.Message.t()]
         ) ::
           {:ok, Task.t()} | {:error, :unavailable}
@@ -32,15 +33,16 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
         %Request{} = request,
         %Runtime{} = runtime,
         %Participant{} = destination,
+        first_activation?,
         initial_messages
       )
-      when is_list(initial_messages) do
+      when is_boolean(first_activation?) and is_list(initial_messages) do
     task =
       Task.Supervisor.async_nolink(
         via(incarnation_id),
         AgentTransfer.DestinationPreparer,
         :prepare,
-        [request, runtime, destination, initial_messages]
+        [request, runtime, destination, first_activation?, initial_messages]
       )
 
     {:ok, task}

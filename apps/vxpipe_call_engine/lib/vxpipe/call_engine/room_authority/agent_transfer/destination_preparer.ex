@@ -8,15 +8,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{Preparation, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  @spec prepare(Request.t(), Runtime.t(), Participant.t(), [Vxpipe.AgentRuntime.Message.t()]) ::
+  @spec prepare(
+          Request.t(),
+          Runtime.t(),
+          Participant.t(),
+          boolean(),
+          [Vxpipe.AgentRuntime.Message.t()]
+        ) ::
           {:ok, Preparation.t()} | {:error, :unavailable}
   def prepare(
         %Request{} = request,
         %Runtime{} = runtime,
         %Participant{} = participant,
+        first_activation?,
         initial_messages
       )
-      when is_list(initial_messages) do
+      when is_boolean(first_activation?) and is_list(initial_messages) do
     with {:ok, %AgentDestination{} = destination} <-
            destination(request, runtime, participant, initial_messages),
          {:ok, %ParticipantPreparation{} = participant} <-
@@ -25,7 +32,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
              request.incarnation_id,
              agent_activation: destination.agent_activation
            ) do
-      prepare_text_to_speech(request, runtime, destination, participant)
+      prepare_text_to_speech(
+        request,
+        runtime,
+        destination,
+        participant,
+        first_activation?
+      )
     else
       {:error, _reason} -> {:error, :unavailable}
     end
@@ -44,7 +57,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
     )
   end
 
-  defp prepare_text_to_speech(request, runtime, destination, participant) do
+  defp prepare_text_to_speech(
+         request,
+         runtime,
+         destination,
+         participant,
+         first_activation?
+       ) do
     owner = Keyword.fetch!(runtime.startup_options, :owner)
 
     case Startup.prepare_text_to_speech(
@@ -58,7 +77,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
          %Preparation{
            destination: destination,
            participant: participant,
-           text_to_speech: text_to_speech
+           text_to_speech: text_to_speech,
+           first_activation?: first_activation?
          }}
 
       {:error, _reason} ->

@@ -448,15 +448,18 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     send(next_provider, {:test_agent_runtime_response, {:ok, next_response}})
   end
 
-  test "an agent re-enters with its participant identity and a fresh activation" do
+  test "agent re-entry keeps identity, refreshes activation, and does not replay its greeting" do
     plan =
       compile_plan(
+        billing_first_message: %{mode: "fixed", text: "Billing is ready."},
         billing_transfers: ["reception"],
         reception_transfer_history: %{mode: "last_n_spoken", turns: 1}
       )
 
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
+    billing = Map.fetch!(plan.participants, "billing")
+    billing_participant_id = billing.participant_id
 
     archive = [
       enabled: true,
@@ -480,6 +483,13 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     )
 
     _ = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      participant_id: ^billing_participant_id,
+                      text: "Billing is ready."
+                    }},
+                   2_000
 
     transfer_through_model(
       plan,
@@ -527,6 +537,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
              )
 
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    source_monitor = monitor_active_participant(plan, reception.participant_id)
     send(provider, {:test_agent_runtime_response, {:ok, response}})
 
     assert_receive {:vxpipe_event,
@@ -535,10 +546,24 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                       result: %{"destination" => "billing", "status" => "completed"}
                     }},
                    2_000
+
+    assert_receive {:DOWN, ^source_monitor, :process, _source_supervisor, _reason}, 2_000
+    _ = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
+
+    refute_receive {:vxpipe_event,
+                    %TextOutput{
+                      participant_id: ^billing_participant_id,
+                      text: "Billing is ready."
+                    }},
+                   100
   end
 
   defp compile_plan(options \\ []) do
     billing_model = Keyword.get(options, :billing_model, "test:scripted")
+
+    billing_first_message =
+      Keyword.get(options, :billing_first_message, %{mode: "wait_for_input"})
+
     billing_transfers = Keyword.get(options, :billing_transfers, [])
 
     reception_transfer_history =
@@ -583,7 +608,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      description: "A billing specialist",
                      prompt: "Handle billing requests.",
                      transfer_history: transfer_history,
-                     first_message: %{mode: "wait_for_input"},
+                     first_message: billing_first_message,
                      capabilities: %{model_inference: "billing-model"},
                      tools: %{},
                      variable_permissions: billing_permissions,

@@ -23,20 +23,48 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
+    for_agent_activation(receiver, caller.participant_id, true)
+  end
+
+  @spec for_agent_activation(ResolvedCallPlan.Participant.t(), String.t(), boolean()) :: t()
+  def for_agent_activation(
+        %ResolvedCallPlan.Participant{} = participant,
+        target_participant_id,
+        true
+      )
+      when is_binary(target_participant_id) do
+    first_message(participant, target_participant_id)
+  end
+
+  def for_agent_activation(
+        %ResolvedCallPlan.Participant{},
+        target_participant_id,
+        false
+      )
+      when is_binary(target_participant_id) do
+    completed(target_participant_id)
+  end
+
+  defp first_message(participant, target_participant_id) do
+    mode = participant.first_message
+
     %__MODULE__{
-      mode: receiver.first_message,
-      status: if(receiver.first_message == :wait_for_input, do: :completed, else: :pending),
-      target_participant_id: caller.participant_id,
-      text: receiver.first_message_text
+      mode: mode,
+      status: if(mode == :wait_for_input, do: :completed, else: :pending),
+      target_participant_id: target_participant_id,
+      text: participant.first_message_text
     }
   end
 
   @spec completed() :: t()
-  def completed do
+  def completed, do: completed(nil)
+
+  @spec completed(nil | String.t()) :: t()
+  def completed(target_participant_id) do
     %__MODULE__{
       mode: :wait_for_input,
       status: :completed,
-      target_participant_id: nil,
+      target_participant_id: target_participant_id,
       text: nil
     }
   end

@@ -284,3 +284,25 @@
   formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   Umbrella `mix test` stops before database-backed test execution because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
+
+## 2026-09-11 — transfer first-message and re-entry no-replay
+
+- Extended the re-entry room test before implementation by configuring billing with a fixed first
+  message. It timed out because transferred participants never applied their first-message policy.
+- Transfer preparation now retains the room-authoritative first-activation decision. Failed
+  preparation does not consume that decision because the participant is remembered only when its
+  preparation commits.
+- `FirstMessage` now builds activation-specific state for any resolved agent participant. The first
+  committed activation keeps the authored wait/fixed/generated policy; subsequent activations use a
+  completed no-replay state while retaining the entry caller as the idle/conversation target.
+- Commit installs the destination text/TTS routes before starting its first message, so destination
+  output cannot be admitted before control commit. The source remains scheduled for normal
+  post-result subtree teardown.
+- The green room flow observes billing's fixed greeting after its first transfer, transfers away,
+  re-enters billing, and observes no repeated greeting. This completes the combined re-entry
+  acceptance scenario together with the preceding identity, activation, history, rebound-authority,
+  and archive assertions. The focused transfer-room file passes eight tests.
+- The complete Call Engine suite remains green at 277 tests with one tagged integration exclusion.
+  Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  Root `mix test` again stops before database-backed test execution because this shell lacks the
+  PostgreSQL SCRAM password; no credential source was inspected.

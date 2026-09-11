@@ -5,12 +5,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Preparation do
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantPreparation
 
   @derive {Inspect, only: [:destination, :participant]}
-  @enforce_keys [:destination, :participant, :text_to_speech]
+  @enforce_keys [:destination, :participant, :text_to_speech, :first_activation?]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
           destination: AgentDestination.t(),
           participant: ParticipantPreparation.t(),
-          text_to_speech: nil | map()
+          text_to_speech: nil | map(),
+          first_activation?: boolean()
         }
 end
