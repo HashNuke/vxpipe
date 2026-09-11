@@ -12,6 +12,8 @@ defmodule Vxpipe.Gateway.CallAdmission do
     CallIngressBackend,
     IncomingLegActivation,
     IngressIdentity,
+    MediaBinding,
+    MediaSupervisor,
     ServiceRegistry
   }
 
@@ -122,6 +124,33 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   @impl CallIngressBackend
+  def handle_live_event(
+        options,
+        %TelephonyAdmissionClaim{} = claim,
+        {%MediaBinding{} = binding, _submission},
+        source,
+        %Event{kind: :media_started, stream_id: stream_id}
+      )
+      when is_pid(source) and is_binary(stream_id) do
+    supervisor = Keyword.get(options, :telephony_media_supervisor, MediaSupervisor)
+
+    case MediaSupervisor.start_session(supervisor, claim, binding, source, stream_id) do
+      {:ok, _connection} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def handle_live_event(
+        _options,
+        %TelephonyAdmissionClaim{},
+        {%MediaBinding{} = binding, _submission},
+        source,
+        %Event{kind: :media} = event
+      )
+      when is_pid(source) do
+    MediaSupervisor.handle_event(binding.client_state_leg_id, source, event)
+  end
+
   def handle_live_event(_options, %TelephonyAdmissionClaim{}, _activation, source, %Event{})
       when is_pid(source) do
     {:error, :telephony_event_not_supported}

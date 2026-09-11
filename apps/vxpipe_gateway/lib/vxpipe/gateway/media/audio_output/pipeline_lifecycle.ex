@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.PipelineLifecycle do
     options =
       Keyword.merge(state.pipeline_options,
         pipeline_id: pipeline_id,
+        pipeline_module: state.pipeline,
         owner: self(),
         connection_id: state.connection_id,
         tenant_id: state.identity.tenant_id,

@@ -985,3 +985,56 @@ validation pins tenant, room, incarnation, and connection but permits that expec
 difference. A natural second turn also keeps monotonically increasing Membrane timestamps on the
 same realtime pipeline; only interruption resets the clock because it first replaces the entire
 pipeline. The expanded six-test output/pipeline set passes after both corrections.
+
+## Checkpoint 26: supervised live Telnyx media attachment
+
+The live backend now responds to the first authenticated media-start event by creating one
+temporary media subtree for the exact internal connection. The subtree attaches the phone
+participant to the already-running room, supplies its direct output sink to the Call Engine, starts
+the shared policy-aware room ingress and egress coordinators, and injects Telnyx-owned Membrane
+pipelines through a small provider selection boundary. The common setup therefore contains no
+Telnyx pipeline modules and is ready for a second provider to supply its own set.
+
+Inbound Telnyx Opus enters both the enabled connection speech ingress and permitted room-audio
+publication path. Direct agent PCM and permitted room-mix PCM leave through their respective
+bounded coordinators and the same authenticated WebSocket owner. Overload/staleness outcomes remain
+drops; fatal media failure stops the session. One significant temporary session and its dynamic
+children use a `one_for_all` supervisor so no codec pipeline or coordinator is orphaned.
+
+The first teardown test was intentionally red: stopping the attached room did not stop its media
+connection within the two-second assertion window. The connection already received a room monitor
+from Call Engine attachment, but the media session had not retained it in its monitored-owner set.
+Adding that exact reference makes socket loss, leg-owner loss, and room loss all end the complete
+connection subtree without a restart.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/media_session_test.exs
+# 2 tests, 1 failure: room termination left the media connection alive
+```
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/media_session_test.exs \
+  test/vxpipe/gateway/telephony/call_ingress_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/media_socket_test.exs
+# 10 tests, 0 failures
+
+mix test
+# 155 tests, 0 failures (4 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check all
+pass. Two initial umbrella runs each hit the existing timing-sensitive startup-readiness assertion:
+the room had already exited and its newly installed monitor reported `:noproc` instead of the
+expected shutdown reason. The owning lifecycle file passed all seven tests immediately, and the
+complete Call Engine lane passed all 348 tests at the failing seed. A clean umbrella repeat then
+passed all seven application lanes—731 tests with zero failures—against a fresh disposable
+PostgreSQL 17 instance.
+
+Outbound transfer dialing, private briefing, exact destination press-1 acceptance, AMD/failure
+cleanup, and the deterministic full-call harness remain before this milestone is runnable.

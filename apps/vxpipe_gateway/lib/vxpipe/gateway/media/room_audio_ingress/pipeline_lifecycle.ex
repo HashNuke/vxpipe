@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.PipelineLifecycle do
     options =
       Keyword.merge(state.pipeline_options,
         pipeline_id: pipeline_id,
+        pipeline_module: state.pipeline,
         owner: self(),
         tenant_id: state.identity.tenant_id,
         room_id: state.identity.room_id,

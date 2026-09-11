@@ -113,7 +113,16 @@ Direct agent speech now has a transport-neutral bounded PCM playout coordinator 
 started/progress/completed and interruption semantics. A dedicated Telnyx Membrane pipeline encodes
 and paces those exact 20 ms frames to the authenticated socket without FFmpeg. The coordinator and
 pipeline contracts pass focused framing, backpressure, interruption, failure, codec, pacing, and
-wire-envelope tests; attaching them to the live leg remains pending.
+wire-envelope tests. The first authenticated media-start now creates one temporary supervised
+connection subtree, attaches the exact phone participant to the running room, routes decoded input
+to enabled speech processing and permitted room publication, and routes both direct agent speech
+and the permitted room mix back through Telnyx's Membrane pipelines. Carrier pipeline selection is
+isolated from the common attachment setup. The socket, exact leg owner, and attached room are all
+monitored; loss of any one tears down the whole media subtree without restart. Focused attachment,
+source-identity, input-delivery, output-envelope, and teardown tests pass, as do all 155 Gateway
+tests and the complete 731-test umbrella gate. Private briefing, outbound transfer/press-1
+acceptance, AMD cleanup, deterministic complete-call harness, and authorized real-provider
+verification remain pending.
 
 ## Specification review
 

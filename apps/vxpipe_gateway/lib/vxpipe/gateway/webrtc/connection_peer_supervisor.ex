@@ -57,10 +57,11 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
 
   def start_audio_pipeline(connection_id, options) do
     pipeline_id = Keyword.fetch!(options, :pipeline_id)
+    pipeline_module = Keyword.get(options, :pipeline_module, AudioPipeline)
 
     child_spec = %{
-      id: {AudioPipeline, pipeline_id},
-      start: {AudioPipeline, :start_link, [options]},
+      id: {pipeline_module, pipeline_id},
+      start: {pipeline_module, :start_link, [Keyword.delete(options, :pipeline_module)]},
       restart: :temporary
     }
 
@@ -76,10 +77,11 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
 
   def start_room_audio_output_pipeline(connection_id, options) do
     pipeline_id = Keyword.fetch!(options, :pipeline_id)
+    pipeline_module = Keyword.get(options, :pipeline_module, RoomAudioOutputPipeline)
 
     child_spec = %{
-      id: {RoomAudioOutputPipeline, pipeline_id},
-      start: {RoomAudioOutputPipeline, :start_link, [options]},
+      id: {pipeline_module, pipeline_id},
+      start: {pipeline_module, :start_link, [Keyword.delete(options, :pipeline_module)]},
       restart: :temporary
     }
 

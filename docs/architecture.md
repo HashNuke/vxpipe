@@ -1151,6 +1151,23 @@ the binding. That frame pins the provider stream ID for every later media and DT
 events are dispatched synchronously to the already-running exact leg owner; a mismatched frame,
 binary frame, or unavailable leg closes the socket instead of being guessed or rerouted.
 
+The first valid media-start event creates one temporary supervised media subtree for that exact
+connection. A provider selector supplies only the carrier-specific direct-output, room-ingress, and
+room-egress Membrane pipelines; the session setup itself owns the common engine attachment and
+coordinator lifecycle. The attached connection makes the transport-neutral direct-output
+coordinator available to the active agent, sends each accepted inbound frame to the connection's
+speech ingress when enabled and to the room mixer when permitted, and subscribes the phone leg to
+its permitted room mix. Droppable overload/staleness results do not tear down a healthy call, while
+a fatal media result does.
+
+The connection supervisor owns the media session, its three coordinators, and their Membrane
+pipelines as one `one_for_all` subtree. The session monitors the authenticated media socket, exact
+provider leg owner, and room-authority monitor returned by attachment. Loss of any of those owners
+ends the whole media subtree without restarting it or reconstructing the call. Duplicate media-start
+delivery reuses the registered connection subtree, and later media must still originate from the
+same authenticated socket and carry the pinned stream ID. This live path uses the pinned in-memory
+claim and attachment; it does not add a PostgreSQL lookup to individual media delivery.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or
