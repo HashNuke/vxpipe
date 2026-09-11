@@ -16,7 +16,14 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony:
         telephony
-        |> Keyword.take([:enabled, :services, :handler, :clock, :maximum_body_bytes])
+        |> Keyword.take([
+          :enabled,
+          :services,
+          :handler,
+          :media_admission,
+          :clock,
+          :maximum_body_bytes
+        ])
         |> TelnyxEvents.init(),
       telephony_media:
         telephony

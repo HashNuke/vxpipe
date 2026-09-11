@@ -4,9 +4,16 @@ defmodule Vxpipe.Gateway.CallAdmission do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.Telephony.Event
+  alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{AdmissionClaim, PreparedCall, TelephonyAdmissionClaim}
-  alias Vxpipe.Gateway.Telephony.{CallIngressBackend, IngressIdentity}
+
+  alias Vxpipe.Gateway.Telephony.{
+    CallIngressBackend,
+    IncomingLegActivation,
+    IngressIdentity,
+    ServiceRegistry
+  }
 
   @behaviour CallIngressBackend
 
@@ -76,6 +83,35 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   @impl CallIngressBackend
+  def activate_incoming(
+        options,
+        %IngressIdentity{} = identity,
+        %TelephonyAdmissionClaim{} = claim,
+        %RoomSnapshot{} = room,
+        leg
+      )
+      when is_pid(leg) do
+    with {:ok, %ServiceRegistry{} = registry} <- Keyword.fetch(options, :service_registry),
+         {:ok, service} <- ServiceRegistry.fetch(registry, identity.ingress_key),
+         {:ok, binding, submission} <-
+           IncomingLegActivation.activate(
+             service,
+             claim,
+             room.incarnation_id,
+             leg,
+             telephony_activation_options(options)
+           ) do
+      {:ok, {binding, submission}}
+    else
+      :error -> {:error, :telephony_service_unavailable}
+      {:ok, _invalid_registry} -> {:error, :telephony_service_unavailable}
+      {:error, :disabled} -> {:error, :telephony_service_unavailable}
+      {:error, :service_not_found} -> {:error, :telephony_service_unavailable}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @impl CallIngressBackend
   def mark_incoming_started(options, claim, incarnation_id, started_at) do
     Calls.mark_incoming_telephony_started(claim, incarnation_id, started_at, options)
   end
@@ -86,7 +122,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   @impl CallIngressBackend
-  def handle_live_event(_options, %TelephonyAdmissionClaim{}, %Event{}) do
+  def handle_live_event(_options, %TelephonyAdmissionClaim{}, _activation, %Event{}) do
     {:error, :telephony_event_not_supported}
   end
 
@@ -153,4 +189,13 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   defp archive_options(options), do: Keyword.get(options, :archive, enabled: false)
+
+  defp telephony_activation_options(options) do
+    activation_options = Keyword.take(options, [:media_admission])
+
+    case Keyword.fetch(options, :telephony_leg_id) do
+      {:ok, generator} -> Keyword.put(activation_options, :leg_id, generator)
+      :error -> activation_options
+    end
+  end
 end

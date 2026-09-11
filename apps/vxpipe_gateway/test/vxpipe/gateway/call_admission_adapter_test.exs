@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
   alias Vxpipe.CallEngine.CallDefinition.{ConnectionIntent, VariablePermissions}
   alias Vxpipe.CallEngine.Command.CreateRoom
   alias Vxpipe.CallEngine.ResolvedCallPlan
+  alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.{
     CallVariables,
@@ -15,6 +16,8 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
 
   alias Vxpipe.Calls.{AdmissionClaim, PreparedCall}
   alias Vxpipe.Gateway.CallAdmission
+  alias Vxpipe.Gateway.Telephony.{IngressIdentity, MediaAdmission, ServiceRegistry}
+  alias Vxpipe.Gateway.TestTelephonyCallBackend
 
   test "joins the claimed pinned participant beneath an existing call incarnation" do
     tenant_id = unique_id("tenant")
@@ -101,6 +104,65 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
 
     assert {:join_error, :participant_start_failed} = CallAdmission.start_call([], claim)
     assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {tenant_id, room_id}) == []
+  end
+
+  test "activates an incoming leg through its configured service" do
+    backend = start_supervised!({TestTelephonyCallBackend, observer: self()})
+    admission = start_supervised!({MediaAdmission, name: nil})
+    leg = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
+
+    registry =
+      ServiceRegistry.init!(
+        enabled: true,
+        services: [
+          [
+            id: "primary-phone",
+            ingress_key: "ingress_telnyx_primary",
+            scope: {:tenant, "AAAAAAAAAAAAAAAA"},
+            provider: :telnyx,
+            provider_connection_id: "voice-application-1",
+            public_key: Base.encode64(:binary.copy(<<1>>, 32)),
+            api_key: "accept",
+            public_base_url: "https://voice.example.test",
+            adapter: Vxpipe.Gateway.TestTelephonyAdapter
+          ]
+        ]
+      )
+
+    identity = %IngressIdentity{
+      service_id: "primary-phone",
+      ingress_key: "ingress_telnyx_primary",
+      scope: {:tenant, "AAAAAAAAAAAAAAAA"},
+      provider: :telnyx,
+      provider_connection_id: "voice-application-1"
+    }
+
+    room = %RoomSnapshot{
+      tenant_id: "AAAAAAAAAAAAAAAA",
+      room_id: "60000000-0000-4000-8000-000000000006",
+      incarnation_id: "rinc_phone-1",
+      lifecycle: :open,
+      created_by_actor_id: "actor_phone",
+      created_by_command_id: "cmd_phone-start"
+    }
+
+    assert {:ok, {binding, submission}} =
+             CallAdmission.activate_incoming(
+               [
+                 service_registry: registry,
+                 media_admission: admission,
+                 telephony_leg_id: fn -> "tleg-incoming-default" end
+               ],
+               identity,
+               TestTelephonyCallBackend.claim(backend),
+               room,
+               leg
+             )
+
+    assert binding.incarnation_id == room.incarnation_id
+    assert binding.leg == leg
+    assert submission.status == :accepted
+    assert_receive {:test_telephony_answer, _request}
   end
 
   defp prepared_call(plan, incarnation_id, started_at, state \\ :running) do

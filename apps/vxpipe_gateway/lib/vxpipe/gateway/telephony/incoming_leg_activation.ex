@@ -101,7 +101,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
     base = URI.parse(service.public_base_url)
 
     path =
-      base.path <>
+      (base.path || "") <>
         "/api/telephony/telnyx/#{service.identity.ingress_key}/media/#{token}"
 
     base

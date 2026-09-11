@@ -5,8 +5,9 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
   import Plug.Test
 
   alias Vxpipe.CallEngine.Telephony.Event
-  alias Vxpipe.Gateway.HTTP.Endpoint
-  alias Vxpipe.Gateway.Telephony.IngressIdentity
+  alias Vxpipe.Gateway.CallAdmission
+  alias Vxpipe.Gateway.HTTP.{Endpoint, TelnyxEvents}
+  alias Vxpipe.Gateway.Telephony.{CallIngress, IngressIdentity, ServiceRegistry}
   alias Vxpipe.Gateway.TestTelephonyIngress
 
   @ingress_key "ingress_telnyx_primary"
@@ -124,6 +125,34 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     assert conn.status == 413
     assert conn.resp_body == "payload too large"
     refute_receive {:telephony_event, _identity, _event}
+  end
+
+  test "pins the default call ingress to the configured service and media admission" do
+    {public_key, _private_key} = :crypto.generate_key(:eddsa, :ed25519)
+    media_admission = self()
+
+    options =
+      TelnyxEvents.init(
+        enabled: true,
+        media_admission: media_admission,
+        services: [
+          [
+            id: "telnyx-primary",
+            ingress_key: @ingress_key,
+            provider: :telnyx,
+            provider_connection_id: "voice-application-1",
+            public_key: Base.encode64(public_key),
+            api_key: "test-api-key",
+            public_base_url: "https://voice.example.test",
+            scope: {:tenant, "tenantkey1234567"}
+          ]
+        ]
+      )
+
+    assert {CallIngress, ingress_options} = options.handler
+    assert {CallAdmission, backend_options} = Keyword.fetch!(ingress_options, :backend)
+    assert ^media_admission = Keyword.fetch!(backend_options, :media_admission)
+    assert %ServiceRegistry{enabled?: true} = Keyword.fetch!(backend_options, :service_registry)
   end
 
   defp request(endpoint, body, private_key) do

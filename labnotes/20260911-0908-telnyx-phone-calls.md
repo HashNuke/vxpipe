@@ -816,3 +816,67 @@ the retained filtered output did not contain the failed assertion. Call Engine p
 with the exact seed on immediate isolation, and a following complete umbrella run passed 719 tests
 with zero failures against the same isolated disposable PostgreSQL 17 instance. No checkpoint code
 was changed to mask the transient result.
+
+## Checkpoint 21: serialized carrier activation and live evidence
+
+The first focused leg-owner test failed because room startup projected the call as running before
+the configured carrier answer operation had even been attempted. A separate default-backend test
+also failed because the authenticated service registry and media-admission owner were not available
+at the call-control boundary. Gateway now injects those immutable runtime objects into only the
+standard `CallIngress`/`CallAdmission` path. Custom ingress handlers and custom call-ingress
+backends remain unchanged, and secret-bearing configured-service data is not added to normalized
+events.
+
+The live leg owner now serializes durable claim, ordinary room startup, and exactly one configured
+answer activation. A rejected activation is projected as `leg_activation_failed`, leaves
+`started_at` empty, revokes its media token, and retires the temporary owner. Accepted and unknown
+submissions both wait in `answering`; neither triggers a retry or claims that the phone leg is live.
+An exact provider `answered` event supplies the durable start timestamp. If the authenticated,
+single-use media socket starts first, that observation proves liveness and uses the gateway clock.
+Duplicate incoming and answered events do not repeat claim, room startup, answer submission, or
+start projection. When admitted media start is that first evidence, projection precedes dispatch of
+the same event to the live media backend so pipeline attachment is not lost. Later exact live events
+still route through the pinned in-memory claim.
+
+The new default-adapter test exposed a valid URL edge case: an HTTPS public base with no path parses
+with a nil path. Media URL construction now treats that as the empty prefix while preserving the
+same WSS route.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test --no-start test/vxpipe/gateway/http/telnyx_events_test.exs
+# 8 tests, 1 failure: media_admission was not accepted or injected
+
+mix test test/vxpipe/gateway/telephony/call_ingress_test.exs
+# 5 tests, 2 failures: start was projected at command submission and media-start was not live evidence
+```
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/call_admission_adapter_test.exs \
+  test/vxpipe/gateway/telephony/call_ingress_test.exs \
+  test/vxpipe/gateway/telephony/incoming_leg_activation_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs
+# 19 tests, 0 failures
+```
+
+This checkpoint still does not attach the Telnyx ingress/egress pipelines to the room or agent
+output. Private briefing, press-1 acceptance, exact end cleanup, the deterministic complete-call
+harness, and authorized real-provider verification remain pending.
+
+The first full umbrella gate exposed one existing MediaSocket regression: the media-start event was
+consumed as lifecycle evidence but not forwarded to the live backend. The Gateway lane failed one
+of 147 tests for the missing dispatch while every other completed lane was green. The fix keeps the
+ordering explicit—project live state, then dispatch that same exact media-start—and the owning
+focused socket/leg tests were rerun before repeating the full gate.
+
+Final verification passed formatting, compilation with warnings as errors, strict Credo, and the
+unused-dependency check. The first post-fix umbrella repeat encountered the existing timing-sensitive
+Call Engine room-shutdown assertion at its two-second monitor deadline (seed `468577`); all other
+lanes were green. The owning Call Engine suite immediately passed all 348 tests with that exact seed,
+and the following clean umbrella run passed 723 tests with zero failures against a fresh disposable
+PostgreSQL 17 instance. No production change was made for that unrelated transient assertion.

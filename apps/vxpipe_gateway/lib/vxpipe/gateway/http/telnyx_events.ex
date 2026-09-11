@@ -5,9 +5,16 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
 
   alias Plug.Conn.Utils
   alias Vxpipe.CallEngine.Telephony.{Event, Webhook}
+  alias Vxpipe.Gateway.CallAdmission
   alias Vxpipe.Gateway.HTTP.RawBody
 
-  alias Vxpipe.Gateway.Telephony.{CallIngress, IngressHandler, ServiceRegistry}
+  alias Vxpipe.Gateway.Telephony.{
+    CallIngress,
+    IngressHandler,
+    MediaAdmission,
+    ServiceRegistry
+  }
+
   alias Vxpipe.Gateway.Telephony.Telnyx.{WebhookDecoder, WebhookVerifier}
 
   @default_maximum_body_bytes 131_072
@@ -19,6 +26,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
         enabled: false,
         services: [],
         handler: {CallIngress, []},
+        media_admission: MediaAdmission,
         clock: &__MODULE__.system_time_seconds/0,
         maximum_body_bytes: @default_maximum_body_bytes
       )
@@ -29,7 +37,11 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
         services: Keyword.fetch!(options, :services)
       )
 
-    handler = handler!(registry.enabled?, Keyword.fetch!(options, :handler))
+    handler =
+      registry.enabled?
+      |> handler!(Keyword.fetch!(options, :handler))
+      |> configure_default_backend(registry, Keyword.fetch!(options, :media_admission))
+
     clock = clock!(Keyword.fetch!(options, :clock))
     maximum_body_bytes = maximum_body_bytes!(Keyword.fetch!(options, :maximum_body_bytes))
 
@@ -149,6 +161,28 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
   defp handler!(false, _handler), do: nil
   defp handler!(true, {module, _context} = handler) when is_atom(module), do: handler
   defp handler!(true, _invalid), do: raise(ArgumentError, "telephony ingress handler is required")
+
+  defp configure_default_backend({CallIngress, options}, registry, media_admission) do
+    backend =
+      options
+      |> Keyword.get(:backend, {CallAdmission, []})
+      |> configure_call_admission(registry, media_admission)
+
+    {CallIngress, Keyword.put(options, :backend, backend)}
+  end
+
+  defp configure_default_backend(handler, _registry, _media_admission), do: handler
+
+  defp configure_call_admission({CallAdmission, options}, registry, media_admission) do
+    options =
+      options
+      |> Keyword.put(:service_registry, registry)
+      |> Keyword.put(:media_admission, media_admission)
+
+    {CallAdmission, options}
+  end
+
+  defp configure_call_admission(backend, _registry, _media_admission), do: backend
 
   defp clock!(clock) when is_function(clock, 0), do: clock
   defp clock!(_invalid), do: raise(ArgumentError, "telephony ingress clock must be a function/0")

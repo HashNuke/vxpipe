@@ -94,10 +94,17 @@ private briefing, acceptance, cleanup, and runnable vendor outcome remain incomp
 Configured Telnyx services now fail startup unless webhook verification, command credentials,
 provider connection identity, a provider-reachable TLS base URL, and a bounded media-token lifetime
 form one complete deployment configuration; secret-bearing fields are excluded from inspection.
-The isolated incoming-leg activator now binds that configuration and the pinned call incarnation to
-one internal leg ID, one media token, and one provider-neutral answer command. Rejected commands
-revoke admission and unknown submission outcomes never cause retry; the live leg owner has not yet
-adopted this activator.
+The incoming-leg activator now binds that configuration and the pinned call incarnation to one
+internal leg ID, one media token, and one provider-neutral answer command. Rejected commands revoke
+admission and unknown submission outcomes never cause retry. The default webhook boundary injects
+its immutable service registry and shared media admission only into the standard call-ingress
+backend, leaving custom backends unchanged. The live leg owner serializes durable claim, ordinary
+room startup, carrier activation, and exact live evidence. It remains `answering` after command
+submission and projects `started_at` only from the exact provider answer occurrence, or from the
+gateway observation time when the admitted media stream proves liveness first. Room pipeline
+attachment, private briefing, acceptance, cleanup, and runnable vendor outcome remain incomplete.
+This serialized activation checkpoint passed the root formatting, warnings-as-errors compilation,
+strict Credo, unused-dependency, focused 22-test regression set, and a clean 723-test umbrella run.
 
 ## Specification review
 

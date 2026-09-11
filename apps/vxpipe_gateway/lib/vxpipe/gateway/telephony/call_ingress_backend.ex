@@ -16,6 +16,14 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
   @callback start_incoming(context(), TelephonyAdmissionClaim.t()) ::
               {:ok, RoomSnapshot.t()} | {:error, term()}
 
+  @callback activate_incoming(
+              context(),
+              IngressIdentity.t(),
+              TelephonyAdmissionClaim.t(),
+              RoomSnapshot.t(),
+              pid()
+            ) :: {:ok, term()} | {:error, term()}
+
   @callback mark_incoming_started(
               context(),
               TelephonyAdmissionClaim.t(),
@@ -26,6 +34,6 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
   @callback mark_incoming_failed(context(), TelephonyAdmissionClaim.t(), atom()) ::
               {:ok, TelephonyAdmissionClaim.t()} | {:error, term()}
 
-  @callback handle_live_event(context(), TelephonyAdmissionClaim.t(), Event.t()) ::
+  @callback handle_live_event(context(), TelephonyAdmissionClaim.t(), term(), Event.t()) ::
               :ok | {:error, term()}
 end

@@ -1059,22 +1059,31 @@ agent activation tree used for web calls. This is not a provider adapter inside 
 carrier media and control still attach at the gateway boundary using the room incarnation returned
 by startup.
 
-Once startup returns, Calls projects that exact claim and returned incarnation in one transaction:
-the call becomes `running` with its actual `started_at`, and the initial leg becomes `active` with
-the same incarnation. A pre-live startup failure instead makes the call `failed` and the leg
-`ended`, leaving `started_at` empty. Projection rechecks every stored provider correlation and call,
-tenant, and participant identity from the claim under a database lock. Repeating the same terminal
-transition is idempotent; a different incarnation or mismatched claim is unavailable rather than
-silently reassigned.
+Once startup returns, the same live leg owner activates the carrier through the configured service
+before it accepts later callbacks. An accepted or unknown answer submission leaves the owner in an
+`answering` state; command submission alone is not evidence that the call started. The first exact
+provider `answered` event projects its provider occurrence time as `started_at`. If the admitted
+media socket starts first, that exact media observation is also proof that the call is live and the
+gateway's observation time is used. Calls then projects the claim and returned incarnation in one
+transaction: the call becomes `running` and the initial leg becomes `active` with the same
+incarnation. A pre-live room or carrier-activation failure instead makes the call `failed` and the
+leg `ended`, leaving `started_at` empty. Projection rechecks every stored provider correlation and
+call, tenant, and participant identity from the claim under a database lock. Repeating the same
+terminal transition is idempotent; a different incarnation or mismatched claim is unavailable
+rather than silently reassigned.
 
 Gateway's default telephony ingress handler starts one temporary OTP leg owner keyed by configured
-service plus provider and provider leg ID. That owner performs the durable claim itself, then
-serializes room startup and lifecycle projection before it accepts later callbacks. Registering
-before the claim closes the retry window between transaction commit and live ownership: concurrent
-copies await the same result and cannot start another room. A persisted `admitting` claim found
-after its live owner has disappeared is marked `startup_unknown` and is not restarted; persisted
-`running` or `failed` claims are acknowledged without repeating the call. Startup failure is also
-projected once and acknowledged rather than becoming an automatic redial signal.
+service plus provider and provider leg ID. The HTTP boundary supplies that default owner with the
+same immutable configured-service registry and media-admission process used to authenticate the
+webhook and admit its media socket; custom ingress/backends remain untouched. The owner performs
+the durable claim itself, then serializes room startup, carrier answer submission, exact live
+evidence, and lifecycle projection before it accepts ordinary later callbacks. Registering before
+the claim closes the retry window between transaction commit and live ownership: concurrent copies
+await the same result and cannot start another room or submit another answer. A persisted
+`admitting` claim found after its live owner has disappeared is marked `startup_unknown` and is not
+restarted; persisted `running` or `failed` claims are acknowledged without repeating the call.
+Startup or carrier-activation failure is also projected once and acknowledged rather than becoming
+an automatic redial signal.
 
 After admission, the leg owner verifies provider connection, call-control, leg, and session IDs on
 every normalized callback and dispatches it through the pinned in-memory claim. These later events

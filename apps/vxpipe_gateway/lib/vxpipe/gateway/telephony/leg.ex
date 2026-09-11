@@ -42,11 +42,13 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   @impl true
   def init(options) do
     state = %{
+      activation: nil,
       backend: Keyword.fetch!(options, :backend),
       claim: nil,
       clock: Keyword.fetch!(options, :clock),
       identity: Keyword.fetch!(options, :identity),
       initial_event: Keyword.fetch!(options, :event),
+      incarnation_id: nil,
       result: nil,
       status: :starting,
       waiters: []
@@ -57,11 +59,20 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   @impl true
   def handle_continue(:admit, state) do
-    {status, claim, result} = admit(state)
+    {status, claim, activation, incarnation_id, result} = admit(state)
     Enum.each(state.waiters, &GenServer.reply(&1, result))
-    state = %{state | claim: claim, result: result, status: status, waiters: []}
 
-    if status == :unclaimed do
+    state = %{
+      state
+      | activation: activation,
+        claim: claim,
+        incarnation_id: incarnation_id,
+        result: result,
+        status: status,
+        waiters: []
+    }
+
+    if status in [:failed, :unclaimed] do
       Process.send_after(self(), :retire, 1_000)
     end
 
@@ -77,9 +88,39 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     {:noreply, %{state | waiters: [from | state.waiters]}}
   end
 
+  def handle_call(
+        {:event, %Event{kind: kind} = event},
+        _from,
+        %{status: :answering} = state
+      )
+      when kind in [:answered, :media_started] do
+    with :ok <- matching_event(state.claim, event) do
+      state = project_started(state, event)
+
+      case dispatch_start_event(state, event) do
+        :ok -> {:reply, :ok, state}
+        {:error, reason} -> {:reply, {:error, reason}, state}
+      end
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:event, %Event{kind: :answered} = event}, _from, %{status: :running} = state) do
+    case matching_event(state.claim, event) do
+      :ok -> {:reply, :ok, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call({:event, event}, _from, %{status: :running} = state) do
     with :ok <- matching_event(state.claim, event),
-         :ok <- call_backend(state.backend, :handle_live_event, [state.claim, event]) do
+         :ok <-
+           call_backend(state.backend, :handle_live_event, [
+             state.claim,
+             state.activation,
+             event
+           ]) do
       {:reply, :ok, state}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -91,7 +132,9 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   @impl true
-  def handle_info(:retire, %{status: :unclaimed} = state), do: {:stop, :normal, state}
+  def handle_info(:retire, %{status: status} = state) when status in [:failed, :unclaimed],
+    do: {:stop, :normal, state}
+
   def handle_info(:retire, state), do: {:noreply, state}
 
   defp admit(state) do
@@ -100,51 +143,91 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
         start_call(%{state | claim: claim})
 
       {:duplicate, %TelephonyAdmissionClaim{call: %{state: :running}} = claim} ->
-        {:running, claim, :ok}
+        {:failed, claim, nil, claim.call.incarnation_id, :ok}
 
       {:duplicate, %TelephonyAdmissionClaim{call: %{state: :failed}} = claim} ->
-        {:failed, claim, :ok}
+        {:failed, claim, nil, nil, :ok}
 
       {:duplicate, %TelephonyAdmissionClaim{call: %{state: :admitting}} = claim} ->
         case call_backend(state.backend, :mark_incoming_failed, [claim, :startup_unknown]) do
-          {:ok, failed} -> {:failed, failed, :ok}
-          {:error, _reason} -> {:failed, claim, :ok}
+          {:ok, failed} -> {:failed, failed, nil, nil, :ok}
+          {:error, _reason} -> {:failed, claim, nil, nil, :ok}
         end
 
       {:error, reason} ->
-        {:unclaimed, nil, {:error, reason}}
+        {:unclaimed, nil, nil, nil, {:error, reason}}
 
       _invalid ->
-        {:unclaimed, nil, {:error, :invalid_telephony_call_backend_response}}
+        {:unclaimed, nil, nil, nil, {:error, :invalid_telephony_call_backend_response}}
     end
   end
 
   defp start_call(state) do
     case call_backend(state.backend, :start_incoming, [state.claim]) do
-      {:ok, %RoomSnapshot{incarnation_id: incarnation_id}} ->
-        started_at = state.clock.()
-
-        case call_backend(state.backend, :mark_incoming_started, [
-               state.claim,
-               incarnation_id,
-               started_at
-             ]) do
-          {:ok, claim} -> {:running, claim, :ok}
-          _projection_outcome -> {:running, state.claim, :ok}
-        end
+      {:ok, %RoomSnapshot{} = room} ->
+        activate_call(state, room)
 
       {:error, _reason} ->
         case call_backend(state.backend, :mark_incoming_failed, [
                state.claim,
                :room_start_failed
              ]) do
-          {:ok, claim} -> {:failed, claim, :ok}
-          _projection_outcome -> {:failed, state.claim, :ok}
+          {:ok, claim} -> {:failed, claim, nil, nil, :ok}
+          _projection_outcome -> {:failed, state.claim, nil, nil, :ok}
         end
 
       _invalid ->
-        {:unclaimed, nil, {:error, :invalid_telephony_call_backend_response}}
+        {:unclaimed, nil, nil, nil, {:error, :invalid_telephony_call_backend_response}}
     end
+  end
+
+  defp activate_call(state, %RoomSnapshot{incarnation_id: incarnation_id} = room) do
+    case call_backend(state.backend, :activate_incoming, [
+           state.identity,
+           state.claim,
+           room,
+           self()
+         ]) do
+      {:ok, activation} ->
+        {:answering, state.claim, activation, incarnation_id, :ok}
+
+      {:error, _reason} ->
+        case call_backend(state.backend, :mark_incoming_failed, [
+               state.claim,
+               :leg_activation_failed
+             ]) do
+          {:ok, claim} -> {:failed, claim, nil, nil, :ok}
+          _projection_outcome -> {:failed, state.claim, nil, nil, :ok}
+        end
+
+      _invalid ->
+        {:unclaimed, nil, nil, nil, {:error, :invalid_telephony_call_backend_response}}
+    end
+  end
+
+  defp project_started(state, event) do
+    started_at = start_time(event, state.clock)
+
+    claim =
+      case call_backend(state.backend, :mark_incoming_started, [
+             state.claim,
+             state.incarnation_id,
+             started_at
+           ]) do
+        {:ok, claim} -> claim
+        _projection_outcome -> state.claim
+      end
+
+    %{state | claim: claim, status: :running}
+  end
+
+  defp start_time(%Event{occurred_at: %DateTime{} = occurred_at}, _clock), do: occurred_at
+  defp start_time(%Event{kind: :media_started}, clock), do: clock.()
+
+  defp dispatch_start_event(_state, %Event{kind: :answered}), do: :ok
+
+  defp dispatch_start_event(state, %Event{kind: :media_started} = event) do
+    call_backend(state.backend, :handle_live_event, [state.claim, state.activation, event])
   end
 
   defp matching_event(claim, event) do

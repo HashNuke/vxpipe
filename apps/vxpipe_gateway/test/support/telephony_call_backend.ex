@@ -15,6 +15,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
         claim: claim(),
         observer: Keyword.fetch!(options, :observer),
         operations: [],
+        activation_failure?: Keyword.get(options, :activation_failure?, false),
         claimed?: false,
         start_failure?: Keyword.get(options, :start_failure?, false)
       }
@@ -52,6 +53,17 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   end
 
   @impl true
+  def activate_incoming(agent, _identity, claim, room, leg) do
+    operation(agent, {:activate_incoming, claim.call.id, room.incarnation_id, leg})
+
+    if Agent.get(agent, & &1.activation_failure?) do
+      {:error, :command_rejected}
+    else
+      {:ok, :test_activation}
+    end
+  end
+
+  @impl true
   def mark_incoming_started(agent, claim, incarnation_id, started_at) do
     operation(agent, {:mark_incoming_started, claim.call.id, incarnation_id, started_at})
 
@@ -78,7 +90,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   end
 
   @impl true
-  def handle_live_event(agent, claim, event) do
+  def handle_live_event(agent, claim, _activation, event) do
     operation(agent, {:handle_live_event, claim.call.id, event.kind, event.provider_event_id})
     send(Agent.get(agent, & &1.observer), {:test_live_telephony_event, event})
     :ok
