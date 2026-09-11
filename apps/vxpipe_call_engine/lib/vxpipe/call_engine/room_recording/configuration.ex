@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
   @spec new(keyword()) :: {:ok, t()} | {:error, term()}
   def new(options) when is_list(options) do
     with {:ok, identity} <- identity(options),
-         mixer when is_pid(mixer) <- Keyword.get(options, :mixer),
+         {:ok, mixer} <- mixer(options),
          recording_token when is_reference(recording_token) <-
            Keyword.get(options, :recording_token),
          {:ok, maximum_pull_frames} <- positive(options, :maximum_pull_frames),
@@ -55,6 +55,17 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
   end
 
   def new(_options), do: {:error, :invalid_room_recording_options}
+
+  defp mixer(options) do
+    try do
+      case options |> Keyword.get(:mixer) |> GenServer.whereis() do
+        mixer when is_pid(mixer) -> {:ok, mixer}
+        nil -> {:error, :room_mixer_unavailable}
+      end
+    catch
+      _kind, _reason -> {:error, :invalid_room_recording_options}
+    end
+  end
 
   defp identity(options) do
     identity = %{

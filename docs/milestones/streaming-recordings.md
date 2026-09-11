@@ -234,6 +234,44 @@ pending with recording configuration, track capture, metadata, and playback.
 Root formatting, compilation with warnings as errors, strict Credo over 626 source files, all 807
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 6: room-supervised recording startup
+
+Trusted call-start options can now explicitly enable recording and supply its target list, bounded
+pull size, and writer adapter. Recording remains disabled by default. Gateway admission forwards
+the same application/tenant-owned settings for web and telephony starts; client payloads and call
+definitions do not gain storage credentials or adapter options.
+
+The room-incarnation supervisor creates one fresh reference per enabled room and injects it into
+only the room mixer and its temporary `RoomRecording` sibling. It starts the recorder after the
+significant room authority has registered the mixer with the initial media-policy snapshot. An
+enabled recorder therefore cannot open a policy-less tap, and an invalid enabled setup fails room
+startup instead of silently claiming recording. The engine still knows only its recording-writer
+port; the host may inject the artifacts adapter without reversing that dependency.
+
+The call-engine test was first red because `start_call/2` discarded the recording option. Its green
+path starts a complete two-human planned room, observes an opened full-mix stream with the pinned
+tenant/call/room/incarnation identity, and ends the room through its lifecycle. A second gateway
+boundary test was red until its extracted call-engine option adapter preserved the trusted recording
+configuration:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs --max-cases 1
+# 2 tests, 0 failures
+
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/call_admission/call_engine_options_test.exs \
+  test/vxpipe/gateway/call_admission_adapter_test.exs --max-cases 1
+# 5 tests, 0 failures
+```
+
+This checkpoint does not add a call-definition recording shape, select the concrete S3 adapter in
+the Console runtime, capture connection-qualified individual tracks, publish artifact metadata, or
+serve operator playback. Those remain later parts of this milestone.
+
+Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 809
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

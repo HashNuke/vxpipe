@@ -10,7 +10,8 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     Error,
     RoomMixer,
     TestCallLifecycleTimer,
-    TestMediaPolicyEnforcer
+    TestMediaPolicyEnforcer,
+    TestRecordingWriter
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
@@ -117,6 +118,45 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
 
     command = send_command(plan, room, caller, "conn-human-caller")
     assert {:error, %Error{code: :agent_not_ready}} = CallEngine.send_text(command)
+
+    room_monitor = Process.monitor(authority)
+    :ok = TestCallLifecycleTimer.fire(maximum_timer)
+
+    assert_receive {:DOWN, ^room_monitor, :process, ^authority,
+                    {:shutdown, :maximum_duration_reached}}
+  end
+
+  test "starts an explicitly enabled full-mix recording with the room" do
+    plan = compile_plan()
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               call_lifecycle: [
+                 readiness_timeout_ms: 30_000,
+                 idle_timeout_ms: 15_000,
+                 timer: {TestCallLifecycleTimer, [observer: self()]}
+               ],
+               recording: [
+                 enabled: true,
+                 targets: [:full_mix],
+                 writer: {TestRecordingWriter, [observer: self()]},
+                 maximum_pull_frames: 4
+               ]
+             )
+
+    assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}
+    assert_receive {:test_call_lifecycle_timer_scheduled, _readiness_timer, 30_000}
+
+    assert_receive {:test_recording_writer_opened, _caller, recording, stream}
+    assert is_pid(recording)
+    assert stream.tenant_id == plan.tenant_id
+    assert stream.call_id == plan.call_id
+    assert stream.room_id == plan.room_id
+    assert stream.incarnation_id == room.incarnation_id
+    assert stream.mode == :full_mix
+
+    [{authority, _value}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
     room_monitor = Process.monitor(authority)
     :ok = TestCallLifecycleTimer.fire(maximum_timer)

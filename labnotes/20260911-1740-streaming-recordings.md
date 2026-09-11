@@ -192,3 +192,44 @@ this is recorded as a transient test observation rather than a diagnosed project
 
 Root formatting, compilation with warnings as errors, strict Credo over 626 source files, all 807
 umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: supervised recording startup
+
+The next call-engine test passed recording settings to `start_call/2` and expected the writer to
+open a full-mix stream carrying the pinned tenant, call, room, and incarnation identity. It failed
+at the expected boundary because room startup discarded those settings and never created a
+recorder.
+
+The room-incarnation supervisor now delegates recording-child construction to a cohesive helper.
+When explicitly enabled, the helper creates a fresh reference, puts it into the room mixer's trusted
+options, and gives the same reference to a temporary recorder. The recorder is ordered after the
+significant room authority because authority initialization registers the mixer with the initial
+media policy. Starting it earlier returned a policy-unavailable subscription and would have made
+the supervision order incorrect. Disabled settings add no token and no child.
+
+`RoomMixer.ref/1` exposes only its internal registered server reference. Recording configuration
+resolves that reference to the actual mixer process before monitoring or subscribing, retaining
+the existing direct-PID test boundary. The engine continues to accept an injected writer and has no
+dependency on the concrete artifacts application.
+
+The gateway's previously private option assembly was extracted into one adapter responsible for
+mapping trusted call-admission settings into call-engine settings. Its test was separately red while
+that adapter did not exist, then green after it preserved recording for both web and telephony call
+startup paths.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs --max-cases 1
+# 2 tests, 0 failures
+
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/call_admission/call_engine_options_test.exs \
+  test/vxpipe/gateway/call_admission_adapter_test.exs --max-cases 1
+# 5 tests, 0 failures
+```
+
+Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 809
+umbrella tests, and the unused-dependency check pass. Concrete runtime selection, qualified
+individual tracks, metadata publication, integration storage, and playback remain pending.

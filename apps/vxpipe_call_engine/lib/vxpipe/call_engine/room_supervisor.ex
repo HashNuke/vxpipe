@@ -322,6 +322,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       archive_source_policy: archive.source_policy,
       call_lifecycle: call_lifecycle_options(runtime_options),
       live_inspection: live_inspection_options(),
+      recording: Keyword.get(runtime_options, :recording, enabled: false),
       room_mixer: room_mixer_options(),
       transcript_router: transcript_router_options(),
       opening_audio: Keyword.fetch!(runtime_options, :opening_audio),

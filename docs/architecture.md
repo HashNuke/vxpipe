@@ -2347,6 +2347,16 @@ client payload data. The adapter state excludes those client options and buffere
 inspection. A completed object remains raw signed little-endian 16-bit PCM described by its
 artifact manifest; authenticated playback packaging belongs to the later operator boundary.
 
+Recording is disabled unless trusted call-start options set `recording: [enabled: true, ...]` and
+provide a writer implementation, bounded pull size, and targets. Gateway call admission preserves
+that host configuration for both web and telephony starts. The room-incarnation supervisor creates
+a fresh reference for each enabled recording and supplies it only to that room's mixer and recorder.
+It starts `RoomRecording` after `RoomAuthority`, so the authority has already registered the mixer
+with the initial media-policy snapshot before the recorder requests its tap. The recorder remains a
+temporary sibling: its startup failure prevents an enabled recording call from pretending to have
+recording, while a later recorder or storage failure does not terminate the significant room
+authority. Disabled calls create neither a recording token nor a recorder.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

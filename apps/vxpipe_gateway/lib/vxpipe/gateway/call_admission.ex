@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{AdmissionClaim, PreparedCall, TelephonyAdmissionClaim}
+  alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
 
   alias Vxpipe.Gateway.Telephony.{
     CallIngressBackend,
@@ -99,7 +100,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   @impl CallIngressBackend
   def start_incoming(options, %TelephonyAdmissionClaim{} = claim) do
-    CallEngine.start_call(claim.call.plan, call_engine_options(options))
+    CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options))
   end
 
   @impl CallIngressBackend
@@ -186,7 +187,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   defp start_prepared_call(options, claim) do
-    case CallEngine.start_call(claim.call.plan, call_engine_options(options)) do
+    case CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options)) do
       {:ok, room} ->
         case CallEngine.participant_snapshot(
                claim.call.tenant_key,
@@ -235,16 +236,6 @@ defmodule Vxpipe.Gateway.CallAdmission do
   defp ttl_options(options, ttl_seconds) do
     Keyword.put(options, :join_token_ttl_seconds, ttl_seconds)
   end
-
-  defp archive_options(options), do: Keyword.get(options, :archive, enabled: false)
-
-  defp call_engine_options(options) do
-    [archive: archive_options(options)]
-    |> put_optional(:outbound_leg_connector, Keyword.get(options, :outbound_leg_connector))
-  end
-
-  defp put_optional(options, _key, nil), do: options
-  defp put_optional(options, key, value), do: Keyword.put(options, key, value)
 
   defp telephony_activation_options(options) do
     activation_options = Keyword.take(options, [:media_admission])

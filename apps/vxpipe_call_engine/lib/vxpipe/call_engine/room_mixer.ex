@@ -40,6 +40,12 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     end
   end
 
+  @doc false
+  @spec ref(String.t()) :: GenServer.server()
+  def ref(incarnation_id) when is_binary(incarnation_id) do
+    {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, registry_key(incarnation_id)}}
+  end
+
   @spec push(GenServer.server(), NormalizedFrame.t()) :: :ok | {:error, term()}
   def push(server, %NormalizedFrame{} = frame), do: safe_call(server, {:push, frame})
 
@@ -238,8 +244,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   defp via(options) do
     options
     |> Keyword.fetch!(:incarnation_id)
-    |> registry_key()
-    |> then(&{:via, Registry, {Vxpipe.CallEngine.RoomRegistry, &1}})
+    |> ref()
   end
 
   defp registry_key(incarnation_id), do: {:room_mixer, incarnation_id}

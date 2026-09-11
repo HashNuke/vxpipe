@@ -17,6 +17,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   }
 
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
+  alias Vxpipe.CallEngine.RoomIncarnationSupervisor.RecordingChildren
 
   def start_link(options), do: Supervisor.start_link(__MODULE__, options)
 
@@ -32,6 +33,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
 
   @impl true
   def init(options) do
+    {options, recording_children} = RecordingChildren.prepare(options)
     participant_supervisor = {RoomParticipantSupervisor, options}
     capability_supervisor = {RoomCapabilitySupervisor, options}
     transfer_supervisor = {RoomTransferSupervisor, options}
@@ -49,7 +51,8 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
         call_variables_child(options) ++
         call_lifecycle_child(options) ++
         media_policy_child(options) ++
-        transcript_router_child(options) ++ room_mixer_child(options) ++ [authority]
+        transcript_router_child(options) ++
+        room_mixer_child(options) ++ [authority] ++ recording_children
 
     Supervisor.init(children,
       strategy: :one_for_one,
