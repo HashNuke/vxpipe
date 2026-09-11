@@ -15,6 +15,7 @@ defmodule Vxpipe.CallEngine.Provider.SpeechToText.Signal do
   @enforce_keys [:kind, :provider_sequence]
   defstruct @enforce_keys ++
               [
+                :policy_revision,
                 :request_id,
                 :provider_turn_index,
                 :text,
@@ -35,6 +36,7 @@ defmodule Vxpipe.CallEngine.Provider.SpeechToText.Signal do
   @type t :: %__MODULE__{
           kind: kind(),
           provider_sequence: non_neg_integer(),
+          policy_revision: non_neg_integer() | nil,
           request_id: String.t() | nil,
           provider_turn_index: non_neg_integer() | nil,
           text: String.t() | nil,

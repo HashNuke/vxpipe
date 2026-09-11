@@ -402,3 +402,26 @@
 - The milestone acceptance item remains unchecked because provider-returned STT signals are not
   yet pinned to the audio interval's policy revision. That transcript provenance and demand
   lifecycle remains the next engine behavior change.
+
+## 2026-09-11 — STT policy-session primitive
+
+- Added the demand and provider-session tests first. The red compile failed because normalized STT
+  signals had no policy-revision field, establishing the missing source-provenance contract.
+- `SpeechToTextDemand` requires a configured source's STT only while that source is present and
+  either `save_transcripts` is permitted or at least one present recipient is reachable through
+  `transcript_routes`. Storage denial therefore does not stop live transcript sharing, and an
+  explicit empty route plus storage denial produces no demand.
+- The stable STT capability now owns a replaceable provider transport. Its first applied snapshot
+  pins the new transport; every later demanded revision closes the old session and opens a fresh
+  one before acknowledgement; a denied revision closes it without replacement. Provider sequence
+  state resets with the session, and normalized signals carry its pinned policy revision. The
+  legacy path still runs with a nil revision until it is attached to a planned policy authority.
+- Five focused tests pass across the demand and STT-capability modules. The complete Call Engine
+  suite passes 322 tests with one tagged integration exclusion; formatting, warnings-as-errors
+  compilation, strict Credo, and the unused-dependency check pass.
+- Refactored while green: the 289-line first pass is now a 173-line GenServer concerned with
+  message/event coordination and a 172-line typed state module concerned with provider transport,
+  policy installation, and audio validation. The pure demand decision remains separate from both.
+- This checkpoint deliberately does not register the capability or media ingress with the room
+  barrier yet. Queue purge, planned-room wiring, and revision-aware transcript projection are the
+  next behavior checkpoint.

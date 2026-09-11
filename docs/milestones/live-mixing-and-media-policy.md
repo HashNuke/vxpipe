@@ -263,6 +263,18 @@ mixer purge, and egress generation replacement compose correctly. The Gateway su
 tests with four tagged integration exclusions. STT provider-session provenance must still prove
 the transcript half before the broader acceptance item can be marked complete.
 
+The STT-policy primitive now decides demand independently for each speech source. A configured STT
+session is needed when the source is present and either transcript storage is permitted or at least
+one currently present recipient has a permitted live transcript route. The stable capability owns
+replaceable provider transports: its initial transport is pinned when the first snapshot arrives,
+every later demanded revision closes it and starts a fresh session, and a no-demand revision leaves
+no provider transport running. Provider sequence tracking resets only with that new session, and
+each normalized signal carries the session's pinned policy revision. Focused red/green tests cover
+storage-only demand, live-only demand, absent/denied sources, transport closure and reactivation,
+revision replacement, and sequence reuse. The Call Engine suite passes 322 tests with one tagged
+integration exclusion. Ingress purge, barrier registration, and revision-aware transcript
+projection remain the next checkpoint, so this primitive alone does not close the checklist item.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

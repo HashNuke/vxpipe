@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
@@ -105,6 +106,59 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     refute_receive {:vxpipe_stt_signal, ^capability, _, _}
   end
 
+  test "pins each demanded provider session to one policy revision" do
+    identity = [
+      tenant_id: "tenant-demo",
+      room_id: "room-demo",
+      incarnation_id: "rinc-demo",
+      participant_id: "part-human",
+      connection_id: "conn-demo"
+    ]
+
+    {capability, first_transport} = start_capability()
+
+    assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
+    refute_receive {:test_stt_transport_started, _transport, _connection}
+
+    TestSpeechToTextTransport.deliver(first_transport, turn_message("StartOfTurn", 1, "first"))
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{provider_sequence: 1, policy_revision: 0}}
+
+    assert :ok = Enforcer.apply(capability, snapshot(1, ["part-human"], %{}, false), 500)
+    assert_receive {:test_stt_transport_closed, ^first_transport}
+    assert {:error, :policy_denied} = SpeechToText.push_audio(capability, audio_frame(identity))
+
+    routes = %{"part-human" => MapSet.new(["part-recipient"])}
+
+    assert :ok =
+             Enforcer.apply(
+               capability,
+               snapshot(2, ["part-human", "part-recipient"], routes, false),
+               500
+             )
+
+    assert_receive {:test_stt_transport_started, second_transport, _connection}
+    assert :ok = SpeechToText.push_audio(capability, audio_frame(identity))
+    assert_receive {:test_stt_audio, ^second_transport, <<1, 2, 3>>}
+
+    TestSpeechToTextTransport.deliver(second_transport, turn_message("StartOfTurn", 1, "second"))
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{provider_sequence: 1, policy_revision: 2}}
+
+    assert :ok =
+             Enforcer.apply(
+               capability,
+               snapshot(3, ["part-human", "part-recipient"], routes, false),
+               500
+             )
+
+    assert_receive {:test_stt_transport_closed, ^second_transport}
+    assert_receive {:test_stt_transport_started, third_transport, _connection}
+    refute third_transport == second_transport
+  end
+
   defp start_capability do
     assert {:ok, provider} =
              Flux.new(
@@ -161,6 +215,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
       "words" => [],
       "end_of_turn_confidence" => 0.8
     })
+  end
+
+  defp snapshot(revision, present, transcript_routes, save_transcripts) do
+    %Snapshot{
+      revision: revision,
+      present_participant_ids: MapSet.new(present),
+      effective: %Effective{
+        audio_routes: :unrestricted,
+        transcript_routes: transcript_routes,
+        record_audio: true,
+        save_transcripts: save_transcripts
+      }
+    }
   end
 
   def handle_telemetry_event(event, measurements, metadata, {test_pid, provider}) do

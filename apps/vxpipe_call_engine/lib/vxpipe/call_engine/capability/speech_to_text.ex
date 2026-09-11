@@ -4,11 +4,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   use GenServer
 
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Telemetry
+  alias Vxpipe.CallEngine.Capability.SpeechToText.State
 
   @call_timeout 5_000
-  @maximum_audio_bytes 131_072
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
 
@@ -20,7 +21,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     }
   end
 
-  @spec push_audio(pid(), AudioFrame.t()) :: :ok | {:error, :unsupported_audio | :unavailable}
+  @spec push_audio(pid(), AudioFrame.t()) ::
+          :ok | {:error, :policy_denied | :unsupported_audio | :unavailable}
   def push_audio(capability, %AudioFrame{} = frame) do
     GenServer.call(capability, {:push_audio, frame}, @call_timeout)
   end
@@ -41,37 +43,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def init(options) do
     Process.flag(:trap_exit, true)
 
-    identity = %{
-      tenant_id: Keyword.fetch!(options, :tenant_id),
-      room_id: Keyword.fetch!(options, :room_id),
-      incarnation_id: Keyword.fetch!(options, :incarnation_id),
-      participant_id: Keyword.fetch!(options, :participant_id),
-      connection_id: Keyword.fetch!(options, :connection_id)
-    }
+    case State.new(options) do
+      {:ok, state} ->
+        {:ok, state}
 
-    owner = Keyword.fetch!(options, :owner)
-    {provider_module, provider_config} = Keyword.fetch!(options, :provider)
-    {transport_module, transport_options} = Keyword.fetch!(options, :transport)
-    connection = provider_module.connection_options(provider_config)
-
-    case transport_module.start_link(
-           owner: self(),
-           connection: connection,
-           transport_options: transport_options
-         ) do
-      {:ok, transport} ->
-        {:ok,
-         %{
-           identity: identity,
-           last_provider_sequence: -1,
-           media_format: provider_module.media_format(provider_config),
-           owner: owner,
-           provider_module: provider_module,
-           transport: transport,
-           transport_module: transport_module
-         }}
-
-      {:error, _reason} ->
+      {:error, :transport_start_failed, provider_module} ->
         Telemetry.provider_failure(:stt, provider_module, :transport_closed)
         {:stop, :transport_start_failed}
     end
@@ -79,13 +55,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @impl true
   def handle_call({:push_audio, frame}, _from, state) do
-    if supported_audio?(frame, state) do
-      result = safe_send_audio(state.transport_module, state.transport, frame.payload)
-      reply = if result == :ok, do: :ok, else: {:error, :unavailable}
-      {:reply, reply, state}
-    else
-      {:reply, {:error, :unsupported_audio}, state}
+    {:reply, State.send_audio(state, frame), state}
+  end
+
+  def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
+    case State.install_policy(state, snapshot) do
+      {:ok, state} ->
+        {:reply, :ok, state}
+
+      {:error, :transport_start_failed, state} ->
+        Telemetry.provider_failure(:stt, state.provider_module, :transport_closed)
+        {:reply, {:error, :transport_start_failed}, state}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
     end
+  end
+
+  def handle_call({:vxpipe_apply_media_policy, _invalid}, _from, state) do
+    {:reply, {:error, :invalid_policy}, state}
   end
 
   @impl true
@@ -96,19 +84,22 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   @impl true
   def handle_info({:vxpipe_stt_audio, ingress, reference, frame}, state)
       when is_pid(ingress) and is_reference(reference) do
-    if supported_audio?(frame, state) do
-      case safe_send_audio(state.transport_module, state.transport, frame.payload) do
-        :ok ->
-          acknowledge_audio(ingress, reference, frame.sequence_number, :ok)
-          {:noreply, state}
+    case State.send_audio(state, frame) do
+      {:error, :unsupported_audio} ->
+        acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unsupported_audio})
+        stop_unavailable(:unsupported_audio, state)
 
-        {:error, _reason} ->
-          acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unavailable})
-          stop_unavailable(:transport_closed, state)
-      end
-    else
-      acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unsupported_audio})
-      stop_unavailable(:unsupported_audio, state)
+      {:error, :policy_denied} ->
+        acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :policy_denied})
+        {:noreply, state}
+
+      {:error, :unavailable} ->
+        acknowledge_audio(ingress, reference, frame.sequence_number, {:error, :unavailable})
+        stop_unavailable(:transport_closed, state)
+
+      :ok ->
+        acknowledge_audio(ingress, reference, frame.sequence_number, :ok)
+        {:noreply, state}
     end
   end
 
@@ -138,7 +129,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @impl true
   def terminate(_reason, state) do
-    _ = safe_close(state.transport_module, state.transport)
+    _ = State.close(state)
     :ok
   end
 
@@ -148,27 +139,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   defp handle_signal(%Signal{kind: :failed} = signal, state) do
+    signal = %{signal | policy_revision: state.policy_revision}
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
 
     stop_unavailable(:provider_failed, %{state | last_provider_sequence: signal.provider_sequence})
   end
 
   defp handle_signal(%Signal{} = signal, state) do
+    signal = %{signal | policy_revision: state.policy_revision}
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
     {:noreply, %{state | last_provider_sequence: signal.provider_sequence}}
-  end
-
-  defp supported_audio?(frame, state) do
-    frame.tenant_id == state.identity.tenant_id and
-      frame.room_id == state.identity.room_id and
-      frame.incarnation_id == state.identity.incarnation_id and
-      frame.participant_id == state.identity.participant_id and
-      frame.connection_id == state.identity.connection_id and
-      frame.codec == state.media_format.codec and
-      frame.sample_rate == state.media_format.sample_rate and
-      frame.channels in [1, 2] and
-      is_binary(frame.payload) and byte_size(frame.payload) > 0 and
-      byte_size(frame.payload) <= @maximum_audio_bytes
   end
 
   defp stop_unavailable(reason, state) do
@@ -189,21 +169,5 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       ingress,
       {:vxpipe_stt_audio_result, self(), reference, sequence_number, result}
     )
-  end
-
-  defp safe_send_audio(module, transport, audio) do
-    try do
-      module.send_audio(transport, audio)
-    catch
-      :exit, _reason -> {:error, :transport_closed}
-    end
-  end
-
-  defp safe_close(module, transport) do
-    try do
-      module.close(transport)
-    catch
-      :exit, _reason -> :ok
-    end
   end
 end
