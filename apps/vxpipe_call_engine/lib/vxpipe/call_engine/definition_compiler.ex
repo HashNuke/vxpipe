@@ -237,7 +237,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          %{
            definition_key: definition_key,
            participant_id: destination.participant_id,
-           description: destination.description
+           description: destination.description,
+           reason_required: destination.transfer_history.mode == :selected
          }}
       end)
 

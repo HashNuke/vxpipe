@@ -959,6 +959,14 @@ through the Agent Runtime seed boundary. Later speech during preparation cannot 
 prepared destination's history. Selected-mode reason delivery and re-entry remain separate
 follow-ups.
 
+For a `selected` destination, the generated transfer schema requires the source agent to provide a
+non-empty transfer reason of at most 1,024 characters. This requirement is destination-specific: a
+single transfer tool can still target ordinary-history destinations without accepting a reason for
+those variants. Call Engine validates the selected variant again while constructing its private
+transfer request and keeps the reason out of `Inspect` and client events. Supplying that reason and
+the destination-readable Call Variables to the destination model remains the next private-context
+checkpoint; schema acceptance alone does not claim delivery.
+
 The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
 activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
 reauthorizes the room/incarnation, caller connection, current source participant and activation,
@@ -972,8 +980,9 @@ inspection surface.
 
 This checkpoint supports fresh, all-spoken, and bounded-last-spoken destination history and
 implements preparation failure, total-deadline cleanup, duplicate-attempt rejection, and late-result
-exclusion. Selected reason/variables, re-entry with a fresh activation, and the bounded source-
-capability restoration rule remain follow-up work.
+exclusion. Selected transfers now require and privately capture a bounded reason, but destination
+reason/variables delivery, re-entry with a fresh activation, and the bounded source-capability
+restoration rule remain follow-up work.
 
 ### Presence-driven media and transcript policy — approved R38
 

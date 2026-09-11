@@ -181,3 +181,23 @@
   format checking, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   The umbrella test command remains blocked at Persistence database creation because this shell has
   no PostgreSQL password; no credential content was inspected or logged.
+
+## 2026-09-11 — selected transfer reason boundary
+
+- Added the selected-destination compiler test first. It failed because the generated transfer
+  descriptor accepted only `destination` and could not require a reason for one history policy.
+- The compiler now marks each private target with whether its pinned destination history policy
+  requires a reason. If any target is selected, the generated JSON Schema uses closed per-target
+  variants: selected destinations require `destination` and `reason`, while ordinary destinations
+  continue to accept `destination` only.
+- The private transfer request validates the same distinction independently of model-schema
+  validation. Selected reasons must be non-blank and at most 1,024 characters; accepted text is
+  trimmed and retained outside the request's inspection projection. Missing, blank, oversized,
+  extra, or reason-on-ordinary input is rejected.
+- This is an input-and-authority checkpoint only. The reason is not yet inserted into destination
+  model context, and the destination-readable Call Variables projection remains pending with it.
+- The combined compiler/room transfer run passes 15 tests. The complete Call Engine suite passes
+  275 tests with one tagged integration exclusion.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  Umbrella `mix test` still stops before test execution at Persistence database creation because
+  the shell has no PostgreSQL password; no credential source was inspected.

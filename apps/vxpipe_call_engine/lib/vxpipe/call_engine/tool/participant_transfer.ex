@@ -10,30 +10,68 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
     targets =
       binding.targets
       |> Enum.sort_by(fn {definition_key, _target} -> definition_key end)
-      |> Enum.map(fn {definition_key, target} ->
-        choice = %{"const" => definition_key}
 
-        case target.description do
-          description when is_binary(description) -> Map.put(choice, "description", description)
-          nil -> choice
-        end
-      end)
+    parameters =
+      if Enum.any?(targets, fn {_definition_key, target} -> target.reason_required end) do
+        %{"oneOf" => Enum.map(targets, &target_parameters/1)}
+      else
+        ordinary_parameters(targets)
+      end
 
     %Definition{
       name: "transfer",
       description: "Transfer the caller to one permitted agent participant.",
-      parameters: %{
-        "type" => "object",
-        "properties" => %{
-          "destination" => %{
-            "type" => "string",
-            "oneOf" => targets
-          }
-        },
-        "required" => ["destination"],
-        "additionalProperties" => false
-      }
+      parameters: parameters
     }
+  end
+
+  defp ordinary_parameters(targets) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "destination" => %{
+          "type" => "string",
+          "oneOf" => Enum.map(targets, &destination_choice/1)
+        }
+      },
+      "required" => ["destination"],
+      "additionalProperties" => false
+    }
+  end
+
+  defp target_parameters({_definition_key, %{reason_required: true}} = target) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "destination" => destination_choice(target),
+        "reason" => %{
+          "type" => "string",
+          "minLength" => 1,
+          "maxLength" => 1_024,
+          "description" => "Explain why the caller is being transferred."
+        }
+      },
+      "required" => ["destination", "reason"],
+      "additionalProperties" => false
+    }
+  end
+
+  defp target_parameters(target) do
+    %{
+      "type" => "object",
+      "properties" => %{"destination" => destination_choice(target)},
+      "required" => ["destination"],
+      "additionalProperties" => false
+    }
+  end
+
+  defp destination_choice({definition_key, target}) do
+    choice = %{"const" => definition_key}
+
+    case target.description do
+      description when is_binary(description) -> Map.put(choice, "description", description)
+      nil -> choice
+    end
   end
 
   @spec execute(Binding.t(), map(), Context.t()) ::

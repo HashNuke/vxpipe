@@ -42,7 +42,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
              "billing" => %{
                definition_key: "billing",
                participant_id: billing.participant_id,
-               description: "A billing specialist"
+               description: "A billing specialist",
+               reason_required: false
              }
            } == binding.targets
 
@@ -161,6 +162,57 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
 
       assert Map.take(plan.participants["billing"].transfer_history, [:mode, :turns]) == expected
     end
+  end
+
+  test "requires an explicit bounded reason only for selected-history destinations" do
+    input =
+      put_in(
+        transfer_definition(),
+        [:participants, "billing", :transfer_history],
+        %{mode: "selected"}
+      )
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "support", revision: 7)
+
+    assert {:ok, plan} =
+             DefinitionCompiler.compile(definition, invocation(), registries())
+
+    reception = plan.participants["reception"]
+    assert {:ok, [descriptor]} = ToolDescriptors.compile(reception.tools)
+
+    assert descriptor.input_schema == %{
+             "oneOf" => [
+               %{
+                 "type" => "object",
+                 "properties" => %{
+                   "destination" => %{
+                     "const" => "billing",
+                     "description" => "A billing specialist"
+                   },
+                   "reason" => %{
+                     "type" => "string",
+                     "minLength" => 1,
+                     "maxLength" => 1_024,
+                     "description" => "Explain why the caller is being transferred."
+                   }
+                 },
+                 "required" => ["destination", "reason"],
+                 "additionalProperties" => false
+               }
+             ]
+           }
+
+    assert {:ok, registry} = ToolRegistry.new([descriptor])
+
+    assert {:ok, ^descriptor} =
+             ToolRegistry.resolve(registry, "transfer", %{
+               "destination" => "billing",
+               "reason" => "The caller needs help understanding invoice 17."
+             })
+
+    assert {:error, :invalid_arguments} =
+             ToolRegistry.resolve(registry, "transfer", %{"destination" => "billing"})
   end
 
   test "rejects malformed destination transfer history policies at their exact path" do

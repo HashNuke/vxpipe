@@ -137,6 +137,15 @@ tests and one pure projection test pass, and the complete Call Engine suite pass
 tagged integration exclusion. Selected reason/variable packet semantics and complete re-entry
 coverage remain open.
 
+The selected-history transfer descriptor now expresses its destination-specific reason contract.
+For a selected destination it requires exactly `destination` plus a non-empty reason bounded to
+1,024 characters; ordinary destinations continue to accept only `destination`. The private request
+boundary independently rejects missing, blank, oversized, extra, or destination-inappropriate
+reason input and retains the normalized reason outside its inspection surface. The focused
+compiler/room transfer run passes 15 tests and the complete Call Engine suite passes 275 tests with
+one tagged integration exclusion. This checkpoint captures authority-bearing input only; it does
+not yet claim destination model-context or Call Variables delivery.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

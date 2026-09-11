@@ -8,7 +8,9 @@ fresh-history agent destination, preserves room variables, and tears down the so
 commit. The next schema checkpoint pins the configurable total attempt budget and ensures the outer
 supervised tool timeout encloses it. A subsequent runtime checkpoint moves preparation out of Room
 Authority, enforces that deadline, cleans up failed/expired destinations, and excludes late results;
-re-entry and alternate-history checks remain pending.
+confirmed spoken-history projection is active, and selected destinations now require a private
+bounded transfer reason. Destination-readable selected context, re-entry, and restoration checks
+remain pending.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

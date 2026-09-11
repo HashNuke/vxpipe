@@ -13,7 +13,8 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding do
   @type target :: %{
           required(:definition_key) => String.t(),
           required(:participant_id) => String.t(),
-          required(:description) => nil | String.t()
+          required(:description) => nil | String.t(),
+          required(:reason_required) => boolean()
         }
 
   @type t :: %__MODULE__{

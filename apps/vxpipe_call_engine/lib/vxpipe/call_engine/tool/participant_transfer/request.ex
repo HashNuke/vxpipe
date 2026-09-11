@@ -20,7 +20,8 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
     :correlation_id,
     :tool_call_id,
     :destination_definition_key,
-    :destination_participant_id
+    :destination_participant_id,
+    :reason
   ]
   defstruct @enforce_keys
 
@@ -38,19 +39,17 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
           correlation_id: String.t(),
           tool_call_id: String.t(),
           destination_definition_key: String.t(),
-          destination_participant_id: String.t()
+          destination_participant_id: String.t(),
+          reason: nil | String.t()
         }
 
   @spec new(Binding.t(), map(), Context.t()) :: {:ok, t()} | {:error, :rejected}
-  def new(
-        %Binding{} = binding,
-        %{"destination" => destination} = arguments,
-        %Context{} = context
-      )
-      when map_size(arguments) == 1 and is_binary(destination) do
-    with true <- context.agent_participant_id == binding.source_participant_id,
+  def new(%Binding{} = binding, arguments, %Context{} = context) when is_map(arguments) do
+    with {:ok, destination} <- destination(arguments),
+         true <- context.agent_participant_id == binding.source_participant_id,
          tool_call_id when is_binary(tool_call_id) <- context.tool_call_id,
          {:ok, target} <- Map.fetch(binding.targets, destination),
+         {:ok, reason} <- reason(arguments, target),
          source_capability when is_pid(source_capability) <-
            AgentActivationSupervisor.whereis_child(binding.source_activation_id, :coordinator) do
       {:ok,
@@ -68,7 +67,8 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
          correlation_id: context.correlation_id,
          tool_call_id: tool_call_id,
          destination_definition_key: target.definition_key,
-         destination_participant_id: target.participant_id
+         destination_participant_id: target.participant_id,
+         reason: reason
        }}
     else
       _invalid_or_stale -> {:error, :rejected}
@@ -76,4 +76,28 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer.Request do
   end
 
   def new(%Binding{}, _arguments, %Context{}), do: {:error, :rejected}
+
+  defp destination(%{"destination" => destination}) when is_binary(destination),
+    do: {:ok, destination}
+
+  defp destination(_arguments), do: {:error, :rejected}
+
+  defp reason(%{"destination" => _destination, "reason" => reason} = arguments, %{
+         reason_required: true
+       })
+       when map_size(arguments) == 2 and is_binary(reason) do
+    trimmed = String.trim(reason)
+
+    if trimmed != "" and String.length(reason) <= 1_024 do
+      {:ok, trimmed}
+    else
+      {:error, :rejected}
+    end
+  end
+
+  defp reason(%{"destination" => _destination} = arguments, %{reason_required: false})
+       when map_size(arguments) == 1,
+       do: {:ok, nil}
+
+  defp reason(_arguments, _target), do: {:error, :rejected}
 end

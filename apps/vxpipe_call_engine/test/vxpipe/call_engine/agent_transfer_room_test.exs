@@ -174,6 +174,47 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
            ]
   end
 
+  test "selected history requires and privately retains a bounded transfer reason" do
+    plan = compile_plan(transfer_history: %{mode: "selected"})
+    caller = Map.fetch!(plan.participants, "caller")
+    reception = Map.fetch!(plan.participants, "reception")
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    attach_caller(plan, room, caller)
+
+    binding = Map.fetch!(reception.tools, "transfer").transfer
+    context = transfer_context(plan, room, caller, reception, "selected-transfer")
+
+    assert {:error, :rejected} =
+             Request.new(binding, %{"destination" => "billing"}, context)
+
+    assert {:error, :rejected} =
+             Request.new(
+               binding,
+               %{"destination" => "billing", "reason" => "   "},
+               context
+             )
+
+    assert {:error, :rejected} =
+             Request.new(
+               binding,
+               %{"destination" => "billing", "reason" => String.duplicate("x", 1_025)},
+               context
+             )
+
+    reason = "The caller needs help understanding invoice 17."
+
+    assert {:ok, request} =
+             Request.new(
+               binding,
+               %{"destination" => "billing", "reason" => "  #{reason}  "},
+               context
+             )
+
+    assert request.reason == reason
+    refute inspect(request) =~ reason
+  end
+
   test "room authority rejects a stale source activation before destination startup" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
@@ -457,7 +498,18 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
   end
 
   defp transfer_request(plan, room, caller, source, tool_call_id) do
-    context = %Context{
+    context = transfer_context(plan, room, caller, source, tool_call_id)
+
+    binding = Map.fetch!(source.tools, "transfer").transfer
+
+    assert {:ok, request} =
+             Request.new(binding, %{"destination" => "billing"}, context)
+
+    request
+  end
+
+  defp transfer_context(plan, room, caller, source, tool_call_id) do
+    %Context{
       tenant_id: plan.tenant_id,
       room_id: plan.room_id,
       incarnation_id: room.incarnation_id,
@@ -470,13 +522,6 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       tool_call_id: tool_call_id,
       audio_response: false
     }
-
-    binding = Map.fetch!(source.tools, "transfer").transfer
-
-    assert {:ok, request} =
-             Request.new(binding, %{"destination" => "billing"}, context)
-
-    request
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
