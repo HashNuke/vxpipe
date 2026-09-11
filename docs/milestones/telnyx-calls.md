@@ -83,8 +83,10 @@ another database lookup. A recovered `admitting` record without its owner become
 `startup_unknown` rather than restarting a crashed call. Provider-specific post-initiation
 commands now submit through a bounded no-retry Telnyx Voice API client, and authenticated headerless
 Opus media has a Membrane ingress normalizer that emits exact 20 ms, 48 kHz mono room-clock frames
-without FFmpeg. The live media WebSocket, room attachment, outbound mixer path, private briefing,
-acceptance, cleanup, and runnable vendor outcome remain incomplete.
+without FFmpeg. The reverse Membrane path validates an exact authorized mixer subscription and
+encodes/paces 20 ms frames as the documented Telnyx `media.payload` socket envelope. The live media
+WebSocket, room attachment, private briefing, acceptance, cleanup, and runnable vendor outcome
+remain incomplete.
 
 ## Specification review
 

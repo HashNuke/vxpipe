@@ -1097,7 +1097,10 @@ provider timing. Exact pinned call identity and strictly increasing media chunks
 Membrane receives a packet. Stale chunks and regressing timestamps are rejected rather than replayed
 into the room. The decoded PCM frame, mono mixer, and PCM sink are transport-neutral Gateway media
 components shared with WebRTC, while RTP handling and Telnyx clock alignment remain in their owning
-transport adapters.
+transport adapters. In the reverse direction, authorized 20 ms room PCM frames use the shared PCM
+source, Membrane's Opus encoder, and Membrane's realtime pacing before the Telnyx sink emits the
+provider's exact client-to-server `media.payload` JSON envelope. That envelope contains base64
+headerless Opus and no invented stream identifier; the socket itself already names the exact leg.
 
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,

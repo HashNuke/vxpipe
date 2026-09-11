@@ -650,3 +650,34 @@ nonzero status after its retained output showed the final Console lane green but
 failure block. The Gateway lane passed all 127 tests with the same seed on immediate isolation, and
 the following complete umbrella run passed every lane. No implementation was changed for that
 transient result.
+
+## Checkpoint 15: Membrane Telnyx egress encoding
+
+The current Telnyx media documentation was rechecked before fixing the outbound contract. In RTP
+bidirectional mode, client-to-provider audio is a JSON `media` event containing one base64 payload;
+the example does not add a stream ID. Permitted chunks range from 20 ms to 30 seconds, but Vxpipe
+retains the mixer's existing 20 ms cadence for bounded latency and consistent policy boundaries.
+
+The shared `MixedFrame` PCM source was first moved from the WebRTC namespace into the Gateway media
+namespace, keeping the existing WebRTC output test green in a separate mechanical commit. The new
+Telnyx egress test then failed because `AudioEgressPipeline` did not exist. The implementation pins
+tenant, room incarnation, recipient, and subscription, accepts only mix-minus/full-mix 48 kHz mono
+20 ms frames, encodes with Membrane's Opus encoder, paces with `Membrane.Realtimer`, and emits the
+documented base64 headerless Opus envelope to the exact socket owner. It rejects misaligned and
+wrong-identity frames before encoding.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/audio_egress_pipeline_test.exs
+# 2 tests, 0 failures
+```
+
+The pipeline is not itself a socket or room subscriber. The next checkpoint must connect both
+Membrane directions to one authenticated, single-use Telnyx WebSocket owned by the exact live leg.
+
+The checkpoint passed `mix format --check-formatted`, compilation with warnings as errors, strict
+Credo, the focused ingress/egress and WebRTC-output regression set (6 tests), the full umbrella
+suite against an isolated disposable PostgreSQL 17 instance (705 tests, 0 failures), and the unused
+dependency check.
