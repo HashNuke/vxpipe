@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
          identity: identity,
          clock_origin_ms: clock_origin_ms,
          format: format,
+         recording_token: recording_token(options),
          playout: playout,
          policy: nil,
          buffer: TimestampBuffer.new(maximum_buffered_timestamps),
@@ -24,6 +25,13 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
          buffer_overflows: 0,
          policy_dropped_frames: 0
        }}
+    end
+  end
+
+  defp recording_token(options) do
+    case Keyword.get(options, :recording_token) do
+      token when is_reference(token) -> token
+      _missing_or_invalid -> nil
     end
   end
 

@@ -12,7 +12,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.Subscription do
     :room_id,
     :incarnation_id,
     :recipient_participant_id,
-    :mode
+    :mode,
+    :purpose
   ]
   defstruct @enforce_keys
 
@@ -23,8 +24,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.Subscription do
           tenant_id: String.t(),
           room_id: String.t(),
           incarnation_id: String.t(),
-          recipient_participant_id: String.t(),
-          mode: Vxpipe.CallEngine.Media.MixedFrame.mode()
+          recipient_participant_id: nil | String.t(),
+          mode: Vxpipe.CallEngine.Media.MixedFrame.mode(),
+          purpose: :participant | :recording
         }
 
   @spec take(t(), pos_integer()) ::

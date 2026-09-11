@@ -40,3 +40,39 @@ Running `mix credo` from the child does not work because Credo is intentionally 
 dependency. From the root, formatting, compilation with warnings as errors, strict Credo over 612
 source files, all 803 umbrella tests, and the unused-dependency check pass. No S3 request, database
 row, room mixer subscription, or recording configuration exists yet.
+
+## 2026-09-11: internal recording subscription
+
+The next red test specified the policy boundary before starting any recorder process. It attempted
+to create a full-mix recording subscription using a fresh room-local reference, rejected another
+reference, and expected frames only in policy revisions whose effective `record_audio` value was
+true. The initial run failed at the intended missing `RoomMixer.subscribe_recording/2` API.
+
+The mixer now stores an optional unforgeable recording token. `SubscriptionCatalog` constructs a
+separate `:recording` subscription with no participant recipient, while the existing path explicitly
+marks every ordinary subscription as `:participant`. This prevents recording from borrowing monitor
+or participant identity. Full-mix and individual-track modes are accepted; mix-minus is not.
+
+Recording fanout deliberately does not use participant recipient routes. The route map answers who
+may hear a source, while the independent effective `record_audio` boolean answers whether main-room
+audio may be stored. Private transfer preparation never enters the main mixer. On a denial revision,
+the existing policy barrier clears pending timestamp buckets and subscription queues before it
+acknowledges the revision; the installed recording subscription simply receives nothing until a
+later permitted revision supplies new frames.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/media_policy_room_test.exs \
+  test/vxpipe/call_engine/silent_monitor_call_test.exs --max-cases 1
+# 10 tests, 0 failures
+```
+
+No dependency on `vxpipe_artifacts` or network/storage work was added to the mixer. The next step is
+the room-scoped capability that owns these subscriptions and projects their frames into bounded
+artifact chunks.
+
+Root formatting, compilation with warnings as errors, strict Credo over 612 source files, all 804
+umbrella tests, and the unused-dependency check pass.

@@ -2295,6 +2295,16 @@ artifacts-owned task supervisor. This boundary does not yet enable recording or 
 future `RoomRecording` capability remains responsible for policy-filtered mixer subscriptions and
 for constructing exact interval/chunk metadata before it calls the handoff.
 
+The mixer now has a distinct internal recording-subscription path guarded by a fresh room-local
+reference shared only with its sibling recording capability. A recorder is therefore not modeled
+as a fake participant and cannot acquire participant output privileges. Recording subscriptions
+select either the full main-room mix or one participant track. They ignore recipient route maps,
+because `record_audio` independently governs storage, but receive no frames while that effective
+permission is false. Private preparation media remains outside the main mixer and therefore outside
+these taps. Policy installation clears mixer input and subscription queues before acknowledgement;
+denied or formerly queued intervals cannot arrive after the barrier or be replayed when permission
+later returns.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

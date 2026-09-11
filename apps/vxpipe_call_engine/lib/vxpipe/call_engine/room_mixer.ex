@@ -54,6 +54,13 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   @doc false
+  @spec subscribe_recording(GenServer.server(), keyword()) ::
+          {:ok, Subscription.t()} | {:error, term()}
+  def subscribe_recording(server, options) when is_list(options) do
+    safe_call(server, {:subscribe_recording, options})
+  end
+
+  @doc false
   @spec take(Subscription.t(), pos_integer()) :: {:ok, [MixedFrame.t()]} | {:error, term()}
   def take(%Subscription{} = subscription, maximum_frames)
       when is_integer(maximum_frames) and maximum_frames > 0 do
@@ -93,6 +100,23 @@ defmodule Vxpipe.CallEngine.RoomMixer do
            state.policy,
            self(),
            state.source_sequences
+         ) do
+      {:ok, handle, subscriptions} ->
+        {:reply, {:ok, handle}, %{state | subscriptions: subscriptions}}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:subscribe_recording, options}, _from, state) do
+    case SubscriptionCatalog.add_recording(
+           state.subscriptions,
+           options,
+           state.identity,
+           state.policy,
+           self(),
+           state.recording_token
          ) do
       {:ok, handle, subscriptions} ->
         {:reply, {:ok, handle}, %{state | subscriptions: subscriptions}}

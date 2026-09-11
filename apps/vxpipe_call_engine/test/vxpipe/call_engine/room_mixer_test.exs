@@ -81,6 +81,43 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert %{policy_dropped_frames: 1, policy_revision: 2} = RoomMixer.stats(mixer)
   end
 
+  test "records only permitted policy intervals through an authorized internal subscription" do
+    recording_token = make_ref()
+    mixer = start_mixer(recording_token: recording_token)
+
+    :ok =
+      apply_policy(mixer, 0, ["alice", "bob"],
+        audio_routes: %{},
+        record_audio: true
+      )
+
+    assert {:error, :recording_not_authorized} =
+             subscribe_recording(mixer, make_ref(), :full_mix)
+
+    assert {:ok, recording} = subscribe_recording(mixer, recording_token, :full_mix)
+
+    assert :ok = RoomMixer.push(mixer, frame("alice", 1, 0, [1_000, 2_000]))
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [3_000, -5_000]))
+    assert {:ok, %{delivered: 1, dropped: 0}} = RoomMixer.flush_through(mixer, 0)
+    assert_frame(Subscription.take(recording, 1), nil, ["alice", "bob"], [4_000, -3_000], 0)
+
+    :ok = apply_policy(mixer, 1, ["alice", "bob"], record_audio: false)
+
+    assert :ok =
+             RoomMixer.push(mixer, frame("alice", 2, 2, [5_000, 6_000], policy_revision: 1))
+
+    assert {:ok, %{delivered: 0, dropped: 0}} = RoomMixer.flush_through(mixer, 2)
+    assert {:ok, []} = Subscription.take(recording, 1)
+
+    :ok = apply_policy(mixer, 2, ["alice", "bob"], record_audio: true)
+
+    assert :ok =
+             RoomMixer.push(mixer, frame("bob", 2, 4, [7_000, 8_000], policy_revision: 2))
+
+    assert {:ok, %{delivered: 1, dropped: 0}} = RoomMixer.flush_through(mixer, 4)
+    assert_frame(Subscription.take(recording, 1), nil, ["bob"], [7_000, 8_000], 2)
+  end
+
   test "bounds timestamp alignment and every subscriber queue without blocking the mixer" do
     mixer = start_mixer(maximum_buffered_timestamps: 1, maximum_sink_frames: 1)
     :ok = apply_policy(mixer, 0, ["alice", "bob"])
@@ -258,6 +295,18 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
       )
 
     RoomMixer.subscribe(mixer, options)
+  end
+
+  defp subscribe_recording(mixer, recording_token, mode) do
+    RoomMixer.subscribe_recording(mixer,
+      id: "recording-output",
+      tenant_id: @identity.tenant_id,
+      room_id: @identity.room_id,
+      incarnation_id: @identity.incarnation_id,
+      recording_token: recording_token,
+      mode: mode,
+      subscriber: self()
+    )
   end
 
   defp frame(source, sequence, timestamp, samples, overrides \\ []) do

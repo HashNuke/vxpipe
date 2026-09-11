@@ -10,8 +10,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
 
   @type entry :: %{
           token: reference(),
-          recipient_id: String.t(),
+          recipient_id: nil | String.t(),
           mode: MixedFrame.mode(),
+          purpose: :participant | :recording,
           subscriber: pid(),
           monitor: reference(),
           queue: :queue.queue(MixedFrame.t()),
@@ -55,13 +56,72 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
         room_id: identity.room_id,
         incarnation_id: identity.incarnation_id,
         recipient_participant_id: recipient_id,
-        mode: mode
+        mode: mode,
+        purpose: :participant
       }
 
       entry = %{
         token: token,
         recipient_id: recipient_id,
         mode: mode,
+        purpose: :participant,
+        subscriber: subscriber,
+        monitor: monitor,
+        queue: :queue.new(),
+        notified?: false
+      }
+
+      {:ok, handle,
+       %{
+         catalog
+         | entries: Map.put(catalog.entries, id, entry),
+           monitors: Map.put(catalog.monitors, monitor, id)
+       }}
+    else
+      {:error, reason} -> {:error, reason}
+      _invalid -> {:error, :invalid_subscription}
+    end
+  end
+
+  @spec add_recording(t(), keyword(), map(), Snapshot.t(), pid(), nil | reference()) ::
+          {:ok, Subscription.t(), t()} | {:error, term()}
+  def add_recording(%__MODULE__{}, _options, _identity, nil, _mixer, _recording_token),
+    do: {:error, :policy_unavailable}
+
+  def add_recording(
+        %__MODULE__{} = catalog,
+        options,
+        identity,
+        %Snapshot{},
+        mixer,
+        recording_token
+      ) do
+    with {:ok, id} <- nonempty(options, :id),
+         :ok <- unique_subscription(catalog, id),
+         :ok <- subscription_identity(options, identity),
+         :ok <- recording_authorized(options, recording_token),
+         {:ok, mode} <- recording_mode(Keyword.get(options, :mode)),
+         subscriber when is_pid(subscriber) <- Keyword.get(options, :subscriber) do
+      token = make_ref()
+      monitor = Process.monitor(subscriber)
+
+      handle = %Subscription{
+        id: id,
+        mixer: mixer,
+        token: token,
+        tenant_id: identity.tenant_id,
+        room_id: identity.room_id,
+        incarnation_id: identity.incarnation_id,
+        recipient_participant_id: nil,
+        mode: mode,
+        purpose: :recording
+      }
+
+      entry = %{
+        token: token,
+        recipient_id: nil,
+        mode: mode,
+        purpose: :recording,
         subscriber: subscriber,
         monitor: monitor,
         queue: :queue.new(),
@@ -132,7 +192,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
   @spec monitor_recipient?(t(), String.t()) :: boolean()
   def monitor_recipient?(%__MODULE__{} = catalog, recipient_id) do
     Enum.any?(catalog.entries, fn {_id, entry} ->
-      entry.recipient_id == recipient_id and entry.mode != :mix_minus
+      entry.purpose == :participant and entry.recipient_id == recipient_id and
+        entry.mode != :mix_minus
     end)
   end
 
@@ -190,6 +251,25 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
   end
 
   defp subscription_mode(_mode, _snapshot), do: {:error, :invalid_subscription_mode}
+
+  defp recording_mode(:full_mix), do: {:ok, :full_mix}
+
+  defp recording_mode({:individual_track, source_id} = mode) when is_binary(source_id) do
+    if String.trim(source_id) == "" or byte_size(source_id) > 128,
+      do: {:error, :invalid_subscription_mode},
+      else: {:ok, mode}
+  end
+
+  defp recording_mode(_mode), do: {:error, :invalid_subscription_mode}
+
+  defp recording_authorized(options, recording_token) when is_reference(recording_token) do
+    if Keyword.get(options, :recording_token) == recording_token,
+      do: :ok,
+      else: {:error, :recording_not_authorized}
+  end
+
+  defp recording_authorized(_options, _recording_token),
+    do: {:error, :recording_not_authorized}
 
   defp compatibility(catalog, recipient_id, :mix_minus, _source_sequences) do
     if monitor_recipient?(catalog, recipient_id),

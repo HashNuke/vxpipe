@@ -39,24 +39,38 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
        ) do
     entry = Map.fetch!(catalog.entries, id)
 
-    if MapSet.member?(policy.present_participant_ids, entry.recipient_id) do
-      frames = Router.sources(bucket, entry.recipient_id, entry.mode, policy.effective)
+    case sources(entry, bucket, policy) do
+      {:ok, frames} ->
+        offer(
+          frames,
+          id,
+          entry,
+          timestamp,
+          identity,
+          format,
+          policy,
+          mixer,
+          catalog,
+          delivered,
+          dropped
+        )
 
-      offer(
-        frames,
-        id,
-        entry,
-        timestamp,
-        identity,
-        format,
-        policy,
-        mixer,
-        catalog,
-        delivered,
-        dropped
-      )
+      :skip ->
+        {catalog, delivered, dropped}
+    end
+  end
+
+  defp sources(%{purpose: :recording, mode: mode}, bucket, policy) do
+    if policy.effective.record_audio,
+      do: {:ok, Router.recording_sources(bucket, mode)},
+      else: :skip
+  end
+
+  defp sources(%{purpose: :participant} = entry, bucket, policy) do
+    if MapSet.member?(policy.present_participant_ids, entry.recipient_id) do
+      {:ok, Router.sources(bucket, entry.recipient_id, entry.mode, policy.effective)}
     else
-      {catalog, delivered, dropped}
+      :skip
     end
   end
 

@@ -20,6 +20,17 @@ defmodule Vxpipe.CallEngine.RoomMixer.Router do
     |> Enum.map(&elem(&1, 1))
   end
 
+  @spec recording_sources(
+          %{String.t() => NormalizedFrame.t()},
+          :full_mix | {:individual_track, String.t()}
+        ) :: [NormalizedFrame.t()]
+  def recording_sources(bucket, mode) do
+    bucket
+    |> Enum.filter(fn {source_id, _frame} -> selected?(mode, source_id, nil) end)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.map(&elem(&1, 1))
+  end
+
   defp selected?(:mix_minus, source_id, recipient_id), do: source_id != recipient_id
   defp selected?(:full_mix, _source_id, _recipient_id), do: true
 

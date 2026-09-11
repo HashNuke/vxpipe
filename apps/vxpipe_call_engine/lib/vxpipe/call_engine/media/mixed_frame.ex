@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.Media.MixedFrame do
           room_id: String.t(),
           incarnation_id: String.t(),
           subscription_id: String.t(),
-          recipient_participant_id: String.t(),
+          recipient_participant_id: nil | String.t(),
           mode: mode(),
           source_participant_ids: [String.t()],
           timestamp: non_neg_integer(),

@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
     :identity,
     :clock_origin_ms,
     :format,
+    :recording_token,
     :playout,
     :policy,
     :buffer,
@@ -26,6 +27,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
             channels: pos_integer(),
             frame_samples: pos_integer()
           },
+          recording_token: nil | reference(),
           playout: Playout.t() | nil,
           policy: nil | Snapshot.t(),
           buffer: TimestampBuffer.t(),

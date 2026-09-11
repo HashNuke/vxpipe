@@ -89,6 +89,46 @@ is introduced by this checkpoint. Those remain later parts of this milestone.
 Root formatting, compilation with warnings as errors, strict Credo over 612 source files, all 803
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 2: policy-gated mixer recording subscriptions
+
+`RoomMixer` now exposes a separate internal recording subscription instead of pretending that a
+recorder is a silent human participant. `RoomIncarnationSupervisor` will supply a fresh reference to
+the mixer and the future `RoomRecording` sibling; callers without that exact token cannot create a
+recording subscription. Existing participant mix-minus and monitor subscriptions retain their
+presence, route, and conflict rules.
+
+A recording subscription may select the full main-room mix or one named participant track. It sees
+only normalized frames admitted under the current room identity and policy revision. Recording is
+independent of participant recipient routes: when enabled, it captures the selected main-room
+source even if that source has a narrow audience. It never captures private preparation audio,
+which is not an input to the main mixer. The effective `record_audio` boolean remains the storage
+authority.
+
+Fanout skips all recording subscriptions while `record_audio` is false. A policy transition clears
+the timestamp buffer and every subscriber queue before acknowledging the new revision, so audio
+queued in a permitted interval cannot be pulled after denial and denied frames cannot be replayed
+after permission returns. The recording subscription may remain installed and resumes only with
+new frames tagged for the later permitted revision.
+
+The new test was red with an undefined `RoomMixer.subscribe_recording/2`. The green case proves a
+forged token is rejected, route-independent full-mix capture succeeds while recording is permitted,
+the denied middle interval emits nothing, and a later permitted revision records only new audio.
+Existing mixer, policy-room, and silent-monitor behavior remains green:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/media_policy_room_test.exs \
+  test/vxpipe/call_engine/silent_monitor_call_test.exs --max-cases 1
+# 10 tests, 0 failures
+```
+
+This checkpoint supplies only the authorized mixer tap. It does not start a recorder, hand chunks
+to an artifact writer, or enable recording in a call definition.
+
+Root formatting, compilation with warnings as errors, strict Credo over 612 source files, all 804
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,
