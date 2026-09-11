@@ -40,6 +40,24 @@ defmodule Vxpipe.Persistence.ArtifactStore do
     end
   end
 
+  @impl true
+  def fetch_call_artifact(repo, tenant_key, call_id, artifact_id) do
+    case fetch_call(repo, tenant_key, call_id) do
+      nil ->
+        {:error, :call_not_found}
+
+      call ->
+        case repo.one(
+               from(artifact in StoredArtifact,
+                 where: artifact.call_id == ^call.id and artifact.public_id == ^artifact_id
+               )
+             ) do
+          nil -> {:error, :call_artifact_not_found}
+          stored -> to_call_artifact(stored, tenant_key, call_id)
+        end
+    end
+  end
+
   defp fetch_call(repo, tenant_key, call_id, lock \\ nil) do
     query =
       from(call in Call,

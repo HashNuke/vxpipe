@@ -630,10 +630,34 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     refute inspect(artifact) =~ "ignored"
     assert Repo.aggregate(StoredCallArtifact, :count) == 1
 
+    assert {:ok, ^artifact} =
+             Calls.fetch_call_artifact(
+               context.principal,
+               call.id,
+               manifest.artifact_id,
+               context.options
+             )
+
+    assert {:error, :call_artifact_not_found} =
+             Calls.fetch_call_artifact(
+               context.principal,
+               call.id,
+               "artifact-missing",
+               context.options
+             )
+
     other_tenant = %{context.principal | tenant_key: "ZZZZZZZZZZZZZZZZ"}
 
     assert {:error, :call_not_found} =
              Calls.fetch_call_artifacts(other_tenant, call.id, context.options)
+
+    assert {:error, :call_not_found} =
+             Calls.fetch_call_artifact(
+               other_tenant,
+               call.id,
+               manifest.artifact_id,
+               context.options
+             )
 
     conflicting = %Result{result | manifest: %{manifest | sample_count: 960}}
 

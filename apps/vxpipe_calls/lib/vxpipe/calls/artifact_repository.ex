@@ -10,4 +10,7 @@ defmodule Vxpipe.Calls.ArtifactRepository do
 
   @callback fetch_call_artifacts(context(), String.t(), String.t()) ::
               {:ok, [CallArtifact.t()]} | {:error, term()}
+
+  @callback fetch_call_artifact(context(), String.t(), String.t(), String.t()) ::
+              {:ok, CallArtifact.t()} | {:error, term()}
 end

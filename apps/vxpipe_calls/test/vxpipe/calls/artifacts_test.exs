@@ -19,14 +19,25 @@ defmodule Vxpipe.Calls.ArtifactsTest do
 
     assert {:ok, [^artifact]} = Calls.fetch_call_artifacts(principal, artifact.call_id, options)
 
+    assert {:ok, ^artifact} =
+             Calls.fetch_call_artifact(principal, artifact.call_id, artifact.id, options)
+
+    assert {:error, :call_artifact_not_found} =
+             Calls.fetch_call_artifact(principal, artifact.call_id, "artifact-missing", options)
+
     unauthorized = %{principal | scopes: MapSet.new([:admin])}
 
     assert {:error, :insufficient_scope} =
              Calls.fetch_call_artifacts(unauthorized, artifact.call_id, options)
 
+    assert {:error, :insufficient_scope} =
+             Calls.fetch_call_artifact(unauthorized, artifact.call_id, artifact.id, options)
+
     assert TestArtifactRepository.operations(repository) == [
              {:store, artifact.id},
-             {:fetch, artifact.tenant_key, artifact.call_id}
+             {:fetch, artifact.tenant_key, artifact.call_id},
+             {:fetch_one, artifact.tenant_key, artifact.call_id, artifact.id},
+             {:fetch_one, artifact.tenant_key, artifact.call_id, "artifact-missing"}
            ]
   end
 

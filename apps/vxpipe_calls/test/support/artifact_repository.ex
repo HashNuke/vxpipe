@@ -33,4 +33,26 @@ defmodule Vxpipe.Calls.TestArtifactRepository do
        %{state | operations: [{:fetch, tenant_key, call_id} | state.operations]}}
     end)
   end
+
+  @impl true
+  def fetch_call_artifact(agent, tenant_key, call_id, artifact_id) do
+    Agent.get_and_update(agent, fn state ->
+      result =
+        case Enum.find(state.artifacts, fn artifact ->
+               artifact.tenant_key == tenant_key and artifact.call_id == call_id and
+                 artifact.id == artifact_id
+             end) do
+          nil -> {:error, :call_artifact_not_found}
+          artifact -> {:ok, artifact}
+        end
+
+      {result,
+       %{
+         state
+         | operations: [
+             {:fetch_one, tenant_key, call_id, artifact_id} | state.operations
+           ]
+       }}
+    end)
+  end
 end

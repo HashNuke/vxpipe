@@ -636,6 +636,39 @@ The root gates pass formatting, compilation with warnings as errors, strict Cred
 files, all 824 default umbrella tests, and the unused-dependency check. The one S3-compatible test
 is excluded from that default total and passed separately above.
 
+## Checkpoint 16: exact tenant-authorized artifact lookup
+
+Calls now exposes a single-artifact workflow for the playback boundary. It requires the same
+`calls` scope as artifact listing and supplies the authenticated tenant key, call public ID, and
+artifact public ID to the repository. Persistence binds all three before returning terminal
+metadata. A missing artifact is distinct from a missing tenant-visible call, while a call owned by
+another tenant remains indistinguishable from a missing call.
+
+This prevents the eventual browser endpoint from accepting an object-store key or provider URL as
+authority. The Console will receive only the typed metadata returned by Calls and will pass its
+already-persisted object reference to the artifacts-owned reader in the next checkpoint.
+
+The focused Calls test was first red because `fetch_call_artifact/4` did not exist. Its green path
+covers an exact hit, a missing artifact, and scope rejection. The real Ecto adapter additionally
+proves exact lookup and cross-tenant failure against PostgreSQL:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/artifacts_test.exs --max-cases 1
+# 1 test, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test \
+  mix test test/vxpipe/persistence/call_store_test.exs --max-cases 1
+# 17 tests, 0 failures
+```
+
+This is the authorization foundation, not yet an operator playback route. The combined
+playback/access checklist item therefore remains open.
+
+Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
+default umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

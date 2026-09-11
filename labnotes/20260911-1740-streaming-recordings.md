@@ -599,3 +599,35 @@ manual verification remain.
 Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
 default umbrella tests, and the unused-dependency check pass. The tagged object-store test is
 excluded from that total and passed separately above.
+
+## 2026-09-11: exact artifact access boundary
+
+The private playback path needs one terminal artifact, but the existing Calls workflow returned
+every artifact for a tenant-visible call. Filtering that list in Console would be authorized but
+would make the presentation host retrieve and handle unrelated storage references. The new Calls
+operation instead resolves one artifact through the repository using the authenticated tenant key,
+call public ID, and artifact public ID.
+
+The focused test was written first and failed with an undefined
+`Vxpipe.Calls.fetch_call_artifact/4`. The workflow now rejects principals without the `calls` scope,
+and the repository test adapter records the exact lookup without exposing object storage details.
+The Ecto adapter first resolves the tenant-visible call and then queries the artifact by its public
+ID within that call. Another tenant therefore receives `call_not_found`; a nonexistent artifact in
+a visible call receives `call_artifact_not_found`.
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/artifacts_test.exs --max-cases 1
+# 1 test, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test \
+  mix test test/vxpipe/persistence/call_store_test.exs --max-cases 1
+# 17 tests, 0 failures
+```
+
+No HTTP route or object reader exists in this checkpoint. The next change can build those pieces
+without letting a browser choose a bucket or object key.
+
+Root formatting, compilation with warnings as errors, strict Credo over 647 source files, all 824
+default umbrella tests, and the unused-dependency check pass.

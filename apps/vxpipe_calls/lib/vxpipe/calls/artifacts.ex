@@ -24,6 +24,23 @@ defmodule Vxpipe.Calls.Artifacts do
 
   def fetch(_principal, _call_id, _options), do: {:error, :invalid_artifact_request}
 
+  @spec fetch_one(Principal.t(), String.t(), String.t(), keyword()) ::
+          {:ok, CallArtifact.t()} | {:error, term()}
+  def fetch_one(%Principal{} = principal, call_id, artifact_id, options)
+      when is_binary(call_id) and is_binary(artifact_id) and is_list(options) do
+    with :ok <- authorize(principal),
+         {:ok, repository} <- Repositories.fetch(options, :artifact_repository) do
+      Repositories.call(repository, :fetch_call_artifact, [
+        principal.tenant_key,
+        call_id,
+        artifact_id
+      ])
+    end
+  end
+
+  def fetch_one(_principal, _call_id, _artifact_id, _options),
+    do: {:error, :invalid_artifact_request}
+
   defp authorize(%Principal{scopes: scopes}) do
     if MapSet.member?(scopes, :calls), do: :ok, else: {:error, :insufficient_scope}
   end

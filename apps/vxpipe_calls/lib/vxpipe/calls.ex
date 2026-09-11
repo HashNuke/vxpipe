@@ -83,6 +83,9 @@ defmodule Vxpipe.Calls do
   def fetch_call_artifacts(principal, call_id, options \\ []),
     do: Artifacts.fetch(principal, call_id, options)
 
+  def fetch_call_artifact(principal, call_id, artifact_id, options \\ []),
+    do: Artifacts.fetch_one(principal, call_id, artifact_id, options)
+
   def fetch_call_history(principal, call_id, options \\ []),
     do: Archives.fetch_call_history(principal, call_id, options)
 

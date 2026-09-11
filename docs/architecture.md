@@ -2400,6 +2400,9 @@ only the object key and optional ETag. Provider-returned locations are not persi
 playback authorization. Duplicate identical publication is idempotent, while conflicting reuse of
 an artifact ID and a wrong call incarnation fail. Incomplete metadata may survive without an object
 reference, which reports an attempted/failed artifact rather than inventing playable audio.
+Calls also exposes an exact artifact lookup keyed by authenticated tenant, call public ID, and
+artifact public ID. Persistence binds all three in its query; browser paths never select an object
+by accepting a storage key or provider-returned location from the client.
 
 The repository development host composes those existing ports in `vxpipe_console`; it does not add
 S3 or Ecto knowledge to Call Engine or Gateway. Recording is off by default. When the trusted
