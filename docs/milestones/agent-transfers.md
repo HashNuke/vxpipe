@@ -1,6 +1,6 @@
 # Allowlisted agent-to-agent transfers
 
-Status: partially implemented. Specification review: approved (2026-09-08).
+Status: complete as of 2026-09-11. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP tools](remote-mcp-tools.md); [Call lifecycle](opening-audio-and-call-lifecycle.md).
 Sources: [Transfer identities](../../labnotes/20260905-0405-call-definition-design.md#runtime-participant-and-transfer-identities); [transfer success/failure](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [history policies](../../labnotes/20260905-0405-call-definition-design.md#initial-agent-transfer-history-policies).
 
@@ -62,13 +62,10 @@ No human bridge, arbitrary dialing, named transfers, graph/on_success hooks, gen
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
-
-Implementation remains partial; do not mark this slice complete because its specification has
-been reviewed or because the compiler boundary below exists.
 
 Partial implementation evidence (2026-09-10): schema `20260910.04` accepts unique, non-empty
 definition-local agent transfer refs and rejects malformed, duplicate, missing, self, and human
@@ -303,8 +300,13 @@ Both ordinary and selected-history schemas pass direct Gemini requests, and the 
 returns `transfer` as expected. The rendered sample then transferred reception to billing, played
 billing's fixed greeting to completion, retained the caller's spoken transfer request, and read the
 permitted `order-demo-1001` variable through the blocking variables tool. A requested return to
-reception produced a second transfer tool call, but the subsequent caller turn did not receive a
-rendered response within the bounded observation window, so re-entry remains manually unchecked.
+reception produced a second transfer tool call. In the first pass, the next caller turn interrupted
+the source acknowledgement's delayed audio and received no rendered response inside the bounded
+window. A clean replay waited for that acknowledgement to stop before sending new input: the second
+transfer committed, reception answered after re-entry, and the following caller question received
+“I am the reception department. How can I help you?” in the rendered conversation. This isolates
+the earlier
+observation as an interruption race rather than failed re-entry.
 The deterministic 282-test Call Engine suite remains green with one tagged integration exclusion.
 Frontend tests and
 type checking, development and test warnings-as-errors compilation, formatting, strict Credo, and
@@ -313,9 +315,19 @@ instance exposed three Persistence fixtures pinned to the superseded `20260910.0
 those fixtures to the current `20260910.06` schema restored the complete green umbrella suite; the
 database was removed after verification.
 
+Final milestone evidence combines that rendered happy path and re-entry with deterministic failure
+coverage for unauthorized destinations, stale/wrong sources, duplicate preparation, provider
+startup failure, deadline expiry, failed commit, one-shot source restoration, late-result exclusion,
+history/variable privacy, and source-subtree termination. The complete database-backed umbrella
+suite and all common formatting, warnings-as-errors compilation, strict Credo, and unused-dependency
+gates pass. The rendered console was inspected at desktop and 390 x 844 viewports through headless
+Chromium/CDP because `agent-browser` was unavailable; that substitution is recorded rather than
+claiming the unavailable tool.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Specified history modes, precommit destination silence/source continuity, empty-list and total-deadline races; re-review approved.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+That review was specification evidence only; the implementation and runtime evidence above now
+closes the separate completion gates.

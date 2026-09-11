@@ -529,3 +529,20 @@
 - The complete database-backed umbrella suite passes against disposable PostgreSQL 17, as do
   formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check. The
   database was removed after verification.
+
+## 2026-09-11 — clean rendered re-entry verification
+
+- Repeated the rendered reception-to-billing-to-reception path in a fresh HTTPS call. Both generated
+  `transfer` calls appeared in the conversation, billing's fixed greeting completed, and the return
+  transfer produced a fresh reception response without replaying reception's first greeting.
+- Waited for the return-transfer acknowledgement audio to stop before sending the next caller turn.
+  “Which department are you?” then received “I am the reception department. How can I help you?” in
+  the rendered conversation. This verifies that a fresh turn routes through the new reception
+  activation after re-entry; the earlier transfer greetings had already exercised completed audio
+  playout.
+- The prior pass had sent its probe while delayed source acknowledgement audio was still playing.
+  That input interrupted the old playout, so its missing response was not reliable re-entry
+  evidence. The clean sequencing removes that race without changing runtime behavior.
+- Combined with the green deterministic acceptance suite and complete database-backed umbrella
+  gates from the preceding checkpoints, this closes the transfer milestone. Headless Chromium/CDP
+  was used because `agent-browser` remains unavailable in this environment.

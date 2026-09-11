@@ -1,23 +1,12 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 13 complete and 11 incomplete. Milestone 13, opening audio
-and call lifecycle, is complete. Milestone 14, allowlisted agent-to-agent transfers, is the current
-implementation slice. Its definition parser and compiler now derive a private default-blocking
-transfer binding from validated agent-local allowlists. Its first runnable checkpoint commits a
-fresh-history agent destination, preserves room variables, and tears down the source only after
-commit. The next schema checkpoint pins the configurable total attempt budget and ensures the outer
-supervised tool timeout encloses it. A subsequent runtime checkpoint moves preparation out of Room
-Authority, enforces that deadline, cleans up failed/expired destinations, and excludes late results;
-confirmed spoken-history projection is active, and selected destinations now receive their private
-bounded transfer reason plus only destination-readable variables. Re-entry preserves participant
-identity with fresh activation and no greeting replay. Private transfer attempts/outcomes are
-archived with activation attribution while client failures remain generic. A failed preparation
-now makes at most one bounded room-supervised attempt to restore lost source TTS and records its
-private outcome without exposing the cause. Timed-out startup cleanup is also supervised and
-capacity-bounded, so it cannot block Room Authority while a provider finishes connecting. A
-prepared destination that exits before commit is rejected without transferring authority or
-publishing false completion. Automated acceptance coverage is complete; rendered/manual transfer
-verification and the common completion gates remain.
+Status: 24 milestone specifications: 14 complete and 10 incomplete. Milestone 14, allowlisted
+agent-to-agent transfers, is complete. The rendered call transferred reception to billing and back,
+retained permitted history and variables, and accepted a fresh caller turn after re-entry. Its
+default-blocking transfer tools still run in independently supervised workers; the setting gates
+only later conversation. Deterministic coverage proves authorization, prepare/commit, deadline,
+restoration, history/privacy, re-entry, and late-result failure boundaries. Milestone 15, live mixing
+and presence-driven media policy, is the current implementation slice.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
@@ -60,7 +49,7 @@ progress without claiming the entire milestone is complete.
 11. [x] [ReqLLM agent runtime](reqllm-agent-runtime.md) — Build and adopt the reusable streamed model/tool loop without Jido.
 12. [x] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
 13. [x] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
-14. [ ] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
+14. [x] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
 15. [ ] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
 16. [ ] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
 17. [ ] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
