@@ -1,11 +1,11 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngressTest do
+defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Media.NormalizedFrame
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
-  alias Vxpipe.Gateway.Media.PCMFrame
-  alias Vxpipe.Gateway.WebRTC.{ConnectionPeerSupervisor, RoomAudioIngress}
+  alias Vxpipe.Gateway.Media.{PCMFrame, RoomAudioIngress}
+  alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
 
   test "starts and registers the per-connection ingress through its owning supervisor" do
     connection_id = unique_id("conn-supervised")
@@ -122,14 +122,13 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngressTest do
        incarnation_id: "rinc-demo",
        participant_id: "part-human",
        owner: self(),
-       jitter_latency_ms: 0,
        clock: fn -> 1_010 end,
        engine: Vxpipe.Gateway.TestRoomAudioEngine,
        pipeline: Vxpipe.Gateway.TestRoomAudioPipeline,
        pipeline_supervisor: Vxpipe.Gateway.TestRoomAudioPipelineSupervisor,
        pipeline_options:
          Keyword.merge(
-           [test_observer: self()],
+           [test_observer: self(), jitter_latency: 0],
            Keyword.get(options, :pipeline_options, [])
          )}
     )

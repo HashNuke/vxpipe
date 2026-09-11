@@ -1,9 +1,9 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.FrameProjection do
+defmodule Vxpipe.Gateway.Media.RoomAudioIngress.FrameProjection do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.NormalizedFrame
   alias Vxpipe.Gateway.Media.PCMFrame
-  alias Vxpipe.Gateway.WebRTC.RoomAudioIngress.State
+  alias Vxpipe.Gateway.Media.RoomAudioIngress.State
 
   @spec stale_transport_frame?(Vxpipe.CallEngine.Media.AudioFrame.t(), State.t()) :: boolean()
   def stale_transport_frame?(frame, %State{reject_received_through_ms: cutoff})

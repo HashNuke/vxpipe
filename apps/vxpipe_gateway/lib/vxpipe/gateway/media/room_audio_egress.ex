@@ -1,10 +1,10 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress do
+defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   @moduledoc false
 
   use GenServer
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.Gateway.WebRTC.RoomAudioEgress.{Delivery, PipelineLifecycle, State}
+  alias Vxpipe.Gateway.Media.RoomAudioEgress.{Delivery, PipelineLifecycle, State}
 
   @call_timeout 5_000
 

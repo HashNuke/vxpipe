@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
+defmodule Vxpipe.Gateway.Media.RoomAudioEgress.State do
   @moduledoc false
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
@@ -12,7 +12,6 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
     :identity,
     :in_flight,
     :owner,
-    :peer_connection,
     :pipeline,
     :pipeline_generation,
     :pipeline_id,
@@ -24,8 +23,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
     :policy,
     :ready_waiters,
     :subscription,
-    :subscription_id,
-    :track_id
+    :subscription_id
   ]
   defstruct @enforce_keys
 
@@ -37,7 +35,6 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
           identity: map(),
           in_flight: {String.t(), non_neg_integer()} | nil,
           owner: pid(),
-          peer_connection: pid(),
           pipeline: module(),
           pipeline_generation: non_neg_integer(),
           pipeline_id: String.t() | nil,
@@ -49,8 +46,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
           policy: Snapshot.t() | nil,
           ready_waiters: [GenServer.from()],
           subscription: term() | nil,
-          subscription_id: String.t(),
-          track_id: String.t()
+          subscription_id: String.t()
         }
 
   @spec new(keyword()) :: t()
@@ -70,7 +66,6 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
       },
       in_flight: nil,
       owner: Keyword.fetch!(options, :owner),
-      peer_connection: Keyword.fetch!(options, :peer_connection),
       pipeline: Keyword.get(options, :pipeline, RoomAudioOutputPipeline),
       pipeline_generation: 0,
       pipeline_id: nil,
@@ -82,8 +77,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
       policy: nil,
       ready_waiters: [],
       subscription: nil,
-      subscription_id: "#{connection_id}:room-output",
-      track_id: Keyword.fetch!(options, :track_id)
+      subscription_id: "#{connection_id}:room-output"
     }
   end
 end

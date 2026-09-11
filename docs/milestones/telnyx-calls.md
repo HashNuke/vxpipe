@@ -105,6 +105,10 @@ gateway observation time when the admitted media stream proves liveness first. R
 attachment, private briefing, acceptance, cleanup, and runnable vendor outcome remain incomplete.
 This serialized activation checkpoint passed the root formatting, warnings-as-errors compilation,
 strict Credo, unused-dependency, focused 22-test regression set, and a clean 723-test umbrella run.
+The existing policy-aware room ingress/egress coordinators have also moved from the WebRTC namespace
+to the transport-neutral Gateway media boundary, with their WebRTC behavior unchanged. Telnyx can
+therefore adopt the same policy revision, mixer subscription, and backpressure ownership while
+retaining its own Membrane codecs and socket lifecycle.
 
 ## Specification review
 

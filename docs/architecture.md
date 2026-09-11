@@ -1121,6 +1121,11 @@ transport adapters. In the reverse direction, authorized 20 ms room PCM frames u
 source, Membrane's Opus encoder, and Membrane's realtime pacing before the Telnyx sink emits the
 provider's exact client-to-server `media.payload` JSON envelope. That envelope contains base64
 headerless Opus and no invented stream identifier; the socket itself already names the exact leg.
+The policy-aware room-ingress and room-egress coordinators are also Gateway media components rather
+than WebRTC components. They own engine attachment handles, media-policy revision barriers, mixer
+subscription/backpressure, and transport-pipeline replacement. WebRTC and telephony supply their
+own supervised pipeline lifecycle and codec-specific options; neither transport reimplements those
+room-facing semantics.
 Before a provider receives a media URL, Gateway issues an opaque, expiring admission token bound to
 the exact live leg process and its tenant, call, incarnation, participant, configured service, and
 provider identifiers. The token is single-use, is valid only under that service's opaque ingress

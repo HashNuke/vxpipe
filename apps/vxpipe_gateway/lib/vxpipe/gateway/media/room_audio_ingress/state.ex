@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.State do
+defmodule Vxpipe.Gateway.Media.RoomAudioIngress.State do
   @moduledoc false
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
@@ -11,7 +11,6 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.State do
     :configuration,
     :engine,
     :identity,
-    :jitter_latency_ms,
     :next_sequence_number,
     :owner,
     :pipeline,
@@ -35,7 +34,6 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.State do
           configuration: map(),
           engine: module(),
           identity: map(),
-          jitter_latency_ms: non_neg_integer(),
           next_sequence_number: pos_integer(),
           owner: pid(),
           pipeline: module(),
@@ -65,7 +63,6 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.State do
         participant_id: Keyword.fetch!(options, :participant_id)
       },
       configuration: Keyword.fetch!(options, :configuration),
-      jitter_latency_ms: Keyword.fetch!(options, :jitter_latency_ms),
       next_sequence_number: 1,
       owner: Keyword.fetch!(options, :owner),
       pipeline: Keyword.get(options, :pipeline, AudioPipeline),

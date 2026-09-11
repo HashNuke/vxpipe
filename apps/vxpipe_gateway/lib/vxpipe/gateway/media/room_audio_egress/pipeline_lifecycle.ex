@@ -1,7 +1,7 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.PipelineLifecycle do
+defmodule Vxpipe.Gateway.Media.RoomAudioEgress.PipelineLifecycle do
   @moduledoc false
 
-  alias Vxpipe.Gateway.WebRTC.RoomAudioEgress.State
+  alias Vxpipe.Gateway.Media.RoomAudioEgress.State
 
   @spec launch(State.t()) :: {:ok, State.t()} | {:error, term()}
   def launch(%State{} = state) do
@@ -12,8 +12,6 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.PipelineLifecycle do
       Keyword.merge(state.pipeline_options,
         pipeline_id: pipeline_id,
         owner: self(),
-        peer_connection: state.peer_connection,
-        track_id: state.track_id,
         subscription_id: state.subscription_id,
         tenant_id: state.identity.tenant_id,
         room_id: state.identity.room_id,

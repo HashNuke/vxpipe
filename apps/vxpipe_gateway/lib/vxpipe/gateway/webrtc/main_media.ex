@@ -2,13 +2,9 @@ defmodule Vxpipe.Gateway.WebRTC.MainMedia do
   @moduledoc false
 
   alias Vxpipe.CallEngine.ConnectionAttachment
+  alias Vxpipe.Gateway.Media.{RoomAudioEgress, RoomAudioIngress}
   alias Vxpipe.Gateway.Session.Snapshot
-
-  alias Vxpipe.Gateway.WebRTC.{
-    ConnectionPeerSupervisor,
-    RoomAudioEgress,
-    RoomAudioIngress
-  }
+  alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
 
   @spec activate(
           String.t(),

@@ -1,7 +1,7 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.PipelineLifecycle do
+defmodule Vxpipe.Gateway.Media.RoomAudioIngress.PipelineLifecycle do
   @moduledoc false
 
-  alias Vxpipe.Gateway.WebRTC.RoomAudioIngress.State
+  alias Vxpipe.Gateway.Media.RoomAudioIngress.State
 
   @spec launch(State.t()) :: {:ok, State.t()} | {:error, term()}
   def launch(%State{} = state) do
@@ -17,8 +17,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.PipelineLifecycle do
         incarnation_id: state.identity.incarnation_id,
         participant_id: state.identity.participant_id,
         connection_id: state.connection_id,
-        clock_origin_ms: state.configuration.clock_origin_ms,
-        jitter_latency: state.jitter_latency_ms
+        clock_origin_ms: state.configuration.clock_origin_ms
       )
 
     case state.pipeline_supervisor.start_audio_pipeline(state.connection_id, options) do

@@ -5,7 +5,8 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
   alias ExWebRTC.RTPCodecParameters
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.ConnectionAttachment
-  alias Vxpipe.Gateway.WebRTC.{AudioFrame, RoomAudioIngress}
+  alias Vxpipe.Gateway.Media.RoomAudioIngress
+  alias Vxpipe.Gateway.WebRTC.AudioFrame
 
   @spec forward(
           RTPCodecParameters.t() | nil,

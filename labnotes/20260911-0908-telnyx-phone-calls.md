@@ -880,3 +880,30 @@ Call Engine room-shutdown assertion at its two-second monitor deadline (seed `46
 lanes were green. The owning Call Engine suite immediately passed all 348 tests with that exact seed,
 and the following clean umbrella run passed 723 tests with zero failures against a fresh disposable
 PostgreSQL 17 instance. No production change was made for that unrelated transient assertion.
+
+## Checkpoint 22: transport-neutral room media coordinators
+
+Before attaching Telnyx, the policy-aware room ingress and room egress coordinators were moved from
+`Vxpipe.Gateway.WebRTC` to `Vxpipe.Gateway.Media`. Their responsibilities are not WebRTC-specific:
+they own engine audio handles, current policy snapshots, policy-barrier pipeline replacement,
+normalized PCM projection, mixer subscription, bounded draining, and transport pipeline failure.
+The RTP decoder/encoder pipelines and the WebRTC child supervisor remain under the WebRTC boundary.
+No behavior or public API was changed, and Git retains the files as moves with namespace updates.
+
+Focused regression evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/media/room_audio_ingress_test.exs \
+  test/vxpipe/gateway/media/room_audio_egress_test.exs \
+  test/vxpipe/gateway/webrtc/audio_pipeline_test.exs \
+  test/vxpipe/gateway/webrtc/connection_test.exs
+# 14 tests, 0 failures
+```
+
+The next behavioral checkpoint can inject Telnyx's existing Membrane ingress/egress pipelines and
+an owning telephony supervisor into these coordinators instead of cloning their room-facing logic.
+
+The mechanical checkpoint passed formatting, compilation with warnings as errors, strict Credo,
+the unused-dependency check, the focused 14-test regression set, and the complete 723-test umbrella
+suite against a fresh disposable PostgreSQL 17 instance.

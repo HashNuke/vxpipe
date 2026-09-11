@@ -1,9 +1,9 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.Delivery do
+defmodule Vxpipe.Gateway.Media.RoomAudioEgress.Delivery do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.MixedFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.Gateway.WebRTC.RoomAudioEgress.State
+  alias Vxpipe.Gateway.Media.RoomAudioEgress.State
 
   @spec drain(State.t()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def drain(

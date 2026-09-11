@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
+defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   @moduledoc false
 
   use GenServer
@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.Gateway.Media.PCMFrame
 
-  alias Vxpipe.Gateway.WebRTC.RoomAudioIngress.{
+  alias Vxpipe.Gateway.Media.RoomAudioIngress.{
     FrameProjection,
     PipelineLifecycle,
     State

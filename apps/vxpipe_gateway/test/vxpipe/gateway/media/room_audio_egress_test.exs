@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgressTest do
+defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.Media.MixedFrame

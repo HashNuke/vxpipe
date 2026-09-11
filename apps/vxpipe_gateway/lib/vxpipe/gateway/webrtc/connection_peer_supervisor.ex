@@ -5,12 +5,11 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
 
   alias ExWebRTC.PeerConnection
   alias Vxpipe.CallEngine
+  alias Vxpipe.Gateway.Media.{RoomAudioEgress, RoomAudioIngress}
 
   alias Vxpipe.Gateway.WebRTC.{
     AudioEgress,
     AudioPipeline,
-    RoomAudioEgress,
-    RoomAudioIngress,
     RoomAudioOutputPipeline
   }
 
@@ -102,6 +101,11 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
         {:ok, nil}
 
       {:ok, configuration} ->
+        pipeline_options =
+          options
+          |> Keyword.get(:pipeline_options, [])
+          |> Keyword.put(:jitter_latency, Keyword.get(options, :jitter_latency_ms, 200))
+
         ingress_options =
           identity ++
             [
@@ -109,11 +113,10 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
               attachment: attachment,
               configuration: configuration,
               owner: self(),
-              jitter_latency_ms: Keyword.get(options, :jitter_latency_ms, 200),
               engine: engine,
               pipeline: Keyword.get(options, :pipeline, AudioPipeline),
               pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, __MODULE__),
-              pipeline_options: Keyword.get(options, :pipeline_options, [])
+              pipeline_options: pipeline_options
             ]
 
         start_and_register_room_audio_ingress(
@@ -165,18 +168,21 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
         {:ok, nil}
 
       {:ok, %{mode: mode}} when mode in [:full_mix, :mix_minus] ->
+        pipeline_options =
+          options
+          |> Keyword.get(:pipeline_options, [])
+          |> Keyword.merge(peer_connection: peer_connection, track_id: track_id)
+
         egress_options =
           identity ++
             [
               connection_id: connection_id,
               attachment: attachment,
               owner: self(),
-              peer_connection: peer_connection,
-              track_id: track_id,
               engine: engine,
               pipeline: Keyword.get(options, :pipeline, RoomAudioOutputPipeline),
               pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, __MODULE__),
-              pipeline_options: Keyword.get(options, :pipeline_options, [])
+              pipeline_options: pipeline_options
             ]
 
         start_and_register_room_audio_egress(
