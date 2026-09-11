@@ -9,11 +9,13 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     DefinitionCompiler,
     Error,
     RoomMixer,
-    TestCallLifecycleTimer
+    TestCallLifecycleTimer,
+    TestMediaPolicyEnforcer
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
+  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.RoomMixer.Subscription
 
   test "starts two human entries without an agent, mixes audio, and retains call lifecycle" do
@@ -39,12 +41,32 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     _ = registered_participant(plan, caller.participant_id)
     _ = registered_participant(plan, receiver.participant_id)
 
-    attach(plan, room, caller, "conn-human-caller")
+    caller_attachment = attach(plan, room, caller, "conn-human-caller")
     assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
-    attach(plan, room, receiver, "conn-human-receiver")
+    receiver_attachment = attach(plan, room, receiver, "conn-human-receiver")
+
+    assert {:ok,
+            %{
+              clock_origin_ms: clock_origin_ms,
+              sample_rate: 48_000,
+              channels: 1,
+              frame_samples: 960
+            }} = CallEngine.room_audio_configuration(caller_attachment)
+
+    assert is_integer(clock_origin_ms)
+
+    assert {:ok, %{clock_origin_ms: ^clock_origin_ms}} =
+             CallEngine.room_audio_configuration(receiver_attachment)
 
     assert [{authority, _value}] =
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    enforcer = start_supervised!({TestMediaPolicyEnforcer, owner: self(), mode: :ok})
+
+    assert {:ok, %Snapshot{revision: 2}} =
+             CallEngine.register_room_audio_enforcer(caller_attachment, enforcer)
+
+    assert_receive {:media_policy_applied, ^enforcer, %Snapshot{revision: 2}}
 
     state = :sys.get_state(authority)
     assert state.text_capability == nil
@@ -60,14 +82,14 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     receiver_audio = :binary.copy(<<200::little-signed-16>>, 960)
 
     assert :ok =
-             RoomMixer.push(
-               mixer,
+             CallEngine.push_room_audio(
+               caller_attachment,
                normalized_frame(plan, room, caller.participant_id, caller_audio)
              )
 
     assert :ok =
-             RoomMixer.push(
-               mixer,
+             CallEngine.push_room_audio(
+               receiver_attachment,
                normalized_frame(plan, room, receiver.participant_id, receiver_audio)
              )
 
@@ -142,7 +164,8 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    assert {:ok, _attachment} = CallEngine.attach_connection(command)
+    assert {:ok, attachment} = CallEngine.attach_connection(command)
+    attachment
   end
 
   defp subscribe(mixer, plan, room, participant_id, id) do

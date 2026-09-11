@@ -65,6 +65,9 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   @spec stats(GenServer.server()) :: map() | {:error, :unavailable}
   def stats(server), do: safe_call(server, :stats)
 
+  @spec ingress_configuration(GenServer.server()) :: {:ok, map()} | {:error, :unavailable}
+  def ingress_configuration(server), do: safe_call(server, :ingress_configuration)
+
   @impl true
   def init(options) do
     case Configuration.new(options) do
@@ -140,6 +143,11 @@ defmodule Vxpipe.CallEngine.RoomMixer do
 
   def handle_call(:stats, _from, state) do
     {:reply, state_stats(state), state}
+  end
+
+  def handle_call(:ingress_configuration, _from, state) do
+    configuration = Map.put(state.format, :clock_origin_ms, state.clock_origin_ms)
+    {:reply, {:ok, configuration}, state}
   end
 
   @impl true

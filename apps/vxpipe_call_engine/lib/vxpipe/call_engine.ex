@@ -8,11 +8,12 @@ defmodule Vxpipe.CallEngine do
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.DefinitionValidation
   alias Vxpipe.CallEngine.Error
-  alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
+  alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress, NormalizedFrame}
   alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
   alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.RoomSupervisor
+  alias Vxpipe.CallEngine.RoomAudioHandle
 
   @spec compile_definition(CallDefinition.t(), CallInvocation.t(), map(), keyword()) ::
           {:ok, ResolvedCallPlan.t()} | {:error, Error.t()}
@@ -95,11 +96,23 @@ defmodule Vxpipe.CallEngine do
              output_sink
            ) do
         {:ok, room_authority, media_ingress} ->
-          {:ok,
-           %ConnectionAttachment{
-             room_monitor: Process.monitor(room_authority),
-             media_ingress: media_ingress
-           }}
+          case RoomAudioHandle.resolve(command.incarnation_id) do
+            {:ok, room_audio} ->
+              {:ok,
+               %ConnectionAttachment{
+                 room_monitor: Process.monitor(room_authority),
+                 media_ingress: media_ingress,
+                 room_audio: room_audio
+               }}
+
+            {:error, :unavailable} ->
+              {:error,
+               Error.new(
+                 :room_audio_unavailable,
+                 "The room audio pipeline is unavailable.",
+                 retryable: true
+               )}
+          end
 
         {:error, %Error{} = error} ->
           {:error, error}
@@ -129,6 +142,39 @@ defmodule Vxpipe.CallEngine do
 
   def push_audio(%ConnectionAttachment{media_ingress: media_ingress}, %AudioFrame{} = frame) do
     Ingress.push(media_ingress, frame)
+  end
+
+  @spec room_audio_configuration(ConnectionAttachment.t()) :: {:ok, map()} | :disabled
+  def room_audio_configuration(%ConnectionAttachment{room_audio: nil}), do: :disabled
+
+  def room_audio_configuration(%ConnectionAttachment{room_audio: %RoomAudioHandle{} = handle}) do
+    {:ok, handle.configuration}
+  end
+
+  @spec register_room_audio_enforcer(ConnectionAttachment.t(), pid()) ::
+          {:ok, Vxpipe.CallEngine.MediaPolicy.Snapshot.t()} | {:error, :disabled | term()}
+  def register_room_audio_enforcer(%ConnectionAttachment{room_audio: nil}, enforcer)
+      when is_pid(enforcer),
+      do: {:error, :disabled}
+
+  def register_room_audio_enforcer(
+        %ConnectionAttachment{room_audio: %RoomAudioHandle{} = handle},
+        enforcer
+      )
+      when is_pid(enforcer) do
+    RoomAudioHandle.register_enforcer(handle, enforcer)
+  end
+
+  @spec push_room_audio(ConnectionAttachment.t(), NormalizedFrame.t()) ::
+          :ok | {:error, :disabled | term()}
+  def push_room_audio(%ConnectionAttachment{room_audio: nil}, %NormalizedFrame{}),
+    do: {:error, :disabled}
+
+  def push_room_audio(
+        %ConnectionAttachment{room_audio: %RoomAudioHandle{} = handle},
+        %NormalizedFrame{} = frame
+      ) do
+    RoomAudioHandle.push(handle, frame)
   end
 
   @spec send_text(SendText.t()) :: :ok | {:error, Error.t()}

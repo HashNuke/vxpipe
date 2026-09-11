@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
 
   @enforce_keys [
     :identity,
+    :clock_origin_ms,
     :format,
     :policy,
     :buffer,
@@ -18,6 +19,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
 
   @type t :: %__MODULE__{
           identity: %{tenant_id: String.t(), room_id: String.t(), incarnation_id: String.t()},
+          clock_origin_ms: integer(),
           format: %{
             sample_rate: pos_integer(),
             channels: pos_integer(),

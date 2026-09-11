@@ -62,10 +62,12 @@ defmodule Vxpipe.CallEngine.TextTurnTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, %ConnectionAttachment{room_monitor: room_monitor, media_ingress: nil}} =
+    assert {:ok,
+            %ConnectionAttachment{room_monitor: room_monitor, media_ingress: nil} = attachment} =
              CallEngine.attach_connection(attach_command)
 
     assert is_reference(room_monitor)
+    assert :disabled = CallEngine.room_audio_configuration(attachment)
 
     assert {:ok, send_command} =
              SendText.new(

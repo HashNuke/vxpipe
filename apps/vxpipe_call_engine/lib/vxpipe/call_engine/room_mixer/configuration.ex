@@ -6,12 +6,14 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
   @spec new(keyword()) :: {:ok, State.t()} | {:error, term()}
   def new(options) when is_list(options) do
     with {:ok, identity} <- identity(options),
+         {:ok, clock_origin_ms} <- clock_origin_ms(options),
          {:ok, format} <- format(options),
          {:ok, maximum_buffered_timestamps} <- positive(options, :maximum_buffered_timestamps),
          {:ok, maximum_sink_frames} <- positive(options, :maximum_sink_frames) do
       {:ok,
        %State{
          identity: identity,
+         clock_origin_ms: clock_origin_ms,
          format: format,
          policy: nil,
          buffer: TimestampBuffer.new(maximum_buffered_timestamps),
@@ -36,6 +38,13 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
          {:ok, channels} <- positive(options, :channels),
          {:ok, frame_samples} <- positive(options, :frame_samples) do
       {:ok, %{sample_rate: sample_rate, channels: channels, frame_samples: frame_samples}}
+    end
+  end
+
+  defp clock_origin_ms(options) do
+    case Keyword.get(options, :clock_origin_ms, System.monotonic_time(:millisecond)) do
+      value when is_integer(value) -> {:ok, value}
+      _invalid -> {:error, {:invalid_room_mixer_option, :clock_origin_ms}}
     end
   end
 

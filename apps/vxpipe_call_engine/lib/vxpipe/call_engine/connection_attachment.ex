@@ -5,11 +5,14 @@ defmodule Vxpipe.CallEngine.ConnectionAttachment do
   This struct is never part of a public snapshot or wire protocol.
   """
 
+  alias Vxpipe.CallEngine.RoomAudioHandle
+
   @enforce_keys [:room_monitor, :media_ingress]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [room_audio: nil]
 
   @type t :: %__MODULE__{
           room_monitor: reference(),
-          media_ingress: pid() | nil
+          media_ingress: pid() | nil,
+          room_audio: RoomAudioHandle.t() | nil
         }
 end
