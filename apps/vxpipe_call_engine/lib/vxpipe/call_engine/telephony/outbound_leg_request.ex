@@ -11,8 +11,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
              :room_id,
              :incarnation_id,
              :participant_id,
-             :service_id,
-             :answering_machine_detection
+             :service_id
            ]}
   @enforce_keys [
     :tenant_id,
@@ -22,8 +21,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
     :incarnation_id,
     :participant_id,
     :service_id,
-    :to,
-    :answering_machine_detection
+    :to
   ]
   defstruct @enforce_keys
 
@@ -35,8 +33,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
           incarnation_id: String.t(),
           participant_id: String.t(),
           service_id: String.t(),
-          to: String.t(),
-          answering_machine_detection: :disabled | :detect
+          to: String.t()
         }
 
   @spec valid?(t()) :: boolean()
@@ -52,8 +49,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
         request.service_id
       ],
       &present?/1
-    ) and phone_number?(request.to) and
-      request.answering_machine_detection in [:disabled, :detect]
+    ) and phone_number?(request.to)
   end
 
   defp phone_number?(value), do: is_binary(value) and Regex.match?(@phone_number, value)

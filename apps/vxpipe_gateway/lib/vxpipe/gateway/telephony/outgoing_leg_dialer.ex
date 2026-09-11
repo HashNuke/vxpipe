@@ -65,7 +65,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
       to: request.to,
       callback_url: PublicEndpoint.event_url(service),
       media_url: PublicEndpoint.media_url(service, token),
-      answering_machine_detection: request.answering_machine_detection
+      answering_machine_detection: service.answering_machine_detection
     }
   end
 end

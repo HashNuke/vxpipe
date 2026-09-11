@@ -184,6 +184,35 @@ commit or cleanup. The carrier reference remains opaque and is still interpreted
 Carrier hangup, AMD outcomes, deterministic whole-call harness coverage, and authorized vendor
 verification remain pending.
 
+## Checkpoint 37: configured carrier detection mode
+
+Answering-machine detection is now a reusable configured-service option rather than part of a
+call definition or room-authored outbound request. Omission resolves to `disabled`; the only other
+accepted value is `detect`. Invalid values fail the service configuration closed. When enabled, the
+Gateway copies the pinned service choice into the common dial command sent to the carrier adapter.
+
+The focused dial test was red because its room request disabled detection even though the selected
+service enabled it. The service now owns that choice, and the redundant field has been removed from
+Call Engine's outbound-leg request. This preserves the existing participant connection schema and
+prevents call orchestration from overriding deployment/provider policy.
+
+Focused green evidence:
+
+```text
+mix test apps/vxpipe_call_engine/test/vxpipe/call_engine/human_phone_transfer_room_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/configured_service_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/outgoing_leg_test.exs
+# 10 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. The complete umbrella run reached every application and found only the previously recorded
+startup-readiness teardown race (`:noproc` instead of the expected shutdown reason); its unchanged
+seven-test owning file immediately passed at the same seed.
+
+Exact machine/end-event handling and carrier hangup remain pending within the AMD/cleanup
+checklist item.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

@@ -17,7 +17,22 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
     assert service.public_base_url == "https://voice.example.test/voice"
     assert service.media_token_ttl_ms == 60_000
     assert service.outbound_number == "+15550001000"
+    assert service.answering_machine_detection == :disabled
     refute inspect(service) =~ "test-api-key"
+  end
+
+  test "accepts the closed provider answering-machine detection setting" do
+    assert {:ok, service} =
+             valid_options()
+             |> Keyword.put(:answering_machine_detection, :detect)
+             |> ConfiguredService.new()
+
+    assert service.answering_machine_detection == :detect
+
+    assert {:error, :invalid_telephony_service_configuration} =
+             valid_options()
+             |> Keyword.put(:answering_machine_detection, :premium)
+             |> ConfiguredService.new()
   end
 
   test "rejects missing secrets and non-TLS or ambiguous public URLs" do

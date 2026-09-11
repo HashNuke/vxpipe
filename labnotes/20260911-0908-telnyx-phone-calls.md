@@ -1430,3 +1430,38 @@ umbrella tests pass; all seven application lanes completed with zero failures.
 This checkpoint establishes the engine-side failure signal. The next checkpoint will translate
 exact Telnyx AMD and end events into that supervised owner lifecycle and issue a single explicit
 hangup only when a detected machine requires it.
+
+## Checkpoint 37: detection configuration belongs to the carrier service
+
+The outbound room request had an `answering_machine_detection` field even though its resolver
+always set it to `disabled`. That put a provider-profile choice on the wrong side of the engine /
+transport boundary and left no reusable application- or tenant-service setting to enable it.
+
+I first added focused configured-service assertions. They failed because the service struct had no
+field and rejected the new key. A second focused dial assertion then failed with `disabled` after a
+service configured for `detect` was selected, proving that the room request still overrode the
+service.
+
+`ConfiguredService` now accepts only `:disabled` (the default) or `:detect`. `OutgoingLegDialer`
+copies that choice into the common dial command. The redundant field was removed from
+`OutboundLegRequest`, leaving the engine responsible only for exact room, participant, service and
+destination authorization. No call-definition schema change was needed.
+
+Focused verification:
+
+```text
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test \
+  mix test apps/vxpipe_call_engine/test/vxpipe/call_engine/human_phone_transfer_room_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/configured_service_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/outgoing_leg_test.exs
+# Call Engine: 3 tests, 0 failures
+# Gateway: 7 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. The full umbrella test reached all seven applications but hit the known startup-readiness
+teardown race: its `DOWN` reason was `:noproc` rather than the asserted shutdown tuple. The
+unchanged owning file immediately passed all seven tests with seed `466793`.
+
+The configuration is now pinned correctly, but the outgoing owner does not yet act on machine or
+ended events. That is the next red-green checkpoint.

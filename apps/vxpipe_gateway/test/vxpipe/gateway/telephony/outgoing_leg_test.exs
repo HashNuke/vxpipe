@@ -25,7 +25,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
   end
 
   test "submits one dial and binds accepted provider identity to the exact leg", context do
-    service = service(self())
+    service = service(self(), answering_machine_detection: :detect)
     request = request()
 
     assert {:ok, leg} =
@@ -54,6 +54,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert dial.leg_id == context.leg_id
     assert dial.from == "+15550001000"
     assert dial.to == "+15550001001"
+    assert dial.answering_machine_detection == :detect
 
     assert dial.callback_url ==
              "https://voice.example.test/voice/api/telephony/telnyx/outbound_ingress/events"
@@ -155,12 +156,11 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
       incarnation_id: "rinc-outbound",
       participant_id: "participant-support",
       service_id: "telnyx-primary",
-      to: "+15550001001",
-      answering_machine_detection: :detect
+      to: "+15550001001"
     }
   end
 
-  defp service(observer, overrides \\ []) do
+  defp service(observer, overrides) do
     assert {:ok, service} =
              ConfiguredService.new(service_options(observer, overrides))
 

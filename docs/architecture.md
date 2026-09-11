@@ -1015,10 +1015,12 @@ Gateway exposes this boundary at
 ingress key to one enabled application- or tenant-scoped service, its expected Voice API connection
 ID, and its webhook verifier. The same configured service pins the provider command adapter and
 secret options, an optional E.164 outbound origination number, a provider-reachable HTTPS public
-base URL, and the short media-token lifetime. Outbound lookup first selects an exact tenant-scoped
-service ID and otherwise falls back to the application-scoped service with that ID; it never uses
-another tenant's configuration. The origination number is deployment configuration rather than a
-call-definition value or a model-selected destination.
+base URL, the short media-token lifetime, and a closed answering-machine setting that defaults to
+`disabled` and may be set to `detect`. The resolved room request chooses the configured service and
+destination but cannot override that provider-profile setting. Outbound lookup first selects an exact
+tenant-scoped service ID and otherwise falls back to the application-scoped service with that ID; it
+never uses another tenant's configuration. The origination number is deployment configuration rather
+than a call-definition value or a model-selected destination.
 Plain HTTP, missing-host, userinfo-bearing, query-bearing, fragment-bearing, and missing-secret
 configurations fail during startup. Credentials and verifier material remain inside that
 configured service and are never passed to the ingress handler or included in its derived

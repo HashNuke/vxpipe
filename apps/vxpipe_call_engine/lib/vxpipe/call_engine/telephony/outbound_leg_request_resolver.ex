@@ -31,8 +31,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequestResolver do
         incarnation_id: incarnation_id,
         participant_id: participant.participant_id,
         service_id: service,
-        to: number,
-        answering_machine_detection: :disabled
+        to: number
       }
 
       if OutboundLegRequest.valid?(request),

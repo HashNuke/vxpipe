@@ -94,8 +94,7 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
                       incarnation_id: incarnation_id,
                       participant_id: participant_id,
                       service_id: "primary-phone",
-                      to: "+15550001001",
-                      answering_machine_detection: :disabled
+                      to: "+15550001001"
                     }, timeout},
                    2_000
 

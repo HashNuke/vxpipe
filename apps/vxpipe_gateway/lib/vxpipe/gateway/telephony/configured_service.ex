@@ -16,6 +16,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
     :identity,
     :adapter,
     :adapter_options,
+    :answering_machine_detection,
     :media_token_ttl_ms,
     :outbound_number,
     :public_base_url,
@@ -27,6 +28,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
           identity: IngressIdentity.t(),
           adapter: module(),
           adapter_options: keyword(),
+          answering_machine_detection: :disabled | :detect,
           media_token_ttl_ms: pos_integer(),
           outbound_number: nil | String.t(),
           public_base_url: String.t(),
@@ -47,6 +49,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
              outbound_number: nil,
              public_base_url: nil,
              adapter: Adapter,
+             answering_machine_detection: :disabled,
              media_token_ttl_ms: 60_000,
              webhook_tolerance_seconds: 300
            ),
@@ -65,6 +68,8 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
            optional_phone_number(Keyword.fetch!(options, :outbound_number)),
          {:ok, public_base_url} <- public_base_url(Keyword.fetch!(options, :public_base_url)),
          {:ok, adapter} <- adapter(Keyword.fetch!(options, :adapter)),
+         {:ok, answering_machine_detection} <-
+           answering_machine_detection(Keyword.fetch!(options, :answering_machine_detection)),
          {:ok, media_token_ttl_ms} <-
            positive_integer(Keyword.fetch!(options, :media_token_ttl_ms)),
          verifier_options <- [
@@ -79,6 +84,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
            api_key: api_key,
            provider_connection_id: provider_connection_id
          ],
+         answering_machine_detection: answering_machine_detection,
          identity: %IngressIdentity{
            service_id: service_id,
            ingress_key: ingress_key,
@@ -122,6 +128,9 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
 
   defp adapter(value) when is_atom(value), do: {:ok, value}
   defp adapter(_invalid), do: :error
+
+  defp answering_machine_detection(value) when value in [:disabled, :detect], do: {:ok, value}
+  defp answering_machine_detection(_invalid), do: :error
 
   defp positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
   defp positive_integer(_invalid), do: :error
