@@ -681,3 +681,29 @@ The checkpoint passed `mix format --check-formatted`, compilation with warnings 
 Credo, the focused ingress/egress and WebRTC-output regression set (6 tests), the full umbrella
 suite against an isolated disposable PostgreSQL 17 instance (705 tests, 0 failures), and the unused
 dependency check.
+
+## Checkpoint 16: single-use media admission
+
+The provider media socket cannot use webhook signatures because Telnyx is opening a new WebSocket,
+and a call-control identifier in a URL is not sufficient authentication. A focused test first
+failed because no media admission or binding modules existed. Gateway now owns an in-memory token
+issuer. Each cryptographically random token pins the exact live leg process plus tenant, call, room
+incarnation, participant, configured service, ingress key, and provider identifiers. It can be
+consumed once only through the configured ingress key, expires on a monotonic deadline, and is
+revoked when the leg process terminates. Repeated preparation for the same exact binding returns
+the existing pending token so a duplicate command path cannot leave multiple valid socket URLs.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/media_admission_test.exs
+# 4 tests, 0 failures
+```
+
+This checkpoint deliberately does not expose an HTTP route yet. The next checkpoint consumes the
+token before upgrading and passes only the resolved binding into the Telnyx WebSocket process.
+
+The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the focused
+four-test contract, the full umbrella suite against an isolated disposable PostgreSQL 17 instance
+(709 tests, 0 failures), and the unused dependency check.

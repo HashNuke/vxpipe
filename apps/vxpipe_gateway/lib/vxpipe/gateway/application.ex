@@ -5,7 +5,7 @@ defmodule Vxpipe.Gateway.Application do
 
   alias Vxpipe.Gateway.HTTP
   alias Vxpipe.Gateway.SessionSupervisor
-  alias Vxpipe.Gateway.Telephony.LegSupervisor
+  alias Vxpipe.Gateway.Telephony.{LegSupervisor, MediaAdmission}
   alias Vxpipe.Gateway.WebRTC.ConnectionSupervisor
 
   @impl true
@@ -17,6 +17,7 @@ defmodule Vxpipe.Gateway.Application do
       {Registry, keys: :unique, name: Vxpipe.Gateway.SessionRegistry},
       SessionSupervisor,
       {Registry, keys: :unique, name: Vxpipe.Gateway.Telephony.LegRegistry},
+      MediaAdmission,
       LegSupervisor,
       {Registry, keys: :unique, name: Vxpipe.Gateway.Media.Registry},
       {Registry, keys: :unique, name: Vxpipe.Gateway.WebRTC.Registry},

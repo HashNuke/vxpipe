@@ -85,8 +85,9 @@ commands now submit through a bounded no-retry Telnyx Voice API client, and auth
 Opus media has a Membrane ingress normalizer that emits exact 20 ms, 48 kHz mono room-clock frames
 without FFmpeg. The reverse Membrane path validates an exact authorized mixer subscription and
 encodes/paces 20 ms frames as the documented Telnyx `media.payload` socket envelope. The live media
-WebSocket, room attachment, private briefing, acceptance, cleanup, and runnable vendor outcome
-remain incomplete.
+WebSocket now has a supervised single-use admission primitive that pins every room and provider
+identifier to the exact live leg and revokes admission with that leg. HTTP upgrade, room attachment,
+private briefing, acceptance, cleanup, and runnable vendor outcome remain incomplete.
 
 ## Specification review
 
