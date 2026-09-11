@@ -472,3 +472,17 @@
   warnings-as-errors compilation, formatting, strict Credo, and the unused-dependency check pass.
   Root `mix test` stops at the unchanged Persistence setup failure because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
+
+## 2026-09-11 — complete umbrella test verification
+
+- Re-ran the rendered text path while observing the RTC data channel. The client received the
+  gateway's correlated safe generation-failure response; transport setup, caller submission, and
+  error projection worked, but no live transfer was claimed.
+- Started a disposable PostgreSQL 17 instance with local trust authentication solely for the test
+  run. The first complete root run reached Persistence and failed 13 tests because three fixture
+  builders still authored schema `20260910.05`, which the current compiler correctly rejects after
+  the `20260910.06` conversation-mode release.
+- Updated only those fixture schema versions. The subsequent root suite passed: MCP 37 tests with
+  three tagged exclusions, Agent Runtime 58 with two exclusions, Call Engine 282 with one
+  exclusion, Calls 37, Persistence 25, Gateway 67 with four exclusions, and Console 57. The
+  disposable database was removed immediately after the run.

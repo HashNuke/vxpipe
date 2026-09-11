@@ -296,12 +296,14 @@ while still executing in independently supervised workers.
 
 An HTTPS browser pass reached RTVI ready at desktop and 390 x 844 viewports with fake media. The
 console rendered without horizontal overflow or browser exceptions. A text turn crossed the data
-channel and appeared in the conversation, but the configured external model did not return during
-the bounded observation window, so the live transfer steps remain unchecked. The deterministic
+channel and appeared in the conversation, but the configured external model returned the gateway's
+safe generation-failure response, so the live transfer steps remain unchecked. The deterministic
 282-test Call Engine suite remains green with one tagged integration exclusion. Frontend tests and
 type checking, development and test warnings-as-errors compilation, formatting, strict Credo, and
-the unused-dependency check pass. Root tests still stop at the unchanged missing PostgreSQL SCRAM
-password before database-backed suites begin; no credential source was inspected.
+the unused-dependency check pass. A complete root test run against a disposable PostgreSQL 17
+instance exposed three Persistence fixtures pinned to the superseded `20260910.05` schema. Updating
+those fixtures to the current `20260910.06` schema restored the complete green umbrella suite; the
+database was removed after verification.
 
 ## Specification review
 
