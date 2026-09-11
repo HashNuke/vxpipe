@@ -1,0 +1,33 @@
+defmodule Vxpipe.CallEngine.RoomMixer.State do
+  @moduledoc false
+
+  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
+  alias Vxpipe.CallEngine.RoomMixer.{SubscriptionCatalog, TimestampBuffer}
+
+  @enforce_keys [
+    :identity,
+    :format,
+    :policy,
+    :buffer,
+    :subscriptions,
+    :source_sequences,
+    :buffer_overflows,
+    :policy_dropped_frames
+  ]
+  defstruct @enforce_keys
+
+  @type t :: %__MODULE__{
+          identity: %{tenant_id: String.t(), room_id: String.t(), incarnation_id: String.t()},
+          format: %{
+            sample_rate: pos_integer(),
+            channels: pos_integer(),
+            frame_samples: pos_integer()
+          },
+          policy: nil | Snapshot.t(),
+          buffer: TimestampBuffer.t(),
+          subscriptions: SubscriptionCatalog.t(),
+          source_sequences: %{optional(String.t()) => non_neg_integer()},
+          buffer_overflows: non_neg_integer(),
+          policy_dropped_frames: non_neg_integer()
+        }
+end

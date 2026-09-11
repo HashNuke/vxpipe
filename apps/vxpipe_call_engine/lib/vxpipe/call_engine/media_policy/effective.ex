@@ -50,6 +50,14 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Effective do
     route_permitted?(routes, source_id, recipient_id)
   end
 
+  @spec valid?(term()) :: boolean()
+  def valid?(%__MODULE__{} = policy) do
+    valid_routes?(policy.audio_routes) and valid_routes?(policy.transcript_routes) and
+      is_boolean(policy.record_audio) and is_boolean(policy.save_transcripts)
+  end
+
+  def valid?(_policy), do: false
+
   defp compose_routes(routes) do
     case Enum.reject(routes, &(&1 == :inherit)) do
       [] -> :unrestricted
@@ -87,6 +95,17 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Effective do
   end
 
   defp route_permitted?(_routes, _source_id, _recipient_id), do: false
+
+  defp valid_routes?(:unrestricted), do: true
+
+  defp valid_routes?(routes) when is_map(routes) do
+    Enum.all?(routes, fn {source_id, recipients} ->
+      is_binary(source_id) and is_struct(recipients, MapSet) and
+        Enum.all?(recipients, &is_binary/1)
+    end)
+  end
+
+  defp valid_routes?(_routes), do: false
 
   defp valid_contributions?(contributions) do
     Enum.all?(contributions, fn {owner_id, policy} ->

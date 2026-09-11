@@ -15,7 +15,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     DefinitionCompiler,
     Error,
     PlanStartup,
-    RoomAuthority
+    RoomAuthority,
+    RoomMixer
   }
 
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
@@ -607,6 +608,8 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert present_participant_ids ==
              MapSet.new([caller.participant_id, receiver.participant_id])
 
+    assert %{policy_revision: 2} = RoomMixer.stats(RoomMixer.whereis(room.incarnation_id))
+
     assert participant_registered?(room_id, caller.participant_id)
     assert participant_registered?(room_id, receiver.participant_id)
     refute participant_registered?(room_id, unused.participant_id)
@@ -698,6 +701,23 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     policy_authority = Authority.whereis(room.incarnation_id)
 
     Process.exit(policy_authority, :kill)
+
+    assert_receive {:DOWN, ^room_monitor, :process, ^room_authority, :shutdown}, 2_000
+  end
+
+  test "ends a planned room if its registered room mixer exits" do
+    room_id = unique_id("room-mixer-exit")
+    plan = compile_plan(room_id)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+
+    assert [{room_authority, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
+
+    room_monitor = Process.monitor(room_authority)
+    room_mixer = RoomMixer.whereis(room.incarnation_id)
+
+    Process.exit(room_mixer, :kill)
 
     assert_receive {:DOWN, ^room_monitor, :process, ^room_authority, :shutdown}, 2_000
   end
@@ -1556,13 +1576,13 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   end
 
   defp participant_registered?(room_id, participant_id) do
-    match?(
-      [{_pid, _value}],
-      Registry.lookup(
-        Vxpipe.CallEngine.RoomRegistry,
-        {:participant, "tenant-test", room_id, participant_id}
-      )
-    )
+    case Registry.lookup(
+           Vxpipe.CallEngine.RoomRegistry,
+           {:participant, "tenant-test", room_id, participant_id}
+         ) do
+      [{pid, _value}] -> Process.alive?(pid)
+      [] -> false
+    end
   end
 
   defp attach_caller(plan, room, caller, connection_id, output_sink \\ nil) do

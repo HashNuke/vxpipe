@@ -20,15 +20,15 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 ## Implementation checklist
 
 - [ ] Red-test synthetic tagged PCM sources, timestamp alignment/mix-minus, monitor authorization, and human-only lifecycle.
-- [ ] Implement mixer/pipeline supervision and bounded sinks independently of RoomAuthority and storage adapters.
-- [ ] Compile/intersect presence policies and apply an authoritative media commit barrier.
+- [x] Implement mixer/pipeline supervision and bounded sinks independently of RoomAuthority and storage adapters.
+- [x] Compile/intersect presence policies and apply an authoritative media commit barrier.
 - [ ] Connect transcript, STT-demand, archive and future recorder taps to the same interval permissions.
 - [ ] Expose existing transport/harness paths for multiple authorized participants and silent monitoring without redesigning the sample console.
 
 ## Acceptance and failure checks
 
-- [ ] Mix-minus excludes own source; monitor hears only authorized sources, contributes none, and cross-tenant/unauthorized subscriptions fail.
-- [ ] Explicit omitted publisher/recipient, empty maps, multiple simultaneous restrictions, leave and transport-loss cases behave differently as specified.
+- [x] Mix-minus excludes own source; monitor hears only authorized sources, contributes none, and cross-tenant/unauthorized subscriptions fail.
+- [x] Explicit omitted publisher/recipient, empty maps, multiple simultaneous restrictions, leave and transport-loss cases behave differently as specified.
 - [ ] Admit a restrictive participant: no forbidden in-flight audio/transcript crosses the commit barrier; queued output and later relaxation cannot replay that interval.
 - [ ] Live transcript sharing can continue with save_transcripts false; no-save is not no-processing. Stop STT when no permitted consumer remains.
 - [ ] Human-only calls still route/end correctly; slow monitors/storage and process failure do not put mixing into authority or database work.
@@ -103,6 +103,26 @@ with one tagged integration exclusion. A fresh database-backed umbrella run also
 seven child applications. No mixer, transcript projector, or archive gate is registered yet, so
 the implementation checklist remains open until those concrete consumers apply and enforce the
 revisions.
+
+A significant room-scoped `RoomMixer` is now the first concrete barrier enforcer in every planned
+room. It accepts only fixed-format normalized s16le PCM frames carrying the currently installed
+policy revision, aligns sources by room-clock timestamp in a bounded buffer, saturating-mixes them,
+and produces policy-filtered mix-minus, full-mix, or individual-track frames. Participant presence
+and exact tenant/room/incarnation identity are checked at the mixer boundary. Full-mix and track
+subscriptions are output-only and conflict with speaking subscriptions for the same participant.
+Every subscription has a bounded mixer-owned queue and a coalesced availability notice; consumers
+pull through an opaque token, so a slow sink neither blocks the mixer nor accumulates audio in its
+mailbox. A policy revision clears aligned inputs and pending outputs before acknowledging the
+barrier, and stale-revision frames cannot be reclassified under a later relaxed policy. Absent
+recipients receive nothing even if their connection subscription has not been removed yet.
+Focused tests were written first and cover timestamp alignment, mix-minus/full/track output,
+16-bit saturation, route restrictions, stale revisions, no replay after relaxation, bounded input
+and output overload, monitor non-publication, identity/participant authorization, recipient leave,
+and malformed/non-monotonic policy. Planned-room tests prove startup reaches policy revision two
+and mixer loss ends the room. The complete Call Engine suite passes 310 tests with one tagged
+integration exclusion. A fresh database-backed umbrella run also passes across all seven child
+applications. Gateway normalization/encoding, live connection subscription, transcript and
+archive enforcement, and human-only startup remain open.
 
 ## Specification review
 

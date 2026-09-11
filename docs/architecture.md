@@ -1079,6 +1079,26 @@ barrier cannot apply before commit. New delivery, queued/late old output, later
 reactivation, and retrospective replay must not bypass a restricted interval.
 Source responsibility, total transfer deadline, and restoration rules remain.
 
+The implemented media-policy runtime has one significant policy authority and one significant
+`RoomMixer` per planned room. The authority composes immutable effective snapshots and commits a
+new revision only after every registered enforcer installs it. Rejection, timeout, malformed
+acknowledgement, or enforcer loss ends the room. The mixer is registered before entry participants
+are admitted, so startup revisions and later presence transitions pass through the same barrier.
+
+`RoomMixer` accepts normalized, timestamped s16le PCM frames tagged with the installed policy
+revision. It rejects wrong-room, absent/output-only source, stale revision, stale sequence, stale
+timestamp, duplicate, wrong-format, and over-capacity input. Fixed-size timestamp buckets align
+sources; saturating PCM addition produces mix-minus, full-mix, and individual-track outputs after
+`audio_routes` filtering. Output subscriptions belong to present participant identities. Full-mix
+and track subscribers are silent monitors at this boundary and cannot also publish or take a
+mix-minus subscription. Per-subscription output queues are bounded inside the mixer and expose
+only coalesced availability notices plus opaque-token pulls, keeping slow consumers out of the
+mixing path. Installing any new policy revision clears pending input and output frames before the
+acknowledgement, and every output retains source IDs, timestamp, and policy revision. Transport
+decoding/normalization, WebRTC output encoding, connection subscription orchestration, transcript
+projection, and recording taps are subsequent boundaries; they cannot omit revision provenance or
+bypass this barrier.
+
 Dial destinations may be literal participant `connection.number` values or come
 from a declared creation-time variable, using the candidate alternative
 `number_from_variable: {"section": "routing", "variable": "support_number"}`.

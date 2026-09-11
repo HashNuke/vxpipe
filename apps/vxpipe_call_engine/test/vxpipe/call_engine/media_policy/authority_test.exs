@@ -177,7 +177,8 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     Process.exit(enforcer, :kill)
 
     assert_receive {:DOWN, ^monitor, :process, ^server,
-                    {:media_policy_enforcer_unavailable, ^enforcer, :killed}}
+                    {:media_policy_enforcer_unavailable, ^enforcer, :killed}},
+                   1_000
   end
 
   defp start_authority(plan) do

@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request, as: TransferRequest
 
-  alias Vxpipe.CallEngine.{Error, ResolvedCallPlan, TextToSpeechRequest}
+  alias Vxpipe.CallEngine.{Error, ResolvedCallPlan, RoomMixer, TextToSpeechRequest}
 
   alias Vxpipe.CallEngine.Room.Snapshot
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
@@ -117,7 +117,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
     with {:ok, call_lifecycle} <- StartupReadiness.bind(room_source, incarnation_id),
          {:ok, media_policy_authority} <-
-           bind_media_policy_authority(room_source, incarnation_id) do
+           bind_media_policy_authority(room_source, incarnation_id),
+         {:ok, room_mixer} <-
+           bind_room_mixer(room_source, incarnation_id, media_policy_authority) do
       state =
         State.new(
           ArchiveRecorder.new(room_source, incarnation_id, options),
@@ -126,7 +128,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           OpeningAudio.new(room_source, Keyword.get(options, :opening_audio)),
           FirstMessage.new(room_source),
           call_lifecycle,
-          media_policy_authority
+          media_policy_authority,
+          room_mixer
         )
 
       case Startup.start_agent(room_source, options, state) do
@@ -479,6 +482,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     case MediaPolicyAuthority.whereis(incarnation_id) do
       authority when is_pid(authority) -> {:ok, authority}
       nil -> {:error, :media_policy_unavailable}
+    end
+  end
+
+  defp bind_room_mixer(%CreateRoom{}, _incarnation_id, nil), do: {:ok, nil}
+
+  defp bind_room_mixer(%ResolvedCallPlan{}, incarnation_id, media_policy_authority) do
+    case RoomMixer.whereis(incarnation_id) do
+      mixer when is_pid(mixer) ->
+        case MediaPolicyAuthority.register_enforcer(media_policy_authority, mixer) do
+          {:ok, _snapshot} -> {:ok, mixer}
+          {:error, _reason} -> {:error, :media_policy_unavailable}
+        end
+
+      nil ->
+        {:error, :room_mixer_unavailable}
     end
   end
 

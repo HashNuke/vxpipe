@@ -113,3 +113,43 @@
   exclusions, and Console 57. The disposable database was removed afterward. No concrete mixer,
   transcript projector, or archive consumer is registered yet; this checkpoint establishes their
   common commit boundary but does not claim that media is enforced.
+
+## 2026-09-11 — bounded room mixer
+
+- Added the standalone mixer tests before implementation. The red run failed while expanding the
+  absent `Media.MixedFrame` struct, confirming that no prior live-mix contract existed.
+- Defined normalized input as fixed-size signed 16-bit little-endian PCM on the room clock. Every
+  frame carries its policy revision, source participant, track, timestamp, and monotonic source
+  sequence. This revision tag is required to distinguish late old-interval media from data received
+  after a policy change; arrival time alone cannot make that distinction safely.
+- Added a bounded timestamp buffer and saturating PCM mixer. A flush processes timestamp buckets in
+  order. It selects sources independently for each recipient through effective `audio_routes`,
+  excludes a participant's own source for mix-minus, and supports output-only full-mix and
+  individual-track monitor subscriptions.
+- Kept slow sinks out of the GenServer hot path. Each subscription has a fixed mixer-owned queue,
+  receives only a coalesced availability notice, and pulls bounded batches using an opaque handle.
+  A full queue drops the new mixed frame and increments an explicit overflow counter instead of
+  blocking or expanding a remote process mailbox.
+- Applying a policy revision clears both aligned input buckets and pending output queues before
+  acknowledging the barrier. Frames tagged with another revision are rejected, so old data cannot
+  be replayed under a later relaxed policy. Tests also cover exact room identity, present recipient
+  and source checks, explicit monitor non-publication, 16-bit saturation, duplicate/stale input,
+  and malformed or non-monotonic policy snapshots.
+- The initial planned-room tests failed because no registered mixer existed. Planned room
+  supervision now starts one temporary significant mixer after the policy authority and before
+  Room Authority. Room Authority registers it as an enforcer before admitting either entry
+  participant. The entry test reaches mixer revision two, and killing the mixer ends the room.
+- A leave-path audit then found that an unrestricted route could still target a retained output
+  subscription after its recipient left. The regression failed with one delivery; delivery now
+  also requires the recipient to be present in the installed snapshot, and the test is green.
+- Before committing, the initial cohesive implementation was split along its actual reasons to
+  change. The 539-line mixer module is now a 181-line GenServer boundary delegating configuration
+  and state construction, policy installation, frame admission, timestamp buffering, routing and
+  fan-out, PCM arithmetic, and monitored subscription queues to named modules. The same focused
+  behavior tests remained green after the split.
+- Focused mixer and planned-room checks pass. The complete Call Engine suite passes 310 tests with
+  one tagged integration exclusion; strict Credo reports no issues. A fresh umbrella run against a
+  disposable PostgreSQL 17 instance also passes all seven child applications with the same counts
+  as the preceding checkpoint except for the expanded Call Engine suite. The disposable database
+  was removed afterward. Transport PCM normalization, connection-to-mixer input/output wiring,
+  transcript/archive policy consumers, and human-only startup remain open.

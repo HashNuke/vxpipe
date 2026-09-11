@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
     ResolvedCallPlan,
     RoomAuthority,
     RoomCapabilitySupervisor,
+    RoomMixer,
     RoomTransferSupervisor,
     RoomParticipantSupervisor
   }
@@ -45,7 +46,8 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
       [participant_supervisor, capability_supervisor, transfer_supervisor] ++
         live_inspection_child(options) ++
         call_variables_child(options) ++
-        call_lifecycle_child(options) ++ media_policy_child(options) ++ [authority]
+        call_lifecycle_child(options) ++
+        media_policy_child(options) ++ room_mixer_child(options) ++ [authority]
 
     Supervisor.init(children,
       strategy: :one_for_one,
@@ -71,6 +73,26 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
     case Keyword.get(options, :plan) do
       %ResolvedCallPlan{} -> [{MediaPolicyAuthority, options}]
       nil -> []
+    end
+  end
+
+  defp room_mixer_child(options) do
+    case Keyword.get(options, :plan) do
+      %ResolvedCallPlan{} = plan ->
+        mixer_options =
+          options
+          |> Keyword.fetch!(:room_mixer)
+          |> Keyword.merge(
+            tenant_id: plan.tenant_id,
+            room_id: plan.room_id,
+            incarnation_id: Keyword.fetch!(options, :incarnation_id)
+          )
+
+        child = Supervisor.child_spec({RoomMixer, mixer_options}, [])
+        [Map.put(child, :significant, true)]
+
+      nil ->
+        []
     end
   end
 

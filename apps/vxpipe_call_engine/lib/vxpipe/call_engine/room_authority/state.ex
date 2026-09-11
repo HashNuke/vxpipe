@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
     :first_message,
     :media_policy_authority,
     :opening_audio,
+    :room_mixer,
     :snapshot,
     :spoken_history,
     :speech_to_text_runtime,
@@ -50,6 +51,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           background_tool_calls: map(),
           next_sequence: pos_integer(),
           opening_audio: OpeningAudio.t(),
+          room_mixer: nil | pid(),
           pending_agent_transfer:
             nil
             | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Pending.t()
@@ -76,6 +78,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           OpeningAudio.t(),
           FirstMessage.t(),
           nil | pid(),
+          nil | pid(),
           nil | pid()
         ) :: t()
   def new(
@@ -85,7 +88,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
         %OpeningAudio{} = opening_audio \\ OpeningAudio.open(),
         %FirstMessage{} = first_message \\ FirstMessage.completed(),
         call_lifecycle \\ nil,
-        media_policy_authority \\ nil
+        media_policy_authority \\ nil,
+        room_mixer \\ nil
       ) do
     %__MODULE__{
       archive_recorder: archive_recorder,
@@ -93,6 +97,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
       first_message: first_message,
       media_policy_authority: media_policy_authority,
       opening_audio: opening_audio,
+      room_mixer: room_mixer,
       snapshot: snapshot,
       spoken_history: SpokenHistory.new(),
       speech_to_text_runtime: speech_to_text_runtime,
