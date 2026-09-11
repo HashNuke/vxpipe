@@ -272,6 +272,43 @@ serve operator playback. Those remain later parts of this milestone.
 Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 809
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 7: connection-qualified mixer sources
+
+The gateway's normalized PCM frame now preserves the authenticated connection ID already present
+on decoded media. The engine validates connection and track identifiers, and the mixer keys each
+timestamp bucket and monotonic sequence by participant, connection, and track together. Two active
+tracks owned by one participant therefore remain separate sources instead of the later frame being
+rejected as a duplicate of the participant.
+
+Participant-level route and presence policy is intentionally unchanged: all tracks still inherit
+their authenticated participant's live policy. Full-mix provenance reports unique contributing
+participant IDs even when that participant supplied multiple tracks. The complete source identity
+remains on normalized frames for the next checkpoint to open distinct individual recording streams.
+
+The call-engine test first failed because `NormalizedFrame` had no connection field. After that
+field was introduced, the new same-participant case exposed the former participant-only duplicate
+key; its green path admits two connection/track pairs at one room timestamp and produces their
+combined samples. The gateway test separately proves that normalization retains both identifiers:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/room_recording_test.exs \
+  test/vxpipe/call_engine/human_only_call_test.exs \
+  test/vxpipe/call_engine/silent_monitor_call_test.exs --max-cases 1
+# 14 tests, 0 failures
+
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/media/room_audio_ingress_test.exs --max-cases 1
+# 4 tests, 0 failures
+```
+
+This checkpoint does not yet create one artifact per source or add selection, metadata persistence,
+playback, or a concrete runtime S3 configuration.
+
+Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 810
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

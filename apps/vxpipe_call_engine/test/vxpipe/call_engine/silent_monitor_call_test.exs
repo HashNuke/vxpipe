@@ -61,6 +61,7 @@ defmodule Vxpipe.CallEngine.SilentMonitorCallTest do
                  room_id: plan.room_id,
                  incarnation_id: room.incarnation_id,
                  source_participant_id: monitor.participant_id,
+                 connection_id: "conn-monitor",
                  track_id: "track-monitor",
                  sequence_number: 1,
                  timestamp: 0,

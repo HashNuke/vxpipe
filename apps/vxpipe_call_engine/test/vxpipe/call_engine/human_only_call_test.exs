@@ -247,6 +247,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
       room_id: plan.room_id,
       incarnation_id: room.incarnation_id,
       source_participant_id: source_participant_id,
+      connection_id: "connection-#{source_participant_id}",
       track_id: "track-#{source_participant_id}",
       sequence_number: 1,
       timestamp: 0,

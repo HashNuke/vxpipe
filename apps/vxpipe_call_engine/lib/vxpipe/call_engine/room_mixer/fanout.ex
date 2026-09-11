@@ -3,10 +3,10 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
 
   alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame, PCM}
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.CallEngine.RoomMixer.{Router, SubscriptionCatalog}
+  alias Vxpipe.CallEngine.RoomMixer.{Router, SubscriptionCatalog, TimestampBuffer}
 
   @spec deliver(
-          [{non_neg_integer(), %{String.t() => NormalizedFrame.t()}}],
+          [{non_neg_integer(), %{TimestampBuffer.source_key() => NormalizedFrame.t()}}],
           SubscriptionCatalog.t(),
           map(),
           map(),
@@ -121,7 +121,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
       subscription_id: id,
       recipient_participant_id: entry.recipient_id,
       mode: entry.mode,
-      source_participant_ids: Enum.map(frames, & &1.source_participant_id),
+      source_participant_ids: frames |> Enum.map(& &1.source_participant_id) |> Enum.uniq(),
       timestamp: timestamp,
       policy_revision: policy.revision,
       sample_rate: format.sample_rate,

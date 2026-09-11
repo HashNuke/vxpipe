@@ -8,9 +8,11 @@ defmodule Vxpipe.CallEngine.RoomMixer.TimestampBuffer do
 
   @type t :: %__MODULE__{
           maximum_timestamps: pos_integer(),
-          buckets: %{optional(non_neg_integer()) => %{String.t() => NormalizedFrame.t()}},
+          buckets: %{optional(non_neg_integer()) => %{source_key() => NormalizedFrame.t()}},
           last_flushed_timestamp: integer()
         }
+
+  @type source_key :: {String.t(), String.t(), String.t()}
 
   @spec new(pos_integer()) :: t()
   def new(maximum_timestamps) when is_integer(maximum_timestamps) and maximum_timestamps > 0 do
@@ -25,19 +27,20 @@ defmodule Vxpipe.CallEngine.RoomMixer.TimestampBuffer do
           {:ok, t()} | {:error, :buffer_full | :duplicate_frame | :stale_timestamp}
   def put(%__MODULE__{} = buffer, %NormalizedFrame{} = frame) do
     bucket = Map.get(buffer.buckets, frame.timestamp)
+    source_key = source_key(frame)
 
     cond do
       frame.timestamp <= buffer.last_flushed_timestamp ->
         {:error, :stale_timestamp}
 
-      is_map(bucket) and Map.has_key?(bucket, frame.source_participant_id) ->
+      is_map(bucket) and Map.has_key?(bucket, source_key) ->
         {:error, :duplicate_frame}
 
       is_nil(bucket) and map_size(buffer.buckets) >= buffer.maximum_timestamps ->
         {:error, :buffer_full}
 
       true ->
-        bucket = Map.put(bucket || %{}, frame.source_participant_id, frame)
+        bucket = Map.put(bucket || %{}, source_key, frame)
         {:ok, %{buffer | buckets: Map.put(buffer.buckets, frame.timestamp, bucket)}}
     end
   end
@@ -68,5 +71,10 @@ defmodule Vxpipe.CallEngine.RoomMixer.TimestampBuffer do
       end)
 
     {dropped, %{buffer | buckets: %{}}}
+  end
+
+  @spec source_key(NormalizedFrame.t()) :: source_key()
+  def source_key(%NormalizedFrame{} = frame) do
+    {frame.source_participant_id, frame.connection_id, frame.track_id}
   end
 end

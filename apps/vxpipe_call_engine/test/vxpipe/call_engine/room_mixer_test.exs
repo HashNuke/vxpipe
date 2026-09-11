@@ -46,6 +46,33 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert_frame(Subscription.take(debugger, 4), "debugger", ["alice"], [1_000, 2_000], 0)
   end
 
+  test "keeps simultaneous connection tracks for one participant distinct" do
+    mixer = start_mixer()
+    :ok = apply_policy(mixer, 0, ["alice", "monitor"])
+    assert {:ok, monitor} = subscribe(mixer, "monitor-output", "monitor", :full_mix)
+
+    assert :ok =
+             RoomMixer.push(
+               mixer,
+               frame("alice", 1, 0, [1_000, 2_000],
+                 connection_id: "connection-a",
+                 track_id: "track-a"
+               )
+             )
+
+    assert :ok =
+             RoomMixer.push(
+               mixer,
+               frame("alice", 1, 0, [3_000, -5_000],
+                 connection_id: "connection-b",
+                 track_id: "track-b"
+               )
+             )
+
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 0)
+    assert_frame(Subscription.take(monitor, 1), "monitor", ["alice"], [4_000, -3_000], 0)
+  end
+
   test "applies a new policy revision before acknowledging it and never replays queued media" do
     mixer = start_mixer()
     :ok = apply_policy(mixer, 0, ["alice", "bob", "monitor"])
@@ -314,6 +341,7 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
       @identity
       |> Map.merge(%{
         source_participant_id: source,
+        connection_id: "connection-#{source}",
         track_id: "track-#{source}",
         sequence_number: sequence,
         timestamp: timestamp,

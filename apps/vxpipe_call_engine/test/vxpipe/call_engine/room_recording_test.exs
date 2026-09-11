@@ -106,6 +106,7 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
       room_id: @identity.room_id,
       incarnation_id: @identity.incarnation_id,
       source_participant_id: source,
+      connection_id: "connection-#{source}",
       track_id: "track-#{source}",
       sequence_number: sequence,
       timestamp: timestamp,

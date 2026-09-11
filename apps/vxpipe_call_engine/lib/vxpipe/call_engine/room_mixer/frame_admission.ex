@@ -14,7 +14,11 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
          state
          | buffer: buffer,
            source_sequences:
-             Map.put(state.source_sequences, frame.source_participant_id, frame.sequence_number)
+             Map.put(
+               state.source_sequences,
+               TimestampBuffer.source_key(frame),
+               frame.sequence_number
+             )
        }}
     else
       {:error, :buffer_full} ->
@@ -39,6 +43,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
       not MapSet.member?(state.policy.present_participant_ids, frame.source_participant_id) ->
         {:error, :source_not_present}
 
+      not valid_source?(frame) ->
+        {:error, :invalid_pcm_frame}
+
       SubscriptionCatalog.monitor_recipient?(
         state.subscriptions,
         frame.source_participant_id
@@ -54,7 +61,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
   end
 
   defp validate_sequence(frame, state) do
-    case Map.get(state.source_sequences, frame.source_participant_id, -1) do
+    case Map.get(state.source_sequences, TimestampBuffer.source_key(frame), -1) do
       previous when frame.sequence_number > previous -> :ok
       _previous -> {:error, :stale_sequence}
     end
@@ -65,6 +72,14 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
       is_integer(frame.sequence_number) and frame.sequence_number >= 0 and
       is_integer(frame.timestamp) and frame.timestamp >= 0 and is_binary(frame.payload) and
       byte_size(frame.payload) == format.frame_samples * format.channels * 2
+  end
+
+  defp valid_source?(frame) do
+    valid_identifier?(frame.connection_id) and valid_identifier?(frame.track_id)
+  end
+
+  defp valid_identifier?(value) do
+    is_binary(value) and String.trim(value) != "" and byte_size(value) <= 128
   end
 
   defp same_identity?(frame, identity) do

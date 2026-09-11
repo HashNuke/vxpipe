@@ -2357,6 +2357,13 @@ temporary sibling: its startup failure prevents an enabled recording call from p
 recording, while a later recorder or storage failure does not terminate the significant room
 authority. Disabled calls create neither a recording token nor a recorder.
 
+Normalized room audio retains its authenticated `connection_id` as well as participant and track
+identity. Mixer timestamp buckets and monotonic source sequences are keyed by that complete triple,
+so simultaneous connections or tracks owned by one participant do not overwrite or reject one
+another. Live participant routing still evaluates the participant identity, while the full mix
+reports unique contributing participant IDs. This source identity is the prerequisite for opening
+separate recording artifacts whose manifests can name the exact participant, connection, and track.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

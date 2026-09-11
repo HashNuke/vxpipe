@@ -32,7 +32,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
           policy: nil | Snapshot.t(),
           buffer: TimestampBuffer.t(),
           subscriptions: SubscriptionCatalog.t(),
-          source_sequences: %{optional(String.t()) => non_neg_integer()},
+          source_sequences: %{
+            optional(TimestampBuffer.source_key()) => non_neg_integer()
+          },
           buffer_overflows: non_neg_integer(),
           policy_dropped_frames: non_neg_integer()
         }

@@ -233,3 +233,42 @@ mix test test/vxpipe/gateway/call_admission/call_engine_options_test.exs \
 Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 809
 umbrella tests, and the unused-dependency check pass. Concrete runtime selection, qualified
 individual tracks, metadata publication, integration storage, and playback remain pending.
+
+## 2026-09-11: preserving recording source identity
+
+The decoded gateway PCM contract already carried participant, connection, and track identity, but
+normalization omitted the connection. Mixer buckets and source sequences then used only the
+participant ID. This meant two simultaneous tracks belonging to one participant collided at the
+same timestamp and could not later produce honestly identified separate artifacts.
+
+Two tests captured the boundary first. The gateway test could not compile its expected normalized
+connection because the struct lacked that field. The mixer test then required two connection/track
+pairs for one participant at the same timestamp to be admitted and mixed instead of treating the
+second as a duplicate.
+
+`NormalizedFrame` now retains the connection ID. The timestamp buffer exposes one source-key
+function for the participant/connection/track triple, and both buffering and sequence admission use
+it. Connection and track identifiers are validated at mixer admission. Routers continue to apply
+presence and audio routes by participant; a full mix deduplicates its contributing participant list
+when multiple qualified tracks belong to that participant.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/room_mixer_test.exs \
+  test/vxpipe/call_engine/room_recording_test.exs \
+  test/vxpipe/call_engine/human_only_call_test.exs \
+  test/vxpipe/call_engine/silent_monitor_call_test.exs --max-cases 1
+# 14 tests, 0 failures
+
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/media/room_audio_ingress_test.exs --max-cases 1
+# 4 tests, 0 failures
+```
+
+The next step is dynamic, policy-gated individual stream creation from this identity. No separate
+artifact, metadata row, runtime storage selection, or playback endpoint was added here.
+
+Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 810
+umbrella tests, and the unused-dependency check pass.

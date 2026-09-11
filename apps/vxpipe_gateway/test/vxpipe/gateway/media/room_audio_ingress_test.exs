@@ -34,7 +34,13 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
     assert_receive {:test_room_audio_pipeline_push, _pipeline, %AudioFrame{sequence_number: 1}}
 
     send(ingress, {:vxpipe_audio_pipeline, pipeline_id, pcm_frame(0, <<1::16, 2::16>>)})
-    assert_receive {:test_room_audio, %NormalizedFrame{policy_revision: 7}}
+
+    assert_receive {:test_room_audio,
+                    %NormalizedFrame{
+                      connection_id: "conn-demo",
+                      track_id: "track-a",
+                      policy_revision: 7
+                    }}
   end
 
   test "tags normalized PCM with the committed policy and preserves sequence across a purge" do

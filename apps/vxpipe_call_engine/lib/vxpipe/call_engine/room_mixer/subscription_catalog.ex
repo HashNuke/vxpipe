@@ -278,9 +278,17 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
   end
 
   defp compatibility(catalog, recipient_id, _monitor_mode, source_sequences) do
-    if Map.has_key?(source_sequences, recipient_id) or mix_minus_recipient?(catalog, recipient_id),
-      do: {:error, :conflicting_subscription},
-      else: :ok
+    if participant_source?(source_sequences, recipient_id) or
+         mix_minus_recipient?(catalog, recipient_id),
+       do: {:error, :conflicting_subscription},
+       else: :ok
+  end
+
+  defp participant_source?(source_sequences, participant_id) do
+    Enum.any?(source_sequences, fn
+      {{^participant_id, _connection_id, _track_id}, _sequence} -> true
+      {_source_key, _sequence} -> false
+    end)
   end
 
   defp mix_minus_recipient?(catalog, recipient_id) do

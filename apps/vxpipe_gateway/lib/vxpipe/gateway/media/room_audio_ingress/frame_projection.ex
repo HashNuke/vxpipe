@@ -20,6 +20,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.FrameProjection do
       room_id: frame.room_id,
       incarnation_id: frame.incarnation_id,
       source_participant_id: frame.participant_id,
+      connection_id: frame.connection_id,
       track_id: frame.track_id,
       sequence_number: sequence_number,
       timestamp: frame.timestamp,

@@ -3,16 +3,19 @@ defmodule Vxpipe.CallEngine.RoomMixer.Router do
 
   alias Vxpipe.CallEngine.Media.NormalizedFrame
   alias Vxpipe.CallEngine.MediaPolicy.Effective
+  alias Vxpipe.CallEngine.RoomMixer.TimestampBuffer
 
   @spec sources(
-          %{String.t() => NormalizedFrame.t()},
+          %{TimestampBuffer.source_key() => NormalizedFrame.t()},
           String.t(),
           Vxpipe.CallEngine.Media.MixedFrame.mode(),
           Effective.t()
         ) :: [NormalizedFrame.t()]
   def sources(bucket, recipient_id, mode, %Effective{} = policy) do
     bucket
-    |> Enum.filter(fn {source_id, _frame} ->
+    |> Enum.filter(fn {_source_key, frame} ->
+      source_id = frame.source_participant_id
+
       selected?(mode, source_id, recipient_id) and
         Effective.audio_route_permitted?(policy, source_id, recipient_id)
     end)
@@ -21,12 +24,14 @@ defmodule Vxpipe.CallEngine.RoomMixer.Router do
   end
 
   @spec recording_sources(
-          %{String.t() => NormalizedFrame.t()},
+          %{TimestampBuffer.source_key() => NormalizedFrame.t()},
           :full_mix | {:individual_track, String.t()}
         ) :: [NormalizedFrame.t()]
   def recording_sources(bucket, mode) do
     bucket
-    |> Enum.filter(fn {source_id, _frame} -> selected?(mode, source_id, nil) end)
+    |> Enum.filter(fn {_source_key, frame} ->
+      selected?(mode, frame.source_participant_id, nil)
+    end)
     |> Enum.sort_by(&elem(&1, 0))
     |> Enum.map(&elem(&1, 1))
   end
