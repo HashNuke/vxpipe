@@ -11,7 +11,6 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Validation do
       frame.tenant_id != state.identity.tenant_id -> {:error, :wrong_tenant}
       frame.room_id != state.identity.room_id -> {:error, :wrong_room}
       frame.incarnation_id != state.identity.incarnation_id -> {:error, :wrong_incarnation}
-      frame.participant_id != state.identity.participant_id -> {:error, :wrong_participant}
       frame.codec != :linear16 -> {:error, :unsupported_audio}
       frame.sample_rate != 48_000 -> {:error, :unsupported_audio}
       frame.channels != 1 -> {:error, :unsupported_audio}

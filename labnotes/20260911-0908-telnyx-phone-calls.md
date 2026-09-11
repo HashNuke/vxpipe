@@ -978,3 +978,10 @@ mix test test/vxpipe/gateway/media/audio_output_test.exs \
 
 Root formatting, compilation with warnings as errors, and strict Credo also pass. Live-leg
 attachment and complete umbrella verification remain for the next checkpoint.
+
+A pre-commit follow-up test caught two identity/clock details. `AudioOutputFrame.participant_id`
+names the speaking agent rather than the human who owns the destination connection, so output
+validation pins tenant, room, incarnation, and connection but permits that expected participant
+difference. A natural second turn also keeps monotonically increasing Membrane timestamps on the
+same realtime pipeline; only interruption resets the clock because it first replaces the entire
+pipeline. The expanded six-test output/pipeline set passes after both corrections.

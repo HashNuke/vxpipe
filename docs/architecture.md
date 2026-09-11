@@ -1132,6 +1132,9 @@ and derives started/progress/completed or interrupted duration from transport ac
 The Telnyx implementation supplies a Membrane Opus encoder, realtime pacer, and WebSocket sink; it
 does not invoke FFmpeg. Direct playout and mixer egress remain distinct sources because only direct
 playout owns turn callbacks, while the provider socket remains their common serialized wire sink.
+The output frame names the agent that produced the speech, which need not be the human participant
+owning the target connection. Natural turn boundaries preserve the pipeline's monotonic media
+clock; an interruption replaces the pipeline before resetting that clock and admitting new speech.
 Before a provider receives a media URL, Gateway issues an opaque, expiring admission token bound to
 the exact live leg process and its tenant, call, incarnation, participant, configured service, and
 provider identifiers. The token is single-use, is valid only under that service's opaque ingress

@@ -114,7 +114,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
          tenant_id: "tenant-test",
          room_id: "room-test",
          incarnation_id: "incarnation-test",
-         participant_id: "agent-test",
+         participant_id: "caller-test",
          owner: self(),
          pipeline: Vxpipe.Gateway.TestAudioOutputPipeline,
          pipeline_supervisor: Vxpipe.Gateway.TestAudioOutputPipelineSupervisor,
