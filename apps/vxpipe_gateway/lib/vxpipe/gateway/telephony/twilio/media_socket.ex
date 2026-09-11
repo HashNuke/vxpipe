@@ -44,6 +44,14 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSocket do
   def handle_in({_message, opcode: :binary}, state), do: invalid_message(state)
 
   @impl true
+  def handle_info(
+        {:vxpipe_twilio_socket_send, message},
+        %{stream_id: stream_id} = state
+      )
+      when is_binary(message) and is_binary(stream_id) do
+    {:push, {:text, message}, state}
+  end
+
   def handle_info({:DOWN, monitor, :process, leg, _reason}, state)
       when monitor == state.leg_monitor and leg == state.binding.leg do
     {:stop, :normal, {1000, "leg ended"}, state}

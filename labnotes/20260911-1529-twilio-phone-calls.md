@@ -251,3 +251,56 @@ The complete umbrella suite passes all seven application lanes—784 tests with 
 This is authenticated ingress and wire normalization, not live Twilio audio. PCMU decode/encode,
 8/48 kHz conversion, outbound media/clear, Membrane pipeline selection, full transfer parity, and
 the tagged provider lane remain pending.
+
+## Checkpoint 6: PCMU conversion and live-session routing
+
+The media implementation was divided at the same provider boundary used by Telnyx. Small pure
+modules own G.711 PCMU companding and the fixed 8/48 kHz conversion. Small Membrane filters wrap
+those operations, while provider pipelines own clock alignment, framing, real-time pacing, and the
+Twilio JSON envelope. The WebSocket only translates internal encoded-media messages into WebSocket
+pushes. Room and participant processes continue to see the existing 48 kHz signed 16-bit PCM
+contract.
+
+The standard codec-vector and streaming-boundary tests were red because the codec and converter did
+not exist, then passed with zero dependencies added. The upsampler retains the last 8 kHz sample and
+linearly interpolates each next interval into six samples, introducing only its fixed one-sample
+causal delay. The downsampler averages each complete six-sample group and retains any partial group
+for the next buffer. This is intentionally bounded, deterministic voice-band conversion rather
+than an invocation of FFmpeg's general-purpose resampler.
+
+Ingress, room-egress, and direct-output pipeline tests were next red because the three Twilio
+pipelines did not exist. They now prove 20 ms frame size/timing, provider format rejection,
+identity/order checks, exact Stream SID envelopes, and pacing acknowledgements. An initial parallel
+run observed pipeline-start scheduling past the test's two-second receive window; running these
+Membrane lifecycle tests non-async and in the established single-case lane removed that test-only
+contention without relaxing production deadlines.
+
+The common media-session test was red with `unsupported_media_provider`. Adding Twilio to the
+closed `MediaPipelineSet` and carrying its authenticated Stream SID into direct and room output
+pipelines made the same session attach a caller, accept PCMU into room ingress, and produce outbound
+PCMU from 48 kHz agent audio. The first socket-output test was red because the message was ignored;
+the socket now emits only internally generated media messages after its Stream SID has been pinned.
+
+Focused and Gateway evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/twilio/pcmu/codec_test.exs \
+  test/vxpipe/gateway/telephony/twilio/pcmu/rate_converter_test.exs \
+  test/vxpipe/gateway/telephony/twilio/audio_ingress_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/twilio/audio_egress_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/twilio/audio_output_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_session_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_socket_test.exs --max-cases 1
+# 16 tests, 0 failures
+
+mix test --max-cases 1
+# 216 tests, 0 failures (5 excluded)
+```
+
+The umbrella completion gates also pass: formatting, warnings-as-errors compilation, strict
+Credo, 797 tests across all seven applications, and the unused-dependency check.
+
+The remaining Twilio work is explicit remote-buffer clearing on interruption/privacy changes, the
+full common private-transfer harness, and a guarded tagged provider lane. No live-provider claim is
+made from the deterministic pipeline proof.

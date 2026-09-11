@@ -1,12 +1,6 @@
 defmodule Vxpipe.Gateway.Telephony.MediaPipelineSet do
   @moduledoc false
 
-  alias Vxpipe.Gateway.Telephony.Telnyx.{
-    AudioEgressPipeline,
-    AudioIngressPipeline,
-    AudioOutputPipeline
-  }
-
   @enforce_keys [:direct_output, :room_egress, :room_ingress]
   defstruct @enforce_keys
 
@@ -18,13 +12,29 @@ defmodule Vxpipe.Gateway.Telephony.MediaPipelineSet do
 
   @spec resolve(atom()) :: {:ok, t()} | {:error, :unsupported_media_provider}
   def resolve(:telnyx) do
-    {:ok,
-     %__MODULE__{
-       direct_output: AudioOutputPipeline,
-       room_egress: AudioEgressPipeline,
-       room_ingress: AudioIngressPipeline
-     }}
+    pipeline_set(
+      Vxpipe.Gateway.Telephony.Telnyx.AudioOutputPipeline,
+      Vxpipe.Gateway.Telephony.Telnyx.AudioEgressPipeline,
+      Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline
+    )
+  end
+
+  def resolve(:twilio) do
+    pipeline_set(
+      Vxpipe.Gateway.Telephony.Twilio.AudioOutputPipeline,
+      Vxpipe.Gateway.Telephony.Twilio.AudioEgressPipeline,
+      Vxpipe.Gateway.Telephony.Twilio.AudioIngressPipeline
+    )
   end
 
   def resolve(_provider), do: {:error, :unsupported_media_provider}
+
+  defp pipeline_set(direct_output, room_egress, room_ingress) do
+    {:ok,
+     %__MODULE__{
+       direct_output: direct_output,
+       room_egress: room_egress,
+       room_ingress: room_ingress
+     }}
+  end
 end

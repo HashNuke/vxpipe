@@ -1031,9 +1031,17 @@ therefore cannot burn a legitimate admission token. The resulting socket pins th
 Account SID, exact Call SID, one Stream SID, and live leg owner. It accepts only Twilio's declared
 mono 8 kHz `audio/x-mulaw` start format, bounds and decodes PCMU media, timestamps DTMF at gateway
 observation, and dispatches normalized events through the provider-neutral leg boundary. Cross-call
-or cross-stream frames close the socket rather than entering the room. PCMU remains an authenticated
-provider packet at this checkpoint: bidirectional conversion/routing and complete transfer parity
-remain unsupported until their owning checkpoints are implemented.
+or cross-stream frames close the socket rather than entering the room.
+
+The Twilio media-session selection reuses the same direct-output, room-ingress, and room-egress
+contracts as Telnyx. Provider-owned Membrane pipelines decode PCMU to mono signed 16-bit PCM,
+linearly interpolate the fixed 8-to-48 kHz ingress ratio, and frame it on the room's 20 ms clock.
+The reverse path applies a bounded six-sample averaging filter, converts 48-to-8 kHz, encodes PCMU,
+and uses `Membrane.Realtimer` before producing the exact Twilio media envelope with its pinned
+Stream SID. No FFmpeg runtime or external codec process participates. Codec/rate math remains in
+small deterministic modules beneath the Membrane elements rather than in the socket or room
+authority. Explicit Twilio buffered-playout clearing, complete transfer parity, and live-provider
+verification remain pending checkpoints.
 
 Outbound Twilio control uses the current official
 [Calls resource](https://www.twilio.com/docs/voice/api/call-resource). Gateway posts one

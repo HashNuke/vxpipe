@@ -58,6 +58,22 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSocketTest do
              MediaSocket.handle_info(down, context.socket)
   end
 
+  test "pushes internally encoded media envelopes to the provider", context do
+    assert {:ok, socket} = MediaSocket.handle_in(text(start_message()), context.socket)
+
+    message =
+      JSON.encode!(%{
+        "event" => "media",
+        "streamSid" => @stream_sid,
+        "media" => %{"payload" => Base.encode64(<<0xFF>>)}
+      })
+
+    assert {:push, {:text, ^message}, socket} =
+             MediaSocket.handle_info({:vxpipe_twilio_socket_send, message}, socket)
+
+    assert socket.stream_id == @stream_sid
+  end
+
   defp text(message), do: {JSON.encode!(message), opcode: :text}
 
   defp start_message do

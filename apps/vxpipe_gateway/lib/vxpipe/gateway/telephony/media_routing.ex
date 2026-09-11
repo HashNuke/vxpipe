@@ -32,6 +32,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
              child_supervisor,
              connection_id,
              socket_owner,
+             stream_id,
              attachment,
              identity,
              engine,
@@ -85,6 +86,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
          child_supervisor,
          connection_id,
          socket_owner,
+         stream_id,
          attachment,
          identity,
          engine,
@@ -104,7 +106,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
               engine: engine,
               pipeline: pipeline,
               pipeline_supervisor: child_supervisor,
-              pipeline_options: [socket_owner: socket_owner]
+              pipeline_options: [socket_owner: socket_owner, stream_id: stream_id]
             ]
 
         with {:ok, egress} <-

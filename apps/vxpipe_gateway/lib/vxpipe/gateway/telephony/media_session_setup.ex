@@ -29,7 +29,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
 
     with :ok <- valid_runtime(actor_id, binding, socket_owner, stream_id),
          {:ok, output} <-
-           start_output(child_supervisor, connection_id, socket_owner, identity, options),
+           start_output(
+             child_supervisor,
+             connection_id,
+             socket_owner,
+             stream_id,
+             identity,
+             options
+           ),
          {:ok, command} <- attach_command(actor_id, binding),
          {:ok, %ConnectionAttachment{} = attachment} <-
            engine.attach_connection(command, output),
@@ -52,7 +59,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
     end
   end
 
-  defp start_output(child_supervisor, connection_id, socket_owner, identity, options) do
+  defp start_output(
+         child_supervisor,
+         connection_id,
+         socket_owner,
+         stream_id,
+         identity,
+         options
+       ) do
     output_options =
       identity ++
         [
@@ -61,7 +75,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
           maximum_frames: Keyword.get(options, :maximum_audio_frames, 500),
           pipeline: Keyword.fetch!(options, :media_pipelines).direct_output,
           pipeline_supervisor: child_supervisor,
-          pipeline_options: [socket_owner: socket_owner]
+          pipeline_options: [socket_owner: socket_owner, stream_id: stream_id]
         ]
 
     with {:ok, output} <-

@@ -236,6 +236,49 @@ checkpoint will keep media lifecycle/routing in Membrane while supplying a narro
 codec and fixed 8/48 kHz conversion without FFmpeg. Outbound media/clear handling, shared transfer
 parity, and tagged provider verification remain pending.
 
+## Checkpoint 6: bidirectional PCMU Membrane pipelines
+
+Twilio now resolves through the existing provider-neutral media-pipeline set. Its direct playback,
+room ingress, and room egress are supervised Membrane pipelines rather than codec work in the
+WebSocket or room authority. Inbound raw PCMU is decoded to signed 16-bit mono PCM, converted from
+8 to 48 kHz with continuous fixed-factor linear interpolation, aligned to the room clock, and
+framed at 20 ms. Authorized direct or mixed 48 kHz PCM takes the reverse path through a bounded
+six-sample averaging converter and PCMU encoder; `Membrane.Realtimer` paces exact Twilio media
+envelopes containing the pinned Stream SID.
+
+The codec uses standard independent silence/sign/range vectors. The converter carries interpolation
+state and partial downsample groups across buffers. Neither depends on a native codec, an external
+process, or FFmpeg. Media session setup now passes the authenticated Stream SID to both output
+pipelines while leaving the Telnyx path unchanged.
+
+The three pipeline tests were first red because the modules did not exist. The common session test
+then failed with `unsupported_media_provider` until Twilio was added to the closed pipeline
+selection and the Stream SID reached its output sinks. The socket egress test also failed until the
+WebSocket handled the internal encoded-media message.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/twilio/pcmu/codec_test.exs \
+  test/vxpipe/gateway/telephony/twilio/pcmu/rate_converter_test.exs \
+  test/vxpipe/gateway/telephony/twilio/audio_ingress_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/twilio/audio_egress_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/twilio/audio_output_pipeline_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_session_test.exs \
+  test/vxpipe/gateway/telephony/twilio/media_socket_test.exs --max-cases 1
+# 16 tests, 0 failures
+
+mix test --max-cases 1
+# 216 tests, 0 failures (5 excluded)
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, the complete 797-test umbrella
+suite, and the unused-dependency check also pass.
+
+This proves bidirectional codec conversion and provider-neutral live-session routing with local
+deterministic media; it is not tagged real-provider evidence. Explicit `clear` handling for
+Twilio's remote playback buffer, full transfer-harness parity, and the guarded live lane remain
+pending.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
