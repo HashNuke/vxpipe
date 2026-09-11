@@ -448,3 +448,27 @@
   formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   Root `mix test` stops at the unchanged Persistence setup failure because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
+
+## 2026-09-11 — rendered development sample
+
+- Updated the development call definition to make the transfer slice reachable from the existing
+  console: reception can transfer to billing, and billing can transfer back to reception. Billing
+  uses a fixed first greeting and can read the synthetic order section. Reception retains the
+  existing intake permissions and the non-blocking background-report example.
+- Kept the tool execution distinction explicit in the runnable configuration. All tool operations
+  use the common supervised invocation-worker path. The background report opts into
+  `non_blocking`; generated transfer bindings omit `conversation_mode` and therefore use the
+  default blocking conversation gate.
+- Started the normal HTTPS development stack and inspected the rendered Pipecat console through
+  headless Chromium because `agent-browser` is unavailable in this environment. The console
+  reached RTVI ready with fake media at desktop and 390 x 844, rendered without horizontal
+  overflow, and showed no browser exceptions.
+- Submitted a transfer request through the rendered text input. The caller turn crossed the data
+  channel and appeared in the conversation, but the configured external model did not return
+  during the bounded observation window. No transfer result was claimed; the milestone's live
+  manual steps remain open. The browser and development processes were stopped after inspection.
+- Verification: Console assets pass four Vitest checks and TypeScript checking. The complete Call
+  Engine suite passes 282 tests with one tagged integration exclusion. Development and test
+  warnings-as-errors compilation, formatting, strict Credo, and the unused-dependency check pass.
+  Root `mix test` stops at the unchanged Persistence setup failure because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.

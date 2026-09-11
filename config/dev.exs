@@ -1,7 +1,7 @@
 import Config
 
-sample_system_prompt = """
-You are a concise, helpful voice assistant. Respond naturally in plain text.
+sample_reception_prompt = """
+You are a concise, helpful reception voice assistant. Respond naturally in plain text.
 Keep replies brief unless the user asks for detail. Do not use Markdown because
 your response will be spoken aloud. Always use get_current_time when asked for
 the current date or time; never guess it. Use read_variables when asked about the
@@ -14,6 +14,17 @@ failed update instead. Use prepare_background_report only when the caller
 explicitly asks for a background report. A running result means the report was
 accepted, not completed: acknowledge that it is running, continue the
 conversation, and do not claim it is ready until the later completion arrives.
+When the caller asks to speak with billing, use the transfer tool with the billing
+destination. Do not claim the transfer completed unless the tool result confirms it.
+"""
+
+sample_billing_prompt = """
+You are a concise billing voice assistant. Respond naturally in plain text and do
+not use Markdown because your response will be spoken aloud. Use read_variables
+when the caller asks about the sample order. You may read the order section, but
+you cannot read or change the reception intake section. When the caller asks to
+return to reception, use the transfer tool with the reception destination. Do not
+claim the transfer completed unless the tool result confirms it.
 """
 
 sample_capability_profiles = %{
@@ -121,10 +132,10 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           "order" => %{"id" => "order-demo-1001"}
         },
         definition: %{
-          schema_version: "20260910.05",
+          schema_version: "20260910.06",
           name: "Development sample",
           entry_caller: "caller",
-          entry_receiver: "assistant",
+          entry_receiver: "reception",
           defaults: %{
             capabilities: %{
               speech_to_text: "deepgram-flux-stt",
@@ -165,10 +176,11 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               description: "Browser caller",
               connection: %{service: "web", mode: "receive", admission: "start_call"}
             },
-            "assistant" => %{
+            "reception" => %{
               type: "agent",
-              description: "Development voice assistant",
-              prompt: sample_system_prompt,
+              description: "Development reception assistant",
+              prompt: sample_reception_prompt,
+              transfer_history: %{mode: "last_n_spoken", turns: 4},
               first_message: %{mode: "wait_for_input"},
               tools: %{
                 "get_current_time" => %{type: "platform", tool: "get_current_time"},
@@ -178,10 +190,24 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
                   conversation_mode: "non_blocking"
                 }
               },
-              transfers: [],
+              transfers: ["billing"],
               variable_permissions: %{
                 "order" => ["read"],
                 "intake" => ["read", "write"]
+              }
+            },
+            "billing" => %{
+              type: "agent",
+              description: "Development billing assistant",
+              prompt: sample_billing_prompt,
+              transfer_history: %{mode: "all_spoken"},
+              first_message: %{mode: "fixed", text: "Billing is ready. How can I help?"},
+              tools: %{
+                "get_current_time" => %{type: "platform", tool: "get_current_time"}
+              },
+              transfers: ["reception"],
+              variable_permissions: %{
+                "order" => ["read"]
               }
             }
           },

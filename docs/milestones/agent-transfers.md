@@ -286,6 +286,23 @@ strict Credo, and unused-dependency checks pass. Root `mix test` stops at the un
 setup failure because PostgreSQL SCRAM authentication needs a password absent from this shell; no
 credential source was inspected.
 
+The development sample now exposes the same vertical slice through the rendered console. Its
+reception participant can transfer only to billing, receives a bounded trailing spoken-history
+window on re-entry, and retains the existing read/write variable permissions. Billing has a fixed
+first greeting, receives all confirmed spoken history, can read the synthetic order variable, and
+can transfer only back to reception. The ordinary local background-report binding remains the
+explicit non-blocking example; both generated transfer bindings retain the default blocking mode
+while still executing in independently supervised workers.
+
+An HTTPS browser pass reached RTVI ready at desktop and 390 x 844 viewports with fake media. The
+console rendered without horizontal overflow or browser exceptions. A text turn crossed the data
+channel and appeared in the conversation, but the configured external model did not return during
+the bounded observation window, so the live transfer steps remain unchecked. The deterministic
+282-test Call Engine suite remains green with one tagged integration exclusion. Frontend tests and
+type checking, development and test warnings-as-errors compilation, formatting, strict Credo, and
+the unused-dependency check pass. Root tests still stop at the unchanged missing PostgreSQL SCRAM
+password before database-backed suites begin; no credential source was inspected.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,
