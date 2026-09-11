@@ -1,0 +1,18 @@
+{
+  "event": "start",
+  "sequence_number": "1",
+  "stream_id": "{{stream_id}}",
+  "start": {
+    "user_id": "test-user",
+    "call_control_id": "{{call_control_id}}",
+    "call_session_id": "{{call_session_id}}",
+    "from": "{{from}}",
+    "to": "{{to}}",
+    "client_state": "{{client_state}}",
+    "media_format": {
+      "encoding": "OPUS",
+      "sample_rate": 16000,
+      "channels": 1
+    }
+  }
+}

@@ -1509,3 +1509,71 @@ That repeat passed all seven lanes: MCP 37, Agent Runtime 58, Call Engine 351, C
 
 This completes the AMD/exact-cleanup checklist item. The deterministic whole-call harness and
 authorized vendor lane remain.
+
+## Checkpoint 39: deterministic whole-call proof and guarded live lane
+
+Added provider-shaped JSON fixtures for incoming initiation, incoming answer, outgoing initiation,
+media start, and DTMF. `Vxpipe.Gateway.TelnyxFixture` renders bounded placeholders, signs the exact
+raw body with an ephemeral Ed25519 test key, sends the request through the real reusable endpoint,
+performs the real WebSocket upgrade, and initializes the production `MediaSocket`. No carrier
+credential, real number, or environment value appears in a fixture.
+
+The scenario builder and harness backend keep test setup responsibilities outside the assertion
+module. The backend performs one deterministic admission claim and then delegates startup,
+activation, media, and room behavior to production `CallAdmission`. It can deliberately reject all
+later durable operations while retaining that already-pinned runtime.
+
+The first whole-call test attempt tried to inject a browser `send-text` command from the test
+process. It correctly failed at connection ownership: the authenticated phone socket, not the test
+process, owns the caller connection. The harness was corrected to deliver a provider STT turn—the
+actual phone-input boundary—and the scripted model then requested the allowlisted transfer. A
+second assertion incorrectly expected a room tool event to be delivered to the test process even
+though the incoming leg owns the subscription. It was replaced with checks at authoritative
+participant/media state boundaries. Promotion is asynchronous after private playback, so the final
+assertion now uses a bounded acknowledgement loop rather than `Process.sleep/1`.
+
+The green scenario now proves one signed incoming call, idempotent duplicate initiation, exact
+answered correlation, incoming media admission, STT-to-model transfer selection, one outbound dial,
+duplicate signed outgoing correlation without redial, private destination media, socket-owned DTMF
+`1`, no early bridge, completed private briefing, source-agent shutdown, permitted Opus output, and
+promotion of the two humans. Durable storage is made unavailable immediately after admission;
+answer, media, DTMF, and transfer still complete, and the backend records exactly one claim.
+
+Official Telnyx documentation was rechecked on 2026-09-11 for the Voice API v2 webhook envelope and
+signature, dial command fields, bidirectional Opus media frames, DTMF, and answering-machine event
+ordering. The relevant sources are linked from the milestone and architecture documents. This was
+a published-contract check, not a live carrier call.
+
+A separate `Vxpipe.Gateway.Integration.TelnyxVoiceAPITest` is tagged `:integration` and
+`:telnyx_live`. It places a call only when `VXPIPE_TELNYX_LIVE=1` and all six explicit Telnyx test
+settings are available. Its accepted path captures carrier IDs and schedules exact-leg cleanup.
+The first explicit include exposed an invalid `setup_all` skip return; the module now uses a static
+skip tag when live execution is not opted in, so even `--include integration` remains safe. No live
+call was placed.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/http/telnyx_media_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/adapter_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/webhook_decoder_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/media_decoder_test.exs
+# 28 tests, 0 failures
+
+mix test test/integration/telnyx_voice_api_test.exs --include integration
+# 1 test, 0 failures, 1 skipped
+
+mix test test/integration/telnyx_voice_api_test.exs
+# 0 tests, 0 failures, 1 excluded
+```
+
+The root completion run passed all seven application lanes: MCP 37, Agent Runtime 58, Call Engine
+351, Calls 44, Persistence 30, Gateway 176, and Console 59—755 tests with zero failures. Root
+formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check also pass.
+
+The milestone is complete locally. An operator can run the guarded live lane later with a
+controlled/verified destination and provider-reachable ingress; until that happens, the docs make
+no external-interoperability claim.

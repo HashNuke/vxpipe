@@ -1,6 +1,6 @@
 # Telnyx calls and phone transfers
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: complete (2026-09-11). Specification review: approved (2026-09-08).
 Prerequisites: [Human web transfers](human-web-transfers.md), including admission, private preparation, mixer and media policy.
 Sources: [Common telephony intent](../../labnotes/20260905-0405-call-definition-design.md#keep-telephony-provider-neutral-and-pin-the-resolved-definition-in-the-room); [protected destinations](../../labnotes/20260905-0405-call-definition-design.md#protected-dynamic-dial-destinations--approved-r13-decision); [machine detection](../../labnotes/20260905-0405-call-definition-design.md#provider-answering-machine-detection--resolved-r32).
 
@@ -31,16 +31,16 @@ webhook/media ingress; the development tailnet URL is not assumed publicly reach
 - [x] Add Telnyx configured service resolution, verified ingress and provider-leg correlation through Calls/Gateway adapter boundaries.
 - [x] Implement permitted outbound dialing, media normalization and private briefing/press-1 acceptance.
 - [x] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or definition semantics.
-- [ ] Add fixtures for vendor webhook/media authentication and a separate tagged real-provider lane using authorized test endpoints.
+- [x] Add fixtures for vendor webhook/media authentication and a separate tagged real-provider lane using authorized test endpoints.
 
 ## Acceptance and failure checks
 
-- [ ] Receive routes select only published matching definitions; spoofed/tampered/cross-tenant callbacks/media fail before adoption.
-- [ ] Duplicate/out-of-order events cannot duplicate rooms/dials/acceptance; uncertain command response never triggers speculative second dial.
-- [ ] Literal/protected variable destinations work; invalid/missing/mutated-by-agent source fails before dialing; model cannot supply numbers.
-- [ ] Private briefing is isolated; only destination-leg press-1 accepts, then privacy barrier precedes human bridge.
-- [ ] Machine/no-answer/busy/timeout cleans destination and retains valid source/caller; unknown AMD does not reset deadline. Delayed events target only known current legs.
-- [ ] Stop PostgreSQL after admission: known current-leg callbacks/DTMF/media still work with
+- [x] Receive routes select only published matching definitions; spoofed/tampered/cross-tenant callbacks/media fail before adoption.
+- [x] Duplicate/out-of-order events cannot duplicate rooms/dials/acceptance; uncertain command response never triggers speculative second dial.
+- [x] Literal/protected variable destinations work; invalid/missing/mutated-by-agent source fails before dialing; model cannot supply numbers.
+- [x] Private briefing is isolated; only destination-leg press-1 accepts, then privacy barrier precedes human bridge.
+- [x] Machine/no-answer/busy/timeout cleans destination and retains valid source/caller; unknown AMD does not reset deadline. Delayed events target only known current legs.
+- [x] Stop PostgreSQL after admission: known current-leg callbacks/DTMF/media still work with
   honest archive lag. An outbound callback matching an inbound number does not create a call.
 
 ## Manual verification
@@ -56,9 +56,9 @@ No arbitrary model-supplied numbers, generic outbound routing-policy matrix, aut
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence: the provider-neutral adapter contract, Telnyx raw-webhook verifier,
@@ -254,6 +254,65 @@ zero failures.
 
 The remaining milestone work is deterministic signed-webhook/whole-call harness coverage and an
 authorized tagged real-provider lane.
+
+## Checkpoint 39: signed whole-call harness and live-provider lane
+
+Provider-shaped Voice API v2 fixtures now cover incoming and outgoing initiation, answer, media
+start, and DTMF. The harness renders only bounded placeholders, signs the exact raw webhook body
+with the configured Ed25519 key, and sends it through the mounted Gateway endpoint. It upgrades the
+real media route and initializes the real Telnyx socket rather than invoking a room callback
+directly.
+
+The complete deterministic scenario admits one incoming phone caller, starts the pinned reception
+agent, attaches Opus media, and has an STT turn ask for the allowlisted human destination. The
+scripted model selects only that participant ref. Gateway submits one dial, correlates duplicate
+signed outgoing events to the already-pending attempt, attaches the destination privately, and
+accepts only DTMF `1` from its exact media socket. The destination remains private until its
+briefing playback completes; promotion then applies the existing policy barrier, shuts down the
+source agent, and leaves the two humans joined through the normal room path.
+
+After the initial claim, the harness makes its durable backend unavailable. Signed answer events,
+both media sockets, DTMF, briefing completion, and promotion still use the pinned in-memory owners.
+The operation record contains exactly one durable claim, proving that later carrier traffic does
+not fall back to storage or the inbound route. Existing focused tests retain the spoofing,
+cross-tenant, protected-number, command-uncertainty, machine, no-answer, timeout, and exact cleanup
+failure coverage.
+
+The wire choices were checked on 2026-09-11 against Telnyx's current official
+[Voice API webhook](https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-webhooks),
+[dial command](https://developers.telnyx.com/api-reference/call-commands/dial),
+[media streaming](https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming), and
+[answering-machine detection](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
+documentation. This validates the fixture envelopes and configured command/media options against
+the published contract; it is not a claim that an external carrier call ran in this checkout.
+
+An `:integration`/`:telnyx_live` test provides the separate real Voice API dial lane. It remains
+excluded by default and additionally skips unless `VXPIPE_TELNYX_LIVE=1`. Its required settings are
+the API key, connection ID, controlled from/destination numbers, and provider-reachable webhook and
+media URLs. A successful accepted dial captures all three provider identities and schedules an
+exact-leg hangup. The live lane was compiled and observed to skip safely without those explicit
+settings; no external call was placed for this checkpoint.
+
+Focused verification:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/http/telnyx_media_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/adapter_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/webhook_decoder_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/media_decoder_test.exs
+# 28 tests, 0 failures
+
+mix test test/integration/telnyx_voice_api_test.exs --include integration
+# 1 test, 0 failures, 1 skipped
+```
+
+The implementation commit also passed the root formatting, warnings-as-errors compilation, strict
+Credo, unused-dependency check, and all seven umbrella lanes—755 tests with zero failures. The live
+lane is ready for an explicitly authorized carrier run when controlled numbers and public ingress
+are available.
 
 ## Specification review
 

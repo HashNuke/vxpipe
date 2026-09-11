@@ -1,11 +1,10 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 16 complete and 8 incomplete. Milestone 16, private briefing
-and human web acceptance, is complete. A catalog web destination receives an isolated private
-briefing, controls only its exact pending attempt, cannot bridge after timeout, and joins
-bidirectional human audio only after acceptance, media readiness, completed playback, and the
-privacy commit barrier. Milestone 17, Telnyx calls and phone transfers, is the current
-implementation slice.
+Status: 24 milestone specifications: 17 complete and 7 incomplete. Milestone 17, Telnyx calls and
+phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
+agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
+duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
+Milestone 18, Twilio through the common telephony contract, is the current implementation slice.
 The earlier behavior contracts have completed focused review.
 Implementation continues through milestone 22, including the runnable samples and their
 cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain
@@ -55,7 +54,7 @@ progress without claiming the entire milestone is complete.
 14. [x] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
 15. [x] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
 16. [x] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
-17. [ ] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
+17. [x] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
 18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant definitions or room control.
 19. [ ] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
 20. [ ] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.

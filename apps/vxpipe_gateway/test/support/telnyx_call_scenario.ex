@@ -1,0 +1,195 @@
+defmodule Vxpipe.Gateway.TelnyxCallScenario do
+  @moduledoc false
+
+  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.Calls.{PreparedCall, TelephonyAdmissionClaim}
+
+  alias Vxpipe.Gateway.Telephony.{
+    LegSupervisor,
+    MediaSupervisor,
+    OutgoingLegConnector,
+    ServiceRegistry
+  }
+
+  def build(observer, public_key, media_admission, inbound_leg_id, outbound_leg_id)
+      when is_pid(observer) do
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, "caller")
+    service_options = service_options(plan.tenant_id, public_key, observer)
+    registry = ServiceRegistry.init!(enabled: true, services: [service_options])
+
+    connector =
+      {OutgoingLegConnector,
+       [
+         leg_id: fn -> outbound_leg_id end,
+         leg_supervisor: LegSupervisor,
+         media_admission: media_admission,
+         media_supervisor: MediaSupervisor,
+         service_registry: registry
+       ]}
+
+    runtime_options = [
+      media_admission: media_admission,
+      outbound_leg_connector: connector,
+      service_registry: registry,
+      telephony_leg_id: fn -> inbound_leg_id end,
+      telephony_media_supervisor: MediaSupervisor
+    ]
+
+    %{
+      claim: claim(plan, caller.participant_id),
+      plan: plan,
+      runtime_options: runtime_options,
+      service_options: service_options
+    }
+  end
+
+  defp compile_plan do
+    id = System.unique_integer([:positive, :monotonic])
+
+    {:ok, definition} =
+      CallDefinition.new(
+        %{
+          schema_version: CallDefinition.schema_version(),
+          entry_caller: "caller",
+          entry_receiver: "reception",
+          defaults: %{capabilities: %{}},
+          participants: %{
+            "caller" => %{
+              type: "human",
+              capabilities: %{speech_to_text: "test-stt"},
+              connection: %{
+                service: "primary-phone",
+                mode: "receive",
+                admission: "start_call",
+                number: "+15550001000"
+              }
+            },
+            "reception" => %{
+              type: "agent",
+              prompt: "Route callers safely.",
+              first_message: %{mode: "wait_for_input"},
+              capabilities: %{
+                model_inference: "test-model",
+                text_to_speech: "test-voice"
+              },
+              tools: %{},
+              transfers: ["human-support"]
+            },
+            "human-support" => %{
+              type: "human",
+              description: "A human support specialist",
+              connection: %{
+                service: "primary-phone",
+                mode: "dial",
+                number: "+15550001002"
+              },
+              transfer_notice: "This call is recorded."
+            }
+          },
+          transfer_policy: %{attempt_timeout_ms: 10_000},
+          limits: %{max_duration_ms: 60_000}
+        },
+        resource_id: "telnyx-harness-definition",
+        revision: 1
+      )
+
+    {:ok, invocation} =
+      CallInvocation.new(
+        %{
+          call_definition: %{id: "telnyx-harness-definition", revision: 1},
+          initial_variables: %{},
+          transport: %{type: "telephony"}
+        },
+        tenant_id: "tenant-telnyx-harness",
+        actor_id: "actor-telnyx-harness",
+        call_id: "call-telnyx-harness-#{id}",
+        room_id: "room-telnyx-harness-#{id}"
+      )
+
+    {:ok, plan} =
+      DefinitionCompiler.compile(definition, invocation, %{
+        capability_profiles: %{
+          "test-stt" => %{
+            kind: :speech_to_text,
+            provider: Flux,
+            options: %{
+              model: "flux-general-multi",
+              encoding: :opus,
+              sample_rate: 48_000
+            }
+          },
+          "test-model" => %{
+            kind: :model_inference,
+            provider: :req_llm,
+            options: %{model: "test:scripted"}
+          },
+          "test-voice" => %{
+            kind: :text_to_speech,
+            provider: FluxTextToSpeech,
+            options: %{
+              model: "flux-test-voice",
+              encoding: :linear16,
+              sample_rate: 48_000
+            }
+          }
+        },
+        host_tools: %{}
+      })
+
+    plan
+  end
+
+  defp claim(plan, participant_id) do
+    call = %PreparedCall{
+      id: plan.call_id,
+      tenant_key: plan.tenant_id,
+      definition_id: plan.definition_id,
+      definition_revision: plan.definition_revision,
+      schema_version: plan.schema_version,
+      participant_routes: %{},
+      entry_caller: plan.entry_caller,
+      entry_receiver: plan.entry_receiver,
+      initial_variables: %{},
+      plan: plan,
+      plan_digest: :crypto.hash(:sha256, :erlang.term_to_binary(plan)),
+      state: :admitting,
+      room_id: plan.room_id,
+      created_at: ~U[2026-09-11 15:00:00Z],
+      started_at: nil,
+      ended_at: nil,
+      incarnation_id: nil,
+      terminal_reason: nil
+    }
+
+    %TelephonyAdmissionClaim{
+      call: call,
+      participant_ref: "caller",
+      participant_id: participant_id,
+      provider: :telnyx,
+      service: "primary-phone",
+      provider_event_id: "event-incoming-harness",
+      provider_connection_id: "voice-application-harness",
+      provider_call_control_id: "inbound-call-control",
+      provider_call_leg_id: "inbound-call-leg",
+      provider_call_session_id: "inbound-call-session",
+      accepted_at: ~U[2026-09-11 15:00:00Z]
+    }
+  end
+
+  defp service_options(tenant_id, public_key, observer) do
+    [
+      id: "primary-phone",
+      ingress_key: "harness",
+      scope: {:tenant, tenant_id},
+      provider: :telnyx,
+      provider_connection_id: "voice-application-harness",
+      public_key: Base.encode64(public_key),
+      api_key: "observer:#{:erlang.pid_to_list(observer)}",
+      outbound_number: "+15550001000",
+      public_base_url: "https://voice.example.test",
+      adapter: Vxpipe.Gateway.TestTelephonyAdapter
+    ]
+  end
+end

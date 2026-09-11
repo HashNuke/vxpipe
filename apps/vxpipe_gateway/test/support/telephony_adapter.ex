@@ -5,7 +5,7 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
 
   @impl true
   def answer(options, request) do
-    send(self(), {:test_telephony_answer, request})
+    send(observer(options), {:test_telephony_answer, request})
 
     case Keyword.fetch!(options, :api_key) do
       "reject" ->

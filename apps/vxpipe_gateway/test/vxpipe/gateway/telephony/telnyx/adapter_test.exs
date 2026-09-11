@@ -8,7 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AdapterTest do
 
   setup :verify_on_exit!
 
-  test "dials an authorized leg with bidirectional L16 media and no automatic retry" do
+  test "dials an authorized leg with bidirectional Opus media and no automatic retry" do
     Req.Test.expect(__MODULE__, fn conn ->
       assert conn.method == "POST"
       assert conn.request_path == "/v2/calls"

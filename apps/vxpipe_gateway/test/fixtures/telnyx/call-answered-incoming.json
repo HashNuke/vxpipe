@@ -1,0 +1,18 @@
+{
+  "data": {
+    "record_type": "event",
+    "event_type": "call.answered",
+    "id": "event-answered-harness",
+    "occurred_at": "2026-09-11T15:00:01.123456Z",
+    "payload": {
+      "call_control_id": "inbound-call-control",
+      "connection_id": "voice-application-harness",
+      "call_leg_id": "inbound-call-leg",
+      "call_session_id": "inbound-call-session"
+    }
+  },
+  "meta": {
+    "attempt": 1,
+    "delivered_to": "https://voice.example.test/api/telephony/telnyx/harness/events"
+  }
+}

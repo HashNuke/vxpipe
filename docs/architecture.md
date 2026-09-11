@@ -1231,6 +1231,16 @@ the binding. That frame pins the provider stream ID for every later media and DT
 events are dispatched synchronously to the already-running exact leg owner; a mismatched frame,
 binary frame, or unavailable leg closes the socket instead of being guessed or rerouted.
 
+Provider-wire compatibility is kept testable without making ordinary tests place phone calls.
+Versioned provider-shaped fixtures are signed over their exact raw body and pass through the real
+webhook, media-upgrade, socket, admission, room, and transfer boundaries. A separate opt-in tagged
+lane exercises the same adapter against the live Voice API only when an operator explicitly supplies
+authorized numbers and provider-reachable webhook/media URLs. The fixture profile is checked against
+Telnyx's current official [Voice API webhooks](https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-webhooks),
+[dial command](https://developers.telnyx.com/api-reference/call-commands/dial), and
+[media-streaming](https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming)
+contracts; passing deterministic fixtures alone is not represented as a successful external call.
+
 The first valid media-start event creates one temporary supervised media subtree for that exact
 connection. A provider selector supplies only the carrier-specific direct-output, room-ingress, and
 room-egress Membrane pipelines; the session setup itself owns the common engine attachment and

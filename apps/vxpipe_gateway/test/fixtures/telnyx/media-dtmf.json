@@ -1,0 +1,9 @@
+{
+  "event": "dtmf",
+  "stream_id": "{{stream_id}}",
+  "occurred_at": "2026-09-11T15:00:04.123456Z",
+  "sequence_number": "2",
+  "dtmf": {
+    "digit": "{{digit}}"
+  }
+}

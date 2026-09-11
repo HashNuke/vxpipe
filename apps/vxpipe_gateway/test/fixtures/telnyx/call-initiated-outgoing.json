@@ -1,0 +1,23 @@
+{
+  "data": {
+    "record_type": "event",
+    "event_type": "call.initiated",
+    "id": "event-outgoing-harness",
+    "occurred_at": "2026-09-11T15:00:03.123456Z",
+    "payload": {
+      "call_control_id": "outbound-call-control",
+      "connection_id": "voice-application-harness",
+      "call_leg_id": "outbound-call-leg",
+      "call_session_id": "outbound-call-session",
+      "client_state": "{{client_state}}",
+      "from": "+15550001000",
+      "to": "+15550001002",
+      "direction": "outgoing",
+      "state": "parked"
+    }
+  },
+  "meta": {
+    "attempt": 1,
+    "delivered_to": "https://voice.example.test/api/telephony/telnyx/harness/events"
+  }
+}
