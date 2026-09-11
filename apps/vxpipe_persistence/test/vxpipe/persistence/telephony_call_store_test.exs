@@ -70,6 +70,23 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
     assert Repo.aggregate(TelephonyLeg, :count) == 1
   end
 
+  test "persists a Twilio leg without a fabricated provider session identifier", context do
+    assert {:ok, claim} =
+             Calls.claim_incoming_telephony(
+               {:tenant, context.tenant.key},
+               "primary-phone",
+               twilio_incoming_event(),
+               context.options
+             )
+
+    assert claim.provider_call_session_id == nil
+
+    assert %TelephonyLeg{
+             provider: "twilio",
+             provider_call_session_id: nil
+           } = Repo.one(TelephonyLeg)
+  end
+
   test "rolls back a new call when an event identifier conflicts with another leg", context do
     assert {:ok, _claim} =
              Calls.claim_incoming_telephony(
@@ -151,6 +168,21 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
       provider_call_control_id: "call-control-1",
       provider_call_leg_id: "call-leg-1",
       provider_call_session_id: "call-session-1",
+      occurred_at: ~U[2026-09-11 10:14:59.000000Z],
+      from: "+15550001001",
+      to: "+15550001000"
+    }
+  end
+
+  defp twilio_incoming_event do
+    %Event{
+      kind: :incoming,
+      provider: :twilio,
+      provider_event_id: "CA00000000000000000000000000000000:incoming",
+      provider_connection_id: "AC00000000000000000000000000000000",
+      provider_call_control_id: "CA00000000000000000000000000000000",
+      provider_call_leg_id: "CA00000000000000000000000000000000",
+      provider_call_session_id: nil,
       occurred_at: ~U[2026-09-11 10:14:59.000000Z],
       from: "+15550001001",
       to: "+15550001000"

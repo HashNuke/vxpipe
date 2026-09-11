@@ -989,6 +989,13 @@ as an actionable event or asking the carrier to retry it. Provider media remains
 authenticated codec/clock/sequence metadata until a Membrane gateway pipeline converts it into the
 existing room PCM clock; raw carrier packets do not enter Room Authority.
 
+Common provider identity preserves the identifiers a carrier actually supplies. Configured provider
+connection, addressable call-control, and exact call-leg identifiers are mandatory. A separate
+provider call-session identifier is optional: Telnyx supplies and pins it, while Twilio has no
+distinct equivalent and retains `nil` instead of duplicating its Call SID into a fictitious session.
+Matching includes the optional value, so adapters cannot discard a real session identifier merely
+because another carrier lacks one.
+
 The Telnyx gateway boundary authenticates the untouched request body before any event decoding.
 It verifies the base64 Ed25519 signature over `timestamp <> "|" <> raw_body` with the configured
 base64 public key and rejects signed timestamps more than five minutes before or after gateway

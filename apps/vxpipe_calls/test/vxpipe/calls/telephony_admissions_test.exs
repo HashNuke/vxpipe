@@ -73,6 +73,23 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
     assert stored.state == :admitting
   end
 
+  test "claims a Twilio leg without inventing a separate provider session identifier", context do
+    assert {:ok,
+            %TelephonyAdmissionClaim{
+              provider: :twilio,
+              provider_connection_id: "AC00000000000000000000000000000000",
+              provider_call_control_id: "CA00000000000000000000000000000000",
+              provider_call_leg_id: "CA00000000000000000000000000000000",
+              provider_call_session_id: nil
+            }} =
+             Calls.claim_incoming_telephony(
+               {:tenant, context.tenant.key},
+               "primary-phone",
+               twilio_incoming_event(),
+               context.options
+             )
+  end
+
   test "fails closed when an event identifier and provider leg disagree", context do
     assert {:ok, _claim} =
              Calls.claim_incoming_telephony(
@@ -167,6 +184,21 @@ defmodule Vxpipe.Calls.TelephonyAdmissionsTest do
       provider_call_control_id: "call-control-1",
       provider_call_leg_id: "call-leg-1",
       provider_call_session_id: "call-session-1",
+      occurred_at: ~U[2026-09-11 10:09:59.000000Z],
+      from: "+15550001001",
+      to: "+15550001000"
+    }
+  end
+
+  defp twilio_incoming_event do
+    %Event{
+      kind: :incoming,
+      provider: :twilio,
+      provider_event_id: "CA00000000000000000000000000000000:incoming",
+      provider_connection_id: "AC00000000000000000000000000000000",
+      provider_call_control_id: "CA00000000000000000000000000000000",
+      provider_call_leg_id: "CA00000000000000000000000000000000",
+      provider_call_session_id: nil,
       occurred_at: ~U[2026-09-11 10:09:59.000000Z],
       from: "+15550001001",
       to: "+15550001000"

@@ -101,18 +101,22 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
       event.provider_connection_id,
       event.provider_call_control_id,
       event.provider_call_leg_id,
-      event.provider_call_session_id,
       event.from,
       event.to
     ]
 
     if event.provider in [:telnyx, :twilio] and match?(%DateTime{}, event.occurred_at) and
-         Enum.all?(required, &(is_binary(&1) and byte_size(&1) > 0)) do
+         Enum.all?(required, &present?/1) and optional_identifier?(event.provider_call_session_id) do
       :ok
     else
       {:error, :invalid_incoming_telephony_event}
     end
   end
+
+  defp optional_identifier?(nil), do: true
+  defp optional_identifier?(value), do: present?(value)
+
+  defp present?(value), do: is_binary(value) and byte_size(value) > 0
 
   defp entry_caller(participant_ref, participant_ref), do: :ok
   defp entry_caller(_participant_ref, _entry_caller), do: {:error, :participant_not_entry_caller}

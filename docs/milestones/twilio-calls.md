@@ -51,8 +51,38 @@ No automatic cross-carrier fallback, generic provider-specific JSON escape hatch
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation is in progress. Do not mark this slice complete until all checklist and acceptance
+items have evidence.
+
+## Checkpoint 1: honest provider identity
+
+The common admission and persistence contract now permits an absent provider call-session ID while
+continuing to require configured connection, call-control, and exact leg identity. This is a genuine
+second-provider requirement: Twilio's Account SID identifies the configured account and its Call SID
+is both the addressable call resource and exact leg, but it has no distinct counterpart to Telnyx's
+call-session ID. The Twilio value remains `nil`; Vxpipe does not copy Call SID into an invented
+session field.
+
+Focused red-green evidence covers both the in-memory Calls workflow and the PostgreSQL repository.
+The first Calls run rejected the otherwise valid event as `invalid_incoming_telephony_event`. After
+normalization accepted the optional value, the persistence run exposed that the Ecto changeset had
+temporarily stopped casting the session field while still requiring it; correcting the cast/required
+split and applying the nullable-column migration made both provider shapes green. Existing Telnyx
+records still require and retain the value supplied by that adapter.
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/telephony_admissions_test.exs
+# 6 tests, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test \
+  mix test test/vxpipe/persistence/telephony_call_store_test.exs
+# 5 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency, and all seven
+umbrella lanes pass—757 tests with zero failures.
 
 ## Specification review
 

@@ -37,7 +37,7 @@ defmodule Vxpipe.Calls.TelephonyAdmissionClaim do
           provider_connection_id: String.t(),
           provider_call_control_id: String.t(),
           provider_call_leg_id: String.t(),
-          provider_call_session_id: String.t(),
+          provider_call_session_id: nil | String.t(),
           accepted_at: DateTime.t()
         }
 end

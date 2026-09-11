@@ -49,7 +49,6 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
       :provider_connection_id,
       :provider_call_control_id,
       :provider_call_leg_id,
-      :provider_call_session_id,
       :participant_ref,
       :participant_id,
       :state,
