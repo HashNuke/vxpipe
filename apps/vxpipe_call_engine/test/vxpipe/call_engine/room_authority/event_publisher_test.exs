@@ -42,6 +42,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EventPublisherTest do
            } = EventPublisher.transcript_source_policy(state, "source", 0)
   end
 
+  test "denies transcript delivery and archive permission when its policy router is unavailable" do
+    router = start_router()
+    :ok = apply_policy(router, 0, ["source", "recipient"])
+    monitor = Process.monitor(router)
+    Process.exit(router, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^router, :killed}
+
+    event = event()
+
+    assert {_state, %{"save_transcripts" => false}} =
+             EventPublisher.publish_transcript(state(router), self(), event)
+
+    refute_receive {:vxpipe_event, ^event}
+  end
+
   defp state(router) do
     recorder = %Recorder{port: nil, participant_activations: %{}}
 

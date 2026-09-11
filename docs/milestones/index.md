@@ -1,12 +1,12 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 14 complete and 10 incomplete. Milestone 14, allowlisted
-agent-to-agent transfers, is complete. The rendered call transferred reception to billing and back,
-retained permitted history and variables, and accepted a fresh caller turn after re-entry. Its
-default-blocking transfer tools still run in independently supervised workers; the setting gates
-only later conversation. Deterministic coverage proves authorization, prepare/commit, deadline,
-restoration, history/privacy, re-entry, and late-result failure boundaries. Milestone 15, live mixing
-and presence-driven media policy, is the current implementation slice.
+Status: 24 milestone specifications: 15 complete and 9 incomplete. Milestone 15, live mixing and
+presence-driven media policy, is complete. Two humans exchange live WebRTC mix-minus audio, an
+authorized silent monitor receives only allowlisted sources and cannot publish, and presence-driven
+audio/transcript/storage restrictions commit before new or queued data can cross. Concrete mixer
+and transcript-router failure checks tear down the room rather than retain a partially applied
+bridge. Milestone 16, private briefing and human web acceptance, is the current implementation
+slice.
 The earlier behavior contracts have completed focused review.
 Implementation continues through milestone 22, including the runnable samples and their
 cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain
@@ -54,7 +54,7 @@ progress without claiming the entire milestone is complete.
 12. [x] [Remote MCP tools in a live call](remote-mcp-tools.md) — Run a validated, tenant-configured remote tool while talking.
 13. [x] [Opening audio and call lifecycle](opening-audio-and-call-lifecycle.md) — Play optional opening audio, greet, and enforce approved live-call timers.
 14. [x] [Allowlisted agent-to-agent transfers](agent-transfers.md) — Transfer responsibility between agent participants without losing variables.
-15. [ ] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
+15. [x] [Live mixing and presence-driven media policy](live-mixing-and-media-policy.md) — Route/mix multiple participants live and enforce transcript/audio denials.
 16. [ ] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
 17. [ ] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
 18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant definitions or room control.

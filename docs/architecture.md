@@ -1174,6 +1174,13 @@ revision pinning and STT demand/restart at policy boundaries remain required bef
 late provider results spanning a presence transition are completely source-interval accurate.
 If a delayed projection outlives the retained history, it fails closed instead of inferring policy.
 
+Admission is also fail-closed when a concrete mixer or transcript router cannot install the next
+revision. The policy authority terminates the room rather than retaining a partially updated
+bridge, and the public participant-join boundary converts the concurrent room teardown into a
+retryable protocol-neutral error. If transcript policy lookup itself is unavailable, delivery has
+no recipients and archive provenance explicitly denies transcript storage; no content is handed to
+the asynchronous archive queue under an inferred policy.
+
 Dial destinations may be literal participant `connection.number` values or come
 from a declared creation-time variable, using the candidate alternative
 `number_from_variable: {"section": "routing", "variable": "support_number"}`.

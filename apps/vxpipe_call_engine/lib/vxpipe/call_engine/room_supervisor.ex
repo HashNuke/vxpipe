@@ -56,6 +56,14 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       [{room_authority, _value}] -> RoomAuthority.join_participant(room_authority, command)
       [] -> {:error, room_not_found(command.room_id)}
     end
+  catch
+    :exit, _reason ->
+      {:error,
+       Error.new(
+         :room_start_failed,
+         "The participant could not be admitted because the room became unavailable.",
+         retryable: true
+       )}
   end
 
   def participant_snapshot(tenant_id, room_id, participant_id) do

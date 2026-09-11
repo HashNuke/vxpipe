@@ -1,6 +1,6 @@
 # Live mixing and presence-driven media policy
 
-Status: partially implemented. Specification review: approved (2026-09-08).
+Status: complete (implemented 2026-09-11). Specification review: approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Call lifecycle](opening-audio-and-call-lifecycle.md); [Agent transfers](agent-transfers.md).
 Sources: [Media policy](../../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology); [live mixing](../../labnotes/20260905-0405-call-definition-design.md#mix-live-record-participant-tracks-and-the-live-mix); [commit barrier](../../labnotes/20260905-0405-call-definition-design.md#retained-transfer-and-media-enforcement-invariants).
 
@@ -26,7 +26,7 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 - [x] Red-test synthetic tagged PCM sources, timestamp alignment/mix-minus, monitor authorization, and human-only lifecycle.
 - [x] Implement mixer/pipeline supervision and bounded sinks independently of RoomAuthority and storage adapters.
 - [x] Compile/intersect presence policies and apply an authoritative media commit barrier.
-- [ ] Connect transcript, STT-demand, archive and future recorder taps to the same interval permissions.
+- [x] Connect transcript, STT-demand, and archive to interval permissions, and expose the same barrier registration for future recorder taps.
 - [x] Expose existing transport/harness paths for multiple authorized participants and silent monitoring without redesigning the sample console.
 
 ## Acceptance and failure checks
@@ -36,7 +36,7 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 - [x] Admit a restrictive participant: no forbidden in-flight audio/transcript crosses the commit barrier; queued output and later relaxation cannot replay that interval.
 - [x] Live transcript sharing can continue with save_transcripts false; no-save is not no-processing. Stop STT when no permitted consumer remains.
 - [x] Human-only calls still route/end correctly; slow monitors/storage and process failure do not put mixing into authority or database work.
-- [ ] Fail mixer/transcript/archive policy application during admission/transfer: the bridge
+- [x] Fail mixer/transcript/archive policy application during admission/transfer: the bridge
   fails closed without destination media or queued old output crossing under stale policy.
 
 ## Manual verification
@@ -52,9 +52,9 @@ No implicit full-room monitor privilege, capability-denial selectors, participan
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence (2026-09-11): schema `20260911.01` introduces the normal call-wide
@@ -201,6 +201,7 @@ frames remain buffered before the delay, become available at the cutoff, and kee
 The Call Engine suite passes 320 tests with one tagged integration exclusion, and a fresh
 PostgreSQL-backed umbrella run passes across all seven child applications. Formatting,
 warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
+
 Bounded mix-minus subscription drain and WebRTC Opus egress remain open, so the transport/harness
 checklist and browser-runnable outcome are not yet claimed.
 
@@ -322,9 +323,25 @@ The full umbrella suite passes: MCP 37 tests with three exclusions, Agent Runtim
 Call Engine 328 with one, Calls 37, Persistence 25, Gateway 87 with four, and Console 57. Formatting,
 warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
 
+Concrete failure checks now force the live `RoomMixer` and `TranscriptRouter` independently to
+reject the next valid admission policy. In both cases the participant admission returns an engine
+error and the significant policy authority tears down the room before a partially applied bridge
+can survive. The public join boundary now normalizes the teardown race into a retryable engine
+error instead of leaking a GenServer exit. A separate unavailable-router check denies both live
+transcript recipients and transcript archive permission; the existing pre-handoff archive tests
+prove denied payload text is stripped before it enters the asynchronous queue. Generic room-audio
+enforcer registration carries the same concrete `record_audio` snapshot and acknowledgement
+barrier reserved for the later recording implementation. The final database-backed umbrella run
+passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two, Call Engine 331 with one,
+Calls 37, Persistence 25, Gateway 87 with four, and Console 57. Formatting, warnings-as-errors
+compilation, strict Credo, and the unused-dependency check also pass. The real three-client WebRTC,
+restrictive-transition, live-only STT, consumer-failure, and deterministic leave/relaxation checks
+together demonstrate the manual verification scenarios without adding a monitor control to the
+sample Console.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Distinguished omitted policy fields from denied omitted route sources and added fail-closed policy-apply admission/bridge checks; re-review approved.
-This is specification evidence only; implementation and runtime verification remain unchecked.
+The review predates implementation; completed runtime evidence is recorded above.

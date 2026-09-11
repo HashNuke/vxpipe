@@ -518,3 +518,28 @@
   Engine 328 with one, Calls 37, Persistence 25, Gateway 87 with four, and Console 57. Formatting,
   warnings-as-errors compilation, strict Credo over 4,509 modules/functions, and the unused-lock
   check pass against a disposable PostgreSQL 17 database.
+
+## 2026-09-11 — concrete consumer failure closure
+
+- Added room-level checks that corrupt only the next-revision expectation of the real mixer or the
+  real transcript router, then admit a restrictive participant. This avoids substituting the fake
+  policy enforcer for the production consumers whose behavior matters at the bridge boundary.
+- The mixer case returned the expected room-start error. The first transcript-router run exposed a
+  race in the public join operation: the room supervisor could tear down Room Authority before its
+  reply reached the caller, leaking a GenServer `:shutdown` exit. `RoomSupervisor.join_participant/1`
+  now normalizes that race into a retryable protocol-neutral `:room_start_failed` error.
+- Both concrete cases now fail admission and observe the room terminate. The candidate participant
+  cannot remain bridged under a partially installed policy.
+- Added an unavailable-router projection check. It produces no live recipient and explicitly
+  returns `save_transcripts: false`; the existing Archive Port coverage verifies that this source
+  decision strips transcript content before asynchronous handoff.
+- Transcript routing, STT demand/session revisioning, archive handoff, and the future recorder
+  enforcer boundary now share the room policy authority's snapshot and acknowledgement contract.
+  Actual recording bytes remain correctly deferred to the streaming-recordings milestone.
+- Final verification passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two, Call
+  Engine 331 with one, Calls 37, Persistence 25, Gateway 87 with four, and Console 57. Formatting,
+  warnings-as-errors compilation, strict Credo over 4,509 modules/functions, and the unused-lock
+  check pass. The disposable PostgreSQL 17 database was stopped after the run.
+- Milestone 15 is complete. Its runnable multi-human and monitor scenarios use actual ExWebRTC and
+  Membrane transport paths; recording bytes and human-transfer mode changes remain in their later
+  milestones.
