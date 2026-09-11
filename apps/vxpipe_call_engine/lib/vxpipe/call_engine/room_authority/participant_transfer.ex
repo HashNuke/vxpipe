@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   @moduledoc false
 
   alias Vxpipe.CallEngine.RoomParticipantSupervisor
@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
 
   alias Vxpipe.CallEngine.RoomAuthority.{SpokenHistory, Startup, State}
 
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
     Cleanup,
     Committer,
@@ -22,9 +22,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
 
   @spec begin(Request.t(), GenServer.from(), State.t()) ::
           {:noreply, State.t()} | {:reply, {:error, :rejected | :unavailable}, State.t()}
-  def begin(%Request{} = request, from, %State{pending_agent_transfer: nil} = state) do
+  def begin(%Request{} = request, from, %State{pending_participant_transfer: nil} = state) do
     with :ok <- Authorizer.authorize(request, state) do
-      timeout_ms = state.agent_transfer_runtime.plan.transfer_policy.attempt_timeout_ms
+      timeout_ms = state.participant_transfer_runtime.plan.transfer_policy.attempt_timeout_ms
       deadline_ms = System.monotonic_time(:millisecond) + timeout_ms
       start_preparation(request, from, deadline_ms, state)
     else
@@ -39,7 +39,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   defp start_preparation(request, from, deadline_ms, state) do
     destination =
       Map.fetch!(
-        state.agent_transfer_runtime.plan.participants,
+        state.participant_transfer_runtime.plan.participants,
         request.destination_definition_key
       )
 
@@ -55,7 +55,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     case RoomTransferSupervisor.prepare(
            request.incarnation_id,
            request,
-           state.agent_transfer_runtime,
+           state.participant_transfer_runtime,
            destination,
            not previously_activated?,
            initial_messages
@@ -66,7 +66,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
         timer =
           Process.send_after(
             self(),
-            {:vxpipe_agent_transfer_deadline, task.ref},
+            {:vxpipe_participant_transfer_deadline, task.ref},
             remaining_ms
           )
 
@@ -78,7 +78,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
           timer: timer
         }
 
-        {:noreply, %{state | pending_agent_transfer: pending}}
+        {:noreply, %{state | pending_participant_transfer: pending}}
 
       {:error, :unavailable} ->
         state = History.failed(state, request, :preparation_supervisor_unavailable)
@@ -90,7 +90,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   def prepared(
         reference,
         %Preparation{} = preparation,
-        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
+          state
       ) do
     settle_task(pending)
 
@@ -104,7 +105,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
 
         reject_pending(pending, :source_authority_changed, %{
           state
-          | pending_agent_transfer: nil
+          | pending_participant_transfer: nil
         })
 
       true ->
@@ -122,7 +123,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   def worker_failed(
         reference,
         reason,
-        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
+          state
       ) do
     settle_task(pending)
     Cleanup.discard_destination(pending.request)
@@ -132,7 +134,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   def worker_failed(
         reference,
         _reason,
-        %State{pending_agent_transfer: %Restoration{task: %Task{ref: reference}} = restoration} =
+        %State{
+          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
+        } =
           state
       ) do
     settle_task(restoration)
@@ -151,7 +155,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   @spec deadline_elapsed(reference(), State.t()) :: {:noreply, State.t()}
   def deadline_elapsed(
         reference,
-        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
+          state
       ) do
     Process.demonitor(reference, [:flush])
     cancel_timer(pending.timer)
@@ -165,7 +170,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   def restored(
         reference,
         capability,
-        %State{pending_agent_transfer: %Restoration{task: %Task{ref: reference}} = restoration} =
+        %State{
+          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
+        } =
           state
       )
       when is_map(capability) do
@@ -182,7 +189,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   @spec restoration_deadline_elapsed(reference(), State.t()) :: {:noreply, State.t()}
   def restoration_deadline_elapsed(
         reference,
-        %State{pending_agent_transfer: %Restoration{task: %Task{ref: reference}} = restoration} =
+        %State{
+          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
+        } =
           state
       ) do
     Process.demonitor(reference, [:flush])
@@ -203,7 +212,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   def worker_down(
         reference,
         _reason,
-        %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
+        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
+          state
       ) do
     cancel_timer(pending.timer)
     _ = RoomTransferSupervisor.cleanup_destination(pending.request, pending.task.pid)
@@ -214,7 +224,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   def worker_down(
         reference,
         _reason,
-        %State{pending_agent_transfer: %Restoration{task: %Task{ref: reference}} = restoration} =
+        %State{
+          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
+        } =
           state
       ) do
     cancel_timer(restoration.timer)
@@ -291,21 +303,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   defp restore_or_fail(pending, cause, state) do
     case SourceRestorer.start(pending.request, pending.from, cause, state) do
       {:ok, restoration} ->
-        {:noreply, %{state | pending_agent_transfer: restoration}}
+        {:noreply, %{state | pending_participant_transfer: restoration}}
 
       :not_required ->
-        fail_pending(pending, cause, %{state | pending_agent_transfer: nil})
+        fail_pending(pending, cause, %{state | pending_participant_transfer: nil})
 
       {:error, :unavailable} ->
         state = History.failed(state, pending.request, cause, :failed)
         GenServer.reply(pending.from, {:error, :unavailable})
-        {:noreply, %{state | pending_agent_transfer: nil}}
+        {:noreply, %{state | pending_participant_transfer: nil}}
     end
   end
 
   defp finish_restoration(restoration, outcome, state) do
     state = History.failed(state, restoration.request, restoration.cause, outcome)
     GenServer.reply(restoration.from, {:error, :unavailable})
-    {:noreply, %{state | pending_agent_transfer: nil}}
+    {:noreply, %{state | pending_participant_transfer: nil}}
   end
 end

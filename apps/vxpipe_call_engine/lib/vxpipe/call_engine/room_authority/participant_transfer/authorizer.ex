@@ -1,14 +1,14 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Authorizer do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
   @moduledoc false
 
   alias Vxpipe.CallEngine.RoomAuthority.State
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   @spec authorize(Request.t(), State.t()) :: :ok | {:error, :rejected}
   def authorize(
         %Request{} = request,
-        %State{agent_transfer_runtime: %Runtime{} = runtime} = state
+        %State{participant_transfer_runtime: %Runtime{} = runtime} = state
       ) do
     source = Map.get(runtime.plan.participants, request.source_definition_key)
     destination = Map.get(runtime.plan.participants, request.destination_definition_key)

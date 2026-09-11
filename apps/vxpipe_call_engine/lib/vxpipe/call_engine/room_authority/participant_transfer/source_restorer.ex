@@ -1,10 +1,10 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.SourceRestorer do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.SourceRestorer do
   @moduledoc false
 
   alias Vxpipe.CallEngine.{RoomTransferSupervisor, TextToSpeechRuntime}
   alias Vxpipe.CallEngine.RoomAuthority.{Startup, State}
 
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
     History,
     Restoration
@@ -37,7 +37,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.SourceRestorer do
   end
 
   defp start_worker(request, from, cause, state) do
-    owner = Keyword.fetch!(state.agent_transfer_runtime.startup_options, :owner)
+    owner = Keyword.fetch!(state.participant_transfer_runtime.startup_options, :owner)
 
     case RoomTransferSupervisor.restore_text_to_speech(
            request.incarnation_id,
@@ -49,7 +49,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.SourceRestorer do
         timer =
           Process.send_after(
             self(),
-            {:vxpipe_agent_transfer_restoration_deadline, task.ref},
+            {:vxpipe_participant_transfer_restoration_deadline, task.ref},
             @restoration_timeout_ms
           )
 

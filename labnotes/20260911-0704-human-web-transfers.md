@@ -18,3 +18,14 @@
   all application suites (MCP 37/3 excluded, Agent Runtime 58/2, Call Engine 333/1, Calls 37,
   Persistence 25, Gateway 87/4, Console 57), strict Credo (4,509 modules/functions), and unused
   dependency-lock checks.
+
+## Refactor: participant-neutral room transfer ownership
+
+- Mechanically renamed the room coordinator and its cohesive support namespace from
+  `RoomAuthority.AgentTransfer` to `RoomAuthority.ParticipantTransfer`, including its state fields,
+  internal messages, and room-supervised worker references.
+- The transfer tool and the existing agent-to-agent test remain named for their actual contracts;
+  no behavior, public wire format, timeout, or lifecycle rule changed in this refactor.
+- Focused verification: all 11 agent-transfer room tests pass after the rename.
+- Full verification passes formatting, warnings-as-errors compilation, every umbrella suite with
+  the same counts as the prior checkpoint, strict Credo, and unused dependency-lock checks.

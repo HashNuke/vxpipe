@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.History do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Recorder

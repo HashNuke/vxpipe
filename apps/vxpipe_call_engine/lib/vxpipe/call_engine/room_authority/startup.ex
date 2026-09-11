@@ -16,7 +16,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   }
 
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, State}
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime, as: AgentTransferRuntime
+
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime,
+    as: ParticipantTransferRuntime
 
   @spec start_entries(CreateRoom.t() | ResolvedCallPlan.t(), keyword(), State.t()) ::
           {:ok, State.t()} | {:error, :agent_start_failed | :entry_start_failed}
@@ -82,8 +84,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       }
 
       with {:ok, state} <- activate_entry_receiver(startup, receiver_snapshot, state) do
-        runtime = %AgentTransferRuntime{plan: plan, startup_options: startup_options}
-        {:ok, %{state | agent_transfer_runtime: runtime}}
+        runtime = %ParticipantTransferRuntime{plan: plan, startup_options: startup_options}
+        {:ok, %{state | participant_transfer_runtime: runtime}}
       end
     else
       _error -> {:error, :entry_start_failed}

@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Preparation do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Preparation do
   @moduledoc false
 
   alias Vxpipe.CallEngine.PlanStartup.AgentDestination

@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
   @moduledoc false
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
     State
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{History, Pending, Preparation}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{History, Pending, Preparation}
 
   @spec commit(Pending.t(), Preparation.t(), State.t()) ::
           {:ok, map(), State.t()} | {:error, :destination_unavailable}
@@ -62,7 +62,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
             preparation.first_activation?
           ),
         pending_agent_teardowns: pending_agent_teardowns,
-        pending_agent_transfer: nil,
+        pending_participant_transfer: nil,
         text_capability: destination_capability,
         text_to_speech_capability: Startup.activate_text_to_speech(preparation.text_to_speech),
         text_to_speech_runtime: preparation.destination.text_to_speech

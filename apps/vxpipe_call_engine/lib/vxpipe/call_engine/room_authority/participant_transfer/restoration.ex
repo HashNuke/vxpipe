@@ -1,7 +1,7 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Restoration do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Restoration do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.History
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   @derive {Inspect, only: [:cause, :request]}

@@ -138,8 +138,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     authority = room_authority(plan)
     state = :sys.get_state(authority)
-    assert state.agent_transfer_runtime.plan.entry_caller == plan.entry_caller
-    assert state.agent_transfer_runtime.plan.entry_receiver == plan.entry_receiver
+    assert state.participant_transfer_runtime.plan.entry_caller == plan.entry_caller
+    assert state.participant_transfer_runtime.plan.entry_receiver == plan.entry_receiver
 
     send(
       authority,
@@ -583,7 +583,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     assert_receive {:test_agent_runtime_model_preparing, blocked_preparer}, 2_000
 
     authority = room_authority(plan)
-    %{pending_agent_transfer: %{task: preparation_task}} = :sys.get_state(authority)
+    %{pending_participant_transfer: %{task: preparation_task}} = :sys.get_state(authority)
     preparation_monitor = Process.monitor(preparation_task.pid)
 
     assert :ok = :sys.suspend(authority)

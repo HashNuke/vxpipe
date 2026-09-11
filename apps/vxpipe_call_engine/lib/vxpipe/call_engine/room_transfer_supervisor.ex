@@ -1,9 +1,9 @@
 defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Cleanup
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Cleanup
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.CallEngine.{TextToSpeechRuntime, RoomAuthority.Startup}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
@@ -48,7 +48,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     task =
       Task.Supervisor.async_nolink(
         via(incarnation_id),
-        AgentTransfer.DestinationPreparer,
+        ParticipantTransfer.DestinationPreparer,
         :prepare,
         [request, runtime, destination, first_activation?, initial_messages]
       )

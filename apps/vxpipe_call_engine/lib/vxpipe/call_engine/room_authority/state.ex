@@ -23,9 +23,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
               [
                 connection_monitors: %{},
                 connections: %{},
-                agent_transfer_runtime: nil,
+                participant_transfer_runtime: nil,
                 activated_agent_participant_ids: MapSet.new(),
-                pending_agent_transfer: nil,
+                pending_participant_transfer: nil,
                 agent_turns: %{},
                 background_tool_calls: %{},
                 pending_agent_teardowns: %{},
@@ -42,7 +42,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
 
   @type t :: %__MODULE__{
           archive_recorder: Recorder.t(),
-          agent_transfer_runtime: nil | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime.t(),
+          participant_transfer_runtime:
+            nil | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime.t(),
           activated_agent_participant_ids: MapSet.t(String.t()),
           call_lifecycle: nil | pid(),
           connection_monitors: %{optional(reference()) => String.t()},
@@ -55,10 +56,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           opening_audio: OpeningAudio.t(),
           room_mixer: nil | pid(),
           transcript_router: nil | pid(),
-          pending_agent_transfer:
+          pending_participant_transfer:
             nil
-            | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Pending.t()
-            | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Restoration.t(),
+            | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending.t()
+            | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Restoration.t(),
           pending_agent_teardowns: %{optional(pid()) => map()},
           participant_monitors: %{optional(reference()) => String.t()},
           participant_supervisors: %{optional(String.t()) => pid()},

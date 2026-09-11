@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime do
   @moduledoc false
 
   alias Vxpipe.CallEngine.ResolvedCallPlan

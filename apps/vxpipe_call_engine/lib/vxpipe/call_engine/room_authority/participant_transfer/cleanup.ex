@@ -1,9 +1,9 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Cleanup do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Cleanup do
   @moduledoc false
 
   alias Vxpipe.CallEngine.{RoomCapabilitySupervisor, RoomParticipantSupervisor}
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, Startup, State}
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Preparation
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Preparation
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   @spec discard(Preparation.t(), State.t()) :: :ok

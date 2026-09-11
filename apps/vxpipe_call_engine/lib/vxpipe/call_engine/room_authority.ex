@@ -31,7 +31,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
-    AgentTransfer,
+    ParticipantTransfer,
     CallerIdle,
     ConnectionLifecycle,
     EndCall,
@@ -89,7 +89,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def transfer(%TransferRequest{} = request) do
     GenServer.call(
       via(request.tenant_id, request.room_id),
-      {:transfer_agent, request},
+      {:transfer_participant, request},
       @transfer_timeout
     )
   catch
@@ -219,36 +219,36 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     InputTurns.accept_text(command, caller, state)
   end
 
-  def handle_call({:transfer_agent, %TransferRequest{} = request}, from, state) do
-    AgentTransfer.begin(request, from, state)
+  def handle_call({:transfer_participant, %TransferRequest{} = request}, from, state) do
+    ParticipantTransfer.begin(request, from, state)
   end
 
   @impl true
   def handle_info(
-        {reference, {:ok, %AgentTransfer.Preparation{} = preparation}},
+        {reference, {:ok, %ParticipantTransfer.Preparation{} = preparation}},
         state
       )
       when is_reference(reference) do
-    AgentTransfer.prepared(reference, preparation, state)
+    ParticipantTransfer.prepared(reference, preparation, state)
   end
 
   def handle_info({reference, {:ok, capability}}, state)
       when is_reference(reference) and is_map(capability) do
-    AgentTransfer.restored(reference, capability, state)
+    ParticipantTransfer.restored(reference, capability, state)
   end
 
   def handle_info({reference, {:error, reason}}, state) when is_reference(reference) do
-    AgentTransfer.worker_failed(reference, reason, state)
+    ParticipantTransfer.worker_failed(reference, reason, state)
   end
 
-  def handle_info({:vxpipe_agent_transfer_deadline, reference}, state)
+  def handle_info({:vxpipe_participant_transfer_deadline, reference}, state)
       when is_reference(reference) do
-    AgentTransfer.deadline_elapsed(reference, state)
+    ParticipantTransfer.deadline_elapsed(reference, state)
   end
 
-  def handle_info({:vxpipe_agent_transfer_restoration_deadline, reference}, state)
+  def handle_info({:vxpipe_participant_transfer_restoration_deadline, reference}, state)
       when is_reference(reference) do
-    AgentTransfer.restoration_deadline_elapsed(reference, state)
+    ParticipantTransfer.restoration_deadline_elapsed(reference, state)
   end
 
   def handle_info(
@@ -304,7 +304,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
          :participant_transfer_committed},
         state
       ) do
-    {:noreply, AgentTransfer.teardown_source(state, capability, context)}
+    {:noreply, ParticipantTransfer.teardown_source(state, capability, context)}
   end
 
   def handle_info(
@@ -441,7 +441,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
-    case AgentTransfer.worker_down(monitor, reason, state) do
+    case ParticipantTransfer.worker_down(monitor, reason, state) do
       {:handled, state} ->
         {:noreply, state}
 

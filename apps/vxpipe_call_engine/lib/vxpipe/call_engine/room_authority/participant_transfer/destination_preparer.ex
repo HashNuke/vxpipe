@@ -1,11 +1,11 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPreparer do
   @moduledoc false
 
   alias Vxpipe.CallEngine.PlanStartup
   alias Vxpipe.CallEngine.PlanStartup.AgentDestination
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, ParticipantPreparation, Startup}
-  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{Preparation, Runtime}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{Preparation, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   @type failure_reason ::

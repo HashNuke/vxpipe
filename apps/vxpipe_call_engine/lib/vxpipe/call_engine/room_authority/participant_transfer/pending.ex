@@ -1,4 +1,4 @@
-defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Pending do
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
