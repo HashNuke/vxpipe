@@ -192,3 +192,58 @@ decoder to acknowledge unconsumed event types without inventing corresponding ro
 
 The complete umbrella format, warnings-as-errors compile, strict Credo, default test, and
 unused-dependency gates passed against an isolated disposable PostgreSQL 17 instance.
+
+## Checkpoint 5: Telnyx Voice API event normalization
+
+The initial common event was missing two facts required by the approved ingress design:
+
+- Telnyx `connection_id` establishes which configured Voice API service emitted the webhook before
+  route selection uses the called number.
+- Provider `occurred_at` provides the source observation time needed alongside event-ID
+  deduplication when callbacks arrive late or out of order.
+
+Both are now explicit common-event fields. Webhook-origin lifecycle events require an event ID,
+leg ID, and parsed occurrence time; inbound initiation additionally requires provider connection
+identity. DTMF, AMD, and ended events received the same correlation validation rather than being
+accepted from only a call-control ID plus their event-specific value.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/webhook_decoder_test.exs
+# compilation failed because the required common event fields did not exist
+```
+
+The small `WebhookDecoder` module now parses only the authenticated Voice API v2 `data` envelope and
+maps incoming, answered, DTMF, standard/premium AMD, and hangup callbacks into common events. It uses
+fixed mappings rather than atoms derived from provider input, bounds every retained identifier or
+address, maps premium `human_residence`/`human_business` to `human`, premium
+`machine`/`silence`/`fax_detected` to `machine`, and `not_sure` AMD to `unknown`. It preserves
+actionable timeout/busy/no-answer endings and collapses unknown non-empty hangup causes to generic
+failure. Outbound initiation, streaming status, playback status, and future authenticated event
+types return `:ignore`. Malformed JSON/envelopes and incomplete consumed events return one bounded
+decoder error.
+
+The first decoder green pass covered only the standard AMD values. A follow-up check against the
+current premium AMD documentation exposed its distinct result vocabulary; expanded tests failed on
+`human_residence` before the event-specific mappings were added, and all decoder tests then passed.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/webhook_decoder_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/webhook_verifier_test.exs
+# 9 tests, 0 failures
+
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/telephony/adapter_test.exs
+# 5 tests, 0 failures
+```
+
+The complete umbrella format, warnings-as-errors compile, strict Credo, default test, and
+unused-dependency gates passed against an isolated disposable PostgreSQL 17 instance.
+
+The HTTP endpoint and service resolver still need to construct the raw webhook, authenticate it,
+then invoke this decoder and dispatch only the resulting common event.

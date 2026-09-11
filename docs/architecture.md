@@ -997,6 +997,16 @@ while malformed headers, stale/future timestamps, signature decoding failures, a
 share one bounded authentication failure. Event decoding and admission cannot run until this check
 succeeds.
 
+After authentication, the Telnyx webhook decoder accepts the Voice API v2 `data` envelope and emits
+bounded common events. It retains the provider event ID, Voice API `connection_id`, call-control ID,
+leg ID, session ID, and parsed occurrence time for service/leg correlation and delayed-event
+handling. Incoming initiation additionally retains the caller and called addresses. Answered, DTMF,
+standard/premium machine detection, and hangup events map to the closed common vocabulary;
+documented premium human variants become `human`, premium machine/silence/fax outcomes become
+`machine`, and `not_sure` becomes `unknown`. Known timeout/busy/no-answer hangups retain that
+meaning, while unrecognized provider hangup causes become generic failure. Outbound initiation and
+other authenticated but unconsumed Voice API events are acknowledged through `ignore`.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

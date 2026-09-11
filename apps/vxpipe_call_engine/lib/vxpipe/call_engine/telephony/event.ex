@@ -13,9 +13,11 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
              :kind,
              :provider,
              :provider_event_id,
+             :provider_connection_id,
              :provider_call_control_id,
              :provider_call_leg_id,
              :provider_call_session_id,
+             :occurred_at,
              :stream_id,
              :sequence_number,
              :answering_machine,
@@ -25,8 +27,10 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
   defstruct @enforce_keys ++
               [
                 provider_event_id: nil,
+                provider_connection_id: nil,
                 provider_call_leg_id: nil,
                 provider_call_session_id: nil,
+                occurred_at: nil,
                 stream_id: nil,
                 sequence_number: nil,
                 from: nil,
@@ -44,9 +48,11 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           kind: kind(),
           provider: atom(),
           provider_event_id: nil | String.t(),
+          provider_connection_id: nil | String.t(),
           provider_call_control_id: String.t(),
           provider_call_leg_id: nil | String.t(),
           provider_call_session_id: nil | String.t(),
+          occurred_at: nil | DateTime.t(),
           stream_id: nil | String.t(),
           sequence_number: nil | non_neg_integer(),
           from: nil | String.t(),
@@ -64,9 +70,11 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
   end
 
   defp valid_kind?(%__MODULE__{kind: :incoming} = event),
-    do: present?(event.from) and present?(event.to) and identified?(event)
+    do:
+      present?(event.from) and present?(event.to) and present?(event.provider_connection_id) and
+        webhook_identified?(event)
 
-  defp valid_kind?(%__MODULE__{kind: :answered} = event), do: identified?(event)
+  defp valid_kind?(%__MODULE__{kind: :answered} = event), do: webhook_identified?(event)
 
   defp valid_kind?(%__MODULE__{kind: :media_started} = event),
     do: present?(event.stream_id)
@@ -76,19 +84,21 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
       event.sequence_number == media.sequence_number
   end
 
-  defp valid_kind?(%__MODULE__{kind: :dtmf, digit: digit}),
-    do: is_binary(digit) and Regex.match?(@dtmf, digit)
+  defp valid_kind?(%__MODULE__{kind: :dtmf, digit: digit} = event),
+    do: is_binary(digit) and Regex.match?(@dtmf, digit) and webhook_identified?(event)
 
-  defp valid_kind?(%__MODULE__{kind: :answering_machine, answering_machine: result}),
-    do: result in @answering_machine_results
+  defp valid_kind?(%__MODULE__{kind: :answering_machine, answering_machine: result} = event),
+    do: result in @answering_machine_results and webhook_identified?(event)
 
-  defp valid_kind?(%__MODULE__{kind: :ended, end_reason: reason}),
-    do: reason in @end_reasons
+  defp valid_kind?(%__MODULE__{kind: :ended, end_reason: reason} = event),
+    do: reason in @end_reasons and webhook_identified?(event)
 
   defp valid_kind?(%__MODULE__{}), do: false
 
-  defp identified?(event),
-    do: present?(event.provider_event_id) and present?(event.provider_call_leg_id)
+  defp webhook_identified?(event) do
+    present?(event.provider_event_id) and present?(event.provider_call_leg_id) and
+      match?(%DateTime{}, event.occurred_at)
+  end
 
   defp present?(value), do: is_binary(value) and value != ""
 end

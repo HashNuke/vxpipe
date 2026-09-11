@@ -61,10 +61,10 @@ No arbitrary model-supplied numbers, generic outbound routing-policy matrix, aut
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: the provider-neutral adapter contract and Telnyx raw-webhook verifier are
-implemented with deterministic focused tests. Configured service resolution, HTTP mounting, event
-normalization, live admission, commands, media, and the runnable vendor outcome remain incomplete;
-do not mark this slice complete.
+Implementation evidence: the provider-neutral adapter contract, Telnyx raw-webhook verifier, and
+bounded Voice API v2 event normalization are implemented with deterministic focused tests.
+Configured service resolution, HTTP mounting, live admission, commands, media, and the runnable
+vendor outcome remain incomplete; do not mark this slice complete.
 
 ## Specification review
 

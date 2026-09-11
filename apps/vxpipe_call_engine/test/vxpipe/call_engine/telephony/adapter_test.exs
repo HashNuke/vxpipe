@@ -158,9 +158,11 @@ defmodule Vxpipe.CallEngine.Telephony.AdapterTest do
           kind: kind,
           provider: :fake,
           provider_event_id: "provider-event-#{kind}",
+          provider_connection_id: "provider-service",
           provider_call_control_id: "provider-call-control",
           provider_call_leg_id: "provider-call-leg",
-          provider_call_session_id: "provider-call-session"
+          provider_call_session_id: "provider-call-session",
+          occurred_at: ~U[2026-09-11 09:45:12Z]
         ],
         attributes
       )
