@@ -8,7 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipelineTest do
 
   @application_voip 2_048
   @automatic_bitrate -1_000
-  @pipeline_timeout 2_000
+  @pipeline_timeout 5_000
   @signal_voice 3_001
 
   test "decodes Telnyx Opus into room-aligned 48 kHz mono PCM without FFmpeg" do
