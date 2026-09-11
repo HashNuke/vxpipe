@@ -49,6 +49,12 @@ defmodule Vxpipe.Gateway.Telemetry do
        do: :telephony_webhook
 
   defp operation(%Plug.Conn{
+         method: "GET",
+         path_info: ["api", "telephony", "telnyx", _ingress_key, "media", _token]
+       }),
+       do: :telephony_media_upgrade
+
+  defp operation(%Plug.Conn{
          method: "POST",
          path_info: ["api", "tenants", _tenant, "participants", _participant, "calls"]
        }),

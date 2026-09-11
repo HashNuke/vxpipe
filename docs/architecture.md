@@ -1106,6 +1106,11 @@ the exact live leg process and its tenant, call, incarnation, participant, confi
 provider identifiers. The token is single-use, is valid only under that service's opaque ingress
 key, and is revoked when the leg terminates. Repeated command preparation reuses the still-pending
 token instead of creating multiple valid media admissions.
+Gateway consumes that token only after validating an RFC-compliant WebSocket upgrade at
+`GET /api/telephony/telnyx/:ingress_key/media/:token`. A wrong ingress key, expired/reused token,
+or malformed token receives the same not-found response. An invalid upgrade does not consume a
+valid token. Only the resolved binding—not the token or request data—crosses into the socket
+process, whose frame and idle limits are bounded independently of webhook request limits.
 
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,

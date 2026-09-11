@@ -707,3 +707,29 @@ token before upgrading and passes only the resolved binding into the Telnyx WebS
 The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the focused
 four-test contract, the full umbrella suite against an isolated disposable PostgreSQL 17 instance
 (709 tests, 0 failures), and the unused dependency check.
+
+## Checkpoint 17: bounded media WebSocket upgrade
+
+A focused HTTP test first failed because the aggregate telephony configuration rejected media
+admission settings. The router now validates the complete telephony option namespace, then gives
+event and media handlers only their owned subsets. The new Telnyx media route validates the
+WebSocket handshake before consuming a token, returns the same not-found response for invalid,
+wrong-ingress, and reused tokens, and upgrades with only the resolved binding. An invalid handshake
+therefore cannot burn a valid one-time token. Idle time and frame size are bounded, and Gateway now
+declares its direct WebSock dependencies rather than relying on Console's Phoenix dependency tree.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/telnyx_media_test.exs
+# 2 tests, 0 failures
+```
+
+The initial socket process monitors the exact leg and can carry outbound Telnyx envelopes, but it
+still rejects inbound provider frames until the next checkpoint attaches decoding and media
+pipelines.
+
+The checkpoint passed formatting, compilation with warnings as errors, strict Credo, the unused
+dependency check, the focused two-test HTTP contract, and the full umbrella suite against an
+isolated disposable PostgreSQL 17 instance (711 tests, 0 failures).

@@ -43,6 +43,8 @@ defmodule Vxpipe.Gateway.MixProject do
       {:plug, "~> 1.20"},
       {:req, "~> 0.7.4"},
       {:telemetry, "~> 1.3"},
+      {:websock, "~> 0.5"},
+      {:websock_adapter, "~> 0.6"},
       {:vxpipe_call_engine, in_umbrella: true},
       {:vxpipe_calls, in_umbrella: true}
     ]

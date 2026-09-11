@@ -5,14 +5,28 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   import Plug.Conn
 
-  alias Vxpipe.Gateway.HTTP.{CallAdmissions, RTVI, Rooms, TelnyxEvents}
+  alias Vxpipe.Gateway.HTTP.{CallAdmissions, RTVI, Rooms, TelnyxEvents, TelnyxMedia}
 
   @impl true
   def init(options) do
+    telephony = options |> Keyword.get(:telephony, []) |> telephony_options!()
+
     %{
       call_admission: options |> Keyword.get(:call_admission, []) |> CallAdmissions.init(),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
-      telephony: options |> Keyword.get(:telephony, []) |> TelnyxEvents.init(),
+      telephony:
+        telephony
+        |> Keyword.take([:enabled, :services, :handler, :clock, :maximum_body_bytes])
+        |> TelnyxEvents.init(),
+      telephony_media:
+        telephony
+        |> Keyword.take([
+          :media_admission,
+          :maximum_media_message_bytes,
+          :media_socket,
+          :media_socket_timeout_ms
+        ])
+        |> TelnyxMedia.init(),
       rtvi: options |> Keyword.get(:webrtc, []) |> RTVI.init()
     }
   end
@@ -34,6 +48,16 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         options
       ) do
     TelnyxEvents.handle(conn, options.telephony, ingress_key)
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "GET",
+          path_info: ["api", "telephony", "telnyx", ingress_key, "media", token]
+        } = conn,
+        options
+      ) do
+    TelnyxMedia.upgrade(conn, options.telephony_media, ingress_key, token)
   end
 
   def call(
@@ -117,4 +141,18 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   end
 
   def call(conn, _options), do: send_resp(conn, 404, "not found")
+
+  defp telephony_options!(options) do
+    Keyword.validate!(options, [
+      :enabled,
+      :services,
+      :handler,
+      :clock,
+      :maximum_body_bytes,
+      :media_admission,
+      :maximum_media_message_bytes,
+      :media_socket,
+      :media_socket_timeout_ms
+    ])
+  end
 end
