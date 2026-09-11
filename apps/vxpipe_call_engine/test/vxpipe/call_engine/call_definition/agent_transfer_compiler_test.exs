@@ -57,12 +57,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
              "properties" => %{
                "destination" => %{
                  "type" => "string",
-                 "oneOf" => [
-                   %{
-                     "const" => "billing",
-                     "description" => "A billing specialist"
-                   }
-                 ]
+                 "enum" => ["billing"],
+                 "description" => "Permitted destination: billing (A billing specialist)."
                }
              },
              "required" => ["destination"],
@@ -202,8 +198,9 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
                  "type" => "object",
                  "properties" => %{
                    "destination" => %{
-                     "const" => "billing",
-                     "description" => "A billing specialist"
+                     "type" => "string",
+                     "enum" => ["billing"],
+                     "description" => "Permitted destination: billing (A billing specialist)."
                    },
                    "reason" => %{
                      "type" => "string",

@@ -296,9 +296,17 @@ while still executing in independently supervised workers.
 
 An HTTPS browser pass reached RTVI ready at desktop and 390 x 844 viewports with fake media. The
 console rendered without horizontal overflow or browser exceptions. A text turn crossed the data
-channel and appeared in the conversation, but the configured external model returned the gateway's
-safe generation-failure response, so the live transfer steps remain unchecked. The deterministic
-282-test Call Engine suite remains green with one tagged integration exclusion. Frontend tests and
+channel and appeared in the conversation. The initial live transfer failed because the generated
+schema represented each permitted destination with `const` inside `oneOf`, which Gemini rejects in
+function declarations. The same closed allowlist now uses `enum` plus a safe descriptive label.
+Both ordinary and selected-history schemas pass direct Gemini requests, and the ordinary request
+returns `transfer` as expected. The rendered sample then transferred reception to billing, played
+billing's fixed greeting to completion, retained the caller's spoken transfer request, and read the
+permitted `order-demo-1001` variable through the blocking variables tool. A requested return to
+reception produced a second transfer tool call, but the subsequent caller turn did not receive a
+rendered response within the bounded observation window, so re-entry remains manually unchecked.
+The deterministic 282-test Call Engine suite remains green with one tagged integration exclusion.
+Frontend tests and
 type checking, development and test warnings-as-errors compilation, formatting, strict Credo, and
 the unused-dependency check pass. A complete root test run against a disposable PostgreSQL 17
 instance exposed three Persistence fixtures pinned to the superseded `20260910.05` schema. Updating

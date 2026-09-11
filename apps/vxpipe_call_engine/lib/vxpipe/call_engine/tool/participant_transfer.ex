@@ -29,10 +29,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
     %{
       "type" => "object",
       "properties" => %{
-        "destination" => %{
-          "type" => "string",
-          "oneOf" => Enum.map(targets, &destination_choice/1)
-        }
+        "destination" => destination_schema(targets)
       },
       "required" => ["destination"],
       "additionalProperties" => false
@@ -43,7 +40,7 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
     %{
       "type" => "object",
       "properties" => %{
-        "destination" => destination_choice(target),
+        "destination" => destination_schema([target]),
         "reason" => %{
           "type" => "string",
           "minLength" => 1,
@@ -59,20 +56,28 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
   defp target_parameters(target) do
     %{
       "type" => "object",
-      "properties" => %{"destination" => destination_choice(target)},
+      "properties" => %{"destination" => destination_schema([target])},
       "required" => ["destination"],
       "additionalProperties" => false
     }
   end
 
-  defp destination_choice({definition_key, target}) do
-    choice = %{"const" => definition_key}
+  defp destination_schema(targets) do
+    label = if match?([_target], targets), do: "destination", else: "destinations"
 
-    case target.description do
-      description when is_binary(description) -> Map.put(choice, "description", description)
-      nil -> choice
-    end
+    %{
+      "type" => "string",
+      "enum" => Enum.map(targets, fn {definition_key, _target} -> definition_key end),
+      "description" =>
+        "Permitted #{label}: " <> Enum.map_join(targets, ", ", &describe_target/1) <> "."
+    }
   end
+
+  defp describe_target({definition_key, %{description: description}})
+       when is_binary(description),
+       do: "#{definition_key} (#{description})"
+
+  defp describe_target({definition_key, _target}), do: definition_key
 
   @spec execute(Binding.t(), map(), Context.t()) ::
           {:ok, PlatformResult.t()} | {:error, :tool_failed}

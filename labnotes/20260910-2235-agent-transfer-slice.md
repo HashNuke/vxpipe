@@ -503,3 +503,29 @@
   tagged integration exclusion, and the complete database-backed umbrella suite against a
   disposable PostgreSQL 17 instance. Formatting, warnings-as-errors compilation, strict Credo, and
   the unused-dependency check also pass; the disposable database was removed after the run.
+
+## 2026-09-11 — provider-portable transfer allowlist
+
+- Reproduced the rendered generation failure with the exact development tool set outside WebRTC.
+  The provider returned HTTP 400 because its function-declaration schema does not accept JSON
+  Schema `const` within the generated destination `oneOf`; a request with every non-transfer tool
+  had already succeeded, isolating the transfer schema as the cause.
+- Changed the compiler expectation first. The focused test failed twice on the old ordinary and
+  selected-history shapes. The implementation now emits a string `enum` for the immutable permitted
+  definition keys and retains their safe descriptions in the property's descriptive text. Runtime
+  validation remains closed: values outside the enumerated allowlist are still rejected.
+- Direct requests through the production Agent Runtime ReqLLM adapter passed for both ordinary and
+  reason-required selected-history transfer schemas. In each case the configured Gemini model
+  returned a `transfer` call rather than a provider error.
+- Started the normal HTTPS development stack and used headless Chromium with fake media because
+  `agent-browser` is unavailable. Reception requested the generated transfer, billing's fixed
+  greeting played to completion, and billing correctly recalled the caller's spoken request. Its
+  blocking `read_variables` invocation then returned the permitted `order-demo-1001` value.
+- The same rendered call requested transfer back to reception and showed a second `transfer` call.
+  A later caller question received no rendered response within 30 seconds, so manual re-entry is not
+  claimed complete from this pass. The existing deterministic test continues to prove stable
+  participant identity, fresh activation, rebound authority, and no greeting replay. Browser and
+  development processes were stopped after inspection.
+- The complete database-backed umbrella suite passes against disposable PostgreSQL 17, as do
+  formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check. The
+  database was removed after verification.
