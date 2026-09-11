@@ -19,6 +19,13 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
 end
 
 if config_env() == :dev do
+  config :vxpipe_console, :recording,
+    enabled: System.get_env("VXPIPE_RECORDING_ENABLED"),
+    persistence_enabled: not is_nil(database_url),
+    bucket: System.get_env("VXPIPE_RECORDING_S3_BUCKET"),
+    region: System.get_env("VXPIPE_RECORDING_S3_REGION"),
+    endpoint: System.get_env("VXPIPE_RECORDING_S3_ENDPOINT")
+
   call_engine_settings =
     Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 

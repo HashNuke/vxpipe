@@ -1,6 +1,6 @@
 # Permitted live recordings streamed to S3
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: implementation in progress. Specification review: approved (2026-09-08).
 Prerequisites: [Live mixing/media policy](live-mixing-and-media-policy.md); [Asynchronous history](asynchronous-call-history.md).
 Sources: [Live recording split](../../labnotes/20260905-0405-call-definition-design.md#mix-live-record-participant-tracks-and-the-live-mix); [R38/R41](../call-definition-gap-review.md).
 
@@ -431,6 +431,52 @@ tagged storage integration, agent-egress provenance, and operator playback remai
 
 Root formatting, compilation with warnings as errors, strict Credo over 641 source files, all 814
 umbrella tests, and the unused-dependency check pass.
+
+## Checkpoint 11: trusted Console recording composition
+
+The repository development host can now select the concrete recording path without changing a call
+definition or client contract. Recording remains disabled by default. An explicit runtime switch
+requires both PostgreSQL-backed persistence and an S3 bucket, then Console injects the existing
+artifacts recording writer, multipart S3 object store, and asynchronous Ecto metadata adapter into
+the Gateway's ordinary web/telephony call-admission backend.
+
+The host records the permitted live full mix and all permitted individual tracks. Its fixed bounds
+pull at most 16 mixer frames per coordinator pass, admit at most 100 pending writer chunks (about two
+seconds with the current 20 ms room frame), and allow a terminating writer up to 30 seconds to drain.
+ExAws retains credential discovery and request signing. Optional trusted region and root HTTP(S)
+endpoint settings support AWS and path-style S3-compatible stores without putting secrets, storage
+options, or adapter modules in client payloads or call definitions.
+
+`vxpipe_console` now declares the artifacts and persistence applications as runtime dependencies
+because it is the executable composition host. Call Engine remains storage-neutral, Gateway remains
+reusable without Phoenix, and an embedding host may continue to inject another writer through the
+same engine-owned port.
+
+The focused test was first red because `RecordingConfiguration.build/1` did not exist. Its green
+cases cover the disabled default, exact enabled composition, ExAws defaults, missing persistence or
+bucket, malformed endpoint, and malformed enablement:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/recording_configuration_test.exs --max-cases 1
+# 4 tests, 0 failures
+
+mix test --max-cases 1
+# 63 tests, 0 failures
+```
+
+A `mix run --no-start` probe with non-secret development values also evaluated
+`config/runtime.exs`, rebuilt the trusted recording options, and verified the concrete writer and
+object-store selection. No network request or object upload was claimed by that probe.
+
+The first umbrella run exposed an existing inbound Membrane readiness race and failed one gateway
+test before recording tests ran. That separately documented fix now waits for every pipeline child
+to be playing before accepting input. The rerun passes root formatting, compilation with warnings
+as errors, strict Credo over 642 source files, all 818 umbrella tests, and the unused-dependency
+check.
+
+Terminal failed-upload evidence, agent-egress provenance, tagged S3-compatible integration, and
+authorized operator playback remain pending. The milestone is not complete.
 
 ## Specification review
 

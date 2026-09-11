@@ -4,8 +4,10 @@ defmodule Vxpipe.Console.Application do
   use Application
 
   alias Vxpipe.Console.Endpoint
+  alias Vxpipe.Console.RecordingConfiguration
   alias Vxpipe.Console.SampleCall
   alias Vxpipe.Console.TelemetryReporter
+  alias Vxpipe.Gateway.CallAdmission
   alias Vxpipe.Gateway.HTTP.Mount
 
   @impl true
@@ -43,10 +45,35 @@ defmodule Vxpipe.Console.Application do
     gateway_settings =
       Application.fetch_env!(:vxpipe_gateway, Vxpipe.Gateway.Application)
 
+    recording_settings = Application.fetch_env!(:vxpipe_console, :recording)
+
+    recording =
+      case RecordingConfiguration.build(recording_settings) do
+        {:ok, recording} -> recording
+        {:error, reason} -> raise ArgumentError, "invalid recording configuration: #{reason}"
+      end
+
     gateway_settings
     |> Keyword.fetch!(:http)
     |> Keyword.take([:call_admission, :cors, :room_creation, :telephony, :webrtc])
+    |> Keyword.update!(:call_admission, &configure_recording(&1, recording))
     |> Keyword.put(:path_prefix, "/")
     |> Mount.init()
+  end
+
+  defp configure_recording(call_admission, enabled: false), do: call_admission
+
+  defp configure_recording(call_admission, recording) do
+    case Keyword.get(call_admission, :backend) do
+      {CallAdmission, options} when is_list(options) ->
+        Keyword.put(
+          call_admission,
+          :backend,
+          {CallAdmission, Keyword.put(options, :recording, recording)}
+        )
+
+      _invalid ->
+        raise ArgumentError, "recording requires the configured call-admission backend"
+    end
   end
 end

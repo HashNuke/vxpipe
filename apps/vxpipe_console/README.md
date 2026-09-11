@@ -20,7 +20,33 @@ The Console root serves the tracked SPA index and `Plug.Static` serves its
 revalidated `/assets/*` files. If either compiled bundle is absent, the root returns
 503 rather than a nonfunctional shell. The separate bounded diagnostics surface
 remains available at `/diagnostics`. This application does not own Ecto or call
-protocol implementations.
+protocol implementations; as the repository executable host, it may compose and
+start their owning umbrella applications.
+
+## Development recording composition
+
+Recording is disabled by default. To select the implemented multipart S3-compatible
+writer for repository development, configure PostgreSQL and enable the trusted host
+profile:
+
+```shell
+VXPIPE_DATABASE_URL=postgres://user:password@database/vxpipe
+VXPIPE_RECORDING_ENABLED=true
+VXPIPE_RECORDING_S3_BUCKET=vxpipe-call-artifacts
+VXPIPE_RECORDING_S3_REGION=us-east-1
+# VXPIPE_RECORDING_S3_ENDPOINT=http://127.0.0.1:9000
+```
+
+The endpoint is optional and must be a root HTTP(S) origin; it enables path-style
+requests for a compatible local object store. ExAws obtains credentials from its
+standard provider chain, including `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+Do not put credentials, bucket settings, or endpoint settings in call definitions or
+client requests.
+
+The development profile captures the live full mix and all individual tracks only
+for intervals permitted by the effective room media policy. Raw PCM objects and
+terminal metadata are internal at this checkpoint; authenticated operator playback
+is still pending in the streaming-recordings milestone.
 
 The sample root, diagnostics, and LiveDashboard have no Console-specific authentication.
 Call inspection is separate and requires its operator session as described below. Join

@@ -2392,6 +2392,23 @@ playback authorization. Duplicate identical publication is idempotent, while con
 an artifact ID and a wrong call incarnation fail. Incomplete metadata may survive without an object
 reference, which reports an attempted/failed artifact rather than inventing playable audio.
 
+The repository development host composes those existing ports in `vxpipe_console`; it does not add
+S3 or Ecto knowledge to Call Engine or Gateway. Recording is off by default. When the trusted
+runtime switch is enabled, Console requires its configured persistence application and S3 bucket,
+then injects `Vxpipe.Artifacts.RecordingWriter` with `S3ObjectStore` and the asynchronous
+`Vxpipe.Persistence.EctoStorage` metadata adapter into Gateway call admission. The default targets
+are the live full mix and all individual tracks that remain permitted by the room's effective media
+policy. A bounded pull handles at most 16 mixer frames at once, and the writer accepts at most 100
+pending chunks—about two seconds at the repository's 20 ms room frame—before rejecting later chunks
+and reporting incomplete evidence. Writer drain is independently bounded at 30 seconds.
+
+Development runtime settings use `VXPIPE_RECORDING_ENABLED`, `VXPIPE_RECORDING_S3_BUCKET`, and
+optional `VXPIPE_RECORDING_S3_REGION` / `VXPIPE_RECORDING_S3_ENDPOINT`. The endpoint parser accepts
+only root HTTP(S) origins and forces S3 path-style requests for compatible local stores. Credentials
+remain in ExAws's standard provider chain; Console does not copy them into a call definition,
+prepared-call record, client response, or inspectable recording state. An embedding host can supply
+the same engine recording options directly without including Console.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

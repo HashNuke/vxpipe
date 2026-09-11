@@ -399,3 +399,45 @@ The full nine-migration chain succeeded on a new empty temporary database, which
 Root formatting, compilation with warnings as errors, strict Credo over 641 source files, all 814
 umbrella tests, and the unused-dependency check pass. Runtime recording configuration, terminal
 failed-upload integration, agent-egress provenance, tagged storage integration, and playback remain.
+
+## 2026-09-11: trusted runtime recording composition
+
+The next checkpoint moved concrete adapter selection to the executable Console host. The focused
+test was written before the configuration module and failed with the expected undefined
+`Vxpipe.Console.RecordingConfiguration.build/1`. The implementation keeps recording disabled unless
+the host explicitly enables it, and rejects enabled settings without both persistence and a bucket.
+
+The enabled development profile injects the artifacts recording writer, multipart S3 object store,
+and asynchronous Ecto metadata writer into the existing Gateway call-admission backend. Its targets
+are the permitted full mix plus all permitted individual tracks. A coordinator pass pulls at most 16
+room frames, writer capacity is 100 chunks (about two seconds with the configured 20 ms frames), and
+post-source drain is bounded at 30 seconds. Those are application-owned limits, not client input.
+
+Optional region and root HTTP(S) endpoint values become ExAws request overrides. A configured
+endpoint uses path-style S3 requests. ExAws continues to discover credentials through its provider
+chain; neither the configuration object nor the call definition receives credential values. Console
+now has runtime dependencies on the artifacts and persistence applications because it is the
+repository composition host. The engine and reusable Gateway retain their existing dependency
+direction and ports.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/recording_configuration_test.exs --max-cases 1
+# 4 tests, 0 failures
+
+mix test --max-cases 1
+# 63 tests, 0 failures
+```
+
+A development `mix run --no-start` probe supplied non-secret database, bucket, region, and local
+endpoint values, evaluated `config/runtime.exs`, and matched the trusted writer/object-store
+selection. It printed `trusted recording runtime configuration valid`; it intentionally made no
+network request. Failed-upload projection, agent-egress provenance, tagged S3-compatible integration,
+and authenticated playback remain pending.
+
+The first complete umbrella run exposed the inbound Membrane child-readiness race recorded in the
+separate `20260911-1942-audio-pipeline-readiness.md` labnote. After that ancillary fix, root
+formatting, compilation with warnings as errors, strict Credo over 642 source files, all 818 umbrella
+tests, and the unused-dependency check pass.
