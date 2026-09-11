@@ -138,7 +138,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
                ],
                recording: [
                  enabled: true,
-                 targets: [:full_mix],
+                 targets: [:full_mix, {:individual_participants, ["caller"]}],
                  writer: {TestRecordingWriter, [observer: self()]},
                  maximum_pull_frames: 4
                ]
@@ -146,6 +146,11 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
 
     assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}
     assert_receive {:test_call_lifecycle_timer_scheduled, _readiness_timer, 30_000}
+
+    [{authority, _value}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    room_monitor = Process.monitor(authority)
 
     assert_receive {:test_recording_writer_opened, _caller, recording, stream}
     assert is_pid(recording)
@@ -155,10 +160,51 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     assert stream.incarnation_id == room.incarnation_id
     assert stream.mode == :full_mix
 
-    [{authority, _value}] =
-      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    caller_attachment = attach(plan, room, caller, "conn-recording-caller")
+    receiver_attachment = attach(plan, room, receiver, "conn-recording-receiver")
 
-    room_monitor = Process.monitor(authority)
+    caller_audio = :binary.copy(<<100::little-signed-16>>, 960)
+    receiver_audio = :binary.copy(<<200::little-signed-16>>, 960)
+
+    assert :ok =
+             CallEngine.push_room_audio(
+               caller_attachment,
+               normalized_frame(
+                 plan,
+                 room,
+                 caller.participant_id,
+                 caller_audio,
+                 "conn-recording-caller"
+               )
+             )
+
+    assert :ok =
+             CallEngine.push_room_audio(
+               receiver_attachment,
+               normalized_frame(
+                 plan,
+                 room,
+                 receiver.participant_id,
+                 receiver_audio,
+                 "conn-recording-receiver"
+               )
+             )
+
+    mixer = RoomMixer.whereis(room.incarnation_id)
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+
+    assert_receive {:test_recording_writer_opened, _caller, ^recording, individual_stream}
+
+    assert individual_stream.mode ==
+             {:individual_track, caller.participant_id, "conn-recording-caller",
+              "track-#{caller.participant_id}"}
+
+    individual_stream_id = individual_stream.stream_id
+    assert_receive {:test_recording_chunk, ^individual_stream_id, individual_chunk}
+    assert individual_chunk.payload == caller_audio
+
     :ok = TestCallLifecycleTimer.fire(maximum_timer)
 
     assert_receive {:DOWN, ^room_monitor, :process, ^authority,
@@ -241,13 +287,13 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
     subscription
   end
 
-  defp normalized_frame(plan, room, source_participant_id, payload) do
+  defp normalized_frame(plan, room, source_participant_id, payload, connection_id \\ nil) do
     %NormalizedFrame{
       tenant_id: plan.tenant_id,
       room_id: plan.room_id,
       incarnation_id: room.incarnation_id,
       source_participant_id: source_participant_id,
-      connection_id: "connection-#{source_participant_id}",
+      connection_id: connection_id || "connection-#{source_participant_id}",
       track_id: "track-#{source_participant_id}",
       sequence_number: 1,
       timestamp: 0,

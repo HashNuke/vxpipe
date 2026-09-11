@@ -26,8 +26,10 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
           maximum_pull_frames: pos_integer(),
           writer: module(),
           writer_options: keyword(),
-          targets: [:full_mix]
+          targets: [target()]
         }
+
+  @type target :: :full_mix | {:individual_tracks, [String.t()]}
 
   @spec new(keyword()) :: {:ok, t()} | {:error, term()}
   def new(options) when is_list(options) do
@@ -95,15 +97,45 @@ defmodule Vxpipe.CallEngine.RoomRecording.Configuration do
   defp targets(options) do
     case Keyword.get(options, :targets) do
       targets when is_list(targets) and targets != [] ->
-        if Enum.all?(targets, &(&1 == :full_mix)) and
-             length(targets) == length(Enum.uniq(targets)),
-           do: {:ok, targets},
-           else: {:error, :invalid_recording_targets}
+        normalize_targets(targets)
 
       _invalid ->
         {:error, :invalid_recording_targets}
     end
   end
+
+  defp normalize_targets(targets) do
+    with {:ok, targets} <- reduce_targets(targets),
+         true <- length(targets) == length(Enum.uniq(targets)),
+         true <- Enum.count(targets, &individual_target?/1) <= 1 do
+      {:ok, targets}
+    else
+      _invalid -> {:error, :invalid_recording_targets}
+    end
+  end
+
+  defp reduce_targets(targets) do
+    Enum.reduce_while(targets, {:ok, []}, fn target, {:ok, normalized} ->
+      case normalize_target(target) do
+        {:ok, target} -> {:cont, {:ok, normalized ++ [target]}}
+        :error -> {:halt, :error}
+      end
+    end)
+  end
+
+  defp normalize_target(:full_mix), do: {:ok, :full_mix}
+
+  defp normalize_target({:individual_tracks, participant_ids}) when is_list(participant_ids) do
+    if participant_ids != [] and Enum.all?(participant_ids, &valid_identifier?/1) and
+         length(participant_ids) == length(Enum.uniq(participant_ids)),
+       do: {:ok, {:individual_tracks, participant_ids}},
+       else: :error
+  end
+
+  defp normalize_target(_target), do: :error
+
+  defp individual_target?({:individual_tracks, _participant_ids}), do: true
+  defp individual_target?(_target), do: false
 
   defp positive(options, key) do
     case Keyword.get(options, key) do

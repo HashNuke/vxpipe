@@ -11,7 +11,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
   @type entry :: %{
           token: reference(),
           recipient_id: nil | String.t(),
-          mode: MixedFrame.mode(),
+          mode: MixedFrame.mode() | :individual_tracks | {:individual_tracks, [String.t()]},
           purpose: :participant | :recording,
           subscriber: pid(),
           monitor: reference(),
@@ -254,6 +254,15 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
 
   defp recording_mode(:full_mix), do: {:ok, :full_mix}
 
+  defp recording_mode(:individual_tracks), do: {:ok, :individual_tracks}
+
+  defp recording_mode({:individual_tracks, participant_ids}) when is_list(participant_ids) do
+    if participant_ids != [] and Enum.all?(participant_ids, &valid_source_id?/1) and
+         length(participant_ids) == length(Enum.uniq(participant_ids)),
+       do: {:ok, {:individual_tracks, participant_ids}},
+       else: {:error, :invalid_subscription_mode}
+  end
+
   defp recording_mode({:individual_track, source_id} = mode) when is_binary(source_id) do
     if String.trim(source_id) == "" or byte_size(source_id) > 128,
       do: {:error, :invalid_subscription_mode},
@@ -261,6 +270,10 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
   end
 
   defp recording_mode(_mode), do: {:error, :invalid_subscription_mode}
+
+  defp valid_source_id?(source_id) do
+    is_binary(source_id) and String.trim(source_id) != "" and byte_size(source_id) <= 128
+  end
 
   defp recording_authorized(options, recording_token) when is_reference(recording_token) do
     if Keyword.get(options, :recording_token) == recording_token,

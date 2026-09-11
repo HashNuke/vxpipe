@@ -24,7 +24,7 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
            [
              mixer: mixer,
              recording_token: recording_token,
-             targets: [:full_mix],
+             targets: [:full_mix, {:individual_tracks, ["alice"]}],
              writer: {TestRecordingWriter, [observer: self()]},
              maximum_pull_frames: 2
            ]}
@@ -38,7 +38,16 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
 
     assert :ok = RoomMixer.push(mixer, frame("alice", 1, 0, 0))
     assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, 0))
-    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 0)
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+
+    assert_receive {:test_recording_writer_opened, _caller, ^recording, individual_stream}
+
+    assert individual_stream.mode ==
+             {:individual_track, "alice", "connection-alice", "track-alice"}
+
+    assert individual_stream.participant_id == "alice"
+    assert individual_stream.connection_id == "connection-alice"
+    assert individual_stream.track_id == "track-alice"
 
     assert_receive {:test_recording_chunk, "full-mix", first}
     assert first.sequence == 0
@@ -47,6 +56,13 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
     assert first.policy_revision == 0
     assert first.source_participant_ids == ["alice", "bob"]
     assert decode_samples(first.payload) == [4_000, -3_000]
+
+    assert_receive {:test_recording_chunk, individual_stream_id, individual}
+    assert individual_stream_id == individual_stream.stream_id
+    assert individual.sequence == 0
+    assert individual.offset_samples == 0
+    assert individual.source_participant_ids == ["alice"]
+    assert decode_samples(individual.payload) == [1_000, 2_000]
 
     :ok = apply_policy(mixer, 1, false)
     assert :ok = RoomMixer.push(mixer, frame("alice", 2, 2, 1))
@@ -57,13 +73,15 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
     assert :ok = RoomMixer.push(mixer, frame("bob", 2, 4, 2))
     assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 4)
 
+    refute_receive {:test_recording_writer_opened, _caller, ^recording, %{participant_id: "bob"}}
+
     assert_receive {:test_recording_chunk, "full-mix", resumed}
     assert resumed.sequence == 1
     assert resumed.offset_samples == 4
     assert resumed.policy_revision == 2
     assert decode_samples(resumed.payload) == [3_000, -5_000]
 
-    assert %{accepted_chunks: 2, rejected_chunks: 0, streams: 1} =
+    assert %{accepted_chunks: 3, rejected_chunks: 0, streams: 2} =
              RoomRecording.stats(recording)
   end
 

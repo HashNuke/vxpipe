@@ -29,10 +29,8 @@ defmodule Vxpipe.CallEngine.RoomRecording do
          {:ok, streams} <- Streams.open(configuration, format, self()) do
       {:ok,
        %State{
-         mixer: configuration.mixer,
+         configuration: configuration,
          mixer_monitor: Process.monitor(configuration.mixer),
-         writer: configuration.writer,
-         maximum_pull_frames: configuration.maximum_pull_frames,
          streams: streams,
          accepted_chunks: 0,
          rejected_chunks: 0
@@ -48,14 +46,17 @@ defmodule Vxpipe.CallEngine.RoomRecording do
     stats = %{
       accepted_chunks: state.accepted_chunks,
       rejected_chunks: state.rejected_chunks,
-      streams: map_size(state.streams)
+      streams: Streams.count(state.streams)
     }
 
     {:reply, stats, state}
   end
 
   @impl true
-  def handle_info({:vxpipe_room_audio_available, mixer, id}, %{mixer: mixer} = state) do
+  def handle_info(
+        {:vxpipe_room_audio_available, mixer, id},
+        %{configuration: %{mixer: mixer}} = state
+      ) do
     case Map.fetch(state.streams, id) do
       {:ok, stream_state} -> pull_stream(state, id, stream_state)
       :error -> {:noreply, state}
@@ -64,7 +65,7 @@ defmodule Vxpipe.CallEngine.RoomRecording do
 
   def handle_info(
         {:DOWN, monitor, :process, mixer, reason},
-        %{mixer: mixer, mixer_monitor: monitor} = state
+        %{configuration: %{mixer: mixer}, mixer_monitor: monitor} = state
       ) do
     {:stop, {:shutdown, {:room_mixer_unavailable, reason}}, state}
   end
@@ -72,7 +73,7 @@ defmodule Vxpipe.CallEngine.RoomRecording do
   def handle_info(_message, state), do: {:noreply, state}
 
   defp pull_stream(state, id, stream_state) do
-    case Streams.pull(stream_state, state.writer, state.maximum_pull_frames) do
+    case Streams.pull(stream_state, state.configuration) do
       {:ok, stream_state, accepted, rejected} ->
         state = %{
           state

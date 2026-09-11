@@ -73,4 +73,38 @@ defmodule Vxpipe.Artifacts.RecordingWriterTest do
     assert result.manifest == manifest
     assert_receive {:DOWN, ^writer_monitor, :process, ^writer, :normal}, 1_000
   end
+
+  test "retains participant, connection, and track identity for an individual artifact" do
+    source = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
+
+    stream = %Stream{
+      tenant_id: "tenant-test",
+      call_id: "call-test",
+      room_id: "room-test",
+      incarnation_id: "incarnation-test",
+      stream_id: "individual-test",
+      mode: {:individual_track, "participant-test", "connection-test", "track-test"},
+      participant_id: "participant-test",
+      connection_id: "connection-test",
+      track_id: "track-test",
+      sample_rate: 48_000,
+      channels: 1,
+      sample_format: :s16le
+    }
+
+    assert {:ok, _handle} =
+             RecordingWriter.open(stream,
+               source: source,
+               object_store: TestObjectStore,
+               object_store_options: [observer: self()],
+               maximum_pending_chunks: 1,
+               drain_timeout_ms: 1_000
+             )
+
+    assert_receive {:test_object_store_opened, _task, spec}
+    assert spec.kind == :participant_track
+    assert spec.participant_id == "participant-test"
+    assert spec.connection_id == "connection-test"
+    assert spec.track_id == "track-test"
+  end
 end

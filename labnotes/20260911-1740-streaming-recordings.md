@@ -272,3 +272,55 @@ artifact, metadata row, runtime storage selection, or playback endpoint was adde
 
 Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 810
 umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: selected individual recording streams
+
+The next test changed a recorder target from full mix only to full mix plus one selected participant.
+Its red run stopped with `:invalid_recording_targets`, proving that no individual stream path existed.
+The desired behavior required no individual writer at room creation, one writer after the selected
+source's first qualified frame, exact unmixed PCM at the same room offset as the full mix, and no
+writer for an unselected source.
+
+Room startup accepts stable participant definition references in trusted recording settings and
+resolves them against the pinned plan. It also supports selecting every plan participant. The
+private mixer target holds resolved participant IDs, and its fanout creates one concrete individual
+mode for each participant/connection/track source rather than mixing selected sources together.
+
+The recorder now separates subscription state from concrete output state. Full mix opens at startup;
+individual outputs open lazily because connection and track identity becomes available only with
+media. Each output owns its own writer handle and sequence counter. Writer rejection remains outside
+the mixer path, and the frame's authoritative room-clock offset still exposes loss or denied gaps.
+
+The recording stream carries optional source identity only for concrete individual modes. Its opaque
+stream ID is deterministically derived from that qualified identity. The artifacts locator maps the
+stream to a participant-track specification with the exact participant, connection, and track IDs.
+To preserve the required test sequence, the old full-mix-only locator was restored first; the new
+adapter test failed on `:full_mix` versus `:participant_track`, then passed after the mapping was
+applied.
+
+Focused evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs \
+  test/vxpipe/call_engine/room_recording_test.exs \
+  test/vxpipe/call_engine/room_mixer_test.exs --max-cases 1
+# 13 tests, 0 failures
+
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/recording_writer_test.exs --max-cases 1
+# 2 tests, 0 failures
+```
+
+This checkpoint does not yet select the S3 adapter in the Console runtime, persist artifact
+metadata, prove terminal failure manifests, attribute accepted agent egress, run a tagged storage
+integration, or expose playback.
+
+The first two root-suite runs exposed existing timing sensitivity in unrelated asynchronous tests:
+one lifecycle assertion installed its explicit monitor late, and one model-provider timeout allowed
+only 25 ms for the request task to become observable under umbrella load. The lifecycle monitor now
+starts immediately after room startup. The model test uses a still-bounded 250 ms provider deadline
+and a one-second outcome assertion. Its focused 11-test module and the recording-focused tests pass.
+
+Root formatting, compilation with warnings as errors, strict Credo over 630 source files, all 811
+umbrella tests, and the unused-dependency check pass.

@@ -1,76 +1,125 @@
 defmodule Vxpipe.CallEngine.RoomRecording.Streams do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Media.MixedFrame
   alias Vxpipe.CallEngine.Recording.{Chunk, Stream}
   alias Vxpipe.CallEngine.RoomMixer
-  alias Vxpipe.CallEngine.RoomRecording.Configuration
 
-  @type stream_state :: Vxpipe.CallEngine.RoomRecording.State.stream_state()
+  alias Vxpipe.CallEngine.RoomRecording.{
+    Configuration,
+    Output,
+    SubscriptionState
+  }
+
+  @type subscriptions :: %{optional(String.t()) => SubscriptionState.t()}
 
   @spec open(Configuration.t(), map(), pid()) ::
-          {:ok, %{optional(String.t()) => stream_state()}} | {:error, term()}
+          {:ok, subscriptions()} | {:error, term()}
   def open(%Configuration{} = configuration, format, source) when is_pid(source) do
-    Enum.reduce_while(configuration.targets, {:ok, %{}}, fn mode, {:ok, streams} ->
-      with {:ok, stream} <- Stream.new(configuration.identity, mode, format),
-           {:ok, subscription} <- subscribe(configuration, stream, source),
-           {:ok, writer_handle} <- open_writer(configuration, stream, source) do
-        stream_state = %{
+    Enum.reduce_while(configuration.targets, {:ok, %{}}, fn target, {:ok, subscriptions} ->
+      with {:ok, subscription} <- subscribe(configuration, target, source),
+           {:ok, outputs} <- initial_outputs(configuration, target, format, source) do
+        state = %SubscriptionState{
           subscription: subscription,
-          writer_handle: writer_handle,
-          next_sequence: 0
+          target: target,
+          outputs: outputs
         }
 
-        {:cont, {:ok, Map.put(streams, subscription.id, stream_state)}}
+        {:cont, {:ok, Map.put(subscriptions, subscription.id, state)}}
       else
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
   end
 
-  @spec pull(stream_state(), module(), pos_integer()) ::
-          {:ok, stream_state(), non_neg_integer(), non_neg_integer()} | {:error, term()}
-  def pull(stream_state, writer, maximum_frames) do
-    case RoomMixer.take(stream_state.subscription, maximum_frames) do
+  @spec count(subscriptions()) :: non_neg_integer()
+  def count(subscriptions) do
+    Enum.reduce(subscriptions, 0, fn {_id, state}, count ->
+      count + map_size(state.outputs)
+    end)
+  end
+
+  @spec pull(SubscriptionState.t(), Configuration.t()) ::
+          {:ok, SubscriptionState.t(), non_neg_integer(), non_neg_integer()} | {:error, term()}
+  def pull(%SubscriptionState{} = state, %Configuration{} = configuration) do
+    case RoomMixer.take(state.subscription, configuration.maximum_pull_frames) do
       {:ok, frames} ->
-        {stream_state, accepted, rejected} = offer_frames(frames, stream_state, writer)
-        {:ok, stream_state, accepted, rejected}
+        {state, accepted, rejected} = offer_frames(frames, state, configuration)
+        {:ok, state, accepted, rejected}
 
       {:error, reason} ->
         {:error, reason}
     end
   end
 
-  defp offer_frames(frames, stream_state, writer) do
-    Enum.reduce(frames, {stream_state, 0, 0}, fn frame, {stream_state, accepted, rejected} ->
-      sequence = stream_state.next_sequence
-      stream_state = %{stream_state | next_sequence: sequence + 1}
-
-      case Chunk.from_mixed_frame(frame, sequence) do
-        {:ok, chunk} -> offer_chunk(writer, stream_state, chunk, accepted, rejected)
-        {:error, _reason} -> {stream_state, accepted, rejected + 1}
-      end
+  defp offer_frames(frames, state, configuration) do
+    Enum.reduce(frames, {state, 0, 0}, fn frame, {state, accepted, rejected} ->
+      offer_frame(frame, state, configuration, accepted, rejected)
     end)
   end
 
-  defp offer_chunk(writer, stream_state, chunk, accepted, rejected) do
-    case safe_offer(writer, stream_state.writer_handle, chunk) do
-      :ok -> {stream_state, accepted + 1, rejected}
-      {:error, _reason} -> {stream_state, accepted, rejected + 1}
+  defp offer_frame(%MixedFrame{} = frame, state, configuration, accepted, rejected) do
+    with {:ok, output, state} <- output(state, frame, configuration),
+         {sequence, output} <- next_sequence(output),
+         state = put_output(state, frame.mode, output),
+         {:ok, chunk} <- Chunk.from_mixed_frame(frame, sequence) do
+      case safe_offer(configuration.writer, output.writer_handle, chunk) do
+        :ok -> {state, accepted + 1, rejected}
+        {:error, _reason} -> {state, accepted, rejected + 1}
+      end
+    else
+      {:error, _reason} -> {state, accepted, rejected + 1}
     end
   end
 
-  defp subscribe(configuration, stream, source) do
+  defp output(state, frame, configuration) do
+    case Map.fetch(state.outputs, frame.mode) do
+      {:ok, output} -> {:ok, output, state}
+      :error -> open_output(state, frame, configuration)
+    end
+  end
+
+  defp open_output(state, frame, configuration) do
+    with {:ok, stream} <- Stream.new(configuration.identity, frame.mode, frame),
+         {:ok, writer_handle} <- open_writer(configuration, stream, self()) do
+      output = %Output{writer_handle: writer_handle, next_sequence: 0}
+      {:ok, output, put_output(state, frame.mode, output)}
+    end
+  end
+
+  defp next_sequence(%Output{} = output) do
+    {output.next_sequence, %{output | next_sequence: output.next_sequence + 1}}
+  end
+
+  defp put_output(state, mode, output) do
+    %{state | outputs: Map.put(state.outputs, mode, output)}
+  end
+
+  defp initial_outputs(configuration, :full_mix, format, source) do
+    with {:ok, stream} <- Stream.new(configuration.identity, :full_mix, format),
+         {:ok, writer_handle} <- open_writer(configuration, stream, source) do
+      {:ok, %{full_mix: %Output{writer_handle: writer_handle, next_sequence: 0}}}
+    end
+  end
+
+  defp initial_outputs(_configuration, {:individual_tracks, _participant_ids}, _format, _source),
+    do: {:ok, %{}}
+
+  defp subscribe(configuration, target, source) do
     RoomMixer.subscribe_recording(
       configuration.mixer,
-      id: "recording-#{stream.stream_id}",
+      id: subscription_id(target),
       tenant_id: configuration.identity.tenant_id,
       room_id: configuration.identity.room_id,
       incarnation_id: configuration.identity.incarnation_id,
       recording_token: configuration.recording_token,
-      mode: stream.mode,
+      mode: target,
       subscriber: source
     )
   end
+
+  defp subscription_id(:full_mix), do: "recording-full-mix"
+  defp subscription_id({:individual_tracks, _participant_ids}), do: "recording-individual-tracks"
 
   defp open_writer(configuration, stream, source) do
     options = Keyword.put(configuration.writer_options, :source, source)

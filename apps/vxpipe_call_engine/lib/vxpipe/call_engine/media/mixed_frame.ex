@@ -20,7 +20,11 @@ defmodule Vxpipe.CallEngine.Media.MixedFrame do
   ]
   defstruct @enforce_keys
 
-  @type mode :: :mix_minus | :full_mix | {:individual_track, String.t()}
+  @type mode ::
+          :mix_minus
+          | :full_mix
+          | {:individual_track, String.t()}
+          | {:individual_track, String.t(), String.t(), String.t()}
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),

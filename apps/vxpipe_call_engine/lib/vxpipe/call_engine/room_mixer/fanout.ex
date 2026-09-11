@@ -39,21 +39,19 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
        ) do
     entry = Map.fetch!(catalog.entries, id)
 
+    delivery = %{
+      id: id,
+      entry: entry,
+      timestamp: timestamp,
+      identity: identity,
+      format: format,
+      policy: policy,
+      mixer: mixer
+    }
+
     case sources(entry, bucket, policy) do
       {:ok, frames} ->
-        offer(
-          frames,
-          id,
-          entry,
-          timestamp,
-          identity,
-          format,
-          policy,
-          mixer,
-          catalog,
-          delivered,
-          dropped
-        )
+        deliver_frames(frames, delivery, {catalog, delivered, dropped})
 
       :skip ->
         {catalog, delivered, dropped}
@@ -74,58 +72,57 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
     end
   end
 
-  defp offer(
-         [],
-         _id,
-         _entry,
-         _timestamp,
-         _identity,
-         _format,
-         _policy,
-         _mixer,
-         catalog,
-         delivered,
-         dropped
-       ) do
-    {catalog, delivered, dropped}
+  defp deliver_frames(
+         frames,
+         %{entry: %{mode: mode}} = delivery,
+         totals
+       )
+       when mode == :individual_tracks or
+              (is_tuple(mode) and tuple_size(mode) == 2 and
+                 elem(mode, 0) == :individual_tracks) do
+    Enum.reduce(frames, totals, fn frame, totals ->
+      concrete_mode =
+        {:individual_track, frame.source_participant_id, frame.connection_id, frame.track_id}
+
+      offer([frame], concrete_mode, delivery, totals)
+    end)
   end
+
+  defp deliver_frames(frames, %{entry: entry} = delivery, totals) do
+    offer(frames, entry.mode, delivery, totals)
+  end
+
+  defp offer([], _mode, _delivery, totals), do: totals
 
   defp offer(
          frames,
-         id,
-         entry,
-         timestamp,
-         identity,
-         format,
-         policy,
-         mixer,
-         catalog,
-         delivered,
-         dropped
+         mode,
+         delivery,
+         {catalog, delivered, dropped}
        ) do
-    frame = mixed_frame(frames, id, entry, timestamp, identity, format, policy)
+    frame = mixed_frame(frames, mode, delivery)
 
-    case SubscriptionCatalog.offer(catalog, id, frame, mixer) do
+    case SubscriptionCatalog.offer(catalog, delivery.id, frame, delivery.mixer) do
       {:ok, catalog} -> {catalog, delivered + 1, dropped}
       {:error, :full, catalog} -> {catalog, delivered, dropped + 1}
     end
   end
 
-  defp mixed_frame(frames, id, entry, timestamp, identity, format, policy) do
+  defp mixed_frame(frames, mode, delivery) do
     {:ok, payload} = PCM.mix(Enum.map(frames, & &1.payload))
 
     %MixedFrame{
-      tenant_id: identity.tenant_id,
-      room_id: identity.room_id,
-      incarnation_id: identity.incarnation_id,
-      subscription_id: id,
-      recipient_participant_id: entry.recipient_id,
-      mode: entry.mode,
+      tenant_id: delivery.identity.tenant_id,
+      room_id: delivery.identity.room_id,
+      incarnation_id: delivery.identity.incarnation_id,
+      subscription_id: delivery.id,
+      recipient_participant_id: delivery.entry.recipient_id,
+      mode: mode,
       source_participant_ids: frames |> Enum.map(& &1.source_participant_id) |> Enum.uniq(),
-      timestamp: timestamp,
-      policy_revision: policy.revision,
-      sample_rate: format.sample_rate,
-      channels: format.channels,
+      timestamp: delivery.timestamp,
+      policy_revision: delivery.policy.revision,
+      sample_rate: delivery.format.sample_rate,
+      channels: delivery.format.channels,
       payload: payload
     }
   end

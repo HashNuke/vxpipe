@@ -309,6 +309,49 @@ playback, or a concrete runtime S3 configuration.
 Root formatting, compilation with warnings as errors, strict Credo over 628 source files, all 810
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 8: selected individual track artifacts
+
+Trusted recording targets can now combine `:full_mix` with all individual tracks or with individual
+tracks selected by stable participant definition keys. Room startup resolves selected keys against
+the pinned call plan and passes only the resulting participant IDs into the private mixer
+subscription. Unknown or malformed selections fail an explicitly enabled recording setup rather
+than silently widening capture.
+
+The mixer emits one unmixed frame per selected participant/connection/track source. `RoomRecording`
+keeps one subscription state separate from its concrete output states and opens an individual writer
+only when the source's first frame reveals its connection and track IDs. Every artifact has its own
+sequence while retaining the shared room-clock offset and policy revision. An unselected source is
+not delivered to the recorder and cannot open a writer.
+
+The recording stream and artifacts adapter carry the exact participant, connection, and track
+identity into a `:participant_track` object specification. Its opaque stream ID is derived from the
+qualified identity; storage keys still use the independently generated artifact ID. No audio
+conversion or external process is introduced.
+
+The engine test was first red because only full-mix targets were valid. It now proves a selected
+source opens lazily, preserves exact identity and PCM, shares offset zero with the full mix, remains
+absent for an unselected source, and obeys the same deny/resume policy intervals. The planned-room
+test separately proves stable definition-key resolution. The artifacts test was run red against the
+old full-mix locator before adding the individual mapping:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_only_call_test.exs \
+  test/vxpipe/call_engine/room_recording_test.exs \
+  test/vxpipe/call_engine/room_mixer_test.exs --max-cases 1
+# 13 tests, 0 failures
+
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/recording_writer_test.exs --max-cases 1
+# 2 tests, 0 failures
+```
+
+Concrete Console/S3 configuration, metadata persistence, writer-failure completeness evidence,
+agent-egress provenance, tagged storage integration, and operator playback remain pending.
+
+Root formatting, compilation with warnings as errors, strict Credo over 630 source files, all 811
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

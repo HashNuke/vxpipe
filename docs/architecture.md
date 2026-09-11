@@ -2364,6 +2364,15 @@ another. Live participant routing still evaluates the participant identity, whil
 reports unique contributing participant IDs. This source identity is the prerequisite for opening
 separate recording artifacts whose manifests can name the exact participant, connection, and track.
 
+Trusted recording targets may request the full mix, all individual tracks, or individual tracks for
+specific participant definition keys. Room startup resolves those stable definition keys against
+the pinned plan; no caller supplies runtime participant IDs. The mixer uses one authorized wildcard
+recording subscription to emit a separate unmixed frame for every selected qualified source. The
+recorder opens each individual writer lazily on its first frame, because connection and track IDs do
+not exist at room creation, and keeps an independent sequence per artifact. Its stream contract and
+the artifacts adapter preserve all three source identifiers; full-mix and individual objects remain
+different artifact kinds under the same room clock.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

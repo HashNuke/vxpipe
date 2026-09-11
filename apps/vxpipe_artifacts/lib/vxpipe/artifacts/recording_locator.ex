@@ -14,12 +14,18 @@ defmodule Vxpipe.Artifacts.RecordingLocator do
       incarnation_id: stream.incarnation_id,
       artifact_id: artifact_id,
       object_key: object_key(stream, artifact_id),
-      kind: :full_mix,
+      kind: artifact_kind(stream),
+      participant_id: stream.participant_id,
+      connection_id: stream.connection_id,
+      track_id: stream.track_id,
       sample_rate: stream.sample_rate,
       channels: stream.channels,
       sample_format: stream.sample_format
     }
   end
+
+  defp artifact_kind(%Stream{mode: :full_mix}), do: :full_mix
+  defp artifact_kind(%Stream{mode: {:individual_track, _, _, _}}), do: :participant_track
 
   defp object_key(stream, artifact_id) do
     encoded_path =

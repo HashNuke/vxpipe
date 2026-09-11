@@ -18,6 +18,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor.RecordingChildren do
     plan = Keyword.fetch!(options, :plan)
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
     recording_token = make_ref()
+    settings = Keyword.update(settings, :targets, [], &resolve_targets(&1, plan))
 
     options =
       Keyword.update!(options, :room_mixer, fn mixer_options ->
@@ -41,5 +42,39 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor.RecordingChildren do
       mixer: RoomMixer.ref(incarnation_id),
       recording_token: recording_token
     ]
+  end
+
+  defp resolve_targets(targets, plan) when is_list(targets) do
+    Enum.map(targets, &resolve_target(&1, plan))
+  end
+
+  defp resolve_targets(invalid, _plan), do: invalid
+
+  defp resolve_target(:individual_tracks, plan) do
+    participant_ids =
+      plan.participants
+      |> Map.values()
+      |> Enum.map(& &1.participant_id)
+      |> Enum.sort()
+
+    {:individual_tracks, participant_ids}
+  end
+
+  defp resolve_target({:individual_participants, references}, plan) when is_list(references) do
+    case participant_ids(references, plan.participants) do
+      {:ok, participant_ids} -> {:individual_tracks, participant_ids}
+      :error -> :invalid_recording_target
+    end
+  end
+
+  defp resolve_target(target, _plan), do: target
+
+  defp participant_ids(references, participants) do
+    Enum.reduce_while(references, {:ok, []}, fn reference, {:ok, participant_ids} ->
+      case Map.fetch(participants, reference) do
+        {:ok, participant} -> {:cont, {:ok, participant_ids ++ [participant.participant_id]}}
+        :error -> {:halt, :error}
+      end
+    end)
   end
 end

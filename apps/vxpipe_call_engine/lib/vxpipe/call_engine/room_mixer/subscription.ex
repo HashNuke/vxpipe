@@ -25,7 +25,10 @@ defmodule Vxpipe.CallEngine.RoomMixer.Subscription do
           room_id: String.t(),
           incarnation_id: String.t(),
           recipient_participant_id: nil | String.t(),
-          mode: Vxpipe.CallEngine.Media.MixedFrame.mode(),
+          mode:
+            Vxpipe.CallEngine.Media.MixedFrame.mode()
+            | :individual_tracks
+            | {:individual_tracks, [String.t()]},
           purpose: :participant | :recording
         }
 
