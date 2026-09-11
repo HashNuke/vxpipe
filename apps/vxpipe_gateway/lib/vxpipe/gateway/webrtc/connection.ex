@@ -86,6 +86,19 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
                participant_id: session.participant_id
              ],
              jitter_latency_ms: Keyword.fetch!(options, :audio_jitter_latency_ms)
+           ),
+         {:ok, room_audio_egress} <-
+           ConnectionPeerSupervisor.start_room_audio_egress(
+             connection_id,
+             attachment,
+             [
+               tenant_id: session.tenant_id,
+               room_id: session.room_id,
+               incarnation_id: session.incarnation_id,
+               participant_id: session.participant_id
+             ],
+             peer_connection,
+             output_track.id
            ) do
       {:ok,
        %{
@@ -98,6 +111,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          peer_connection: peer_connection,
          peer_monitor: Process.monitor(peer_connection),
          room_monitor: attachment.room_monitor,
+         room_audio_egress: room_audio_egress,
          room_audio_ingress: room_audio_ingress,
          rtvi_turn_state: TurnState.new(),
          session: session

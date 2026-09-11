@@ -358,7 +358,29 @@
 - A final failure-path test showed that subscription rejection after pipeline launch left that
   sibling alive until the connection supervisor ended. Activation now unwinds the launched
   pipeline immediately; the five focused coordinator tests are green.
-- The complete Gateway suite passes 81 tests with four tagged integration exclusions; Call Engine
+- The complete Gateway suite passes 82 tests with four tagged integration exclusions; Call Engine
   remains green at 320 tests with one exclusion. A fresh PostgreSQL-backed umbrella run passes all
   seven applications, along with formatting, warnings-as-errors compilation, strict Credo, and the
   unused-dependency check.
+
+## 2026-09-11 — live two-human WebRTC output
+
+- Added the HTTP/WebRTC behavior test before changing `Connection`. Its first red run failed before
+  the expected missing-output assertion: the real Membrane pipeline returned
+  `{:ok, supervisor, pipeline}`, while the ingress lifecycle's fake only returned `{:ok, pid}`.
+  The peer supervisor now normalizes the real pipeline result to the dynamic supervisor's child
+  identity, preserving correct monitoring and termination for both ingress and output pipelines.
+- After that integration repair, the test failed at the intended boundary because the connection
+  had no room-output pipeline. `Connection` now starts `RoomAudioEgress` after attachment and
+  ingress setup. The coordinator itself still decides from the engine-owned attachment whether
+  mixer output is enabled, so active-agent connections retain only direct TTS output.
+- The green test negotiates two independent ExWebRTC clients through `/api/rtvi/offer`, sends a
+  real Opus packet in each direction, decodes the received RTP payload back to one 20 ms PCM frame,
+  and proves that the sending participant receives no self-echo. Assertions stay at the external
+  WebRTC behavior rather than depending on internal Registry entries.
+- The complete Gateway suite passes 83 tests with four tagged integration exclusions. A fresh
+  PostgreSQL-backed umbrella run passes all seven applications: MCP 37 tests with three exclusions,
+  Agent Runtime 58 with two exclusions, Call Engine 320 with one exclusion, Calls 37, Persistence
+  25, Gateway 83 with four exclusions, and Console 57. Formatting, warnings-as-errors compilation,
+  strict Credo, and the unused-dependency check pass. Manual sample-console verification remains
+  open.

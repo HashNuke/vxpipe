@@ -241,6 +241,18 @@ and failure propagation. `Connection` startup and a two-client WebRTC verificati
 If mixer subscription fails after pipeline launch, activation immediately terminates that pipeline
 instead of leaving a sibling process behind for later connection cleanup.
 
+The live-connection checkpoint now starts that coordinator from the real WebRTC `Connection` only
+when the Call Engine attachment advertises mixer output. A focused HTTP/WebRTC test negotiates two
+independent ExWebRTC clients through the RTVI offer endpoint, sends encoded Opus from each human,
+decodes the other human's received output, and verifies mix-minus does not echo the caller's own
+frame. The red run also exposed that Membrane pipeline children return supervisor and pipeline
+process identities from `start_link/1`; the owning dynamic-supervisor boundary now normalizes that
+result to the supervised child identity used for monitoring and termination. Existing active-agent
+connections retain the direct TTS owner and do not start a second RTP producer. The Gateway suite
+passes 83 tests with four tagged integration exclusions; a fresh PostgreSQL-backed umbrella run
+and every common quality gate pass. An authorized monitor connection,
+restrictive live-policy transition, and sample-console/manual verification remain open.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

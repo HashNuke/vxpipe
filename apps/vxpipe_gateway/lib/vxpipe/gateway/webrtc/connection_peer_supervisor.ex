@@ -65,7 +65,10 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
       restart: :temporary
     }
 
-    DynamicSupervisor.start_child(via(connection_id), child_spec)
+    connection_id
+    |> via()
+    |> DynamicSupervisor.start_child(child_spec)
+    |> normalize_pipeline_start()
   end
 
   def stop_audio_pipeline(connection_id, pipeline) when is_pid(pipeline) do
@@ -81,7 +84,10 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
       restart: :temporary
     }
 
-    DynamicSupervisor.start_child(via(connection_id), child_spec)
+    connection_id
+    |> via()
+    |> DynamicSupervisor.start_child(child_spec)
+    |> normalize_pipeline_start()
   end
 
   def stop_room_audio_output_pipeline(connection_id, pipeline) when is_pid(pipeline) do
@@ -217,4 +223,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
   defp peer_via(connection_id) do
     {:via, Registry, {Vxpipe.Gateway.WebRTC.Registry, {:peer_connection, connection_id}}}
   end
+
+  defp normalize_pipeline_start({:ok, supervisor, _pipeline}), do: {:ok, supervisor}
+  defp normalize_pipeline_start(result), do: result
 end

@@ -1,0 +1,237 @@
+defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
+  use ExUnit.Case, async: false
+
+  import Plug.Conn
+  import Plug.Test
+
+  alias ExRTP.Packet
+  alias ExWebRTC.{ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
+  alias Membrane.Opus.{Decoder, Encoder}
+  alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
+  alias Vxpipe.Gateway.HTTP.Endpoint
+  alias Vxpipe.Gateway.SessionSupervisor
+
+  @moduletag capture_log: true
+
+  @application_voip 2_048
+  @automatic_bitrate -1_000
+  @endpoint_options Endpoint.init(cors: [])
+  @signal_voice 3_001
+
+  test "two admitted humans exchange live mix-minus audio over WebRTC" do
+    plan = compile_plan()
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    caller_session = issue_session(plan, room, caller.participant_id)
+    receiver_session = issue_session(plan, room, receiver.participant_id)
+
+    caller_client = connect(caller_session.session_id)
+    receiver_client = connect(receiver_session.session_id)
+
+    :ok = send_audio(caller_client, 1, 960, 8_000)
+    receiver_packet = await_audio(receiver_client, 5_000)
+    assert decodable_pcm_size(receiver_packet) == 1_920
+    caller = caller_client.client
+    caller_output_track_id = caller_client.output_track_id
+
+    refute_receive {:ex_webrtc, ^caller, {:rtp, ^caller_output_track_id, _rid, %Packet{}}},
+                   500
+
+    :ok = send_audio(receiver_client, 1, 960, -8_000)
+    caller_packet = await_audio(caller_client, 5_000)
+    assert decodable_pcm_size(caller_packet) == 1_920
+  end
+
+  defp compile_plan do
+    resource_id = unique_id("human-webrtc")
+    room_id = unique_id("room-human-webrtc")
+
+    input = %{
+      schema_version: CallDefinition.schema_version(),
+      entry_caller: "caller",
+      entry_receiver: "receiver",
+      defaults: %{capabilities: %{}},
+      call_variables: %{sections: %{}},
+      participants: %{
+        "caller" => human_participant(),
+        "receiver" => human_participant()
+      },
+      limits: %{max_duration_ms: 30_000}
+    }
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: resource_id, revision: 1)
+
+    assert {:ok, invocation} =
+             CallInvocation.new(
+               %{
+                 call_definition: %{id: resource_id, revision: 1},
+                 initial_variables: %{},
+                 transport: %{type: "web"}
+               },
+               tenant_id: "tenant-human-webrtc",
+               actor_id: "actor-human-webrtc",
+               call_id: unique_id("call-human-webrtc"),
+               room_id: room_id
+             )
+
+    assert {:ok, plan} = DefinitionCompiler.compile(definition, invocation, registries())
+    plan
+  end
+
+  defp human_participant do
+    %{
+      type: "human",
+      connection: %{service: "web", mode: "receive", admission: "start_call"},
+      capabilities: %{}
+    }
+  end
+
+  defp registries, do: %{capability_profiles: %{}, host_tools: %{}}
+
+  defp issue_session(plan, room, participant_id) do
+    binding = [
+      tenant_id: plan.tenant_id,
+      actor_id: plan.actor_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id,
+      participant_id: participant_id,
+      tool_visibility: plan.tool_visibility
+    ]
+
+    assert {:ok, session} = SessionSupervisor.issue(binding, 30_000)
+    session
+  end
+
+  defp connect(session_id) do
+    client_id = unique_id("client")
+    child_spec = Supervisor.child_spec({PeerConnection, []}, id: {PeerConnection, client_id})
+    client = start_supervised!(child_spec)
+    :ok = PeerConnection.controlling_process(client, self())
+
+    input_track = MediaStreamTrack.new(:audio)
+
+    assert {:ok, _transceiver} =
+             PeerConnection.add_transceiver(client, input_track, direction: :sendrecv)
+
+    assert {:ok, offer} = PeerConnection.create_offer(client)
+    :ok = PeerConnection.set_local_description(client, offer)
+
+    response =
+      :post
+      |> conn(
+        "/api/rtvi/offer",
+        JSON.encode!(%{
+          "sdp" => offer.sdp,
+          "type" => "offer",
+          "pc_id" => nil,
+          "restart_pc" => false,
+          "requestData" => %{"session_id" => session_id}
+        })
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@endpoint_options)
+
+    assert response.status == 200
+
+    assert %{"pc_id" => connection_id, "sdp" => answer_sdp, "type" => "answer"} =
+             JSON.decode!(response.resp_body)
+
+    :ok =
+      PeerConnection.set_remote_description(
+        client,
+        %SessionDescription{type: :answer, sdp: answer_sdp}
+      )
+
+    assert_receive {:ex_webrtc, ^client, {:ice_candidate, %ICECandidate{} = candidate}}, 5_000
+    patch_candidate(connection_id, candidate)
+    assert_receive {:ex_webrtc, ^client, {:connection_state_change, :connected}}, 5_000
+
+    assert_receive {:ex_webrtc, ^client,
+                    {:track, %MediaStreamTrack{kind: :audio} = output_track}},
+                   5_000
+
+    %{
+      client: client,
+      connection_id: connection_id,
+      input_track_id: input_track.id,
+      output_track_id: output_track.id
+    }
+  end
+
+  defp patch_candidate(connection_id, candidate) do
+    response =
+      :patch
+      |> conn(
+        "/api/rtvi/offer",
+        JSON.encode!(%{
+          "pc_id" => connection_id,
+          "candidates" => [
+            %{
+              "candidate" => candidate.candidate,
+              "sdp_mid" => candidate.sdp_mid,
+              "sdp_mline_index" => candidate.sdp_m_line_index
+            }
+          ]
+        })
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@endpoint_options)
+
+    assert response.status == 200
+  end
+
+  defp send_audio(connection, sequence_number, timestamp, sample) do
+    encoder =
+      Encoder.Native.create(
+        48_000,
+        1,
+        @application_voip,
+        @automatic_bitrate,
+        @signal_voice
+      )
+
+    pcm = :binary.copy(<<sample::little-signed-16>>, 960)
+    assert {:ok, payload} = Encoder.Native.encode_packet(encoder, pcm, 960)
+
+    packet =
+      Packet.new(payload,
+        payload_type: 111,
+        sequence_number: sequence_number,
+        timestamp: timestamp,
+        ssrc: 123
+      )
+
+    PeerConnection.send_rtp(connection.client, connection.input_track_id, packet)
+  end
+
+  defp await_audio(connection, timeout_ms) do
+    receive do
+      {:ex_webrtc, client, {:rtp, track_id, _rid, %Packet{} = packet}}
+      when client == connection.client and track_id == connection.output_track_id ->
+        packet
+    after
+      timeout_ms -> flunk("timed out waiting for mixed WebRTC audio")
+    end
+  end
+
+  defp decodable_pcm_size(packet) do
+    decoder = Decoder.Native.create(48_000, 1)
+    packet |> then(&Decoder.Native.decode_packet(decoder, &1.payload)) |> byte_size()
+  end
+
+  defp stop_room_on_exit(plan) do
+    on_exit(fn ->
+      case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
+        [{room, _value}] -> GenServer.stop(room, :shutdown)
+        [] -> :ok
+      end
+    end)
+  end
+
+  defp unique_id(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+end
