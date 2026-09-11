@@ -3,7 +3,12 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
 
   use Phoenix.Component
 
-  alias Vxpipe.Console.{CallInspectionFormat, CallInspectionTimeline, CallVariableDiff}
+  alias Vxpipe.Console.{
+    CallInspectionFormat,
+    CallInspectionTimeline,
+    CallRecordingComponents,
+    CallVariableDiff
+  }
 
   attr :selected_id, :string, required: true
   attr :selected_event_id, :string, default: nil
@@ -12,6 +17,8 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   attr :status, :atom, required: true
   attr :persisted, Vxpipe.Calls.CallDetailPage, default: nil
   attr :live, Vxpipe.Calls.LiveCallInspection, default: nil
+  attr :recordings, :list, default: []
+  attr :recordings_status, :atom, default: :unavailable
 
   def workbench(assigns) do
     timeline = CallInspectionTimeline.combine(assigns.persisted, assigns.live)
@@ -50,6 +57,12 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
         </div>
       <% else %>
         <.call_context persisted={@persisted} live={@live} participants={@participant_summary} />
+
+        <CallRecordingComponents.panel
+          call_id={@selected_id}
+          recordings={@recordings}
+          status={@recordings_status}
+        />
 
         <div class="evidence-grid">
           <section class="event-ledger" aria-labelledby="event-ledger-heading">

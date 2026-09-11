@@ -23,7 +23,7 @@ During a multi-party call, enabled permitted individual tracks and the already-l
 - [x] Add artifacts application/ports and scoped writer supervision; keep dependency direction and engine database-free.
 - [x] Implement bounded stream-to-S3 recording plus asynchronous metadata/manifests.
 - [x] Capture live full mix and selected individual tracks with shared clocks and honest egress provenance.
-- [ ] Add private operator playback/access mechanism and tagged S3-compatible integration tests without logging signed URLs/secrets.
+- [x] Add private operator playback/access mechanism and tagged S3-compatible integration tests without logging signed URLs/secrets.
 
 ## Acceptance and failure checks
 
@@ -783,6 +783,52 @@ claim the operator-facing runnable outcome.
 
 Root formatting, compilation with warnings as errors, strict Credo over 660 source files, all 839
 default umbrella tests, and the unused-dependency check pass.
+
+## Checkpoint 20: operator recording evidence and playback
+
+The call-inspection workbench now lists tenant-authorized recording artifacts and places the live
+private WAVE route behind native browser audio controls. The list crosses the existing Calls
+workflow and returns a dedicated safe summary. Private object references, object keys, endpoints,
+credentials, and provider locations never enter LiveView assigns or rendered markup. Constructing
+the list checks whether each terminal manifest can form a valid virtual WAVE source under trusted
+playback settings without reading object bytes.
+
+The recording panel is a separate presentation module rather than another responsibility in the
+general call-detail component. It orders the full mix before connection-qualified participant
+tracks and shows room-clock start offset, duration, sample format, gap count, rejected chunks,
+terminal reason, and complete/incomplete state. A valid artifact receives its private audio
+control; an invalid or unbound artifact retains inspectable terminal evidence with playback marked
+unavailable. No-artifact and repository-unavailable states remain visibly distinct without
+rendering internal failure reasons.
+
+The focused behavior was red first: the facade and Calls-backed list operations were undefined,
+then the rendered call detail had no recording section. The green runs covered safe projection,
+no object read during listing, exact private playback paths, aligned incomplete evidence, and empty
+versus unavailable states:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/call_recording_test.exs \
+  test/vxpipe/console/call_recording_presentation_test.exs --max-cases 1
+# 6 tests, 0 failures
+
+mix test --max-cases 1
+# 80 tests, 0 failures
+```
+
+The rendered workbench was inspected in headless Chrome at 1440 by 1000 and 390 by 844. Both native
+players loaded their metadata, neither viewport overflowed horizontally, and the accessibility
+scan reported zero violations or incomplete checks. The mobile inspection exposed cramped
+two-column metadata, so the readouts were changed to one column and both viewports were checked
+again. The design-system detector reported no findings.
+
+Root formatting, compilation with warnings as errors, strict Credo over 662 source files, all 843
+default umbrella tests, and the unused-dependency check pass. One root-suite process was externally
+terminated without an assertion failure; the complete retry passed.
+
+The operator playback checklist item is now complete, including the earlier tagged S3-compatible
+multipart/read integration evidence. Final cross-slice acceptance and failure verification remain
+before this milestone can be marked complete.
 
 ## Specification review
 

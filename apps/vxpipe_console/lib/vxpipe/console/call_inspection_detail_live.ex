@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
   use Phoenix.LiveView, layout: false
 
   alias Vxpipe.Calls.CallDetailPage
-  alias Vxpipe.Console.{CallInspection, CallInspectionComponents}
+  alias Vxpipe.Console.{CallInspection, CallInspectionComponents, CallRecording}
 
   @list_page_size 25
   @history_page_size 50
@@ -19,7 +19,9 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
        selected_event_id: nil,
        list_cursor: nil,
        history_cursor: nil,
-       refresh_token: nil
+       refresh_token: nil,
+       recordings: [],
+       recordings_status: :unavailable
      )}
   end
 
@@ -33,6 +35,7 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
       |> maybe_cancel_refresh(reload_call?)
       |> maybe_load_list(requested, reload_call?)
       |> maybe_load_detail(requested, reload_call?)
+      |> maybe_load_recordings(requested, reload_call?)
       |> assign(
         loaded?: true,
         selected_id: requested.call_id,
@@ -112,6 +115,18 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
 
     inspection_state(persisted_result, live_result)
   end
+
+  defp maybe_load_recordings(socket, requested, true) do
+    case CallRecording.list(socket.assigns.principal, requested.call_id) do
+      {:ok, recordings} ->
+        assign(socket, recordings: recordings, recordings_status: :available)
+
+      {:error, _reason} ->
+        assign(socket, recordings: [], recordings_status: :unavailable)
+    end
+  end
+
+  defp maybe_load_recordings(socket, _requested, false), do: socket
 
   defp load_live(principal, call_id, {:ok, %CallDetailPage{call: %{state: state}}})
        when state in [:admitting, :running] do

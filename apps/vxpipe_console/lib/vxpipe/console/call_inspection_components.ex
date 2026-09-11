@@ -16,6 +16,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   attr :list_cursor, :string, default: nil
   attr :history_cursor, :string, default: nil
   attr :selected_event_id, :string, default: nil
+  attr :recordings, :list, default: []
+  attr :recordings_status, :atom, default: :unavailable
 
   def index(assigns) do
     ~H"""
@@ -57,6 +59,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
         status={@detail_status}
         persisted={@persisted}
         live={@live}
+        recordings={@recordings}
+        recordings_status={@recordings_status}
       />
     </main>
     """

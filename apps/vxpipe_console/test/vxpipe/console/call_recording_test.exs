@@ -31,6 +31,13 @@ defmodule Vxpipe.Console.CallRecordingTest do
     assert_receive {:open_call_recording, @principal, "call-public-id", "artifact-public-id"}
   end
 
+  test "lists safe recording summaries through the configured boundary" do
+    backend = {TestCallRecordingBackend, {self(), {:ok, []}}}
+
+    assert {:ok, []} = CallRecording.list(@principal, "call-public-id", backend: backend)
+    assert_receive {:list_call_recordings, @principal, "call-public-id"}
+  end
+
   test "composes tenant-authorized artifact lookup with the trusted object reader" do
     artifact = artifact()
 
@@ -66,6 +73,30 @@ defmodule Vxpipe.Console.CallRecordingTest do
     assert Keyword.fetch!(reader_options, :observer) == self()
     assert Keyword.fetch!(reader_options, :payload) == <<1, 2, 3, 4>>
     assert Keyword.fetch!(reader_options, :client_options) == [request_options: []]
+  end
+
+  test "lists playable metadata without retaining a private object reference" do
+    artifact = artifact()
+
+    options = [
+      calls_options: [
+        artifact_repository: {TestCallRecordingArtifactRepository, {self(), {:ok, [artifact]}}}
+      ],
+      recording_settings: [bucket: "recordings"],
+      object_reader: TestCallRecordingObjectReader,
+      object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
+    ]
+
+    assert {:ok, [summary]} =
+             CallsRecordingBackend.list(options, @principal, "call-public-id")
+
+    assert_receive {:fetch_call_recording_artifacts, "tenantkey1234567", "call-public-id"}
+    assert summary.id == "artifact-public-id"
+    assert summary.kind == :full_mix
+    assert summary.playable?
+    refute Map.has_key?(summary, :object_key)
+    refute Map.has_key?(summary, :object_reference)
+    refute_receive {:read_call_recording_object, _, _, _, _}
   end
 
   defp source do

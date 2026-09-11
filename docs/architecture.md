@@ -2478,6 +2478,21 @@ before response streaming begins receives a generic storage error. Cross-tenant 
 call/artifact lookups share a generic not-found response. Responses are private and non-cacheable,
 and ordinary room, mixer, monitor, and call-control processes are absent from this playback path.
 
+Call inspection obtains recording rows through a separate list operation on the same
+tenant-authorized Calls boundary. Console projects each artifact into a safe summary containing
+only its public identity, source identity, format, room-clock alignment, terminal state, and gap /
+rejection evidence. Object keys, object references, endpoints, credentials, and provider locations
+do not enter the LiveView assigns or rendered markup. Summary construction may validate that a
+virtual WAVE layout and trusted reader binding can be built, but it performs no object read.
+
+The operator workbench renders the full mix before connection-qualified participant tracks and
+keeps each native audio control on the private call/artifact route. An incomplete artifact remains
+visible with its known duration, start offset, gaps, rejected chunks, and terminal reason; it is
+playable only when the stored manifest and trusted playback configuration form a valid source.
+Empty recording history and temporary recording-repository failure are distinct, bounded states.
+This presentation is owned by a dedicated recording component rather than adding storage or media
+logic to the general call-detail component.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

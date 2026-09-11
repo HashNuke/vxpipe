@@ -731,3 +731,43 @@ Root formatting, compilation with warnings as errors, strict Credo over 660 sour
 default umbrella tests, and the unused-dependency check pass. The first unconfigured root test
 invocation failed before test execution because the workstation database expected a password; the
 prescribed `VXPIPE_TEST_DATABASE_URL` lane completed successfully.
+
+## 2026-09-11: operator recording evidence and playback
+
+The inspection page now loads recording artifacts through a separate list callback on the existing
+tenant-authorized Calls boundary. Its safe summary retains only public artifact/source identity,
+format, room-clock offsets, counts, gaps, terminal state, and a derived playability flag. It omits
+the persisted object key and object reference. The playability check constructs the trusted reader
+binding and virtual WAVE layout but performs no object read.
+
+Recording presentation is isolated in `CallRecordingComponents`. It orders the full mix before
+participant tracks, displays alignment and integrity evidence, and points native audio controls at
+the private call/artifact route. An artifact that cannot be opened remains visible with playback
+marked unavailable. Empty results and repository failure use distinct generic states; internal
+failure values are not rendered.
+
+The behavior tests were red first because the facade and production backend had no list operation,
+then because the rendered page had no recording section. The green focused and child-suite runs
+were:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/call_recording_test.exs \
+  test/vxpipe/console/call_recording_presentation_test.exs --max-cases 1
+# 6 tests, 0 failures
+
+mix test --max-cases 1
+# 80 tests, 0 failures
+```
+
+The page was rendered at 1440 by 1000 and 390 by 844 in headless Chrome with two playable fixture
+artifacts. Both native audio controls loaded metadata, neither viewport overflowed horizontally,
+and the accessibility scan reported zero violations and zero incomplete checks. The first narrow
+render showed truncated two-column readouts; changing those readouts to one column exposed the full
+values, and desktop plus narrow layouts were checked again. The design-system detector reported no
+findings and required no persisted exception.
+
+Root formatting, compilation with warnings as errors, strict Credo over 662 source files, all 843
+default umbrella tests, and the unused-dependency check pass. One root-suite process was externally
+terminated without an assertion failure; the complete retry passed. The remaining work is final
+cross-slice acceptance and failure verification before milestone completion.

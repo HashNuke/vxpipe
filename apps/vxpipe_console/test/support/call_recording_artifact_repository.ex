@@ -7,7 +7,10 @@ defmodule Vxpipe.Console.TestCallRecordingArtifactRepository do
   def store_call_artifact(_context, artifact), do: {:ok, artifact}
 
   @impl true
-  def fetch_call_artifacts(_context, _tenant_key, _call_id), do: {:ok, []}
+  def fetch_call_artifacts({observer, response}, tenant_key, call_id) do
+    send(observer, {:fetch_call_recording_artifacts, tenant_key, call_id})
+    response
+  end
 
   @impl true
   def fetch_call_artifact({observer, response}, tenant_key, call_id, artifact_id) do
