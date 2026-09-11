@@ -771,3 +771,39 @@ Root formatting, compilation with warnings as errors, strict Credo over 662 sour
 default umbrella tests, and the unused-dependency check pass. One root-suite process was externally
 terminated without an assertion failure; the complete retry passed. The remaining work is final
 cross-slice acceptance and failure verification before milestone completion.
+
+## 2026-09-11: final cross-slice acceptance
+
+The remaining storage-pressure claim had only boundary-level evidence, so a deterministic
+composition test now joins the real room mixer, room recording coordinator, recording adapter,
+artifact writer, and test object-store port. The first object write stays blocked while an ordinary
+monitor continues receiving five live mixes. Recording is denied for one middle interval, restored,
+and then saturated for a later interval before the held write is released.
+
+Only three accepted mixes reach the object-store boundary. Their PCM values exactly match the live
+mixes at room-clock offsets 0, 4, and 8. The terminal manifest spans samples 0 through 10, retains
+sequences 0, 1, and 3, reports separate two-sample gaps at offsets 2 and 6, counts one rejected
+chunk, and is incomplete. The denied audio is not replayed when recording resumes, while the live
+monitor remains independent of both policy omission and storage backpressure.
+
+Console also now checks that artifact metadata with no stored-object reference remains visible but
+is not called playable and causes no object read. The final focused matrix was:
+
+```text
+Call Engine: 16 tests, 0 failures
+Gateway:     11 tests, 0 failures
+Artifacts:   10 tests, 0 failures
+Calls:        1 test, 0 failures
+Persistence: 17 tests, 0 failures
+Console:     15 tests, 0 failures
+```
+
+The new asynchronous composition passed 50 consecutive repetitions. The complete captured root
+run passed all 845 default tests: MCP 37, Agent Runtime 58, Call Engine 357, Calls 46, Gateway 224,
+Artifacts 10, Persistence 32, and Console 81. One earlier root run returned nonzero amid the noisy
+media suite without retaining a useful failure line; the captured complete rerun passed and the
+new test's repetition found no instability.
+
+Formatting, warnings-as-errors compilation, strict Credo over 662 source files, and the
+unused-dependency check pass. Earlier checkpoints retain the rendered desktop/narrow-browser,
+accessibility, and real S3-compatible integration evidence. Milestone 19 is complete.

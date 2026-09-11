@@ -99,6 +99,34 @@ defmodule Vxpipe.Console.CallRecordingTest do
     refute_receive {:read_call_recording_object, _, _, _, _}
   end
 
+  test "does not claim metadata without a stored object is playable" do
+    artifact = %{
+      artifact()
+      | id: "artifact-metadata-only",
+        object_key: "private/metadata-only.s16le",
+        object_reference: nil,
+        status: :incomplete,
+        terminal_reason: "completion_failed"
+    }
+
+    options = [
+      calls_options: [
+        artifact_repository: {TestCallRecordingArtifactRepository, {self(), {:ok, [artifact]}}}
+      ],
+      recording_settings: [bucket: "recordings"],
+      object_reader: TestCallRecordingObjectReader,
+      object_reader_options: [observer: self(), payload: <<1, 2, 3, 4>>]
+    ]
+
+    assert {:ok, [summary]} =
+             CallsRecordingBackend.list(options, @principal, "call-public-id")
+
+    refute summary.playable?
+    assert summary.status == :incomplete
+    assert summary.terminal_reason == "completion_failed"
+    refute_receive {:read_call_recording_object, _, _, _, _}
+  end
+
   defp source do
     {:ok, source} =
       Source.new(artifact(), {Vxpipe.Console.TestCallRecordingReader, {self(), <<1, 2, 3, 4>>}})

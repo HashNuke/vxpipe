@@ -1,13 +1,14 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 17 complete and 7 incomplete. Milestone 17, Telnyx calls and
+Status: 24 milestone specifications: 18 complete and 6 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
 Milestone 18, Twilio through the common telephony contract, remains formally incomplete only because
 its guarded live-provider audio check still needs credentials and an approved destination. Milestone
-19, permitted live recordings streamed to S3, is the current implementation slice. The earlier
-behavior contracts have completed focused review.
+19, permitted live recordings streamed to S3, is complete. Milestone 20, usage and cost
+observations, is the next implementation slice. The earlier behavior contracts have completed
+focused review.
 Implementation continues through milestone 22, including the runnable samples and their
 cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain
 unimplemented until the user has exercised the working platform and decided which fixes or
@@ -58,7 +59,7 @@ progress without claiming the entire milestone is complete.
 16. [x] [Private briefing and human web acceptance](human-web-transfers.md) — Privately brief a destination, accept over web control, then bridge human-only audio.
 17. [x] [Telnyx calls and phone transfers](telnyx-calls.md) — Connect verified telephony legs through the same admission and transfer contracts.
 18. [ ] [Twilio through the common telephony contract](twilio-calls.md) — Prove a second provider fits without changing participant definitions or room control.
-19. [ ] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
+19. [x] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
 20. [ ] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [ ] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [ ] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
@@ -113,12 +114,14 @@ owns ordering; insert or move entries here without renaming milestone files.
 
 ## Scope and dependency rules
 
-The current playground already creates rooms and supports durable admission, a single human/agent
-text/audio path, streaming model output, hosted speech services, engine-owned tool execution,
-room-scoped Call Variables with private model/client projections, asynchronous call history, and
-call inspection. It does not implement live remote MCP, a multi-party mixer, telephony, streaming
-recordings, billing enrichment, or whole-call retention. Reuse working code; do not recreate
-applications or label existing primitives as newly implemented.
+The current platform already supports durable admission, streamed agent text/audio, hosted speech
+services, engine-owned local and remote tools, room-scoped Call Variables, asynchronous history,
+call inspection, multi-party mixing, presence-driven media policy, transfers, Telnyx and the common
+telephony boundary, and permitted S3-compatible recordings with private operator playback. The
+Twilio implementation still awaits its guarded live-provider proof. Usage/billing enrichment,
+call-details publications, context compaction and native fallback, container delivery, and
+whole-call retention remain unimplemented. Reuse working code; do not recreate applications or
+label existing primitives as newly implemented.
 
 Early milestones expose only their implemented subset. Reject unsupported enabled features
 explicitly; never silently ignore a presence/privacy rule, auth requirement, or provider

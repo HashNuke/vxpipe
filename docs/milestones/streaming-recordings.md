@@ -1,6 +1,6 @@
 # Permitted live recordings streamed to S3
 
-Status: implementation in progress. Specification review: approved (2026-09-08).
+Status: complete (2026-09-11). Specification review: approved (2026-09-08).
 Prerequisites: [Live mixing/media policy](live-mixing-and-media-policy.md); [Asynchronous history](asynchronous-call-history.md).
 Sources: [Live recording split](../../labnotes/20260905-0405-call-definition-design.md#mix-live-record-participant-tracks-and-the-live-mix); [R38/R41](../call-definition-gap-review.md).
 
@@ -27,11 +27,11 @@ During a multi-party call, enabled permitted individual tracks and the already-l
 
 ## Acceptance and failure checks
 
-- [ ] Reconstruct duration/alignment from manifests; combined object matches live mix and excludes generated-but-discarded/not-egress-accepted TTS. Test interrupted/discarded output without equating egress acceptance with remote playout.
-- [ ] Deny recording mid-call: no tracks/mix/derivatives from that interval enter tap/queue/object; relaxation cannot replay it.
-- [ ] Slow/failing object store and saturated writer queue leave live calls/monitor responsive; gaps/incomplete state are explicit.
+- [x] Reconstruct duration/alignment from manifests; combined object matches live mix and excludes generated-but-discarded/not-egress-accepted TTS. Test interrupted/discarded output without equating egress acceptance with remote playout.
+- [x] Deny recording mid-call: no tracks/mix/derivatives from that interval enter tap/queue/object; relaxation cannot replay it.
+- [x] Slow/failing object store and saturated writer queue leave live calls/monitor responsive; gaps/incomplete state are explicit.
 - [x] Room/writer crash preserves surviving evidence and records final/incomplete manifests when storage succeeds; a total outage cannot guarantee persisted manifests or successful finalization. Post-call draining is independent of reporting wait.
-- [ ] Cross-tenant reads and ungranted recording/monitor taps fail; metadata alone is not claimed to restore lost audio.
+- [x] Cross-tenant reads and ungranted recording/monitor taps fail; metadata alone is not claimed to restore lost audio.
 
 ## Manual verification
 
@@ -46,13 +46,13 @@ No mandatory offline remix, PG audio-byte duplication, automatic repair/import, 
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation is in progress. The first checkpoint evidence follows; do not mark the whole slice
-complete until every acceptance check is demonstrated.
+Implementation is complete. The checkpoint evidence below records the incremental behavior and
+final cross-slice verification.
 
 ## Checkpoint 1: bounded artifact-writer ownership
 
@@ -829,6 +829,51 @@ terminated without an assertion failure; the complete retry passed.
 The operator playback checklist item is now complete, including the earlier tagged S3-compatible
 multipart/read integration evidence. Final cross-slice acceptance and failure verification remain
 before this milestone can be marked complete.
+
+## Checkpoint 21: cross-slice recording acceptance
+
+A deterministic Engine-to-Artifacts acceptance test now composes the real room mixer, recording
+coordinator, bounded recording adapter, artifact writer, and object-store port. It deliberately
+holds the first object write while ordinary live monitor output continues. Recording is then
+denied for one interval, restored, and saturated for another interval before storage drains.
+
+The monitor receives all five live mixes, including the interval that storage policy denies and
+the interval lost to recording backpressure. The object-store boundary receives only three accepted
+mixes with their original PCM values and sequences `0`, `1`, and `3`. Its manifest reconstructs
+the room-clock span from sample 0 through sample 10 and reports separate two-sample gaps at offsets
+2 and 6, one rejected chunk, and incomplete status. This demonstrates that storage pressure does
+not become live media pressure, policy denial is not replayed after relaxation, and accepted bytes
+remain exactly the live mix rather than a post-call reconstruction.
+
+Console coverage now also proves that terminal metadata without a stored-object reference remains
+inspectable but is not marked playable and causes no object read. Together with the existing exact
+tenant lookup, forged recording-token rejection, silent-monitor admission, virtual WAVE, web and
+phone egress-acceptance/interruption, writer-failure, and tagged S3-compatible tests, this closes
+the remaining acceptance matrix. Egress acceptance remains evidence of transport submission only;
+the milestone does not claim remote hearing.
+
+The focused matrix passed across the owning applications:
+
+```text
+Call Engine: 16 tests, 0 failures
+Gateway:     11 tests, 0 failures
+Artifacts:   10 tests, 0 failures
+Calls:        1 test, 0 failures
+Persistence: 17 tests, 0 failures
+Console:     15 tests, 0 failures
+```
+
+The new asynchronous composition test also passed 50 consecutive repetitions. The complete root
+suite passed all 845 default tests: MCP 37, Agent Runtime 58, Call Engine 357, Calls 46, Gateway
+224, Artifacts 10, Persistence 32, and Console 81, with each application's tagged network tests
+excluded by default. One earlier root invocation returned nonzero amid the existing high-volume
+media suite without retaining a useful failure line; the captured complete rerun passed, while the
+new test's repeated run found no instability.
+
+Formatting, compilation with warnings as errors, strict Credo over 662 source files, and the
+unused-dependency check pass. Checkpoint 20 supplies the responsive rendered-browser and
+accessibility evidence; Checkpoint 15 supplies the real S3-compatible multipart/read round trip.
+Milestone 19 is complete.
 
 ## Specification review
 

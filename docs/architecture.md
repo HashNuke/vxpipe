@@ -2493,6 +2493,14 @@ Empty recording history and temporary recording-repository failure are distinct,
 This presentation is owned by a dedicated recording component rather than adding storage or media
 logic to the general call-detail component.
 
+The final recording acceptance composition holds an artifact object-write task while the room
+mixer continues serving an ordinary monitor. A denied recording interval and a later bounded-queue
+rejection stay audible to that permitted live monitor but absent from the stored PCM. When storage
+resumes, later accepted audio keeps its original room-clock offset; the terminal manifest exposes
+separate gaps for policy omission and capacity loss. This validates the intended dependency
+direction in operation: the live mixer offers bounded evidence outward, while object latency and
+failure cannot synchronously enter participant or monitor delivery.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped
