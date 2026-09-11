@@ -33,8 +33,8 @@ Two admitted humans exchange live audio without an agent, and a separately autho
 
 - [x] Mix-minus excludes own source; monitor hears only authorized sources, contributes none, and cross-tenant/unauthorized subscriptions fail.
 - [x] Explicit omitted publisher/recipient, empty maps, multiple simultaneous restrictions, leave and transport-loss cases behave differently as specified.
-- [ ] Admit a restrictive participant: no forbidden in-flight audio/transcript crosses the commit barrier; queued output and later relaxation cannot replay that interval.
-- [ ] Live transcript sharing can continue with save_transcripts false; no-save is not no-processing. Stop STT when no permitted consumer remains.
+- [x] Admit a restrictive participant: no forbidden in-flight audio/transcript crosses the commit barrier; queued output and later relaxation cannot replay that interval.
+- [x] Live transcript sharing can continue with save_transcripts false; no-save is not no-processing. Stop STT when no permitted consumer remains.
 - [x] Human-only calls still route/end correctly; slow monitors/storage and process failure do not put mixing into authority or database work.
 - [ ] Fail mixer/transcript/archive policy application during admission/transfer: the bridge
   fails closed without destination media or queued old output crossing under stale policy.
@@ -299,6 +299,15 @@ index after restart: a different policy revision replaces an unfinished old inpu
 merging the two sessions. Focused red/green tests cover both source-revision projection and
 same-index session rollover. A composed room transition still needs to exercise the transcript
 path before its acceptance item is marked complete.
+
+The composed STT room check now starts under `save_transcripts: false` with an explicit live route
+from its caller to its receiver. The provider remains active, accepts audio, and its transcript is
+delivered live. Admitting a third participant whose presence contributes an empty transcript
+allowlist synchronously closes the provider session; later caller audio is dropped without a new
+provider request. Together with the WebRTC queued-audio transition, retained-revision projection,
+and router no-replay-after-relaxation checks, this closes both restrictive-transition and
+live-only-STT acceptance items. The remaining milestone work is authorized silent-monitor
+transport plus explicit fail-closed consumer integration and manual sample verification.
 
 ## Specification review
 

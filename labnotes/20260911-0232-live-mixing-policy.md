@@ -472,3 +472,19 @@
   revision and provider turn index.
 - Both focused red/green tests pass. A composed planned-room transition remains necessary before
   claiming the restrictive transcript acceptance item.
+
+## 2026-09-11 — composed live-only STT transition
+
+- Expanded the planned-room STT check without production changes. The initial room policy denies
+  transcript storage but permits the caller's live transcript to the receiver; attachment keeps
+  the provider transport running, caller audio reaches it, and its partial transcript reaches the
+  connected receiver.
+- Admitting a third participant contributes an explicit empty transcript route map. The admission
+  barrier closes the provider transport before returning, and later caller audio is discarded
+  without opening or sending to another provider session.
+- This room-level composition, the live WebRTC queued-audio transition, the stale-source Event
+  Publisher check, and Transcript Router's existing no-replay-after-relaxation check jointly cover
+  the restrictive-transition and live-only-STT acceptance items. Both are now checked in the
+  milestone.
+- The focused planned-room module passes two tests. Silent-monitor transport, fail-closed concrete
+  consumer integration, broader gates, and manual sample verification remain open.
