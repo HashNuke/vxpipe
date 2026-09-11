@@ -1,0 +1,95 @@
+defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
+  @moduledoc false
+
+  @behaviour Vxpipe.CallEngine.Telephony.OutboundLegConnector
+
+  alias Vxpipe.CallEngine.Telephony.OutboundLegRequest
+  alias Vxpipe.Gateway.Id
+
+  alias Vxpipe.Gateway.Telephony.{
+    LegSupervisor,
+    MediaAdmission,
+    OutgoingLeg,
+    OutgoingLegReference,
+    ServiceRegistry
+  }
+
+  @impl true
+  def connect(options, %OutboundLegRequest{} = request, timeout)
+      when is_list(options) and is_integer(timeout) and timeout > 0 do
+    with {:ok, registry} <- service_registry(options),
+         {:ok, service} <-
+           ServiceRegistry.fetch_for_tenant(registry, request.service_id, request.tenant_id),
+         {:ok, leg_id} <- generate_leg_id(options) do
+      start_leg(options, request, service, leg_id, timeout)
+    else
+      {:error, _reason} -> {:error, :outbound_connection_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :outbound_connection_unavailable}
+  end
+
+  def connect(_options, %OutboundLegRequest{}, _timeout) do
+    {:error, :outbound_connection_unavailable}
+  end
+
+  @impl true
+  def disconnect(_options, %OutgoingLegReference{} = reference) do
+    case DynamicSupervisor.terminate_child(reference.supervisor, reference.leg) do
+      :ok -> :ok
+      {:error, :not_found} -> :ok
+    end
+  catch
+    :exit, _reason -> :ok
+  end
+
+  def disconnect(_options, _reference), do: {:error, :invalid_outbound_leg_reference}
+
+  defp start_leg(options, request, service, leg_id, timeout) do
+    supervisor = Keyword.get(options, :leg_supervisor, LegSupervisor)
+    media_admission = Keyword.get(options, :media_admission, MediaAdmission)
+
+    case LegSupervisor.start_outgoing(
+           supervisor,
+           leg_id,
+           request,
+           service,
+           media_admission
+         ) do
+      {:ok, leg} -> await_leg(supervisor, leg, leg_id, timeout)
+      {:error, _reason} -> {:error, :outbound_connection_unavailable}
+    end
+  end
+
+  defp await_leg(supervisor, leg, leg_id, timeout) do
+    case OutgoingLeg.await(leg, timeout) do
+      :ok ->
+        {:ok, %OutgoingLegReference{leg: leg, leg_id: leg_id, supervisor: supervisor}}
+
+      {:error, _reason} ->
+        _ = DynamicSupervisor.terminate_child(supervisor, leg)
+        {:error, :outbound_connection_unavailable}
+    end
+  end
+
+  defp service_registry(options) do
+    case Keyword.get(options, :service_registry) do
+      %ServiceRegistry{} = registry -> {:ok, registry}
+      _missing -> {:error, :service_registry_unavailable}
+    end
+  end
+
+  defp generate_leg_id(options) do
+    generator = Keyword.get(options, :leg_id, fn -> Id.generate(:telephony_leg) end)
+
+    case generator.() do
+      leg_id when is_binary(leg_id) and byte_size(leg_id) > 0 and byte_size(leg_id) <= 128 ->
+        {:ok, leg_id}
+
+      _invalid ->
+        {:error, :invalid_telephony_leg_id}
+    end
+  rescue
+    _exception -> {:error, :invalid_telephony_leg_id}
+  end
+end

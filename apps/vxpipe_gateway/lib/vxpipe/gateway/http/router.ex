@@ -6,25 +6,22 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   import Plug.Conn
 
   alias Vxpipe.Gateway.HTTP.{CallAdmissions, RTVI, Rooms, TelnyxEvents, TelnyxMedia}
+  alias Vxpipe.Gateway.CallAdmission
 
   @impl true
   def init(options) do
     telephony = options |> Keyword.get(:telephony, []) |> telephony_options!()
+    telephony_events = telephony |> event_options() |> TelnyxEvents.init()
+
+    call_admission =
+      options
+      |> Keyword.get(:call_admission, [])
+      |> configure_call_admission(telephony_events)
 
     %{
-      call_admission: options |> Keyword.get(:call_admission, []) |> CallAdmissions.init(),
+      call_admission: CallAdmissions.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
-      telephony:
-        telephony
-        |> Keyword.take([
-          :enabled,
-          :services,
-          :handler,
-          :media_admission,
-          :clock,
-          :maximum_body_bytes
-        ])
-        |> TelnyxEvents.init(),
+      telephony: telephony_events,
       telephony_media:
         telephony
         |> Keyword.take([
@@ -161,5 +158,36 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       :media_socket,
       :media_socket_timeout_ms
     ])
+  end
+
+  defp event_options(telephony) do
+    Keyword.take(telephony, [
+      :enabled,
+      :services,
+      :handler,
+      :media_admission,
+      :clock,
+      :maximum_body_bytes
+    ])
+  end
+
+  defp configure_call_admission(options, telephony) do
+    {backend, options} = Keyword.pop(options, :backend, {CallAdmission, []})
+
+    backend =
+      case backend do
+        {CallAdmission, backend_options} ->
+          {CallAdmission,
+           CallAdmission.configure_telephony(
+             backend_options,
+             telephony.registry,
+             telephony.media_admission
+           )}
+
+        custom_backend ->
+          custom_backend
+      end
+
+    Keyword.put(options, :backend, backend)
   end
 end

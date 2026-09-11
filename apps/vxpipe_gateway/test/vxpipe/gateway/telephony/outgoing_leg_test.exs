@@ -9,7 +9,10 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     ConfiguredService,
     LegSupervisor,
     MediaAdmission,
-    OutgoingLeg
+    OutgoingLeg,
+    OutgoingLegConnector,
+    OutgoingLegReference,
+    ServiceRegistry
   }
 
   setup do
@@ -118,6 +121,31 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert binding.provider_call_session_id == event.provider_call_session_id
   end
 
+  test "the engine connector resolves the tenant service and starts one supervised leg",
+       context do
+    registry = ServiceRegistry.init!(enabled: true, services: [service_options(self())])
+
+    connector = [
+      leg_id: fn -> context.leg_id end,
+      leg_supervisor: LegSupervisor,
+      media_admission: context.media_admission,
+      service_registry: registry
+    ]
+
+    assert {:ok,
+            %OutgoingLegReference{
+              leg: leg,
+              leg_id: leg_id,
+              supervisor: LegSupervisor
+            }} = OutgoingLegConnector.connect(connector, request(), 1_000)
+
+    assert is_pid(leg)
+    assert leg_id == context.leg_id
+    assert_receive {:test_telephony_dial, %{leg_id: ^leg_id}}
+    refute_receive {:test_telephony_dial, _duplicate}
+    assert {:ok, ^leg} = LegSupervisor.lookup_outgoing(leg_id)
+  end
+
   defp request do
     %OutboundLegRequest{
       tenant_id: "tenantkey1234567",
@@ -134,25 +162,27 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
 
   defp service(observer, overrides \\ []) do
     assert {:ok, service} =
-             ConfiguredService.new(
-               Keyword.merge(
-                 [
-                   id: "telnyx-primary",
-                   ingress_key: "outbound_ingress",
-                   scope: {:tenant, "tenantkey1234567"},
-                   provider: :telnyx,
-                   provider_connection_id: "voice-application-1",
-                   public_key: Base.encode64(:binary.copy(<<1>>, 32)),
-                   api_key: "observer:#{:erlang.pid_to_list(observer)}",
-                   outbound_number: "+15550001000",
-                   public_base_url: "https://voice.example.test/voice",
-                   adapter: Vxpipe.Gateway.TestTelephonyAdapter
-                 ],
-                 overrides
-               )
-             )
+             ConfiguredService.new(service_options(observer, overrides))
 
     service
+  end
+
+  defp service_options(observer, overrides \\ []) do
+    Keyword.merge(
+      [
+        id: "telnyx-primary",
+        ingress_key: "outbound_ingress",
+        scope: {:tenant, "tenantkey1234567"},
+        provider: :telnyx,
+        provider_connection_id: "voice-application-1",
+        public_key: Base.encode64(:binary.copy(<<1>>, 32)),
+        api_key: "observer:#{:erlang.pid_to_list(observer)}",
+        outbound_number: "+15550001000",
+        public_base_url: "https://voice.example.test/voice",
+        adapter: Vxpipe.Gateway.TestTelephonyAdapter
+      ],
+      overrides
+    )
   end
 
   defp outgoing_event(leg_id) do

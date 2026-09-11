@@ -1179,6 +1179,13 @@ preparation; expiry or failed preparation disconnects that handle, while success
 leaves the live transport leg under its transport owner. This boundary lets Gateway implement
 Telnyx today without introducing a Gateway dependency into Call Engine or making Room Authority
 perform network I/O.
+Gateway's default connector resolves the requested service through the tenant-first configured
+registry, generates one opaque internal leg ID, starts the existing temporary outbound owner, and
+waits only within the engine-supplied remaining deadline for its accepted-or-unknown no-retry dial
+result. Both prepared web calls and incoming phone calls receive this connector when the reusable
+Gateway HTTP mount uses its default admission backend; custom admission backends remain untouched.
+The returned reference identifies the exact owner and supervisor for later cleanup without
+exposing carrier credentials or provider command data to Call Engine.
 Gateway consumes that token only after validating an RFC-compliant WebSocket upgrade at
 `GET /api/telephony/telnyx/:ingress_key/media/:token`. A wrong ingress key, expired/reused token,
 or malformed token receives the same not-found response. An invalid upgrade does not consume a

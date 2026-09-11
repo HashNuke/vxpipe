@@ -1299,3 +1299,46 @@ test instance.
 
 Gateway still needs to implement the connector, attach an outbound media session through the
 ordinary engine API, and let only that exact session report media readiness and press-1 acceptance.
+
+## Checkpoint 34: Gateway outbound connector
+
+Gateway now implements Call Engine's outbound-leg connector without moving service selection or
+carrier setup into the engine. The connector resolves the requested service ID tenant-first,
+generates one bounded opaque leg ID, starts the existing temporary outbound owner beneath its
+dynamic supervisor, and waits only for the engine-supplied remaining deadline. An accepted or
+unknown immediate provider result returns the same opaque process/supervisor reference; a known
+failure terminates that exact child and becomes the engine's generic unavailable outcome.
+
+The focused connector test was first red because neither the Gateway connector nor its opaque
+reference existed. After implementation, it proves the tenant-scoped registry selection, one
+generated supervised owner, one dial submission, bounded completion, and live lookup by the same
+internal ID.
+
+The reusable HTTP Router now gives the default Calls admission backend the same immutable service
+registry and media-admission owner used by the Telnyx event/media endpoints. `CallAdmission`
+forwards the resulting connector through both prepared-web and incoming-phone room startup. This
+means either entry mechanism can later request a phone transfer without a second listener or a
+Gateway lookup from Room Authority. A custom admission backend is preserved rather than rewritten.
+The configuration test was red because the default backend had an empty context, then green with
+the exact connector and shared runtime objects.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/telephony_runtime_test.exs \
+  test/vxpipe/gateway/telephony/outgoing_leg_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/call_admission_adapter_test.exs
+# 17 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. Two umbrella attempts exposed unrelated timing-sensitive Call Engine assertions (the already
+recorded startup-readiness race, then a model-request timeout); each unchanged owning file passed
+immediately in isolation. A clean repeat then passed all seven lanes—745 tests with zero
+failures—against the isolated PostgreSQL 17 test instance.
+
+The connector currently tears down its exact local owner on cleanup. Carrier hangup, phone media
+attachment, media-ready reporting, and destination press-1 acceptance remain the next runtime
+checkpoint.

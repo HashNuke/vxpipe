@@ -48,6 +48,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
     %{
       registry: registry,
       handler: handler,
+      media_admission: Keyword.fetch!(options, :media_admission),
       clock: clock,
       maximum_body_bytes: maximum_body_bytes
     }
@@ -174,12 +175,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEvents do
   defp configure_default_backend(handler, _registry, _media_admission), do: handler
 
   defp configure_call_admission({CallAdmission, options}, registry, media_admission) do
-    options =
-      options
-      |> Keyword.put(:service_registry, registry)
-      |> Keyword.put(:media_admission, media_admission)
-
-    {CallAdmission, options}
+    {CallAdmission, CallAdmission.configure_telephony(options, registry, media_admission)}
   end
 
   defp configure_call_admission(backend, _registry, _media_admission), do: backend

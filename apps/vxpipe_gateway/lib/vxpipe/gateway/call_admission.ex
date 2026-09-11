@@ -14,6 +14,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
     IngressIdentity,
     MediaBinding,
     MediaSupervisor,
+    OutgoingLegConnector,
     ServiceRegistry
   }
 
@@ -45,6 +46,18 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   def claim_token(options, secret, expected_scope) do
     Calls.claim_join_token(secret, expected_scope, options)
+  end
+
+  @doc false
+  @spec configure_telephony(keyword(), ServiceRegistry.t(), GenServer.server()) :: keyword()
+  def configure_telephony(options, %ServiceRegistry{} = registry, media_admission)
+      when is_list(options) do
+    connector_options = [service_registry: registry, media_admission: media_admission]
+
+    options
+    |> Keyword.put(:service_registry, registry)
+    |> Keyword.put(:media_admission, media_admission)
+    |> Keyword.put_new(:outbound_leg_connector, {OutgoingLegConnector, connector_options})
   end
 
   def start_call(
@@ -81,7 +94,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   @impl CallIngressBackend
   def start_incoming(options, %TelephonyAdmissionClaim{} = claim) do
-    CallEngine.start_call(claim.call.plan, archive: archive_options(options))
+    CallEngine.start_call(claim.call.plan, call_engine_options(options))
   end
 
   @impl CallIngressBackend
@@ -168,7 +181,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   defp start_prepared_call(options, claim) do
-    case CallEngine.start_call(claim.call.plan, archive: archive_options(options)) do
+    case CallEngine.start_call(claim.call.plan, call_engine_options(options)) do
       {:ok, room} ->
         case CallEngine.participant_snapshot(
                claim.call.tenant_key,
@@ -219,6 +232,14 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   defp archive_options(options), do: Keyword.get(options, :archive, enabled: false)
+
+  defp call_engine_options(options) do
+    [archive: archive_options(options)]
+    |> put_optional(:outbound_leg_connector, Keyword.get(options, :outbound_leg_connector))
+  end
+
+  defp put_optional(options, _key, nil), do: options
+  defp put_optional(options, key, value), do: Keyword.put(options, key, value)
 
   defp telephony_activation_options(options) do
     activation_options = Keyword.take(options, [:media_admission])

@@ -162,6 +162,12 @@ private briefing, exact attached-connection acceptance, policy commit, and sourc
 accepts dial/transfer human participants. A deterministic engine test proves protected-number
 resolution, one outbound request, private briefing and promotion, plus deadline cleanup. Gateway's
 connector implementation and automatic phone media/DTMF control remain pending.
+Gateway now implements that connector with tenant-first configured-service resolution, an opaque
+generated leg ID, the existing temporary leg supervisor, and a bounded wait for the single
+no-retry submission result. Its reusable HTTP mount injects the same registry and media-admission
+owner into the default Calls admission path for both browser-started and incoming-phone rooms;
+custom backends are not rewritten. The returned exact process/supervisor reference is opaque to
+Call Engine. Automatic phone media attachment, DTMF acceptance, and provider hangup remain pending.
 
 ## Specification review
 
