@@ -52,7 +52,11 @@ defmodule Vxpipe.Gateway.CallAdmission do
   @spec configure_telephony(keyword(), ServiceRegistry.t(), GenServer.server()) :: keyword()
   def configure_telephony(options, %ServiceRegistry{} = registry, media_admission)
       when is_list(options) do
-    connector_options = [service_registry: registry, media_admission: media_admission]
+    connector_options = [
+      service_registry: registry,
+      media_admission: media_admission,
+      media_supervisor: Keyword.get(options, :telephony_media_supervisor, MediaSupervisor)
+    ]
 
     options
     |> Keyword.put(:service_registry, registry)

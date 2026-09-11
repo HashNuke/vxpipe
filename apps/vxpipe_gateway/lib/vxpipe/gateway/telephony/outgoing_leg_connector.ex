@@ -48,13 +48,15 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
   defp start_leg(options, request, service, leg_id, timeout) do
     supervisor = Keyword.get(options, :leg_supervisor, LegSupervisor)
     media_admission = Keyword.get(options, :media_admission, MediaAdmission)
+    runtime_options = Keyword.take(options, [:media_supervisor])
 
     case LegSupervisor.start_outgoing(
            supervisor,
            leg_id,
            request,
            service,
-           media_admission
+           media_admission,
+           runtime_options
          ) do
       {:ok, leg} -> await_leg(supervisor, leg, leg_id, timeout)
       {:error, _reason} -> {:error, :outbound_connection_unavailable}

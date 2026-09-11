@@ -29,7 +29,7 @@ webhook/media ingress; the development tailnet URL is not assumed publicly reach
 
 - [x] Define/test the common telephony adapter contract with fake receive/dial/answer/media/DTMF/AMD/end events before vendor code.
 - [x] Add Telnyx configured service resolution, verified ingress and provider-leg correlation through Calls/Gateway adapter boundaries.
-- [ ] Implement permitted outbound dialing, media normalization and private briefing/press-1 acceptance.
+- [x] Implement permitted outbound dialing, media normalization and private briefing/press-1 acceptance.
 - [ ] Integrate optional AMD and exact-leg failure/cleanup without changing transfer or definition semantics.
 - [ ] Add fixtures for vendor webhook/media authentication and a separate tagged real-provider lane using authorized test endpoints.
 
@@ -167,7 +167,18 @@ generated leg ID, the existing temporary leg supervisor, and a bounded wait for 
 no-retry submission result. Its reusable HTTP mount injects the same registry and media-admission
 owner into the default Calls admission path for both browser-started and incoming-phone rooms;
 custom backends are not rewritten. The returned exact process/supervisor reference is opaque to
-Call Engine. Automatic phone media attachment, DTMF acceptance, and provider hangup remain pending.
+Call Engine. Carrier lifecycle handling remains pending.
+The outbound owner now handles the authenticated media socket as the transport half of the existing
+human-transfer state machine. A valid media start creates the ordinary supervised telephony media
+subtree and attaches the destination in `transfer_preparation` mode, where only direct private
+playout exists. The exact attached media-session process automatically reports media readiness and
+can report press-1 acceptance; the webhook process, caller, and another process are rejected by the
+existing room connection-ownership check. Completion of both acceptance and the private briefing
+lets the room commit its privacy barrier and promote that same session, which only then starts the
+Membrane room ingress and mix-minus egress pipelines. A deterministic full-seam test covers dial,
+private speech, exact-socket DTMF, delayed completion, promotion, and active destination state.
+Carrier hangup, AMD outcomes, deterministic whole-call harness coverage, and authorized vendor
+verification remain pending.
 
 ## Specification review
 

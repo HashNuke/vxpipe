@@ -1186,6 +1186,21 @@ result. Both prepared web calls and incoming phone calls receive this connector 
 Gateway HTTP mount uses its default admission backend; custom admission backends remain untouched.
 The returned reference identifies the exact owner and supervisor for later cleanup without
 exposing carrier credentials or provider command data to Call Engine.
+When the outbound media socket supplies a valid start event, that same leg owner creates the
+ordinary supervised telephony media subtree using the actor and destination identity already
+pinned in the outbound request. The connection first attaches with `transfer_preparation`
+admission: its direct-output Membrane pipeline can play the private briefing, but no room ingress
+or room-mix egress exists yet. The attached media-session process reports readiness and press-1
+acceptance because it is the exact process Room Authority recorded as the connection owner; the
+dial owner, webhook process, caller, source agent, and any other socket cannot substitute for it.
+Duplicate control from the same session is idempotent for that attempt.
+
+After the private briefing has completed and the destination has accepted, the room applies the
+privacy barrier, commits the human transfer, and sends the promoted attachment to that same media
+session. Only then does the session start the provider-specific Membrane room-ingress and
+room-egress pipelines with the promoted policy-bearing attachment. Thus private preparation cannot
+publish destination audio or hear the room mix, and the carrier-specific leg never bypasses the
+room mixer or its policy enforcement during promotion.
 Gateway consumes that token only after validating an RFC-compliant WebSocket upgrade at
 `GET /api/telephony/telnyx/:ingress_key/media/:token`. A wrong ingress key, expired/reused token,
 or malformed token receives the same not-found response. An invalid upgrade does not consume a

@@ -25,6 +25,9 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyRuntimeTest do
              Keyword.fetch!(connector_options, :service_registry)
 
     assert Keyword.fetch!(connector_options, :media_admission) == MediaAdmission
+
+    assert Keyword.fetch!(connector_options, :media_supervisor) ==
+             Vxpipe.Gateway.Telephony.MediaSupervisor
   end
 
   defp service do

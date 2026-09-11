@@ -69,5 +69,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
       )
   end
 
+  @spec matches_event?(t(), Vxpipe.CallEngine.Telephony.Event.t()) :: boolean()
+  def matches_event?(%__MODULE__{} = binding, %Vxpipe.CallEngine.Telephony.Event{} = event) do
+    Vxpipe.CallEngine.Telephony.Event.valid?(event) and event.provider == binding.provider and
+      event.provider_connection_id == binding.provider_connection_id and
+      event.provider_call_control_id == binding.provider_call_control_id and
+      event.provider_call_leg_id == binding.provider_call_leg_id and
+      event.provider_call_session_id == binding.provider_call_session_id
+  end
+
   defp present?(value), do: is_binary(value) and value != ""
 end

@@ -3,12 +3,15 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.Command.ParticipantTransferControl
+  alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket}
 
   alias Vxpipe.Gateway.Telephony.{
     IncomingAudio,
     MediaBinding,
+    MediaRouting,
     MediaSessionSetup
   }
 
@@ -30,6 +33,12 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   @spec handle_event(pid(), pid(), Event.t()) :: :ok | {:error, term()}
   def handle_event(session, source, %Event{} = event) do
     safe_call(session, {:event, source, event})
+  end
+
+  @spec report_transfer_control(pid(), pid(), ParticipantTransferControl.action()) ::
+          :ok | {:error, term()}
+  def report_transfer_control(session, source, action) when action in [:accept, :media_ready] do
+    safe_call(session, {:transfer_control, source, action})
   end
 
   @spec snapshot(pid()) :: {:ok, map()} | {:error, term()}
@@ -54,6 +63,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
            binding: binding,
            connection_id: Keyword.fetch!(options, :connection_id),
            monitors: monitors,
+           reported_transfer_controls: MapSet.new(),
            socket_owner: socket_owner,
            stream_id: Keyword.fetch!(options, :stream_id)
          })}
@@ -80,6 +90,26 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   def handle_call({:event, source, _event}, _from, %{socket_owner: socket_owner} = state)
       when source != socket_owner do
     {:reply, {:error, :wrong_media_source}, state}
+  end
+
+  def handle_call(
+        {:transfer_control, source, _action},
+        _from,
+        %{socket_owner: socket_owner} = state
+      )
+      when source != socket_owner do
+    {:reply, {:error, :wrong_media_source}, state}
+  end
+
+  def handle_call(
+        {:transfer_control, source, action},
+        _from,
+        %{socket_owner: source} = state
+      ) do
+    case transfer_control_outcome(action, state) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
   end
 
   def handle_call(
@@ -114,6 +144,32 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
     {:stop, :media_unavailable, state}
   end
 
+  def handle_info(
+        {:vxpipe_transfer_main_media, attempt_id,
+         %ConnectionAttachment{admission: :main} = attachment},
+        %{
+          attachment: %ConnectionAttachment{
+            admission: :transfer_preparation,
+            transfer_attempt_id: attempt_id
+          }
+        } = state
+      ) do
+    case MediaRouting.start(attachment, routing_options(state)) do
+      {:ok, routing} ->
+        state = %{
+          state
+          | attachment: attachment,
+            room_audio_egress: routing.room_audio_egress,
+            room_audio_ingress: routing.room_audio_ingress
+        }
+
+        {:noreply, state}
+
+      {:error, _reason} ->
+        {:stop, :media_unavailable, state}
+    end
+  end
+
   def handle_info({:vxpipe_event, _event}, state), do: {:noreply, state}
   def handle_info(_message, state), do: {:noreply, state}
 
@@ -138,6 +194,57 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   defp normalize_delivery(:ok), do: :ok
   defp normalize_delivery(:drop), do: :ok
   defp normalize_delivery(:unavailable), do: {:error, :media_unavailable}
+
+  defp transfer_control_command(state, attempt_id, action) do
+    ParticipantTransferControl.new(
+      tenant_id: state.binding.tenant_id,
+      actor_id: state.actor_id,
+      room_id: state.binding.room_id,
+      incarnation_id: state.binding.incarnation_id,
+      participant_id: state.binding.participant_id,
+      connection_id: state.connection_id,
+      attempt_id: attempt_id,
+      action: action,
+      deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+    )
+  end
+
+  defp transfer_control_outcome(action, state) do
+    cond do
+      MapSet.member?(state.reported_transfer_controls, action) ->
+        {:ok, state}
+
+      match?(
+        %ConnectionAttachment{admission: :transfer_preparation},
+        state.attachment
+      ) ->
+        submit_transfer_control(action, state)
+
+      true ->
+        {:error, :transfer_not_pending}
+    end
+  end
+
+  defp submit_transfer_control(action, state) do
+    with {:ok, command} <-
+           transfer_control_command(state, state.attachment.transfer_attempt_id, action),
+         :ok <- state.engine.participant_transfer_control(command) do
+      reported = MapSet.put(state.reported_transfer_controls, action)
+      {:ok, %{state | reported_transfer_controls: reported}}
+    end
+  end
+
+  defp routing_options(state) do
+    [
+      child_supervisor: state.child_supervisor,
+      connection_id: state.connection_id,
+      engine: state.engine,
+      identity: state.identity,
+      media_pipelines: state.media_pipelines,
+      socket_owner: state.socket_owner,
+      stream_id: state.stream_id
+    ]
+  end
 
   defp safe_call(server, message) do
     GenServer.call(server, message, @call_timeout)

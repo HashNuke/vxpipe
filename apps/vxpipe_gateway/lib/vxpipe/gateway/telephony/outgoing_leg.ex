@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   alias Vxpipe.Gateway.Telephony.{
     MediaAdmission,
     MediaBinding,
+    MediaSupervisor,
     OutgoingLegDialer,
     OutgoingLegIdentity
   }
@@ -50,6 +51,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
        request: Keyword.fetch!(options, :request),
        service: Keyword.fetch!(options, :service),
        media_admission: Keyword.fetch!(options, :media_admission),
+       media_supervisor: Keyword.get(options, :media_supervisor, MediaSupervisor),
        binding: nil,
        result: nil,
        status: :starting,
@@ -123,6 +125,79 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
       {:ok, binding} when binding == state.binding -> {:reply, :ok, state}
       _mismatch -> {:reply, {:error, :telephony_leg_mismatch}, state}
     end
+  end
+
+  def handle_call(
+        {:event, %Event{kind: :media_started, stream_id: stream_id} = event},
+        {source, _tag},
+        %{binding: %MediaBinding{} = binding, status: :accepted} = state
+      ) do
+    result =
+      with true <- MediaBinding.matches_event?(binding, event),
+           {:ok, _connection} <-
+             MediaSupervisor.start_outbound_session(
+               state.media_supervisor,
+               state.request,
+               binding,
+               source,
+               stream_id
+             ),
+           :ok <-
+             MediaSupervisor.report_transfer_control(
+               binding.client_state_leg_id,
+               source,
+               :media_ready
+             ) do
+        :ok
+      else
+        false -> {:error, :telephony_leg_mismatch}
+        {:error, reason} -> {:error, reason}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call(
+        {:event, %Event{kind: :media} = event},
+        {source, _tag},
+        %{binding: %MediaBinding{} = binding, status: :accepted} = state
+      ) do
+    result =
+      if MediaBinding.matches_event?(binding, event) do
+        MediaSupervisor.handle_event(binding.client_state_leg_id, source, event)
+      else
+        {:error, :telephony_leg_mismatch}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call(
+        {:event, %Event{kind: :dtmf, digit: "1"} = event},
+        {source, _tag},
+        %{binding: %MediaBinding{} = binding, status: :accepted} = state
+      ) do
+    result =
+      if MediaBinding.matches_event?(binding, event) do
+        MediaSupervisor.report_transfer_control(binding.client_state_leg_id, source, :accept)
+      else
+        {:error, :telephony_leg_mismatch}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call(
+        {:event, %Event{kind: :dtmf} = event},
+        _from,
+        %{binding: %MediaBinding{} = binding, status: :accepted} = state
+      ) do
+    result =
+      if MediaBinding.matches_event?(binding, event),
+        do: :ok,
+        else: {:error, :telephony_leg_mismatch}
+
+    {:reply, result, state}
   end
 
   def handle_call({:event, _event}, _from, state) do

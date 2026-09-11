@@ -1342,3 +1342,53 @@ failures—against the isolated PostgreSQL 17 test instance.
 The connector currently tears down its exact local owner on cleanup. Carrier hangup, phone media
 attachment, media-ready reporting, and destination press-1 acceptance remain the next runtime
 checkpoint.
+
+## Checkpoint 35: outbound phone media and press-1 promotion
+
+The full Gateway-to-engine transfer seam was first red after an accepted dial because the outbound
+leg rejected the carrier's media-start event as unsupported. The new test uses a distinct media
+socket process so the process identity involved in transfer authorization is observable rather
+than mocked away.
+
+Outbound media now reuses the ordinary temporary telephony media subtree. Common session setup
+accepts the actor ID pinned in either an incoming claim or an outbound request, and a separate
+`MediaRouting` module owns room ingress/egress startup. The initial outbound attachment is a private
+`transfer_preparation` connection: its direct Telnyx Membrane output is live for the destination
+briefing, while room ingress and room egress remain absent. No FFmpeg process or dependency is
+involved.
+
+The media session automatically reports `media_ready` after the exact socket starts. A `1` DTMF
+event from that same socket reports acceptance; the focused test also proves that the test process
+cannot submit acceptance for the socket. Both controls go through the session because it is the
+process stored by Room Authority as the connection owner. Repeated control from that session is
+idempotent for the attempt.
+
+The transfer remains pending after press 1 until private TTS playout is acknowledged complete. The
+room then commits its existing privacy barrier and sends the promoted attachment back to the same
+session. Only at that point does `MediaRouting` start the Telnyx Membrane Opus ingress and mix-minus
+egress pipelines. The test observes the encoded private audio on the destination socket, the
+completed transfer result, an active destination participant, and a main attachment with both room
+pipelines.
+
+Red evidence:
+
+```text
+mix test apps/vxpipe_gateway/test/vxpipe/gateway/telephony/outbound_phone_transfer_test.exs
+# 1 test, 1 failure: {:error, :telephony_event_not_supported}
+```
+
+Focused green evidence:
+
+```text
+mix test apps/vxpipe_gateway/test/vxpipe/gateway/telephony/outbound_phone_transfer_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/media_session_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/outgoing_leg_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/http/telephony_runtime_test.exs
+# 8 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency, and complete
+umbrella tests pass. The clean umbrella run completed all seven application lanes with zero
+failures. A subsequent Gateway-only stress repeat exposed the previously recorded 100 ms
+`RoomAudioEgressTest` teardown assertion; its unchanged six-test owning file immediately passed at
+the same seed. Carrier lifecycle/AMD cleanup remains the next checkpoint.

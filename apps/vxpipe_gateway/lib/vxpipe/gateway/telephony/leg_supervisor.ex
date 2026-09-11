@@ -9,6 +9,7 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
     ConfiguredService,
     IngressIdentity,
     Leg,
+    MediaSupervisor,
     OutgoingLeg
   }
 
@@ -32,18 +33,41 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
   end
 
   @spec start_outgoing(
+          String.t(),
+          OutboundLegRequest.t(),
+          ConfiguredService.t(),
+          GenServer.server()
+        ) :: {:ok, pid()} | {:error, term()}
+  def start_outgoing(leg_id, request, service, media_admission) do
+    start_outgoing(__MODULE__, leg_id, request, service, media_admission, [])
+  end
+
+  @spec start_outgoing(
           GenServer.server(),
           String.t(),
           OutboundLegRequest.t(),
           ConfiguredService.t(),
           GenServer.server()
         ) :: {:ok, pid()} | {:error, term()}
-  def start_outgoing(supervisor \\ __MODULE__, leg_id, request, service, media_admission) do
+  def start_outgoing(supervisor, leg_id, request, service, media_admission) do
+    start_outgoing(supervisor, leg_id, request, service, media_admission, [])
+  end
+
+  @spec start_outgoing(
+          GenServer.server(),
+          String.t(),
+          OutboundLegRequest.t(),
+          ConfiguredService.t(),
+          GenServer.server(),
+          keyword()
+        ) :: {:ok, pid()} | {:error, term()}
+  def start_outgoing(supervisor, leg_id, request, service, media_admission, runtime_options) do
     options = [
       leg_id: leg_id,
       request: request,
       service: service,
-      media_admission: media_admission
+      media_admission: media_admission,
+      media_supervisor: Keyword.get(runtime_options, :media_supervisor, MediaSupervisor)
     ]
 
     case DynamicSupervisor.start_child(supervisor, {OutgoingLeg, options}) do
