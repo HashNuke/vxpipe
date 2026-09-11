@@ -344,3 +344,40 @@ tests across all seven applications, and the unused-dependency check.
 
 Private-transfer parity and tagged live-provider verification remain. This checkpoint does not
 claim either one.
+
+## Checkpoint 8: provider-paired outbound transfer scenario
+
+The existing outbound private-transfer test was hard-coded to one configured carrier even though
+the production orchestration already accepts the common telephony contract. The test body was first
+put behind a provider-shaped scenario entry while retaining its original case; that mechanical
+step stayed green with two tests.
+
+A Twilio case was then added with its real identity shape: Account SID as configured connection,
+Call SID as control and leg, no provider session ID, and a pinned Stream SID. The first run failed
+at the intended test boundary. The private briefing reached the Twilio PCMU Membrane egress, but the
+shared fake socket had no clause for the Twilio delivery message and terminated. Adding Twilio
+media/clear observation to that fake allowed the unchanged transfer assertions to pass.
+
+The scenario now covers both success and configured machine detection for Telnyx and Twilio. The
+success path proves one dial, private destination briefing, rejection of acceptance from the wrong
+process, destination press-1, no commit before briefing completion, one tool completion, main-media
+promotion, and harmless repeated DTMF. The machine path proves exact-leg termination, tool failure,
+source retention, and no duplicate end command.
+
+To avoid growing the test into another fixture owner, call-plan compilation, connector/service
+construction, commands, normalized events, briefing completion, and identifiers moved to the
+cohesive `PhoneTransferScenario` test-support module. The assertion module fell from 613 to 362
+lines.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/outbound_phone_transfer_test.exs --max-cases 1
+# initial provider-paired run: 3 tests, 1 failure (Twilio message unsupported by fake socket)
+# final run after success + machine parity and refactor: 4 tests, 0 failures
+```
+
+The complete Gateway lane passes 220 tests. Root formatting, warnings-as-errors compilation, strict
+Credo over 601 source files, all 801 umbrella tests, and the unused-dependency check pass.
+
+This is deterministic outbound-transfer parity. It is not the signed Twilio inbound-to-outbound
+harness and is not live-provider evidence.

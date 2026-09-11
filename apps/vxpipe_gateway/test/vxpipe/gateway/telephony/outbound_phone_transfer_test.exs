@@ -5,30 +5,23 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   alias Vxpipe.CallEngine
 
   alias Vxpipe.CallEngine.{
-    CallDefinition,
-    CallInvocation,
     ConnectionAttachment,
-    DefinitionCompiler,
     TestAudioOutputSink,
     TestSelectiveAgentRuntimeModelProvider,
     TestTextToSpeechTransport
   }
 
-  alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallFailed}
   alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
-  alias Vxpipe.CallEngine.Telephony.{EndLeg, Event, LegReference}
+  alias Vxpipe.CallEngine.Telephony.{EndLeg, LegReference}
 
   alias Vxpipe.Gateway.Telephony.{
     LegSupervisor,
-    MediaAdmission,
     MediaSupervisor,
-    OutgoingLeg,
-    OutgoingLegConnector,
-    ServiceRegistry
+    OutgoingLeg
   }
 
-  alias Vxpipe.Gateway.TestTelephonySocket
+  alias Vxpipe.Gateway.{PhoneTransferScenario, TestTelephonySocket}
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -69,24 +62,21 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   end
 
   test "the exact outbound phone leg accepts with press 1 after its private briefing" do
-    plan = compile_plan()
+    assert_private_transfer(:telnyx)
+  end
+
+  test "Twilio runs the same private press-1 transfer contract" do
+    assert_private_transfer(:twilio)
+  end
+
+  defp assert_private_transfer(provider) when provider in [:telnyx, :twilio] do
+    plan = PhoneTransferScenario.compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    leg_id = unique_id("outbound-leg")
+    leg_id = PhoneTransferScenario.unique_id("outbound-leg")
     on_exit(fn -> LegSupervisor.stop_outgoing(leg_id) end)
 
-    registry =
-      ServiceRegistry.init!(enabled: true, services: [service(plan.tenant_id, self())])
-
-    connector =
-      {OutgoingLegConnector,
-       [
-         leg_id: fn -> leg_id end,
-         leg_supervisor: LegSupervisor,
-         media_admission: MediaAdmission,
-         media_supervisor: MediaSupervisor,
-         service_registry: registry
-       ]}
+    connector = PhoneTransferScenario.connector(provider, plan.tenant_id, self(), leg_id)
 
     assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
     assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
@@ -95,11 +85,17 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :outbound_phone_caller_sink)
 
     assert {:ok, %ConnectionAttachment{admission: :main}} =
-             attach(plan, room, caller, "caller-connection", caller_sink)
+             PhoneTransferScenario.attach(
+               plan,
+               room,
+               caller,
+               "caller-connection",
+               caller_sink
+             )
 
     begin_transfer(plan, room, caller)
 
-    assert_receive {:test_telephony_dial, %{leg_id: ^leg_id}}, 2_000
+    assert_dial(provider, leg_id)
     assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
     assert {:ok, leg} = LegSupervisor.lookup_outgoing(leg_id)
 
@@ -107,7 +103,11 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     assert :ok =
              TestTelephonySocket.run(socket, fn ->
-               OutgoingLeg.dispatch(leg, media_started_event(leg_id), 5_000)
+               OutgoingLeg.dispatch(
+                 leg,
+                 PhoneTransferScenario.media_started_event(provider, leg_id),
+                 5_000
+               )
              end)
 
     assert {:ok,
@@ -131,18 +131,26 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
     assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
 
     assert {:error, :wrong_media_source} =
-             OutgoingLeg.dispatch(leg, dtmf_event(leg_id, "1"), 5_000)
+             OutgoingLeg.dispatch(
+               leg,
+               PhoneTransferScenario.dtmf_event(provider, leg_id, "1"),
+               5_000
+             )
 
     assert :ok =
              TestTelephonySocket.run(socket, fn ->
-               OutgoingLeg.dispatch(leg, dtmf_event(leg_id, "1"), 5_000)
+               OutgoingLeg.dispatch(
+                 leg,
+                 PhoneTransferScenario.dtmf_event(provider, leg_id, "1"),
+                 5_000
+               )
              end)
 
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phone-transfer"}}, 50
 
-    finish_private_briefing(briefing_tts)
+    PhoneTransferScenario.finish_private_briefing(briefing_tts)
 
-    assert_receive {:test_telnyx_socket_send, message}, 2_000
+    message = receive_media(provider)
     assert %{"event" => "media"} = JSON.decode!(message)
 
     assert_receive {:vxpipe_event,
@@ -174,7 +182,11 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     assert :ok =
              TestTelephonySocket.run(socket, fn ->
-               OutgoingLeg.dispatch(leg, dtmf_event(leg_id, "1"), 5_000)
+               OutgoingLeg.dispatch(
+                 leg,
+                 PhoneTransferScenario.dtmf_event(provider, leg_id, "1"),
+                 5_000
+               )
              end)
 
     assert {:ok, snapshot} =
@@ -184,27 +196,28 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   end
 
   test "a configured machine result ends only the attempted destination and retains the source" do
-    plan = compile_plan()
+    assert_machine_transfer_failure(:telnyx)
+  end
+
+  test "Twilio machine detection ends only the attempted destination and retains the source" do
+    assert_machine_transfer_failure(:twilio)
+  end
+
+  defp assert_machine_transfer_failure(provider) when provider in [:telnyx, :twilio] do
+    plan = PhoneTransferScenario.compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
-    leg_id = unique_id("outbound-machine-leg")
+    leg_id = PhoneTransferScenario.unique_id("outbound-machine-leg")
     on_exit(fn -> LegSupervisor.stop_outgoing(leg_id) end)
 
-    registry =
-      ServiceRegistry.init!(
-        enabled: true,
-        services: [service(plan.tenant_id, self(), answering_machine_detection: :detect)]
-      )
-
     connector =
-      {OutgoingLegConnector,
-       [
-         leg_id: fn -> leg_id end,
-         leg_supervisor: LegSupervisor,
-         media_admission: MediaAdmission,
-         media_supervisor: MediaSupervisor,
-         service_registry: registry
-       ]}
+      PhoneTransferScenario.connector(
+        provider,
+        plan.tenant_id,
+        self(),
+        leg_id,
+        answering_machine_detection: :detect
+      )
 
     assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
     assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
@@ -213,26 +226,30 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :machine_caller_sink)
 
     assert {:ok, %ConnectionAttachment{admission: :main}} =
-             attach(plan, room, caller, "caller-connection", caller_sink)
+             PhoneTransferScenario.attach(
+               plan,
+               room,
+               caller,
+               "caller-connection",
+               caller_sink
+             )
 
     begin_transfer(plan, room, caller)
 
-    assert_receive {:test_telephony_dial,
-                    %{leg_id: ^leg_id, answering_machine_detection: :detect}},
-                   2_000
+    assert_detecting_dial(provider, leg_id)
 
     assert_receive {:test_tts_transport_started, _briefing_tts, _connection}, 2_000
     assert {:ok, leg} = LegSupervisor.lookup_outgoing(leg_id)
     monitor = Process.monitor(leg)
 
-    assert :ok = OutgoingLeg.dispatch(leg, answering_machine_event(), 1_000)
+    assert :ok =
+             OutgoingLeg.dispatch(
+               leg,
+               PhoneTransferScenario.answering_machine_event(provider),
+               1_000
+             )
 
-    assert_receive {:test_telephony_end_leg,
-                    %EndLeg{
-                      leg: %LegReference{leg_id: ^leg_id},
-                      reason: :answering_machine
-                    }},
-                   2_000
+    assert_machine_end(provider, leg_id)
 
     assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 2_000
 
@@ -248,95 +265,18 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
              )
 
     assert source.participant_id == reception.participant_id
-    refute_receive {:test_telephony_end_leg, _duplicate}
-  end
-
-  defp compile_plan do
-    assert {:ok, definition} =
-             CallDefinition.new(
-               %{
-                 schema_version: CallDefinition.schema_version(),
-                 entry_caller: "caller",
-                 entry_receiver: "reception",
-                 defaults: %{capabilities: %{}},
-                 participants: %{
-                   "caller" => %{
-                     type: "human",
-                     connection: %{
-                       service: "web",
-                       mode: "receive",
-                       admission: "start_call"
-                     }
-                   },
-                   "reception" => %{
-                     type: "agent",
-                     prompt: "Route callers safely.",
-                     capabilities: %{
-                       model_inference: "test-model",
-                       text_to_speech: "test-voice"
-                     },
-                     tools: %{},
-                     transfers: ["human-support"]
-                   },
-                   "human-support" => %{
-                     type: "human",
-                     description: "A human support specialist",
-                     connection: %{
-                       service: "primary-phone",
-                       mode: "dial",
-                       number: "+15550001001"
-                     },
-                     transfer_notice: "This call is recorded."
-                   }
-                 },
-                 transfer_policy: %{attempt_timeout_ms: 10_000},
-                 limits: %{max_duration_ms: 60_000}
-               },
-               resource_id: "outbound-phone-transfer-definition",
-               revision: 1
-             )
-
-    assert {:ok, invocation} =
-             CallInvocation.new(
-               %{
-                 call_definition: %{id: "outbound-phone-transfer-definition", revision: 1},
-                 initial_variables: %{},
-                 transport: %{type: "web"}
-               },
-               tenant_id: "tenant-outbound-phone",
-               actor_id: "actor-outbound-phone",
-               call_id: unique_id("call"),
-               room_id: unique_id("room")
-             )
-
-    assert {:ok, plan} =
-             DefinitionCompiler.compile(definition, invocation, %{
-               capability_profiles: %{
-                 "test-model" => %{
-                   kind: :model_inference,
-                   provider: :req_llm,
-                   options: %{model: "test:scripted"}
-                 },
-                 "test-voice" => %{
-                   kind: :text_to_speech,
-                   provider: FluxTextToSpeech,
-                   options: %{
-                     model: "flux-test-voice",
-                     encoding: :linear16,
-                     sample_rate: 48_000
-                   }
-                 }
-               },
-               host_tools: %{}
-             })
-
-    plan
+    refute_duplicate_end(provider)
   end
 
   defp begin_transfer(plan, room, caller) do
     assert :ok =
              CallEngine.send_text(
-               send_command(plan, room, caller, "Please connect me to human support.")
+               PhoneTransferScenario.send_command(
+                 plan,
+                 room,
+                 caller,
+                 "Please connect me to human support."
+               )
              )
 
     assert_receive {:test_agent_runtime_stream, source_provider, _request}, 2_000
@@ -355,113 +295,54 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
   end
 
-  defp attach(plan, room, participant, connection_id, output_sink) do
-    assert {:ok, command} =
-             AttachConnection.new(
-               tenant_id: plan.tenant_id,
-               actor_id: plan.actor_id,
-               room_id: plan.room_id,
-               incarnation_id: room.incarnation_id,
-               participant_id: participant.participant_id,
-               connection_id: connection_id,
-               deadline: future_deadline()
-             )
-
-    CallEngine.attach_connection(command, output_sink)
+  defp assert_dial(:telnyx, leg_id) do
+    assert_receive {:test_telephony_dial, %{leg_id: ^leg_id}}, 2_000
   end
 
-  defp send_command(plan, room, caller, content) do
-    assert {:ok, command} =
-             SendText.new(
-               tenant_id: plan.tenant_id,
-               actor_id: plan.actor_id,
-               room_id: plan.room_id,
-               incarnation_id: room.incarnation_id,
-               participant_id: caller.participant_id,
-               connection_id: "caller-connection",
-               correlation_id: unique_id("turn"),
-               content: content,
-               deadline: future_deadline()
-             )
-
-    command
+  defp assert_dial(:twilio, leg_id) do
+    assert_receive {:test_twilio_dial, %{leg_id: ^leg_id}}, 2_000
   end
 
-  defp media_started_event(leg_id) do
-    %Event{
-      kind: :media_started,
-      provider: :telnyx,
-      provider_call_control_id: "outbound-call-control",
-      provider_connection_id: "voice-application-1",
-      provider_call_leg_id: "outbound-call-leg",
-      provider_call_session_id: "outbound-call-session",
-      leg_id: leg_id,
-      stream_id: "outbound-stream"
-    }
+  defp assert_detecting_dial(:telnyx, leg_id) do
+    assert_receive {:test_telephony_dial,
+                    %{leg_id: ^leg_id, answering_machine_detection: :detect}},
+                   2_000
   end
 
-  defp dtmf_event(leg_id, digit) do
-    %Event{
-      kind: :dtmf,
-      provider: :telnyx,
-      provider_event_id: unique_id("event"),
-      provider_call_control_id: "outbound-call-control",
-      provider_connection_id: "voice-application-1",
-      provider_call_leg_id: "outbound-call-leg",
-      provider_call_session_id: "outbound-call-session",
-      leg_id: leg_id,
-      digit: digit,
-      occurred_at: DateTime.utc_now()
-    }
+  defp assert_detecting_dial(:twilio, leg_id) do
+    assert_receive {:test_twilio_dial, %{leg_id: ^leg_id, answering_machine_detection: :detect}},
+                   2_000
   end
 
-  defp answering_machine_event do
-    %Event{
-      kind: :answering_machine,
-      provider: :telnyx,
-      provider_event_id: unique_id("event"),
-      provider_call_control_id: "outbound-call-control",
-      provider_connection_id: "voice-application-1",
-      provider_call_leg_id: "outbound-call-leg",
-      provider_call_session_id: "outbound-call-session",
-      answering_machine: :machine,
-      occurred_at: DateTime.utc_now()
-    }
+  defp assert_machine_end(:telnyx, leg_id) do
+    assert_receive {:test_telephony_end_leg,
+                    %EndLeg{
+                      leg: %LegReference{leg_id: ^leg_id},
+                      reason: :answering_machine
+                    }},
+                   2_000
   end
 
-  defp finish_private_briefing(briefing_tts) do
-    TestTextToSpeechTransport.deliver_control(
-      briefing_tts,
-      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"private-briefing"})
-    )
-
-    TestTextToSpeechTransport.deliver_audio(
-      briefing_tts,
-      :binary.copy(<<1_000::little-signed-16>>, 960)
-    )
-
-    TestTextToSpeechTransport.deliver_control(
-      briefing_tts,
-      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"private-briefing"})
-    )
+  defp assert_machine_end(:twilio, leg_id) do
+    assert_receive {:test_twilio_end_leg,
+                    %EndLeg{
+                      leg: %LegReference{leg_id: ^leg_id},
+                      reason: :answering_machine
+                    }},
+                   2_000
   end
 
-  defp service(tenant_id, observer, overrides \\ []) do
-    Keyword.merge(
-      [
-        id: "primary-phone",
-        ingress_key: "outbound_ingress",
-        scope: {:tenant, tenant_id},
-        provider: :telnyx,
-        provider_connection_id: "voice-application-1",
-        public_key: Base.encode64(:binary.copy(<<1>>, 32)),
-        api_key: "observer:#{:erlang.pid_to_list(observer)}",
-        outbound_number: "+15550001000",
-        public_base_url: "https://voice.example.test/voice",
-        adapter: Vxpipe.Gateway.TestTelephonyAdapter
-      ],
-      overrides
-    )
+  defp refute_duplicate_end(:telnyx), do: refute_receive({:test_telephony_end_leg, _duplicate})
+  defp refute_duplicate_end(:twilio), do: refute_receive({:test_twilio_end_leg, _duplicate})
+
+  defp receive_media(:telnyx) do
+    assert_receive {:test_telnyx_socket_send, message}, 2_000
+    message
+  end
+
+  defp receive_media(:twilio) do
+    assert_receive {:test_twilio_socket_send, message}, 2_000
+    message
   end
 
   defp assert_eventually(assertion, attempts \\ 50)
@@ -478,10 +359,4 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
   end
 
   defp assert_eventually(_assertion, 0), do: flunk("condition did not become true")
-
-  defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
-
-  defp unique_id(prefix) do
-    "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
-  end
 end

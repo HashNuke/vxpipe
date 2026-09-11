@@ -22,4 +22,14 @@ defmodule Vxpipe.Gateway.TestTelephonySocket do
     send(observer, {:test_telnyx_socket_send, message})
     {:noreply, observer}
   end
+
+  def handle_info({:vxpipe_twilio_socket_send, message}, observer) do
+    send(observer, {:test_twilio_socket_send, message})
+    {:noreply, observer}
+  end
+
+  def handle_info({:vxpipe_twilio_socket_clear, message}, observer) do
+    send(observer, {:test_twilio_socket_clear, message})
+    {:noreply, observer}
+  end
 end

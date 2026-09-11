@@ -317,6 +317,40 @@ suite, and the unused-dependency check also pass.
 Full private-transfer harness parity and tagged live-provider verification remain before this
 milestone can be marked complete.
 
+## Checkpoint 8: outbound private-transfer parity
+
+The existing outbound human-transfer slice now runs unchanged for both configured carriers. One
+provider-neutral scenario builds the call definition, resolves the configured phone service,
+constructs normalized media/DTMF/AMD events, and supplies the same participant and transfer
+semantics to the room. Carrier-specific test code is limited to credentials, exact provider
+identities, and the fake adapter/socket messages at the transport boundary.
+
+For Twilio, the slice proves that the agent's transfer tool starts one exact outbound leg, keeps the
+destination in transfer-preparation admission, plays the briefing only through the destination's
+PCMU Membrane output, refuses press-1 from another process, and waits for both destination-bound
+acceptance and completed briefing before committing. After commit, the source agent terminates, the
+destination moves to main admission with live room ingress and mix-minus egress, and repeated DTMF
+cannot commit again. A separate provider-paired case proves that configured machine detection ends
+only the attempted destination leg, reports failure to the source, and leaves that source active.
+
+The first Twilio run reached the real Twilio output pipeline but failed because the shared test
+socket handled only the Telnyx delivery message. Extending that test boundary to observe both
+provider message types made the same assertions green. The scenario construction was then moved out
+of the assertion module, reducing that module from 613 to 362 lines while preserving the green
+behavior.
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/outbound_phone_transfer_test.exs --max-cases 1
+# 4 tests, 0 failures
+```
+
+The full Gateway lane passes 220 tests. Root formatting, warnings-as-errors compilation, strict
+Credo, all 801 umbrella tests, and the unused-dependency check also pass.
+
+The full signed Twilio inbound-to-outbound harness and guarded tagged provider verification remain.
+This checkpoint does not claim either one.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
