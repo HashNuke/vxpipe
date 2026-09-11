@@ -68,7 +68,8 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     :ok = TestCallLifecycleTimer.fire(readiness_timer)
 
     assert_receive {:DOWN, ^monitor, :process, ^authority,
-                    {:shutdown, :startup_readiness_timeout}}
+                    {:shutdown, :startup_readiness_timeout}},
+                   1_000
 
     refute room.incarnation_id == ""
   end
@@ -87,7 +88,9 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
 
     :ok = TestCallLifecycleTimer.fire(maximum_timer)
 
-    assert_receive {:DOWN, monitor, :process, _authority, {:shutdown, :maximum_duration_reached}}
+    assert_receive {:DOWN, monitor, :process, _authority, {:shutdown, :maximum_duration_reached}},
+                   1_000
+
     assert monitor == attachment.room_monitor
   end
 
@@ -110,7 +113,8 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
 
     assert_receive {:DOWN, ^monitor, :process, ^authority,
-                    {:shutdown, {:startup_failure, :speech_to_text_unavailable}}}
+                    {:shutdown, {:startup_failure, :speech_to_text_unavailable}}},
+                   1_000
   end
 
   test "notifies a waiting agent once and rearms only after new caller activity" do
