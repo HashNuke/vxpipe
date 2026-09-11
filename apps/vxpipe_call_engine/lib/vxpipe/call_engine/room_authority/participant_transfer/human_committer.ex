@@ -37,24 +37,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
     source_text_to_speech = state.text_to_speech_capability
     source_supervisor = Map.fetch!(state.participant_supervisors, request.source_participant_id)
 
-    pending_agent_teardowns =
-      Map.put(state.pending_agent_teardowns, request.source_capability, %{
-        participant_id: request.source_participant_id,
-        participant_supervisor: source_supervisor
-      })
-
-    state = %{
-      state
-      | agent_turns: %{},
-        first_message: FirstMessage.completed(request.caller_participant_id),
-        pending_agent_teardowns: pending_agent_teardowns,
-        pending_participant_transfer: nil,
-        text_capability: nil,
-        text_capability_required?: false,
-        text_to_speech_capability: nil,
-        text_to_speech_runtime: nil
-    }
-
     attachment = %ConnectionAttachment{
       admission: :main,
       media_ingress: nil,
@@ -65,7 +47,31 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
       transfer_attempt_id: nil
     }
 
-    send(connection.pid, {:vxpipe_transfer_main_media, pending.attempt_id, attachment})
+    pending_agent_teardowns =
+      Map.put(state.pending_agent_teardowns, request.source_capability, %{
+        participant_id: request.source_participant_id,
+        participant_supervisor: source_supervisor
+      })
+
+    pending_connection_promotions =
+      Map.put(state.pending_connection_promotions, request.source_participant_id, %{
+        attachment: attachment,
+        attempt_id: pending.attempt_id,
+        connection: connection.pid
+      })
+
+    state = %{
+      state
+      | agent_turns: %{},
+        first_message: FirstMessage.completed(request.caller_participant_id),
+        pending_agent_teardowns: pending_agent_teardowns,
+        pending_connection_promotions: pending_connection_promotions,
+        pending_participant_transfer: nil,
+        text_capability: nil,
+        text_capability_required?: false,
+        text_to_speech_capability: nil,
+        text_to_speech_runtime: nil
+    }
 
     _ = Startup.discard_text_to_speech(preparation.text_to_speech, state)
     _ = Startup.discard_text_to_speech(source_text_to_speech, state)

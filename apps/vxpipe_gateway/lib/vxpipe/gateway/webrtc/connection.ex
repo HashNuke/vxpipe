@@ -26,8 +26,10 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     ToolCallStarted
   }
 
-  alias Vxpipe.Gateway.RTVI.{Codec, ToolProjection, TurnState}
-  alias Vxpipe.Gateway.WebRTC.{ConnectionPeerSupervisor, IncomingAudio}
+  alias Vxpipe.Gateway.RTVI.{ToolProjection, TurnState}
+  alias Vxpipe.Gateway.WebRTC.{ConnectionPeerSupervisor, IncomingAudio, TransferSideband}
+
+  alias Vxpipe.Gateway.RTVI.Codec, as: RTVICodec
 
   @call_timeout 10_000
   @command_timeout_seconds 5
@@ -106,15 +108,20 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          attachment: attachment,
          audio_egress: audio_egress,
          audio_tracks: %{},
-         channel_ref: nil,
+         audio_jitter_latency_ms: Keyword.fetch!(options, :audio_jitter_latency_ms),
          connection_id: connection_id,
+         output_track_id: output_track.id,
          peer_connection: peer_connection,
          peer_monitor: Process.monitor(peer_connection),
          room_monitor: attachment.room_monitor,
          room_audio_egress: room_audio_egress,
          room_audio_ingress: room_audio_ingress,
+         rtvi_channel_ref: nil,
          rtvi_turn_state: TurnState.new(),
-         session: session
+         session: session,
+         sideband_channel_ref: nil,
+         transfer_media_ready?: false,
+         transfer_preparation_sent?: false
        }}
     else
       _error -> {:stop, :connection_attachment_failed}
@@ -164,15 +171,15 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   def handle_info({:ex_webrtc, peer_connection, {:data_channel, %DataChannel{} = channel}}, state)
       when peer_connection == state.peer_connection do
-    state = if channel.label == "chat", do: %{state | channel_ref: channel.ref}, else: state
+    state = remember_data_channel(channel, state)
     {:noreply, state}
   end
 
   def handle_info(
         {:ex_webrtc, peer_connection, {:data, channel_ref, payload}},
-        %{peer_connection: peer_connection, channel_ref: channel_ref} = state
+        %{peer_connection: peer_connection, rtvi_channel_ref: channel_ref} = state
       ) do
-    case Codec.handle(payload) do
+    case RTVICodec.handle(payload) do
       {:reply, reply} -> :ok = PeerConnection.send_data(peer_connection, channel_ref, reply)
       {:command, {:send_text, input}} -> submit_text(input, state)
       :ignore -> :ok
@@ -182,10 +189,32 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def handle_info(
-        {:ex_webrtc, peer_connection, {:data_channel_state_change, channel_ref, :closed}},
-        %{peer_connection: peer_connection, channel_ref: channel_ref} = state
+        {:ex_webrtc, peer_connection, {:data, channel_ref, payload}},
+        %{peer_connection: peer_connection, sideband_channel_ref: channel_ref} = state
       ) do
+    state_reply(TransferSideband.handle_data(payload, state))
+  end
+
+  def handle_info(
+        {:ex_webrtc, peer_connection, {:data_channel_state_change, channel_ref, :open}},
+        %{peer_connection: peer_connection, sideband_channel_ref: channel_ref} = state
+      ) do
+    {:noreply, TransferSideband.channel_opened(state)}
+  end
+
+  def handle_info(
+        {:ex_webrtc, peer_connection, {:data_channel_state_change, channel_ref, :closed}},
+        %{peer_connection: peer_connection} = state
+      )
+      when channel_ref == state.rtvi_channel_ref or channel_ref == state.sideband_channel_ref do
     {:stop, :shutdown, state}
+  end
+
+  def handle_info(
+        {:ex_webrtc, peer_connection, {:connection_state_change, :connected}},
+        %{peer_connection: peer_connection} = state
+      ) do
+    state_reply(TransferSideband.media_connected(state))
   end
 
   def handle_info(
@@ -295,17 +324,30 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     {:stop, :shutdown, state}
   end
 
+  def handle_info(
+        {:vxpipe_transfer_main_media, attempt_id,
+         %ConnectionAttachment{admission: :main} = attachment},
+        %{
+          attachment: %ConnectionAttachment{
+            admission: :transfer_preparation,
+            transfer_attempt_id: attempt_id
+          }
+        } = state
+      ) do
+    state_reply(TransferSideband.activate_main_media(attempt_id, attachment, state))
+  end
+
   def handle_info({:ex_webrtc, _peer_connection, _event}, state), do: {:noreply, state}
 
   defp send_event(event, state) do
-    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
-         {:ok, message} <- Codec.encode_event(event) do
+    with channel_ref when not is_nil(channel_ref) <- state.rtvi_channel_ref,
+         {:ok, message} <- RTVICodec.encode_event(event) do
       :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
     end
   end
 
   defp send_tool_event(event, state) do
-    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
+    with channel_ref when not is_nil(channel_ref) <- state.rtvi_channel_ref,
          {:ok, message} <- ToolProjection.encode(event, state.session.tool_visibility) do
       :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
     end
@@ -321,15 +363,15 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   defp send_turn_action({:event, event}, state), do: send_event(event, state)
 
   defp send_turn_action({:spoken_progress, output, event_id, status}, state) do
-    send_encoded(Codec.encode_spoken_progress(output, event_id, status), state)
+    send_encoded(RTVICodec.encode_spoken_progress(output, event_id, status), state)
   end
 
   defp send_turn_action({:interruption_context, event}, state) do
-    send_encoded(Codec.encode_interruption_context(event), state)
+    send_encoded(RTVICodec.encode_interruption_context(event), state)
   end
 
   defp send_encoded(encoded, state) do
-    with channel_ref when not is_nil(channel_ref) <- state.channel_ref,
+    with channel_ref when not is_nil(channel_ref) <- state.rtvi_channel_ref,
          {:ok, message} <- encoded do
       :ok = PeerConnection.send_data(state.peer_connection, channel_ref, message)
     end
@@ -413,10 +455,23 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         :ok
 
       {:error, %Error{}} ->
-        reply = Codec.encode_error_response(input.id, "The text input could not be accepted.")
-        :ok = PeerConnection.send_data(state.peer_connection, state.channel_ref, reply)
+        reply = RTVICodec.encode_error_response(input.id, "The text input could not be accepted.")
+        :ok = PeerConnection.send_data(state.peer_connection, state.rtvi_channel_ref, reply)
     end
   end
+
+  defp remember_data_channel(%DataChannel{label: "chat", ref: channel_ref}, state) do
+    %{state | rtvi_channel_ref: channel_ref}
+  end
+
+  defp remember_data_channel(%DataChannel{label: "vxpipe", ref: channel_ref}, state) do
+    %{state | sideband_channel_ref: channel_ref}
+  end
+
+  defp remember_data_channel(%DataChannel{}, state), do: state
+
+  defp state_reply({:ok, state}), do: {:noreply, state}
+  defp state_reply({:stop, state}), do: {:stop, :shutdown, state}
 
   defp command_deadline do
     DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)

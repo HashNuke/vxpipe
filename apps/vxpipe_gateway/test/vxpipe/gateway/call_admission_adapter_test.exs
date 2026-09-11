@@ -50,6 +50,40 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     assert participant.role == :human
   end
 
+  test "leaves a transfer-only human pending until its WebRTC connection attaches" do
+    tenant_id = unique_id("tenant")
+    room_id = unique_id("room")
+    participant_id = unique_id("support")
+    plan = resolved_plan(tenant_id, room_id, participant_id, :transfer)
+
+    assert {:ok, create_room} =
+             CreateRoom.new(
+               tenant_id: tenant_id,
+               actor_id: plan.actor_id,
+               room_id: room_id,
+               deadline: future_deadline()
+             )
+
+    assert {:ok, room} = CallEngine.create_room(create_room)
+    started_at = DateTime.add(DateTime.utc_now(), -1, :second)
+
+    claim = %AdmissionClaim{
+      call: prepared_call(plan, room.incarnation_id, started_at),
+      token_id: unique_id("token"),
+      participant_key: unique_id("route"),
+      participant_ref: "support",
+      participant_id: participant_id,
+      accepted_at: DateTime.utc_now()
+    }
+
+    assert {:transfer_pending, pending} = CallAdmission.start_call([], claim)
+    assert pending.participant_id == participant_id
+    assert pending.kind == :human
+
+    assert {:error, %{code: :participant_not_found}} =
+             CallEngine.participant_snapshot(tenant_id, room_id, participant_id)
+  end
+
   defp prepared_call(plan, incarnation_id, started_at) do
     %PreparedCall{
       id: plan.call_id,
@@ -73,14 +107,14 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     }
   end
 
-  defp resolved_plan(tenant_id, room_id, participant_id) do
+  defp resolved_plan(tenant_id, room_id, participant_id, admission \\ :start_call) do
     participant = %Participant{
       definition_key: "support",
       participant_id: participant_id,
       activation_id: nil,
       kind: :human,
       description: nil,
-      connection: %ConnectionIntent{service: :web, mode: :receive, admission: :start_call},
+      connection: %ConnectionIntent{service: :web, mode: :receive, admission: admission},
       transfer_notice: nil,
       prompt: nil,
       first_message: nil,

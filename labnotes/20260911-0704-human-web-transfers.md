@@ -60,3 +60,42 @@
   fixed drop-count assertion observed unrelated concurrent umbrella telemetry. That exact test
   passed alone, and a clean full rerun passed MCP 37/3 excluded, Agent Runtime 58/2, Call Engine
   336/1, Calls 37, Persistence 25, Gateway 87/4, and Console 57.
+
+## Checkpoint: authenticated WebRTC transfer handoff
+
+- Added a red admission test for the catalog destination of a running call. Ordinary call
+  admission initially joined it immediately; the gateway now returns a provisional
+  `pending_transfer` session bound to the existing room incarnation without changing the call
+  start clock or participant presence.
+- Added a separate bounded `vxpipe` WebRTC data-channel codec. RTVI continues unchanged on the
+  `chat` channel. The sideband carries only preparation, exact-attempt acceptance, activation, and
+  a generic rejection; it never serializes the private reason, Variables, history, or internal
+  authorization data.
+- Added a real two-peer WebRTC test before the adapter behavior. It initially received no
+  preparation control, then exposed two deeper ordering problems: policy replacement acknowledged
+  before the replacement Membrane pipeline was usable, and an ordinary human caller had no room
+  output while the agent's direct TTS path was active.
+- `RoomAudioIngress` and `RoomAudioEgress` now expose a readiness barrier backed by their Membrane
+  pipeline playing notifications. A replacement-policy call does not acknowledge until the new
+  pipeline is ready. Human transfer promotion waits for both main-media pipelines and is sent only
+  after the source participant exits, preventing `transfer.active` from racing the final
+  presence-driven policy transition.
+- Ordinary human connections now retain policy-authorized mix-minus output even while an agent
+  owns direct TTS. This keeps human room audio available through handoff without introducing a
+  second bridge or tying output authority to STT configuration.
+- Kept transfer framing/control and main-media startup in cohesive `Sideband` and WebRTC modules;
+  the existing connection process only owns transport callbacks and delegates the transfer
+  transition instead of absorbing another independent callback implementation.
+- The full transport test requests transfer through the caller's real RTVI channel, verifies that
+  destination microphone and speaker are isolated before acceptance, rejects a forged attempt,
+  delivers the private briefing only to the destination, then proves caller-to-destination and
+  destination-to-caller Opus audio after activation.
+- Verification: all 336 Call Engine tests pass with 0 failures and 1 excluded integration test;
+  all 94 Gateway tests pass with 0 failures and 4 excluded integration tests. `mix format
+  --check-formatted`, `git diff --check`, `mix compile --warnings-as-errors`, `mix credo --strict`,
+  and `mix deps.unlock --check-unused` also pass at this checkpoint. The umbrella `mix test` first
+  stopped before execution because the shell had no PostgreSQL SCRAM password. A disposable local
+  PostgreSQL instance on the reserved test port supplied `VXPIPE_TEST_DATABASE_URL`; the complete
+  umbrella suite then passed (MCP 37/3 excluded, Agent Runtime 58/2, Call Engine 336/1, Calls 37,
+  Persistence 25, Gateway 94/4, and Console 57), and that test instance was stopped afterward
+  without touching the existing project test database container.

@@ -40,23 +40,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
       ) do
     participant = Map.fetch!(call.plan.participants, claim.participant_ref)
 
-    with %DateTime{} <- call.started_at,
-         incarnation_id when is_binary(incarnation_id) and byte_size(incarnation_id) > 0 <-
-           call.incarnation_id,
-         {:ok, command} <-
-           JoinParticipant.new(
-             tenant_id: call.tenant_key,
-             actor_id: call.plan.actor_id,
-             room_id: call.room_id,
-             participant_id: participant.participant_id,
-             role: participant.kind,
-             deadline: DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)
-           ),
-         {:ok, participant_snapshot} <- CallEngine.join_participant(command) do
-      {:joined, participant_snapshot}
-    else
-      _unavailable -> {:join_error, :participant_start_failed}
-    end
+    admit_running_participant(call, participant)
   end
 
   def start_call(options, claim) do
@@ -82,6 +66,34 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   def mark_failed(options, claim, reason) do
     Calls.mark_call_failed(claim, reason, options)
+  end
+
+  defp admit_running_participant(
+         %PreparedCall{} = _call,
+         %{kind: :human, connection: %{service: :web, mode: :receive, admission: :transfer}} =
+           participant
+       ) do
+    {:transfer_pending, participant}
+  end
+
+  defp admit_running_participant(%PreparedCall{} = call, participant) do
+    with %DateTime{} <- call.started_at,
+         incarnation_id when is_binary(incarnation_id) and byte_size(incarnation_id) > 0 <-
+           call.incarnation_id,
+         {:ok, command} <-
+           JoinParticipant.new(
+             tenant_id: call.tenant_key,
+             actor_id: call.plan.actor_id,
+             room_id: call.room_id,
+             participant_id: participant.participant_id,
+             role: participant.kind,
+             deadline: DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)
+           ),
+         {:ok, participant_snapshot} <- CallEngine.join_participant(command) do
+      {:joined, participant_snapshot}
+    else
+      _unavailable -> {:join_error, :participant_start_failed}
+    end
   end
 
   defp ttl_options(options, nil), do: options

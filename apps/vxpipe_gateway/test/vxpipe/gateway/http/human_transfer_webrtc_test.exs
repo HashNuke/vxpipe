@@ -1,0 +1,476 @@
+defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
+  use ExUnit.Case, async: false
+
+  import Plug.Conn
+  import Plug.Test
+
+  alias ExRTP.Packet
+  alias ExWebRTC.{DataChannel, ICECandidate, MediaStreamTrack, PeerConnection, SessionDescription}
+  alias Membrane.Opus.{Decoder, Encoder}
+  alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
+
+  alias Vxpipe.CallEngine
+
+  alias Vxpipe.CallEngine.{
+    CallDefinition,
+    CallInvocation,
+    DefinitionCompiler,
+    TestSelectiveAgentRuntimeModelProvider,
+    TestTextToSpeechTransport
+  }
+
+  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.Gateway.HTTP.Endpoint
+  alias Vxpipe.Gateway.SessionSupervisor
+
+  @moduletag capture_log: true
+
+  @application_voip 2_048
+  @automatic_bitrate -1_000
+  @endpoint_options Endpoint.init(cors: [])
+  @signal_voice 3_001
+
+  setup do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      original
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:implementation, :agent_runtime)
+      |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, owner: self())
+
+    text_to_speech = [
+      enabled: true,
+      provider: FluxTextToSpeech,
+      provider_options: [
+        api_key: "runtime-test-secret",
+        model: "flux-application-voice",
+        encoding: :linear16,
+        sample_rate: 48_000
+      ],
+      transport: {TestTextToSpeechTransport, observer: self()},
+      maximum_requests: 2
+    ]
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      original
+      |> Keyword.put(:agent_runtime, agent_runtime)
+      |> Keyword.put(:text_to_speech, text_to_speech)
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+
+    :ok
+  end
+
+  test "a destination accepts privately before joining bidirectional room audio" do
+    plan = compile_plan()
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+
+    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+
+    caller_client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat"))
+
+    assert :ok = send_rtvi_text(caller_client)
+    assert_receive {:test_agent_runtime_stream, source_provider, _request}, 2_000
+
+    reason = "Taylor is calling about order 17."
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: "human-support-transfer",
+               name: "transfer",
+               arguments: %{"destination" => "human-support", "reason" => reason}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_transport_started, briefing_tts, _connection}, 2_000
+
+    support_client =
+      plan
+      |> issue_session(room, support.participant_id)
+      |> then(&connect(&1.session_id, "vxpipe"))
+
+    assert %{
+             "id" => attempt_id,
+             "type" => "transfer.preparation",
+             "data" => %{
+               "attempt_id" => attempt_id,
+               "participant_id" => participant_id
+             }
+           } = await_sideband(support_client, "transfer.preparation", 5_000)
+
+    assert participant_id == support.participant_id
+
+    :ok = send_audio(caller_client, 1, 960, 8_000)
+    refute_audio(support_client, 500)
+
+    :ok = send_audio(support_client, 1, 960, -8_000)
+    refute_audio(caller_client, 500)
+
+    :ok = send_acceptance(support_client, "accept-stale", "xfer-stale")
+
+    assert %{
+             "id" => "accept-stale",
+             "type" => "error",
+             "data" => %{"message" => "The transfer control could not be accepted."}
+           } = await_sideband(support_client, "error", 5_000)
+
+    :ok = send_acceptance(support_client, "accept-support", attempt_id)
+
+    assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
+
+    assert JSON.decode!(speak) == %{
+             "text" => reason <> " This call is recorded.",
+             "type" => "Speak"
+           }
+
+    assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"private-briefing"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(briefing_tts, :binary.copy(<<1, 0>>, 960))
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"private-briefing"})
+    )
+
+    assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    assert %{
+             "id" => ^attempt_id,
+             "type" => "transfer.active",
+             "data" => %{"attempt_id" => ^attempt_id}
+           } = await_sideband(support_client, "transfer.active", 5_000)
+
+    :ok = send_audio(caller_client, 2, 1_920, 7_000)
+    assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    Enum.each(
+      [{2, 1_920}, {3, 2_880}, {4, 3_840}],
+      fn {sequence_number, timestamp} ->
+        :ok = send_audio(support_client, sequence_number, timestamp, -7_000)
+      end
+    )
+
+    assert caller_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+  end
+
+  defp compile_plan do
+    resource_id = unique_id("human-transfer-definition")
+
+    assert {:ok, definition} =
+             CallDefinition.new(
+               %{
+                 schema_version: CallDefinition.schema_version(),
+                 entry_caller: "caller",
+                 entry_receiver: "reception",
+                 defaults: %{capabilities: %{}},
+                 participants: %{
+                   "caller" => %{
+                     type: "human",
+                     connection: %{
+                       service: "web",
+                       mode: "receive",
+                       admission: "start_call"
+                     }
+                   },
+                   "reception" => %{
+                     type: "agent",
+                     prompt: "Route callers safely.",
+                     capabilities: %{
+                       model_inference: "test-model",
+                       text_to_speech: "test-voice"
+                     },
+                     tools: %{},
+                     transfers: ["human-support"]
+                   },
+                   "human-support" => %{
+                     type: "human",
+                     description: "A human support specialist",
+                     connection: %{
+                       service: "web",
+                       mode: "receive",
+                       admission: "transfer"
+                     },
+                     transfer_notice: "This call is recorded."
+                   }
+                 },
+                 limits: %{max_duration_ms: 60_000}
+               },
+               resource_id: resource_id,
+               revision: 1
+             )
+
+    assert {:ok, invocation} =
+             CallInvocation.new(
+               %{
+                 call_definition: %{id: resource_id, revision: 1},
+                 initial_variables: %{},
+                 transport: %{type: "web"}
+               },
+               tenant_id: unique_id("tenant-human-transfer"),
+               actor_id: unique_id("actor-human-transfer"),
+               call_id: unique_id("call-human-transfer"),
+               room_id: unique_id("room-human-transfer")
+             )
+
+    assert {:ok, plan} =
+             DefinitionCompiler.compile(definition, invocation, %{
+               capability_profiles: %{
+                 "test-model" => %{
+                   kind: :model_inference,
+                   provider: :req_llm,
+                   options: %{model: "test:scripted"}
+                 },
+                 "test-voice" => %{
+                   kind: :text_to_speech,
+                   provider: FluxTextToSpeech,
+                   options: %{
+                     model: "flux-test-voice",
+                     encoding: :linear16,
+                     sample_rate: 48_000
+                   }
+                 }
+               },
+               host_tools: %{}
+             })
+
+    plan
+  end
+
+  defp issue_session(plan, room, participant_id) do
+    binding = [
+      tenant_id: plan.tenant_id,
+      actor_id: plan.actor_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id,
+      participant_id: participant_id,
+      tool_visibility: plan.tool_visibility
+    ]
+
+    assert {:ok, session} = SessionSupervisor.issue(binding, 30_000)
+    session
+  end
+
+  defp connect(session_id, channel_label) do
+    client_id = unique_id("client")
+    child_spec = Supervisor.child_spec({PeerConnection, []}, id: {PeerConnection, client_id})
+    client = start_supervised!(child_spec)
+    :ok = PeerConnection.controlling_process(client, self())
+
+    channel_ref = create_channel(client, channel_label)
+    input_track = MediaStreamTrack.new(:audio)
+
+    assert {:ok, _transceiver} =
+             PeerConnection.add_transceiver(client, input_track, direction: :sendrecv)
+
+    assert {:ok, offer} = PeerConnection.create_offer(client)
+    :ok = PeerConnection.set_local_description(client, offer)
+
+    response =
+      :post
+      |> conn(
+        "/api/rtvi/offer",
+        JSON.encode!(%{
+          "sdp" => offer.sdp,
+          "type" => "offer",
+          "pc_id" => nil,
+          "restart_pc" => false,
+          "requestData" => %{"session_id" => session_id}
+        })
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@endpoint_options)
+
+    assert response.status == 200
+
+    assert %{"pc_id" => connection_id, "sdp" => answer_sdp, "type" => "answer"} =
+             JSON.decode!(response.resp_body)
+
+    :ok =
+      PeerConnection.set_remote_description(
+        client,
+        %SessionDescription{type: :answer, sdp: answer_sdp}
+      )
+
+    assert_receive {:ex_webrtc, ^client, {:ice_candidate, %ICECandidate{} = candidate}}, 5_000
+    patch_candidate(connection_id, candidate)
+    assert_receive {:ex_webrtc, ^client, {:connection_state_change, :connected}}, 5_000
+
+    if channel_ref != nil do
+      assert_receive {:ex_webrtc, ^client, {:data_channel_state_change, ^channel_ref, :open}},
+                     5_000
+    end
+
+    assert_receive {:ex_webrtc, ^client,
+                    {:track, %MediaStreamTrack{kind: :audio} = output_track}},
+                   5_000
+
+    %{
+      client: client,
+      channel_ref: channel_ref,
+      connection_id: connection_id,
+      input_track_id: input_track.id,
+      output_track_id: output_track.id
+    }
+  end
+
+  defp create_channel(_client, nil), do: nil
+
+  defp create_channel(client, label) do
+    assert {:ok, %DataChannel{ref: channel_ref}} =
+             PeerConnection.create_data_channel(client, label, ordered: true)
+
+    channel_ref
+  end
+
+  defp patch_candidate(connection_id, candidate) do
+    response =
+      :patch
+      |> conn(
+        "/api/rtvi/offer",
+        JSON.encode!(%{
+          "pc_id" => connection_id,
+          "candidates" => [
+            %{
+              "candidate" => candidate.candidate,
+              "sdp_mid" => candidate.sdp_mid,
+              "sdp_mline_index" => candidate.sdp_m_line_index
+            }
+          ]
+        })
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@endpoint_options)
+
+    assert response.status == 200
+  end
+
+  defp send_rtvi_text(connection) do
+    PeerConnection.send_data(
+      connection.client,
+      connection.channel_ref,
+      JSON.encode!(%{
+        "id" => unique_id("turn"),
+        "label" => "rtvi-ai",
+        "type" => "send-text",
+        "data" => %{
+          "content" => "Please connect me to human support.",
+          "options" => %{"run_immediately" => true, "audio_response" => false}
+        }
+      })
+    )
+  end
+
+  defp await_sideband(connection, type, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_await_sideband(connection, type, deadline)
+  end
+
+  defp send_acceptance(connection, id, attempt_id) do
+    PeerConnection.send_data(
+      connection.client,
+      connection.channel_ref,
+      JSON.encode!(%{
+        "id" => id,
+        "type" => "transfer.accept",
+        "data" => %{"attempt_id" => attempt_id}
+      })
+    )
+  end
+
+  defp do_await_sideband(connection, type, deadline) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+    client = connection.client
+    channel_ref = connection.channel_ref
+
+    receive do
+      {:ex_webrtc, ^client, {:data, ^channel_ref, payload}} ->
+        message = JSON.decode!(payload)
+
+        if message["type"] == type do
+          message
+        else
+          do_await_sideband(connection, type, deadline)
+        end
+    after
+      remaining -> flunk("timed out waiting for #{type}")
+    end
+  end
+
+  defp send_audio(connection, sequence_number, timestamp, sample) do
+    encoder =
+      Encoder.Native.create(
+        48_000,
+        1,
+        @application_voip,
+        @automatic_bitrate,
+        @signal_voice
+      )
+
+    pcm = :binary.copy(<<sample::little-signed-16>>, 960)
+    assert {:ok, payload} = Encoder.Native.encode_packet(encoder, pcm, 960)
+
+    packet =
+      Packet.new(payload,
+        payload_type: 111,
+        sequence_number: sequence_number,
+        timestamp: timestamp,
+        ssrc: 123
+      )
+
+    PeerConnection.send_rtp(connection.client, connection.input_track_id, packet)
+  end
+
+  defp await_audio(connection, timeout_ms) do
+    client = connection.client
+    output_track_id = connection.output_track_id
+
+    receive do
+      {:ex_webrtc, ^client, {:rtp, ^output_track_id, _rid, %Packet{} = packet}} -> packet
+    after
+      timeout_ms -> flunk("timed out waiting for WebRTC audio")
+    end
+  end
+
+  defp refute_audio(connection, timeout_ms) do
+    client = connection.client
+    output_track_id = connection.output_track_id
+
+    refute_receive {:ex_webrtc, ^client, {:rtp, ^output_track_id, _rid, %Packet{}}}, timeout_ms
+  end
+
+  defp decodable_pcm_size(packet) do
+    decoder = Decoder.Native.create(48_000, 1)
+    packet |> then(&Decoder.Native.decode_packet(decoder, &1.payload)) |> byte_size()
+  end
+
+  defp stop_room_on_exit(plan) do
+    on_exit(fn ->
+      case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
+        [{room, _value}] -> GenServer.stop(room, :shutdown)
+        [] -> :ok
+      end
+    end)
+  end
+
+  defp unique_id(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+end

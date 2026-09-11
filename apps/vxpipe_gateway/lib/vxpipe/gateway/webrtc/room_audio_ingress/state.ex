@@ -20,8 +20,10 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.State do
     :pipeline_monitor,
     :pipeline_options,
     :pipeline_pid,
+    :pipeline_ready?,
     :pipeline_supervisor,
     :policy,
+    :ready_waiters,
     :reject_received_through_ms
   ]
   defstruct @enforce_keys
@@ -42,8 +44,10 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.State do
           pipeline_monitor: reference() | nil,
           pipeline_options: keyword(),
           pipeline_pid: pid() | nil,
+          pipeline_ready?: boolean(),
           pipeline_supervisor: module(),
           policy: Snapshot.t() | nil,
+          ready_waiters: [GenServer.from()],
           reject_received_through_ms: integer() | nil
         }
 
@@ -70,8 +74,10 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.State do
       pipeline_monitor: nil,
       pipeline_options: Keyword.get(options, :pipeline_options, []),
       pipeline_pid: nil,
+      pipeline_ready?: false,
       pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, ConnectionPeerSupervisor),
       policy: nil,
+      ready_waiters: [],
       reject_received_through_ms: nil
     }
   end

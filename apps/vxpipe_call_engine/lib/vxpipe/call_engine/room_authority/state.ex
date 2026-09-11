@@ -29,6 +29,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 agent_turns: %{},
                 background_tool_calls: %{},
                 pending_agent_teardowns: %{},
+                pending_connection_promotions: %{},
                 next_sequence: 1,
                 participant_monitors: %{},
                 participant_supervisors: %{},
@@ -61,6 +62,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
             | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending.t()
             | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Restoration.t(),
           pending_agent_teardowns: %{optional(pid()) => map()},
+          pending_connection_promotions: %{optional(String.t()) => map()},
           participant_monitors: %{optional(reference()) => String.t()},
           participant_supervisors: %{optional(String.t()) => pid()},
           participant_ids: MapSet.t(String.t()),

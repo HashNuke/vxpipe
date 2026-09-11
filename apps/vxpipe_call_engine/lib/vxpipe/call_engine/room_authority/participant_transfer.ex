@@ -367,6 +367,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     end
   end
 
+  @spec promote_connection_after_source_exit(State.t(), String.t()) :: State.t()
+  def promote_connection_after_source_exit(%State{} = state, participant_id)
+      when is_binary(participant_id) do
+    case Map.pop(state.pending_connection_promotions, participant_id) do
+      {%{attachment: attachment, attempt_id: attempt_id, connection: connection}, pending} ->
+        send(connection, {:vxpipe_transfer_main_media, attempt_id, attachment})
+        %{state | pending_connection_promotions: pending}
+
+      {nil, _pending} ->
+        state
+    end
+  end
+
   defp commit_prepared(pending, preparation, state) do
     case Committer.commit(pending, preparation, state) do
       {:ok, result, state} ->

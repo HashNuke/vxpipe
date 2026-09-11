@@ -75,7 +75,12 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     support_sink =
       start_supervised!({TestAudioOutputSink, observer: self()}, id: :support_output_sink)
 
-    assert {:ok, %ConnectionAttachment{admission: :main}} =
+    assert {:ok,
+            %ConnectionAttachment{
+              admission: :main,
+              room_audio_input_mode: :enabled,
+              room_audio_output_mode: :mix_minus
+            }} =
              attach(plan, room, caller, "caller-connection", caller_sink)
 
     source_supervisor = participant_supervisor(plan, reception.participant_id)

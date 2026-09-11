@@ -56,9 +56,15 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngressTest do
                       payload: <<1::16, 2::16>>
                     }}
 
-    assert :ok = GenServer.call(ingress, {:vxpipe_apply_media_policy, snapshot(5)})
+    policy_update =
+      Task.async(fn -> GenServer.call(ingress, {:vxpipe_apply_media_policy, snapshot(5)}) end)
+
     assert_receive {:test_room_audio_pipeline_started, second_pipeline_id, second_pipeline}
     refute second_pipeline_id == first_pipeline_id
+    assert Task.yield(policy_update, 0) == nil
+
+    send(ingress, {:vxpipe_audio_pipeline_ready, second_pipeline_id})
+    assert Task.await(policy_update) == :ok
 
     assert {:error, :stale_policy_interval} =
              RoomAudioIngress.push(ingress, audio_frame(2, 1_010))

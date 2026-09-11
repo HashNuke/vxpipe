@@ -70,19 +70,22 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgressTest do
     send(egress, {:vxpipe_room_audio_available, self(), subscription_id})
     assert_receive {:test_room_audio_output_pipeline_push, ^old_pipeline_id, ^old_frame}
 
-    assert :ok = GenServer.call(egress, {:vxpipe_apply_media_policy, snapshot(5)})
+    policy_update =
+      Task.async(fn -> GenServer.call(egress, {:vxpipe_apply_media_policy, snapshot(5)}) end)
 
     assert_receive {:test_room_audio_output_pipeline_stopped, ^old_pipeline_id, _pipeline}
 
     assert_receive {:test_room_audio_output_pipeline_started, new_pipeline_id, _pipeline, ^egress}
 
     refute new_pipeline_id == old_pipeline_id
+    assert Task.yield(policy_update, 0) == nil
 
     send(egress, {:vxpipe_room_audio_output_sent, old_pipeline_id, 0})
     send(egress, {:vxpipe_room_audio_available, self(), subscription_id})
     refute_receive {:test_room_audio_output_pipeline_push, ^new_pipeline_id, ^new_frame}, 50
 
     send(egress, {:vxpipe_room_audio_output_ready, new_pipeline_id})
+    assert Task.await(policy_update) == :ok
     assert_receive {:test_room_audio_output_pipeline_push, ^new_pipeline_id, ^new_frame}
   end
 

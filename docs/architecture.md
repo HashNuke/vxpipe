@@ -979,7 +979,21 @@ its media-policy transition before promoting the connection to ordinary mix-minu
 clears agent text ownership and arranges source-subtree teardown through the existing transfer-tool
 completion effect. Call Variables and the room lifecycle remain unchanged. A dropped private
 destination cleans its attempt and reports a generic tool failure while the source remains active.
-The gateway sideband encoding and two-browser path remain the next adapter checkpoint.
+
+For a running call, the gateway recognizes this destination's pinned transfer admission and issues
+a provisional session bound to the existing room incarnation; it does not invoke ordinary
+participant joining. The WebRTC connection retains the normal `chat` data channel for unmodified
+RTVI and adds a separate `vxpipe` data channel for the narrow transfer control. That channel
+exposes only bounded preparation, destination acceptance, activation, and generic failure. It does
+not expose the private briefing, Call Variables, history, internal rejection reason, PIDs, or room
+authority. Acceptance and media-ready commands are reconstructed from the authenticated session
+and the actual connection process before the engine reauthorizes the exact current attempt.
+
+The destination connection starts main room ingress and mix-minus egress only after the briefing
+playback and policy commit. Both Membrane pipelines must report usable readiness, and the source
+participant must have exited, before the gateway announces the transfer as active. This prevents
+an acknowledgement from racing the final presence-driven policy replacement. Dropping or failing
+the provisional connection still leaves the source responsible.
 
 Agent Runtime accepts an internal initial-conversation seed for activation construction. That
 boundary retains the destination's independently configured system prompt and accepts only plain
@@ -1166,17 +1180,16 @@ clock, so a stopped or silent publisher cannot strand another participant's fina
 delay covers the Gateway's default 200 ms RTP jitter window and leaves 100 ms for cross-connection
 arrival skew. Directly constructed mixers omit scheduling unless `playout_delay_ms` is supplied,
 which preserves deterministic manual flushing for focused tests and embedding-specific control.
-Subscription draining, Opus egress, and the browser-runnable multi-human path remain subsequent
-work.
+The Gateway drains these subscriptions through Membrane-backed Opus egress. The rendered
+multi-browser sample remains subsequent work.
 
-The attachment also makes the currently safe output path explicit. A room whose entry receiver is
-human and therefore has no active text/TTS capability advertises `:mix_minus`; the transport may
-create exactly one policy-authorized mixer subscription for that participant through the opaque
-Call Engine API. Legacy rooms and planned rooms with an active agent advertise room output as
-disabled and retain their direct TTS sink. This avoids deriving output ownership from whether STT
-happens to be configured and prevents two RTP producers from silently claiming one WebRTC track.
-Later human-transfer work owns the explicit transition between those modes when agent capability
-ownership changes mid-call.
+The attachment also makes output authority explicit. Every ordinary human connection in a planned
+room receives policy-authorized mix-minus output, including while an agent owns the room's direct
+TTS path; monitor connections receive full mix and cannot publish. The transport creates each
+subscription only through the opaque Call Engine handle. Agent TTS remains a direct output source,
+while authorized human callers can hear other admitted room sources before and after agent
+handoff. This avoids deriving media ownership from whether STT happens to be configured and lets a
+human-only continuation reuse the same room/mixer path rather than switch to a second bridge.
 
 Silent-monitor authority is carried by the engine-issued connection attachment rather than by a
 client-supplied mixer option. An admitted monitor receives `:full_mix`, has no STT or room-audio
@@ -1448,6 +1461,15 @@ result envelope:
 
 RTVI protocol errors remain reserved for malformed, unsupported, or
 uncorrelatable wire messages.
+
+One deliberately separate transport mechanism exists for a provisional human-transfer
+destination. Its WebRTC connection may negotiate a `vxpipe` data channel alongside RTVI's `chat`
+channel. The server sends `transfer.preparation`, the authenticated destination sends
+`transfer.accept`, and the server sends `transfer.active` only after engine commit and usable main
+media. Controls carry bounded public attempt/participant identifiers, never briefing content or
+internal authorization detail. This is not an RTVI message family and does not alter behavior for
+an unmodified RTVI 2.x client. Future adapters may expose the same protocol-neutral engine command
+through another authenticated mechanism.
 
 Initial optional message families are:
 

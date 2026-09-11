@@ -105,6 +105,9 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
           claim.call.started_at
         )
 
+      {:transfer_pending, participant} ->
+        send_pending_transfer_session(conn, options, claim, participant)
+
       {:started, room} ->
         started_at = options.clock.()
         project(options, :mark_started, [claim, room.incarnation_id, started_at])
@@ -163,6 +166,34 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
     end
   end
 
+  defp send_pending_transfer_session(conn, options, claim, participant) do
+    case issue_pending_transfer_session(options, claim, participant) do
+      {:ok, session} ->
+        send_json(conn, 201, %{
+          "call" => %{
+            "call_id" => claim.call.id,
+            "started_at" => DateTime.to_iso8601(claim.call.started_at),
+            "state" => "running"
+          },
+          "participant" => %{
+            "participant_id" => participant.participant_id,
+            "role" => Atom.to_string(participant.kind),
+            "state" => "pending_transfer"
+          },
+          "session" => session_public(session)
+        })
+
+      {:error, _reason} ->
+        send_error(
+          conn,
+          503,
+          "session_start_failed",
+          "The gateway session could not be started.",
+          true
+        )
+    end
+  end
+
   defp issue_session(options, claim, incarnation_id, participant) do
     SessionSupervisor.issue(
       [
@@ -170,6 +201,20 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
         actor_id: claim.call.plan.actor_id,
         room_id: participant.room_id,
         incarnation_id: incarnation_id,
+        participant_id: participant.participant_id,
+        tool_visibility: claim.call.plan.tool_visibility
+      ],
+      options.session_ttl_ms
+    )
+  end
+
+  defp issue_pending_transfer_session(options, claim, participant) do
+    SessionSupervisor.issue(
+      [
+        tenant_id: claim.call.tenant_key,
+        actor_id: claim.call.plan.actor_id,
+        room_id: claim.call.room_id,
+        incarnation_id: claim.call.incarnation_id,
         participant_id: participant.participant_id,
         tool_visibility: claim.call.plan.tool_visibility
       ],

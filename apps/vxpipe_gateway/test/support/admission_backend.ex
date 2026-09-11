@@ -17,6 +17,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
         participant_failure?: Keyword.get(options, :participant_failure?, false),
         projection_failure?: Keyword.get(options, :projection_failure?, false),
         start_failure?: Keyword.get(options, :start_failure?, false),
+        transfer_pending?: Keyword.get(options, :transfer_pending?, false),
         operations: []
       }
     end)
@@ -72,7 +73,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
 
     Agent.get(agent, fn state ->
       if secret == state.join_token and expected_scope == expected_scope() do
-        {:ok, admission_claim(state.existing_call?)}
+        {:ok, admission_claim(state.existing_call? or state.transfer_pending?)}
       else
         {:error, :token_scope_mismatch}
       end
@@ -84,10 +85,20 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
 
     Agent.get(agent, fn state ->
       cond do
-        state.existing_call? -> {:joined, participant_snapshot()}
-        state.start_failure? -> {:error, :room_start_failed}
-        state.participant_failure? -> {:started, room_snapshot()}
-        true -> {:ok, room_snapshot(), participant_snapshot()}
+        state.transfer_pending? ->
+          {:transfer_pending, %{participant_id: "part_test-support", kind: :human}}
+
+        state.existing_call? ->
+          {:joined, participant_snapshot()}
+
+        state.start_failure? ->
+          {:error, :room_start_failed}
+
+        state.participant_failure? ->
+          {:started, room_snapshot()}
+
+        true ->
+          {:ok, room_snapshot(), participant_snapshot()}
       end
     end)
   end

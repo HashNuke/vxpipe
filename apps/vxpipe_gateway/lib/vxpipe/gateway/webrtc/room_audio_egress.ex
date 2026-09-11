@@ -21,6 +21,9 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress do
   @spec activate(pid()) :: :ok | {:error, term()}
   def activate(egress), do: safe_call(egress, :activate)
 
+  @spec await_ready(pid()) :: :ok | {:error, term()}
+  def await_ready(egress), do: safe_call(egress, :await_ready)
+
   @impl true
   def init(options), do: {:ok, State.new(options)}
 
@@ -37,11 +40,19 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress do
 
   def handle_call(:activate, _from, state), do: {:reply, {:error, :already_started}, state}
 
-  def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
+  def handle_call(:await_ready, _from, %{pipeline_ready?: true} = state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:await_ready, from, state) do
+    {:noreply, %{state | ready_waiters: [from | state.ready_waiters]}}
+  end
+
+  def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, from, state) do
     with :ok <- Snapshot.validate_transition(snapshot, state.policy),
-         {:ok, state} <- install_policy(snapshot, state),
+         {:ok, reply_mode, state} <- install_policy(snapshot, from, state),
          {:ok, state} <- Delivery.drain(state) do
-      {:reply, :ok, state}
+      policy_reply(reply_mode, state)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
       {:error, reason, state} -> {:reply, {:error, reason}, state}
@@ -57,7 +68,8 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress do
         {:vxpipe_room_audio_output_ready, pipeline_id},
         %{pipeline_id: pipeline_id} = state
       ) do
-    continue(%{state | pipeline_ready?: true})
+    Enum.each(state.ready_waiters, &GenServer.reply(&1, :ok))
+    continue(%{state | pipeline_ready?: true, ready_waiters: []})
   end
 
   def handle_info(
@@ -112,16 +124,23 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress do
     end
   end
 
-  defp install_policy(snapshot, %{policy: nil} = state) do
-    {:ok, %{state | policy: snapshot}}
+  defp install_policy(snapshot, _from, %{policy: nil} = state) do
+    {:ok, :immediate, %{state | policy: snapshot}}
   end
 
-  defp install_policy(snapshot, state) do
+  defp install_policy(snapshot, from, state) do
     case PipelineLifecycle.replace(state) do
-      {:ok, state} -> {:ok, %{state | policy: snapshot}}
-      {:error, reason, state} -> {:error, reason, state}
+      {:ok, state} ->
+        {:ok, :when_ready,
+         %{state | policy: snapshot, ready_waiters: [from | state.ready_waiters]}}
+
+      {:error, reason, state} ->
+        {:error, reason, state}
     end
   end
+
+  defp policy_reply(:immediate, state), do: {:reply, :ok, state}
+  defp policy_reply(:when_ready, state), do: {:noreply, state}
 
   defp continue(state) do
     case Delivery.drain(state) do

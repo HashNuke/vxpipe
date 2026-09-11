@@ -29,7 +29,8 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.PipelineLifecycle do
            | pipeline_generation: generation,
              pipeline_id: pipeline_id,
              pipeline_monitor: Process.monitor(pipeline_pid),
-             pipeline_pid: pipeline_pid
+             pipeline_pid: pipeline_pid,
+             pipeline_ready?: false
          }}
 
       {:error, reason} ->
@@ -49,7 +50,13 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.PipelineLifecycle do
 
   @spec clear(State.t()) :: State.t()
   def clear(%State{} = state) do
-    %{state | pipeline_id: nil, pipeline_monitor: nil, pipeline_pid: nil}
+    %{
+      state
+      | pipeline_id: nil,
+        pipeline_monitor: nil,
+        pipeline_pid: nil,
+        pipeline_ready?: false
+    }
   end
 
   defp stop(%State{pipeline_pid: nil}), do: :ok

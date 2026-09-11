@@ -22,6 +22,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
     :pipeline_ready?,
     :pipeline_supervisor,
     :policy,
+    :ready_waiters,
     :subscription,
     :subscription_id,
     :track_id
@@ -46,6 +47,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
           pipeline_ready?: boolean(),
           pipeline_supervisor: module(),
           policy: Snapshot.t() | nil,
+          ready_waiters: [GenServer.from()],
           subscription: term() | nil,
           subscription_id: String.t(),
           track_id: String.t()
@@ -78,6 +80,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioEgress.State do
       pipeline_ready?: false,
       pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, ConnectionPeerSupervisor),
       policy: nil,
+      ready_waiters: [],
       subscription: nil,
       subscription_id: "#{connection_id}:room-output",
       track_id: Keyword.fetch!(options, :track_id)

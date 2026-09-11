@@ -503,7 +503,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           state =
             cond do
               Map.has_key?(state.participant_monitors, monitor) ->
-                ParticipantLifecycle.remove(monitor, reason, state)
+                participant_id = Map.fetch!(state.participant_monitors, monitor)
+                state = ParticipantLifecycle.remove(monitor, reason, state)
+                ParticipantTransfer.promote_connection_after_source_exit(state, participant_id)
 
               Map.has_key?(state.connection_monitors, monitor) ->
                 connection_id = Map.fetch!(state.connection_monitors, monitor)

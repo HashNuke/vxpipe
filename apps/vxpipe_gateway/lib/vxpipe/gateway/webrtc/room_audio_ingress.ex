@@ -32,6 +32,9 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
   def push(nil, _frame), do: :disabled
   def push(ingress, frame), do: safe_call(ingress, {:push, frame})
 
+  @spec await_ready(pid()) :: :ok | {:error, term()}
+  def await_ready(ingress), do: safe_call(ingress, :await_ready)
+
   @impl true
   def init(options), do: {:ok, State.new(options)}
 
@@ -44,6 +47,14 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
   end
 
   def handle_call(:start_pipeline, _from, state), do: {:reply, {:error, :already_started}, state}
+
+  def handle_call(:await_ready, _from, %{pipeline_ready?: true} = state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:await_ready, from, state) do
+    {:noreply, %{state | ready_waiters: [from | state.ready_waiters]}}
+  end
 
   def handle_call({:push, _frame}, _from, %{policy: nil} = state) do
     {:reply, {:error, :policy_unavailable}, state}
@@ -62,7 +73,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
     end
   end
 
-  def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
+  def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, from, state) do
     case Snapshot.validate_transition(snapshot, state.policy) do
       :ok when is_nil(state.policy) ->
         {:reply, :ok, %{state | policy: snapshot}}
@@ -73,10 +84,11 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
             state = %{
               state
               | policy: snapshot,
+                ready_waiters: [from | state.ready_waiters],
                 reject_received_through_ms: state.clock.()
             }
 
-            {:reply, :ok, state}
+            {:noreply, state}
 
           {:error, reason, state} ->
             {:reply, {:error, reason}, state}
@@ -122,6 +134,14 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
 
   def handle_info({:vxpipe_audio_pipeline, _stale_pipeline_id, %PCMFrame{}}, state) do
     {:noreply, state}
+  end
+
+  def handle_info(
+        {:vxpipe_audio_pipeline_ready, pipeline_id},
+        %{pipeline_id: pipeline_id} = state
+      ) do
+    Enum.each(state.ready_waiters, &GenServer.reply(&1, :ok))
+    {:noreply, %{state | pipeline_ready?: true, ready_waiters: []}}
   end
 
   def handle_info({:vxpipe_audio_pipeline_ready, _pipeline_id}, state), do: {:noreply, state}

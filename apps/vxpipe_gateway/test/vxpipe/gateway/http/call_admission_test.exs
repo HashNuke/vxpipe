@@ -262,6 +262,44 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     assert call_id == TestAdmissionBackend.call_id()
   end
 
+  test "issues a provisional session without joining a transfer-only human", _context do
+    backend =
+      start_supervised!(
+        {TestAdmissionBackend,
+         api_key: @api_key, join_token: @join_token, observer: self(), transfer_pending?: true},
+        id: :transfer_pending_backend
+      )
+
+    conn =
+      :post
+      |> conn(session_path(), JSON.encode!(%{}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer #{@join_token}")
+      |> put_req_header("origin", @origin)
+      |> Endpoint.call(endpoint_options(backend))
+
+    assert conn.status == 201
+
+    assert %{
+             "call" => %{
+               "started_at" => "2026-09-09T12:00:05.000000Z",
+               "state" => "running"
+             },
+             "participant" => %{
+               "participant_id" => "part_test-support",
+               "role" => "human",
+               "state" => "pending_transfer"
+             },
+             "session" => %{
+               "incarnation_id" => "rinc_test-admission",
+               "participant_id" => "part_test-support"
+             }
+           } = body(conn)
+
+    refute_receive {:test_admission_started, _incarnation_id, _started_at}
+    refute_receive {:test_admission_failed, _reason}
+  end
+
   test "does not let browser session input replace prepared values or visibility", context do
     conn =
       :post
