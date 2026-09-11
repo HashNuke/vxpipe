@@ -13,6 +13,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.Adapter do
   }
 
   alias Vxpipe.Gateway.Telephony.Telnyx.{
+    MediaDecoder,
     MediaSettings,
     VoiceClient,
     WebhookDecoder,
@@ -80,7 +81,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.Adapter do
   def decode_webhook(_options, %Webhook{} = webhook), do: WebhookDecoder.decode(webhook)
 
   @impl true
-  def decode_media_message(_options, _message), do: {:error, :telnyx_media_not_attached}
+  def decode_media_message(options, message), do: MediaDecoder.decode(options, message)
 
   defp submission({:accepted, body}, nil) do
     case get_in(body, ["data", "call_control_id"]) do

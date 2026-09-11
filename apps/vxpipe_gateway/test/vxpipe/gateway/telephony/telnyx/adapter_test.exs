@@ -24,9 +24,9 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AdapterTest do
                "webhook_url_method" => "POST",
                "stream_url" => "wss://voice.example.test/telnyx/media/leg-outbound",
                "stream_track" => "inbound_track",
-               "stream_codec" => "L16",
+               "stream_codec" => "OPUS",
                "stream_bidirectional_mode" => "rtp",
-               "stream_bidirectional_codec" => "L16",
+               "stream_bidirectional_codec" => "OPUS",
                "stream_bidirectional_sampling_rate" => 16_000,
                "stream_bidirectional_target_legs" => "self",
                "answering_machine_detection" => "detect",
@@ -62,9 +62,9 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AdapterTest do
       assert %{
                "stream_url" => "wss://voice.example.test/telnyx/media/leg-inbound",
                "stream_track" => "inbound_track",
-               "stream_codec" => "L16",
+               "stream_codec" => "OPUS",
                "stream_bidirectional_mode" => "rtp",
-               "stream_bidirectional_codec" => "L16",
+               "stream_bidirectional_codec" => "OPUS",
                "stream_bidirectional_sampling_rate" => 16_000,
                "stream_bidirectional_target_legs" => "self",
                "command_id" => "answer-leg-inbound"

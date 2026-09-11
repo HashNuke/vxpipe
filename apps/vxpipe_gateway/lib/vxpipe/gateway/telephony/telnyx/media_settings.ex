@@ -8,9 +8,9 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSettings do
     %{
       "stream_url" => stream_url,
       "stream_track" => "inbound_track",
-      "stream_codec" => "L16",
+      "stream_codec" => "OPUS",
       "stream_bidirectional_mode" => "rtp",
-      "stream_bidirectional_codec" => "L16",
+      "stream_bidirectional_codec" => "OPUS",
       "stream_bidirectional_sampling_rate" => @sample_rate,
       "stream_bidirectional_target_legs" => "self"
     }

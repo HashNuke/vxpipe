@@ -545,7 +545,7 @@ rerun, followed by the complete clean umbrella result. No timing implementation 
 ## Checkpoint 12: bounded Telnyx Voice API commands
 
 The Telnyx adapter now maps the provider-neutral dial, answer, and exact-leg end commands onto the
-current Voice API endpoints. Dial and answer request one bidirectional L16 16 kHz stream, with
+current Voice API endpoints. Dial and answer request one bidirectional Opus stream, with
 inbound audio selected for room ingestion and outbound mixer audio addressed back to the same leg.
 Dial also sends the configured Voice API connection, callback URL, an opaque Vxpipe leg correlation
 value, and `detect` only when AMD was enabled by the compiled intent. Hangup uses the already
@@ -574,3 +574,38 @@ The root format, warnings-as-errors compile, strict Credo, unused-dependency, an
 umbrella test gates passed with 696 tests and zero failures. The first umbrella run had one failure
 in the unrelated MCP mixed-DNS wire-security test. Its exact test passed immediately, followed by
 the complete clean umbrella result; no MCP implementation was changed.
+
+## Checkpoint 13: exact-leg Telnyx media decoding
+
+The command media settings now request Telnyx's supported Opus mode rather than L16. This lets the
+next Membrane pipeline decode directly to the room's existing 48 kHz PCM without an FFmpeg process,
+`libswresample`, or a custom sample-rate converter. The configured Telnyx voice bandwidth remains
+16 kHz while the Opus decoder owns conversion to the room format.
+
+The media decoder accepts a bounded JSON message only after its `start` message matches the
+in-memory call-control ID, session ID, opaque Vxpipe leg state, optional expected stream ID, and the
+requested Opus/16 kHz/mono format. Media messages must name the admitted stream and inbound track;
+their base64 payload, global sequence, media chunk, and millisecond timestamp are parsed without
+turning provider strings into atoms. Media chunk is used as the audio ordering sequence, while the
+provider sequence remains part of a stable event identity. Socket DTMF receives the exact known
+leg/session identity and provider occurrence time before common event validation. Another call,
+stream, direction, malformed base64 payload, or incompatible format fails closed.
+
+The tests were written first. The combined provider adapter/media suite initially had seven
+expected failures because media decoding was unattached and command requests still selected L16.
+The focused green result after implementation was:
+
+```text
+cd apps/vxpipe_gateway
+MIX_ENV=test mix test test/vxpipe/gateway/telephony/telnyx/adapter_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/media_decoder_test.exs
+# 11 tests, 0 failures
+```
+
+This checkpoint validates the provider message boundary only. A WebSocket owner, media token, and
+Membrane ingress/egress pipelines remain required before media can attach to the room.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella test gates passed with 701 tests and zero failures. The umbrella has no `ecto.setup` alias;
+the disposable test database was therefore initialized with the existing `ecto.create` and
+`ecto.migrate` tasks before the clean test run.

@@ -1075,13 +1075,23 @@ events currently return an explicit processing error rather than being silently 
 
 Telnyx command submission is isolated behind the common adapter and a small Voice API client. Dial
 creates one authorized provider leg with the configured Voice API connection, exact callback URL,
-opaque Vxpipe leg correlation, optional `detect` AMD, and one bidirectional L16 16 kHz media stream.
+opaque Vxpipe leg correlation, optional `detect` AMD, and one bidirectional Opus media stream.
 Answer adopts an exact known provider control ID into the same media contract; hangup also targets
 only that exact ID. The HTTP client disables redirects and automatic retries for all three
 side-effecting commands. A 2xx response is accepted, a bounded 4xx status is a known rejection, and
 a transport, 3xx, or 5xx result is an unknown outcome. Unknown never means permission to submit the
 command again; later correlated provider events determine what actually happened. Provider bodies
 and API credentials are not included in returned errors.
+
+The carrier requests Opus at its supported 16 kHz voice bandwidth rather than L16. Telnyx media
+messages carry headerless RTP payloads plus string sequence, chunk, and millisecond timestamp
+fields. The adapter admits a socket `start` only when its call-control ID, session ID, opaque leg
+state, stream identity, and declared Opus/16 kHz/mono format match the in-memory leg. Subsequent
+inbound media is base64-decoded into a provider-neutral packet ordered by media chunk; DTMF is
+given the same exact leg identity and its provider occurrence time. Another call, session, stream,
+direction, codec, or malformed payload fails before entering a pipeline. The Membrane Opus path
+will decode directly to the existing 48 kHz room PCM clock, avoiding FFmpeg and a separate raw-PCM
+resampler.
 
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
