@@ -36,6 +36,7 @@ defmodule Vxpipe.Gateway.MixProject do
       {:ex_webrtc, "~> 0.17.0"},
       {:membrane_opus_plugin, "~> 0.21.0"},
       {:membrane_raw_audio_parser_plugin, "~> 0.5.0"},
+      {:membrane_realtimer_plugin, "~> 0.11.1"},
       {:membrane_rtp_opus_plugin, "~> 0.10.3"},
       {:membrane_rtp_plugin, "~> 0.31.5"},
       {:numbers, "== 5.2.4", override: true},

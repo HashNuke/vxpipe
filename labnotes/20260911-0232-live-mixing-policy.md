@@ -308,3 +308,28 @@
 - The Call Engine suite remains green at 320 tests with one tagged integration exclusion. A fresh
   PostgreSQL-backed umbrella run and every formatting, compile, Credo, and dependency gate pass;
   the exact disposable database container was removed afterward.
+
+## 2026-09-11 — Membrane room-output encoding
+
+- Added the output-pipeline test before implementation. Its red run failed because
+  `RoomAudioOutputPipeline` did not exist.
+- Added a per-attachment Membrane chain from the room mixer's fixed PCM format through Opus
+  encoding, RTP payload/header generation, presentation-timestamp pacing, and the WebRTC RTP send
+  boundary. No FFmpeg element or external process participates in this path.
+- The first implementation announced readiness from the parent pipeline's `handle_playing/2`.
+  The green run exposed that Membrane can invoke that callback before all children finish linking;
+  an immediate push reached a stopped source. Readiness now requires all six children to report
+  `:playing`.
+- Opus encoding deliberately drops arbitrary buffer metadata. The first delivery acknowledgement
+  attempt therefore lost the mixer timestamp. The sink now reconstructs the exact room-sample
+  timestamp from the PTS preserved by the media chain, which also keeps RTP and acknowledgement
+  timing on the same authoritative clock.
+- The focused tests pass for coherent SSRC/sequence/timestamp progression, decodable Opus payload,
+  delivery acknowledgement, and pinned recipient/format rejection. Connection-owned subscription
+  draining and policy-revision replacement remain separate work; this checkpoint does not yet make
+  the human-only browser path runnable.
+- The complete Gateway suite passes 77 tests with four tagged integration exclusions. A fresh
+  PostgreSQL-backed umbrella run passes across all seven applications: MCP 37 tests with three
+  exclusions, Agent Runtime 58 with two exclusions, Call Engine 320 with one exclusion, Calls 37,
+  Persistence 25, Gateway 77 with four exclusions, and Console 57. Formatting,
+  warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.

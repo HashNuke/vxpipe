@@ -214,6 +214,19 @@ switching belongs to the later human-transfer milestone; Gateway draining and Op
 open here. The Call Engine suite remains green at 320 tests with one tagged integration exclusion,
 and the fresh PostgreSQL-backed umbrella run and all quality gates pass.
 
+The first output-media checkpoint now turns one fixed-format mixer frame stream into WebRTC-ready
+Opus/RTP. A dedicated Membrane pipeline owns PCM ingestion, voice-tuned Opus encoding, Opus RTP
+payloading, randomized RTP stream identity/header sequencing, presentation-timestamp-based
+real-time pacing, and delivery to the negotiated WebRTC audio track. The boundary accepts only
+20 ms, 48 kHz, mono s16le `:mix_minus` frames whose tenant, room incarnation, subscription, and
+recipient match its pinned attachment. Readiness is announced only after every child in the media
+chain reaches `:playing`; this prevents a caller from pushing into a pipeline whose children are
+still linking. Focused tests verify two encoded packets as one coherent RTP stream, their 960-sample
+timestamp progression, decodable Opus output, delivery acknowledgements, and identity/format
+rejection. The pipeline contains no FFmpeg element or process. Bounded subscription draining,
+policy-revision pipeline replacement, and live connection startup remain the next checkpoint, so
+the transport checklist and browser-runnable outcome remain open.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
