@@ -710,6 +710,39 @@ playback is not yet claimed.
 Root formatting, compilation with warnings as errors, strict Credo over 650 source files, all 826
 default umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 18: aligned virtual WAV and byte ranges
+
+Console now has browser-independent primitives for playback without transcoding or an external
+media process. A recording source contains safe artifact metadata and an inspection-redacted
+bounded reader. `RecordingWave` constructs the standard 44-byte RIFF/WAVE header for signed
+little-endian 16-bit PCM and exposes only bounded chunks.
+
+The virtual data length uses the manifest timeline, not only stored sample count. Known gap
+intervals are synthesized as zero-valued PCM while recorded intervals map to sequential bounded
+object reads. Gap order, bounds, and total sample arithmetic must reconstruct exactly; inconsistent
+metadata is rejected instead of shifting later audio earlier. RIFF's 32-bit size ceiling and format
+arithmetic are also enforced.
+
+A separate single-range parser supports complete, bounded, open-ended, and suffix HTTP byte
+ranges, clamps an end past the file, and rejects malformed, multiple, or unsatisfiable ranges.
+Neither module owns a controller, operator session, database query, or S3 configuration.
+
+The tests were first red because the source, reader, wave, and range modules did not exist. The
+green cases read the virtual file in three-byte chunks, verify the exact WAVE header, preserve a
+two-sample gap as silence, and cover accepted/rejected HTTP range forms:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/recording_wave_test.exs \
+  test/vxpipe/console/http_byte_range_test.exs --max-cases 1
+# 4 tests, 0 failures
+```
+
+The authenticated streaming controller and rendered recording controls remain pending.
+
+Root formatting, compilation with warnings as errors, strict Credo over 654 source files, all 830
+default umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

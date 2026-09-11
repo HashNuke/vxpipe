@@ -658,3 +658,34 @@ Console responsibilities built on this bounded port.
 
 Root formatting, compilation with warnings as errors, strict Credo over 650 source files, all 826
 default umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: virtual WAV and range selection
+
+The stored recording remains raw signed little-endian 16-bit PCM. Console now has a focused
+virtual-file layer that creates a standard WAVE header and fetches only the bounded source ranges
+needed for each response chunk. There is no transcode, temporary file, whole-object buffer, or
+external media executable.
+
+A manifest gap cannot simply be omitted during playback because that would pull every later voice
+interval earlier. The virtual WAVE layout converts each declared gap into zero-valued PCM and maps
+the surrounding data segments to their sequential positions in the stored object. It accepts the
+layout only when start/end offsets, stored sample count, and all gap counts reconcile exactly. The
+format and RIFF 32-bit size limits are checked before a response begins.
+
+The HTTP range parser is separate from media projection. It selects one complete, bounded,
+open-ended, or suffix range and rejects multi-range or unsatisfiable requests. The tests were first
+red with the expected undefined modules. Their green run reads a gapped file in three-byte chunks,
+checks its exact header/data bytes, and exercises the supported range forms:
+
+```text
+cd apps/vxpipe_console
+mix test test/vxpipe/console/recording_wave_test.exs \
+  test/vxpipe/console/http_byte_range_test.exs --max-cases 1
+# 4 tests, 0 failures
+```
+
+These are not yet reachable over HTTP. The operator route will compose them with exact Calls
+authorization and the S3-compatible reader in a later checkpoint.
+
+Root formatting, compilation with warnings as errors, strict Credo over 654 source files, all 830
+default umbrella tests, and the unused-dependency check pass.

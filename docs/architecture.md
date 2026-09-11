@@ -2453,6 +2453,15 @@ credential discovery, request signing, endpoint configuration, and S3 response h
 layers may stream a recording through repeated bounded reads without loading the object into a
 room process or a single application buffer.
 
+Console projects the stored signed-16 PCM into a virtual RIFF/WAVE file for ordinary browser
+playback; it performs no transcoding and starts no external media process. The 44-byte header is
+generated from the artifact format. Manifest gaps become zero-valued PCM intervals in the virtual
+data so a damaged recording retains its known timeline instead of silently compressing time.
+Individual tracks begin at their recorded start offset, which remains visible as alignment
+metadata. A single-range HTTP parser supports complete, bounded, open-ended, and suffix reads;
+multiple or unsatisfiable ranges fail closed. Both header and silence are generated in bounded
+chunks, while recorded bytes continue through the artifacts-owned range port.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped
