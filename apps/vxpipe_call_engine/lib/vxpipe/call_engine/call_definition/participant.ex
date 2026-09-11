@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
   alias Vxpipe.CallEngine.CallDefinition.{
     Capabilities,
     ConnectionIntent,
+    MediaPolicy,
     ToolSelection,
     TransferHistory,
     VariablePermissions
@@ -18,18 +19,20 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :prompt,
     :first_message,
     :capabilities,
+    :while_present,
     :tools,
     :transfers,
     :transfer_history,
     :variable_permissions
   ]
-  @human_fields [:type, :description, :connection, :capabilities]
+  @human_fields [:type, :description, :connection, :capabilities, :while_present]
   @agent_fields [
     :type,
     :description,
     :prompt,
     :first_message,
     :capabilities,
+    :while_present,
     :tools,
     :transfers,
     :transfer_history,
@@ -45,6 +48,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
     :first_message,
     :first_message_text,
     :capabilities,
+    :while_present,
     :tools,
     :transfers,
     :transfer_history,
@@ -61,6 +65,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
           first_message: nil | :wait_for_input | :generated | :fixed,
           first_message_text: nil | String.t(),
           capabilities: Capabilities.t(),
+          while_present: MediaPolicy.t(),
           tools: %{optional(String.t()) => ToolSelection.t()},
           transfers: [String.t()],
           transfer_history: nil | TransferHistory.t(),
@@ -89,6 +94,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
          {:ok, description} <- optional_description(input, code, message, path),
          {:ok, capabilities} <-
            Capabilities.new(Map.get(input, :capabilities, %{}), path ++ ["capabilities"]),
+         {:ok, while_present} <-
+           MediaPolicy.from_optional(
+             Map.fetch(input, :while_present),
+             path ++ ["while_present"]
+           ),
          {:ok, attributes} <- kind_attributes(kind, input, code, message, path) do
       {:ok,
        struct!(
@@ -97,7 +107,8 @@ defmodule Vxpipe.CallEngine.CallDefinition.Participant do
            definition_key: definition_key,
            kind: kind,
            description: description,
-           capabilities: capabilities
+           capabilities: capabilities,
+           while_present: while_present
          })
        )}
     end

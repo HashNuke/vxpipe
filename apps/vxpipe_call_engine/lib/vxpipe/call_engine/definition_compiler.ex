@@ -26,6 +26,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     VariableSection
   }
 
+  alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy, as: ResolvedMediaPolicy
+
   @code :call_definition_resolution_failed
   @message "The call definition could not be resolved."
 
@@ -51,6 +53,12 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
              Map.get(registries, :mcp_integrations),
              invocation.tenant_id
            ),
+         {:ok, media_policy} <-
+           resolve_media_policy(
+             definition.media_policy,
+             participant_ids(base_participants),
+             ["media_policy"]
+           ),
          {:ok, participants} <- resolve_transfer_bindings(base_participants),
          {:ok, tool_visibility} <-
            resolve_tool_visibility(
@@ -71,6 +79,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          entry_caller: definition.entry_caller,
          entry_receiver: definition.entry_receiver,
          opening_audio: definition.opening_audio,
+         media_policy: media_policy,
          participants: participants,
          transfer_policy: definition.transfer_policy,
          call_variables: call_variables,
@@ -124,6 +133,16 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          mcp_integrations,
          tenant_id
        ) do
+    identities =
+      Map.new(definition.participants, fn {key, participant} ->
+        activation_id = if participant.kind == :agent, do: Id.generate(:activation), else: nil
+
+        {key, %{participant_id: Id.generate(:participant), activation_id: activation_id}}
+      end)
+
+    participant_ids =
+      Map.new(identities, fn {key, identity} -> {key, identity.participant_id} end)
+
     Enum.reduce_while(definition.participants, {:ok, %{}}, fn {key, participant}, {:ok, acc} ->
       case resolve_participant(
              participant,
@@ -131,7 +150,9 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
              capability_profiles,
              host_tools,
              mcp_integrations,
-             tenant_id
+             tenant_id,
+             Map.fetch!(identities, key),
+             participant_ids
            ) do
         {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
         {:error, _error} = error -> {:halt, error}
@@ -145,17 +166,23 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          profiles,
          host_tools,
          mcp_integrations,
-         tenant_id
+         tenant_id,
+         identity,
+         participant_ids
        ) do
     with {:ok, capabilities} <- resolve_capabilities(participant, defaults, profiles),
-         {:ok, tools} <- resolve_tools(participant, host_tools, mcp_integrations, tenant_id) do
-      activation_id = if participant.kind == :agent, do: Id.generate(:activation), else: nil
-
+         {:ok, tools} <- resolve_tools(participant, host_tools, mcp_integrations, tenant_id),
+         {:ok, while_present} <-
+           resolve_media_policy(
+             participant.while_present,
+             participant_ids,
+             ["participants", participant.definition_key, "while_present"]
+           ) do
       {:ok,
        %ResolvedCallPlan.Participant{
          definition_key: participant.definition_key,
-         participant_id: Id.generate(:participant),
-         activation_id: activation_id,
+         participant_id: identity.participant_id,
+         activation_id: identity.activation_id,
          kind: participant.kind,
          description: participant.description,
          connection: participant.connection,
@@ -163,11 +190,25 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          first_message: participant.first_message,
          first_message_text: participant.first_message_text,
          capabilities: capabilities,
+         while_present: while_present,
          tools: tools,
          transfers: participant.transfers,
          transfer_history: participant.transfer_history,
          variable_permissions: participant.variable_permissions
        }}
+    end
+  end
+
+  defp participant_ids(participants) do
+    Map.new(participants, fn {definition_key, participant} ->
+      {definition_key, participant.participant_id}
+    end)
+  end
+
+  defp resolve_media_policy(policy, participant_ids, path) do
+    case ResolvedMediaPolicy.resolve(policy, participant_ids) do
+      {:ok, resolved} -> {:ok, resolved}
+      :error -> invalid(path, "is not a validated trusted media policy")
     end
   end
 

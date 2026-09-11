@@ -116,7 +116,7 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
 
   defp definition_input do
     %{
-      schema_version: "20260910.06",
+      schema_version: "20260911.01",
       name: "First",
       entry_caller: "caller",
       entry_receiver: "assistant",

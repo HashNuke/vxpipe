@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   alias Vxpipe.CallEngine.CallDefinition.{
     CallVariables,
     Capabilities,
+    MediaPolicy,
     OpeningAudio,
     Participant,
     TransferPolicy,
@@ -14,7 +15,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260910.06"
+  @schema_version "20260911.01"
   @fields [
     :schema_version,
     :name,
@@ -22,6 +23,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :entry_receiver,
     :defaults,
     :opening_audio,
+    :media_policy,
     :call_variables,
     :participants,
     :transfer_policy,
@@ -39,6 +41,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :entry_receiver,
     :default_capabilities,
     :opening_audio,
+    :media_policy,
     :call_variables,
     :participants,
     :transfer_policy,
@@ -56,6 +59,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           entry_receiver: String.t(),
           default_capabilities: Capabilities.t(),
           opening_audio: nil | OpeningAudio.t(),
+          media_policy: MediaPolicy.t(),
           call_variables: CallVariables.t(),
           participants: %{String.t() => Participant.t()},
           transfer_policy: TransferPolicy.t(),
@@ -92,12 +96,15 @@ defmodule Vxpipe.CallEngine.CallDefinition do
            DefinitionValidation.identifier(receiver_input, code, message, ["entry_receiver"]),
          {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
          {:ok, opening_audio} <- OpeningAudio.new(Map.get(input, :opening_audio)),
+         {:ok, media_policy} <-
+           MediaPolicy.from_optional(Map.fetch(input, :media_policy), ["media_policy"]),
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
          {:ok, participants_input} <-
            DefinitionValidation.fetch(input, :participants, code, message, []),
          {:ok, participants} <- participants(participants_input, code, message),
          :ok <- validate_entries(entry_caller, entry_receiver, participants, code, message),
          :ok <- validate_transfers(participants, code, message),
+         :ok <- validate_media_policies(media_policy, participants),
          {:ok, transfer_policy} <- TransferPolicy.new(Map.get(input, :transfer_policy)),
          :ok <- validate_variable_permissions(participants, call_variables, code, message),
          {:ok, tool_visibility} <-
@@ -117,6 +124,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          entry_receiver: entry_receiver,
          default_capabilities: defaults,
          opening_audio: opening_audio,
+         media_policy: media_policy,
          call_variables: call_variables,
          participants: participants,
          transfer_policy: transfer_policy,
@@ -258,6 +266,21 @@ defmodule Vxpipe.CallEngine.CallDefinition do
         {:error, _error} = error -> {:halt, error}
       end
     end)
+  end
+
+  defp validate_media_policies(media_policy, participants) do
+    with :ok <- MediaPolicy.validate_references(media_policy, participants, ["media_policy"]) do
+      Enum.reduce_while(participants, :ok, fn {definition_key, participant}, :ok ->
+        case MediaPolicy.validate_references(
+               participant.while_present,
+               participants,
+               ["participants", definition_key, "while_present"]
+             ) do
+          :ok -> {:cont, :ok}
+          {:error, _error} = error -> {:halt, error}
+        end
+      end)
+    end
   end
 
   defp validate_transfer_targets(participant, participants, code, message) do

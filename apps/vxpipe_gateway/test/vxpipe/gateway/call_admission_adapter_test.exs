@@ -85,6 +85,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       first_message: nil,
       first_message_text: nil,
       capabilities: %Capabilities{},
+      while_present: Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy.inherit(),
       tools: %{},
       transfers: [],
       transfer_history: nil,
@@ -94,7 +95,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     %ResolvedCallPlan{
       definition_id: unique_id("definition"),
       definition_revision: 1,
-      schema_version: "20260910.06",
+      schema_version: "20260911.01",
       tenant_id: tenant_id,
       actor_id: unique_id("actor"),
       call_id: unique_id("call"),
@@ -103,6 +104,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       entry_caller: "caller",
       entry_receiver: "assistant",
       opening_audio: nil,
+      media_policy: Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy.inherit(),
       participants: %{"support" => participant},
       transfer_policy: %Vxpipe.CallEngine.CallDefinition.TransferPolicy{
         attempt_timeout_ms: 30_000

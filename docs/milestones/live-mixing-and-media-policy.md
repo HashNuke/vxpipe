@@ -1,6 +1,6 @@
 # Live mixing and presence-driven media policy
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: partially implemented. Specification review: approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Call lifecycle](opening-audio-and-call-lifecycle.md); [Agent transfers](agent-transfers.md).
 Sources: [Media policy](../../labnotes/20260905-0405-call-definition-design.md#participant-presence-constrains-the-capability-topology); [live mixing](../../labnotes/20260905-0405-call-definition-design.md#mix-live-record-participant-tracks-and-the-live-mix); [commit barrier](../../labnotes/20260905-0405-call-definition-design.md#retained-transfer-and-media-enforcement-invariants).
 
@@ -53,8 +53,20 @@ No implicit full-room monitor privilege, capability-denial selectors, participan
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence (2026-09-11): schema `20260911.01` introduces the normal call-wide
+`media_policy` and participant-local `while_present` shapes. Omitted fields compile as `:inherit`,
+while explicit empty route maps/recipient lists and false storage permissions remain distinct.
+Route sources and recipients accept only declared participant definition keys, reject duplicates,
+and fail malformed values at exact paths. The compiler translates those keys once to immutable
+runtime participant IDs and `MapSet` recipient allowlists in the resolved plan. The focused test was
+written first and failed because both typed policy modules were absent; after implementation it
+passes four tests, including JSON/Elixir parity, omission versus empty, the full approved
+specialist restriction, invalid-reference paths, and compiler rejection of a forged typed policy.
+The complete Call Engine suite passes 286
+tests with one tagged integration exclusion. The complete database-backed umbrella suite also
+passes after correcting the independently observed stale transfer-registration race. Runtime
+intersection, authoritative presence, the
+commit barrier, mixer, transcript/archive enforcement, and human-only routing remain open.
 
 ## Specification review
 

@@ -166,7 +166,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
       tenant_key: tenant_key(),
       definition_id: "50000000-0000-4000-8000-000000000005",
       definition_revision: 1,
-      schema_version: "20260910.06",
+      schema_version: "20260911.01",
       participant_routes: %{participant_key() => "caller"},
       entry_caller: "caller",
       entry_receiver: "assistant",
@@ -187,7 +187,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     %ResolvedCallPlan{
       definition_id: "50000000-0000-4000-8000-000000000005",
       definition_revision: 1,
-      schema_version: "20260910.06",
+      schema_version: "20260911.01",
       tenant_id: tenant_key(),
       actor_id: "actor_test-caller",
       call_id: call_id(),
@@ -196,6 +196,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
       entry_caller: "caller",
       entry_receiver: "assistant",
       opening_audio: nil,
+      media_policy: Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy.inherit(),
       participants: %{},
       transfer_policy: %Vxpipe.CallEngine.CallDefinition.TransferPolicy{
         attempt_timeout_ms: 30_000

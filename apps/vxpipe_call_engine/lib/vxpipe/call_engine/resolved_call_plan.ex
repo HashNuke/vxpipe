@@ -4,7 +4,13 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   """
 
   alias Vxpipe.CallEngine.CallDefinition.TransferPolicy
-  alias Vxpipe.CallEngine.ResolvedCallPlan.{CallVariables, Participant, ToolVisibility}
+
+  alias Vxpipe.CallEngine.ResolvedCallPlan.{
+    CallVariables,
+    MediaPolicy,
+    Participant,
+    ToolVisibility
+  }
 
   @enforce_keys [
     :definition_id,
@@ -18,6 +24,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
     :entry_caller,
     :entry_receiver,
     :opening_audio,
+    :media_policy,
     :participants,
     :transfer_policy,
     :call_variables,
@@ -38,6 +45,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           entry_caller: String.t(),
           entry_receiver: String.t(),
           opening_audio: nil | Vxpipe.CallEngine.CallDefinition.OpeningAudio.t(),
+          media_policy: MediaPolicy.t(),
           participants: %{String.t() => Participant.t()},
           transfer_policy: TransferPolicy.t(),
           call_variables: CallVariables.t(),

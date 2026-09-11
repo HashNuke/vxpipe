@@ -52,8 +52,16 @@ and playout work before the participant audio turn begins. `EndOfTurn` commits
 that same turn without repeating interruption. The engine runs no local VAD and
 still contains no WebRTC or RTVI types.
 
-The definition-driven compiler's current schema is `20260910.06`; it accepts validated
-definition-local agent transfer allowlists, derives one private default-blocking transfer binding
+The definition-driven compiler's current schema is `20260911.01`. It adds the normal call-wide
+`media_policy` and each participant's optional `while_present` contribution. Each independently
+optional policy field preserves omission as `:inherit`; explicit audio/transcript route maps are
+complete direct participant-key allowlists, including meaningful empty maps and recipient arrays.
+Unknown or duplicate references and malformed storage booleans fail at their exact definition path.
+Compilation pins every route to runtime participant IDs so later admission and media enforcement do
+not reinterpret public JSON. This checkpoint does not yet apply or intersect those policies at
+runtime.
+
+The schema also accepts validated definition-local agent transfer allowlists, derives one private default-blocking transfer binding
 for each non-empty list, pins the call-level total transfer-attempt deadline, and pins each agent's
 inbound `transfer_history` policy. Omission selects the privacy-safe `fresh` mode; the closed set is
 `fresh`, `all_spoken`, `last_n_spoken` with a positive `turns` value, and `selected`.
@@ -71,9 +79,11 @@ now requires a non-empty reason of at most 1,024 characters. The descriptor requ
 that destination, and the private transfer request retains it without exposing it through
 inspection. Each Agent Runtime generation receives a separately bounded transient projection of
 only that participant's readable Call Variables. A selected destination additionally receives the
-transfer reason in that private state, not in conversation history. Re-entry and source-capability
-restoration remain unsupported.
-Schema `20260910.04` added the transfer allowlists and generated binding. Schema `20260910.03`
+transfer reason in that private state, not in conversation history. Re-entry preserves participant
+identity with a fresh activation, and failed preparation has one bounded source-capability
+restoration attempt.
+Schema `20260910.06` added inbound transfer history and selected projections; schema
+`20260910.04` added the transfer allowlists and generated binding. Schema `20260910.03`
 added explicitly selected platform
 tools to the participant's unified `tools` map. The fixed initial catalog contains
 `get_current_time` and
