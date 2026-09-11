@@ -1153,6 +1153,14 @@ the complete validated media identity releases that waiter and consumes the toke
 expiry, revocation, or owner death releases it with the same invalid-token outcome. A mismatched bind
 does not consume the reservation. This closes the media-before-command-response race without
 weakening the exact final binding or exposing whether a token is merely pending.
+Each outbound attempt has one temporary OTP leg owner registered by its opaque Vxpipe leg ID. Its
+startup validates the already-resolved room destination against the configured service and
+origination number, reserves one media URL, and submits one dial command from that process. A
+duplicate concurrent start joins the same child and observes the same result rather than submitting
+another dial. An accepted command binds the response's complete carrier identity to the exact
+tenant, call, room incarnation, participant, and owner before media admission succeeds. An
+inbound-only service or mismatched request fails before carrier submission; a failed owner is not
+restarted by its supervisor.
 Gateway consumes that token only after validating an RFC-compliant WebSocket upgrade at
 `GET /api/telephony/telnyx/:ingress_key/media/:token`. A wrong ingress key, expired/reused token,
 or malformed token receives the same not-found response. An invalid upgrade does not consume a

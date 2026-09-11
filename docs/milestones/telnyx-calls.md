@@ -142,6 +142,11 @@ Configured services can now pin an optional validated E.164 origination number. 
 selection resolves an exact tenant-scoped service ID before its application-wide fallback and
 cannot select another tenant's configuration. The service ref remains in the call definition while
 credentials, provider connection identity, and the `from` number remain deployment settings.
+One temporary supervised outbound leg now validates the exact room destination, reserves its media
+URL, and submits a single dial. Concurrent starts for the same opaque leg ID share the owner and
+result rather than redialing. An accepted response binds its complete carrier identity to the exact
+tenant/call/incarnation/participant before media can connect; inbound-only service configuration
+fails before submission. Unknown-outcome webhook adoption and transfer control remain pending.
 
 ## Specification review
 

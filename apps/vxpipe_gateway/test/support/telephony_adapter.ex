@@ -21,7 +21,17 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
   end
 
   @impl true
-  def dial(_options, _request), do: {:error, :not_supported}
+  def dial(options, request) do
+    send(observer(options), {:test_telephony_dial, request})
+
+    {:ok,
+     %Submission{
+       status: :accepted,
+       provider_call_control_id: "outbound-call-control",
+       provider_call_leg_id: "outbound-call-leg",
+       provider_call_session_id: "outbound-call-session"
+     }}
+  end
 
   @impl true
   def send_media(_options, _request), do: {:error, :not_supported}
@@ -37,4 +47,11 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
 
   @impl true
   def decode_media_message(_options, _message), do: :ignore
+
+  defp observer(options) do
+    case Keyword.fetch!(options, :api_key) do
+      "observer:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
+      _other -> self()
+    end
+  end
 end

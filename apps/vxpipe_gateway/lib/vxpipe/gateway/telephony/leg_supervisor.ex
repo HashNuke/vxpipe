@@ -3,8 +3,14 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
 
   use DynamicSupervisor
 
-  alias Vxpipe.CallEngine.Telephony.Event
-  alias Vxpipe.Gateway.Telephony.{IngressIdentity, Leg}
+  alias Vxpipe.CallEngine.Telephony.{Event, OutboundLegRequest}
+
+  alias Vxpipe.Gateway.Telephony.{
+    ConfiguredService,
+    IngressIdentity,
+    Leg,
+    OutgoingLeg
+  }
 
   def start_link(_options) do
     DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -25,6 +31,28 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
     end
   end
 
+  @spec start_outgoing(
+          GenServer.server(),
+          String.t(),
+          OutboundLegRequest.t(),
+          ConfiguredService.t(),
+          GenServer.server()
+        ) :: {:ok, pid()} | {:error, term()}
+  def start_outgoing(supervisor \\ __MODULE__, leg_id, request, service, media_admission) do
+    options = [
+      leg_id: leg_id,
+      request: request,
+      service: service,
+      media_admission: media_admission
+    ]
+
+    case DynamicSupervisor.start_child(supervisor, {OutgoingLeg, options}) do
+      {:ok, leg} -> {:ok, leg}
+      {:error, {:already_started, leg}} -> {:ok, leg}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @spec lookup(atom(), String.t(), String.t()) :: {:ok, pid()} | {:error, :leg_not_found}
   def lookup(provider, service, provider_call_leg_id) do
     case Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, {
@@ -32,6 +60,14 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
            service,
            provider_call_leg_id
          }) do
+      [{leg, _value}] -> {:ok, leg}
+      [] -> {:error, :leg_not_found}
+    end
+  end
+
+  @spec lookup_outgoing(String.t()) :: {:ok, pid()} | {:error, :leg_not_found}
+  def lookup_outgoing(leg_id) do
+    case Registry.lookup(Vxpipe.Gateway.Telephony.LegRegistry, {:outgoing, leg_id}) do
       [{leg, _value}] -> {:ok, leg}
       [] -> {:error, :leg_not_found}
     end
@@ -47,6 +83,18 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
   @spec stop(atom(), String.t(), String.t()) :: :ok
   def stop(provider, service, provider_call_leg_id) do
     case lookup(provider, service, provider_call_leg_id) do
+      {:ok, leg} ->
+        _result = DynamicSupervisor.terminate_child(__MODULE__, leg)
+        :ok
+
+      {:error, :leg_not_found} ->
+        :ok
+    end
+  end
+
+  @spec stop_outgoing(String.t()) :: :ok
+  def stop_outgoing(leg_id) do
+    case lookup_outgoing(leg_id) do
       {:ok, leg} ->
         _result = DynamicSupervisor.terminate_child(__MODULE__, leg)
         :ok

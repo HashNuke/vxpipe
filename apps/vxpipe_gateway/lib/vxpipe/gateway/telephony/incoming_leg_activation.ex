@@ -11,6 +11,8 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
     MediaBinding
   }
 
+  alias Vxpipe.Gateway.Telephony.Telnyx.PublicEndpoint
+
   @spec activate(ConfiguredService.t(), TelephonyAdmissionClaim.t(), String.t(), pid(), keyword()) ::
           {:ok, MediaBinding.t(), Vxpipe.CallEngine.Telephony.Submission.t()} | {:error, term()}
   def activate(
@@ -93,20 +95,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
         leg_id: binding.client_state_leg_id,
         provider_call_control_id: binding.provider_call_control_id
       },
-      media_url: media_url(service, token)
+      media_url: PublicEndpoint.media_url(service, token)
     }
-  end
-
-  defp media_url(service, token) do
-    base = URI.parse(service.public_base_url)
-
-    path =
-      (base.path || "") <>
-        "/api/telephony/telnyx/#{service.identity.ingress_key}/media/#{token}"
-
-    base
-    |> Map.put(:scheme, "wss")
-    |> Map.put(:path, path)
-    |> URI.to_string()
   end
 end

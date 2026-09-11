@@ -1175,3 +1175,40 @@ pass. Two initial umbrella invocations exited nonzero while their retained tail 
 passing Console lane; the changed Gateway lane independently passed all 162 tests. A failure-focused
 clean umbrella run then passed all seven lanes—738 tests with zero failures—against the isolated
 PostgreSQL 17 test instance.
+
+## Checkpoint 31: one supervised accepted outbound dial
+
+An outbound attempt now has one temporary `OutgoingLeg` under the existing telephony dynamic
+supervisor. The process is registered by its opaque Vxpipe leg ID before it performs side effects.
+Concurrent starts for that same ID therefore receive the same process and result instead of issuing
+a second dial. The child is `temporary`; a crash is not a restart instruction.
+
+The separate dialer validates the provider-neutral destination against the configured service and
+tenant scope, requires that service's E.164 origination number, reserves a media token, constructs
+the public webhook and WSS media endpoints, and invokes the existing no-retry adapter exactly once.
+An accepted response builds and binds the complete media identity for the tenant, call, room
+incarnation, participant, carrier connection/control/leg/session, internal leg, and owner process.
+An inbound-only service fails and revokes any reservation before carrier submission. URL assembly
+is shared with incoming activation so the two paths cannot drift.
+
+The first test was red because neither the provider-neutral outbound request nor Gateway's
+supervised outbound owner existed. Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/outgoing_leg_test.exs \
+  test/vxpipe/gateway/telephony/incoming_leg_activation_test.exs \
+  test/vxpipe/gateway/telephony/media_admission_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/adapter_test.exs
+# 19 tests, 0 failures
+```
+
+This checkpoint covers an accepted immediate submission. An unknown result deliberately keeps the
+same reservation and owner alive; adopting its exact IDs from the signed outgoing webhook is the
+next checkpoint before the transfer runtime can use this owner.
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. The first umbrella run hit the previously recorded startup-readiness timeout assertion in the
+unchanged Call Engine lifecycle test. Its owning seven-test file and the complete 348-test Call
+Engine lane passed immediately at the same seed. A clean umbrella repeat then passed all seven
+lanes—740 tests with zero failures—against the isolated PostgreSQL 17 test instance.
