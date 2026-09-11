@@ -1073,6 +1073,16 @@ failure cannot restart a call from stale initialization data. Carrier-specific h
 post-initiation event types is added with the media and call-control checkpoints; unsupported live
 events currently return an explicit processing error rather than being silently discarded.
 
+Telnyx command submission is isolated behind the common adapter and a small Voice API client. Dial
+creates one authorized provider leg with the configured Voice API connection, exact callback URL,
+opaque Vxpipe leg correlation, optional `detect` AMD, and one bidirectional L16 16 kHz media stream.
+Answer adopts an exact known provider control ID into the same media contract; hangup also targets
+only that exact ID. The HTTP client disables redirects and automatic retries for all three
+side-effecting commands. A 2xx response is accepted, a bounded 4xx status is a known rejection, and
+a transport, 3xx, or 5xx result is an unknown outcome. Unknown never means permission to submit the
+command again; later correlated provider events determine what actually happened. Provider bodies
+and API credentials are not included in returned errors.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

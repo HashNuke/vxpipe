@@ -541,3 +541,36 @@ The root format, warnings-as-errors compile, strict Credo, unused-dependency, an
 umbrella test gates passed with 690 tests and zero failures. The first umbrella run had one
 unrelated call-lifecycle readiness test fail; its seven-test file passed on an immediate focused
 rerun, followed by the complete clean umbrella result. No timing implementation was changed.
+
+## Checkpoint 12: bounded Telnyx Voice API commands
+
+The Telnyx adapter now maps the provider-neutral dial, answer, and exact-leg end commands onto the
+current Voice API endpoints. Dial and answer request one bidirectional L16 16 kHz stream, with
+inbound audio selected for room ingestion and outbound mixer audio addressed back to the same leg.
+Dial also sends the configured Voice API connection, callback URL, an opaque Vxpipe leg correlation
+value, and `detect` only when AMD was enabled by the compiled intent. Hangup uses the already
+correlated provider call-control ID and never looks up or guesses a destination.
+
+The HTTP boundary turns 2xx into an accepted submission and exposes only the status of a known 4xx
+rejection. Transport errors, redirects, 5xx responses, and malformed success bodies are bounded;
+ambiguous outcomes are represented as `unknown`. Req retries and redirects are disabled after
+merging injectable test transport options, so a caller cannot accidentally override the no-retry
+rule. Neither provider response bodies nor credentials enter the returned error value.
+
+The test was written first and failed because the provider adapter did not exist. After the three
+cohesive modules were added, the focused result was:
+
+```text
+cd apps/vxpipe_gateway
+MIX_ENV=test mix test test/vxpipe/gateway/telephony/telnyx/adapter_test.exs
+# 6 tests, 0 failures
+```
+
+The command adapter is not wired into the live leg owner yet, and the media WebSocket remains an
+explicit unattached result. Those are separate checkpoints so HTTP command semantics, socket
+ownership, and Membrane audio normalization do not accumulate in one module.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella test gates passed with 696 tests and zero failures. The first umbrella run had one failure
+in the unrelated MCP mixed-DNS wire-security test. Its exact test passed immediately, followed by
+the complete clean umbrella result; no MCP implementation was changed.
