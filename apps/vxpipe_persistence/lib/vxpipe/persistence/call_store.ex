@@ -85,6 +85,16 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   @impl true
+  def mark_incoming_telephony_started(repo, claim, incarnation_id, started_at) do
+    TelephonyCallStore.mark_started(repo, claim, incarnation_id, started_at)
+  end
+
+  @impl true
+  def mark_incoming_telephony_failed(repo, claim, reason, failed_at) do
+    TelephonyCallStore.mark_failed(repo, claim, reason, failed_at)
+  end
+
+  @impl true
   def claim_join_token(repo, digest, expected_scope, now) do
     repo.transaction(fn ->
       with %StoredToken{} = token <- fetch_token(repo, digest),

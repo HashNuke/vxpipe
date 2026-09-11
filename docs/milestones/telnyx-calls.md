@@ -71,8 +71,9 @@ and atomically persists the call in `admitting` state with its provider leg. Exa
 return the original claim, while a reused event ID naming another leg fails closed and rolls back
 the attempted call. `started_at` remains empty until live room startup succeeds. Call Engine's
 ordinary planned-room lifecycle now accepts the pinned telephony transport and configured
-receive/start entry caller, while continuing to reject unsupported connection intents. The gateway
-resolves opaque ingress keys to
+receive/start entry caller, while continuing to reject unsupported connection intents. Calls can
+atomically project the returned incarnation onto both call and initial leg, or mark both terminal
+without a start timestamp when room startup fails. The gateway resolves opaque ingress keys to
 application- or tenant-scoped services, authenticates before decoding, bounds request size, rejects
 provider-connection mismatches, and dispatches only safe service identity plus common events.
 Gateway-to-Calls dispatch, provider-leg ownership of the returned room incarnation, commands,

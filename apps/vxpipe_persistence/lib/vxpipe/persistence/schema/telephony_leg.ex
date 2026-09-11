@@ -70,6 +70,14 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
     )
   end
 
+  def activate_changeset(leg, incarnation_id) do
+    change(leg, state: "active", incarnation_id: incarnation_id)
+  end
+
+  def end_changeset(leg) do
+    change(leg, state: "ended")
+  end
+
   defp validate_lengths(changeset) do
     Enum.reduce(
       [

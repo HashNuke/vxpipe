@@ -32,4 +32,18 @@ defmodule Vxpipe.Calls.CallRepository do
               {:ok, TelephonyAdmissionClaim.t()}
               | {:duplicate, TelephonyAdmissionClaim.t()}
               | {:error, term()}
+
+  @callback mark_incoming_telephony_started(
+              context(),
+              TelephonyAdmissionClaim.t(),
+              String.t(),
+              DateTime.t()
+            ) :: {:ok, TelephonyAdmissionClaim.t()} | {:error, term()}
+
+  @callback mark_incoming_telephony_failed(
+              context(),
+              TelephonyAdmissionClaim.t(),
+              atom(),
+              DateTime.t()
+            ) :: {:ok, TelephonyAdmissionClaim.t()} | {:error, term()}
 end

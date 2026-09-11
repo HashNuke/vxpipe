@@ -272,6 +272,54 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
   end
 
+  def mark_incoming_telephony_started(agent, claim, incarnation_id, started_at) do
+    update_telephony_claim(agent, claim, fn current ->
+      case current.call do
+        %{state: :admitting} = call ->
+          {:ok,
+           %{
+             current
+             | call: %{
+                 call
+                 | state: :running,
+                   incarnation_id: incarnation_id,
+                   started_at: started_at
+               }
+           }}
+
+        %{state: :running, incarnation_id: ^incarnation_id} ->
+          {:ok, current}
+
+        _call ->
+          {:error, :call_unavailable}
+      end
+    end)
+  end
+
+  def mark_incoming_telephony_failed(agent, claim, reason, failed_at) do
+    update_telephony_claim(agent, claim, fn current ->
+      case current.call do
+        %{state: :admitting} = call ->
+          {:ok,
+           %{
+             current
+             | call: %{
+                 call
+                 | state: :failed,
+                   terminal_reason: reason,
+                   ended_at: failed_at
+               }
+           }}
+
+        %{state: :failed, terminal_reason: ^reason} ->
+          {:ok, current}
+
+        _call ->
+          {:error, :call_unavailable}
+      end
+    end)
+  end
+
   def issue_join_token(agent, tenant_key, call_id, participant_key, token) do
     Agent.get_and_update(agent, fn state ->
       with {:ok, call} <- Map.fetch(state.calls, {tenant_key, call_id}),
@@ -410,6 +458,32 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   defp current_claim(state, claim) do
     call = Map.fetch!(state.calls, {claim.call.tenant_key, claim.call.id})
     %{claim | call: call}
+  end
+
+  defp update_telephony_claim(agent, claim, transition) do
+    Agent.get_and_update(agent, fn state ->
+      event_key = {claim.provider, claim.service, claim.provider_event_id}
+      leg_key = {claim.provider, claim.service, claim.provider_call_leg_id}
+
+      with {:ok, current} <- Map.fetch(state.telephony_event_claims, event_key),
+           {:ok, leg_claim} <- Map.fetch(state.telephony_leg_claims, leg_key),
+           true <- current.call.id == claim.call.id and leg_claim.call.id == claim.call.id,
+           {:ok, updated} <- transition.(current) do
+        call_key = {updated.call.tenant_key, updated.call.id}
+
+        next_state = %{
+          state
+          | calls: Map.put(state.calls, call_key, updated.call),
+            telephony_event_claims: Map.put(state.telephony_event_claims, event_key, updated),
+            telephony_leg_claims: Map.put(state.telephony_leg_claims, leg_key, updated)
+        }
+
+        {{:ok, updated}, next_state}
+      else
+        {:error, reason} -> {{:error, reason}, state}
+        _missing_or_mismatched -> {{:error, :telephony_leg_not_found}, state}
+      end
+    end)
   end
 
   defp expected_scope(token, expected_scope) do

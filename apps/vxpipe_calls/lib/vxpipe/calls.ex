@@ -58,6 +58,12 @@ defmodule Vxpipe.Calls do
   def claim_incoming_telephony(scope, service, event, options \\ []),
     do: TelephonyAdmissions.claim_incoming(scope, service, event, options)
 
+  def mark_incoming_telephony_started(claim, incarnation_id, started_at, options \\ []),
+    do: TelephonyAdmissions.mark_started(claim, incarnation_id, started_at, options)
+
+  def mark_incoming_telephony_failed(claim, reason, options \\ []),
+    do: TelephonyAdmissions.mark_failed(claim, reason, options)
+
   def archive_variable_snapshot(snapshot, options \\ []),
     do: Archives.store_variable_snapshot(snapshot, options)
 

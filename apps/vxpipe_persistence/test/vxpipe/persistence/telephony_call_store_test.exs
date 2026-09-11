@@ -9,6 +9,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
 
   @tenant_key "AAAAAAAAAAAAAAAA"
   @now ~U[2026-09-11 10:15:00.000000Z]
+  @started_at ~U[2026-09-11 10:15:01.000000Z]
 
   setup do
     options = [
@@ -92,6 +93,53 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
 
     assert Repo.aggregate(Call, :count) == 1
     assert Repo.aggregate(TelephonyLeg, :count) == 1
+  end
+
+  test "atomically projects the live incarnation onto the call and provider leg", context do
+    assert {:ok, claim} =
+             Calls.claim_incoming_telephony(
+               {:tenant, context.tenant.key},
+               "primary-phone",
+               incoming_event(),
+               context.options
+             )
+
+    assert {:ok, started_claim} =
+             Calls.mark_incoming_telephony_started(
+               claim,
+               "rinc-phone-1",
+               @started_at,
+               context.options
+             )
+
+    assert started_claim.call.state == :running
+    assert started_claim.call.incarnation_id == "rinc-phone-1"
+    assert started_claim.call.started_at == @started_at
+
+    assert %TelephonyLeg{state: "active", incarnation_id: "rinc-phone-1"} =
+             Repo.one(TelephonyLeg)
+  end
+
+  test "atomically marks the call and initial leg terminal when room startup fails", context do
+    assert {:ok, claim} =
+             Calls.claim_incoming_telephony(
+               {:tenant, context.tenant.key},
+               "primary-phone",
+               incoming_event(),
+               context.options
+             )
+
+    assert {:ok, failed_claim} =
+             Calls.mark_incoming_telephony_failed(
+               claim,
+               :room_start_failed,
+               context.options
+             )
+
+    assert failed_claim.call.state == :failed
+    assert failed_claim.call.started_at == nil
+    assert failed_claim.call.ended_at == @now
+    assert %TelephonyLeg{state: "ended", incarnation_id: nil} = Repo.one(TelephonyLeg)
   end
 
   defp incoming_event do

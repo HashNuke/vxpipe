@@ -58,6 +58,43 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
   def claim_incoming(_scope, _service, %Event{}, _options),
     do: {:error, :invalid_incoming_telephony_event}
 
+  @spec mark_started(TelephonyAdmissionClaim.t(), String.t(), DateTime.t(), keyword()) ::
+          {:ok, TelephonyAdmissionClaim.t()} | {:error, term()}
+  def mark_started(
+        %TelephonyAdmissionClaim{} = claim,
+        incarnation_id,
+        %DateTime{} = started_at,
+        options
+      )
+      when is_binary(incarnation_id) and byte_size(incarnation_id) > 0 and is_list(options) do
+    with {:ok, repository} <- Repositories.fetch(options, :call_repository) do
+      Repositories.call(repository, :mark_incoming_telephony_started, [
+        claim,
+        incarnation_id,
+        started_at
+      ])
+    end
+  end
+
+  def mark_started(_claim, _incarnation_id, _started_at, _options),
+    do: {:error, :invalid_telephony_call_start}
+
+  @spec mark_failed(TelephonyAdmissionClaim.t(), atom(), keyword()) ::
+          {:ok, TelephonyAdmissionClaim.t()} | {:error, term()}
+  def mark_failed(%TelephonyAdmissionClaim{} = claim, reason, options)
+      when reason in [:room_start_failed, :session_start_failed, :startup_unknown] and
+             is_list(options) do
+    with {:ok, repository} <- Repositories.fetch(options, :call_repository) do
+      Repositories.call(repository, :mark_incoming_telephony_failed, [
+        claim,
+        reason,
+        now(options)
+      ])
+    end
+  end
+
+  def mark_failed(_claim, _reason, _options), do: {:error, :invalid_telephony_call_failure}
+
   defp incoming_event(event) do
     required = [
       event.provider_event_id,

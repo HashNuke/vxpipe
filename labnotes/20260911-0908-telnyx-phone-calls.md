@@ -444,3 +444,49 @@ umbrella test gates passed with 683 tests and zero failures. An initial umbrella
 failure in the unrelated room-authority termination test; that exact file passed immediately on a
 focused rerun, and the subsequent complete umbrella run passed. No implementation change was made
 for that transient result.
+
+## Checkpoint 10: provider-leg lifecycle projection
+
+Calls now exposes lifecycle operations specific to an incoming telephony claim. A successful room
+startup atomically changes the call from `admitting` to `running`, sets its actual `started_at` and
+incarnation, and changes the exact stored leg from `admitting` to `active` with the same
+incarnation. An exact repeat is idempotent. A pre-live startup failure instead changes the call to
+`failed` and the leg to `ended`, preserves an empty `started_at`, and records the safe terminal
+reason and failure time.
+
+The PostgreSQL adapter locks and rechecks the stored provider event, connection, control, leg, and
+session identifiers plus tenant, call, and participant identity before either transition. Call and
+leg changes share one transaction, so neither half can commit independently. The general
+`CallStore` delegates these operations to the cohesive `TelephonyCallStore` boundary.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/telephony_admissions_test.exs
+# 5 tests, 2 failures because both lifecycle facade operations were absent
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=ecto://postgres:postgres@127.0.0.1:55434/vxpipe_test \
+  mix test test/vxpipe/persistence/telephony_call_store_test.exs
+# 4 tests, 2 failures because the Ecto repository callbacks were absent
+```
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/telephony_admissions_test.exs
+# 5 tests, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=ecto://postgres:postgres@127.0.0.1:55434/vxpipe_test \
+  mix test test/vxpipe/persistence/telephony_call_store_test.exs
+# 4 tests, 0 failures
+```
+
+The gateway still has to invoke claim, startup, and projection as one ingress workflow and retain
+the live provider-leg correlation in memory.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella test gates passed with 687 tests and zero failures.

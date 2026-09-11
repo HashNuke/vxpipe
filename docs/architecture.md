@@ -1048,6 +1048,14 @@ agent activation tree used for web calls. This is not a provider adapter inside 
 carrier media and control still attach at the gateway boundary using the room incarnation returned
 by startup.
 
+Once startup returns, Calls projects that exact claim and returned incarnation in one transaction:
+the call becomes `running` with its actual `started_at`, and the initial leg becomes `active` with
+the same incarnation. A pre-live startup failure instead makes the call `failed` and the leg
+`ended`, leaving `started_at` empty. Projection rechecks every stored provider correlation and call,
+tenant, and participant identity from the claim under a database lock. Repeating the same terminal
+transition is idempotent; a different incarnation or mismatched claim is unavailable rather than
+silently reassigned.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or
