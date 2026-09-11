@@ -85,12 +85,19 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.Adapter do
   def decode_media_message(options, message), do: MediaDecoder.decode(options, message)
 
   defp submission({:accepted, body}, nil) do
-    case get_in(body, ["data", "call_control_id"]) do
-      value when is_binary(value) and byte_size(value) > 0 ->
-        {:ok, %Submission{status: :accepted, provider_call_control_id: value}}
-
-      _missing ->
-        {:error, :invalid_telnyx_command_response}
+    with %{} = data <- Map.get(body, "data"),
+         {:ok, call_control_id} <- response_identifier(data, "call_control_id"),
+         {:ok, call_leg_id} <- response_identifier(data, "call_leg_id"),
+         {:ok, call_session_id} <- response_identifier(data, "call_session_id") do
+      {:ok,
+       %Submission{
+         status: :accepted,
+         provider_call_control_id: call_control_id,
+         provider_call_leg_id: call_leg_id,
+         provider_call_session_id: call_session_id
+       }}
+    else
+      _missing -> {:error, :invalid_telnyx_command_response}
     end
   end
 
@@ -109,6 +116,13 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.Adapter do
     case Keyword.get(options, key) do
       value when is_binary(value) and byte_size(value) > 0 -> {:ok, value}
       _missing -> {:error, {:missing_telnyx_option, key}}
+    end
+  end
+
+  defp response_identifier(data, key) do
+    case Map.get(data, key) do
+      value when is_binary(value) and byte_size(value) > 0 -> {:ok, value}
+      _missing -> :error
     end
   end
 

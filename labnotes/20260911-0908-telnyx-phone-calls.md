@@ -1104,3 +1104,38 @@ Root formatting, warnings-as-errors compilation, strict Credo, and the unused-de
 pass. A complete umbrella run passed all seven lanes—736 tests with zero failures—against a fresh
 disposable PostgreSQL 17 instance. An earlier Gateway-only run hit an unrelated 100 ms room-output
 teardown assertion; its owning six-test file immediately passed at the same seed.
+
+## Checkpoint 29: accepted outbound provider identity
+
+The Telnyx dial response already supplies call-control, call-leg, and call-session identifiers, but
+the provider-neutral command result retained only call-control identity. That would force an
+accepted outbound dial to wait for a later webhook before its reserved media URL could be bound to
+the exact carrier leg.
+
+`Telephony.Submission` now carries optional provider leg and session identifiers and validates any
+supplied value as a non-empty string. Telnyx dial acceptance requires and preserves all three
+identifiers returned by the Voice API. Answer and end-leg submissions remain valid without the two
+new values because those operations already act on an adopted exact leg.
+
+The focused adapter assertion was first red because the neutral struct had neither field. Green
+evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/adapter_test.exs
+# 6 tests, 0 failures
+
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/telephony/adapter_test.exs
+# 5 tests, 0 failures
+```
+
+This checkpoint preserves response identity only. The supervised outgoing owner will consume it to
+bind the pending media reservation; signed outgoing webhook correlation remains necessary for an
+unknown immediate submission.
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. The first umbrella run reached the previously recorded 100 ms room-output teardown assertion
+in the unchanged Gateway media test. Its owning six-test file passed immediately at the same seed;
+a clean umbrella repeat then passed all seven lanes—736 tests with zero failures—against the
+existing isolated PostgreSQL 17 test instance.

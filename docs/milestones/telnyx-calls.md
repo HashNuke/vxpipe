@@ -134,6 +134,10 @@ existing bound, while bind, expiry, revocation, or leg-owner death settles it wi
 pending-token state. Focused reservation, mismatch, expiry, revocation, single-use, and HTTP-upgrade
 tests pass, as does the complete 736-test umbrella gate. Outbound leg ownership and dial submission
 remain pending.
+Accepted Telnyx dial responses now retain call-control, call-leg, and call-session identity through
+the common submission contract instead of discarding the identifiers needed to bind the reserved
+media admission. The signed correlated outgoing event remains the fallback when the immediate
+submission is unknown. Outbound leg ownership and dial submission remain pending.
 
 ## Specification review
 

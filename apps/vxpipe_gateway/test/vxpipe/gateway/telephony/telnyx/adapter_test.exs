@@ -48,7 +48,9 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AdapterTest do
     assert {:ok,
             %Submission{
               status: :accepted,
-              provider_call_control_id: "call-control-outbound"
+              provider_call_control_id: "call-control-outbound",
+              provider_call_leg_id: "provider-leg-outbound",
+              provider_call_session_id: "provider-session-outbound"
             }} = Adapter.dial(TelnyxAdapter, config(), dial())
   end
 
