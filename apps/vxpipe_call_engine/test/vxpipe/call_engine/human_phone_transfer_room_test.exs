@@ -182,6 +182,62 @@ defmodule Vxpipe.CallEngine.HumanPhoneTransferRoomTest do
     assert participant_id == request.participant_id
   end
 
+  test "losing the exact outbound owner fails the pending transfer and retains the source" do
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, "caller")
+    reception = Map.fetch!(plan.participants, "reception")
+
+    owner =
+      start_supervised!(
+        {Task, fn -> receive do: (:stop -> :ok) end},
+        id: :failed_outbound_phone_owner
+      )
+
+    connector =
+      {TestOutboundLegConnector,
+       %{
+         observer: self(),
+         owner: owner
+       }}
+
+    assert {:ok, room} = CallEngine.start_call(plan, outbound_leg_connector: connector)
+    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+
+    caller_sink =
+      start_supervised!({TestAudioOutputSink, observer: self()}, id: :owner_loss_caller_sink)
+
+    assert {:ok, %ConnectionAttachment{admission: :main}} =
+             attach(plan, room, caller, "caller-connection", caller_sink)
+
+    begin_transfer(plan, room, caller, "owner-loss-phone-transfer")
+
+    assert_receive {:test_outbound_leg_connect, _connector_task, request, _timeout}, 2_000
+    assert_receive {:test_tts_transport_started, _briefing_tts, _connection}, 2_000
+
+    monitor = Process.monitor(owner)
+    send(owner, :stop)
+    assert_receive {:DOWN, ^monitor, :process, ^owner, :normal}, 2_000
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallFailed{
+                      tool_call_id: "owner-loss-phone-transfer",
+                      reason: :tool_failed
+                    }},
+                   2_000
+
+    assert_receive {:test_outbound_leg_disconnect, _cleanup_task, participant_id}, 2_000
+    assert participant_id == request.participant_id
+
+    assert {:ok, source} =
+             CallEngine.participant_snapshot(
+               plan.tenant_id,
+               plan.room_id,
+               reception.participant_id
+             )
+
+    assert source.participant_id == reception.participant_id
+  end
+
   defp compile_plan(options \\ []) do
     transfer_timeout_ms = Keyword.get(options, :transfer_timeout_ms, 30_000)
 

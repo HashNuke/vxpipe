@@ -1392,3 +1392,41 @@ umbrella tests pass. The clean umbrella run completed all seven application lane
 failures. A subsequent Gateway-only stress repeat exposed the previously recorded 100 ms
 `RoomAudioEgressTest` teardown assertion; its unchanged six-test owning file immediately passed at
 the same seed. Carrier lifecycle/AMD cleanup remains the next checkpoint.
+
+## Checkpoint 36: provider-neutral outbound owner monitoring
+
+The first owner-loss test killed a controlled outbound transport process after the connector had
+prepared the phone destination. It remained red because the opaque handle supported cleanup but
+gave Room Authority no provider-neutral process to monitor, so the transfer stayed pending.
+
+The connector contract now exposes the owner process separately from its opaque carrier reference.
+`OutboundLegHandle` keeps both: Room Authority may monitor the owner but still cannot inspect or
+operate on provider state. Gateway returns its supervised outgoing-leg process as that owner; the
+test connector can provide a controlled owner without introducing Gateway into Call Engine tests.
+
+`HumanHandoff` installs the owner monitor when preparation becomes authoritative. Owner loss fails
+the transfer through the existing internal `destination_connection_unavailable` history reason,
+while the client-visible tool result remains the generic `tool_failed`. Cleanup still asks the
+connector to disconnect the exact reference, and the source agent remains active. Successful
+commit and all failure cleanup demonitor with `:flush`, so a late owner exit cannot affect another
+attempt.
+
+Red and green evidence:
+
+```text
+mix test apps/vxpipe_call_engine/test/vxpipe/call_engine/human_phone_transfer_room_test.exs
+# red: 3 tests, 1 failure; owner loss did not finish the transfer
+# green: 3 tests, 0 failures
+
+mix test apps/vxpipe_call_engine/test/vxpipe/call_engine/human_phone_transfer_room_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/outgoing_leg_test.exs \
+  apps/vxpipe_gateway/test/vxpipe/gateway/telephony/outbound_phone_transfer_test.exs
+# 5 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency, and complete
+umbrella tests pass; all seven application lanes completed with zero failures.
+
+This checkpoint establishes the engine-side failure signal. The next checkpoint will translate
+exact Telnyx AMD and end events into that supervised owner lifecycle and issue a single explicit
+hangup only when a detected machine requires it.

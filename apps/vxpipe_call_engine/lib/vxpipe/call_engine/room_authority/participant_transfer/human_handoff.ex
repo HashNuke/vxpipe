@@ -20,7 +20,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   def prepared(%Pending{} = pending, %HumanPreparation{} = preparation, %State{} = state) do
     preparation = %{
       preparation
-      | text_to_speech: Startup.activate_text_to_speech(preparation.text_to_speech)
+      | outbound_leg_monitor: monitor_outbound_leg(preparation.outbound_leg),
+        text_to_speech: Startup.activate_text_to_speech(preparation.text_to_speech)
     }
 
     pending = %{pending | briefing: :waiting, preparation: preparation}
@@ -161,10 +162,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
         } =
           state
       ) do
-    if prep.text_to_speech.monitor == monitor do
-      {:handled, fail(pending, :destination_text_to_speech_unavailable, state)}
-    else
-      :unhandled
+    cond do
+      prep.text_to_speech.monitor == monitor ->
+        {:handled, fail(pending, :destination_text_to_speech_unavailable, state)}
+
+      prep.outbound_leg_monitor == monitor ->
+        {:handled, fail(pending, :destination_connection_unavailable, state)}
+
+      true ->
+        :unhandled
     end
   end
 
@@ -228,6 +234,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   defp progress(%Pending{accepted?: true, briefing: :completed} = pending, state) do
     if Authorizer.authorize(pending.request, state) == :ok do
       cancel_timer(pending.timer)
+      demonitor_outbound_leg(pending.preparation)
 
       case HumanCommitter.commit(pending, pending.preparation, state) do
         {:ok, result, state} ->
@@ -311,6 +318,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp discard_preparation(%Pending{preparation: %HumanPreparation{} = preparation}, state) do
+    demonitor_outbound_leg(preparation)
     _ = Cleanup.discard(preparation, state)
     :ok
   end
@@ -325,6 +333,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   defp cancel_timer(timer) do
     _ = Process.cancel_timer(timer)
+    :ok
+  end
+
+  defp monitor_outbound_leg(nil), do: nil
+  defp monitor_outbound_leg(outbound_leg), do: Process.monitor(outbound_leg.owner)
+
+  defp demonitor_outbound_leg(%HumanPreparation{outbound_leg_monitor: nil}), do: :ok
+
+  defp demonitor_outbound_leg(%HumanPreparation{outbound_leg_monitor: monitor}) do
+    Process.demonitor(monitor, [:flush])
     :ok
   end
 

@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegConnector do
   @callback connect(context(), OutboundLegRequest.t(), timeout()) ::
               {:ok, connection_reference()} | {:error, term()}
   @callback disconnect(context(), connection_reference()) :: :ok | {:error, term()}
+  @callback owner(context(), connection_reference()) :: {:ok, pid()} | {:error, term()}
 
   @spec connect(term(), OutboundLegRequest.t(), timeout()) ::
           {:ok, OutboundLegHandle.t()} | {:error, :outbound_connection_unavailable}
@@ -22,11 +23,14 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegConnector do
     with true <- Code.ensure_loaded?(connector),
          true <- function_exported?(connector, :connect, 3),
          true <- function_exported?(connector, :disconnect, 2),
-         {:ok, reference} <- connector.connect(context, request, timeout) do
+         true <- function_exported?(connector, :owner, 2),
+         {:ok, reference} <- connector.connect(context, request, timeout),
+         {:ok, owner} when is_pid(owner) <- connector.owner(context, reference) do
       {:ok,
        %OutboundLegHandle{
          connector: connector,
          context: context,
+         owner: owner,
          reference: reference
        }}
     else

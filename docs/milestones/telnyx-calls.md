@@ -177,6 +177,10 @@ existing room connection-ownership check. Completion of both acceptance and the 
 lets the room commit its privacy barrier and promote that same session, which only then starts the
 Membrane room ingress and mix-minus egress pipelines. A deterministic full-seam test covers dial,
 private speech, exact-socket DTMF, delayed completion, promotion, and active destination state.
+The provider-neutral connector handle now also supplies an owner process solely for monitoring.
+Room Authority monitors it only while the phone handoff is pending, converts owner loss into the
+ordinary generic failed-transfer result, retains the source, and demonitor-flushes it on either
+commit or cleanup. The carrier reference remains opaque and is still interpreted only by Gateway.
 Carrier hangup, AMD outcomes, deterministic whole-call harness coverage, and authorized vendor
 verification remain pending.
 

@@ -1179,6 +1179,12 @@ preparation; expiry or failed preparation disconnects that handle, while success
 leaves the live transport leg under its transport owner. This boundary lets Gateway implement
 Telnyx today without introducing a Gateway dependency into Call Engine or making Room Authority
 perform network I/O.
+The handle also identifies only its provider-neutral owner process for monitoring. Room Authority
+monitors that owner while the transfer is pending, fails the attempt if it exits, and removes the
+monitor on commit or cleanup. It never reads the connector's opaque carrier reference. This lets a
+busy, no-answer, machine, hangup, or local transport failure promptly retain the source through the
+ordinary failed-transfer path instead of waiting for the total deadline or coupling engine state to
+a provider event schema.
 Gateway's default connector resolves the requested service through the tenant-first configured
 registry, generates one opaque internal leg ID, starts the existing temporary outbound owner, and
 waits only within the engine-supplied remaining deadline for its accepted-or-unknown no-retry dial

@@ -45,6 +45,10 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
 
   def disconnect(_options, _reference), do: {:error, :invalid_outbound_leg_reference}
 
+  @impl true
+  def owner(_options, %OutgoingLegReference{leg: leg}) when is_pid(leg), do: {:ok, leg}
+  def owner(_options, _reference), do: {:error, :invalid_outbound_leg_reference}
+
   defp start_leg(options, request, service, leg_id, timeout) do
     supervisor = Keyword.get(options, :leg_supervisor, LegSupervisor)
     media_admission = Keyword.get(options, :media_admission, MediaAdmission)
