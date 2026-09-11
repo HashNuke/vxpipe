@@ -1114,9 +1114,23 @@ the sink restores the pinned tenant, room-incarnation, participant, connection, 
 identity. The engine's PCM addition delegates to Membrane's audio-mixer adder. Vxpipe retains the
 policy-aware timestamp buckets, mix-minus/full/individual routing, revision barrier, and bounded
 subscriber queues because a generic one-output mixer does not express those room contracts.
-Connection-to-mixer ingestion, policy-transition pipeline restart, output subscription
-orchestration, Membrane-backed WebRTC mix encoding/pacing, and recording taps remain subsequent
-boundaries; they cannot omit revision provenance or bypass this barrier.
+Output subscription orchestration, Membrane-backed WebRTC mix encoding/pacing, and recording taps
+remain subsequent boundaries; they cannot omit revision provenance or bypass this barrier.
+
+The connection-to-mixer ingress boundary is now implemented without exposing mixer or policy
+processes as transport APIs. A planned-room `ConnectionAttachment` carries an opaque room-audio
+handle and the mixer's one VM-relative clock origin; legacy ad-hoc attachments explicitly report
+that room audio is disabled. Each planned WebRTC connection supervises a separate
+`RoomAudioIngress` coordinator and Membrane normalizer. The coordinator registers with the same
+media-policy authority as the mixer and transcript router. Before acknowledging any later policy
+revision, it terminates and replaces the entire jitter/decode/framing pipeline, discards late
+output from the old pipeline generation, and rejects transport frames received through the
+replacement boundary. Only current-generation PCM is assigned the installed revision and a
+connection-stable monotonic source sequence before crossing the engine's opaque handle into the
+mixer. Raw Opus continues independently to configured STT, so human-only planned calls can use
+the mixer without fabricating an STT capability while legacy rooms retain their STT-only route.
+The default WebRTC jitter latency for this path is 200 ms. Mixer playout scheduling, subscription
+draining, Opus egress, and the browser-runnable multi-human path remain subsequent work.
 
 `TranscriptRouter` keeps a bounded installed-revision history for source-interval decisions (128
 revisions by default). A current transcript projection reaches only connected, present

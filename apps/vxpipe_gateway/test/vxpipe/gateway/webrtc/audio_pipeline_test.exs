@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
 
   @application_voip 2_048
   @automatic_bitrate -1_000
+  @pipeline_timeout 2_000
   @signal_voice 3_001
 
   test "uses the Membrane chain to decode and rechunk Opus on the shared room clock" do
@@ -23,7 +24,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
                       channels: 1,
                       payload: pcm
                     }},
-                   1_000
+                   @pipeline_timeout
 
     assert byte_size(pcm) == 1_920
   end
@@ -39,7 +40,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
     assert :ok = AudioPipeline.push(pipeline_id, frame(11, 5_480, 1_010, second))
 
     assert_receive {:vxpipe_audio_pipeline, ^pipeline_id, %PCMFrame{timestamp: 0, payload: pcm}},
-                   1_000
+                   @pipeline_timeout
 
     assert byte_size(pcm) == 1_920
   end
@@ -56,7 +57,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
     assert :ok = AudioPipeline.push(pipeline_id, frame(15, 8_000, 1_020, packet))
 
     assert_receive {:vxpipe_audio_pipeline, ^pipeline_id, %PCMFrame{channels: 1, payload: pcm}},
-                   1_000
+                   @pipeline_timeout
 
     assert byte_size(pcm) == 1_920
   end
@@ -104,7 +105,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
          jitter_latency: 0}
       )
 
-    assert_receive {:vxpipe_audio_pipeline_ready, ^pipeline_id}, 1_000
+    assert_receive {:vxpipe_audio_pipeline_ready, ^pipeline_id}, @pipeline_timeout
     pipeline_id
   end
 

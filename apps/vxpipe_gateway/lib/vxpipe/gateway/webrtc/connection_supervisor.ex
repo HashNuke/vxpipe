@@ -33,6 +33,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionSupervisor do
       connection_id: connection_id,
       session: session,
       ice_servers: Keyword.get(options, :ice_servers, []),
+      audio_jitter_latency_ms: Keyword.get(options, :audio_jitter_latency_ms, 200),
       candidate_gathering_timeout_ms:
         Keyword.get(options, :candidate_gathering_timeout_ms, 1_000),
       maximum_audio_packets: Keyword.get(options, :maximum_audio_packets, 500)

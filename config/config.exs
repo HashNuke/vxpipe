@@ -79,6 +79,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
     call_admission: [enabled: false],
     webrtc: [
       ice_servers: [],
+      audio_jitter_latency_ms: 200,
       candidate_gathering_timeout_ms: 1_000,
       maximum_audio_packets: 500
     ],

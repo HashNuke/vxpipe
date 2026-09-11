@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.HTTP.RTVI do
 
   def init(options) do
     %{
+      audio_jitter_latency_ms: Keyword.get(options, :audio_jitter_latency_ms, 200),
       candidate_gathering_timeout_ms:
         Keyword.get(options, :candidate_gathering_timeout_ms, 1_000),
       ice_servers: Keyword.get(options, :ice_servers, []),

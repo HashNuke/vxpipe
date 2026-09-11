@@ -176,6 +176,25 @@ ingress, policy-transition purge/restart, bounded subscription drain, and WebRTC
 verified together. The Gateway suite passes 71 tests with four tagged integration exclusions, and
 a fresh database-backed umbrella run passes across all seven child applications.
 
+The next transport checkpoint wires that normalizer into planned-room WebRTC ingress. Call Engine
+attachments now expose an opaque room-audio handle plus the mixer's shared clock configuration;
+legacy attachments expose no handle and retain the existing STT-only route. A separately
+supervised Gateway `RoomAudioIngress` registers as a media-policy enforcer, owns a stable source
+sequence, and sends only current-generation decoded PCM through the handle into `RoomMixer`.
+Every later policy revision synchronously terminates and replaces the Membrane jitter/decode/frame
+pipeline before acknowledgement. Late output from the prior generation and packets received
+through that boundary are dropped rather than relabeled under a relaxed policy. Raw Opus still
+fans out independently to configured STT, while a human-only planned connection can operate with
+STT disabled. Focused red/green checks cover planned versus legacy attachment configuration,
+engine-owned push/enforcer registration, supervised ingress startup, revision tagging, sequence
+continuity, pipeline replacement, stale-generation output, and stale-interval packet rejection.
+The Gateway suite passes 75 tests with four tagged integration exclusions; the Call Engine suite
+passes 319 tests with one tagged integration exclusion. A fresh PostgreSQL-backed umbrella run
+passes across all seven child applications. Formatting, warnings-as-errors compilation, strict
+Credo, and the unused-dependency check pass, and the disposable PostgreSQL container was removed.
+Mixer clock-driven flushing, bounded mix-minus subscription drain and WebRTC Opus egress remain
+open, so the transport/harness checklist and browser-runnable outcome are not yet claimed.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

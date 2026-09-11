@@ -237,3 +237,41 @@
   A fresh database-backed umbrella run passes across all seven child applications. Formatting,
   warnings-as-errors compilation, strict Credo, and the unused-dependency check pass. The
   disposable PostgreSQL container used for the umbrella run was removed afterward.
+
+## 2026-09-11 — policy-barrier WebRTC ingress
+
+- Tightened the planned human-only test first. Its red run failed because Call Engine exposed no
+  room-audio configuration or push boundary on a connection attachment. The new opaque
+  `RoomAudioHandle` retains mixer/policy process details inside Call Engine and exposes only the
+  fixed format, shared room clock, enforcer registration, and normalized-frame push operations.
+  Legacy room attachments return `:disabled` and do not start a mixer path.
+- Added the Gateway ingress tests before implementation. The red runs failed because
+  `RoomAudioIngress` and its owning-supervisor startup operation did not exist. The green tests
+  prove that the process cannot accept RTP before a policy snapshot is installed, tags decoded PCM
+  with the installed revision, and preserves one monotonically increasing source sequence across
+  normalizer replacement.
+- The ingress coordinator is registered as a concrete media-policy enforcer. For every revision
+  after its initial snapshot, it synchronously terminates and replaces the Membrane pipeline before
+  acknowledging the barrier. Pipeline IDs include a local generation, so decoded output already in
+  the mailbox from the terminated generation is discarded. A monotonic cutoff also rejects RTP
+  received through the replacement boundary; this is deliberately conservative by up to the
+  millisecond clock resolution rather than risking old restricted audio under a relaxed policy.
+- The WebRTC connection now fans valid Opus RTP to two independent optional sinks: the existing
+  bounded STT ingress and the planned-room normalizer/mixer ingress. Human-only calls therefore do
+  not fabricate an STT process, while legacy ad-hoc calls continue through STT alone. Expected
+  bounded overflow/stale results drop the affected frame; unavailable required sinks end the
+  connection instead of silently disabling room audio.
+- Refactored while green before committing. `IncomingAudio` owns RTP conversion and sink-result
+  policy; `RoomAudioIngress` owns only GenServer coordination; separate state, frame-projection, and
+  pipeline-lifecycle modules own their respective rules. The connection module is smaller than it
+  was after the first green implementation, and no module combines Membrane construction, policy
+  transition, engine projection, and WebRTC connection handling.
+- A combined focused run once timed out waiting one second for a stereo decoder result while several
+  Membrane and WebRTC tests ran concurrently. The exact isolated test immediately passed, showing a
+  test scheduling timeout rather than a deterministic channel-mixing failure. The bounded assertion
+  timeout is now two seconds. The final Gateway suite passes 75 tests with four tagged integration
+  exclusions; the Call Engine suite passes 319 tests with one tagged integration exclusion.
+- A fresh PostgreSQL-backed umbrella run passes across all seven child applications. Formatting,
+  warnings-as-errors compilation, strict Credo, and the unused-dependency check pass. The disposable
+  PostgreSQL container used for the umbrella run was removed afterward. The runtime path uses
+  Membrane elements and no FFmpeg dependency or process.

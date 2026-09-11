@@ -27,8 +27,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   }
 
   alias Vxpipe.Gateway.RTVI.{Codec, ToolProjection, TurnState}
-  alias Vxpipe.Gateway.WebRTC.AudioFrame
-  alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
+  alias Vxpipe.Gateway.WebRTC.{ConnectionPeerSupervisor, IncomingAudio}
 
   @call_timeout 10_000
   @command_timeout_seconds 5
@@ -75,7 +74,19 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
              Keyword.fetch!(options, :maximum_audio_packets)
            ),
          {:ok, %ConnectionAttachment{} = attachment} <-
-           CallEngine.attach_connection(attach_command, audio_egress) do
+           CallEngine.attach_connection(attach_command, audio_egress),
+         {:ok, room_audio_ingress} <-
+           ConnectionPeerSupervisor.start_room_audio_ingress(
+             connection_id,
+             attachment,
+             [
+               tenant_id: session.tenant_id,
+               room_id: session.room_id,
+               incarnation_id: session.incarnation_id,
+               participant_id: session.participant_id
+             ],
+             jitter_latency_ms: Keyword.fetch!(options, :audio_jitter_latency_ms)
+           ) do
       {:ok,
        %{
          candidate_gathering_timeout_ms: Keyword.fetch!(options, :candidate_gathering_timeout_ms),
@@ -87,6 +98,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          peer_connection: peer_connection,
          peer_monitor: Process.monitor(peer_connection),
          room_monitor: attachment.room_monitor,
+         room_audio_ingress: room_audio_ingress,
          rtvi_turn_state: TurnState.new(),
          session: session
        }}
@@ -334,26 +346,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   defp forward_audio(nil, _track_id, _packet, _state), do: :drop
 
   defp forward_audio(codec, track_id, packet, state) do
-    result =
-      with {:ok, frame} <-
-             AudioFrame.from_rtp(
-               state.session,
-               state.connection_id,
-               track_id,
-               codec,
-               packet,
-               System.monotonic_time(:millisecond)
-             ) do
-        CallEngine.push_audio(state.attachment, frame)
-      end
-
-    case result do
-      :ok -> :ok
-      {:error, reason} when reason in [:queue_full, :stale_frame] -> :drop
-      {:error, :unsupported_codec} -> :drop
-      {:error, :invalid_packet} -> :drop
-      {:error, _reason} -> :unavailable
-    end
+    IncomingAudio.forward(codec, track_id, packet,
+      session: state.session,
+      connection_id: state.connection_id,
+      attachment: state.attachment,
+      room_audio_ingress: state.room_audio_ingress,
+      received_at: System.monotonic_time(:millisecond)
+    )
   end
 
   defp call(connection_id, message) do
