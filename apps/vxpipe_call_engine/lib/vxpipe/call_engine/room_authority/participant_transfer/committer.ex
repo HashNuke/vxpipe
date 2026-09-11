@@ -3,18 +3,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator, as: AgentRuntimeCoordinator
-  alias Vxpipe.CallEngine.Event.ToolCallCompleted
-  alias Vxpipe.CallEngine.Id
 
   alias Vxpipe.CallEngine.RoomAuthority.{
-    EventPublisher,
     FirstMessage,
     ParticipantLifecycle,
     Startup,
     State
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{History, Pending, Preparation}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
+    Completion,
+    History,
+    Pending,
+    Preparation
+  }
 
   @spec commit(Pending.t(), Preparation.t(), State.t()) ::
           {:ok, map(), State.t()} | {:error, :destination_unavailable}
@@ -73,12 +75,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
 
     _ = Startup.discard_text_to_speech(source_text_to_speech, state)
 
-    result = %{
-      "destination" => request.destination_definition_key,
-      "status" => "completed"
-    }
+    result = Completion.result(request)
 
-    {:ok, result, publish_completed(request, result, state)}
+    {:ok, result, Completion.publish(request, result, state)}
   end
 
   defp start_first_message(state, caller_participant_id) do
@@ -86,31 +85,5 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
       {:ok, state} -> state
       {:error, _error} -> %{state | first_message: FirstMessage.completed(caller_participant_id)}
     end
-  end
-
-  defp publish_completed(request, result, state) do
-    connection = Map.fetch!(state.connections, request.connection_id)
-
-    event = %ToolCallCompleted{
-      id: Id.generate(:event),
-      sequence: state.next_sequence,
-      tenant_id: request.tenant_id,
-      room_id: request.room_id,
-      incarnation_id: request.incarnation_id,
-      participant_id: request.source_participant_id,
-      source_participant_id: request.caller_participant_id,
-      connection_id: request.connection_id,
-      command_id: request.command_id,
-      correlation_id: request.correlation_id,
-      tool_call_id: request.tool_call_id,
-      name: "transfer",
-      result: result,
-      occurred_at: DateTime.utc_now(:millisecond)
-    }
-
-    state
-    |> EventPublisher.publish(connection.pid, event)
-    |> Map.update!(:background_tool_calls, &Map.delete(&1, request.tool_call_id))
-    |> Map.update!(:next_sequence, &(&1 + 1))
   end
 end

@@ -41,7 +41,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRequest do
           output_id: String.t(),
           text: String.t(),
           output_sink: pid(),
-          purpose: :agent_turn | :opening_audio,
+          purpose: :agent_turn | :opening_audio | :transfer_briefing,
           source_policy: map()
         }
 end

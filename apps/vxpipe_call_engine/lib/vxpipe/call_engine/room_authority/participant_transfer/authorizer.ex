@@ -24,7 +24,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
          source != nil and source.kind == :agent and
          source.participant_id == request.source_participant_id and
          request.destination_definition_key in source.transfers and
-         destination != nil and destination.kind == :agent and
+         transferable_destination?(destination) and
          destination.participant_id == request.destination_participant_id and
          not MapSet.member?(state.participant_ids, request.destination_participant_id) and
          connection != nil and connection.participant_id == request.caller_participant_id do
@@ -35,4 +35,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
   end
 
   def authorize(%Request{}, %State{}), do: {:error, :rejected}
+
+  defp transferable_destination?(%{kind: :agent}), do: true
+
+  defp transferable_destination?(%{
+         kind: :human,
+         connection: %{service: :web, mode: :receive, admission: :transfer}
+       }),
+       do: true
+
+  defp transferable_destination?(_destination), do: false
 end

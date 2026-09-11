@@ -7,12 +7,92 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor}
   alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, State, TextCapability}
 
-  @spec attach(struct(), pid(), pid(), pid() | nil, State.t()) ::
+  @spec attach(struct(), pid(), pid(), pid() | nil, reference(), State.t()) ::
           {:reply, {:ok, atom(), term()} | {:error, Error.t()}, State.t()}
-  def attach(command, caller, subscriber, output_sink, %State{} = state) do
+  def attach(command, caller, subscriber, output_sink, room_monitor, %State{} = state) do
     case authorize_attachment(command, caller, subscriber, state) do
-      :ok -> put(command, subscriber, output_sink, state)
+      :ok -> put(command, subscriber, output_sink, room_monitor, state)
       {:error, error} -> {:reply, {:error, error}, state}
+    end
+  end
+
+  @spec attach_transfer_preparation(
+          struct(),
+          pid(),
+          pid(),
+          pid() | nil,
+          reference(),
+          String.t(),
+          State.t()
+        ) :: {:reply, tuple() | {:error, Error.t()}, State.t()}
+  def attach_transfer_preparation(
+        command,
+        caller,
+        subscriber,
+        output_sink,
+        room_monitor,
+        attempt_id,
+        %State{} = state
+      ) do
+    case authorize_transfer_attachment(command, caller, subscriber, state) do
+      :ok ->
+        put_transfer_preparation(
+          command,
+          subscriber,
+          output_sink,
+          room_monitor,
+          attempt_id,
+          state
+        )
+
+      {:error, error} ->
+        {:reply, {:error, error}, state}
+    end
+  end
+
+  @spec promote_transfer(String.t(), State.t()) ::
+          {:ok, map(), State.t()} | {:error, :unavailable}
+  def promote_transfer(attempt_id, %State{} = state) when is_binary(attempt_id) do
+    case Enum.find(state.connections, fn {_connection_id, connection} ->
+           connection.admission == :transfer_preparation and
+             connection.transfer_attempt_id == attempt_id
+         end) do
+      {connection_id, connection} ->
+        promoted = %{connection | admission: :main, transfer_attempt_id: nil}
+
+        archive_recorder =
+          ArchiveRecorder.connection_attached(
+            state.archive_recorder,
+            connection.attach_command,
+            connection.role
+          )
+
+        state = %{
+          state
+          | archive_recorder: archive_recorder,
+            connections: Map.put(state.connections, connection_id, promoted)
+        }
+
+        {:ok, promoted, state}
+
+      nil ->
+        {:error, :unavailable}
+    end
+  end
+
+  @spec discard_transfer(String.t(), atom(), State.t()) :: State.t()
+  def discard_transfer(attempt_id, reason, %State{} = state)
+      when is_binary(attempt_id) and is_atom(reason) do
+    case Enum.find(state.connections, fn {_connection_id, connection} ->
+           connection.admission == :transfer_preparation and
+             connection.transfer_attempt_id == attempt_id
+         end) do
+      {connection_id, connection} ->
+        send(connection.pid, {:vxpipe_connection_unavailable, reason})
+        remove_by_id(connection_id, state, reason: reason)
+
+      nil ->
+        state
     end
   end
 
@@ -48,6 +128,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
       connection == nil or connection.pid != caller or
           connection.participant_id != command.participant_id ->
+        {:error, not_attached(command.connection_id)}
+
+      connection.admission != :main ->
         {:error, not_attached(command.connection_id)}
 
       OpeningAudio.admission(state.opening_audio) != :open ->
@@ -143,16 +226,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   defp attachment_ready?(%State{text_capability_required?: false}), do: true
   defp attachment_ready?(%State{} = state), do: TextCapability.ready?(state)
 
-  defp put(command, subscriber, output_sink, state) do
+  defp put(command, subscriber, output_sink, room_monitor, state) do
     monitor = Process.monitor(subscriber)
     role = Map.fetch!(state.participant_roles, command.participant_id)
 
     connection = %{
+      admission: :main,
       actor_id: command.actor_id,
+      attach_command: command,
       participant_id: command.participant_id,
       pid: subscriber,
       output_sink: output_sink,
       role: role,
+      room_monitor: room_monitor,
+      transfer_attempt_id: nil,
       speech_to_text: nil
     }
 
@@ -167,7 +254,39 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     runtime = selected_speech_to_text_runtime(command.participant_id, state)
 
     {input_mode, output_mode} = media_modes(role, state)
-    {:reply, {:ok, role, runtime, input_mode, output_mode}, state}
+    {:reply, {:ok, role, runtime, :main, input_mode, output_mode, nil}, state}
+  end
+
+  defp put_transfer_preparation(
+         command,
+         subscriber,
+         output_sink,
+         room_monitor,
+         attempt_id,
+         state
+       ) do
+    monitor = Process.monitor(subscriber)
+
+    connection = %{
+      admission: :transfer_preparation,
+      actor_id: command.actor_id,
+      attach_command: command,
+      participant_id: command.participant_id,
+      pid: subscriber,
+      output_sink: output_sink,
+      role: :human,
+      room_monitor: room_monitor,
+      speech_to_text: nil,
+      transfer_attempt_id: attempt_id
+    }
+
+    state = %{
+      state
+      | connection_monitors: Map.put(state.connection_monitors, monitor, command.connection_id),
+        connections: Map.put(state.connections, command.connection_id, connection)
+    }
+
+    {:reply, {:ok, :human, nil, :transfer_preparation, :disabled, :disabled, attempt_id}, state}
   end
 
   defp media_modes(:monitor, _state), do: {:disabled, :full_mix}
@@ -198,6 +317,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       connection == nil or connection.pid != subscriber or
           connection.participant_id != command.participant_id ->
         {:error, not_attached(command.connection_id)}
+
+      connection.admission != :main ->
+        {:error, speech_to_text_not_bindable(command.connection_id)}
 
       connection.role != :human or connection.speech_to_text != nil ->
         {:error, speech_to_text_not_bindable(command.connection_id)}
@@ -292,7 +414,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         connections: Map.delete(state.connections, connection_id)
     }
 
-    if connection == nil do
+    if connection == nil or connection.admission != :main do
       state
     else
       archive_recorder =
@@ -304,6 +426,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         )
 
       %{state | archive_recorder: archive_recorder}
+    end
+  end
+
+  defp authorize_transfer_attachment(command, caller, subscriber, state) do
+    cond do
+      caller != subscriber ->
+        {:error, not_attached(command.connection_id)}
+
+      command.incarnation_id != state.snapshot.incarnation_id ->
+        {:error, room_incarnation_changed(state.snapshot.incarnation_id)}
+
+      Map.has_key?(state.connections, command.connection_id) ->
+        {:error, already_attached(command.connection_id)}
+
+      true ->
+        :ok
     end
   end
 

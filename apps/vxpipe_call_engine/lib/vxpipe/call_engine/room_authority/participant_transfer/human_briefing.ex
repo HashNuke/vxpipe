@@ -1,0 +1,55 @@
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanBriefing do
+  @moduledoc false
+
+  alias Vxpipe.CallEngine.Capability.TextToSpeech
+  alias Vxpipe.CallEngine.{Id, TextToSpeechRequest}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{HumanPreparation, Pending}
+  alias Vxpipe.CallEngine.RoomAuthority.State
+
+  @spec start(Pending.t(), HumanPreparation.t(), map(), State.t()) ::
+          {:ok, TextToSpeechRequest.t()} | {:error, :unavailable}
+  def start(
+        %Pending{} = pending,
+        %HumanPreparation{} = preparation,
+        connection,
+        %State{}
+      ) do
+    request = %TextToSpeechRequest{
+      tenant_id: pending.request.tenant_id,
+      room_id: pending.request.room_id,
+      incarnation_id: pending.request.incarnation_id,
+      participant_id: pending.request.destination_participant_id,
+      source_participant_id: pending.request.destination_participant_id,
+      connection_id: connection.attach_command.connection_id,
+      command_id: pending.request.command_id,
+      correlation_id: pending.request.correlation_id,
+      output_id: Id.generate(:event),
+      output_sink: connection.output_sink,
+      purpose: :transfer_briefing,
+      source_policy: %{},
+      text: text(pending, preparation)
+    }
+
+    case TextToSpeech.synthesize(preparation.text_to_speech.pid, request) do
+      :ok -> {:ok, request}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  end
+
+  @spec matches?(Pending.t(), pid(), TextToSpeechRequest.t()) :: boolean()
+  def matches?(
+        %Pending{preparation: %HumanPreparation{} = preparation, briefing_request: expected},
+        capability,
+        %TextToSpeechRequest{} = request
+      ) do
+    preparation.text_to_speech.pid == capability and expected == request
+  end
+
+  defp text(pending, preparation) do
+    notice = preparation.destination.participant.transfer_notice
+
+    [pending.request.reason, notice]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" ")
+  end
+end

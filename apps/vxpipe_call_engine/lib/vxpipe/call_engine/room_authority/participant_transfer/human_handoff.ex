@@ -1,0 +1,330 @@
+defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
+  @moduledoc false
+
+  alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl}
+  alias Vxpipe.CallEngine.{Error, TextToSpeechRequest}
+
+  alias Vxpipe.CallEngine.RoomAuthority.{ConnectionLifecycle, Startup, State}
+
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
+    Authorizer,
+    Cleanup,
+    History,
+    HumanBriefing,
+    HumanCommitter,
+    HumanPreparation,
+    Pending
+  }
+
+  @spec prepared(Pending.t(), HumanPreparation.t(), State.t()) :: {:noreply, State.t()}
+  def prepared(%Pending{} = pending, %HumanPreparation{} = preparation, %State{} = state) do
+    preparation = %{
+      preparation
+      | text_to_speech: Startup.activate_text_to_speech(preparation.text_to_speech)
+    }
+
+    pending = %{pending | briefing: :waiting, preparation: preparation}
+    {:ok, state} = progress(pending, state)
+    {:noreply, state}
+  end
+
+  @spec attach_connection(
+          AttachConnection.t(),
+          pid(),
+          pid(),
+          pid() | nil,
+          reference(),
+          State.t()
+        ) :: :unhandled | {:handled, {:reply, tuple() | {:error, Error.t()}, State.t()}}
+  def attach_connection(
+        %AttachConnection{} = command,
+        caller,
+        subscriber,
+        output_sink,
+        room_monitor,
+        %State{pending_participant_transfer: %Pending{} = pending} = state
+      ) do
+    if human_pending?(pending, state) do
+      if pending_destination?(command, pending) and not deadline_elapsed?(pending) do
+        reply =
+          ConnectionLifecycle.attach_transfer_preparation(
+            command,
+            caller,
+            subscriber,
+            output_sink,
+            room_monitor,
+            pending.attempt_id,
+            state
+          )
+
+        case reply do
+          {:reply,
+           {:ok, _role, _runtime, :transfer_preparation, _input, _output, _attempt} = response,
+           state} ->
+            pending = %{pending | destination_connection_id: command.connection_id}
+            {:handled, {:reply, response, %{state | pending_participant_transfer: pending}}}
+
+          other ->
+            {:handled, other}
+        end
+      else
+        {:handled, {:reply, {:error, rejected_control()}, state}}
+      end
+    else
+      :unhandled
+    end
+  end
+
+  def attach_connection(
+        %AttachConnection{},
+        _caller,
+        _subscriber,
+        _output_sink,
+        _room_monitor,
+        %State{}
+      ),
+      do: :unhandled
+
+  @spec control(ParticipantTransferControl.t(), pid(), State.t()) ::
+          {:reply, :ok | {:error, Error.t()}, State.t()}
+  def control(
+        %ParticipantTransferControl{} = command,
+        caller,
+        %State{pending_participant_transfer: %Pending{} = pending} = state
+      ) do
+    with true <- human_pending?(pending, state),
+         :ok <- authorize_control(command, caller, pending, state),
+         {:ok, pending} <- apply_control(command.action, pending),
+         {:ok, state} <- progress(pending, state) do
+      {:reply, :ok, state}
+    else
+      {:error, %Error{} = error} -> {:reply, {:error, error}, state}
+      _not_pending_or_duplicate -> {:reply, {:error, rejected_control()}, state}
+    end
+  end
+
+  def control(%ParticipantTransferControl{}, _caller, %State{} = state) do
+    {:reply, {:error, rejected_control()}, state}
+  end
+
+  @spec playback(pid(), TextToSpeechRequest.t(), atom() | tuple(), State.t()) ::
+          :unhandled | {:handled, {:noreply, State.t()}}
+  def playback(
+        capability,
+        %TextToSpeechRequest{purpose: :transfer_briefing} = request,
+        status,
+        %State{pending_participant_transfer: %Pending{} = pending} = state
+      ) do
+    if HumanBriefing.matches?(pending, capability, request) do
+      state =
+        case status do
+          :completed ->
+            {:ok, state} = progress(%{pending | briefing: :completed}, state)
+            state
+
+          _started_or_progress ->
+            state
+        end
+
+      {:handled, {:noreply, state}}
+    else
+      :unhandled
+    end
+  end
+
+  def playback(_capability, %TextToSpeechRequest{}, _status, %State{}), do: :unhandled
+
+  @spec unavailable(pid(), State.t()) :: :unhandled | {:handled, {:noreply, State.t()}}
+  def unavailable(
+        capability,
+        %State{
+          pending_participant_transfer:
+            %Pending{preparation: %HumanPreparation{} = prep} = pending
+        } =
+          state
+      ) do
+    if prep.text_to_speech.pid == capability do
+      {:handled, {:noreply, fail(pending, :destination_text_to_speech_unavailable, state)}}
+    else
+      :unhandled
+    end
+  end
+
+  def unavailable(_capability, %State{}), do: :unhandled
+
+  @spec capability_down(reference(), State.t()) :: :unhandled | {:handled, State.t()}
+  def capability_down(
+        monitor,
+        %State{
+          pending_participant_transfer:
+            %Pending{preparation: %HumanPreparation{} = prep} = pending
+        } =
+          state
+      ) do
+    if prep.text_to_speech.monitor == monitor do
+      {:handled, fail(pending, :destination_text_to_speech_unavailable, state)}
+    else
+      :unhandled
+    end
+  end
+
+  def capability_down(_monitor, %State{}), do: :unhandled
+
+  @spec deadline(Pending.t(), State.t()) :: {:noreply, State.t()}
+  def deadline(%Pending{} = pending, %State{} = state) do
+    {:noreply, fail(pending, :deadline_elapsed, state)}
+  end
+
+  @spec failed(Pending.t(), atom(), State.t()) :: {:noreply, State.t()}
+  def failed(%Pending{} = pending, cause, %State{} = state) when is_atom(cause) do
+    {:noreply, fail(pending, cause, state)}
+  end
+
+  @spec connection_down(String.t(), State.t()) :: :unhandled | {:handled, State.t()}
+  def connection_down(
+        connection_id,
+        %State{pending_participant_transfer: %Pending{} = pending} = state
+      )
+      when is_binary(connection_id) do
+    if human_pending?(pending, state) and pending.destination_connection_id == connection_id do
+      {:handled, fail(pending, :destination_connection_unavailable, state)}
+    else
+      :unhandled
+    end
+  end
+
+  def connection_down(_connection_id, %State{}), do: :unhandled
+
+  @spec pending?(Pending.t(), State.t()) :: boolean()
+  def pending?(%Pending{} = pending, %State{} = state), do: human_pending?(pending, state)
+
+  defp apply_control(:accept, %Pending{accepted?: false} = pending),
+    do: {:ok, %{pending | accepted?: true}}
+
+  defp apply_control(:media_ready, %Pending{media_ready?: false} = pending),
+    do: {:ok, %{pending | media_ready?: true}}
+
+  defp apply_control(_action, _pending), do: {:error, :duplicate}
+
+  defp progress(%Pending{media_ready?: true, briefing: :waiting} = pending, state) do
+    connection = transfer_connection(pending.attempt_id, state)
+
+    case connection do
+      %{output_sink: output_sink} when is_pid(output_sink) ->
+        case HumanBriefing.start(pending, pending.preparation, connection, state) do
+          {:ok, request} ->
+            pending = %{pending | briefing: :playing, briefing_request: request}
+            {:ok, %{state | pending_participant_transfer: pending}}
+
+          {:error, :unavailable} ->
+            {:ok, fail(pending, :destination_text_to_speech_unavailable, state)}
+        end
+
+      _missing_connection ->
+        {:error, rejected_control()}
+    end
+  end
+
+  defp progress(%Pending{accepted?: true, briefing: :completed} = pending, state) do
+    if Authorizer.authorize(pending.request, state) == :ok do
+      cancel_timer(pending.timer)
+
+      case HumanCommitter.commit(pending, pending.preparation, state) do
+        {:ok, result, state} ->
+          GenServer.reply(pending.from, {:ok, result})
+          {:ok, state}
+
+        {:error, :destination_unavailable, state} ->
+          {:ok, fail(pending, :destination_commit_unavailable, state)}
+      end
+    else
+      {:ok, fail(pending, :source_authority_changed, state)}
+    end
+  end
+
+  defp progress(%Pending{} = pending, state) do
+    {:ok, %{state | pending_participant_transfer: pending}}
+  end
+
+  defp authorize_control(command, caller, pending, state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    if not deadline_elapsed?(pending) and
+         command.tenant_id == pending.request.tenant_id and
+         command.room_id == pending.request.room_id and
+         command.incarnation_id == pending.request.incarnation_id and
+         command.participant_id == pending.request.destination_participant_id and
+         command.attempt_id == pending.attempt_id and connection != nil and
+         connection.pid == caller and connection.actor_id == command.actor_id and
+         connection.participant_id == command.participant_id and
+         connection.admission == :transfer_preparation and
+         connection.transfer_attempt_id == command.attempt_id do
+      :ok
+    else
+      {:error, rejected_control()}
+    end
+  end
+
+  defp pending_destination?(command, pending) do
+    command.tenant_id == pending.request.tenant_id and
+      command.room_id == pending.request.room_id and
+      command.incarnation_id == pending.request.incarnation_id and
+      command.participant_id == pending.request.destination_participant_id
+  end
+
+  defp human_pending?(pending, state) do
+    case Map.get(
+           state.participant_transfer_runtime.plan.participants,
+           pending.request.destination_definition_key
+         ) do
+      %{
+        kind: :human,
+        connection: %{service: :web, mode: :receive, admission: :transfer}
+      } ->
+        true
+
+      _other ->
+        false
+    end
+  end
+
+  defp transfer_connection(attempt_id, state) do
+    Enum.find_value(state.connections, fn {_connection_id, connection} ->
+      if connection.transfer_attempt_id == attempt_id, do: connection
+    end)
+  end
+
+  defp fail(pending, cause, state) do
+    cancel_timer(pending.timer)
+    discard_preparation(pending, state)
+    state = ConnectionLifecycle.discard_transfer(pending.attempt_id, :transfer_failed, state)
+    state = History.failed(state, pending.request, cause, :not_required)
+    GenServer.reply(pending.from, {:error, :unavailable})
+    %{state | pending_participant_transfer: nil}
+  end
+
+  defp discard_preparation(%Pending{preparation: %HumanPreparation{} = preparation}, state) do
+    _ = Cleanup.discard(preparation, state)
+    :ok
+  end
+
+  defp discard_preparation(%Pending{} = pending, _state) do
+    Cleanup.discard_destination(pending.request)
+  end
+
+  defp deadline_elapsed?(pending) do
+    System.monotonic_time(:millisecond) >= pending.deadline_ms
+  end
+
+  defp cancel_timer(timer) do
+    _ = Process.cancel_timer(timer)
+    :ok
+  end
+
+  defp rejected_control do
+    Error.new(
+      :participant_transfer_rejected,
+      "The participant transfer control was rejected."
+    )
+  end
+end

@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ContinueAgent,
     CreateRoom,
     JoinParticipant,
+    ParticipantTransferControl,
     SendText
   }
 
@@ -70,14 +71,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         room_authority,
         %AttachConnection{} = command,
         subscriber,
-        output_sink
+        output_sink,
+        room_monitor
       )
-      when is_pid(subscriber) do
+      when is_pid(subscriber) and is_reference(room_monitor) do
     GenServer.call(
       room_authority,
-      {:attach_connection, command, subscriber, output_sink},
+      {:attach_connection, command, subscriber, output_sink, room_monitor},
       @call_timeout
     )
+  end
+
+  @spec participant_transfer_control(pid(), ParticipantTransferControl.t()) ::
+          :ok | {:error, Error.t()}
+  def participant_transfer_control(room_authority, %ParticipantTransferControl{} = command) do
+    GenServer.call(room_authority, {:participant_transfer_control, command}, @call_timeout)
   end
 
   def send_text(room_authority, %SendText{} = command) do
@@ -166,23 +174,51 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_call(
-        {:attach_connection, command, subscriber, output_sink},
+        {:attach_connection, command, subscriber, output_sink, room_monitor},
         {caller, _tag},
         state
       ) do
-    case ConnectionLifecycle.attach(command, caller, subscriber, output_sink, state) do
-      {:reply, {:ok, _role, _runtime, _input_mode, _output_mode} = reply, state} ->
-        case begin_connection_startup(command, state) do
-          {:ok, state} ->
-            {:reply, reply, CallerIdle.reconcile(state)}
+    case ParticipantTransfer.attach_connection(
+           command,
+           caller,
+           subscriber,
+           output_sink,
+           room_monitor,
+           state
+         ) do
+      {:handled, reply} ->
+        reply
 
-          {:error, %Error{code: code} = error} ->
-            {:stop, code, {:error, error}, state}
+      :unhandled ->
+        case ConnectionLifecycle.attach(
+               command,
+               caller,
+               subscriber,
+               output_sink,
+               room_monitor,
+               state
+             ) do
+          {:reply, {:ok, _role, _runtime, :main, _input_mode, _output_mode, nil} = reply, state} ->
+            case begin_connection_startup(command, state) do
+              {:ok, state} ->
+                {:reply, reply, CallerIdle.reconcile(state)}
+
+              {:error, %Error{code: code} = error} ->
+                {:stop, code, {:error, error}, state}
+            end
+
+          other ->
+            other
         end
-
-      other ->
-        other
     end
+  end
+
+  def handle_call(
+        {:participant_transfer_control, %ParticipantTransferControl{} = command},
+        {caller, _tag},
+        state
+      ) do
+    ParticipantTransfer.control(command, caller, state)
   end
 
   def handle_call(
@@ -226,6 +262,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   @impl true
   def handle_info(
         {reference, {:ok, %ParticipantTransfer.Preparation{} = preparation}},
+        state
+      )
+      when is_reference(reference) do
+    ParticipantTransfer.prepared(reference, preparation, state)
+  end
+
+  def handle_info(
+        {reference, {:ok, %ParticipantTransfer.HumanPreparation{} = preparation}},
         state
       )
       when is_reference(reference) do
@@ -409,12 +453,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info({:vxpipe_tts_unavailable, capability, _reason}, state) do
-    if OpeningAudio.awaiting_text_playback?(state.opening_audio) do
-      OpeningAudio.failed(state.opening_audio)
-      {:stop, :opening_audio_unavailable, state}
-    else
-      state = AgentOutput.unavailable(capability, state)
-      {:noreply, CallerIdle.reconcile(state)}
+    case ParticipantTransfer.text_to_speech_unavailable(capability, state) do
+      {:handled, reply} ->
+        reply
+
+      :unhandled ->
+        if OpeningAudio.awaiting_text_playback?(state.opening_audio) do
+          OpeningAudio.failed(state.opening_audio)
+          {:stop, :opening_audio_unavailable, state}
+        else
+          state = AgentOutput.unavailable(capability, state)
+          {:noreply, CallerIdle.reconcile(state)}
+        end
     end
   end
 
@@ -456,7 +506,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
                 ParticipantLifecycle.remove(monitor, reason, state)
 
               Map.has_key?(state.connection_monitors, monitor) ->
-                ConnectionLifecycle.remove(monitor, reason, state)
+                connection_id = Map.fetch!(state.connection_monitors, monitor)
+                state = ConnectionLifecycle.remove(monitor, reason, state)
+
+                case ParticipantTransfer.connection_down(connection_id, state) do
+                  {:handled, state} -> state
+                  :unhandled -> state
+                end
 
               Map.has_key?(state.speech_to_text_monitors, monitor) ->
                 ConnectionLifecycle.remove_unavailable_speech_to_text(monitor, state)
@@ -525,25 +581,31 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   defp handle_text_to_speech_playback(capability, request, status, state) do
-    opening_result =
-      if state.text_to_speech_capability != nil and
-           state.text_to_speech_capability.pid == capability do
-        OpeningAudio.playback(state.opening_audio, request, status)
-      else
-        :unrelated
-      end
+    case ParticipantTransfer.playback(capability, request, status, state) do
+      {:handled, reply} ->
+        reply
 
-    case opening_result do
-      {:handled, opening_audio} ->
-        continue_after_opening_audio(opening_audio, state)
+      :unhandled ->
+        opening_result =
+          if state.text_to_speech_capability != nil and
+               state.text_to_speech_capability.pid == capability do
+            OpeningAudio.playback(state.opening_audio, request, status)
+          else
+            :unrelated
+          end
 
-      :unrelated ->
-        state = AgentOutput.playback(capability, request, status, state)
+        case opening_result do
+          {:handled, opening_audio} ->
+            continue_after_opening_audio(opening_audio, state)
 
-        if status == :completed do
-          {:noreply, CallerIdle.reconcile(state)}
-        else
-          {:noreply, state}
+          :unrelated ->
+            state = AgentOutput.playback(capability, request, status, state)
+
+            if status == :completed do
+              {:noreply, CallerIdle.reconcile(state)}
+            else
+              {:noreply, state}
+            end
         end
     end
   end

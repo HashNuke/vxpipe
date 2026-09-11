@@ -1,6 +1,9 @@
 # Private briefing and human web acceptance
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: partially implemented. The protocol-neutral private room lane, exact destination control,
+briefing playback barrier, human-only commit, and dropped-destination cleanup are implemented;
+gateway sideband/session routing and the two-browser sample path remain. Specification review:
+approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Agent transfers](agent-transfers.md); [Live mixing/media policy](live-mixing-and-media-policy.md).
 Sources: [Human transfer acceptance/briefing](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline); [commit barrier](../../labnotes/20260905-0405-call-definition-design.md#retained-transfer-and-media-enforcement-invariants).
 
@@ -55,8 +58,16 @@ No platform-mandated acceptance button/UI design, phone provider yet, blanket re
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Partial implementation evidence (2026-09-11): the Call Engine focused room test starts a genuine
+agent transfer tool invocation, attaches the catalog web human with disabled pre-commit media,
+rejects stale/forged/foreign-process/duplicate control, delivers private briefing audio only to the
+destination sink, waits for completed playback, commits media policy before mix-minus promotion,
+tears down the source agent, and preserves Call Variables. A separate test drops the pending
+destination process and observes a generic failed transfer with the source still active. The three
+focused tests and all 336 Call Engine tests pass (one integration test excluded). This does not mark
+the milestone complete: authenticated gateway wire/session behavior, two real WebRTC clients,
+rendered sample verification, timeout/late-control coverage, and explicit failed-policy-barrier
+coverage remain.
 
 ## Specification review
 

@@ -3,7 +3,14 @@ defmodule Vxpipe.CallEngine do
   Owns Vxpipe's protocol-neutral call lifecycle and processing runtime.
   """
 
-  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.Command.{
+    AttachConnection,
+    CreateRoom,
+    JoinParticipant,
+    ParticipantTransferControl,
+    SendText
+  }
+
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.DefinitionValidation
@@ -96,17 +103,20 @@ defmodule Vxpipe.CallEngine do
              Keyword.fetch!(settings, :speech_to_text),
              output_sink
            ) do
-        {:ok, room_authority, media_ingress, room_audio_input_mode, room_audio_output_mode} ->
+        {:ok, _room_authority, room_monitor, media_ingress, admission, room_audio_input_mode,
+         room_audio_output_mode, transfer_attempt_id} ->
           case RoomAudioHandle.resolve(command.incarnation_id) do
             {:ok, room_audio} ->
               {:ok,
                %ConnectionAttachment{
-                 room_monitor: Process.monitor(room_authority),
+                 admission: admission,
+                 room_monitor: room_monitor,
                  media_ingress: media_ingress,
                  room_audio: room_audio,
                  room_audio_input_mode: room_audio_input_mode(room_audio, room_audio_input_mode),
                  room_audio_output_mode:
-                   room_audio_output_mode(room_audio, room_audio_output_mode)
+                   room_audio_output_mode(room_audio, room_audio_output_mode),
+                 transfer_attempt_id: transfer_attempt_id
                }}
 
             {:error, :unavailable} ->
@@ -126,6 +136,20 @@ defmodule Vxpipe.CallEngine do
        Error.new(
          :deadline_exceeded,
          "The attach-connection command deadline has elapsed."
+       )}
+    end
+  end
+
+  @spec participant_transfer_control(ParticipantTransferControl.t()) ::
+          :ok | {:error, Error.t()}
+  def participant_transfer_control(%ParticipantTransferControl{} = command) do
+    if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
+      RoomSupervisor.participant_transfer_control(command)
+    else
+      {:error,
+       Error.new(
+         :deadline_exceeded,
+         "The participant-transfer-control command deadline has elapsed."
        )}
     end
   end

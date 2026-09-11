@@ -3,7 +3,14 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   use DynamicSupervisor
 
-  alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
+  alias Vxpipe.CallEngine.Command.{
+    AttachConnection,
+    CreateRoom,
+    JoinParticipant,
+    ParticipantTransferControl,
+    SendText
+  }
+
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy
   alias Vxpipe.CallEngine.Archive.Handoff
@@ -94,21 +101,53 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   def attach_connection(%AttachConnection{} = command, speech_to_text_options, output_sink) do
     case lookup_room(command.tenant_id, command.room_id) do
       {:ok, room_authority} ->
-        case RoomAuthority.attach_connection(room_authority, command, self(), output_sink) do
-          {:ok, role, selected_runtime, input_mode, output_mode} ->
-            start_connection_speech_to_text(
-              room_authority,
-              command,
-              role,
-              selected_runtime,
-              input_mode,
-              output_mode,
-              speech_to_text_options
-            )
+        room_monitor = Process.monitor(room_authority)
+
+        case RoomAuthority.attach_connection(
+               room_authority,
+               command,
+               self(),
+               output_sink,
+               room_monitor
+             ) do
+          {:ok, role, selected_runtime, admission, input_mode, output_mode, attempt_id} ->
+            result =
+              start_connection_speech_to_text(
+                room_authority,
+                command,
+                role,
+                selected_runtime,
+                input_mode,
+                output_mode,
+                speech_to_text_options
+              )
+
+            case result do
+              {:ok, room_authority, media_ingress, ^input_mode, ^output_mode} ->
+                {:ok, room_authority, room_monitor, media_ingress, admission, input_mode,
+                 output_mode, attempt_id}
+
+              {:error, %Error{} = error} ->
+                Process.demonitor(room_monitor, [:flush])
+                {:error, error}
+            end
 
           {:error, %Error{} = error} ->
+            Process.demonitor(room_monitor, [:flush])
             {:error, error}
         end
+
+      {:error, %Error{} = error} ->
+        {:error, error}
+    end
+  end
+
+  @spec participant_transfer_control(ParticipantTransferControl.t()) ::
+          :ok | {:error, Error.t()}
+  def participant_transfer_control(%ParticipantTransferControl{} = command) do
+    case lookup_room(command.tenant_id, command.room_id) do
+      {:ok, room_authority} ->
+        RoomAuthority.participant_transfer_control(room_authority, command)
 
       {:error, %Error{} = error} ->
         {:error, error}

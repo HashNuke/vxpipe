@@ -29,3 +29,34 @@
 - Focused verification: all 11 agent-transfer room tests pass after the rename.
 - Full verification passes formatting, warnings-as-errors compilation, every umbrella suite with
   the same counts as the prior checkpoint, strict Credo, and unused dependency-lock checks.
+
+## Checkpoint: private web-human room lane
+
+- Added the first end-to-end room test before the runtime behavior. It initially failed to compile
+  because `ConnectionAttachment` had no admission or transfer-attempt contract. After that boundary
+  existed, the next red run exposed an invalid attempt to project agent transfer history for a human
+  destination; human briefing preparation now starts with no implicit conversation history.
+- A pending human transfer receives a generated attempt ID. Its provisional connection is bound to
+  the catalog destination and is disabled for speech input, room publication, room subscription,
+  transcript projection, and participant/Variables authority.
+- A dedicated destination TTS capability uses the retained source-agent runtime. It speaks only the
+  required bounded reason and optional fixed notice to the destination output sink. The caller sink
+  receives no briefing audio.
+- `ParticipantTransferControl` records early acceptance and usable-media readiness only for the
+  exact actor, participant, connection process, incarnation, and current attempt. The handoff waits
+  for both controls and output-sink playback completion. Stale, forged, foreign-process, and
+  duplicate controls reject.
+- Participant admission applies the existing media-policy commit barrier before the destination
+  connection is promoted to ordinary mix-minus media. On success the source agent subtree and its
+  speech capability stop, while the room and Call Variables process remain. Dropping the pending
+  destination fails and cleans only that attempt; the source remains active.
+- Kept the concerns split between the participant-neutral coordinator, human-lane state machine,
+  briefing builder, human committer, shared completion projection, connection lifecycle, and typed
+  control command rather than adding all callbacks to `RoomAuthority`.
+- Focused verification: the three human-transfer room tests pass. The complete Call Engine suite
+  passes 336 tests with 0 failures and 1 excluded integration test. Warnings-as-errors compilation
+  and strict Credo also pass before the umbrella completion run.
+- The first full umbrella test run encountered the existing Console telemetry-isolation race: its
+  fixed drop-count assertion observed unrelated concurrent umbrella telemetry. That exact test
+  passed alone, and a clean full rerun passed MCP 37/3 excluded, Agent Runtime 58/2, Call Engine
+  336/1, Calls 37, Persistence 25, Gateway 87/4, and Console 57.

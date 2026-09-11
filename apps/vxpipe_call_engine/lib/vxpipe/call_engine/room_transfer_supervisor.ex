@@ -33,7 +33,8 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
           Runtime.t(),
           Participant.t(),
           boolean(),
-          [Vxpipe.AgentRuntime.Message.t()]
+          [Vxpipe.AgentRuntime.Message.t()],
+          nil | TextToSpeechRuntime.t()
         ) ::
           {:ok, Task.t()} | {:error, :unavailable}
   def prepare(
@@ -42,7 +43,8 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
         %Runtime{} = runtime,
         %Participant{} = destination,
         first_activation?,
-        initial_messages
+        initial_messages,
+        source_text_to_speech
       )
       when is_boolean(first_activation?) and is_list(initial_messages) do
     task =
@@ -50,7 +52,14 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
         via(incarnation_id),
         ParticipantTransfer.DestinationPreparer,
         :prepare,
-        [request, runtime, destination, first_activation?, initial_messages]
+        [
+          request,
+          runtime,
+          destination,
+          first_activation?,
+          initial_messages,
+          source_text_to_speech
+        ]
       )
 
     {:ok, task}

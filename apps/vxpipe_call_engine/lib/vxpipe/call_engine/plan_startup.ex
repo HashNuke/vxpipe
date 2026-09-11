@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
   alias Vxpipe.CallEngine.PlanStartup.AgentDestination
+  alias Vxpipe.CallEngine.PlanStartup.HumanDestination
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
@@ -114,6 +115,36 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     unsupported(
       ["participants", participant.definition_key, "type"],
       "must be an agent participant"
+    )
+  end
+
+  @spec human_destination(
+          ResolvedCallPlan.t(),
+          ResolvedCallPlan.Participant.t()
+        ) :: {:ok, HumanDestination.t()} | {:error, Error.t()}
+  def human_destination(
+        %ResolvedCallPlan{} = plan,
+        %ResolvedCallPlan.Participant{
+          kind: :human,
+          connection: %ConnectionIntent{
+            service: :web,
+            mode: :receive,
+            admission: :transfer
+          }
+        } = participant
+      ) do
+    with {:ok, command} <- participant_command(plan, participant) do
+      {:ok, %HumanDestination{participant: participant, command: command}}
+    end
+  end
+
+  def human_destination(
+        %ResolvedCallPlan{},
+        %ResolvedCallPlan.Participant{} = participant
+      ) do
+    unsupported(
+      ["participants", participant.definition_key, "connection"],
+      "must be a web receive/transfer human participant"
     )
   end
 

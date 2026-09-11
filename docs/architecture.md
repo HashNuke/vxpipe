@@ -899,7 +899,7 @@ agent voice for source TTS when applicable and permitted, without choosing a new
 voice/configuration format. Source responsibility continues until commit, and
 acceptance alone does not expose full room media. This approves the bounded
 briefing flow, not general simultaneous-agent consultation or a compliance claim;
-its routing and commit policy follow R38 below. These are designs, not runtime changes.
+its routing and commit policy follow R38 below.
 
 Shared transfer defaults live in call-level `transfer_policy`; source participants
 keep `transfers: [allowed participant refs]`, and destination-specific connection/
@@ -962,8 +962,24 @@ destination may carry one optional fixed `transfer_notice`. A transfer to a huma
 a non-empty bounded `reason`, which is the private caller/purpose briefing supplied to that
 destination; it is not a free-form address, public client event, or full variable/history snapshot.
 The resolved plan pins the connection intent and notice. This checkpoint defines the authoring and
-compilation boundary; pending connection, private playback, authenticated acceptance, and commit
-remain room/gateway runtime responsibilities below.
+compilation boundary.
+
+The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
+destination connection with `transfer_preparation` admission. That attachment has no speech input,
+room-audio publication, room-audio subscription, participant snapshot, transcript projection, or
+Call Variables projection. A dedicated TTS capability uses the retained source-agent voice to send
+the bounded reason and optional fixed notice only to the destination output sink. It does not reuse
+the source connection or publish the private briefing as ordinary room transcript history.
+
+The protocol-neutral `ParticipantTransferControl` command accepts only `media_ready` or `accept`
+from the exact attached destination process, actor, participant, connection, room incarnation, and
+attempt. Early acceptance is remembered but cannot commit before usable media and completed output
+playback; stale, forged, and duplicate controls reject. The room applies participant admission and
+its media-policy transition before promoting the connection to ordinary mix-minus media, then
+clears agent text ownership and arranges source-subtree teardown through the existing transfer-tool
+completion effect. Call Variables and the room lifecycle remain unchanged. A dropped private
+destination cleans its attempt and reports a generic tool failure while the source remains active.
+The gateway sideband encoding and two-browser path remain the next adapter checkpoint.
 
 Agent Runtime accepts an internal initial-conversation seed for activation construction. That
 boundary retains the destination's independently configured system prompt and accepts only plain
