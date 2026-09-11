@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress do
   use GenServer
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.Gateway.WebRTC.PCMFrame
+  alias Vxpipe.Gateway.Media.PCMFrame
 
   alias Vxpipe.Gateway.WebRTC.RoomAudioIngress.{
     FrameProjection,

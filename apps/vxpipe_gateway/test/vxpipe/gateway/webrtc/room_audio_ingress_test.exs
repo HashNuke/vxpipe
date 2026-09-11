@@ -4,7 +4,8 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngressTest do
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Media.NormalizedFrame
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
-  alias Vxpipe.Gateway.WebRTC.{ConnectionPeerSupervisor, PCMFrame, RoomAudioIngress}
+  alias Vxpipe.Gateway.Media.PCMFrame
+  alias Vxpipe.Gateway.WebRTC.{ConnectionPeerSupervisor, RoomAudioIngress}
 
   test "starts and registers the per-connection ingress through its owning supervisor" do
     connection_id = unique_id("conn-supervised")

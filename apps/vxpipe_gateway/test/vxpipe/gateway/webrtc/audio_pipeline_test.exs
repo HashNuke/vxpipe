@@ -3,7 +3,8 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipelineTest do
 
   alias Membrane.Opus.Encoder.Native
   alias Vxpipe.CallEngine.Media.AudioFrame
-  alias Vxpipe.Gateway.WebRTC.{AudioPipeline, PCMFrame}
+  alias Vxpipe.Gateway.Media.PCMFrame
+  alias Vxpipe.Gateway.WebRTC.AudioPipeline
 
   @application_voip 2_048
   @automatic_bitrate -1_000

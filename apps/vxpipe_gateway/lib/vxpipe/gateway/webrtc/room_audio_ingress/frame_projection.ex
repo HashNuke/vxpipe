@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.WebRTC.RoomAudioIngress.FrameProjection do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.NormalizedFrame
-  alias Vxpipe.Gateway.WebRTC.PCMFrame
+  alias Vxpipe.Gateway.Media.PCMFrame
   alias Vxpipe.Gateway.WebRTC.RoomAudioIngress.State
 
   @spec stale_transport_frame?(Vxpipe.CallEngine.Media.AudioFrame.t(), State.t()) :: boolean()

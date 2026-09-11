@@ -9,8 +9,8 @@ defmodule Vxpipe.Gateway.WebRTC.AudioPipeline do
 
   alias Membrane.{Buffer, Pipeline, Time}
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.Gateway.Media.PCMFrame
   alias Vxpipe.Gateway.WebRTC.AudioPipeline.{ChannelMixer, PCMSink, PacketSource, RoomTimestamp}
-  alias Vxpipe.Gateway.WebRTC.PCMFrame
 
   @sample_rate 48_000
   @channels 1

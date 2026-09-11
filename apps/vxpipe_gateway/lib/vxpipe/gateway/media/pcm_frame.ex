@@ -1,4 +1,4 @@
-defmodule Vxpipe.Gateway.WebRTC.PCMFrame do
+defmodule Vxpipe.Gateway.Media.PCMFrame do
   @moduledoc """
   A decoded audio frame aligned to the room mixer's PCM contract.
   """
