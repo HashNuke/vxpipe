@@ -65,3 +65,44 @@ PostgreSQL suite now passes all five tests, including both Telnyx and Twilio sha
 Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
 The complete umbrella run passed all seven application lanes: MCP 37, Agent Runtime 58, Call Engine
 351, Calls 45, Persistence 31, Gateway 176, and Console 59—757 tests with zero failures.
+
+## Checkpoint 2: provider-specific configuration and verified incoming normalization
+
+The next focused tests added a Twilio configured service and an incoming form webhook passed through
+the public common adapter wrapper. The first run failed at compilation because `Webhook` had no URL
+field. That is the expected abstraction difference: Telnyx signs its body and timestamp, while
+Twilio signs the exact public request URL plus decoded form fields.
+
+`ConfiguredService` now owns only the common service envelope. A small closed profile dispatcher
+selects Telnyx or Twilio validation, and each provider module owns its own credential shape, default
+adapter, verifier options, and safe provider-connection identity. The Telnyx rules moved without
+semantic changes. Twilio accepts Account SID plus Auth Token, derives connection identity from the
+Account SID, rejects credentials from the other profile, and keeps secrets out of inspection. The
+common `IngressIdentity` type now honestly names both supported providers.
+
+Twilio form decoding rejects duplicates, excessive field count/size, missing values, and malformed
+percent encoding. Verification parses the raw form, sorts case-sensitive keys, computes the
+documented HMAC-SHA1 input using the exact configured URL, base64-encodes it, and compares it in
+constant time. The decoder rechecks configured Account SID, validates Account/Call SID shapes, and
+normalizes a signed inbound request with Call SID as control+leg and no invented session. Changing
+the signed `From` field fails authentication before decoding.
+
+Only verify/decode is implemented on the Twilio adapter in this checkpoint. Dial, answer, end, and
+media callbacks return explicit unsupported errors until their owning checkpoints, and no Twilio
+HTTP route is exposed yet.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/configured_service_test.exs \
+  test/vxpipe/gateway/telephony/service_registry_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/adapter_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/telephony/twilio/adapter_test.exs
+# 23 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check pass.
+The complete umbrella run passed MCP 37, Agent Runtime 58, Call Engine 351, Calls 45, Persistence
+31, Gateway 180, and Console 59—761 tests with zero failures.

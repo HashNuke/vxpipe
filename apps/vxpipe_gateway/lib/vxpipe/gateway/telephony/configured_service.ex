@@ -1,13 +1,10 @@
 defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
   @moduledoc false
 
-  alias Vxpipe.Gateway.Telephony.IngressIdentity
-  alias Vxpipe.Gateway.Telephony.Telnyx.{Adapter, WebhookVerifier}
+  alias Vxpipe.Gateway.Telephony.{ConfiguredServiceProfile, IngressIdentity}
 
   @identifier ~r/\A[A-Za-z0-9][A-Za-z0-9_-]*\z/
   @maximum_identifier_bytes 128
-  @maximum_provider_connection_id_bytes 128
-  @maximum_api_key_bytes 4_096
   @maximum_public_url_bytes 2_048
   @phone_number ~r/\A\+[1-9][0-9]{1,14}\z/
 
@@ -46,9 +43,11 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
              provider_connection_id: nil,
              public_key: nil,
              api_key: nil,
+             account_sid: nil,
+             auth_token: nil,
              outbound_number: nil,
              public_base_url: nil,
-             adapter: Adapter,
+             adapter: nil,
              answering_machine_detection: :disabled,
              media_token_ttl_ms: 60_000,
              webhook_tolerance_seconds: 300
@@ -56,46 +55,30 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
          {:ok, service_id} <- identifier(Keyword.fetch!(options, :id)),
          {:ok, ingress_key} <- identifier(Keyword.fetch!(options, :ingress_key)),
          {:ok, scope} <- scope(Keyword.fetch!(options, :scope)),
-         :ok <- provider(Keyword.fetch!(options, :provider)),
-         {:ok, provider_connection_id} <-
-           bounded_string(
-             Keyword.fetch!(options, :provider_connection_id),
-             @maximum_provider_connection_id_bytes
-           ),
-         {:ok, api_key} <-
-           bounded_string(Keyword.fetch!(options, :api_key), @maximum_api_key_bytes),
+         {:ok, profile} <- ConfiguredServiceProfile.new(options),
          {:ok, outbound_number} <-
            optional_phone_number(Keyword.fetch!(options, :outbound_number)),
          {:ok, public_base_url} <- public_base_url(Keyword.fetch!(options, :public_base_url)),
-         {:ok, adapter} <- adapter(Keyword.fetch!(options, :adapter)),
          {:ok, answering_machine_detection} <-
            answering_machine_detection(Keyword.fetch!(options, :answering_machine_detection)),
          {:ok, media_token_ttl_ms} <-
-           positive_integer(Keyword.fetch!(options, :media_token_ttl_ms)),
-         verifier_options <- [
-           public_key: Keyword.fetch!(options, :public_key),
-           tolerance_seconds: Keyword.fetch!(options, :webhook_tolerance_seconds)
-         ],
-         :ok <- WebhookVerifier.validate_configuration(verifier_options) do
+           positive_integer(Keyword.fetch!(options, :media_token_ttl_ms)) do
       {:ok,
        %__MODULE__{
-         adapter: adapter,
-         adapter_options: [
-           api_key: api_key,
-           provider_connection_id: provider_connection_id
-         ],
+         adapter: profile.adapter,
+         adapter_options: profile.adapter_options,
          answering_machine_detection: answering_machine_detection,
          identity: %IngressIdentity{
            service_id: service_id,
            ingress_key: ingress_key,
            scope: scope,
-           provider: :telnyx,
-           provider_connection_id: provider_connection_id
+           provider: profile.provider,
+           provider_connection_id: profile.provider_connection_id
          },
          media_token_ttl_ms: media_token_ttl_ms,
          outbound_number: outbound_number,
          public_base_url: public_base_url,
-         verifier_options: verifier_options
+         verifier_options: profile.verifier_options
        }}
     else
       _invalid -> {:error, :invalid_telephony_service_configuration}
@@ -122,12 +105,6 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
   end
 
   defp scope(_invalid), do: :error
-
-  defp provider(:telnyx), do: :ok
-  defp provider(_unsupported), do: :error
-
-  defp adapter(value) when is_atom(value), do: {:ok, value}
-  defp adapter(_invalid), do: :error
 
   defp answering_machine_detection(value) when value in [:disabled, :detect], do: {:ok, value}
   defp answering_machine_detection(_invalid), do: :error

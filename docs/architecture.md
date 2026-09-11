@@ -996,6 +996,26 @@ distinct equivalent and retains `nil` instead of duplicating its Call SID into a
 Matching includes the optional value, so adapters cannot discard a real session identifier merely
 because another carrier lacks one.
 
+Configured telephony services share service ID, ingress key, application/tenant scope, optional
+outbound number, public TLS base, media-token lifetime, and closed machine-detection policy. A
+provider profile owns the rest. Telnyx retains its Voice API connection ID, Ed25519 public key and
+API key; Twilio retains its Account SID and Auth Token. The Twilio Account SID becomes the safe
+configured-provider identity, while the Auth Token remains private in adapter and verifier options.
+Mixed provider credentials fail configuration instead of being ignored, and service inspection
+projects identity only.
+
+The Twilio adapter authenticates form-encoded webhooks according to Twilio's current official
+[request-validation contract](https://www.twilio.com/docs/usage/security): HMAC-SHA1 covers the
+configured exact public URL followed by form fields in case-sensitive key order, and the expected
+base64 value is compared to `X-Twilio-Signature` in constant time. Form parsing rejects duplicate,
+oversized, or malformed fields. Only after verification does the adapter normalize an incoming
+[Voice webhook](https://www.twilio.com/docs/voice/twiml) into the common event. Account SID is
+rechecked against the configured service; Call SID becomes the addressable control/leg identity;
+the stable incoming event key derives from that Call SID. Gateway receipt time is used where the
+initial TwiML request supplies no provider event timestamp. This adapter boundary exists before the
+provider-specific HTTP/TwiML response and media flow and does not by itself advertise live Twilio
+ingress.
+
 The Telnyx gateway boundary authenticates the untouched request body before any event decoding.
 It verifies the base64 Ed25519 signature over `timestamp <> "|" <> raw_body` with the configured
 base64 public key and rejects signed timestamps more than five minutes before or after gateway

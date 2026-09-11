@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
 
   alias Vxpipe.Gateway.Telephony.ConfiguredService
   alias Vxpipe.Gateway.Telephony.Telnyx.Adapter
+  alias Vxpipe.Gateway.Telephony.Twilio.Adapter, as: TwilioAdapter
 
   test "pins a complete Telnyx command and public callback configuration" do
     assert {:ok, service} = ConfiguredService.new(valid_options())
@@ -35,6 +36,39 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
              |> ConfiguredService.new()
   end
 
+  test "pins Twilio account authentication without a fictitious connection id" do
+    assert {:ok, service} = ConfiguredService.new(valid_twilio_options())
+
+    assert service.identity.provider == :twilio
+    assert service.identity.provider_connection_id == "AC00000000000000000000000000000000"
+    assert service.adapter == TwilioAdapter
+
+    assert service.adapter_options == [
+             account_sid: "AC00000000000000000000000000000000",
+             auth_token: "twilio-test-auth-token"
+           ]
+
+    assert service.verifier_options == [auth_token: "twilio-test-auth-token"]
+    refute inspect(service) =~ "twilio-test-auth-token"
+  end
+
+  test "rejects malformed or mixed Twilio credentials" do
+    for options <- [
+          Keyword.put(valid_twilio_options(), :account_sid, "not-an-account-sid"),
+          Keyword.put(valid_twilio_options(), :auth_token, ""),
+          Keyword.put(valid_twilio_options(), :api_key, "telnyx-secret"),
+          Keyword.put(
+            valid_twilio_options(),
+            :public_key,
+            Base.encode64(:binary.copy(<<1>>, 32))
+          ),
+          Keyword.put(valid_twilio_options(), :provider_connection_id, "voice-application")
+        ] do
+      assert {:error, :invalid_telephony_service_configuration} =
+               ConfiguredService.new(options)
+    end
+  end
+
   test "rejects missing secrets and non-TLS or ambiguous public URLs" do
     for options <- [
           Keyword.delete(valid_options(), :api_key),
@@ -63,6 +97,19 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
       provider_connection_id: "voice-application-1",
       public_key: Base.encode64(:binary.copy(<<1>>, 32)),
       api_key: "test-api-key",
+      outbound_number: "+15550001000",
+      public_base_url: "https://voice.example.test/voice/"
+    ]
+  end
+
+  defp valid_twilio_options do
+    [
+      id: "twilio-primary",
+      ingress_key: "ingress_twilio_primary",
+      scope: {:tenant, "tenantkey1234567"},
+      provider: :twilio,
+      account_sid: "AC00000000000000000000000000000000",
+      auth_token: "twilio-test-auth-token",
       outbound_number: "+15550001000",
       public_base_url: "https://voice.example.test/voice/"
     ]

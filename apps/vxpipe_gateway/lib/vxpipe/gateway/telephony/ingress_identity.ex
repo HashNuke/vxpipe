@@ -10,7 +10,7 @@ defmodule Vxpipe.Gateway.Telephony.IngressIdentity do
           service_id: String.t(),
           ingress_key: String.t(),
           scope: scope(),
-          provider: :telnyx,
+          provider: :telnyx | :twilio,
           provider_connection_id: String.t()
         }
 end

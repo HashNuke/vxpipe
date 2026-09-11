@@ -84,6 +84,40 @@ VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_tes
 Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency, and all seven
 umbrella lanes pass—757 tests with zero failures.
 
+## Checkpoint 2: configured profile and verified incoming event
+
+Configured services now dispatch only their provider-specific credential profile while preserving
+one common service envelope. Telnyx validation moved intact into its profile. A Twilio profile
+requires an exact Account SID and bounded Auth Token, derives the configured-provider identity from
+the account, defaults to the Twilio adapter, and refuses mixed Telnyx credentials. Both profiles
+keep secret-bearing adapter/verifier options out of inspection.
+
+The common raw webhook includes an optional exact public request URL and bounded route parameters
+without exposing either in inspection. The Twilio adapter's first implemented operation validates
+the current form-signature contract and decodes an incoming Voice request. It parses the raw form
+with duplicate/size rejection, orders parameters case-sensitively, computes HMAC-SHA1 over the exact
+configured URL and fields, and compares the base64 signature in constant time. Only an authenticated
+body is normalized, and its Account SID must match the configured profile. Call SID is retained as
+control and leg identity, while provider session remains absent. Unsupported Twilio command and
+media operations still return explicit errors; the HTTP/TwiML path is not yet implemented.
+
+The tests were initially red at compilation because the common raw webhook did not retain the URL
+required by Twilio authentication. Focused configuration, verifier/decoder, Telnyx profile, service
+registry, and Telnyx HTTP regressions now pass together:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/configured_service_test.exs \
+  test/vxpipe/gateway/telephony/service_registry_test.exs \
+  test/vxpipe/gateway/telephony/telnyx/adapter_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/telephony/twilio/adapter_test.exs
+# 23 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, unused-dependency, and all seven
+umbrella lanes pass—761 tests with zero failures.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
