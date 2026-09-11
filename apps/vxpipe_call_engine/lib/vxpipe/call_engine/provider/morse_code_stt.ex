@@ -23,6 +23,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT do
   end
 
   @impl true
+  def usage_identity(%Config{}), do: [name: "morse_code"]
+
+  @impl true
   def decode(payload) when is_binary(payload) do
     if byte_size(payload) > @maximum_message_bytes do
       {:error, :message_too_large}

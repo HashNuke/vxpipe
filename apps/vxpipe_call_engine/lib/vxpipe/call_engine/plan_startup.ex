@@ -65,7 +65,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          :ok <- supported_features(plan, caller, receiver),
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text_runtimes} <-
-           speech_to_text_runtimes([caller, receiver], plan.opening_audio, options),
+           speech_to_text_runtimes(plan, [caller, receiver], plan.opening_audio, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options),
          :ok <- supported_opening_audio(plan.opening_audio, text_to_speech, options),
          {:ok, caller_command} <- participant_command(plan, caller),
@@ -312,9 +312,9 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp speech_to_text_runtimes(participants, opening_audio, options) do
+  defp speech_to_text_runtimes(plan, participants, opening_audio, options) do
     Enum.reduce_while(participants, {:ok, %{}}, fn participant, {:ok, runtimes} ->
-      case speech_to_text_runtime(participant, opening_audio, options) do
+      case speech_to_text_runtime(plan, participant, opening_audio, options) do
         {:ok, runtime} ->
           {:cont, {:ok, Map.put(runtimes, participant.participant_id, runtime)}}
 
@@ -336,21 +336,27 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     AgentActivationOptions.new(plan, receiver, options)
   end
 
-  defp speech_to_text_runtime(caller, opening_audio, options) do
-    case resolve_provider(caller.capabilities.speech_to_text, options, :speech_to_text) do
+  defp speech_to_text_runtime(plan, participant, opening_audio, options) do
+    case resolve_provider(participant.capabilities.speech_to_text, options, :speech_to_text) do
       {:ok, nil} ->
         {:ok, nil}
 
-      {:ok, provider, settings} ->
+      {:ok, {provider_module, provider_config} = provider, settings} ->
         with {transport, transport_options}
              when is_atom(transport) and is_list(transport_options) <-
                Keyword.get(settings, :transport),
              media_ingress when is_list(media_ingress) <-
-               Keyword.get(settings, :media_ingress) do
+               Keyword.get(settings, :media_ingress),
+             {:ok, usage_provider} <-
+               speech_to_text_usage_provider(participant, provider_module, provider_config) do
           {:ok,
            %SpeechToTextRuntime{
+             call_id: plan.call_id,
+             participant_id: participant.participant_id,
+             activation_id: participant.activation_id,
              provider: provider,
              transport: {transport, transport_options},
+             usage_provider: usage_provider,
              media_ingress:
                Keyword.put(
                  media_ingress,
@@ -359,11 +365,24 @@ defmodule Vxpipe.CallEngine.PlanStartup do
                )
            }}
         else
-          _invalid_runtime -> unsupported_speech_configuration(caller, :speech_to_text)
+          _invalid_runtime -> unsupported_speech_configuration(participant, :speech_to_text)
         end
 
       {:error, _reason} ->
-        unsupported_speech_configuration(caller, :speech_to_text)
+        unsupported_speech_configuration(participant, :speech_to_text)
+    end
+  end
+
+  defp speech_to_text_usage_provider(participant, provider_module, provider_config) do
+    selection = participant.capabilities.speech_to_text
+
+    with true <- function_exported?(provider_module, :usage_identity, 1),
+         identity when is_list(identity) <- provider_module.usage_identity(provider_config) do
+      identity
+      |> Keyword.put(:integration_id, selection.profile)
+      |> ProviderContext.new()
+    else
+      _invalid -> {:error, :invalid_usage_identity}
     end
   end
 

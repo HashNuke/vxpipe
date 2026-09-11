@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.Capability.SpeechToText.Usage
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -45,7 +46,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
     case State.new(options) do
       {:ok, state} ->
-        {:ok, state}
+        {:ok, Usage.start_session(state)}
 
       {:error, :transport_start_failed, provider_module} ->
         Telemetry.provider_failure(:stt, provider_module, :transport_closed)
@@ -55,15 +56,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @impl true
   def handle_call({:push_audio, frame}, _from, state) do
-    {:reply, State.send_audio(state, frame), state}
+    case State.send_audio(state, frame) do
+      :ok -> {:reply, :ok, Usage.accept_input(state)}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
     case State.install_policy(state, snapshot) do
-      {:ok, state} ->
+      {:ok, updated} ->
+        state = Usage.transition(state, updated)
         {:reply, :ok, state}
 
-      {:error, :transport_start_failed, state} ->
+      {:error, :transport_start_failed, updated} ->
+        state = Usage.transition(state, updated)
         Telemetry.provider_failure(:stt, state.provider_module, :transport_closed)
         {:reply, {:error, :transport_start_failed}, state}
 
@@ -99,7 +105,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
       :ok ->
         acknowledge_audio(ingress, reference, frame.sequence_number, :ok)
-        {:noreply, state}
+        {:noreply, Usage.accept_input(state)}
     end
   end
 
@@ -140,6 +146,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   defp handle_signal(%Signal{kind: :failed} = signal, state) do
     signal = %{signal | policy_revision: state.policy_revision}
+    state = Usage.observe_signal(state, signal)
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
 
     stop_unavailable(:provider_failed, %{state | last_provider_sequence: signal.provider_sequence})
@@ -147,11 +154,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   defp handle_signal(%Signal{} = signal, state) do
     signal = %{signal | policy_revision: state.policy_revision}
+    state = Usage.observe_signal(state, signal)
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
     {:noreply, %{state | last_provider_sequence: signal.provider_sequence}}
   end
 
   defp stop_unavailable(reason, state) do
+    state = Usage.finish_session(state, :failed)
     maybe_report_provider_failure(reason, state.provider_module)
     send(state.owner, {:vxpipe_stt_unavailable, self(), state.identity, reason})
     {:stop, reason, state}

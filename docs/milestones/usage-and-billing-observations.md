@@ -1,8 +1,8 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation/settlement plus successful, failed, or cancelled model and
-text-to-speech attempt capture into the private archive are implemented (2026-09-11); speech-to-text,
-tool/carrier boundaries, operator totals, and billing enrichment remain. Specification review:
+Status: in progress. Typed observation/settlement plus successful, failed, or cancelled model,
+text-to-speech, and speech-to-text attempt capture into the private archive are implemented
+(2026-09-11); tool/carrier boundaries, operator totals, and billing enrichment remain. Specification review:
 approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
@@ -171,8 +171,45 @@ Implementation evidence (2026-09-11, text-to-speech attempt checkpoint):
   warnings-as-errors compilation, strict Credo over 679 source files, all 866 tests across the eight
   umbrella apps, and the unused-dependency check.
 
-This remains a partial milestone. Speech-to-text, tool and carrier capture, persisted
-settlement/operator totals, and billing enrichment are not claimed yet.
+At that point the milestone remained partial: speech-to-text, tool and carrier capture, persisted
+settlement/operator totals, and billing enrichment were not claimed.
+
+Implementation evidence (2026-09-11, speech-to-text session checkpoint):
+
+- Definition-selected recognition runtimes now pin call, participant/optional activation,
+  configured profile, and provider-owned safe identity. Credentials remain inside the provider and
+  transport configuration. The legacy application-configured room path lacks the call/profile
+  evidence and remains unobserved rather than receiving guessed attribution.
+- Every concrete provider transport receives a distinct local attempt and service-interval ID. A
+  transport-accepted audio submission or normalized provider activity creates an observable start;
+  policy replacement closes the old interval as cancelled, and provider/transport failure closes it
+  as failed. A replacement transport receives fresh identities. Connected-only evidence can be
+  buffered until later bound activity or terminal publication so early setup cannot evade the room's
+  exact-capability authorization.
+- Only a final provider turn emits measurement deltas. Flux final audio-window differences are
+  normalized to integer milliseconds and recorded as provider-reported recognized audio duration.
+  Final recognized text is counted as Unicode graphemes only while transcript storage is permitted.
+  Interim/cumulative text, eager/resumed states, and repeated final turn indices add nothing, and no
+  transcript text is retained by the usage tracker. Providers without a final audio window leave that
+  measurement absent.
+- Session lifecycle, measurement projection, and capability integration remain separate focused
+  modules. Room authority accepts observations only from the exact STT process bound to the source
+  participant connection and rechecks all pinned call identities before using the existing private
+  asynchronous archive/live-inspection path. No client event or fabricated domain-turn/provider ID
+  is added.
+- Red evidence: provider decoding first failed on the absent normalized duration field; pure session
+  tests failed on the absent projector; capability tests then timed out on final, policy-rotation,
+  denied-transcript, and failed-session observations. The accepted-audio/no-provider-signal case
+  separately failed until transport acceptance became provider-work evidence. Interval-boundary
+  assertions then failed until start and terminal observations were added.
+- Focused green evidence: 3 session tests, 7 capability tests, 6 hosted-provider adapter tests, the
+  pinned runtime contract, and the definition-driven private archive path pass. The complete Call
+  Engine suite passes 385 tests with one existing integration exclusion. All root gates pass:
+  formatting, warnings-as-errors compilation, strict Credo over 682 source files, all 874 tests
+  across the eight umbrella apps, and the unused-dependency check.
+
+This remains a partial milestone. Tool and carrier capture, persisted settlement/operator totals,
+and billing enrichment are not claimed yet.
 
 ## Specification review
 

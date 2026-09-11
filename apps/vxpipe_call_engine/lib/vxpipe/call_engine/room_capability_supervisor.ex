@@ -97,7 +97,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         %AttachConnection{} = command,
         provider,
         transport,
-        media_ingress_options
+        media_ingress_options,
+        usage \\ nil
       ) do
     identity = [
       tenant_id: command.tenant_id,
@@ -112,7 +113,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         [
           owner: room_authority,
           provider: provider,
-          transport: transport
+          transport: transport,
+          usage: usage
         ]
 
     case DynamicSupervisor.start_child(

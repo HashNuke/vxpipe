@@ -195,3 +195,52 @@ Green evidence:
 
 Speech-to-text, tool and carrier observations, persisted settlement/operator totals, and billing
 lookup remain.
+
+## 2026-09-11: speech-to-text session capture
+
+The recognition boundary differs from synthesis because one provider transport can cover several
+final turns. The implementation therefore uses one local attempt plus one service-interval identity
+per concrete transport and emits per-final-turn deltas within that attempt. A replacement transport
+after a media-policy revision receives new identities rather than extending the previous interval.
+
+The hosted provider's normalized final-turn signal now carries the validated audio-window duration
+as integer milliseconds. Only the final turn produces provider-reported recognized-audio duration;
+interim, eager, resumed, and repeated final turn state produces no duration or character delta. A
+final transcript is counted in Unicode graphemes only when the interval's media policy permits
+transcript storage. The tracker stores no transcript content, and a provider without final-window
+evidence leaves duration absent.
+
+An accepted audio submission or normalized provider activity proves that an attempt exists. The
+first such evidence creates a measurement-free in-progress boundary. A connection-only boundary is
+buffered until later bound activity or terminal publication because the provider transport can
+connect before the room has bound the capability to its participant connection. Policy replacement
+closes the old interval as cancelled; provider or transport failure closes it as failed. Accepted
+audio followed by failure is retained even when no provider request ID or measurement arrives.
+
+The implementation was split after its first green pass. `SpeechToTextSession` owns evidence,
+interval lifecycle, and final-turn deduplication. `SpeechToTextProjection` owns typed measurements
+and immutable observation construction. The capability adapter owns optional state integration and
+policy-based character permission. The room source resolver separately authorizes only the exact
+recognition process bound to the participant connection.
+
+Red evidence:
+
+- Provider tests failed on the absent normalized audio-duration field and safe usage identity.
+- Pure session tests failed while the session projector did not exist.
+- Capability tests timed out waiting for final measurements, cancelled replacement intervals,
+  denied-transcript behavior, and failed terminal observations.
+- A transport-accepted audio/no-provider-response case timed out until accepted submission became
+  attempt evidence.
+- Interval-boundary assertions failed until start and terminal observations were explicit.
+
+Green evidence so far:
+
+- Pure session lifecycle/projection: 3 tests, 0 failures.
+- Recognition capability: 7 tests, 0 failures.
+- Hosted provider adapter: 6 tests, 0 failures.
+- Pinned runtime and definition-driven private archive cases pass.
+- Complete Call Engine: 385 tests, 0 failures, 1 existing integration exclusion.
+- Root gates: formatting, warnings-as-errors compilation, strict Credo over 682 source files, all
+  874 tests across eight apps, and the unused-dependency check pass.
+
+Tool and carrier observations, persisted settlement/operator totals, and billing lookup remain.

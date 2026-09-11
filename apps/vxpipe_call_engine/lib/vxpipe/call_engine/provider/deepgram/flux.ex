@@ -67,6 +67,11 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
   end
 
   @impl true
+  def usage_identity(%__MODULE__{} = config) do
+    [name: "deepgram", model: config.model]
+  end
+
+  @impl true
   def decode(payload) when is_binary(payload) do
     if byte_size(payload) > @maximum_message_bytes do
       {:error, :message_too_large}
@@ -120,6 +125,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
          true <- valid_number?(window_start),
          true <- valid_number?(window_end),
          true <- window_end >= window_start,
+         {:ok, audio_duration_ms} <- audio_duration_ms(window_start, window_end),
          true <- valid_transcript?(transcript),
          true <- is_list(words),
          true <- valid_number?(confidence),
@@ -130,6 +136,7 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
          request_id: request_id,
          provider_sequence: sequence,
          provider_turn_index: turn_index,
+         audio_duration_ms: audio_duration_ms,
          text: transcript,
          end_of_turn_confidence: confidence,
          trigger: trigger
@@ -205,4 +212,12 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.Flux do
 
   defp valid_sequence?(value), do: is_integer(value) and value >= 0
   defp valid_number?(value), do: is_number(value) and value >= 0
+
+  defp audio_duration_ms(window_start, window_end) do
+    milliseconds = round((window_end - window_start) * 1_000)
+
+    if milliseconds >= 0,
+      do: {:ok, milliseconds},
+      else: {:error, :invalid_audio_window}
+  end
 end

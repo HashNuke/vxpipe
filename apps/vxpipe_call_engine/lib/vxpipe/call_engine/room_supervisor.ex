@@ -209,7 +209,8 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
              command,
              runtime.provider,
              runtime.transport,
-             runtime.media_ingress
+             runtime.media_ingress,
+             speech_to_text_usage(runtime)
            ) do
       bind_connection_speech_to_text(
         room_authority,
@@ -234,6 +235,15 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          _application_options
        ) do
     {:ok, room_authority, nil, input_mode, output_mode}
+  end
+
+  defp speech_to_text_usage(%SpeechToTextRuntime{} = runtime) do
+    [
+      call_id: runtime.call_id,
+      participant_id: runtime.participant_id,
+      activation_id: runtime.activation_id,
+      provider: runtime.usage_provider
+    ]
   end
 
   defp bind_connection_speech_to_text(

@@ -43,8 +43,14 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTest do
                 provider_sequence: 5,
                 provider_turn_index: 0,
                 text: "hello there again",
+                audio_duration_ms: 1_000,
                 trigger: "model"
               }} = decode_turn("EndOfTurn", 5, "hello there again", "model")
+    end
+
+    test "normalizes fractional provider audio windows to milliseconds" do
+      assert {:ok, %Signal{audio_duration_ms: 1_235}} =
+               decode_turn("EndOfTurn", 1, "measured", "model", 0.125, 1.36)
     end
 
     test "rejects malformed and oversized messages without retaining provider payloads" do
@@ -109,17 +115,36 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTest do
                "sample_rate" => "48000"
              } = url |> URI.new!() |> Map.fetch!(:query) |> URI.decode_query()
     end
+
+    test "exposes a safe usage identity without credentials" do
+      assert {:ok, config} =
+               Flux.new(
+                 api_key: "runtime-secret",
+                 model: "flux-general-en",
+                 encoding: :opus,
+                 sample_rate: 48_000
+               )
+
+      assert Flux.usage_identity(config) == [name: "deepgram", model: "flux-general-en"]
+    end
   end
 
-  defp decode_turn(event, sequence, transcript, trigger \\ nil) do
+  defp decode_turn(
+         event,
+         sequence,
+         transcript,
+         trigger \\ nil,
+         audio_window_start \\ 0.0,
+         audio_window_end \\ 1.0
+       ) do
     message = %{
       "type" => "TurnInfo",
       "request_id" => "request-1",
       "sequence_id" => sequence,
       "event" => event,
       "turn_index" => 0,
-      "audio_window_start" => 0.0,
-      "audio_window_end" => 1.0,
+      "audio_window_start" => audio_window_start,
+      "audio_window_end" => audio_window_end,
       "transcript" => transcript,
       "words" => [],
       "end_of_turn_confidence" => 0.8

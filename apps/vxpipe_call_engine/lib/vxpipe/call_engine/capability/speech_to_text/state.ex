@@ -17,7 +17,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     :provider_module,
     :transport,
     :transport_module,
-    :transport_options
+    :transport_options,
+    :usage,
+    :usage_context
   ]
   defstruct @enforce_keys
 
@@ -32,7 +34,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
           provider_module: module(),
           transport: pid() | nil,
           transport_module: module(),
-          transport_options: keyword()
+          transport_options: keyword(),
+          usage: nil | Vxpipe.CallEngine.Usage.SpeechToTextSession.t(),
+          usage_context: nil | keyword()
         }
 
   @spec new(keyword()) :: {:ok, t()} | {:error, :transport_start_failed, module()}
@@ -64,7 +68,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
            provider_module: provider_module,
            transport: transport,
            transport_module: transport_module,
-           transport_options: transport_options
+           transport_options: transport_options,
+           usage: nil,
+           usage_context: Keyword.get(options, :usage)
          }}
 
       {:error, _reason} ->

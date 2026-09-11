@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Provider.SpeechToText do
               required(:codec) => atom(),
               required(:sample_rate) => pos_integer()
             }
+  @callback usage_identity(config :: struct()) :: keyword()
   @callback decode(binary()) ::
               {:ok, Signal.t()}
               | {:ignore, atom()}

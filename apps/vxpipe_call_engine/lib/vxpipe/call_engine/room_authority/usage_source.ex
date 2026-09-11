@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.UsageSource do
   def resolve(%State{} = state, capability) when is_pid(capability) do
     with :error <- active_text_source(state, capability),
          :error <- pending_text_source(state, capability),
+         :error <- connection_speech_source(state, capability),
          :error <- active_speech_source(state, capability),
          :error <- pending_speech_source(state.pending_participant_transfer, capability) do
       {:error, :unauthorized}
@@ -41,6 +42,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.UsageSource do
       :error ->
         :error
     end
+  end
+
+  defp connection_speech_source(state, capability) do
+    Enum.find_value(state.connections, :error, fn {_connection_id, connection} ->
+      case connection.speech_to_text do
+        %{capability: ^capability} ->
+          activation_id =
+            Recorder.participant_activation(state.archive_recorder, connection.participant_id)
+
+          {:ok,
+           %{
+             activation_id: activation_id,
+             participant_id: connection.participant_id
+           }}
+
+        _unbound ->
+          false
+      end
+    end)
   end
 
   defp active_speech_source(%{text_to_speech_capability: nil}, _capability), do: :error

@@ -2703,8 +2703,35 @@ prepared private-briefing capability, matching the pinned participant and option
 same private asynchronous archive path used for model observations stores the facts; no client
 event or raw synthesis text is added. Definition-selected hosted and deterministic tone providers
 publish a safe provider identity. The legacy room command path lacks a pinned call/profile identity
-and remains unobserved rather than fabricating one. Speech-to-text, tool, and carrier capture remain
-later parts of the usage milestone.
+and remains unobserved rather than fabricating one. Tool and carrier capture remain later parts of
+the usage milestone.
+
+The third runtime capture path covers definition-selected speech-to-text sessions. The resolved
+runtime pins call, participant/optional activation, configured profile, and a safe provider/model
+identity without copying credentials. Each concrete provider transport receives a fresh local
+`satt_` attempt and `sint_` service-interval identity. A transport-accepted audio submission or
+normalized provider activity proves the attempt exists. A measurement-free `in_progress`
+observation marks its first observed boundary; a provider connection event may be buffered until
+later bound activity or termination so early connection setup cannot bypass room source authority.
+Policy-driven transport replacement closes the old interval as `cancelled`, while provider or
+transport failure closes it as `failed`. A new transport never reuses the prior attempt or interval.
+
+Only a provider's final turn can emit speech measurements. The hosted Flux adapter validates its
+final audio window and normalizes the window difference to the nearest integer millisecond. That
+becomes a provider-reported `recognized_audio_duration` delta. A final transcript may also produce a
+locally measured Unicode-grapheme `recognized_text_characters` delta, but only when the pinned media
+policy permits transcript storage for that interval. Interim, eager, resumed, or repeated final
+turn state never adds character or duration deltas. The tracker retains no transcript text; a
+provider without final-window evidence leaves duration unknown. The local deterministic recognizer,
+for example, can report final recognized characters but does not invent an audio duration.
+
+STT lifecycle tracking and observation projection are separate modules from the capability
+GenServer. The owning `RoomAuthority` accepts their facts only from the exact STT process currently
+bound to a participant connection and rechecks tenant, call, room, incarnation, participant, and
+optional activation. Observations include the service interval but omit a Vxpipe turn when the STT
+boundary has no authoritative domain-turn identity. The facts use the same private archive/live-
+inspection path as model and synthesis usage and add no client event, transcript payload, audio, or
+fabricated provider identifier.
 
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports

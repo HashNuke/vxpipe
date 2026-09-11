@@ -318,6 +318,35 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              payload: %{"content" => "Hello there", "modality" => "audio"}
            } = fact!(facts, :accepted_input)
 
+    stt_usage =
+      Enum.filter(facts, fn
+        %Fact{kind: :usage_observed, payload: %{"capability" => "speech_to_text"}} -> true
+        _other -> false
+      end)
+
+    assert stt_usage
+           |> Enum.reject(&(Map.get(&1.payload, "measurement") == nil))
+           |> Enum.map(&get_in(&1.payload, ["measurement", "component"]))
+           |> Enum.sort() == ["recognized_audio_duration", "recognized_text_characters"]
+
+    assert Enum.any?(stt_usage, fn fact ->
+             fact.payload["outcome"] == "in_progress" and
+               Map.get(fact.payload, "measurement") == nil
+           end)
+
+    assert Enum.all?(stt_usage, fn fact ->
+             fact.tenant_id == plan.tenant_id and
+               fact.call_id == plan.call_id and
+               fact.room_id == plan.room_id and
+               fact.incarnation_id == room.incarnation_id and
+               fact.participant_id == caller.participant_id and
+               fact.activation_id == caller.activation_id and
+               fact.payload["provider"]["name"] == "deepgram" and
+               fact.payload["provider"]["integration_id"] == "plan-stt" and
+               fact.payload["provider"]["request_id"] == "request-private-history" and
+               is_binary(fact.payload["attribution"]["service_interval_id"])
+           end)
+
     generated = fact!(facts, :agent_output_generated)
 
     assert %Fact{
@@ -1292,6 +1321,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              speech_to_text.provider
 
     assert speech_to_text.transport == {MorseCodeSTT.Transport, []}
+    assert speech_to_text.call_id == plan.call_id
+    assert speech_to_text.participant_id == caller.participant_id
+    assert speech_to_text.activation_id == caller.activation_id
+    assert speech_to_text.usage_provider.name == "morse_code"
+    assert speech_to_text.usage_provider.integration_id == "morse-stt"
 
     assert {MorseCodeTTS, %MorseConfig{sample_rate: 16_000, unit_duration_ms: 20}} =
              startup.text_to_speech.provider

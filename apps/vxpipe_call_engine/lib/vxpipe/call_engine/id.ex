@@ -11,6 +11,8 @@ defmodule Vxpipe.CallEngine.Id do
     participant: "part",
     room: "room",
     room_incarnation: "rinc",
+    speech_service_interval: "sint",
+    stt_attempt: "satt",
     transfer_attempt: "xfer",
     tts_attempt: "tatt",
     turn: "turn",
@@ -27,6 +29,8 @@ defmodule Vxpipe.CallEngine.Id do
           | :participant
           | :room
           | :room_incarnation
+          | :speech_service_interval
+          | :stt_attempt
           | :transfer_attempt
           | :tts_attempt
           | :turn
