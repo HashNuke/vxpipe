@@ -36,17 +36,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.SourceRestorer do
     end
   end
 
-  @spec cleanup(Request.t()) :: :ok
-  def cleanup(%Request{} = request) do
-    _ =
-      Vxpipe.CallEngine.RoomCapabilitySupervisor.stop_text_to_speech(
-        request.incarnation_id,
-        request.source_participant_id
-      )
-
-    :ok
-  end
-
   defp start_worker(request, from, cause, state) do
     owner = Keyword.fetch!(state.agent_transfer_runtime.startup_options, :owner)
 

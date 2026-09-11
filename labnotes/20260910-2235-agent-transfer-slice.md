@@ -376,3 +376,26 @@
   formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   Root `mix test` stops at the unchanged Persistence database-creation failure because PostgreSQL
   SCRAM authentication needs a password absent from this shell; no credential source was inspected.
+
+## 2026-09-11 — non-blocking transfer timeout cleanup
+
+- The restoration deadline originally terminated its preparation task and then synchronously asked
+  the room capability supervisor to remove any partial TTS child. A transport can still be inside a
+  bounded `start_link` connection attempt at that point; its DynamicSupervisor is consequently busy
+  completing `start_child`, so the cleanup call could block Room Authority beyond the restoration
+  deadline.
+- Added a controlled transport-start gate to the existing test transport and wrote the room race
+  first. Initial source TTS starts normally, the replacement transport blocks during startup, and
+  destination preparation has already failed. After the 750 ms restoration budget the test's
+  bounded snapshot request failed to receive a reply, reproducing the Room Authority stall.
+- `RoomTransferSupervisor` now starts fire-and-forget cleanup children for expired preparation and
+  restoration tasks. These workers terminate the exact task and clean its destination or source TTS
+  outside Room Authority. The supervisor limits all preparation, restoration, and cleanup children
+  to four per room; saturation returns unavailability instead of allowing unbounded abandoned work.
+- The green test receives a room snapshot within 250 ms after the restoration deadline, observes the
+  generic transfer failure plus private `restoration: timed_out`, releases the late transport, and
+  proves cleanup terminates it without installing it as the room capability. The focused ten-test
+  transfer-room file and complete 280-test Call Engine suite pass. Root formatting,
+  warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. Root `mix test`
+  stops at the unchanged Persistence database-creation failure because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.

@@ -238,6 +238,19 @@ formatting, warnings-as-errors compilation, strict Credo, and unused-dependency 
 tests stop at the unchanged Persistence setup failure because PostgreSQL SCRAM authentication needs
 a password absent from this shell; no credential source was inspected.
 
+A timeout-race follow-up removes synchronous cleanup from Room Authority. The red test holds the
+second TTS transport inside startup until after the 750 ms restoration deadline; the prior timeout
+handler then blocked while asking the busy capability supervisor to stop that partial child. The
+green path schedules termination and exact source/destination cleanup as an unlinked child of the
+room transfer task supervisor, clears transfer authority, archives `timed_out`, and replies without
+waiting for provider startup. The task supervisor permits at most four concurrent preparation,
+restoration, and cleanup tasks per room, so abandoned provider starts cannot accumulate without
+bound. Releasing the transport proves it is stopped and never installed in Room Authority. The
+focused ten-test transfer-room file and complete 280-test Call Engine suite pass. Root formatting,
+warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. Root `mix test`
+stops at the unchanged Persistence setup failure because PostgreSQL SCRAM authentication needs a
+password absent from this shell; no credential source was inspected.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

@@ -30,7 +30,9 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
     owner = Keyword.fetch!(options, :owner)
     transport_options = Keyword.fetch!(options, :transport_options)
     observer = Keyword.fetch!(transport_options, :observer)
-    send(observer, {:test_tts_transport_started, self(), Keyword.fetch!(options, :connection)})
+    connection = Keyword.fetch!(options, :connection)
+    await_start_permission(transport_options, observer, connection)
+    send(observer, {:test_tts_transport_started, self(), connection})
     {:ok, %{observer: observer, owner: owner}}
   end
 
@@ -70,5 +72,23 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
   def handle_info({:vxpipe_tts_audio_result, owner, reference, result}, %{owner: owner} = state) do
     send(state.observer, {:test_tts_audio_result, reference, result})
     {:noreply, state}
+  end
+
+  defp await_start_permission(options, observer, connection) do
+    case {Keyword.get(options, :start_counter), Keyword.get(options, :block_after_starts)} do
+      {counter, successful_starts} when is_reference(counter) and is_integer(successful_starts) ->
+        start_number = :atomics.add_get(counter, 1, 1)
+
+        if start_number > successful_starts do
+          send(observer, {:test_tts_transport_start_blocked, self(), connection})
+
+          receive do
+            :release_test_tts_transport_start -> :ok
+          end
+        end
+
+      _uncontrolled ->
+        :ok
+    end
   end
 end

@@ -1008,6 +1008,11 @@ whether restoration was unnecessary, completed, failed, or timed out. The replac
 restarted again if it later fails. Successful transfer commit replaces the retained runtime with
 the destination's pinned selection. The runtime's inspection representation excludes its provider
 and transport values so retaining it does not add credentials to Room Authority crash reports.
+Deadline cleanup is also scheduled beneath the room transfer task supervisor. A provider transport
+that is still completing its own bounded startup therefore cannot make Room Authority wait on a
+capability-supervisor cleanup call. The transfer task pool has a fixed per-room child limit; late
+startup is stopped without acquiring room authority, and saturation fails later preparation rather
+than accumulating unbounded work.
 
 ### Presence-driven media and transcript policy — approved R38
 

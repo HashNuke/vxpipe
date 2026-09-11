@@ -599,6 +599,97 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     refute_receive {:test_tts_transport_started, _third_transport, _connection}, 100
   end
 
+  test "a timed-out source restoration leaves room authority responsive" do
+    start_counter = :atomics.new(1, [])
+
+    configure_text_to_speech(
+      start_counter: start_counter,
+      block_after_starts: 1
+    )
+
+    plan =
+      compile_plan(
+        billing_model: "test:blocked-unavailable",
+        text_to_speech: true,
+        transfer_timeout_ms: 1_000
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    reception = Map.fetch!(plan.participants, "reception")
+    billing = Map.fetch!(plan.participants, "billing")
+
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert_receive {:test_tts_transport_started, source_transport, _connection}, 2_000
+    attach_caller(plan, room, caller)
+
+    assert :ok =
+             CallEngine.send_text(send_command(plan, room, caller, "Please try billing."))
+
+    assert_receive {:test_agent_runtime_stream, source_provider, _source_request}, 2_000
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: "timed-source-restoration",
+               name: "transfer",
+               arguments: %{"destination" => "billing"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_model_preparing, blocked_preparer}, 2_000
+
+    authority = room_authority(plan)
+    %{text_to_speech_capability: %{pid: source_capability}} = :sys.get_state(authority)
+    source_monitor = Process.monitor(source_capability)
+    TestTextToSpeechTransport.disconnect(source_transport, :test_disconnect)
+    assert_receive {:DOWN, ^source_monitor, :process, ^source_capability, _reason}, 2_000
+
+    send(blocked_preparer, :release_test_agent_runtime_model)
+
+    assert_receive {:test_tts_transport_start_blocked, blocked_transport, _connection}, 2_000
+
+    on_exit(fn ->
+      send(blocked_transport, :release_test_tts_transport_start)
+    end)
+
+    probe = Process.send_after(self(), :probe_restoration_deadline, 850)
+    assert_receive :probe_restoration_deadline, 1_000
+    _ = Process.cancel_timer(probe)
+
+    snapshot = Task.async(fn -> RoomAuthority.snapshot(plan.tenant_id, plan.room_id) end)
+    assert {:ok, _snapshot} = Task.yield(snapshot, 250)
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallFailed{
+                      tool_call_id: "timed-source-restoration",
+                      name: "transfer",
+                      reason: :tool_failed
+                    }},
+                   2_000
+
+    assert_archived_transfer(
+      :participant_transfer_failed,
+      reception,
+      caller,
+      billing,
+      "timed-source-restoration",
+      %{
+        "cause" => "destination_plan_unavailable",
+        "outcome" => "failed",
+        "restoration" => "timed_out"
+      }
+    )
+
+    blocked_monitor = Process.monitor(blocked_transport)
+    send(blocked_transport, :release_test_tts_transport_start)
+    assert_receive {:test_tts_transport_started, ^blocked_transport, _connection}, 2_000
+    assert_receive {:DOWN, ^blocked_monitor, :process, ^blocked_transport, _reason}, 2_000
+
+    assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
+    refute_receive {:test_tts_transport_started, _other_transport, _connection}, 100
+  end
+
   test "agent re-entry keeps identity, refreshes activation, and does not replay its greeting" do
     plan =
       compile_plan(
@@ -813,7 +904,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   defp agent_capabilities(model_profile, false), do: %{model_inference: model_profile}
 
-  defp configure_text_to_speech do
+  defp configure_text_to_speech(transport_options \\ []) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     text_to_speech = [
@@ -825,7 +916,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, [observer: self()]},
+      transport: {TestTextToSpeechTransport, [observer: self()] ++ transport_options},
       maximum_requests: 2
     ]
 

@@ -136,7 +136,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
           state
       ) do
     settle_task(restoration)
-    SourceRestorer.cleanup(restoration.request)
+
+    _ =
+      RoomTransferSupervisor.cleanup_restoration(
+        restoration.request,
+        restoration.task.pid
+      )
+
     finish_restoration(restoration, :failed, state)
   end
 
@@ -147,10 +153,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
         reference,
         %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
       ) do
-    _ = RoomTransferSupervisor.terminate(pending.request.incarnation_id, pending.task.pid)
     Process.demonitor(reference, [:flush])
     cancel_timer(pending.timer)
-    Cleanup.discard_destination(pending.request)
+    _ = RoomTransferSupervisor.cleanup_destination(pending.request, pending.task.pid)
     restore_or_fail(pending, :deadline_elapsed, state)
   end
 
@@ -180,15 +185,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
         %State{pending_agent_transfer: %Restoration{task: %Task{ref: reference}} = restoration} =
           state
       ) do
+    Process.demonitor(reference, [:flush])
+    cancel_timer(restoration.timer)
+
     _ =
-      RoomTransferSupervisor.terminate(
-        restoration.request.incarnation_id,
+      RoomTransferSupervisor.cleanup_restoration(
+        restoration.request,
         restoration.task.pid
       )
 
-    Process.demonitor(reference, [:flush])
-    cancel_timer(restoration.timer)
-    SourceRestorer.cleanup(restoration.request)
     finish_restoration(restoration, :timed_out, state)
   end
 
@@ -201,7 +206,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
         %State{pending_agent_transfer: %Pending{task: %Task{ref: reference}} = pending} = state
       ) do
     cancel_timer(pending.timer)
-    Cleanup.discard_destination(pending.request)
+    _ = RoomTransferSupervisor.cleanup_destination(pending.request, pending.task.pid)
     {:noreply, state} = restore_or_fail(pending, :preparation_process_down, state)
     {:handled, state}
   end
@@ -213,7 +218,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
           state
       ) do
     cancel_timer(restoration.timer)
-    SourceRestorer.cleanup(restoration.request)
+
+    _ =
+      RoomTransferSupervisor.cleanup_restoration(
+        restoration.request,
+        restoration.task.pid
+      )
+
     {:noreply, state} = finish_restoration(restoration, :failed, state)
     {:handled, state}
   end

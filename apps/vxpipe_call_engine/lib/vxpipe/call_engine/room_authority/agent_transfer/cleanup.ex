@@ -31,4 +31,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Cleanup do
 
     :ok
   end
+
+  @spec discard_source_text_to_speech(Request.t()) :: :ok
+  def discard_source_text_to_speech(%Request{} = request) do
+    _ =
+      RoomCapabilitySupervisor.stop_text_to_speech(
+        request.incarnation_id,
+        request.source_participant_id
+      )
+
+    :ok
+  end
 end

@@ -2,14 +2,21 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
   @moduledoc false
 
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer
+  alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Cleanup
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.CallEngine.{TextToSpeechRuntime, RoomAuthority.Startup}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
+  @maximum_tasks_per_room 4
+
   def start_link(options) do
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
-    Task.Supervisor.start_link(name: via(incarnation_id))
+
+    Task.Supervisor.start_link(
+      name: via(incarnation_id),
+      max_children: @maximum_tasks_per_room
+    )
   end
 
   def child_spec(options) do
@@ -77,11 +84,36 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec cleanup_destination(Request.t(), pid()) :: :ok | {:error, :unavailable}
+  def cleanup_destination(%Request{} = request, task) when is_pid(task) do
+    start_cleanup(request.incarnation_id, fn ->
+      _ = terminate(request.incarnation_id, task)
+      Cleanup.discard_destination(request)
+    end)
+  end
+
+  @spec cleanup_restoration(Request.t(), pid()) :: :ok | {:error, :unavailable}
+  def cleanup_restoration(%Request{} = request, task) when is_pid(task) do
+    start_cleanup(request.incarnation_id, fn ->
+      _ = terminate(request.incarnation_id, task)
+      Cleanup.discard_source_text_to_speech(request)
+    end)
+  end
+
   @spec terminate(String.t(), pid()) :: :ok | {:error, :unavailable}
   def terminate(incarnation_id, task) when is_pid(task) do
     case Task.Supervisor.terminate_child(via(incarnation_id), task) do
       :ok -> :ok
       {:error, :not_found} -> :ok
+    end
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  defp start_cleanup(incarnation_id, cleanup) when is_function(cleanup, 0) do
+    case Task.Supervisor.start_child(via(incarnation_id), cleanup) do
+      {:ok, _task} -> :ok
+      {:error, _reason} -> {:error, :unavailable}
     end
   catch
     :exit, _reason -> {:error, :unavailable}
