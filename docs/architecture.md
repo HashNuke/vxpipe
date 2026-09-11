@@ -2331,6 +2331,22 @@ chunks carry channel count as well as per-channel sample count, so offsets, dura
 gaps retain the shared room-clock meaning for mono and multichannel audio. This adapter still does
 not choose or implement an object store.
 
+`Vxpipe.Artifacts.S3ObjectStore` is the first concrete object-store implementation. It uses ExAws
+for S3 operation construction, signing, credential providers, endpoints, and response parsing, with
+ExAws's Req HTTP adapter; Vxpipe does not implement those protocols. The store initiates one
+multipart upload per artifact and retains incoming PCM as reversed iodata until it reaches the
+configured part size, whose minimum is S3's five MiB rule. Full parts upload sequentially in the
+existing artifact task boundary. Completion uploads one permitted final short part and then closes
+the multipart upload with ordered ETags. A terminal part/completion error makes a best-effort abort
+and reports failure to the artifact writer. The in-memory upload buffer is bounded to one part plus
+one already-bounded mixer chunk, and no temporary file or transcoding process is involved.
+
+S3 bucket, endpoint, region, credential-provider overrides, encryption headers, and request options
+are trusted application/tenant configuration supplied to the adapter, never call-definition or
+client payload data. The adapter state excludes those client options and buffered PCM from
+inspection. A completed object remains raw signed little-endian 16-bit PCM described by its
+artifact manifest; authenticated playback packaging belongs to the later operator boundary.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped

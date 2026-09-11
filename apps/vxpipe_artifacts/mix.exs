@@ -27,6 +27,12 @@ defmodule Vxpipe.Artifacts.MixProject do
   defp elixirc_paths(_env), do: ["lib"]
 
   defp deps do
-    [{:vxpipe_call_engine, in_umbrella: true, runtime: false}]
+    [
+      {:ex_aws, "~> 2.7"},
+      {:ex_aws_s3, "~> 2.5"},
+      {:req, "~> 0.7.4"},
+      {:sweet_xml, "~> 0.7.5"},
+      {:vxpipe_call_engine, in_umbrella: true, runtime: false}
+    ]
   end
 end

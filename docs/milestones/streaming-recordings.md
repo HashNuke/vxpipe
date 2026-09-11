@@ -201,6 +201,39 @@ and operator playback remain pending.
 Root formatting, compilation with warnings as errors, strict Credo over 622 source files, all 806
 umbrella tests, and the unused-dependency check pass.
 
+## Checkpoint 5: S3-compatible multipart object store
+
+The artifacts application now has a concrete `S3ObjectStore`. It delegates operation construction,
+request signing, credential providers, endpoint configuration, and response parsing to current
+ExAws/ExAws S3, using their Req HTTP adapter. The implementation does not stage a file or introduce
+an audio/video conversion dependency.
+
+One multipart session buffers PCM as reversed iodata until it reaches the configured part size,
+which cannot be below S3's five MiB minimum. Full parts upload sequentially in the artifact writer's
+existing object-I/O task boundary. Completion uploads the permitted final short part, preserves
+ordered part ETags, and completes the object; terminal part/completion failure attempts an abort.
+The live side remains bounded independently, while object-store memory is bounded to one multipart
+part plus one already-bounded input chunk. Client request options are excluded from session
+inspection because they may contain credential-provider data.
+
+The test was first red because `S3ObjectStore` did not exist. Its green path buffers two smaller PCM
+chunks into an exact five-MiB first part, holds a final short interval, uploads that as part two on
+completion, and supplies both ETags in order:
+
+```text
+cd apps/vxpipe_artifacts
+mix test --max-cases 1
+# 3 tests, 0 failures
+```
+
+ExAws 2.7.0, ExAws S3 2.5.9, Req 0.7.4, and SweetXml 0.7.5 are locked with the dependency change.
+The design follows the official ExAws multipart and Req adapter contracts. The concrete adapter is
+not yet selected by a supervised room, and the tagged S3-compatible integration lane remains
+pending with recording configuration, track capture, metadata, and playback.
+
+Root formatting, compilation with warnings as errors, strict Credo over 626 source files, all 807
+umbrella tests, and the unused-dependency check pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

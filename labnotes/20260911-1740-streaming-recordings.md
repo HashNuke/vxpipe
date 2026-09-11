@@ -148,3 +148,47 @@ identity, relational metadata, or playback was added in this checkpoint.
 
 Root formatting, compilation with warnings as errors, strict Credo over 622 source files, all 806
 umbrella tests, and the unused-dependency check pass.
+
+## 2026-09-11: multipart S3-compatible object store
+
+The next red test described incremental multipart behavior and failed because
+`Vxpipe.Artifacts.S3ObjectStore` did not exist. Two sub-part-size PCM chunks had to form one valid
+five-MiB part; a later short interval had to remain buffered until completion, become the allowed
+final short part, and precede an ordered ETag completion request.
+
+The implementation delegates S3 signing, credential discovery, endpoint behavior, operation
+construction, and response parsing to ExAws 2.7.0 and ExAws S3 2.5.9, using the official Req HTTP
+adapter with Req 0.7.4. SweetXml 0.7.5 supplies the S3 XML parsers. The selection and minimum-part
+behavior were checked against the [ExAws S3 multipart documentation](https://ex-aws-s3.hexdocs.pm/ExAws.S3.html#upload/4)
+and the [ExAws Req adapter documentation](https://ex-aws.hexdocs.pm/ExAws.Request.Req.html).
+
+`S3ObjectStore` initiates one upload per artifact and keeps a reversed iodata buffer. It allocates a
+contiguous binary only when uploading a part, and its configured threshold cannot be smaller than
+five MiB. Each request still executes inside the artifacts-owned task supervisor established by the
+writer checkpoint. On terminal upload or completion failure it attempts to abort the multipart
+upload and returns the original failure. No temporary file, media conversion, or separate OS
+process is involved.
+
+Trusted adapter options carry bucket and ExAws request/initiation settings. They are not accepted
+from call definitions or client payloads, and the session's inspection output excludes both client
+options and buffered PCM. The focused fake-client test observes exact part bytes and ETag order
+without credentials or a network request:
+
+```text
+cd apps/vxpipe_artifacts
+mix test --max-cases 1
+# 3 tests, 0 failures
+```
+
+A fresh compile of dependency source emits one type-analysis warning inside SweetXml 0.7.5 under
+Elixir 1.19; project warnings-as-errors compilation succeeds, and there is no project-owned warning.
+A tagged live S3-compatible lane, runtime configuration/wiring, individual tracks, metadata, and
+playback remain pending.
+
+The first root suite attempt exited with one retained failure target under the persistence app, but
+the captured tail did not include its assertion. `mix test --failed` reran that exact single target
+successfully, and a subsequent complete suite passed. No implementation change was made in response;
+this is recorded as a transient test observation rather than a diagnosed project failure.
+
+Root formatting, compilation with warnings as errors, strict Credo over 626 source files, all 807
+umbrella tests, and the unused-dependency check pass.
