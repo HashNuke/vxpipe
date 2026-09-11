@@ -201,3 +201,26 @@
 - Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   Umbrella `mix test` still stops before test execution at Persistence database creation because
   the shell has no PostgreSQL password; no credential source was inspected.
+
+## 2026-09-11 — transient Agent Runtime model context
+
+- Added a Session test first. It failed because Session configuration rejected a model-context
+  source and `ModelRequest` had no transient context value.
+- Added a narrow `ModelContextSource` behavior and a fetcher separate from pending-tool context.
+  The fetch occurs in bounded request work before every provider generation, accepts only a JSON
+  object with string keys, enforces a configurable encoded-byte limit, rejects the runtime-reserved
+  pending-invocation key, and terminates a stalled source task at timeout.
+- `ModelRequest` carries the fresh object separately from committed messages. The ReqLLM adapter
+  combines it with the independently validated pending projection inside the existing fixed
+  trusted-state envelope. A second Session request sees a replacement value and no copy of the
+  earlier value in conversation history.
+- This provider-neutral checkpoint deliberately has no Call Engine or Call Variables dependency.
+  The next checkpoint must provide the destination's permission-filtered variables plus selected
+  reason through this source.
+- The 16 focused source, Session, and ReqLLM projection tests pass. They include safe failure before
+  provider generation when a configured source is unavailable. The complete Agent Runtime suite
+  passes 58 tests with two tagged integration exclusions.
+- The unchanged complete Call Engine suite passes 275 tests with one tagged integration exclusion.
+  Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  Umbrella `mix test` stops before test execution at Persistence database creation because the
+  shell has no PostgreSQL password; no credential source was inspected.

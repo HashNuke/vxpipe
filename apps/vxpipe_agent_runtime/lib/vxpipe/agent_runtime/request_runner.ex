@@ -5,6 +5,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     Conversation,
     Executor,
     Message,
+    ModelContext,
     ModelRequest,
     ModelResponse,
     PendingContext,
@@ -31,11 +32,13 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          config
        ) do
     with {:ok, pending_invocations} <- pending_context(config, request.correlation),
+         {:ok, model_context} <- model_context(config, request.correlation),
          model_request <-
            ModelRequest.new(
              conversation.messages ++ staged_messages,
              model_tools(config.tool_registry, tools_enabled?),
              pending_invocations,
+             model_context,
              request.correlation
            ),
          {:ok, response} <- generate_response(config, model_request, output),
@@ -191,6 +194,13 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     PendingContext.fetch(config.pending_context_source, correlation,
       timeout_ms: config.pending_context_timeout_ms,
       maximum_invocations: config.maximum_pending_invocations
+    )
+  end
+
+  defp model_context(config, correlation) do
+    ModelContext.fetch(config.model_context_source, correlation,
+      timeout_ms: config.model_context_timeout_ms,
+      maximum_bytes: config.maximum_model_context_bytes
     )
   end
 

@@ -121,6 +121,94 @@ defmodule Vxpipe.AgentRuntime.SessionTest do
     refute provider_pid == session
   end
 
+  test "refreshes transient model context before generation without committing it" do
+    session =
+      start_supervised!(
+        {Session,
+         instructions: "Be concise",
+         model_provider: Vxpipe.AgentRuntime.TestModelProvider,
+         model: %{reply: "done", test_owner: self()},
+         model_context_source: {Vxpipe.AgentRuntime.TestModelContextSource, self()},
+         model_context_timeout_ms: 250,
+         pending_context_source: empty_pending_context(self()),
+         event_destination: self()}
+      )
+
+    first =
+      Task.async(fn ->
+        Session.request(session, "first", %{request_id: "model_context_1"})
+      end)
+
+    assert_receive {:model_context_requested, source, %{request_id: "model_context_1"}, 250}
+
+    send(
+      source,
+      {:model_context_result,
+       {:ok, %{"call_variables" => %{"order" => %{"value" => %{"id" => "order-17"}}}}}}
+    )
+
+    assert_receive {:model_provider_process, _provider_pid, first_request}
+
+    assert first_request.model_context == %{
+             "call_variables" => %{"order" => %{"value" => %{"id" => "order-17"}}}
+           }
+
+    assert {:ok, %Result{status: :completed}} = Task.await(first)
+
+    second =
+      Task.async(fn ->
+        Session.request(session, "second", %{request_id: "model_context_2"})
+      end)
+
+    assert_receive {:model_context_requested, source, %{request_id: "model_context_2"}, 250}
+
+    send(
+      source,
+      {:model_context_result,
+       {:ok, %{"call_variables" => %{"order" => %{"value" => %{"id" => "order-18"}}}}}}
+    )
+
+    assert_receive {:model_provider_process, _provider_pid, second_request}
+
+    assert second_request.model_context == %{
+             "call_variables" => %{"order" => %{"value" => %{"id" => "order-18"}}}
+           }
+
+    refute Enum.any?(second_request.messages, fn message ->
+             String.contains?(message.content, "order-17")
+           end)
+
+    assert {:ok, %Result{status: :completed}} = Task.await(second)
+  end
+
+  test "fails safely before provider generation when transient model context is unavailable" do
+    session =
+      start_supervised!(
+        {Session,
+         instructions: "Be concise",
+         model_provider: Vxpipe.AgentRuntime.TestModelProvider,
+         model: %{reply: "must not run", test_owner: self()},
+         model_context_source: {Vxpipe.AgentRuntime.TestModelContextSource, self()},
+         pending_context_source: empty_pending_context(self()),
+         event_destination: self()}
+      )
+
+    request =
+      Task.async(fn ->
+        Session.request(session, "hello", %{request_id: "model_context_failure"})
+      end)
+
+    assert_receive {:model_context_requested, source, %{request_id: "model_context_failure"},
+                    1_000}
+
+    send(source, {:model_context_result, {:error, :private_source_failure}})
+
+    assert {:ok, %Result{status: :failed, reason: :model_context_unavailable}} =
+             Task.await(request)
+
+    refute_receive {:model_provider_process, _provider_pid, _model_request}
+  end
+
   test "fails safely without calling the provider when pending context is unavailable" do
     session =
       start_supervised!(

@@ -146,6 +146,14 @@ compiler/room transfer run passes 15 tests and the complete Call Engine suite pa
 one tagged integration exclusion. This checkpoint captures authority-bearing input only; it does
 not yet claim destination model-context or Call Variables delivery.
 
+Agent Runtime now provides the provider-neutral transient context seam required for that delivery.
+An optional host source is refreshed before every generation, independently bounded by timeout and
+encoded size, restricted to a JSON object, and excluded from committed conversation. ReqLLM merges
+it with current pending-invocation state in the existing trusted state envelope rather than
+creating a caller or history message. Sixteen focused source, Session, and ReqLLM projection tests
+pass; the complete Agent Runtime suite passes 58 tests with two tagged integration exclusions. Call
+Engine wiring remains unchecked, so selected reason/variables delivery is still open.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

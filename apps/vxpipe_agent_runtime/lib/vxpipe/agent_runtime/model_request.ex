@@ -4,13 +4,14 @@ defmodule Vxpipe.AgentRuntime.ModelRequest do
   alias Vxpipe.AgentRuntime.{Message, ModelTool, PendingInvocation}
 
   @derive {Inspect, only: [:correlation]}
-  @enforce_keys [:messages, :tools, :pending_invocations, :correlation]
+  @enforce_keys [:messages, :tools, :pending_invocations, :model_context, :correlation]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
           messages: [Message.t()],
           tools: [ModelTool.t()],
           pending_invocations: [PendingInvocation.t()],
+          model_context: map(),
           correlation: map()
         }
 
@@ -18,10 +19,18 @@ defmodule Vxpipe.AgentRuntime.ModelRequest do
   def new(messages, tools, pending_invocations, correlation)
       when is_list(messages) and is_list(tools) and is_list(pending_invocations) and
              is_map(correlation) do
+    new(messages, tools, pending_invocations, %{}, correlation)
+  end
+
+  @spec new([Message.t()], [ModelTool.t()], [PendingInvocation.t()], map(), map()) :: t()
+  def new(messages, tools, pending_invocations, model_context, correlation)
+      when is_list(messages) and is_list(tools) and is_list(pending_invocations) and
+             is_map(model_context) and is_map(correlation) do
     %__MODULE__{
       messages: messages,
       tools: tools,
       pending_invocations: pending_invocations,
+      model_context: model_context,
       correlation: correlation
     }
   end

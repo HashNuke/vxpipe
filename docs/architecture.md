@@ -150,6 +150,13 @@ pending state, and performs the correctly gated acknowledgement round outside th
 GenServer. Streaming, cancellation, bounded failure, ReqLLM projection, and Call Engine adoption
 are implemented; Jido is no longer a runtime or dependency.
 
+Agent Runtime now has a second, host-supplied transient model-context boundary for trusted JSON
+state that is not conversation history. It fetches the object outside the Session before every
+provider generation, bounds source time and encoded bytes, rejects non-JSON or reserved runtime
+keys, and keeps it out of committed messages. ReqLLM combines it with the independently validated
+pending-invocation projection in one fixed state envelope. The reusable runtime assigns no room or
+variable semantics to this object; Call Engine must supply only the active agent's authorized view.
+
 Within the package loop, an accepted running exchange is durable for the Session lifetime
 even if the following provider generation fails. Later turns retain that exchange once and
 combine it with the current engine-owned pending projection; a provider failure cannot trigger

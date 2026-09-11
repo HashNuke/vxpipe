@@ -19,6 +19,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
     :pending_context_source,
     :pending_context_timeout_ms,
     :maximum_pending_invocations,
+    :model_context_source,
+    :model_context_timeout_ms,
+    :maximum_model_context_bytes,
     :commit_timeout_ms,
     :request_timeout_ms,
     :event_destination
@@ -52,6 +55,12 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
            positive(Keyword.get(options, :pending_context_timeout_ms, 1_000)),
          {:ok, maximum_pending_invocations} <-
            positive(Keyword.get(options, :maximum_pending_invocations, 32)),
+         {:ok, model_context_source} <-
+           validate_model_context_source(Keyword.get(options, :model_context_source)),
+         {:ok, model_context_timeout_ms} <-
+           positive(Keyword.get(options, :model_context_timeout_ms, 1_000)),
+         {:ok, maximum_model_context_bytes} <-
+           positive(Keyword.get(options, :maximum_model_context_bytes, 256 * 1_024)),
          {:ok, commit_timeout_ms} <- positive(Keyword.get(options, :commit_timeout_ms, 1_000)),
          {:ok, request_timeout_ms} <-
            positive(Keyword.get(options, :request_timeout_ms, 30_000)),
@@ -73,6 +82,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          pending_context_source: pending_context_source,
          pending_context_timeout_ms: pending_context_timeout_ms,
          maximum_pending_invocations: maximum_pending_invocations,
+         model_context_source: model_context_source,
+         model_context_timeout_ms: model_context_timeout_ms,
+         maximum_model_context_bytes: maximum_model_context_bytes,
          commit_timeout_ms: commit_timeout_ms,
          request_timeout_ms: request_timeout_ms,
          event_destination: event_destination
@@ -108,6 +120,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       pending_context_source: config.pending_context_source,
       pending_context_timeout_ms: config.pending_context_timeout_ms,
       maximum_pending_invocations: config.maximum_pending_invocations,
+      model_context_source: config.model_context_source,
+      model_context_timeout_ms: config.model_context_timeout_ms,
+      maximum_model_context_bytes: config.maximum_model_context_bytes,
       begin_submission: begin_submission,
       commit: commit,
       emit_model_usage: emit_model_usage,
@@ -131,6 +146,9 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       :pending_context_source,
       :pending_context_timeout_ms,
       :maximum_pending_invocations,
+      :model_context_source,
+      :model_context_timeout_ms,
+      :maximum_model_context_bytes,
       :commit_timeout_ms,
       :request_timeout_ms,
       :event_destination
@@ -208,6 +226,19 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
 
   defp validate_pending_context_source(_context_source),
     do: {:error, :invalid_pending_context_source}
+
+  defp validate_model_context_source(nil), do: {:ok, nil}
+
+  defp validate_model_context_source({module, _source} = context_source) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :snapshot, 3) do
+      {:ok, context_source}
+    else
+      {:error, :invalid_model_context_source}
+    end
+  end
+
+  defp validate_model_context_source(_context_source),
+    do: {:error, :invalid_model_context_source}
 
   defp resolve_event_destination(destination) do
     case GenServer.whereis(destination) do

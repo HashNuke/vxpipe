@@ -81,7 +81,19 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
         source_turn_id: "turn_2"
       )
 
-    request = ModelRequest.new(messages, [tool], [pending], %{request_id: "req_1"})
+    request =
+      ModelRequest.new(
+        messages,
+        [tool],
+        [pending],
+        %{
+          "call_variables" => %{
+            "order" => %{"revision" => 2, "value" => %{"id" => "order-17"}}
+          }
+        },
+        %{request_id: "req_1"}
+      )
+
     assert {model, context, options} = Provider.prepare_request(config, request)
     assert model.provider == :google
     assert model.id == "gemini-3.5-flash-lite"
@@ -93,6 +105,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
     assert Enum.map(projected, & &1.role) == [:system, :user, :assistant, :tool, :user]
     assert message_text(List.first(projected)) =~ "pending_tool_invocations"
     assert message_text(List.first(projected)) =~ "tool_call_2"
+    assert message_text(List.first(projected)) =~ "call_variables"
+    assert message_text(List.first(projected)) =~ "order-17"
     assert message_text(List.last(projected)) == "The worker later completed."
 
     assistant = Enum.at(projected, 2)

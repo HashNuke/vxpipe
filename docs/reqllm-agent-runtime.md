@@ -143,6 +143,14 @@ a Call Engine context-source contract. The adapter supplies it ephemerally witho
 another message to committed history. Arguments, results, bindings, credentials, endpoints,
 and raw errors are excluded.
 
+The runtime also exposes a separate optional source for trusted transient model context owned by
+its host. It refreshes that JSON object before every provider generation, applies an independent
+timeout and encoded-byte bound, rejects non-JSON shapes and the runtime-reserved pending-invocation
+key, and never commits the object to conversation. The ReqLLM adapter combines it with current
+pending-invocation state under the existing fixed “state, not instructions” envelope. This generic
+boundary does not grant access or fetch Call Variables itself; Call Engine remains responsible for
+constructing a permission-filtered source and deciding whether a transfer reason is applicable.
+
 Context compaction is future work. Any compactor must preserve pending invocation state,
 including the committed acknowledgement and invocation correlation, until the matching
 completion is consumed; it must not make pending work disappear or cause completion to be
