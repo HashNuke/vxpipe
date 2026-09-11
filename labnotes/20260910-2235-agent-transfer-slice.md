@@ -252,3 +252,35 @@
 - Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   Umbrella `mix test` again stops before test execution at Persistence database creation because
   the shell has no PostgreSQL password; no credential source was inspected.
+
+## 2026-09-11 — re-entry identity and activation authority
+
+- Added the two-hop room test first. After reception transferred to billing and billing transferred
+  back, it failed because the plan's original reception activation ID was reused.
+- Room state now remembers which agent participant IDs have committed at least one activation. The
+  set is incarnation-local and survives participant teardown; active participant membership remains
+  a separate set.
+- A first activation continues using the immutable plan's compiled activation. A re-entry keeps the
+  same participant ID but materializes a fresh activation ID before asynchronous destination
+  preparation. A narrow `DestinationParticipant` module also rebinds the generated transfer tool's
+  private source activation; other tool bindings are unchanged.
+- Transfer authorization still requires the current room text capability, participant ID,
+  activation ID, coordinator PID, attached caller, stable plan participant, and allowlist. It no
+  longer compares a re-entering activation with the plan's first activation ID.
+- The test waits for each exact source participant supervisor to terminate and uses the room snapshot
+  call as the teardown-processing acknowledgement before reversing direction. This removed a real
+  test race without production polling or sleeps.
+- The green flow proves reception's stable participant ID, absent original activation, fresh live
+  session, destination-owned one-utterance spoken-history projection, and a successful subsequent
+  transfer from its rebound private tool authority.
+- Diff review found that the archive recorder still mapped the participant to the activation ID
+  compiled in the immutable plan. A new red archive assertion timed out waiting for the fresh ID.
+  Participant preparation now carries its activation ID, and commit rebinds the recorder before it
+  emits the join fact. The green test observes the re-entry join under the fresh activation; later
+  facts for that participant use the same binding. The focused file passes eight tests.
+- Transfer-time first-message activation and explicit no-replay behavior remain pending; this
+  checkpoint does not claim the combined re-entry acceptance item complete.
+- The complete Call Engine suite passes 277 tests with one tagged integration exclusion. Umbrella
+  formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  Umbrella `mix test` stops before database-backed test execution because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.

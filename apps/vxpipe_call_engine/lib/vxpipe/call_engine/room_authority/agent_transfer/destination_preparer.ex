@@ -3,16 +3,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
 
   alias Vxpipe.CallEngine.PlanStartup
   alias Vxpipe.CallEngine.PlanStartup.AgentDestination
+  alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, ParticipantPreparation, Startup}
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{Preparation, Runtime}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  @spec prepare(Request.t(), Runtime.t(), [Vxpipe.AgentRuntime.Message.t()]) ::
+  @spec prepare(Request.t(), Runtime.t(), Participant.t(), [Vxpipe.AgentRuntime.Message.t()]) ::
           {:ok, Preparation.t()} | {:error, :unavailable}
-  def prepare(%Request{} = request, %Runtime{} = runtime, initial_messages)
+  def prepare(
+        %Request{} = request,
+        %Runtime{} = runtime,
+        %Participant{} = participant,
+        initial_messages
+      )
       when is_list(initial_messages) do
     with {:ok, %AgentDestination{} = destination} <-
-           destination(request, runtime, initial_messages),
+           destination(request, runtime, participant, initial_messages),
          {:ok, %ParticipantPreparation{} = participant} <-
            ParticipantLifecycle.prepare(
              destination.command,
@@ -25,9 +31,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
     end
   end
 
-  defp destination(request, runtime, initial_messages) do
-    participant = Map.fetch!(runtime.plan.participants, request.destination_definition_key)
-
+  defp destination(request, runtime, participant, initial_messages) do
     options =
       runtime.startup_options
       |> Keyword.put(:initial_messages, initial_messages)

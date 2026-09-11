@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
   alias Vxpipe.AgentRuntime.{Message, ModelResponse, ToolCall}
 
   alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.Archive.Fact
 
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
@@ -12,6 +13,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     CallVariables,
     DefinitionCompiler,
     RoomAuthority,
+    TestCollectingArchiveWriter,
     TestSelectiveAgentRuntimeModelProvider
   }
 
@@ -446,8 +448,102 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     send(next_provider, {:test_agent_runtime_response, {:ok, next_response}})
   end
 
+  test "an agent re-enters with its participant identity and a fresh activation" do
+    plan =
+      compile_plan(
+        billing_transfers: ["reception"],
+        reception_transfer_history: %{mode: "last_n_spoken", turns: 1}
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    reception = Map.fetch!(plan.participants, "reception")
+
+    archive = [
+      enabled: true,
+      writer: {TestCollectingArchiveWriter, self()},
+      maximum_pending_facts: 64,
+      retry_delay_ms: 5,
+      drain_timeout_ms: 1_000
+    ]
+
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive)
+    attach_caller(plan, room, caller)
+
+    transfer_through_model(
+      plan,
+      room,
+      caller,
+      "Please transfer me to billing.",
+      "reception",
+      "billing",
+      "transfer-to-billing"
+    )
+
+    _ = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
+
+    transfer_through_model(
+      plan,
+      room,
+      caller,
+      "Please send me back to reception.",
+      "billing",
+      "reception",
+      "transfer-to-reception"
+    )
+
+    _ = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
+
+    assert {:ok, reception_snapshot} =
+             CallEngine.participant_snapshot(
+               plan.tenant_id,
+               plan.room_id,
+               reception.participant_id
+             )
+
+    assert reception_snapshot.participant_id == reception.participant_id
+    assert AgentActivationSupervisor.whereis_child(reception.activation_id, :session) == nil
+
+    reentry_activation_id = active_activation_id(plan, reception.participant_id)
+    refute reentry_activation_id == reception.activation_id
+    assert is_pid(AgentActivationSupervisor.whereis_child(reentry_activation_id, :session))
+    assert_archive_join(reception.participant_id, reentry_activation_id)
+
+    current = send_command(plan, room, caller, "Can reception continue helping me?")
+    assert :ok = CallEngine.send_text(current)
+
+    {provider, request} = receive_request_for_prompt("Route callers safely.")
+
+    assert Enum.map(request.messages, &{&1.role, &1.content}) == [
+             {:system, "Route callers safely."},
+             {:user, "Please send me back to reception."},
+             {:user, "Can reception continue helping me?"}
+           ]
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: "reentered-reception-transfer",
+               name: "transfer",
+               arguments: %{"destination" => "billing"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{
+                      tool_call_id: "reentered-reception-transfer",
+                      result: %{"destination" => "billing", "status" => "completed"}
+                    }},
+                   2_000
+  end
+
   defp compile_plan(options \\ []) do
     billing_model = Keyword.get(options, :billing_model, "test:scripted")
+    billing_transfers = Keyword.get(options, :billing_transfers, [])
+
+    reception_transfer_history =
+      Keyword.get(options, :reception_transfer_history, %{mode: "fresh"})
+
     transfer_timeout_ms = Keyword.get(options, :transfer_timeout_ms, 30_000)
     transfer_history = Keyword.get(options, :transfer_history, %{mode: "fresh"})
 
@@ -475,6 +571,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                    "reception" => %{
                      type: "agent",
                      prompt: "Route callers safely.",
+                     transfer_history: reception_transfer_history,
                      first_message: %{mode: "wait_for_input"},
                      capabilities: %{model_inference: "test-model"},
                      tools: %{},
@@ -490,7 +587,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      capabilities: %{model_inference: "billing-model"},
                      tools: %{},
                      variable_permissions: billing_permissions,
-                     transfers: []
+                     transfers: billing_transfers
                    }
                  },
                  limits: %{max_duration_ms: 60_000}
@@ -640,6 +737,85 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
         receive_request_for_prompt(prompt)
     after
       2_000 -> flunk("timed out waiting for agent prompt #{inspect(prompt)}")
+    end
+  end
+
+  defp transfer_through_model(
+         plan,
+         room,
+         caller,
+         input,
+         source_definition_key,
+         destination,
+         tool_call_id
+       ) do
+    source = Map.fetch!(plan.participants, source_definition_key)
+    source_monitor = monitor_active_participant(plan, source.participant_id)
+
+    assert :ok = CallEngine.send_text(send_command(plan, room, caller, input))
+    {provider, _request} = receive_request_for_prompt(source.prompt)
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: tool_call_id,
+               name: "transfer",
+               arguments: %{"destination" => destination}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{
+                      tool_call_id: ^tool_call_id,
+                      result: %{"destination" => ^destination, "status" => "completed"}
+                    }},
+                   2_000
+
+    assert_receive {:DOWN, ^source_monitor, :process, _source_supervisor, _reason}, 2_000
+  end
+
+  defp monitor_active_participant(plan, participant_id) do
+    key = {:participant_supervisor, plan.tenant_id, plan.room_id, participant_id}
+
+    assert [{participant_supervisor, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, key)
+
+    Process.monitor(participant_supervisor)
+  end
+
+  defp active_activation_id(plan, participant_id) do
+    key = {:participant_supervisor, plan.tenant_id, plan.room_id, participant_id}
+
+    assert [{participant_supervisor, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, key)
+
+    assert {:agent_activation, activation_supervisor, :supervisor, [AgentActivationSupervisor]} =
+             List.keyfind(Supervisor.which_children(participant_supervisor), :agent_activation, 0)
+
+    assert [{:agent_activation, activation_id, :supervisor}] =
+             Registry.keys(Vxpipe.CallEngine.RoomRegistry, activation_supervisor)
+
+    activation_id
+  end
+
+  defp assert_archive_join(participant_id, activation_id) do
+    receive do
+      {:test_archive_fact,
+       %Fact{
+         kind: :participant_joined,
+         participant_id: ^participant_id,
+         activation_id: ^activation_id
+       }} ->
+        :ok
+
+      {:test_archive_fact, %Fact{}} ->
+        assert_archive_join(participant_id, activation_id)
+    after
+      2_000 ->
+        flunk(
+          "timed out waiting for archived participant join #{participant_id} / #{activation_id}"
+        )
     end
   end
 

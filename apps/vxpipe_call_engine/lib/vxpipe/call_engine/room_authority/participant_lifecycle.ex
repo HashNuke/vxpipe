@@ -43,7 +43,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
         {:ok,
          %ParticipantPreparation{
            participant_supervisor: participant_supervisor,
-           snapshot: participant
+           snapshot: participant,
+           activation_id: activation_id(options)
          }}
 
       error ->
@@ -60,7 +61,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
 
     state = %{
       state
-      | participant_monitors:
+      | activated_agent_participant_ids:
+          remember_agent_activation(state.activated_agent_participant_ids, participant),
+        participant_monitors:
           Map.put(state.participant_monitors, monitor, participant.participant_id),
         participant_supervisors:
           Map.put(
@@ -73,7 +76,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
           Map.put(state.participant_roles, participant.participant_id, participant.role)
     }
 
-    archive_recorder = ArchiveRecorder.participant_joined(state.archive_recorder, participant)
+    archive_recorder =
+      state.archive_recorder
+      |> ArchiveRecorder.bind_participant_activation(
+        participant.participant_id,
+        preparation.activation_id
+      )
+      |> ArchiveRecorder.participant_joined(participant)
 
     {:ok, participant, %{state | archive_recorder: archive_recorder}}
   end
@@ -155,6 +164,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
     Enum.each(connections, fn {_connection_id, connection} ->
       send(connection.pid, {:vxpipe_connection_unavailable, reason})
     end)
+  end
+
+  defp remember_agent_activation(participant_ids, %{role: :agent, participant_id: participant_id}) do
+    MapSet.put(participant_ids, participant_id)
+  end
+
+  defp remember_agent_activation(participant_ids, _participant), do: participant_ids
+
+  defp activation_id(options) do
+    case Keyword.get(options, :agent_activation) do
+      activation when is_list(activation) -> Keyword.get(activation, :activation_id)
+      _none -> nil
+    end
   end
 
   defp already_exists(participant_id) do

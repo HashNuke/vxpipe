@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     Authorizer,
     Cleanup,
     Committer,
+    DestinationParticipant,
     Pending,
     Preparation
   }
@@ -42,10 +43,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
     initial_messages =
       SpokenHistory.project(state.spoken_history, destination.transfer_history)
 
+    destination =
+      DestinationParticipant.materialize(
+        destination,
+        MapSet.member?(state.activated_agent_participant_ids, destination.participant_id)
+      )
+
     case RoomTransferSupervisor.prepare(
            request.incarnation_id,
            request,
            state.agent_transfer_runtime,
+           destination,
            initial_messages
          ) do
       {:ok, task} ->

@@ -4,11 +4,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantPreparation do
   alias Vxpipe.CallEngine.Participant.Snapshot
 
   @derive {Inspect, only: [:snapshot]}
-  @enforce_keys [:participant_supervisor, :snapshot]
+  @enforce_keys [:participant_supervisor, :snapshot, :activation_id]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
           participant_supervisor: pid(),
-          snapshot: Snapshot.t()
+          snapshot: Snapshot.t(),
+          activation_id: nil | String.t()
         }
 end

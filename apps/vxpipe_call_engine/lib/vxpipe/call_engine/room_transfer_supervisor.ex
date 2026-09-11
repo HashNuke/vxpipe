@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
 
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime
+  alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   def start_link(options) do
@@ -18,16 +19,28 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     }
   end
 
-  @spec prepare(String.t(), Request.t(), Runtime.t(), [Vxpipe.AgentRuntime.Message.t()]) ::
+  @spec prepare(
+          String.t(),
+          Request.t(),
+          Runtime.t(),
+          Participant.t(),
+          [Vxpipe.AgentRuntime.Message.t()]
+        ) ::
           {:ok, Task.t()} | {:error, :unavailable}
-  def prepare(incarnation_id, %Request{} = request, %Runtime{} = runtime, initial_messages)
+  def prepare(
+        incarnation_id,
+        %Request{} = request,
+        %Runtime{} = runtime,
+        %Participant{} = destination,
+        initial_messages
+      )
       when is_list(initial_messages) do
     task =
       Task.Supervisor.async_nolink(
         via(incarnation_id),
         AgentTransfer.DestinationPreparer,
         :prepare,
-        [request, runtime, initial_messages]
+        [request, runtime, destination, initial_messages]
       )
 
     {:ok, task}

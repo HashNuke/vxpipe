@@ -29,6 +29,7 @@ commit, while the source retains conversation.
 - [x] Red-test compiler-derived transfer schema/aliases and runtime source/target authorization.
 - [x] Implement room prepare/commit lifecycle, distinct participant/activation identities, and supervised destination/source ownership.
 - [x] Integrate private destination history/variable projection and source termination after commit.
+- [x] Preserve a re-entering agent's participant identity while creating a fresh activation and rebinding its private tool authority.
 - [ ] Implement total deadline, late-result exclusion, typed failures and single restoration budget.
 - [ ] Emit private transfer history and safe client outcomes without adding new RTVI-core messages.
 
@@ -164,6 +165,24 @@ observes the newly accepted value and revision. The source and ModelRequest insp
 not expose the reason. Twenty-five focused room tests and the complete 276-test Call Engine suite
 pass, each with one tagged integration exclusion where applicable. Selected model-context delivery
 is complete; re-entry and restoration remain open.
+
+Agent re-entry now uses room-incarnation state to distinguish a participant's first activation from
+a later activation. The immutable plan continues to pin one participant ID per definition key, while
+each re-entry materializes a fresh activation ID and rebinds activation-local transfer authority.
+Room authorization compares a request with the current active capability and the plan's stable
+participant/allowlist data; it no longer treats the plan's first activation ID as permanent.
+
+The focused room flow transfers reception to billing and back, then proves reception retains its
+participant ID, its original activation is absent, a fresh activation owns the session, its
+destination-owned `last_n_spoken` projection contains only the permitted trailing utterance, and
+its rebound transfer tool can authorize another transfer. Participant lifecycle also rebinds the
+archive recorder before the join fact, so the fresh activation—not the plan's first activation—is
+used for re-entry and subsequent participant facts. The eight transfer-room tests pass.
+Automatic first-message behavior for a transferred participant and explicit no-replay coverage are
+still pending, so the combined re-entry acceptance checkbox remains open. The complete Call Engine
+suite passes 277 tests with one tagged integration exclusion. Umbrella formatting,
+warnings-as-errors compilation, strict Credo, and unused-dependency checks pass; umbrella tests stop
+at the unchanged missing PostgreSQL SCRAM password before the database-backed suites begin.
 
 ## Specification review
 

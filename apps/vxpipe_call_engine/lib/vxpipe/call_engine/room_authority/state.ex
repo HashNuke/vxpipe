@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 connection_monitors: %{},
                 connections: %{},
                 agent_transfer_runtime: nil,
+                activated_agent_participant_ids: MapSet.new(),
                 pending_agent_transfer: nil,
                 agent_turns: %{},
                 background_tool_calls: %{},
@@ -37,6 +38,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
   @type t :: %__MODULE__{
           archive_recorder: Recorder.t(),
           agent_transfer_runtime: nil | Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Runtime.t(),
+          activated_agent_participant_ids: MapSet.t(String.t()),
           call_lifecycle: nil | pid(),
           connection_monitors: %{optional(reference()) => String.t()},
           connections: map(),

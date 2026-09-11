@@ -23,7 +23,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Authorizer do
          GenServer.whereis(state.text_capability.pid) == request.source_capability and
          source != nil and source.kind == :agent and
          source.participant_id == request.source_participant_id and
-         source.activation_id == request.source_activation_id and
          request.destination_definition_key in source.transfers and
          destination != nil and destination.kind == :agent and
          destination.participant_id == request.destination_participant_id and

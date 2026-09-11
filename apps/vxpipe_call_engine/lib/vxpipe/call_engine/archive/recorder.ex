@@ -51,6 +51,19 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
     %__MODULE__{port: port, participant_activations: participant_activations}
   end
 
+  @doc false
+  @spec bind_participant_activation(t(), String.t(), nil | String.t()) :: t()
+  def bind_participant_activation(%__MODULE__{} = recorder, _participant_id, nil), do: recorder
+
+  def bind_participant_activation(%__MODULE__{} = recorder, participant_id, activation_id)
+      when is_binary(participant_id) and is_binary(activation_id) do
+    %{
+      recorder
+      | participant_activations:
+          Map.put(recorder.participant_activations, participant_id, activation_id)
+    }
+  end
+
   @spec room_opened(t(), RoomSnapshot.t()) :: t()
   def room_opened(%__MODULE__{} = recorder, %RoomSnapshot{} = snapshot) do
     emit(recorder, :room_opened,
