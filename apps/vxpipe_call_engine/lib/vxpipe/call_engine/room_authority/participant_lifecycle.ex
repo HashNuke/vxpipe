@@ -2,7 +2,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
-  alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, RoomParticipantSupervisor}
+
+  alias Vxpipe.CallEngine.{
+    Error,
+    ParticipantSupervisor,
+    RoomCapabilitySupervisor,
+    RoomParticipantSupervisor
+  }
+
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantPreparation, State, TextCapability}
 
   @spec join(struct(), State.t()) :: {:reply, {:ok, struct()} | {:error, Error.t()}, State.t()}
@@ -53,11 +60,27 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   end
 
   @spec commit(ParticipantPreparation.t(), State.t()) ::
-          {:ok, struct(), State.t()}
+          {:ok, struct(), State.t()} | {:error, :participant_unavailable}
   def commit(%ParticipantPreparation{} = preparation, %State{} = state) do
     participant = preparation.snapshot
     participant_supervisor = preparation.participant_supervisor
     monitor = Process.monitor(participant_supervisor)
+
+    if ParticipantSupervisor.registered?(
+         participant.tenant_id,
+         participant.room_id,
+         participant.participant_id,
+         participant_supervisor
+       ) do
+      commit_available(preparation, participant, monitor, state)
+    else
+      Process.demonitor(monitor, [:flush])
+      {:error, :participant_unavailable}
+    end
+  end
+
+  defp commit_available(preparation, participant, monitor, state) do
+    participant_supervisor = preparation.participant_supervisor
 
     state = %{
       state

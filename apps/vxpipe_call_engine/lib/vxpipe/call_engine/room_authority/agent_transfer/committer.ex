@@ -16,13 +16,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
 
   alias Vxpipe.CallEngine.RoomAuthority.AgentTransfer.{History, Pending, Preparation}
 
-  @spec commit(Pending.t(), Preparation.t(), State.t()) :: {map(), State.t()}
+  @spec commit(Pending.t(), Preparation.t(), State.t()) ::
+          {:ok, map(), State.t()} | {:error, :destination_unavailable}
   def commit(%Pending{} = pending, %Preparation{} = preparation, %State{} = state) do
     request = pending.request
 
-    {:ok, destination_snapshot, state} =
-      ParticipantLifecycle.commit(preparation.participant, state)
+    case ParticipantLifecycle.commit(preparation.participant, state) do
+      {:ok, destination_snapshot, state} ->
+        commit_available(request, preparation, destination_snapshot, state)
 
+      {:error, :participant_unavailable} ->
+        {:error, :destination_unavailable}
+    end
+  end
+
+  defp commit_available(request, preparation, destination_snapshot, state) do
     source_text_to_speech = state.text_to_speech_capability
     source_supervisor = Map.fetch!(state.participant_supervisors, request.source_participant_id)
 
@@ -70,7 +78,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.Committer do
       "status" => "completed"
     }
 
-    {result, publish_completed(request, result, state)}
+    {:ok, result, publish_completed(request, result, state)}
   end
 
   defp start_first_message(state, caller_participant_id) do

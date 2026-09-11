@@ -399,3 +399,28 @@
   warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. Root `mix test`
   stops at the unchanged Persistence database-creation failure because PostgreSQL SCRAM
   authentication needs a password absent from this shell; no credential source was inspected.
+
+## 2026-09-11 — failed destination commit race
+
+- The remaining failed-commit acceptance boundary was not directly covered. Destination startup
+  returned a preparation containing a participant supervisor, but `ParticipantLifecycle.commit/2`
+  unconditionally added it to room state. If that supervisor exited before Room Authority handled
+  the task result, the room could archive and publish a successful transfer to an unavailable
+  destination.
+- Added the deterministic integration test first. It blocks destination model setup, suspends Room
+  Authority, releases setup until the preparation task exits normally, terminates the exact
+  destination participant, and resumes Room Authority. The red run archived
+  `participant_transfer_completed` and emitted `ToolCallCompleted`, reproducing the false commit.
+- `ParticipantSupervisor.registered?/4` now owns the exact registry-identity query.
+  `ParticipantLifecycle.commit/2` monitors the prepared participant and verifies that the same PID
+  remains registered for its pinned tenant, room, and participant identity before admitting it to
+  authoritative state. Missing or replaced membership returns `participant_unavailable` and
+  removes the unused monitor.
+- The transfer committer propagates that result without partial room mutation. Room Authority
+  discards the dead preparation, leaves the source activation available, returns only generic
+  `tool_failed`, and archives `destination_commit_unavailable` privately. The focused test passes;
+  the combined transfer/participant-supervision group passes 13 tests, and the complete Call Engine
+  suite passes 281 tests with one tagged integration exclusion. Root formatting,
+  warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. Root `mix test`
+  stops at the unchanged Persistence setup failure because PostgreSQL SCRAM authentication needs a
+  password absent from this shell; no credential source was inspected.

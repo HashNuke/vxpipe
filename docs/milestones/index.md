@@ -14,7 +14,9 @@ identity with fresh activation and no greeting replay. Private transfer attempts
 archived with activation attribution while client failures remain generic. A failed preparation
 now makes at most one bounded room-supervised attempt to restore lost source TTS and records its
 private outcome without exposing the cause. Timed-out startup cleanup is also supervised and
-capacity-bounded, so it cannot block Room Authority while a provider finishes connecting.
+capacity-bounded, so it cannot block Room Authority while a provider finishes connecting. A
+prepared destination that exits before commit is rejected without transferring authority or
+publishing false completion.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

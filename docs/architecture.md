@@ -1013,6 +1013,12 @@ that is still completing its own bounded startup therefore cannot make Room Auth
 capability-supervisor cleanup call. The transfer task pool has a fixed per-room child limit; late
 startup is stopped without acquiring room authority, and saturation fails later preparation rather
 than accumulating unbounded work.
+Prepared membership is still provisional when its startup task reports success. At commit,
+Participant Lifecycle verifies that the exact participant supervisor remains registered under the
+pinned tenant, room, and participant identity before adding it to authoritative room state. A
+destination that exited in the preparation-to-commit gap is discarded, receives no routing
+authority, and produces a generic transfer failure; the private transfer fact retains the closed
+`destination_commit_unavailable` cause.
 
 ### Presence-driven media and transcript policy — approved R38
 

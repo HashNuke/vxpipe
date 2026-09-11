@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.History do
 
   @failure_causes [
     :deadline_elapsed,
+    :destination_commit_unavailable,
     :destination_participant_unavailable,
     :destination_plan_unavailable,
     :destination_text_to_speech_unavailable,
@@ -18,6 +19,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.History do
 
   @type failure_cause ::
           :deadline_elapsed
+          | :destination_commit_unavailable
           | :destination_participant_unavailable
           | :destination_plan_unavailable
           | :destination_text_to_speech_unavailable

@@ -32,6 +32,19 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisor do
     end
   end
 
+  @spec registered?(String.t(), String.t(), String.t(), pid()) :: boolean()
+  def registered?(tenant_id, room_id, participant_id, participant_supervisor)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(participant_id) and
+             is_pid(participant_supervisor) do
+    case Registry.lookup(
+           Vxpipe.CallEngine.RoomRegistry,
+           {:participant_supervisor, tenant_id, room_id, participant_id}
+         ) do
+      [{^participant_supervisor, _value}] -> true
+      _missing_or_replaced -> false
+    end
+  end
+
   @impl true
   def init(options) do
     authority =

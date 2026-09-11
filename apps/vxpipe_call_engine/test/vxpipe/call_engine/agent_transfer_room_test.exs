@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     CallVariables,
     DefinitionCompiler,
     RoomAuthority,
+    RoomParticipantSupervisor,
     TestCollectingArchiveWriter,
     TestSelectiveAgentRuntimeModelProvider,
     TestTextToSpeechTransport
@@ -510,6 +511,111 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert {:ok, next_response} = ModelResponse.new(text: "Yes.")
     send(next_provider, {:test_agent_runtime_response, {:ok, next_response}})
+  end
+
+  test "a destination that exits after preparation cannot commit the transfer" do
+    plan =
+      compile_plan(
+        billing_model: "test:blocked",
+        transfer_timeout_ms: 5_000
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    reception = Map.fetch!(plan.participants, "reception")
+    billing = Map.fetch!(plan.participants, "billing")
+
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    attach_caller(plan, room, caller)
+
+    assert :ok =
+             CallEngine.send_text(send_command(plan, room, caller, "Please try billing."))
+
+    assert_receive {:test_agent_runtime_stream, source_provider, _source_request}, 2_000
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: "destination-exited-before-commit",
+               name: "transfer",
+               arguments: %{"destination" => "billing"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_model_preparing, blocked_preparer}, 2_000
+
+    authority = room_authority(plan)
+    %{pending_agent_transfer: %{task: preparation_task}} = :sys.get_state(authority)
+    preparation_monitor = Process.monitor(preparation_task.pid)
+
+    assert :ok = :sys.suspend(authority)
+
+    on_exit(fn ->
+      try do
+        _ = :sys.resume(authority)
+      catch
+        :exit, _reason -> :ok
+      end
+    end)
+
+    send(blocked_preparer, :release_test_agent_runtime_model)
+
+    assert_receive {:DOWN, ^preparation_monitor, :process, _preparation_task, :normal}, 2_000
+
+    destination_key =
+      {:participant_supervisor, plan.tenant_id, plan.room_id, billing.participant_id}
+
+    assert [{destination_supervisor, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, destination_key)
+
+    destination_monitor = Process.monitor(destination_supervisor)
+
+    assert :ok =
+             RoomParticipantSupervisor.stop_participant(
+               room.incarnation_id,
+               destination_supervisor
+             )
+
+    assert_receive {:DOWN, ^destination_monitor, :process, ^destination_supervisor, :shutdown},
+                   2_000
+
+    assert :ok = :sys.resume(authority)
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallFailed{
+                      tool_call_id: "destination-exited-before-commit",
+                      name: "transfer",
+                      reason: :tool_failed
+                    }},
+                   2_000
+
+    assert_archived_transfer(
+      :participant_transfer_failed,
+      reception,
+      caller,
+      billing,
+      "destination-exited-before-commit",
+      %{
+        "cause" => "destination_commit_unavailable",
+        "outcome" => "failed",
+        "restoration" => "not_required"
+      }
+    )
+
+    refute_receive {:vxpipe_event,
+                    %ToolCallCompleted{tool_call_id: "destination-exited-before-commit"}},
+                   100
+
+    assert is_pid(AgentActivationSupervisor.whereis_child(reception.activation_id, :session))
+
+    assert {:error, %Vxpipe.CallEngine.Error{code: :participant_not_found}} =
+             CallEngine.participant_snapshot(
+               plan.tenant_id,
+               plan.room_id,
+               billing.participant_id
+             )
+
+    reply_to_next_request("The transfer could not be completed.")
   end
 
   test "restores a lost source speech capability once after preparation fails" do

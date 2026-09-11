@@ -251,9 +251,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer do
   end
 
   defp commit_prepared(pending, preparation, state) do
-    {result, state} = Committer.commit(pending, preparation, state)
-    GenServer.reply(pending.from, {:ok, result})
-    {:noreply, state}
+    case Committer.commit(pending, preparation, state) do
+      {:ok, result, state} ->
+        GenServer.reply(pending.from, {:ok, result})
+        {:noreply, state}
+
+      {:error, :destination_unavailable} ->
+        Cleanup.discard(preparation, state)
+        restore_or_fail(pending, :destination_commit_unavailable, state)
+    end
   end
 
   defp settle_task(pending) do

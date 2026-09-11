@@ -251,6 +251,20 @@ warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
 stops at the unchanged Persistence setup failure because PostgreSQL SCRAM authentication needs a
 password absent from this shell; no credential source was inspected.
 
+A failed-commit race checkpoint now treats prepared participant membership as provisional until
+Room Authority commits it. The red integration test suspended Room Authority after destination
+preparation had completed, terminated the exact prepared participant, and then resumed commit. The
+old path archived and emitted transfer completion before observing that the destination was gone.
+Participant Lifecycle now verifies the prepared supervisor's exact registry ownership at commit;
+an absent or replaced process returns `participant_unavailable` without adding authoritative room
+state. Transfer handling discards the preparation, keeps the source active, exposes only generic
+`tool_failed`, and archives the private `destination_commit_unavailable` cause. The focused
+transfer/participant-supervision group passes 13 tests and the complete Call Engine suite passes
+281 tests with one tagged integration exclusion. Root formatting, warnings-as-errors compilation,
+strict Credo, and unused-dependency checks pass. Root `mix test` stops at the unchanged Persistence
+setup failure because PostgreSQL SCRAM authentication needs a password absent from this shell; no
+credential source was inspected.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,
