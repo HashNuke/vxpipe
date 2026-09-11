@@ -1,8 +1,9 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation/settlement and successful, failed, or cancelled model-attempt
-capture into the private archive are implemented (2026-09-11); other provider boundaries, operator
-totals, and billing enrichment remain. Specification review: approved (2026-09-08).
+Status: in progress. Typed observation/settlement plus successful, failed, or cancelled model and
+text-to-speech attempt capture into the private archive are implemented (2026-09-11); speech-to-text,
+tool/carrier boundaries, operator totals, and billing enrichment remain. Specification review:
+approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
 
@@ -137,7 +138,40 @@ Implementation evidence (2026-09-11, model-attempt lifecycle checkpoint):
   pass: formatting, warnings-as-errors compilation, strict Credo over 676 source files, all 860
   tests across the eight umbrella apps, and the unused-dependency check.
 
-This remains a partial milestone. Hosted speech, tool and carrier capture, persisted
+At that point the milestone remained partial: hosted speech, tool and carrier capture, persisted
+settlement/operator totals, and billing enrichment were not claimed.
+
+Implementation evidence (2026-09-11, text-to-speech attempt checkpoint):
+
+- Definition-selected synthesis runtimes now pin a safe provider/profile identity alongside call,
+  participant, and activation identity. Provider adapters expose only their stable name and model;
+  credentials remain in the existing inspected-redacted provider/transport configuration. The
+  legacy room-command path has no pinned call/profile evidence and emits no usage rather than
+  manufacturing that identity.
+- A synthesis attempt starts only when `Speak` is transport-accepted. Rejected `Speak` and queued
+  requests create no attempt; accepted `Speak` followed by failed `Flush` retains a failed input
+  measurement. Successful, interrupted, provider-failed, transport-failed, and downstream-output
+  failure paths settle at most once, so already completed provider work is not rewritten by later
+  playout failure.
+- The attempt retains locally measured Unicode-grapheme input characters. It accumulates decoded
+  provider PCM, including post-interruption discarded audio, and uses `Membrane.RawAudio` frame/time
+  conversion to record generated milliseconds rather than playout progress. Validated request and
+  speech IDs become genuine provider request/operation IDs; the local `tatt_` ID remains separate.
+- Room authority authenticates the exact active TTS capability or exact prepared private-briefing
+  capability and matches its participant/optional activation before handing explicit facts to the
+  existing private asynchronous archive. No raw synthesis text or client-visible usage event is
+  introduced.
+- Red evidence: the attempt tests first failed with three expected undefined-module errors; the
+  capability tests then timed out waiting for successful, cancelled, and failed usage events; the
+  room/runtime tests failed on an absent pinned runtime identity and no archived TTS facts; and the
+  transport-boundary tests first returned `:ok` instead of the expected rejected command outcomes.
+- Focused green evidence: 3 attempt tests, 9 capability tests, the runtime contract, definition-
+  driven private archive cases, and a private human-briefing archive case pass. The complete Call
+  Engine suite passes 377 tests with one integration exclusion. All root gates pass: formatting,
+  warnings-as-errors compilation, strict Credo over 679 source files, all 866 tests across the eight
+  umbrella apps, and the unused-dependency check.
+
+This remains a partial milestone. Speech-to-text, tool and carrier capture, persisted
 settlement/operator totals, and billing enrichment are not claimed yet.
 
 ## Specification review

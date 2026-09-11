@@ -34,6 +34,8 @@ defmodule Vxpipe.CallEngine.MixProject do
       {:decimal, "~> 2.0"},
       {:jsv, "~> 0.22"},
       {:membrane_audio_mix_plugin, "~> 0.16.5"},
+      {:membrane_core, "~> 1.0"},
+      {:membrane_raw_audio_format, "~> 0.12.3"},
       {:req, "~> 0.7.4"},
       {:req_llm, "~> 1.22"},
       {:telemetry, "~> 1.3"},

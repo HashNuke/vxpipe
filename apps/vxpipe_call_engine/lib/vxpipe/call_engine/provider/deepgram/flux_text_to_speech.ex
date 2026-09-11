@@ -84,6 +84,11 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
   end
 
   @impl true
+  def usage_identity(%__MODULE__{} = config) do
+    [name: "deepgram", model: config.model]
+  end
+
+  @impl true
   def encode_speak(text) when is_binary(text) and byte_size(text) <= @maximum_text_bytes do
     JSON.encode!(%{"type" => "Speak", "text" => text})
   end

@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.Id do
     room: "room",
     room_incarnation: "rinc",
     transfer_attempt: "xfer",
+    tts_attempt: "tatt",
     turn: "turn",
     variable_snapshot: "vsnap"
   }
@@ -27,6 +28,7 @@ defmodule Vxpipe.CallEngine.Id do
           | :room
           | :room_incarnation
           | :transfer_attempt
+          | :tts_attempt
           | :turn
           | :variable_snapshot
 

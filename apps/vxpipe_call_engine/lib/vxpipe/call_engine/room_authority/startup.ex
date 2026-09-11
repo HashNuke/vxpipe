@@ -183,6 +183,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
                Keyword.fetch!(options, :maximum_requests)
              ) do
         text_to_speech_capability = %{
+          activation_id: nil,
           monitor: Process.monitor(capability),
           participant_id: participant_id,
           pid: capability
@@ -237,10 +238,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
            participant_id,
            runtime.provider,
            runtime.transport,
-           runtime.maximum_requests
+           runtime.maximum_requests,
+           text_to_speech_usage(runtime, participant_id)
          ) do
       {:ok, capability} ->
         text_to_speech_capability = %{
+          activation_id: usage_activation(runtime, participant_id),
           asset_cache_identity: runtime.asset_cache_identity,
           monitor: nil,
           participant_id: participant_id,
@@ -282,5 +285,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
 
   def activate_text_to_speech(capability) when is_map(capability) do
     %{capability | monitor: Process.monitor(capability.pid)}
+  end
+
+  defp text_to_speech_usage(runtime, participant_id) do
+    [
+      call_id: runtime.call_id,
+      activation_id: usage_activation(runtime, participant_id),
+      provider: runtime.usage_provider
+    ]
+  end
+
+  defp usage_activation(runtime, participant_id) do
+    if runtime.participant_id == participant_id, do: runtime.activation_id, else: nil
   end
 end

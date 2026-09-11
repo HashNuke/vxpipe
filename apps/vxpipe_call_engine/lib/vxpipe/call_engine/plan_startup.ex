@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
+  alias Vxpipe.CallEngine.Usage.ProviderContext
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -65,7 +66,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text_runtimes} <-
            speech_to_text_runtimes([caller, receiver], plan.opening_audio, options),
-         {:ok, text_to_speech} <- text_to_speech_runtime(receiver, options),
+         {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options),
          :ok <- supported_opening_audio(plan.opening_audio, text_to_speech, options),
          {:ok, caller_command} <- participant_command(plan, caller),
          {:ok, receiver_command} <- participant_command(plan, receiver) do
@@ -94,7 +95,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       )
       when is_list(options) do
     with {:ok, activation_options} <- agent_activation_options(plan, participant, options),
-         {:ok, text_to_speech} <- text_to_speech_runtime(participant, options),
+         {:ok, text_to_speech} <- text_to_speech_runtime(plan, participant, options),
          {:ok, command} <- participant_command(plan, participant) do
       {:ok,
        %AgentDestination{
@@ -386,7 +387,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp text_to_speech_runtime(receiver, options) do
+  defp text_to_speech_runtime(plan, receiver, options) do
     case resolve_provider(receiver.capabilities.text_to_speech, options, :text_to_speech) do
       {:ok, nil} ->
         {:ok, nil}
@@ -398,13 +399,19 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              maximum_requests when is_integer(maximum_requests) and maximum_requests > 0 <-
                Keyword.get(settings, :maximum_requests),
              asset_cache_identity when is_map(asset_cache_identity) <-
-               provider_module.asset_cache_identity(provider_config) do
+               provider_module.asset_cache_identity(provider_config),
+             {:ok, usage_provider} <-
+               text_to_speech_usage_provider(receiver, provider_module, provider_config) do
           {:ok,
            %TextToSpeechRuntime{
              asset_cache_identity: asset_cache_identity,
+             call_id: plan.call_id,
+             participant_id: receiver.participant_id,
+             activation_id: receiver.activation_id,
              provider: provider,
              transport: {transport, transport_options},
-             maximum_requests: maximum_requests
+             maximum_requests: maximum_requests,
+             usage_provider: usage_provider
            }}
         else
           _invalid_runtime -> unsupported_speech_configuration(receiver, :text_to_speech)
@@ -412,6 +419,19 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
       {:error, _reason} ->
         unsupported_speech_configuration(receiver, :text_to_speech)
+    end
+  end
+
+  defp text_to_speech_usage_provider(receiver, provider_module, provider_config) do
+    selection = receiver.capabilities.text_to_speech
+
+    with true <- function_exported?(provider_module, :usage_identity, 1),
+         identity when is_list(identity) <- provider_module.usage_identity(provider_config) do
+      identity
+      |> Keyword.put(:integration_id, selection.profile)
+      |> ProviderContext.new()
+    else
+      _invalid -> {:error, :invalid_usage_identity}
     end
   end
 

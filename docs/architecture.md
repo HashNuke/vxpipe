@@ -2679,7 +2679,32 @@ provider request retains the operation with unknown measurements rather than pre
 was zero. If a streaming provider returns a valid final response after a local text/event budget has
 already rejected its output, Agent Runtime hands off the response's usage before returning the local
 failure; rejected conversational output therefore cannot erase known incurred usage. Hosted speech,
-tool, and carrier capture remain later parts of the usage milestone.
+tool, and carrier capture were not part of that model checkpoint.
+
+The second runtime capture path covers definition-selected text-to-speech attempts. The resolved
+runtime pins the call, participant activation, configured profile, and provider-owned safe identity;
+credentials remain in the existing provider/transport configuration. An attempt begins only after
+the transport accepts `Speak`. Text that remains queued, or a `Speak` command rejected locally,
+therefore creates no observation. If `Speak` is accepted and `Flush` fails, the accepted input is
+retained as a failed attempt without an invented provider identifier or audio duration.
+
+Each attempt records the input's Unicode grapheme count as locally measured characters. It counts
+decoded PCM emitted by the provider, including audio discarded after an interruption, and converts
+complete PCM frames to milliseconds with `Membrane.RawAudio`; playout progress is not substituted
+for generated duration. Provider request and speech identifiers cross only from validated provider
+signals and remain distinct from the local `tatt_` attempt identity. Provider completion records
+`succeeded` before downstream playout drains, an acknowledged interruption records `cancelled`, and
+provider/transport failure records `failed`. Output rejection after provider completion cannot
+rewrite or duplicate already-incurred synthesis usage.
+
+The TTS GenServer delegates tracking/projection to focused attempt and adapter modules. Its owning
+`RoomAuthority` accepts observations only from the exact active synthesis capability or the exact
+prepared private-briefing capability, matching the pinned participant and optional activation. The
+same private asynchronous archive path used for model observations stores the facts; no client
+event or raw synthesis text is added. Definition-selected hosted and deterministic tone providers
+publish a safe provider identity. The legacy room command path lacks a pinned call/profile identity
+and remains unobserved rather than fabricating one. Speech-to-text, tool, and carrier capture remain
+later parts of the usage milestone.
 
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports

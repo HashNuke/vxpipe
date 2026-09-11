@@ -239,6 +239,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     room_id = unique_id("room-private-audio-history")
     plan = compile_plan(room_id, speech?: true)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
     archive =
       archive_options(
@@ -346,6 +347,28 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              public_sequence: nil,
              payload: %{"output_id" => ^output_id, "text" => "Hello back."}
            } = fact!(facts, :agent_output_delivered)
+
+    tts_usage =
+      Enum.filter(facts, fn
+        %Fact{kind: :usage_observed, payload: %{"capability" => "text_to_speech"}} -> true
+        _other -> false
+      end)
+
+    assert Enum.map(tts_usage, &get_in(&1.payload, ["measurement", "component"]))
+           |> Enum.sort() == ["generated_audio_duration", "input_characters"]
+
+    assert Enum.all?(tts_usage, fn fact ->
+             fact.tenant_id == plan.tenant_id and
+               fact.call_id == plan.call_id and
+               fact.room_id == plan.room_id and
+               fact.incarnation_id == room.incarnation_id and
+               fact.participant_id == receiver.participant_id and
+               fact.activation_id == receiver.activation_id and
+               fact.payload["provider"]["name"] == "deepgram" and
+               fact.payload["provider"]["integration_id"] == "plan-tts" and
+               fact.payload["provider"]["request_id"] == "req" and
+               fact.payload["provider"]["operation_id"] == "speech-private"
+           end)
   end
 
   test "applies a present participant's transcript routes and storage denial" do
@@ -1274,6 +1297,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              startup.text_to_speech.provider
 
     assert startup.text_to_speech.transport == {MorseCodeTTS.Transport, []}
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+    assert startup.text_to_speech.call_id == plan.call_id
+    assert startup.text_to_speech.participant_id == receiver.participant_id
+    assert startup.text_to_speech.activation_id == receiver.activation_id
+    assert startup.text_to_speech.usage_provider.name == "morse_code"
+    assert startup.text_to_speech.usage_provider.integration_id == "morse-tts"
     assert Keyword.fetch!(default_stt, :provider) == Flux
     assert Keyword.fetch!(default_tts, :provider) == FluxTextToSpeech
   end

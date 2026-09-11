@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
   alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
   alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.Archive.Fact
 
   alias Vxpipe.CallEngine.{
     AgentActivationSupervisor,
@@ -13,6 +14,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     DefinitionCompiler,
     RoomMixer,
     TestAudioOutputSink,
+    TestCollectingArchiveWriter,
     TestSelectiveAgentRuntimeModelProvider,
     TestTextToSpeechTransport
   }
@@ -65,7 +67,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     support = Map.fetch!(plan.participants, "human-support")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
     variables = CallVariables.whereis(room.incarnation_id)
     lifecycle = call_lifecycle(room.incarnation_id)
 
@@ -163,6 +165,18 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     )
 
     assert_receive {:test_audio_output_finish, ^support_sink, _turn}, 2_000
+
+    usage_facts = collect_tts_usage(2)
+
+    assert Enum.all?(usage_facts, fn fact ->
+             fact.call_id == plan.call_id and
+               fact.participant_id == support.participant_id and
+               fact.activation_id == nil and
+               fact.payload["provider"]["name"] == "deepgram" and
+               fact.payload["provider"]["integration_id"] == "test-voice" and
+               fact.payload["provider"]["request_id"] == "req" and
+               fact.payload["provider"]["operation_id"] == "private-briefing"
+           end)
 
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
                    50
@@ -662,6 +676,33 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert_receive {:test_audio_output_finish, ^support_sink, _turn}, 2_000
     assert :ok = TestAudioOutputSink.playback_started(support_sink)
     assert :ok = TestAudioOutputSink.playback_completed(support_sink)
+  end
+
+  defp archive_options do
+    [
+      enabled: true,
+      writer: {TestCollectingArchiveWriter, self()},
+      maximum_pending_facts: 64,
+      retry_delay_ms: 5,
+      drain_timeout_ms: 1_000
+    ]
+  end
+
+  defp collect_tts_usage(count, facts \\ [])
+
+  defp collect_tts_usage(0, facts), do: Enum.reverse(facts)
+
+  defp collect_tts_usage(count, facts) do
+    receive do
+      {:test_archive_fact,
+       %Fact{kind: :usage_observed, payload: %{"capability" => "text_to_speech"}} = fact} ->
+        collect_tts_usage(count - 1, [fact | facts])
+
+      {:test_archive_fact, %Fact{}} ->
+        collect_tts_usage(count, facts)
+    after
+      2_000 -> flunk("timed out waiting for private briefing usage")
+    end
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)

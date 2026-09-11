@@ -33,13 +33,23 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
     connection = Keyword.fetch!(options, :connection)
     await_start_permission(transport_options, observer, connection)
     send(observer, {:test_tts_transport_started, self(), connection})
-    {:ok, %{observer: observer, owner: owner}}
+
+    {:ok,
+     %{
+       observer: observer,
+       owner: owner,
+       remaining_controls: Keyword.get(transport_options, :fail_after_controls, :infinity)
+     }}
   end
 
   @impl true
+  def handle_call({:send_control, _payload}, _from, %{remaining_controls: 0} = state) do
+    {:reply, {:error, :simulated_control_failure}, state}
+  end
+
   def handle_call({:send_control, payload}, _from, state) do
     send(state.observer, {:test_tts_control, self(), payload})
-    {:reply, :ok, state}
+    {:reply, :ok, decrement_remaining_controls(state)}
   end
 
   def handle_call(:close, _from, state) do
@@ -90,5 +100,11 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
       _uncontrolled ->
         :ok
     end
+  end
+
+  defp decrement_remaining_controls(%{remaining_controls: :infinity} = state), do: state
+
+  defp decrement_remaining_controls(state) do
+    %{state | remaining_controls: state.remaining_controls - 1}
   end
 end

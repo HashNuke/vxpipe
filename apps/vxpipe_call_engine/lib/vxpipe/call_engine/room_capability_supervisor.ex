@@ -74,7 +74,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         participant_id,
         provider,
         transport,
-        maximum_requests
+        maximum_requests,
+        usage \\ nil
       ) do
     options = [
       owner: room_authority,
@@ -83,7 +84,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
       transport: transport,
       maximum_requests: maximum_requests,
       task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor,
-      name: text_to_speech_ref(incarnation_id, participant_id)
+      name: text_to_speech_ref(incarnation_id, participant_id),
+      usage: usage
     ]
 
     DynamicSupervisor.start_child(via(incarnation_id), {TextToSpeech, options})

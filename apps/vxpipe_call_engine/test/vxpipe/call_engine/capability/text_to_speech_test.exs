@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
   alias Vxpipe.CallEngine.TestAudioOutputSink
   alias Vxpipe.CallEngine.TestTextToSpeechTransport
   alias Vxpipe.CallEngine.TextToSpeechRequest
+  alias Vxpipe.CallEngine.Usage.ProviderContext
 
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
@@ -91,6 +92,47 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
     assert_receive {:vxpipe_tts_playback, ^capability, ^request, :completed}
   end
 
+  test "reports accepted input and generated audio when provider synthesis completes" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability(maximum_requests: 1)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+
+    request = request("turn-usage", "Hello 👋", sink)
+    assert :ok = TextToSpeech.synthesize(capability, request)
+    assert_receive {:test_tts_control, ^transport, _speak}
+    assert_receive {:test_tts_control, ^transport, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechStarted","request_id":"request-usage","speech_id":"speech-usage"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(transport, :binary.copy(<<0, 0>>, 4_800))
+    assert_receive {:test_audio_output, ^sink, %AudioOutputFrame{correlation_id: "turn-usage"}}
+
+    TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"SpeechMetadata","request_id":"request-usage","speech_id":"speech-usage"})
+    )
+
+    assert_receive {:vxpipe_usage_observations, ^capability, observations}
+    assert [audio, text] = Enum.sort_by(observations, & &1.measurement.component)
+    assert audio.measurement.component == "generated_audio_duration"
+    assert audio.measurement.quantity == 100
+    assert text.measurement.component == "input_characters"
+    assert text.measurement.quantity == 7
+
+    assert Enum.all?(observations, fn observation ->
+             observation.call_id == "call-test" and
+               observation.outcome == :succeeded and
+               observation.provider.request_id == "request-usage" and
+               observation.provider.operation_id == "speech-usage" and
+               observation.attribution.activation_id == "activation-test"
+           end)
+
+    refute inspect(observations) =~ "Hello"
+  end
+
   test "bounds and serializes pending turns until prior playout completes" do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     capability = start_capability(maximum_requests: 1)
@@ -165,6 +207,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
       ~s({"type":"SpeechInterrupted","request_id":"req","audio_played_ms":20,"text_spoken":"o","text_remaining":"ne","metadata":{"speech_id":"dg_sp_one"}})
     )
 
+    assert_receive {:vxpipe_usage_observations, ^capability, interrupted_usage}
+    assert Enum.all?(interrupted_usage, &(&1.outcome == :cancelled))
+
     assert_receive {:test_tts_control, ^transport, replacement_speak}
     assert JSON.decode!(replacement_speak) == %{"type" => "Speak", "text" => "three"}
     assert_receive {:test_tts_control, ^transport, replacement_flush}
@@ -227,6 +272,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
       ~s({"type":"Error","request_id":"req","code":"MESSAGE_INVALID"})
     )
 
+    assert_receive {:vxpipe_usage_observations, ^capability, [failed_usage]}
+    assert failed_usage.outcome == :failed
+    assert failed_usage.measurement.component == "input_characters"
+    assert failed_usage.provider.request_id == "req"
+
     assert_receive {:vxpipe_tts_unavailable, ^capability, :provider_failed}
 
     assert_receive {:telemetry_event, @provider_failure_event, %{count: 1},
@@ -237,7 +287,53 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
     assert_receive {:DOWN, ^monitor, :process, ^capability, :provider_failed}, 1_000
   end
 
+  test "does not invent an attempt when the transport rejects Speak" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+
+    capability =
+      start_capability(
+        maximum_requests: 1,
+        transport_options: [fail_after_controls: 0]
+      )
+
+    monitor = Process.monitor(capability)
+    assert_receive {:test_tts_transport_started, _transport, _connection}
+
+    assert {:error, :unavailable} =
+             TextToSpeech.synthesize(capability, request("turn-rejected", "not accepted", sink))
+
+    refute_receive {:vxpipe_usage_observations, ^capability, _observations}
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}
+  end
+
+  test "retains accepted input when Flush is rejected" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+
+    capability =
+      start_capability(
+        maximum_requests: 1,
+        transport_options: [fail_after_controls: 1]
+      )
+
+    monitor = Process.monitor(capability)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+
+    assert {:error, :unavailable} =
+             TextToSpeech.synthesize(capability, request("turn-flush-failed", "accepted", sink))
+
+    assert_receive {:test_tts_control, ^transport, speak}
+    assert JSON.decode!(speak)["text"] == "accepted"
+    assert_receive {:vxpipe_usage_observations, ^capability, [observation]}
+    assert observation.outcome == :failed
+    assert observation.measurement.component == "input_characters"
+    assert observation.measurement.quantity == 8
+    assert observation.provider.request_id == nil
+    assert_receive {:DOWN, ^monitor, :process, ^capability, :transport_closed}
+  end
+
   defp start_capability(options) do
+    {transport_options, options} = Keyword.pop(options, :transport_options, [])
+
     provider =
       FluxTextToSpeech.new!(
         api_key: "test-key",
@@ -252,10 +348,26 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
          owner: self(),
          participant_id: "agent-test",
          provider: {FluxTextToSpeech, provider},
-         transport: {TestTextToSpeechTransport, [observer: self()]},
-         task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor
+         transport: {TestTextToSpeechTransport, [observer: self()] ++ transport_options},
+         task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor,
+         usage: [
+           call_id: "call-test",
+           activation_id: "activation-test",
+           provider: usage_provider_context()
+         ]
        ] ++ options}
     )
+  end
+
+  defp usage_provider_context do
+    assert {:ok, provider} =
+             ProviderContext.new(
+               name: "deepgram",
+               integration_id: "test-voice",
+               model: "flux-haley-en"
+             )
+
+    provider
   end
 
   defp request(correlation_id, text, sink) do

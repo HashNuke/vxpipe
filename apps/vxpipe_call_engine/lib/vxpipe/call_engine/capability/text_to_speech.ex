@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.Capability.TextToSpeech.Usage
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
   alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
   alias Vxpipe.CallEngine.Telemetry
@@ -64,7 +65,8 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
            provider_module: provider_module,
            task_supervisor: Keyword.fetch!(options, :task_supervisor),
            transport: transport,
-           transport_module: transport_module
+           transport_module: transport_module,
+           usage_context: Keyword.get(options, :usage)
          }}
 
       {:error, _reason} ->
@@ -123,9 +125,15 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
         %{transport: transport} = state
       ) do
     case state.provider_module.decode(payload) do
-      {:ok, %Signal{} = signal} -> handle_signal(signal, state)
-      {:ignore, _reason} -> {:noreply, state}
-      {:error, _reason} -> stop_unavailable(:invalid_provider_message, state)
+      {:ok, %Signal{} = signal} ->
+        state = %{state | current: Usage.observe_signal(state.current, signal)}
+        handle_signal(signal, state)
+
+      {:ignore, _reason} ->
+        {:noreply, state}
+
+      {:error, _reason} ->
+        stop_unavailable(:invalid_provider_message, state)
     end
   end
 
@@ -135,11 +143,11 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       )
       when is_reference(reference) do
     case prepare_audio(payload, state) do
-      {:push, request, audio} ->
+      {:push, request, audio, state} ->
         state = start_audio_output(request, audio, reference, state)
         {:noreply, state}
 
-      :drop ->
+      {:drop, state} ->
         send(transport, {:vxpipe_tts_audio_result, self(), reference, :ok})
         {:noreply, state}
 
@@ -270,16 +278,20 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   defp handle_signal(%Signal{kind: :speech_completed, provider_speech_id: speech_id}, state) do
     case state.current do
-      %{phase: phase, request: request, speech_id: ^speech_id} = current
+      %{phase: phase, request: request, speech_id: ^speech_id}
       when phase in [:streaming, :awaiting_start] ->
         case OutputSink.finish(request.output_sink, request.correlation_id, self()) do
-          :ok -> {:noreply, %{state | current: %{current | phase: :draining}}}
-          {:error, _reason} -> stop_unavailable(:audio_output_failed, state)
+          :ok ->
+            state = finish_usage(:succeeded, state)
+            {:noreply, %{state | current: %{state.current | phase: :draining}}}
+
+          {:error, _reason} ->
+            stop_unavailable(:audio_output_failed, state)
         end
 
       %{phase: phase, speech_id: ^speech_id}
       when phase in [:discarding, :interrupting] ->
-        finish_interruption(state.playback_offset_ms, state)
+        finish_interruption(state.playback_offset_ms, finish_usage(:cancelled, state))
 
       _other ->
         stop_unavailable(:invalid_provider_state, state)
@@ -296,6 +308,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
        ) do
     case state.current do
       %{phase: :interrupting, speech_id: ^speech_id} ->
+        state = finish_usage(:cancelled, state)
         finish_interruption(max(audio_played_ms, state.playback_offset_ms), state)
 
       _other ->
@@ -312,28 +325,34 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     speak = state.provider_module.encode_speak(request.text)
     flush = state.provider_module.encode_flush()
 
-    with :ok <- safe_send_control(state.transport_module, state.transport, speak),
-         :ok <- safe_send_control(state.transport_module, state.transport, flush) do
-      {:ok,
-       %{
-         state
-         | current: %{
-             phase: :awaiting_start,
-             played_ms: 0,
-             request: request,
-             speech_id: nil,
-             started_at: started_at,
-             first_audio_observed?: false
-           }
-       }}
-    else
-      {:error, _reason} -> {:error, state}
+    case safe_send_control(state.transport_module, state.transport, speak) do
+      :ok ->
+        state = %{
+          state
+          | current: %{
+              phase: :awaiting_start,
+              played_ms: 0,
+              request: request,
+              speech_id: nil,
+              started_at: started_at,
+              first_audio_observed?: false,
+              usage: Usage.start(request, state.usage_context, state.media_format)
+            }
+        }
+
+        case safe_send_control(state.transport_module, state.transport, flush) do
+          :ok -> {:ok, state}
+          {:error, _reason} -> {:error, state}
+        end
+
+      {:error, _reason} ->
+        {:error, state}
     end
   end
 
   defp process_audio(payload, state) do
     case prepare_audio(payload, state) do
-      {:push, request, audio} ->
+      {:push, request, audio, state} ->
         state = observe_first_audio(state)
 
         case OutputSink.push(request.output_sink, output_frame(request, audio, state)) do
@@ -341,7 +360,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
           {:error, _reason} -> {:error, :audio_output_failed, state}
         end
 
-      :drop ->
+      {:drop, state} ->
         {:ok, state}
 
       {:error, reason} ->
@@ -353,14 +372,22 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     case state.current do
       %{phase: :streaming, request: request} ->
         case state.provider_module.decode_audio(payload) do
-          {:audio, audio} -> {:push, request, audio}
-          {:error, _reason} -> {:error, :audio_output_failed}
+          {:audio, audio} ->
+            state = %{state | current: Usage.observe_audio(state.current, audio)}
+            {:push, request, audio, state}
+
+          {:error, _reason} ->
+            {:error, :audio_output_failed}
         end
 
       %{phase: phase} when phase in [:discarding, :interrupting] ->
         case state.provider_module.decode_audio(payload) do
-          {:audio, _audio} -> :drop
-          {:error, _reason} -> {:error, :audio_output_failed}
+          {:audio, audio} ->
+            state = %{state | current: Usage.observe_audio(state.current, audio)}
+            {:drop, state}
+
+          {:error, _reason} ->
+            {:error, :audio_output_failed}
         end
 
       _other ->
@@ -510,12 +537,14 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   end
 
   defp stop_unavailable(reason, state) do
+    state = finish_usage(:failed, state)
     Telemetry.provider_failure(:tts, state.provider_module, reason)
     send(state.owner, {:vxpipe_tts_unavailable, self(), reason})
     {:stop, reason, state}
   end
 
   defp stop_unavailable(reason, reply, state) do
+    state = finish_usage(:failed, state)
     Telemetry.provider_failure(:tts, state.provider_module, reason)
     send(state.owner, {:vxpipe_tts_unavailable, self(), reason})
     {:stop, reason, reply, state}
@@ -543,4 +572,8 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   end
 
   defp observe_first_audio(state), do: state
+
+  defp finish_usage(outcome, state) do
+    %{state | current: Usage.finish(state.current, outcome, state.owner)}
+  end
 end

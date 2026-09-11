@@ -36,6 +36,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeTTS do
   end
 
   @impl true
+  def usage_identity(%Config{}), do: [name: "morse_code"]
+
+  @impl true
   def encode_speak(text) when is_binary(text) do
     JSON.encode!(%{"type" => "Speak", "text" => text})
   end

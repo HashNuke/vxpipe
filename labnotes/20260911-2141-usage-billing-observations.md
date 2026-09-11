@@ -146,3 +146,52 @@ Green evidence so far:
 
 Hosted speech, tool and carrier capture, persisted settlement/operator totals, and billing lookup
 remain.
+
+## 2026-09-11: text-to-speech attempt capture
+
+The next adapter checkpoint records synthesis work at the boundary where evidence becomes real.
+An attempt begins only after the transport accepts `Speak`; a queued request or locally rejected
+`Speak` produces no observation. If `Speak` succeeds but `Flush` fails, the input has crossed the
+owned transport boundary, so the attempt is retained as failed without inventing provider IDs or
+generated-audio duration.
+
+The pinned synthesis runtime now carries call, participant activation, configured profile, and a
+provider-owned safe identity. The hosted adapter reports its stable provider/model identity and the
+deterministic tone adapter reports its provider identity. Credentials remain inside the existing
+provider and transport values and are not copied to usage. The older room-command path lacks the
+same pinned call/profile evidence and remains unobserved rather than receiving guessed values.
+
+`TextToSpeechAttempt` owns one attempt's provider identifiers and measurements. It counts input as
+Unicode graphemes and decoded provider output as PCM frames. Generated duration uses
+`Membrane.RawAudio.bytes_to_time/2` and `Membrane.Time.millisecond/0`; it is not inferred from
+playout progress. This matters during interruption: decoded audio that is deliberately discarded
+still represents generated provider work, while a sink's played milliseconds describe a different
+fact. Successful completion settles before playout drains, so a later sink failure cannot rewrite
+or duplicate the provider outcome.
+
+The large synthesis GenServer only marks lifecycle boundaries. A small child adapter creates,
+updates, and finishes optional usage state, while the attempt module owns projection. Room usage
+source resolution is also separate from archive recording and now recognizes the exact active TTS
+process and the exact prepared private-briefing TTS process. Participant and optional activation
+must still match the observation before the ordinary private archive accepts it. No raw synthesis
+text or client event is added.
+
+Red evidence:
+
+- Three attempt tests failed because the attempt module did not exist.
+- Success, interruption, and provider-error capability tests timed out waiting for usage events.
+- Definition-driven tests found neither pinned synthesis usage identity nor private archived facts.
+- Controlled transport tests returned `:ok` until the fixture could reject `Speak` or `Flush` at
+  the requested boundary.
+
+Green evidence:
+
+- Attempt projection: 3 tests, 0 failures.
+- Synthesis capability: 9 tests, 0 failures.
+- Focused runtime, definition-driven archive, and private-briefing archive paths pass.
+- Complete Call Engine: 377 tests, 0 failures, 1 integration exclusion.
+- Root formatting, warnings-as-errors compilation, strict Credo over 679 source files, all 866 tests
+  across eight umbrella apps, and unused-dependency checks pass.
+
+Speech-to-text, tool and carrier observations, persisted settlement/operator totals, and billing
+lookup remain.
