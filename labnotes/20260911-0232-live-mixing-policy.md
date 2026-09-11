@@ -57,3 +57,35 @@
   umbrella run also passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two
   exclusions, Call Engine 291 with one exclusion, Calls 37, Persistence 25, Gateway 67 with four
   exclusions, and Console 57. The disposable PostgreSQL 17 container was removed afterward.
+
+## 2026-09-11 — room policy authority
+
+- Wrote four process-contract tests first. The red run failed at compilation because the
+  `MediaPolicy.Authority` and revisioned `MediaPolicy.Snapshot` contracts did not exist.
+- Added one temporary, significant GenServer per planned room. It owns only the immutable host/call
+  policy inputs, participant-ID-to-policy catalog, active contribution map, monotonic revision, and
+  current effective snapshot. It accepts only participant identities pinned into the resolved plan.
+- Added a separate supervision-boundary assertion. Its red run found no registered policy process
+  beside a live planned room; adding the significant child to the room incarnation made it green.
+  If this privacy-critical process terminates, `auto_shutdown: :any_significant` ends the room
+  subtree rather than restarting with an empty presence map.
+- Tightened the existing definition-driven startup scenario from a revision-zero expectation to
+  both entry participants at revision two. That red run proved the initially supervised process was
+  not yet synchronized with Room Authority membership.
+- Participant commit now applies the pinned `while_present` contribution before writing membership
+  to Room Authority state. A transition failure aborts admission. Authoritative participant exit
+  removes its contribution; a connection detach does not, which preserves the approved distinction
+  between transport loss and leave.
+- Focused room tests confirm the two entry admissions, disconnect-versus-leave behavior, and
+  fail-closed room teardown on policy-authority loss. Media sinks do not consume policy revisions
+  yet, so this is state ownership and commit-order groundwork rather than a completed media barrier.
+- A subsequent boundary test submitted a participant ID absent from the pinned catalog. The policy
+  rejection was correct, but the red test found its already-prepared participant supervisor still
+  registered. `ParticipantLifecycle.start/3` now discards every preparation whose commit fails;
+  rejection leaves neither membership nor a stray participant process and does not advance policy
+  revision.
+- Complete verification passes formatting, warnings-as-errors compilation, 297 Call Engine tests
+  with one integration exclusion, strict Credo, and the unused-lock check. A fresh database-backed
+  umbrella run also passes: MCP 37 tests with three exclusions, Agent Runtime 58 with two
+  exclusions, Call Engine 297 with one exclusion, Calls 37, Persistence 25, Gateway 67 with four
+  exclusions, and Console 57. The disposable PostgreSQL 17 container was removed afterward.

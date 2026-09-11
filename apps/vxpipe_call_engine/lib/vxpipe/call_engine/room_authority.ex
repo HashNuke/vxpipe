@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan, TextToSpeechRequest}
 
   alias Vxpipe.CallEngine.Room.Snapshot
+  alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
@@ -114,7 +115,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     room_source = room_source(options)
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
 
-    with {:ok, call_lifecycle} <- StartupReadiness.bind(room_source, incarnation_id) do
+    with {:ok, call_lifecycle} <- StartupReadiness.bind(room_source, incarnation_id),
+         {:ok, media_policy_authority} <-
+           bind_media_policy_authority(room_source, incarnation_id) do
       state =
         State.new(
           ArchiveRecorder.new(room_source, incarnation_id, options),
@@ -122,7 +125,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           initial_speech_to_text_runtime(room_source),
           OpeningAudio.new(room_source, Keyword.get(options, :opening_audio)),
           FirstMessage.new(room_source),
-          call_lifecycle
+          call_lifecycle,
+          media_policy_authority
         )
 
       case Startup.start_agent(room_source, options, state) do
@@ -468,6 +472,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp initial_speech_to_text_runtime(%CreateRoom{}), do: :application
   defp initial_speech_to_text_runtime(%ResolvedCallPlan{}), do: %{}
+
+  defp bind_media_policy_authority(%CreateRoom{}, _incarnation_id), do: {:ok, nil}
+
+  defp bind_media_policy_authority(%ResolvedCallPlan{}, incarnation_id) do
+    case MediaPolicyAuthority.whereis(incarnation_id) do
+      authority when is_pid(authority) -> {:ok, authority}
+      nil -> {:error, :media_policy_unavailable}
+    end
+  end
 
   defp handle_text_to_speech_playback(capability, request, status, state) do
     opening_result =

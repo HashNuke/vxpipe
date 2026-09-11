@@ -21,9 +21,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.Diagnostics.{AgentRuntimeModelProvider, ModelFixture}
   alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
 
   alias Vxpipe.CallEngine.Command.{
     AttachConnection,
+    JoinParticipant,
     ReadCallVariables,
     SendText,
     UpdateCallVariables
@@ -348,6 +350,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     room_id = unique_id("room-private-departures")
     plan = compile_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
+    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
     archive =
       archive_options(
@@ -380,6 +383,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert :ok = RoomAuthority.detach_connection(room_authority, detach, self())
 
+    assert %Snapshot{revision: 2, present_participant_ids: present_after_disconnect} =
+             Authority.snapshot(Authority.whereis(room.incarnation_id))
+
+    assert present_after_disconnect ==
+             MapSet.new([caller.participant_id, receiver.participant_id])
+
     assert_receive {:test_archive_fact,
                     %Fact{
                       kind: :connection_detached,
@@ -407,6 +416,11 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
                    2_000
 
     assert participant_id == caller.participant_id
+
+    assert %Snapshot{revision: 3, present_participant_ids: present_after_leave} =
+             Authority.snapshot(Authority.whereis(room.incarnation_id))
+
+    assert present_after_leave == MapSet.new([receiver.participant_id])
   end
 
   test "keeps tools and variables live while archival crashes, then drains retained facts" do
@@ -587,6 +601,12 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert room.room_id == room_id
 
+    assert %Snapshot{revision: 2, present_participant_ids: present_participant_ids} =
+             Authority.snapshot(Authority.whereis(room.incarnation_id))
+
+    assert present_participant_ids ==
+             MapSet.new([caller.participant_id, receiver.participant_id])
+
     assert participant_registered?(room_id, caller.participant_id)
     assert participant_registered?(room_id, receiver.participant_id)
     refute participant_registered?(room_id, unused.participant_id)
@@ -663,6 +683,46 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert_receive {:vxpipe_event, %TextOutput{sequence: 7, text: "The host action completed."}}
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 8}}
+  end
+
+  test "ends a planned room if its media policy authority exits" do
+    room_id = unique_id("room-policy-authority-exit")
+    plan = compile_plan(room_id)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+
+    assert [{room_authority, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
+
+    room_monitor = Process.monitor(room_authority)
+    policy_authority = Authority.whereis(room.incarnation_id)
+
+    Process.exit(policy_authority, :kill)
+
+    assert_receive {:DOWN, ^room_monitor, :process, ^room_authority, :shutdown}, 2_000
+  end
+
+  test "discards a prepared participant that is absent from the pinned policy catalog" do
+    room_id = unique_id("room-unplanned-participant")
+    plan = compile_plan(room_id)
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+
+    assert {:ok, join} =
+             JoinParticipant.new(
+               tenant_id: plan.tenant_id,
+               actor_id: plan.actor_id,
+               room_id: room_id,
+               participant_id: "unplanned-participant",
+               role: :human,
+               deadline: future_deadline()
+             )
+
+    assert {:error, %Error{code: :room_start_failed}} = CallEngine.join_participant(join)
+    refute participant_registered?(room_id, "unplanned-participant")
+
+    assert %Snapshot{revision: 2} =
+             Authority.snapshot(Authority.whereis(room.incarnation_id))
   end
 
   test "starts a room-owned Call Variables process independently of RoomAuthority" do

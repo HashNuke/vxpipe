@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
+  alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
 
   alias Vxpipe.CallEngine.{
     Error,
@@ -24,8 +25,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   @spec start(struct(), State.t(), keyword()) ::
           {:ok, struct(), State.t()} | {:error, term()}
   def start(command, %State{} = state, options \\ []) do
-    with {:ok, preparation} <- prepare(command, state, options) do
-      commit(preparation, state)
+    case prepare(command, state, options) do
+      {:ok, preparation} ->
+        case commit(preparation, state) do
+          {:ok, _participant, _state} = started ->
+            started
+
+          {:error, _reason} = error ->
+            _ = discard(preparation, state)
+            error
+        end
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -60,22 +72,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   end
 
   @spec commit(ParticipantPreparation.t(), State.t()) ::
-          {:ok, struct(), State.t()} | {:error, :participant_unavailable}
+          {:ok, struct(), State.t()}
+          | {:error, :media_policy_unavailable | :participant_unavailable}
   def commit(%ParticipantPreparation{} = preparation, %State{} = state) do
     participant = preparation.snapshot
     participant_supervisor = preparation.participant_supervisor
     monitor = Process.monitor(participant_supervisor)
 
-    if ParticipantSupervisor.registered?(
-         participant.tenant_id,
-         participant.room_id,
-         participant.participant_id,
-         participant_supervisor
-       ) do
+    with true <-
+           ParticipantSupervisor.registered?(
+             participant.tenant_id,
+             participant.room_id,
+             participant.participant_id,
+             participant_supervisor
+           ),
+         :ok <- admit_media_policy(state.media_policy_authority, participant.participant_id) do
       commit_available(preparation, participant, monitor, state)
     else
-      Process.demonitor(monitor, [:flush])
-      {:error, :participant_unavailable}
+      false ->
+        Process.demonitor(monitor, [:flush])
+        {:error, :participant_unavailable}
+
+      {:error, :media_policy_unavailable} = error ->
+        Process.demonitor(monitor, [:flush])
+        error
     end
   end
 
@@ -127,6 +147,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   @spec remove(reference(), term(), State.t()) :: State.t()
   def remove(monitor, reason, %State{} = state) do
     {participant_id, participant_monitors} = Map.pop(state.participant_monitors, monitor)
+
+    :ok = leave_media_policy(state.media_policy_authority, participant_id)
 
     affected_connections =
       Map.filter(state.connections, fn {_connection_id, connection} ->
@@ -208,5 +230,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
       "The participant already exists.",
       details: %{"participant_id" => participant_id}
     )
+  end
+
+  defp admit_media_policy(nil, _participant_id), do: :ok
+
+  defp admit_media_policy(authority, participant_id) do
+    case MediaPolicyAuthority.admit(authority, participant_id) do
+      {:ok, _snapshot} -> :ok
+      {:error, _reason} -> {:error, :media_policy_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :media_policy_unavailable}
+  end
+
+  defp leave_media_policy(nil, _participant_id), do: :ok
+
+  defp leave_media_policy(authority, participant_id) do
+    result =
+      try do
+        MediaPolicyAuthority.leave(authority, participant_id)
+      catch
+        :exit, _reason -> {:error, :unavailable}
+      end
+
+    case result do
+      {:ok, _snapshot} -> :ok
+      {:error, reason} -> exit({:media_policy_transition_failed, reason})
+    end
   end
 end

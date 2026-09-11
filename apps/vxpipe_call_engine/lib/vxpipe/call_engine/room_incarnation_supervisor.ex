@@ -14,6 +14,8 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
     RoomParticipantSupervisor
   }
 
+  alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
+
   def start_link(options), do: Supervisor.start_link(__MODULE__, options)
 
   def child_spec(options) do
@@ -42,7 +44,8 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
     children =
       [participant_supervisor, capability_supervisor, transfer_supervisor] ++
         live_inspection_child(options) ++
-        call_variables_child(options) ++ call_lifecycle_child(options) ++ [authority]
+        call_variables_child(options) ++
+        call_lifecycle_child(options) ++ media_policy_child(options) ++ [authority]
 
     Supervisor.init(children,
       strategy: :one_for_one,
@@ -60,6 +63,13 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   defp call_lifecycle_child(options) do
     case Keyword.get(options, :plan) do
       %ResolvedCallPlan{} -> [{CallLifecycle, options}]
+      nil -> []
+    end
+  end
+
+  defp media_policy_child(options) do
+    case Keyword.get(options, :plan) do
+      %ResolvedCallPlan{} -> [{MediaPolicyAuthority, options}]
       nil -> []
     end
   end

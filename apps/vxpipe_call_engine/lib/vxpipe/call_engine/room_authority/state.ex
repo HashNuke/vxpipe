@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
     :archive_recorder,
     :call_lifecycle,
     :first_message,
+    :media_policy_authority,
     :opening_audio,
     :snapshot,
     :spoken_history,
@@ -44,6 +45,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           connection_monitors: %{optional(reference()) => String.t()},
           connections: map(),
           first_message: FirstMessage.t(),
+          media_policy_authority: nil | pid(),
           agent_turns: map(),
           background_tool_calls: map(),
           next_sequence: pos_integer(),
@@ -73,6 +75,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           :application | map(),
           OpeningAudio.t(),
           FirstMessage.t(),
+          nil | pid(),
           nil | pid()
         ) :: t()
   def new(
@@ -81,12 +84,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
         speech_to_text_runtime,
         %OpeningAudio{} = opening_audio \\ OpeningAudio.open(),
         %FirstMessage{} = first_message \\ FirstMessage.completed(),
-        call_lifecycle \\ nil
+        call_lifecycle \\ nil,
+        media_policy_authority \\ nil
       ) do
     %__MODULE__{
       archive_recorder: archive_recorder,
       call_lifecycle: call_lifecycle,
       first_message: first_message,
+      media_policy_authority: media_policy_authority,
       opening_audio: opening_audio,
       snapshot: snapshot,
       spoken_history: SpokenHistory.new(),

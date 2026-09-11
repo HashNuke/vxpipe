@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom, JoinParticipant, SendText}
   alias Vxpipe.CallEngine.ResolvedCallPlan
+  alias Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy
   alias Vxpipe.CallEngine.Archive.Handoff
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
@@ -254,7 +255,9 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       remote_mcp_connection_provider:
         Keyword.get(runtime_options, :remote_mcp_connection_provider),
-      remote_mcp_protocol_client: Keyword.get(runtime_options, :remote_mcp_protocol_client)
+      remote_mcp_protocol_client: Keyword.get(runtime_options, :remote_mcp_protocol_client),
+      media_policy_ceiling:
+        Keyword.get(runtime_options, :media_policy_ceiling, MediaPolicy.inherit())
     ]
 
     case DynamicSupervisor.start_child(__MODULE__, {RoomIncarnationSupervisor, options}) do

@@ -59,7 +59,12 @@ complete direct participant-key allowlists, including meaningful empty maps and 
 Unknown or duplicate references and malformed storage booleans fail at their exact definition path.
 Compilation pins every route to runtime participant IDs so later admission and media enforcement do
 not reinterpret public JSON. This checkpoint does not yet apply or intersect those policies at
-runtime.
+runtime. Planned rooms now supervise a separate, significant media-policy authority. It owns the
+pinned policy catalog, authoritative presence contributions, monotonic policy revision, and current
+effective intersection. Participant commit applies its contribution before Room Authority records
+membership; transport detach does not clear presence, while authoritative participant exit removes
+only that participant's contribution. Losing the policy authority ends the room rather than
+continuing without privacy state. Mixer, transcript, and archive enforcement remain incomplete.
 
 The schema also accepts validated definition-local agent transfer allowlists, derives one private default-blocking transfer binding
 for each non-empty list, pins the call-level total transfer-attempt deadline, and pins each agent's

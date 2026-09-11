@@ -78,6 +78,19 @@ focused composer tests pass; authoritative presence state and media enforcement 
 The expanded Call Engine suite passes 291 tests with one tagged integration exclusion, and the
 database-backed umbrella suite passes across every child application.
 
+A room-scoped media-policy authority now owns the pinned participant-policy catalog, active
+contribution map, monotonic revision, and effective snapshot outside Room Authority. Planned-room
+startup supervises it as a temporary significant child: policy-state loss ends the room rather than
+restarting unrestricted. Participant commit applies the pinned contribution before Room Authority
+records membership. Connection detach leaves that contribution active, while authoritative
+participant exit removes it. Focused process and room tests cover invalid startup, unknown/duplicate
+admission, owner-scoped leave, both entry participants, disconnect versus leave, and fail-closed
+authority loss. A rejected unplanned participant is also discarded after preparation, leaving no
+stray supervisor or policy revision. Mixer/transcript/archive consumers and their revision
+acknowledgement barrier remain open. The expanded Call Engine suite passes 297 tests with one
+tagged integration exclusion, and the database-backed umbrella suite passes across every child
+application.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,
