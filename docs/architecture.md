@@ -2629,6 +2629,26 @@ adding a total to its included subcategories. Do not coalesce separate billable
 attempts. Failed/interrupted work still contributes observed usage; missing usage
 is unknown, not zero. This does not authorize automatic MCP retries.
 
+The implemented neutral contract is owned by Call Engine under `Usage`, before any provider or
+storage adapter. An immutable observation identifies its tenant, call, local operation attempt,
+capability, provider namespace, outcome, time, and one measured component. Attribution is a
+separate optional value containing only dimensions backed by evidence: room incarnation,
+participant activation, service interval, telephony leg, turn, utterance, or tool call. Provider
+context keeps provider/configured-integration selectors and genuine model, voice, request,
+operation, or session identifiers; the external identifiers are available explicitly but omitted
+from ordinary struct inspection.
+
+Canonical scalar units are tokens, characters, milliseconds, and requests. Monetary measurements
+pair an uppercase three-letter currency with a non-negative exact `Decimal`; floating-point money
+is invalid. Measurement provenance is one of provider-reported, locally measured, library
+estimate, or billing lookup. Settlement retains provenance-specific effective amounts and refuses
+to produce an unqualified total spanning multiple provenances, preventing a reported price and an
+estimate from being silently added together. Equal quantities remain distinct. Replay suppression
+requires matching immutable semantics plus a shared observation ID, delivery ID, or source
+sequence; contradictory reuse of one of those identities is an error. Cumulative reports without
+enough explicit source sequencing to choose between otherwise-equivalent-status reports are
+ambiguous rather than settled by arrival order.
+
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports
 them. It runs outside the media hot path and `RoomAuthority` and can outlive the

@@ -1,6 +1,8 @@
 # Usage, cost observations, and billing enrichment
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: in progress. Typed observation and settlement contract implemented (2026-09-11);
+provider capture, archival/operator projection, and billing enrichment remain. Specification
+review: approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
 
@@ -26,7 +28,7 @@ not blind arrival order. Accounting must not start prohibited STT to obtain miss
 
 ## Implementation checklist
 
-- [ ] Red-test typed adapter usage, attribution and observation arithmetic before modifying provider result contracts.
+- [x] Red-test typed adapter usage, attribution and observation arithmetic before modifying provider result contracts.
 - [ ] Capture supported usage in buffered/streaming model and hosted speech adapters plus tool/carrier boundaries.
 - [ ] Persist private observations/effective projections asynchronously and expose tenant-safe operator totals by meaningful dimension/currency.
 - [ ] Implement optional billing-enrichment port/workflow with a controlled provider fixture and honest unavailable support.
@@ -60,8 +62,27 @@ No made-up prices/usage, per-turn forced allocation, floating-point billing reco
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence (2026-09-11, typed observation and settlement checkpoint):
+
+- Added Call Engine-owned value objects for optional evidence-backed attribution, provider
+  namespace and genuine external identifiers, exact component measurements, immutable
+  call-scoped observations, and derived effective amounts. Provider request/operation/session IDs
+  remain explicitly available but are excluded from ordinary struct inspection.
+- Added deterministic settlement for additive deltas, explicitly sequenced cumulative reports,
+  estimate/final/correction precedence, stable observation/delivery/source-sequence replay
+  detection, aggregate/subcategory inclusion, and provenance-specific totals. Monetary values use
+  `Decimal`; floats are rejected and a cross-provenance total is rejected as ambiguous unless its
+  provenance is selected.
+- Red evidence: `mix test test/vxpipe/call_engine/usage/settlement_test.exs --max-cases 1`
+  initially produced five expected undefined-module failures. The expanded provenance and replay
+  cases subsequently produced two expected failures before their implementation.
+- Green evidence: the same focused command passes 6 tests. The owning Call Engine suite passes 363
+  tests with one existing integration exclusion. All root gates pass: formatting, warnings-as-errors
+  compilation, strict Credo over 671 source files, all 851 tests across the eight umbrella apps,
+  and the unused-dependency check.
+
+This is a partial milestone. No provider adapter emits the contract yet, and no persistence,
+inspection, or billing-lookup behavior is claimed by this checkpoint.
 
 ## Specification review
 

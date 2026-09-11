@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.12", only: :test},
+      {:decimal, "~> 2.0"},
       {:jsv, "~> 0.22"},
       {:membrane_audio_mix_plugin, "~> 0.16.5"},
       {:req, "~> 0.7.4"},
