@@ -20,7 +20,7 @@ During a multi-party call, enabled permitted individual tracks and the already-l
 ## Implementation checklist
 
 - [ ] Red-test recording lifecycle with tagged audio and fake object writer, exact permitted intervals, gaps, and room/worker failure.
-- [ ] Add artifacts application/ports and scoped writer supervision; keep dependency direction and engine database-free.
+- [x] Add artifacts application/ports and scoped writer supervision; keep dependency direction and engine database-free.
 - [ ] Implement bounded stream-to-S3 recording plus asynchronous metadata/manifests.
 - [ ] Capture live full mix and selected individual tracks with shared clocks and honest egress provenance.
 - [ ] Add private operator playback/access mechanism and tagged S3-compatible integration tests without logging signed URLs/secrets.
@@ -51,8 +51,43 @@ No mandatory offline remix, PG audio-byte duplication, automatic repair/import, 
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation is in progress. The first checkpoint evidence follows; do not mark the whole slice
+complete until every acceptance check is demonstrated.
+
+## Checkpoint 1: bounded artifact-writer ownership
+
+The umbrella now contains a database- and engine-independent `vxpipe_artifacts` application. Its
+application supervisor owns a unique writer registry, a writer task supervisor, and one dynamic
+supervisor for call-scoped artifact writers. `Vxpipe.Artifacts.Writers` is the only public start
+path; writer identity is pinned by tenant, call, and artifact rather than an unscoped process name.
+
+The initial object-store port separates opening an upload, writing one bounded PCM chunk, and
+completing it with a terminal manifest. A writer monitors its recording source but is not linked to
+that source. It can therefore drain already-accepted chunks after the source exits. Store calls run
+under the artifacts-owned task supervisor, leaving both the writer mailbox and future mixer caller
+free while object I/O is slow.
+
+The handoff reserves a fixed atomics-backed capacity before using a non-suspending process send.
+Capacity includes the active store write and queued chunks; a full handoff rejects the newest chunk
+without blocking. Closing rejects later input. The terminal manifest distinguishes successfully
+written samples from rejected chunks and marks the artifact incomplete when bounded loss occurred.
+This is honest bounded handoff, not a lossless or durable-queue claim.
+
+The focused test was first red because the supervised writer API did not exist. Its green path
+holds the first fake object-store write, fills the two-chunk capacity, observes an immediate third
+rejection, ends the source, drains both accepted chunks, and completes an incomplete manifest:
+
+```text
+cd apps/vxpipe_artifacts
+mix test test/vxpipe/artifacts/writer_test.exs --max-cases 1
+# 1 test, 0 failures
+```
+
+No engine mixer tap, S3 adapter, relational metadata, recording configuration, or operator playback
+is introduced by this checkpoint. Those remain later parts of this milestone.
+
+Root formatting, compilation with warnings as errors, strict Credo over 612 source files, all 803
+umbrella tests, and the unused-dependency check pass.
 
 ## Specification review
 

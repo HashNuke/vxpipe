@@ -2280,6 +2280,21 @@ turn, tool, usage/cost, and full variable-snapshot facts for PostgreSQL.
 PostgreSQL holds history and artifact metadata/references, not duplicate audio bytes.
 Existing call-details publication remains a separate post-call workflow.
 
+The first implemented artifacts boundary lives in the independent `vxpipe_artifacts` application.
+Its application tree owns a unique writer registry, an object-I/O task supervisor, and a dynamic
+writer supervisor. Call-scoped writers are keyed by tenant, call, and artifact; they monitor their
+recording source and may drain after that source exits. A small object-store port owns upload open,
+bounded PCM-chunk writes, and manifest completion. No module in this application depends on the call
+engine, Calls, Ecto, or Gateway.
+
+The writer handoff reserves a fixed shared capacity before a non-suspending send, so an active slow
+write plus queued chunks cannot grow an unbounded mailbox or push object latency into live media.
+Overflow rejects the newest chunk and increments terminal incompleteness evidence. Closing the
+handoff rejects later audio while already-accepted chunks drain. Object-store operations run in the
+artifacts-owned task supervisor. This boundary does not yet enable recording or implement S3: the
+future `RoomRecording` capability remains responsible for policy-filtered mixer subscriptions and
+for constructing exact interval/chunk metadata before it calls the handoff.
+
 The first archive implementation checkpoint establishes the database side of exact Call
 Variables history without putting it on the live path yet. Calls owns an
 `ArchiveRepository` port, immutable baseline/update snapshot contract, and tenant-scoped
