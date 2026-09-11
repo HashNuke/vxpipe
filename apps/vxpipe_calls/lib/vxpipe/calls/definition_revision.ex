@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.DefinitionRevision do
   @moduledoc "An immutable stored source revision and reusable validation metadata."
 
-  alias Vxpipe.Calls.ParticipantRoute
+  alias Vxpipe.Calls.{ParticipantRoute, TelephonyRoute}
 
   @enforce_keys [
     :tenant_key,
@@ -13,6 +13,7 @@ defmodule Vxpipe.Calls.DefinitionRevision do
     :compiled_metadata,
     :validation_errors,
     :routes,
+    :telephony_routes,
     :published_at,
     :inserted_at
   ]
@@ -28,6 +29,7 @@ defmodule Vxpipe.Calls.DefinitionRevision do
           compiled_metadata: map(),
           validation_errors: [map()],
           routes: [ParticipantRoute.t()],
+          telephony_routes: [TelephonyRoute.t()],
           published_at: nil | DateTime.t(),
           inserted_at: DateTime.t()
         }

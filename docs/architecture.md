@@ -1019,6 +1019,16 @@ vocabulary are acknowledged without dispatch. This is only the provider ingress 
 admission, event deduplication, and exact call/participant/leg correlation are owned by the later
 Calls integration and are not implied by a successful HTTP response.
 
+Saving a definition now derives a separate durable inbound telephony route for each human
+`receive`/`start_call` connection whose service is not `web`. The route binds the immutable
+definition revision and participant ref to the configured service ref plus literal E.164 number;
+it stores no carrier credentials. Publication activates these routes in the same transaction that
+switches the definition's web routes, and publishing a later revision deactivates the earlier
+revision's routes. A tenant-scoped service lookup is constrained to that tenant. An
+application-scoped lookup may cross tenants only when service and number identify exactly one
+published route; zero or multiple matches fail closed. This gives authenticated ingress a durable
+definition-selection boundary without using caller identity or a provider leg ID as the route.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

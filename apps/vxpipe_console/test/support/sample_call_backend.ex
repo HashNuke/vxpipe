@@ -153,6 +153,7 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
       compiled_metadata: %{"entry_caller" => "caller"},
       validation_errors: [],
       routes: routes,
+      telephony_routes: [],
       published_at: nil,
       inserted_at: ~U[2026-09-09 13:00:00.000000Z]
     }

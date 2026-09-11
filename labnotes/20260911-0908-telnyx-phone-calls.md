@@ -298,3 +298,54 @@ mix credo --strict
 mix deps.unlock --check-unused
 VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55434/vxpipe_test mix test
 ```
+
+## Checkpoint 7: published inbound telephony routes
+
+Definition persistence previously created only opaque browser participant routes. An inbound phone
+webhook therefore had no durable, provider-neutral way to select a published definition and entry
+participant after its configured service had been authenticated.
+
+The Calls domain now derives a `TelephonyRoute` for each non-web human connection with
+`receive`/`start_call` intent. It binds tenant, configured service ref, literal E.164 destination,
+participant ref, and immutable definition revision without storing carrier credentials or a
+provider leg. Web routes remain a separate type because their opaque join key and lookup contract
+are different.
+
+Publication activates web and telephony routes together and disables both kinds from the previous
+revision. Tenant-scoped lookup can select only that tenant. Application-scoped lookup requires
+exactly one published match across tenants; an ambiguous number/service pair fails closed rather
+than guessing. A new Ecto table and migration preserve the same behavior in PostgreSQL.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/definitions_test.exs
+# failed because DefinitionRevision had no telephony_routes and the resolver did not exist
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55434/vxpipe_test \
+  mix test test/vxpipe/persistence/definition_store_test.exs
+# compilation failed because the Ecto adapter could not construct the strengthened revision
+```
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/definitions_test.exs
+# 6 tests, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55434/vxpipe_test \
+  mix test test/vxpipe/persistence/definition_store_test.exs
+# 3 tests, 0 failures
+```
+
+The first Ecto green attempt exposed a duplicate `select` while adding the tenant scope to the base
+query. Removing the redundant projection left the base query's bounded two-row ambiguity check
+intact. This checkpoint still does not create or start a call from the route, and it does not own a
+provider leg; those remain the next checkpoint.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella test gates all passed against the same isolated PostgreSQL 17 instance.

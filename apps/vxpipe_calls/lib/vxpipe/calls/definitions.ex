@@ -9,7 +9,8 @@ defmodule Vxpipe.Calls.Definitions do
     ParticipantRoute,
     PrivateMaterial,
     PublicId,
-    Repositories
+    Repositories,
+    TelephonyRoute
   }
 
   @maximum_attempts 4
@@ -76,6 +77,24 @@ defmodule Vxpipe.Calls.Definitions do
     end
   end
 
+  @spec resolve_telephony_route(
+          :application | {:tenant, String.t()},
+          String.t(),
+          String.t(),
+          keyword()
+        ) :: {:ok, TelephonyRoute.t()} | {:error, term()}
+  def resolve_telephony_route(scope, service, number, options \\ []) do
+    with :ok <- telephony_scope(scope),
+         true <- is_binary(service) and byte_size(service) > 0,
+         true <- is_binary(number) and byte_size(number) > 0,
+         {:ok, repository} <- Repositories.fetch(options, :definition_repository) do
+      Repositories.call(repository, :resolve_telephony_route, [scope, service, number])
+    else
+      false -> {:error, :invalid_telephony_route}
+      {:error, _reason} = error -> error
+    end
+  end
+
   defp attempt_save(_repository, _tenant_key, _definition_id, _source, _options, 0),
     do: {:error, :revision_generation_exhausted}
 
@@ -86,6 +105,7 @@ defmodule Vxpipe.Calls.Definitions do
            CallDefinition.new(source, resource_id: definition_id, revision: revision_number) do
       validation_errors = validate_support(definition, tenant_key, options)
       routes = participant_routes(definition, tenant_key, options)
+      telephony_routes = telephony_routes(definition, tenant_key)
 
       revision = %DefinitionRevision{
         tenant_key: tenant_key,
@@ -97,6 +117,7 @@ defmodule Vxpipe.Calls.Definitions do
         compiled_metadata: compiled_metadata(definition),
         validation_errors: validation_errors,
         routes: routes,
+        telephony_routes: telephony_routes,
         published_at: nil,
         inserted_at: now(options)
       }
@@ -157,6 +178,40 @@ defmodule Vxpipe.Calls.Definitions do
     end)
     |> Enum.sort_by(& &1.participant_ref)
   end
+
+  defp telephony_routes(definition, tenant_key) do
+    definition.participants
+    |> Enum.filter(fn {_ref, participant} -> inbound_telephony?(participant.connection) end)
+    |> Enum.map(fn {participant_ref, participant} ->
+      connection = participant.connection
+
+      %TelephonyRoute{
+        tenant_key: tenant_key,
+        definition_id: definition.resource_id,
+        definition_revision: definition.revision,
+        participant_ref: participant_ref,
+        service: connection.service,
+        number: connection.number,
+        published_at: nil
+      }
+    end)
+    |> Enum.sort_by(& &1.participant_ref)
+  end
+
+  defp inbound_telephony?(%{
+         service: service,
+         mode: :receive,
+         admission: :start_call,
+         number: number
+       })
+       when is_binary(service) and is_binary(number),
+       do: true
+
+  defp inbound_telephony?(_connection), do: false
+
+  defp telephony_scope(:application), do: :ok
+  defp telephony_scope({:tenant, tenant_key}) when is_binary(tenant_key), do: :ok
+  defp telephony_scope(_invalid), do: {:error, :invalid_telephony_route}
 
   defp compiled_metadata(definition) do
     participants =

@@ -3,7 +3,7 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
 
   alias Vxpipe.Calls.{Administration, Definitions}
   alias Vxpipe.Persistence.{CredentialStore, DefinitionStore, Repo}
-  alias Vxpipe.Persistence.Schema.{DefinitionRevision, ParticipantRoute}
+  alias Vxpipe.Persistence.Schema.{DefinitionRevision, ParticipantRoute, TelephonyRoute}
 
   @tenant_key "AAAAAAAAAAAAAAAA"
   @key_id "11111111-1111-4111-8111-111111111111"
@@ -13,12 +13,13 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
       credential_repository: {CredentialStore, Repo},
       definition_repository: {DefinitionStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
-      uuid_generator: sequence([
-        @key_id,
-        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-        "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
-      ]),
+      uuid_generator:
+        sequence([
+          @key_id,
+          "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        ]),
       api_key_generator: fn -> "vxp_test-secret-value" end,
       registries: registries()
     ]
@@ -47,7 +48,9 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
     changed = Map.put(definition_input(), :name, "Second")
 
     assert {:ok, second} =
-             Definitions.save(tenant.key, changed,
+             Definitions.save(
+               tenant.key,
+               changed,
                Keyword.put(options, :definition_id, first.definition_id)
              )
 
@@ -94,6 +97,46 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
              )
   end
 
+  test "persists and resolves only published inbound telephony routes", %{
+    tenant: tenant,
+    options: options
+  } do
+    assert {:ok, draft} = Definitions.save(tenant.key, phone_definition_input(), options)
+    assert draft.routes == []
+    assert [route] = draft.telephony_routes
+    assert Repo.aggregate(TelephonyRoute, :count) == 1
+
+    assert {:error, :route_unavailable} =
+             Definitions.resolve_telephony_route(
+               :application,
+               route.service,
+               route.number,
+               options
+             )
+
+    assert {:ok, _published} =
+             Definitions.publish(tenant.key, draft.definition_id, draft.revision, options)
+
+    assert {:ok, resolved} =
+             Definitions.resolve_telephony_route(
+               {:tenant, tenant.key},
+               route.service,
+               route.number,
+               options
+             )
+
+    assert resolved.participant_ref == "caller"
+    assert resolved.definition_revision == draft.revision
+
+    assert {:ok, ^resolved} =
+             Definitions.resolve_telephony_route(
+               :application,
+               route.service,
+               route.number,
+               options
+             )
+  end
+
   defp sequence(values) do
     key = {__MODULE__, make_ref()}
     Process.put(key, values)
@@ -134,5 +177,14 @@ defmodule Vxpipe.Persistence.DefinitionStoreTest do
         }
       }
     }
+  end
+
+  defp phone_definition_input do
+    put_in(definition_input(), [:participants, "caller", :connection], %{
+      service: "primary-phone",
+      mode: "receive",
+      admission: "start_call",
+      number: "+15550001000"
+    })
   end
 end

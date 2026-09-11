@@ -129,6 +129,86 @@ defmodule Vxpipe.Calls.DefinitionsTest do
     assert Enum.map(draft.routes, & &1.participant_ref) == ["caller"]
   end
 
+  test "publishes an inbound phone route resolved through its configured service", %{
+    tenant: tenant,
+    other_tenant: other_tenant,
+    options: options
+  } do
+    source =
+      put_in(definition_input(), [:participants, "caller", :connection], %{
+        service: "primary-phone",
+        mode: "receive",
+        admission: "start_call",
+        number: "+15550001000"
+      })
+
+    assert {:ok, draft} = Definitions.save(tenant.key, source, options)
+    assert draft.routes == []
+
+    assert [route] = draft.telephony_routes
+    assert route.service == "primary-phone"
+    assert route.number == "+15550001000"
+    assert route.participant_ref == "caller"
+
+    assert {:error, :route_unavailable} =
+             Definitions.resolve_telephony_route(
+               :application,
+               "primary-phone",
+               "+15550001000",
+               options
+             )
+
+    assert {:ok, _published} =
+             Definitions.publish(tenant.key, draft.definition_id, draft.revision, options)
+
+    assert {:ok, resolved} =
+             Definitions.resolve_telephony_route(
+               {:tenant, tenant.key},
+               "primary-phone",
+               "+15550001000",
+               options
+             )
+
+    assert resolved.definition_id == draft.definition_id
+    assert resolved.definition_revision == draft.revision
+
+    assert {:ok, ^resolved} =
+             Definitions.resolve_telephony_route(
+               :application,
+               "primary-phone",
+               "+15550001000",
+               options
+             )
+
+    assert {:ok, other_draft} = Definitions.save(other_tenant.key, source, options)
+
+    assert {:ok, _other_published} =
+             Definitions.publish(
+               other_tenant.key,
+               other_draft.definition_id,
+               other_draft.revision,
+               options
+             )
+
+    assert {:error, :route_unavailable} =
+             Definitions.resolve_telephony_route(
+               :application,
+               "primary-phone",
+               "+15550001000",
+               options
+             )
+
+    assert {:ok, other_resolved} =
+             Definitions.resolve_telephony_route(
+               {:tenant, other_tenant.key},
+               "primary-phone",
+               "+15550001000",
+               options
+             )
+
+    assert other_resolved.tenant_key == other_tenant.key
+  end
+
   defp registries do
     %{
       capability_profiles: %{

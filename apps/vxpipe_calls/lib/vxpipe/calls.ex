@@ -27,6 +27,9 @@ defmodule Vxpipe.Calls do
   def resolve_participant_route(tenant_key, route_key, options \\ []),
     do: Definitions.resolve_route(tenant_key, route_key, options)
 
+  def resolve_telephony_route(scope, service, number, options \\ []),
+    do: Definitions.resolve_telephony_route(scope, service, number, options)
+
   def prepare_call(principal, participant_key, initial_variables, options \\ []),
     do: Admissions.prepare(principal, participant_key, initial_variables, options)
 

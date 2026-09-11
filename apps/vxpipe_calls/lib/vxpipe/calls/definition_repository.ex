@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.DefinitionRepository do
   @moduledoc "Persistence port for immutable definitions and deployment routes."
 
-  alias Vxpipe.Calls.{DefinitionRevision, ParticipantRoute}
+  alias Vxpipe.Calls.{DefinitionRevision, ParticipantRoute, TelephonyRoute}
 
   @type context :: term()
 
@@ -19,4 +19,10 @@ defmodule Vxpipe.Calls.DefinitionRepository do
               {:ok, DefinitionRevision.t()} | {:error, term()}
   @callback resolve_route(context(), String.t(), String.t()) ::
               {:ok, ParticipantRoute.t()} | {:error, :route_unavailable}
+  @callback resolve_telephony_route(
+              context(),
+              :application | {:tenant, String.t()},
+              String.t(),
+              String.t()
+            ) :: {:ok, TelephonyRoute.t()} | {:error, :route_unavailable}
 end

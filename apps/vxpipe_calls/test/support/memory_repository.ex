@@ -3,7 +3,16 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
 
   def start_link(_options) do
     Agent.start_link(fn ->
-      %{tenants: %{}, keys: %{}, definitions: %{}, routes: %{}, calls: %{}, tokens: %{}, admissions: %{}}
+      %{
+        tenants: %{},
+        keys: %{},
+        definitions: %{},
+        routes: %{},
+        telephony_routes: [],
+        calls: %{},
+        tokens: %{},
+        admissions: %{}
+      }
     end)
   end
 
@@ -87,7 +96,12 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
           end)
 
         {{:ok, %{revision | routes: routes}},
-         %{state | definitions: definitions, routes: Map.merge(state.routes, route_records)}}
+         %{
+           state
+           | definitions: definitions,
+             routes: Map.merge(state.routes, route_records),
+             telephony_routes: state.telephony_routes ++ revision.telephony_routes
+         }}
       end
     end)
   end
@@ -97,7 +111,10 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
       with {:ok, revisions} <- Map.fetch(state.definitions, {tenant_key, definition_id}),
            {:ok, revision} <- Map.fetch(revisions, revision_number) do
         routes = routes_for(state, tenant_key, definition_id, revision_number)
-        {:ok, %{revision | routes: routes}}
+        telephony_routes =
+          telephony_routes_for(state, tenant_key, definition_id, revision_number)
+
+        {:ok, %{revision | routes: routes, telephony_routes: telephony_routes}}
       else
         :error -> {:error, :not_found}
       end
@@ -128,12 +145,47 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
             {route_key, route}
           end)
 
+        telephony_routes =
+          Enum.map(state.telephony_routes, fn route ->
+            same_definition? =
+              route.tenant_key == tenant_key and route.definition_id == definition_id
+
+            cond do
+              same_definition? and route.definition_revision == revision_number ->
+                %{route | published_at: published_at}
+
+              same_definition? ->
+                %{route | published_at: nil}
+
+              true ->
+                route
+            end
+          end)
+
         published = %{revision | published_at: revision.published_at || published_at}
         definitions = Map.put(state.definitions, {tenant_key, definition_id}, Map.put(revisions, revision_number, published))
         result_routes = routes_for(%{state | routes: routes}, tenant_key, definition_id, revision_number)
 
-        {{:ok, %{published | routes: result_routes}},
-         %{state | definitions: definitions, routes: routes}}
+        result_telephony_routes =
+          telephony_routes_for(
+            %{state | telephony_routes: telephony_routes},
+            tenant_key,
+            definition_id,
+            revision_number
+          )
+
+        {{:ok,
+          %{
+            published
+            | routes: result_routes,
+              telephony_routes: result_telephony_routes
+          }},
+         %{
+           state
+           | definitions: definitions,
+             routes: routes,
+             telephony_routes: telephony_routes
+         }}
       else
         :error -> {{:error, :not_found}, state}
       end
@@ -145,6 +197,21 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
       case Map.fetch(state.routes, route_key) do
         {:ok, %{tenant_key: ^tenant_key, published_at: %DateTime{}} = route} -> {:ok, route}
         _missing_or_draft -> {:error, :route_unavailable}
+      end
+    end)
+  end
+
+  def resolve_telephony_route(agent, scope, service, number) do
+    Agent.get(agent, fn state ->
+      matches =
+        Enum.filter(state.telephony_routes, fn route ->
+          route.service == service and route.number == number and
+            match_scope?(route, scope) and match?(%DateTime{}, route.published_at)
+        end)
+
+      case matches do
+        [route] -> {:ok, route}
+        _none_or_ambiguous -> {:error, :route_unavailable}
       end
     end)
   end
@@ -276,6 +343,18 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
     |> Enum.sort_by(& &1.participant_ref)
   end
+
+  defp telephony_routes_for(state, tenant_key, definition_id, revision_number) do
+    state.telephony_routes
+    |> Enum.filter(fn route ->
+      route.tenant_key == tenant_key and route.definition_id == definition_id and
+        route.definition_revision == revision_number
+    end)
+    |> Enum.sort_by(& &1.participant_ref)
+  end
+
+  defp match_scope?(_route, :application), do: true
+  defp match_scope?(route, {:tenant, tenant_key}), do: route.tenant_key == tenant_key
 
   defp token_binding(token, tenant_key, call_id, participant_key, participant_ref) do
     if token.tenant_key == tenant_key and token.call_id == call_id and
