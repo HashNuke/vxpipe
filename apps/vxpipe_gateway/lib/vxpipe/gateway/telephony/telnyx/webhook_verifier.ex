@@ -20,6 +20,19 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookVerifier do
   def verify(%Webhook{}, _invalid_options),
     do: {:error, :invalid_webhook_verifier_configuration}
 
+  @doc false
+  @spec validate_configuration(keyword()) ::
+          :ok | {:error, :invalid_webhook_verifier_configuration}
+  def validate_configuration(options) when is_list(options) do
+    case verifier_config(options) do
+      {:ok, _config} -> :ok
+      :error -> {:error, :invalid_webhook_verifier_configuration}
+    end
+  end
+
+  def validate_configuration(_invalid_options),
+    do: {:error, :invalid_webhook_verifier_configuration}
+
   defp verifier_config(options) do
     with {:ok, options} <-
            Keyword.validate(options,

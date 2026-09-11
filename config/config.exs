@@ -85,6 +85,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
       maximum_audio_packets: 500
     ],
     room_creation: [enabled: false],
+    telephony: [enabled: false],
     cors: [
       allowed_origins: [],
       allowed_methods: ["GET", "POST", "PATCH", "OPTIONS"],

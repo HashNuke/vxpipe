@@ -19,6 +19,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
         call_admission: [],
         cors: [],
         room_creation: [],
+        telephony: [],
         webrtc: []
       )
 
@@ -28,6 +29,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
           cors: Keyword.fetch!(options, :cors),
           call_admission: Keyword.fetch!(options, :call_admission),
           room_creation: Keyword.fetch!(options, :room_creation),
+          telephony: Keyword.fetch!(options, :telephony),
           webrtc: Keyword.fetch!(options, :webrtc)
         ),
       path_prefix: prefix_segments(Keyword.fetch!(options, :path_prefix))

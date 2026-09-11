@@ -42,5 +42,7 @@ defmodule Vxpipe.Gateway.HTTP.Cors do
        ]),
        do: true
 
+  defp backend_only_path?(["api", "telephony", "telnyx", _ingress_key, "events"]), do: true
+
   defp backend_only_path?(_path), do: false
 end

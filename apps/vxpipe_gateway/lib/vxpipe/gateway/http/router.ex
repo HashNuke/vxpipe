@@ -5,13 +5,14 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   import Plug.Conn
 
-  alias Vxpipe.Gateway.HTTP.{CallAdmissions, RTVI, Rooms}
+  alias Vxpipe.Gateway.HTTP.{CallAdmissions, RTVI, Rooms, TelnyxEvents}
 
   @impl true
   def init(options) do
     %{
       call_admission: options |> Keyword.get(:call_admission, []) |> CallAdmissions.init(),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
+      telephony: options |> Keyword.get(:telephony, []) |> TelnyxEvents.init(),
       rtvi: options |> Keyword.get(:webrtc, []) |> RTVI.init()
     }
   end
@@ -23,6 +24,16 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   def call(%Plug.Conn{method: "POST", path_info: ["api", "rooms"]} = conn, options) do
     Rooms.create(conn, options.rooms)
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: ["api", "telephony", "telnyx", ingress_key, "events"]
+        } = conn,
+        options
+      ) do
+    TelnyxEvents.handle(conn, options.telephony, ingress_key)
   end
 
   def call(

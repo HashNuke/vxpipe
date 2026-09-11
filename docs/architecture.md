@@ -1007,6 +1007,18 @@ documented premium human variants become `human`, premium machine/silence/fax ou
 meaning, while unrecognized provider hangup causes become generic failure. Outbound initiation and
 other authenticated but unconsumed Voice API events are acknowledged through `ignore`.
 
+Gateway exposes this boundary at
+`POST /api/telephony/telnyx/:ingress_key/events`. The deployment configuration resolves the opaque
+ingress key to one enabled application- or tenant-scoped service, its expected Voice API connection
+ID, and its webhook verifier. Credentials and verifier material remain inside that configured
+service and are never passed to the ingress handler; the handler receives only a safe service
+identity and a common event. The route is backend-only for CORS, limits the untouched request body
+to 128 KiB, authenticates before JSON decoding, and rejects an otherwise valid event whose
+`connection_id` does not match the selected service. Authenticated events outside the consumed
+vocabulary are acknowledged without dispatch. This is only the provider ingress seam: durable
+admission, event deduplication, and exact call/participant/leg correlation are owned by the later
+Calls integration and are not implied by a successful HTTP response.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

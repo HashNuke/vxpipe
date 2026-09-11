@@ -61,10 +61,14 @@ No arbitrary model-supplied numbers, generic outbound routing-policy matrix, aut
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: the provider-neutral adapter contract, Telnyx raw-webhook verifier, and
-bounded Voice API v2 event normalization are implemented with deterministic focused tests.
-Configured service resolution, HTTP mounting, live admission, commands, media, and the runnable
-vendor outcome remain incomplete; do not mark this slice complete.
+Implementation evidence: the provider-neutral adapter contract, Telnyx raw-webhook verifier,
+bounded Voice API v2 event normalization, configured service registry, and raw-body HTTP ingress
+are implemented with deterministic focused tests. The gateway resolves opaque ingress keys to
+application- or tenant-scoped services, authenticates before decoding, bounds request size, rejects
+provider-connection mismatches, and dispatches only safe service identity plus common events.
+Durable service/definition routing, live admission and exact provider-leg correlation through
+Calls, commands, media, and the runnable vendor outcome remain incomplete; do not mark this slice
+complete or check the second implementation item yet.
 
 ## Specification review
 

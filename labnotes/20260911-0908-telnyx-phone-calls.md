@@ -247,3 +247,54 @@ unused-dependency gates passed against an isolated disposable PostgreSQL 17 inst
 
 The HTTP endpoint and service resolver still need to construct the raw webhook, authenticate it,
 then invoke this decoder and dispatch only the resulting common event.
+
+## Checkpoint 6: configured raw-body HTTP ingress
+
+The gateway now mounts `POST /api/telephony/telnyx/:ingress_key/events` as a backend-only provider
+route. An opaque ingress key resolves to one enabled application- or tenant-scoped configured
+service. The resolved service pins the expected Telnyx Voice API connection ID and verifier options,
+but the downstream handler receives only a safe service identity plus the provider-neutral event.
+Inspection of the registry and configured-service structs omits verifier material.
+
+The endpoint deliberately bypasses `Plug.Parsers` only for this exact route. It reads at most
+128 KiB of untouched bytes, extracts exactly one copy of each required Telnyx signature header,
+authenticates those bytes, then performs semantic decoding. A signed malformed document therefore
+reaches the decoder and returns a bounded request error, while body tampering fails authentication.
+An authenticated event whose `connection_id` differs from the configured service is rejected before
+dispatch. Authenticated events outside Vxpipe's consumed vocabulary are acknowledged without
+dispatch so the provider is not encouraged to retry irrelevant status callbacks.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/telnyx_events_test.exs
+# compilation failed because IngressIdentity and the configured ingress boundary did not exist
+```
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/telnyx_events_test.exs
+# 7 tests, 0 failures
+
+mix test test/vxpipe/gateway/http test/vxpipe/gateway/telephony
+# passed after replacing the default anonymous clock closure with an escapable remote function
+```
+
+This checkpoint does not yet create a durable call, deduplicate provider event IDs, or map a Telnyx
+leg to a tenant/call/participant/incarnation/attempt. Those behaviors remain in the Calls-facing
+part of configured service resolution and provider-leg correlation, so milestone checklist item 2
+stays open.
+
+Umbrella verification used a dedicated disposable PostgreSQL 17 instance on port 55434. The
+following root checks all passed, and the container was stopped afterward:
+
+```text
+mix format --check-formatted
+mix compile --warnings-as-errors
+mix credo --strict
+mix deps.unlock --check-unused
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55434/vxpipe_test mix test
+```

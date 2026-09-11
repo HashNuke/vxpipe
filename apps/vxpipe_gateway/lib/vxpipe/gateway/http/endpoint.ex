@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
 
   @behaviour Plug
 
-  alias Vxpipe.Gateway.HTTP.{Cors, Router}
+  alias Vxpipe.Gateway.HTTP.{Cors, Router, TelnyxEvents}
   alias Vxpipe.Gateway.Telemetry, as: GatewayTelemetry
 
   @impl true
@@ -21,6 +21,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
         Router.init(
           call_admission: Keyword.get(options, :call_admission, []),
           room_creation: Keyword.get(options, :room_creation, []),
+          telephony: Keyword.get(options, :telephony, []),
           webrtc: Keyword.get(options, :webrtc, [])
         )
     }
@@ -34,10 +35,18 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
       if conn.halted do
         conn
       else
-        conn
-        |> Plug.Parsers.call(parser_options)
-        |> Router.call(router_options)
+        parse_and_route(conn, parser_options, router_options)
       end
     end)
+  end
+
+  defp parse_and_route(conn, parser_options, router_options) do
+    if TelnyxEvents.route?(conn) do
+      Router.call(conn, router_options)
+    else
+      conn
+      |> Plug.Parsers.call(parser_options)
+      |> Router.call(router_options)
+    end
   end
 end
