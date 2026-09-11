@@ -1168,6 +1168,17 @@ authorized destination before adopting the event's complete carrier identity. A 
 pending attempt unchanged. On success, the owner registers the provider leg before binding media,
 so an early waiting media socket cannot race ahead of subsequent exact-leg event routing. Accepted
 responses use that same registration-before-bind operation.
+Call Engine initiates a dial transfer only through a narrow host-supplied outbound-leg connector.
+The engine resolves the participant's literal number or direct protected creation-time Call
+Variable from the immutable plan, builds one request containing the exact tenant, actor, call,
+room incarnation, participant, service, destination, and AMD mode, and gives the connector only
+the remaining shared transfer deadline. The model continues to select only a participant ref.
+Provider configuration and submission stay behind the embedding transport implementation. A
+successful connector call yields an opaque cleanup handle retained by the pending human
+preparation; expiry or failed preparation disconnects that handle, while successful transfer
+leaves the live transport leg under its transport owner. This boundary lets Gateway implement
+Telnyx today without introducing a Gateway dependency into Call Engine or making Room Authority
+perform network I/O.
 Gateway consumes that token only after validating an RFC-compliant WebSocket upgrade at
 `GET /api/telephony/telnyx/:ingress_key/media/:token`. A wrong ingress key, expired/reused token,
 or malformed token receives the same not-found response. An invalid upgrade does not consume a

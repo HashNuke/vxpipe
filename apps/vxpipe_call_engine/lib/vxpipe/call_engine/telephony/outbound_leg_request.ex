@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
   @derive {Inspect,
            only: [
              :tenant_id,
+             :actor_id,
              :call_id,
              :room_id,
              :incarnation_id,
@@ -15,6 +16,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
            ]}
   @enforce_keys [
     :tenant_id,
+    :actor_id,
     :call_id,
     :room_id,
     :incarnation_id,
@@ -27,6 +29,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
+          actor_id: String.t(),
           call_id: String.t(),
           room_id: String.t(),
           incarnation_id: String.t(),
@@ -41,6 +44,7 @@ defmodule Vxpipe.CallEngine.Telephony.OutboundLegRequest do
     Enum.all?(
       [
         request.tenant_id,
+        request.actor_id,
         request.call_id,
         request.room_id,
         request.incarnation_id,

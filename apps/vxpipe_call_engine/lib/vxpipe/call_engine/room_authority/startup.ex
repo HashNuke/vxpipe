@@ -63,6 +63,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       agent_request_options: Keyword.get(options, :agent_request_options, []),
       mcp_integrations: Keyword.get(options, :mcp_integrations),
       opening_audio: Keyword.fetch!(options, :opening_audio),
+      outbound_leg_connector: Keyword.get(options, :outbound_leg_connector),
       remote_mcp_connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
       remote_mcp_protocol_client: Keyword.get(options, :remote_mcp_protocol_client),
       speech_to_text: Keyword.fetch!(settings, :speech_to_text),

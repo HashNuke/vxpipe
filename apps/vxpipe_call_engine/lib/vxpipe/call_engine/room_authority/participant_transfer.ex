@@ -64,7 +64,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
            destination,
            not previously_activated?,
            initial_messages,
-           state.text_to_speech_runtime
+           state.text_to_speech_runtime,
+           deadline_ms
          ) do
       {:ok, task} ->
         remaining_ms = max(deadline_ms - System.monotonic_time(:millisecond), 0)

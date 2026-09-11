@@ -44,5 +44,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Authorizer do
        }),
        do: true
 
+  defp transferable_destination?(%{
+         kind: :human,
+         connection: %{service: service, mode: :dial, admission: :transfer}
+       })
+       when is_binary(service),
+       do: true
+
   defp transferable_destination?(_destination), do: false
 end

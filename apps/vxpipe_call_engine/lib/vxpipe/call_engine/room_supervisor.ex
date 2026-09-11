@@ -329,6 +329,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       remote_mcp_connection_provider:
         Keyword.get(runtime_options, :remote_mcp_connection_provider),
       remote_mcp_protocol_client: Keyword.get(runtime_options, :remote_mcp_protocol_client),
+      outbound_leg_connector: Keyword.get(runtime_options, :outbound_leg_connector),
       media_policy_ceiling:
         Keyword.get(runtime_options, :media_policy_ceiling, MediaPolicy.inherit())
     ]

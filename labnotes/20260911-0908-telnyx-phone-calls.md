@@ -1247,3 +1247,55 @@ pass. The first umbrella run hit the previously recorded room-incarnation teardo
 in the unchanged Call Engine create-room test. Its owning three-test file and all 348 Call Engine
 tests passed immediately at the same seed. A clean umbrella repeat then passed all seven
 lanes—741 tests with zero failures—against the isolated PostgreSQL 17 test instance.
+
+## Checkpoint 33: provider-neutral phone-transfer preparation
+
+The transfer runtime previously authorized only agents and web human destinations, so the new
+supervised outbound owner could not be reached from a real transfer tool call without putting
+Gateway/Telnyx knowledge into Call Engine. The first end-to-end engine test failed because the
+neutral outbound request lacked the actor identity needed for the eventual ordinary connection
+attachment; after adding it, the transfer still failed before contacting the fake connector because
+the room authorizer correctly remained closed to the not-yet-supported phone destination.
+
+Call Engine now defines a narrow host connector that opens one exact outbound leg and returns an
+opaque cleanup handle. A small request resolver—not Room Authority—reads either the literal number
+or direct protected creation-time Call Variable from the immutable plan and constructs the exact
+tenant, actor, call, room incarnation, destination participant, configured service, destination,
+and current AMD mode. The preparation task passes only the remaining shared transfer deadline.
+Gateway/provider settings and network behavior remain outside the engine.
+
+Phone-specific preparation is isolated in `HumanDestinationPreparer`; the generic destination
+preparer continues to dispatch agent versus human work. A dial/transfer human then uses the same
+pending attachment, private briefing, exact-connection control, privacy commit, and source handoff
+as a web human. The successful test manually represents Gateway's future attached phone session,
+reports media readiness and acceptance from that exact caller process, completes the private
+briefing, and observes promotion without disconnecting the live leg.
+
+A second cleanup test was made red by temporarily omitting the connector cleanup. The unanswered
+attempt failed at the existing one-second minimum transfer deadline but did not notify the fake
+transport. Restoring cleanup made it green: the pending preparation discards its TTS and invokes the
+opaque leg's disconnect callback. Cleanup failure remains best effort and cannot make a stale
+attempt authoritative.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/human_phone_transfer_room_test.exs \
+  test/vxpipe/call_engine/human_web_transfer_room_test.exs \
+  test/vxpipe/call_engine/call_definition/telephony_connection_compiler_test.exs
+# 10 tests, 0 failures
+
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/outgoing_leg_test.exs
+# 3 tests, 0 failures
+```
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check all
+pass. The first umbrella run hit the existing asynchronous Telnyx Opus test's two-second receive
+window; its unchanged owning file immediately passed both tests at the same seed. A clean umbrella
+repeat then passed all seven lanes—743 tests with zero failures—against the isolated PostgreSQL 17
+test instance.
+
+Gateway still needs to implement the connector, attach an outbound media session through the
+ordinary engine API, and let only that exact session report media readiness and press-1 acceptance.

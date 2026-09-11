@@ -152,6 +152,16 @@ whose opaque internal leg ID locates the existing owner and whose service/from/t
 the pinned request. Mismatches do not consume the reservation. Successful response or event
 adoption registers the exact provider leg before releasing media, closing the early-media routing
 race without a retry. Transfer readiness, press-1, and cleanup remain pending.
+Call Engine now opens a configured phone transfer through a provider-neutral host connector rather
+than a Gateway dependency. It resolves a literal or protected creation-time Call Variable from the
+pinned plan, includes exact actor/call/room-incarnation/participant/service identity, and gives the
+connector only the remaining shared transfer deadline. The connector's opaque handle is retained by
+the pending human preparation and disconnected if preparation fails or the destination never
+accepts; a completed transfer leaves the leg under its transport owner. The same room-authoritative
+private briefing, exact attached-connection acceptance, policy commit, and source handoff path now
+accepts dial/transfer human participants. A deterministic engine test proves protected-number
+resolution, one outbound request, private briefing and promotion, plus deadline cleanup. Gateway's
+connector implementation and automatic phone media/DTMF control remain pending.
 
 ## Specification review
 

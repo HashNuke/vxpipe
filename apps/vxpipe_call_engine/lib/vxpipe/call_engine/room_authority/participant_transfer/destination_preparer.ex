@@ -2,11 +2,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
   @moduledoc false
 
   alias Vxpipe.CallEngine.PlanStartup
-  alias Vxpipe.CallEngine.PlanStartup.{AgentDestination, HumanDestination}
+  alias Vxpipe.CallEngine.PlanStartup.AgentDestination
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, ParticipantPreparation, Startup}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
+    HumanDestinationPreparer,
     HumanPreparation,
     Preparation,
     Runtime
@@ -17,6 +18,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
   @type failure_reason ::
           :destination_participant_unavailable
           | :destination_plan_unavailable
+          | :destination_connection_unavailable
           | :destination_text_to_speech_unavailable
 
   @spec prepare(
@@ -25,7 +27,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
           Participant.t(),
           boolean(),
           [Vxpipe.AgentRuntime.Message.t()],
-          nil | Vxpipe.CallEngine.TextToSpeechRuntime.t()
+          nil | Vxpipe.CallEngine.TextToSpeechRuntime.t(),
+          integer()
         ) ::
           {:ok, Preparation.t() | HumanPreparation.t()} | {:error, failure_reason()}
   def prepare(
@@ -34,15 +37,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
         %Participant{} = participant,
         first_activation?,
         initial_messages,
-        source_text_to_speech
+        source_text_to_speech,
+        deadline_ms
       )
-      when is_boolean(first_activation?) and is_list(initial_messages) do
+      when is_boolean(first_activation?) and is_list(initial_messages) and
+             is_integer(deadline_ms) do
     case participant.kind do
       :agent ->
         prepare_agent(request, runtime, participant, first_activation?, initial_messages)
 
       :human ->
-        prepare_human(request, runtime, participant, source_text_to_speech)
+        HumanDestinationPreparer.prepare(
+          request,
+          runtime,
+          participant,
+          source_text_to_speech,
+          deadline_ms
+        )
     end
   end
 
@@ -53,25 +64,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
 
       {:error, _reason} ->
         {:error, :destination_plan_unavailable}
-    end
-  end
-
-  defp prepare_human(request, runtime, participant, source_text_to_speech) do
-    with %Vxpipe.CallEngine.TextToSpeechRuntime{} <- source_text_to_speech,
-         {:ok, %HumanDestination{} = destination} <-
-           PlanStartup.human_destination(runtime.plan, participant),
-         {:ok, text_to_speech} <-
-           Startup.prepare_text_to_speech(
-             source_text_to_speech,
-             participant.participant_id,
-             request.incarnation_id,
-             Keyword.fetch!(runtime.startup_options, :owner)
-           ) do
-      {:ok, %HumanPreparation{destination: destination, text_to_speech: text_to_speech}}
-    else
-      nil -> {:error, :destination_text_to_speech_unavailable}
-      {:error, %Vxpipe.CallEngine.Error{}} -> {:error, :destination_plan_unavailable}
-      {:error, _reason} -> {:error, :destination_text_to_speech_unavailable}
     end
   end
 

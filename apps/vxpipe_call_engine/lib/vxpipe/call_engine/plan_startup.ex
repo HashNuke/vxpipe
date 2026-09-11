@@ -139,12 +139,29 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   end
 
   def human_destination(
+        %ResolvedCallPlan{} = plan,
+        %ResolvedCallPlan.Participant{
+          kind: :human,
+          connection: %ConnectionIntent{
+            service: service,
+            mode: :dial,
+            admission: :transfer
+          }
+        } = participant
+      )
+      when is_binary(service) do
+    with {:ok, command} <- participant_command(plan, participant) do
+      {:ok, %HumanDestination{participant: participant, command: command}}
+    end
+  end
+
+  def human_destination(
         %ResolvedCallPlan{},
         %ResolvedCallPlan.Participant{} = participant
       ) do
     unsupported(
       ["participants", participant.definition_key, "connection"],
-      "must be a web receive/transfer human participant"
+      "must be a supported receive/transfer or dial/transfer human participant"
     )
   end
 

@@ -121,6 +121,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
   defp request do
     %OutboundLegRequest{
       tenant_id: "tenantkey1234567",
+      actor_id: "actor-outbound",
       call_id: "call-outbound",
       room_id: "room-outbound",
       incarnation_id: "rinc-outbound",

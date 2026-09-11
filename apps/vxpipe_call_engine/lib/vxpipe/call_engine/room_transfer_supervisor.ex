@@ -34,7 +34,8 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
           Participant.t(),
           boolean(),
           [Vxpipe.AgentRuntime.Message.t()],
-          nil | TextToSpeechRuntime.t()
+          nil | TextToSpeechRuntime.t(),
+          integer()
         ) ::
           {:ok, Task.t()} | {:error, :unavailable}
   def prepare(
@@ -44,9 +45,11 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
         %Participant{} = destination,
         first_activation?,
         initial_messages,
-        source_text_to_speech
+        source_text_to_speech,
+        deadline_ms
       )
-      when is_boolean(first_activation?) and is_list(initial_messages) do
+      when is_boolean(first_activation?) and is_list(initial_messages) and
+             is_integer(deadline_ms) do
     task =
       Task.Supervisor.async_nolink(
         via(incarnation_id),
@@ -58,7 +61,8 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
           destination,
           first_activation?,
           initial_messages,
-          source_text_to_speech
+          source_text_to_speech,
+          deadline_ms
         ]
       )
 

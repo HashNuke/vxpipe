@@ -283,6 +283,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
       } ->
         true
 
+      %{
+        kind: :human,
+        connection: %{service: service, mode: :dial, admission: :transfer}
+      }
+      when is_binary(service) ->
+        true
+
       _other ->
         false
     end
