@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
 
   @derive {Inspect, only: [:name, :conversation_mode]}
   @enforce_keys [:name, :conversation_mode, :handler]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [usage_integration_id: nil]
 
   @type handler ::
           {:host, module()}
@@ -20,7 +20,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   @type t :: %__MODULE__{
           name: String.t(),
           conversation_mode: :blocking | :non_blocking,
-          handler: handler()
+          handler: handler(),
+          usage_integration_id: String.t() | nil
         }
 
   @spec from_resolved(ToolBinding.t()) :: {:ok, t()} | {:error, :invalid_binding}
@@ -92,7 +93,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
           name: name,
           type: :mcp,
           conversation_mode: conversation_mode,
-          remote: %ResolvedTool{}
+          remote: %ResolvedTool{} = remote
         },
         owner
       )
@@ -102,7 +103,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
        %__MODULE__{
          name: name,
          conversation_mode: conversation_mode,
-         handler: {:remote_mcp, owner}
+         handler: {:remote_mcp, owner},
+         usage_integration_id: remote.integration_id
        }}
     else
       {:error, :invalid_binding}
@@ -166,10 +168,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   def valid?(%__MODULE__{
         name: name,
         conversation_mode: conversation_mode,
-        handler: {:remote_mcp, owner}
+        handler: {:remote_mcp, owner},
+        usage_integration_id: integration_id
       }) do
     is_binary(name) and name != "" and conversation_mode in [:blocking, :non_blocking] and
-      server_ref?(owner)
+      server_ref?(owner) and is_binary(integration_id) and integration_id != "" and
+      byte_size(integration_id) <= 256
   end
 
   def valid?(_binding), do: false

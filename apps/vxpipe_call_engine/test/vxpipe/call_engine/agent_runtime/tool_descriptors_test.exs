@@ -95,7 +95,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
     assert %InvocationBinding{
              name: "customer_lookup",
              conversation_mode: :blocking,
-             handler: {:remote_mcp, ^owner}
+             handler: {:remote_mcp, ^owner},
+             usage_integration_id: "records"
            } = descriptor.binding
 
     refute inspect(descriptor) =~ "remote-owner"

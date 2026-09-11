@@ -235,6 +235,81 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
                     %{outcome: :consumed}}
   end
 
+  test "publishes one private usage boundary for an accepted invocation and its outcome" do
+    {registry, _supervisor} =
+      start_registry(
+        maximum_invocations: 1,
+        lifecycle_target: self(),
+        usage: [call_id: "call-demo", activation_id: "activation-demo"]
+      )
+
+    binding = host_binding(:blocking)
+    invocation_context = context()
+
+    assert {:accepted, :blocking} =
+             InvocationRegistry.submit(
+               registry,
+               binding,
+               %{"value" => "private-value"},
+               invocation_context,
+               "usage-invocation"
+             )
+
+    assert_receive {:vxpipe_usage_observations, capability, [started]}
+    assert capability == self()
+    assert started.call_id == "call-demo"
+    assert started.attribution.activation_id == "activation-demo"
+    assert started.attribution.tool_call_id == "usage-invocation"
+    assert started.outcome == :in_progress
+    assert started.measurement.quantity == 1
+
+    assert {:accepted, :blocking} =
+             InvocationRegistry.submit(
+               registry,
+               binding,
+               %{"value" => "private-value"},
+               invocation_context,
+               "usage-invocation"
+             )
+
+    refute_receive {:vxpipe_usage_observations, ^capability, [%{outcome: :in_progress}]}
+
+    assert_receive {:submitted_host_tool_started, execution, "private-value"}
+    send(execution, :release_submitted_host_tool)
+
+    assert_receive {:vxpipe_usage_observations, ^capability, [completed]}
+    assert completed.attempt_id == started.attempt_id
+    assert completed.outcome == :succeeded
+    assert completed.measurement == nil
+    refute inspect(completed) =~ "private-value"
+  end
+
+  test "retains an unknown usage outcome when an accepted invocation times out" do
+    {registry, _supervisor} =
+      start_registry(
+        maximum_invocations: 1,
+        invocation_timeout_ms: 25,
+        lifecycle_target: self(),
+        usage: [call_id: "call-timeout", activation_id: "activation-timeout"]
+      )
+
+    assert {:accepted, :blocking} =
+             InvocationRegistry.submit(
+               registry,
+               host_binding(:blocking),
+               %{"value" => "private-timeout"},
+               context(),
+               "usage-timeout"
+             )
+
+    assert_receive {:vxpipe_usage_observations, capability, [started]}
+    assert_receive {:submitted_host_tool_started, _execution, "private-timeout"}
+    assert_receive {:vxpipe_usage_observations, ^capability, [terminal]}, 1_000
+    assert terminal.attempt_id == started.attempt_id
+    assert terminal.outcome == :unknown
+    assert terminal.measurement == nil
+  end
+
   defp start_registry(options) do
     activation_id = "act-registry-#{System.unique_integer([:positive])}"
     maximum_invocations = Keyword.fetch!(options, :maximum_invocations)
@@ -245,20 +320,28 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
          activation_id: activation_id, maximum_children: maximum_invocations}
       )
 
-    registry =
-      start_supervised!(
-        {InvocationRegistry,
-         activation_id: activation_id,
-         invocation_supervisor: supervisor,
-         completion_target: self(),
-         maximum_invocations: maximum_invocations,
-         maximum_consumed_invocations: 4,
-         invocation_timeout_ms: 1_000,
-         maximum_result_bytes: 4_096}
-      )
+    registry_options = [
+      activation_id: activation_id,
+      invocation_supervisor: supervisor,
+      completion_target: self(),
+      maximum_invocations: maximum_invocations,
+      maximum_consumed_invocations: 4,
+      invocation_timeout_ms: Keyword.get(options, :invocation_timeout_ms, 1_000),
+      maximum_result_bytes: 4_096
+    ]
+
+    registry_options =
+      registry_options
+      |> put_optional(:lifecycle_target, Keyword.get(options, :lifecycle_target))
+      |> put_optional(:usage, Keyword.get(options, :usage))
+
+    registry = start_supervised!({InvocationRegistry, registry_options})
 
     {registry, supervisor}
   end
+
+  defp put_optional(options, _key, nil), do: options
+  defp put_optional(options, key, value), do: Keyword.put(options, key, value)
 
   defp host_binding(conversation_mode) do
     resolved = %ToolBinding{

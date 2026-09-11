@@ -21,7 +21,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
     :started_at,
     :status
   ]
-  defstruct @enforce_keys ++ [completion: nil, lease: nil]
+  defstruct @enforce_keys ++ [completion: nil, lease: nil, usage_attempt: nil]
 
   @type t :: %__MODULE__{}
 
@@ -45,6 +45,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
   @spec same_submission?(t(), InvocationSubmission.t()) :: boolean()
   def same_submission?(%__MODULE__{} = record, %InvocationSubmission{} = submission) do
     record.fingerprint == submission.fingerprint
+  end
+
+  @spec attach_usage(t(), Vxpipe.CallEngine.Usage.ToolAttempt.t()) :: t()
+  def attach_usage(%__MODULE__{usage_attempt: nil} = record, usage_attempt)
+      when is_struct(usage_attempt, Vxpipe.CallEngine.Usage.ToolAttempt) do
+    %{record | usage_attempt: usage_attempt}
   end
 
   @spec finish(t(), InvocationCompletion.t()) :: {:ok, t()} | {:error, :stale_completion}

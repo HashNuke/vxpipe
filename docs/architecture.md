@@ -2703,8 +2703,8 @@ prepared private-briefing capability, matching the pinned participant and option
 same private asynchronous archive path used for model observations stores the facts; no client
 event or raw synthesis text is added. Definition-selected hosted and deterministic tone providers
 publish a safe provider identity. The legacy room command path lacks a pinned call/profile identity
-and remains unobserved rather than fabricating one. Tool and carrier capture remain later parts of
-the usage milestone.
+and remains unobserved rather than fabricating one. Carrier capture remains a later part of the
+usage milestone.
 
 The third runtime capture path covers definition-selected speech-to-text sessions. The resolved
 runtime pins call, participant/optional activation, configured profile, and a safe provider/model
@@ -2732,6 +2732,34 @@ optional activation. Observations include the service interval but omit a Vxpipe
 boundary has no authoritative domain-turn identity. The facts use the same private archive/live-
 inspection path as model and synthesis usage and add no client event, transcript payload, audio, or
 fabricated provider identifier.
+
+The fourth runtime capture path covers every tool invocation accepted by an agent activation's
+supervised invocation registry. Acceptance occurs only after the worker has started and creates a
+fresh local `tlatt_` attempt plus one final, locally measured `invocations` request delta. That
+measurement counts an accepted Vxpipe tool invocation; it is not represented as a remote-provider
+billable request. Reconciliation of the same invocation identity and fingerprint reuses the
+existing work and emits no second start or measurement.
+
+A separate terminal observation records succeeded, failed, or unknown according to the actual
+worker outcome. The existing bounded timeout stays unknown and does not authorize a retry.
+Conversational interruption does not cancel the independently supervised tool, so its later real
+outcome remains observable even when stale conversational output is suppressed. Explicit tool
+cancellation remains deferred and is not inferred from speech interruption or a client-facing
+cancelled-output event.
+
+Tool provider context is deliberately narrow. Host actions use the `host_application` namespace;
+engine-owned platform, transfer, and Call Variables actions use `vxpipe`; remote operations use
+`remote_mcp` plus their pinned configured integration ID. The local tool-call ID remains an
+attribution dimension and is never copied into a provider request/operation/session field. Because
+the remote tool protocol defines no common billing envelope here, arbitrary result metadata is not
+treated as usage or cost and missing provider identifiers remain absent.
+
+The invocation registry delegates usage construction and publication to focused modules and keeps
+only the optional attempt state attached to its ordinary invocation record. Arguments and results
+remain in the existing private tool-history facts; neither is copied into usage observations or
+ordinary struct inspection. `RoomAuthority` accepts the observations only from the exact active
+agent capability or its committed-transfer teardown source, rechecks the call and activation, and
+uses the same private asynchronous archive/live-inspection path without a client usage event.
 
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports

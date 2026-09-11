@@ -11,7 +11,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
     :maximum_invocations,
     :maximum_consumed_invocations,
     :invocation_timeout_ms,
-    :maximum_result_bytes
+    :maximum_result_bytes,
+    :usage
   ]
   defstruct @enforce_keys ++ [records: %{}, order: [], consumed: MapSet.new(), consumed_order: []]
 

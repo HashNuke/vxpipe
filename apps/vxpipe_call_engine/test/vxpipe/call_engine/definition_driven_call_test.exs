@@ -205,6 +205,40 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              }
            } = fact!(facts, :tool_call_completed)
 
+    tool_usage =
+      Enum.filter(facts, fn
+        %Fact{kind: :usage_observed, payload: %{"capability" => "tool"}} -> true
+        _other -> false
+      end)
+
+    assert [started_usage, completed_usage] = tool_usage
+    assert started_usage.payload["outcome"] == "in_progress"
+    assert started_usage.payload["provider"] == %{"name" => "host_application"}
+
+    assert started_usage.payload["measurement"] == %{
+             "component" => "invocations",
+             "mode" => "delta",
+             "provenance" => "locally_measured",
+             "quantity" => 1,
+             "status" => "final",
+             "unit" => "requests"
+           }
+
+    assert completed_usage.payload["outcome"] == "succeeded"
+    refute Map.has_key?(completed_usage.payload, "measurement")
+
+    assert Enum.all?(tool_usage, fn fact ->
+             fact.tenant_id == plan.tenant_id and
+               fact.call_id == plan.call_id and
+               fact.room_id == plan.room_id and
+               fact.incarnation_id == room.incarnation_id and
+               fact.participant_id == receiver.participant_id and
+               fact.activation_id == receiver.activation_id and
+               fact.correlation_id == command.correlation_id and
+               fact.tool_call_id == "tool-private-history" and
+               fact.public_sequence == nil
+           end)
+
     assert %Fact{
              kind: :agent_output_generated,
              public_sequence: 5,
@@ -231,6 +265,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
            end)
 
     assert Enum.any?(facts, &match?(%Fact{kind: :agent_turn_completed, public_sequence: 8}, &1))
+    refute_receive {:vxpipe_event, %{kind: :usage_observed}}
   end
 
   test "archives final audio input and distinguishes generated from delivered output" do

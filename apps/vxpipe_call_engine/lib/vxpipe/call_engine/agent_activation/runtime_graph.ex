@@ -169,6 +169,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
        maximum_consumed_invocations: Keyword.fetch!(options, :maximum_completed_requests),
        invocation_timeout_ms: Keyword.fetch!(options, :tool_invocation_timeout_ms),
        maximum_result_bytes: Keyword.fetch!(options, :maximum_tool_result_bytes),
+       usage: [call_id: Keyword.fetch!(options, :call_id), activation_id: activation_id],
        name: invocation_registry},
       id: :invocation_registry,
       restart: :permanent

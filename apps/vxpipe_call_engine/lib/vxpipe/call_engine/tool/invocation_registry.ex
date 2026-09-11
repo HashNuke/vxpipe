@@ -11,7 +11,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     InvocationRecord,
     InvocationSubmission,
     InvocationSupervisor,
-    InvocationTelemetry
+    InvocationTelemetry,
+    InvocationUsage
   }
 
   alias Vxpipe.CallEngine.Tool.InvocationRegistry.State
@@ -197,6 +198,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
               record
             )
 
+            InvocationUsage.settled(
+              record,
+              state.lifecycle_target,
+              state.completion_target
+            )
+
             notify_completion(state, record.invocation_id)
             {:noreply, state}
 
@@ -224,6 +231,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         )
 
         InvocationLifecycle.settled(state.lifecycle_target, state.completion_target, record)
+        InvocationUsage.settled(record, state.lifecycle_target, state.completion_target)
         notify_completion(state, record.invocation_id)
         {:noreply, state}
 
@@ -266,6 +274,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
         case InvocationSupervisor.begin_invocation(worker) do
           :ok ->
+            record =
+              InvocationUsage.started(
+                record,
+                state.usage,
+                state.lifecycle_target,
+                state.completion_target
+              )
+
             state = State.add(state, record)
 
             InvocationTelemetry.admission(
@@ -326,7 +342,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
              :maximum_invocations,
              :maximum_consumed_invocations,
              :invocation_timeout_ms,
-             :maximum_result_bytes
+             :maximum_result_bytes,
+             :usage
            ]),
          activation_id when is_binary(activation_id) and activation_id != "" <-
            Keyword.get(options, :activation_id),
@@ -346,7 +363,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
            Keyword.get(options, :invocation_timeout_ms),
          maximum_result_bytes
          when is_integer(maximum_result_bytes) and maximum_result_bytes > 0 <-
-           Keyword.get(options, :maximum_result_bytes) do
+           Keyword.get(options, :maximum_result_bytes),
+         {:ok, usage} <- InvocationUsage.configuration(Keyword.get(options, :usage)) do
       {:ok,
        %State{
          invocation_supervisor: invocation_supervisor,
@@ -355,7 +373,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
          maximum_invocations: maximum_invocations,
          maximum_consumed_invocations: maximum_consumed,
          invocation_timeout_ms: invocation_timeout_ms,
-         maximum_result_bytes: maximum_result_bytes
+         maximum_result_bytes: maximum_result_bytes,
+         usage: usage
        }}
     else
       _invalid -> {:error, :invalid_configuration}

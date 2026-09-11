@@ -244,3 +244,52 @@ Green evidence so far:
   874 tests across eight apps, and the unused-dependency check pass.
 
 Tool and carrier observations, persisted settlement/operator totals, and billing lookup remain.
+
+## 2026-09-12: tool-invocation capture
+
+The next boundary is the activation-owned supervised invocation registry, not an arbitrary tool
+implementation or result payload. Once the registry has successfully started a worker, it creates
+one local `tlatt_` attempt and records one locally measured `invocations` request. Reconciliation
+of a duplicate identity/fingerprint returns the existing acceptance without duplicating this
+measurement.
+
+The registry records a separate terminal observation for the worker's real succeeded, failed, or
+unknown outcome. Its bounded timeout therefore stays unknown. Conversation interruption does not
+cancel the independent worker under the approved behavior, so no cancelled usage is fabricated;
+the later worker outcome remains authoritative.
+
+Provider mapping is isolated from attempt projection. Host actions use `host_application`;
+engine-owned platform, transfer, and Call Variables tools use `vxpipe`; remote tools use
+`remote_mcp` with the pinned configured integration ID. Remote result metadata is not a standard
+billing envelope, so it is ignored for usage and no provider operation/request/session ID is
+invented. Tool arguments and results continue through existing private history and never enter the
+usage structs or facts.
+
+`InvocationUsage` owns optional configuration and private publication. `ToolAttempt` owns the safe
+attempt state and observations. `ToolProvider` owns binding-to-namespace mapping. The already-large
+registry gained only lifecycle delegation and an optional attempt on its existing invocation
+record. Room authority reuses exact current/committed-teardown agent source authorization before
+archival.
+
+Red evidence:
+
+- `mix test test/vxpipe/call_engine/usage/tool_attempt_test.exs --max-cases 1` first failed with an
+  undefined `ToolAttempt.start/4`.
+- Terminal and remote namespace cases next failed because the terminal API and safe integration
+  field did not exist.
+- The registry case failed startup with `:invalid_configuration` before its usage contract was
+  accepted.
+- The definition-driven archive assertion identified that `get_current_time` in that fixture is a
+  host-provided action, so its namespace was corrected from `vxpipe` to `host_application`.
+
+Green evidence so far:
+
+- Pure tool attempts: 3 tests, 0 failures.
+- Registry lifecycle: 5 tests, 0 failures, including duplicate suppression and timeout-as-unknown.
+- Relevant descriptor, activation-supervisor, conversation, and definition-driven archive cases
+  pass in a 22-test focused run.
+- Complete Call Engine: 390 tests, 0 failures, 1 existing integration exclusion.
+- Root gates: formatting, warnings-as-errors compilation, strict Credo over 685 source files, all
+  879 tests across eight apps, and the unused-dependency check pass.
+
+Carrier observations, persisted settlement/operator totals, and billing enrichment remain.

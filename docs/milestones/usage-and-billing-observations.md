@@ -1,8 +1,8 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation/settlement plus successful, failed, or cancelled model,
-text-to-speech, and speech-to-text attempt capture into the private archive are implemented
-(2026-09-11); tool/carrier boundaries, operator totals, and billing enrichment remain. Specification review:
+Status: in progress. Typed observation/settlement plus model, text-to-speech, speech-to-text, and
+tool attempt capture into the private archive are implemented (2026-09-12); carrier boundaries,
+operator totals, and billing enrichment remain. Specification review:
 approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
@@ -208,8 +208,39 @@ Implementation evidence (2026-09-11, speech-to-text session checkpoint):
   formatting, warnings-as-errors compilation, strict Credo over 682 source files, all 874 tests
   across the eight umbrella apps, and the unused-dependency check.
 
-This remains a partial milestone. Tool and carrier capture, persisted settlement/operator totals,
-and billing enrichment are not claimed yet.
+At that point the milestone remained partial: tool and carrier capture, persisted
+settlement/operator totals, and billing enrichment were not claimed yet.
+
+Implementation evidence (2026-09-12, tool-invocation checkpoint):
+
+- Each invocation accepted by an activation's supervised tool registry now receives one distinct
+  local `tlatt_` attempt identity. Its start observation counts exactly one locally measured
+  `invocations` request; a duplicate submission with the same invocation identity/fingerprint
+  reuses the existing work and emits no second observation.
+- Terminal observations preserve the actual worker outcome as succeeded, failed, or unknown. A
+  bounded timeout remains unknown rather than being rewritten as a failure or retried. Ordinary
+  conversational interruption still does not cancel a tool worker, so accounting follows the
+  invocation's eventual outcome instead of the interrupted output turn.
+- The tool binding supplies only a safe namespace: host actions use `host_application`, engine
+  platform/transfer/Call Variables actions use `vxpipe`, and remote tools use `remote_mcp` plus
+  their pinned configured integration ID. No arbitrary remote result metadata is interpreted as
+  provider usage, and no provider request/session ID is manufactured.
+- Usage observations contain no arguments or results. Existing private tool history retains those
+  payloads under its own visibility/storage contract; the usage facts correlate by tool-call ID,
+  participant activation, and source turn. Room authority reuses its exact active/teardown agent
+  source check and emits no client usage event.
+- Red evidence: the pure attempt test first failed on the absent `ToolAttempt` module; terminal and
+  remote namespace cases then failed on the absent terminal API and binding metadata; registry
+  integration failed configuration on the absent usage contract. An archive assertion also caught
+  and corrected an inaccurate test expectation that a host-provided action was engine-provided.
+- Focused green evidence: 3 pure attempt tests plus 2 registry lifecycle cases pass; the relevant
+  binding, activation, conversation, and private archive checks pass. The complete Call Engine
+  suite passes 390 tests with one existing integration exclusion. All root gates pass: formatting,
+  warnings-as-errors compilation, strict Credo over 685 source files, all 879 tests across the
+  eight umbrella apps, and the unused-dependency check.
+
+This remains a partial milestone. Carrier capture, persisted settlement/operator totals, and
+billing enrichment are not claimed yet.
 
 ## Specification review
 
