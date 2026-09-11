@@ -425,3 +425,19 @@
 - This checkpoint deliberately does not register the capability or media ingress with the room
   barrier yet. Queue purge, planned-room wiring, and revision-aware transcript projection are the
   next behavior checkpoint.
+
+## 2026-09-11 — policy-gated STT ingress
+
+- Added the ingress revision test before implementation. The red run terminated the ingress with
+  an unmatched media-policy call, proving that the bounded input queue was not an enforcer.
+- `Media.Ingress` now applies monotonic snapshots, derives per-source STT demand, and atomically
+  clears queued and in-flight bookkeeping for every revision before acknowledging the barrier.
+- When the opening gate is open but policy demand is false, audio is accepted and discarded. This
+  preserves the connection while preventing denied audio from entering a provider session. A
+  provider request that races with a restrictive transition can return `:policy_denied` without
+  terminating ingress.
+- A later revision with either a permitted live transcript recipient or permitted transcript
+  storage admits only new audio. The focused test proves that one queued frame and one denied-
+  interval frame never reach the transport, while post-relaxation audio does.
+- The focused ingress suite passes six tests. Barrier registration and source-revision transcript
+  projection remain separate work, so no broader milestone acceptance item is claimed yet.

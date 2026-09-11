@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
 
   @call_timeout 1_000
 
@@ -61,13 +62,15 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
          participant_id: Keyword.fetch!(options, :participant_id),
          connection_id: Keyword.fetch!(options, :connection_id)
        },
-       input_admission: Keyword.get(options, :input_admission, :open),
+       opening_input_admission: Keyword.get(options, :input_admission, :open),
        in_flight: nil,
        maximum_age_ms: Keyword.fetch!(options, :maximum_age_ms),
        maximum_bytes: Keyword.fetch!(options, :maximum_bytes),
        maximum_consecutive_overflows: Keyword.fetch!(options, :maximum_consecutive_overflows),
        maximum_frames: Keyword.fetch!(options, :maximum_frames),
        owner: Keyword.get(options, :owner),
+       policy: nil,
+       policy_demand?: true,
        queue: :queue.new(),
        track_id: nil,
        total_bytes: 0
@@ -75,14 +78,31 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   @impl true
-  def handle_call(:open, _from, state), do: {:reply, :ok, %{state | input_admission: :open}}
+  def handle_call(:open, _from, state) do
+    {:reply, :ok, %{state | opening_input_admission: :open}}
+  end
+
+  def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
+    case Snapshot.validate_transition(snapshot, state.policy) do
+      :ok ->
+        demand? = SpeechToTextDemand.required?(snapshot, state.identity.participant_id)
+        {:reply, :ok, install_policy(state, snapshot, demand?)}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:vxpipe_apply_media_policy, _invalid}, _from, state) do
+    {:reply, {:error, :invalid_policy}, state}
+  end
 
   def handle_call({:push, frame}, _from, state) do
     cond do
       not same_connection?(frame, state.identity) ->
         {:reply, {:error, :wrong_connection}, state}
 
-      state.input_admission != :open ->
+      not input_open?(state) ->
         {:reply, :ok, state}
 
       not accepted_track?(frame, state.track_id) ->
@@ -164,6 +184,26 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   def handle_info(
+        {:vxpipe_stt_audio_result, capability, reference, sequence_number,
+         {:error, :policy_denied}},
+        %{
+          capability: capability,
+          in_flight: %{reference: reference, sequence_number: sequence_number} = in_flight
+        } = state
+      ) do
+    notify_owner(state.owner, {:dropped, :policy, sequence_number})
+
+    state = %{
+      state
+      | in_flight: nil,
+        total_bytes: state.total_bytes - in_flight.bytes
+    }
+
+    dispatch_if_idle(state)
+    {:noreply, state}
+  end
+
+  def handle_info(
         {:vxpipe_stt_audio_result, capability, reference, _sequence_number, {:error, _reason}},
         %{capability: capability, in_flight: %{reference: reference}} = state
       ) do
@@ -203,6 +243,22 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   defp stale?(frame, state) do
     state.clock.() - frame.received_at > state.maximum_age_ms
+  end
+
+  defp input_open?(state) do
+    state.opening_input_admission == :open and state.policy_demand?
+  end
+
+  defp install_policy(state, snapshot, demand?) do
+    %{
+      state
+      | consecutive_overflows: 0,
+        in_flight: nil,
+        policy: snapshot,
+        policy_demand?: demand?,
+        queue: :queue.new(),
+        total_bytes: 0
+    }
   end
 
   defp same_connection?(frame, identity) do

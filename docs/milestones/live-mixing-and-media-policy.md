@@ -275,6 +275,15 @@ revision replacement, and sequence reuse. The Call Engine suite passes 322 tests
 integration exclusion. Ingress purge, barrier registration, and revision-aware transcript
 projection remain the next checkpoint, so this primitive alone does not close the checklist item.
 
+The bounded STT ingress now enforces the same revision snapshots independently of the provider
+session. Applying any revision atomically discards its queued and in-flight bookkeeping before the
+barrier acknowledges it. When that source has neither a permitted live transcript recipient nor
+permitted transcript storage, later audio is accepted and dropped at the connection boundary
+rather than entering the provider queue or ending the connection. A later revision that restores
+demand permits new audio without replaying anything from the denied interval. The focused ingress
+suite passes six tests. Planned-room barrier registration and revision-aware transcript projection
+remain open, so the broader checklist item is still not complete.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

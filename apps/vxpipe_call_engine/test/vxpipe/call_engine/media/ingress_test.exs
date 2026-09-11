@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Media.{AudioFrame, Ingress}
+  alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
 
@@ -161,6 +162,51 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :media_overloaded}
   end
 
+  test "purges queued audio and gates later input at each media-policy revision" do
+    {capability, transport} = start_capability(send_mode: :manual)
+
+    ingress =
+      start_supervised!(
+        {Ingress,
+         @identity ++
+           [
+             capability: capability,
+             maximum_frames: 3,
+             maximum_bytes: 32,
+             maximum_age_ms: 1_000,
+             maximum_consecutive_overflows: 2,
+             owner: self(),
+             clock: fn -> 1_000 end
+           ]}
+      )
+
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
+    assert_receive {:test_stt_audio, ^transport, <<1>>}
+    assert :ok = Ingress.push(ingress, audio_frame(2, <<2>>))
+
+    assert :ok = Enforcer.apply(ingress, snapshot(0, ["part-human"], %{}, false), 500)
+    TestSpeechToTextTransport.allow_audio(transport)
+    _ = :sys.get_state(ingress)
+    refute_receive {:test_stt_audio, ^transport, <<2>>}
+
+    assert :ok = Ingress.push(ingress, audio_frame(3, <<3>>))
+    refute_receive {:test_stt_audio, ^transport, <<3>>}
+
+    routes = %{"part-human" => MapSet.new(["part-recipient"])}
+
+    assert :ok =
+             Enforcer.apply(
+               ingress,
+               snapshot(1, ["part-human", "part-recipient"], routes, false),
+               500
+             )
+
+    assert :ok = Ingress.push(ingress, audio_frame(4, <<4>>))
+    assert_receive {:test_stt_audio, ^transport, <<4>>}
+    TestSpeechToTextTransport.allow_audio(transport)
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 4}}
+  end
+
   defp start_capability(transport_options \\ []) do
     assert {:ok, provider} =
              Flux.new(
@@ -201,5 +247,18 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
         ]
 
     struct!(AudioFrame, Keyword.merge(fields, overrides))
+  end
+
+  defp snapshot(revision, present, transcript_routes, save_transcripts) do
+    %Snapshot{
+      revision: revision,
+      present_participant_ids: MapSet.new(present),
+      effective: %Effective{
+        audio_routes: :unrestricted,
+        transcript_routes: transcript_routes,
+        record_audio: true,
+        save_transcripts: save_transcripts
+      }
+    }
   end
 end
