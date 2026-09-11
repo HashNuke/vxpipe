@@ -177,3 +177,18 @@ gates also passed against an isolated disposable PostgreSQL 17 instance.
 The verifier is not yet mounted on an HTTP route. The next checkpoint preserves raw Plug request
 bytes, normalizes the supported Telnyx event envelope, and proves verification precedes decoding at
 the ingress boundary.
+
+## Checkpoint 4: authenticated ignored events
+
+Telnyx delivers lifecycle/status events that Vxpipe may authenticate correctly but deliberately not
+consume, including outbound initiation and streaming-status callbacks. Returning an adapter error
+for these events would conflate valid input with malformed input and could invite unnecessary provider
+retries. The common adapter contract now accepts a closed `:ignore` result only after webhook
+verification has succeeded. It remains invalid adapter output in any other shape.
+
+The focused red test observed `{:error, :invalid_adapter_response}` where the new contract required
+`:ignore`; after the contract change all five adapter tests pass. This prepares the Telnyx event
+decoder to acknowledge unconsumed event types without inventing corresponding room events.
+
+The complete umbrella format, warnings-as-errors compile, strict Credo, default test, and
+unused-dependency gates passed against an isolated disposable PostgreSQL 17 instance.

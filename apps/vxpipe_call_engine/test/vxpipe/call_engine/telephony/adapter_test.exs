@@ -122,6 +122,20 @@ defmodule Vxpipe.CallEngine.Telephony.AdapterTest do
     end
   end
 
+  test "acknowledges an authenticated provider event that the platform does not consume" do
+    config = %{observer: self(), signature: "valid"}
+
+    webhook = %Webhook{
+      headers: %{"fake-signature" => "valid"},
+      body: "ignored-provider-event",
+      received_at: 1_789_120_000
+    }
+
+    assert :ignore = Adapter.ingest_webhook(TestTelephonyAdapter, config, webhook)
+    assert_receive {:fake_telephony, :verify_webhook, ^webhook}
+    assert_receive {:fake_telephony, :decode_webhook, ^webhook}
+  end
+
   test "rejects malformed adapter output before it reaches room control" do
     dial = %Dial{
       leg_id: "leg-outbound",

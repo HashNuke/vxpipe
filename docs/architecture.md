@@ -983,9 +983,11 @@ outcome is deliberately not a retry instruction. Raw webhook bytes and normalize
 intact until the adapter verifies them, and the common wrapper will not decode an unverified body.
 Adapters emit only the closed normalized lifecycle vocabulary: incoming, answered, media started,
 media packet, DTMF, answering-machine result, and ended. Sparse or malformed adapter results fail at
-this boundary before room control sees them. Provider media remains a packet with its authenticated
-codec/clock/sequence metadata until a Membrane gateway pipeline converts it into the existing room
-PCM clock; raw carrier packets do not enter Room Authority.
+this boundary before room control sees them. An authenticated provider event outside that consumed
+vocabulary returns an explicit `ignore` outcome so the gateway can acknowledge it without treating it
+as an actionable event or asking the carrier to retry it. Provider media remains a packet with its
+authenticated codec/clock/sequence metadata until a Membrane gateway pipeline converts it into the
+existing room PCM clock; raw carrier packets do not enter Room Authority.
 
 The Telnyx gateway boundary authenticates the untouched request body before any event decoding.
 It verifies the base64 Ed25519 signature over `timestamp <> "|" <> raw_body` with the configured

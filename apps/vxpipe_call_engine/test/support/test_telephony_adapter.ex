@@ -59,9 +59,13 @@ defmodule Vxpipe.CallEngine.TestTelephonyAdapter do
   end
 
   defp decode_event(body) do
-    case :erlang.binary_to_term(body, [:safe]) do
-      %Event{} = event -> {:ok, event}
-      _other -> {:error, :invalid_event}
+    if body == "ignored-provider-event" do
+      :ignore
+    else
+      case :erlang.binary_to_term(body, [:safe]) do
+        %Event{} = event -> {:ok, event}
+        _other -> {:error, :invalid_event}
+      end
     end
   rescue
     ArgumentError -> {:error, :invalid_event}
