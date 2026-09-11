@@ -1016,8 +1016,8 @@ identity and a common event. The route is backend-only for CORS, limits the unto
 to 128 KiB, authenticates before JSON decoding, and rejects an otherwise valid event whose
 `connection_id` does not match the selected service. Authenticated events outside the consumed
 vocabulary are acknowledged without dispatch. This is only the provider ingress seam: durable
-admission, event deduplication, and exact call/participant/leg correlation are owned by the later
-Calls integration and are not implied by a successful HTTP response.
+admission, event deduplication, and exact call/participant/leg correlation are owned by Calls and
+are not implied by authentication or decoding alone.
 
 Saving a definition now derives a separate durable inbound telephony route for each human
 `receive`/`start_call` connection whose service is not `web`. The route binds the immutable
@@ -1028,6 +1028,18 @@ revision's routes. A tenant-scoped service lookup is constrained to that tenant.
 application-scoped lookup may cross tenants only when service and number identify exactly one
 published route; zero or multiple matches fail closed. This gives authenticated ingress a durable
 definition-selection boundary without using caller identity or a provider leg ID as the route.
+
+Calls claims each normalized incoming event against that published route before a room can start.
+The claim reconstructs and compiles the immutable definition revision with telephony transport,
+generates call/room/participant identities, verifies that the route names the entry caller, and
+persists the call in `admitting` state together with the initial provider leg in one transaction.
+`started_at` remains empty: provider ingress and durable admission do not claim that a live room
+has started. The provider/service/event identity and provider/service/leg identity are independently
+unique. An exact webhook retry returns the existing pinned claim without creating another call;
+reusing an event identifier for a different leg fails closed. The persisted leg retains only safe
+correlation identifiers and never carrier credentials or raw webhook contents. Live ownership and
+room-incarnation correlation are established by the subsequent startup boundary rather than by a
+database lookup for every provider event.
 
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,

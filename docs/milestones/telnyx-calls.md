@@ -65,13 +65,17 @@ Implementation evidence: the provider-neutral adapter contract, Telnyx raw-webho
 bounded Voice API v2 event normalization, configured service registry, and raw-body HTTP ingress
 are implemented with deterministic focused tests. Published inbound telephony routes now pin a
 configured service ref plus literal number to one immutable definition revision and participant;
-tenant lookups remain scoped and ambiguous application-wide matches fail closed. The gateway
+tenant lookups remain scoped and ambiguous application-wide matches fail closed. Calls now claims a
+normalized incoming event against that route, compiles the pinned revision for telephony transport,
+and atomically persists the call in `admitting` state with its provider leg. Exact event/leg retries
+return the original claim, while a reused event ID naming another leg fails closed and rolls back
+the attempted call. `started_at` remains empty until live room startup succeeds. The gateway
 resolves opaque ingress keys to
 application- or tenant-scoped services, authenticates before decoding, bounds request size, rejects
 provider-connection mismatches, and dispatches only safe service identity plus common events.
-Live admission and exact provider-leg correlation through Calls, commands, media, and the runnable
-vendor outcome remain incomplete; do not mark this slice complete or check the second
-implementation item yet.
+Gateway-to-Calls dispatch, live room/incarnation ownership, commands, media, and the runnable vendor
+outcome remain incomplete; do not mark this slice complete or check the second implementation item
+yet.
 
 ## Specification review
 

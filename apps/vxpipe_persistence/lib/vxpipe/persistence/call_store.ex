@@ -6,8 +6,8 @@ defmodule Vxpipe.Persistence.CallStore do
   import Ecto.Query
 
   alias Ecto.Multi
-  alias Vxpipe.Calls.{AdmissionClaim, JoinToken, PreparedCall}
-  alias Vxpipe.Persistence.ResolvedPlanCodec
+  alias Vxpipe.Calls.{AdmissionClaim, JoinToken, TelephonyAdmissionClaim}
+  alias Vxpipe.Persistence.{PreparedCallRecord, TelephonyCallStore}
   alias Vxpipe.Persistence.Schema.{Admission, Call, CallDefinition, Tenant}
   alias Vxpipe.Persistence.Schema.DefinitionRevision, as: StoredRevision
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
@@ -20,7 +20,7 @@ defmodule Vxpipe.Persistence.CallStore do
         fetch_selection(repo, call.tenant_key, call.definition_id, call.definition_revision)
       end)
       |> Multi.insert(:call, fn %{selection: {tenant, _definition, revision}} ->
-        call_changeset(call, tenant, revision)
+        PreparedCallRecord.changeset(call, tenant, revision)
       end)
       |> Multi.insert(:token, fn %{
                                    selection: {tenant, _definition, _revision},
@@ -31,7 +31,7 @@ defmodule Vxpipe.Persistence.CallStore do
 
     case repo.transaction(multi) do
       {:ok, %{call: stored_call, token: stored_token, selection: selection}} ->
-        with {:ok, loaded_call} <- to_prepared_call(stored_call, selection) do
+        with {:ok, loaded_call} <- PreparedCallRecord.load(stored_call, selection) do
           {:ok, loaded_call, to_join_token(stored_token, call.tenant_key, call.id)}
         end
 
@@ -54,7 +54,7 @@ defmodule Vxpipe.Persistence.CallStore do
   def fetch_call(repo, tenant_key, call_id) do
     case fetch_stored_call(repo, tenant_key, call_id) do
       nil -> {:error, :not_found}
-      {call, selection} -> to_prepared_call(call, selection)
+      {call, selection} -> PreparedCallRecord.load(call, selection)
     end
   end
 
@@ -80,6 +80,11 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   @impl true
+  def claim_incoming_telephony(repo, %TelephonyAdmissionClaim{} = claim) do
+    TelephonyCallStore.claim(repo, claim)
+  end
+
+  @impl true
   def claim_join_token(repo, digest, expected_scope, now) do
     repo.transaction(fn ->
       with %StoredToken{} = token <- fetch_token(repo, digest),
@@ -91,7 +96,7 @@ defmodule Vxpipe.Persistence.CallStore do
            {:ok, consumed} <- repo.update(StoredToken.consume_changeset(token, now)),
            {:ok, _admission} <- repo.insert(admission_changeset(call, consumed, now)),
            {:ok, call} <- transition_to_admitting(repo, call),
-           {:ok, prepared_call} <- to_prepared_call(call, selection) do
+           {:ok, prepared_call} <- PreparedCallRecord.load(call, selection) do
         participant = Map.fetch!(prepared_call.plan.participants, token.participant_ref)
 
         %AdmissionClaim{
@@ -194,29 +199,6 @@ defmodule Vxpipe.Persistence.CallStore do
     repo.one(from token in StoredToken, where: token.digest == ^digest, lock: "FOR UPDATE")
   end
 
-  defp call_changeset(call, tenant, revision) do
-    encoded_plan = ResolvedPlanCodec.encode(call.plan)
-
-    Call.changeset(%Call{}, %{
-      public_id: call.id,
-      tenant_id: tenant.id,
-      definition_revision_id: revision.id,
-      participant_routes: call.participant_routes,
-      entry_caller: call.entry_caller,
-      entry_receiver: call.entry_receiver,
-      initial_variables: call.initial_variables,
-      resolved_plan: encoded_plan,
-      plan_digest: call.plan_digest,
-      state: call.state,
-      room_id: call.room_id,
-      created_at: call.created_at,
-      started_at: call.started_at,
-      ended_at: call.ended_at,
-      incarnation_id: call.incarnation_id,
-      terminal_reason: call.terminal_reason
-    })
-  end
-
   defp token_changeset(token, tenant, call) do
     StoredToken.changeset(%StoredToken{}, %{
       public_id: token.id,
@@ -246,32 +228,6 @@ defmodule Vxpipe.Persistence.CallStore do
   end
 
   defp transition_to_admitting(_repo, %Call{} = call), do: {:ok, call}
-
-  defp to_prepared_call(call, {tenant, definition, revision}) do
-    with {:ok, plan} <- ResolvedPlanCodec.decode(call.resolved_plan) do
-      {:ok,
-       %PreparedCall{
-         id: call.public_id,
-         tenant_key: tenant.key,
-         definition_id: definition.public_id,
-         definition_revision: revision.revision,
-         schema_version: revision.schema_version,
-         participant_routes: call.participant_routes,
-         entry_caller: call.entry_caller,
-         entry_receiver: call.entry_receiver,
-         initial_variables: call.initial_variables,
-         plan: plan,
-         plan_digest: call.plan_digest,
-         state: call.state,
-         room_id: call.room_id,
-         created_at: call.created_at,
-         started_at: call.started_at,
-         ended_at: call.ended_at,
-         incarnation_id: call.incarnation_id,
-         terminal_reason: call.terminal_reason
-       }}
-    end
-  end
 
   defp to_join_token(token, tenant_key, call_id) do
     %JoinToken{
@@ -350,7 +306,7 @@ defmodule Vxpipe.Persistence.CallStore do
              ),
            true <- matching_admission?(repo, call, claim),
            {:ok, call} <- transition.(call),
-           {:ok, prepared_call} <- to_prepared_call(call, selection) do
+           {:ok, prepared_call} <- PreparedCallRecord.load(call, selection) do
         prepared_call
       else
         nil -> repo.rollback(:not_found)

@@ -1,14 +1,12 @@
 defmodule Vxpipe.Calls.Admissions do
   @moduledoc "Prepared-call and single-use participant admission workflows."
 
-  alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, ResolvedCallPlan}
-
   alias Vxpipe.Calls.{
     AdmissionClaim,
-    CallPlanCompiler,
     IssuedJoinToken,
     JoinToken,
     PreparedCall,
+    PreparedCallFactory,
     Principal,
     PublicId,
     Repositories
@@ -37,15 +35,10 @@ defmodule Vxpipe.Calls.Admissions do
              route.definition_id,
              route.definition_revision
            ]),
-         {:ok, definition} <-
-           CallDefinition.new(revision.source,
-             resource_id: revision.definition_id,
-             revision: revision.revision
-           ),
-         :ok <- entry_caller(route.participant_ref, definition.entry_caller),
-         {:ok, plan} <- compile_plan(definition, principal, initial_variables, options),
-         {:ok, token_pair} <- build_token(plan, participant_key, route.participant_ref, options),
-         call <- prepared_call(plan, revision.routes, initial_variables, options),
+         {:ok, call} <- PreparedCallFactory.build(revision, initial_variables, :web, options),
+         :ok <- entry_caller(route.participant_ref, call.entry_caller),
+         {:ok, token_pair} <-
+           build_token(call.plan, participant_key, route.participant_ref, options),
          {:ok, stored_call, _stored_token} <-
            Repositories.call(call_repository, :insert_prepared_call, [call, token_pair.stored]) do
       {:ok, stored_call, token_pair.issued}
@@ -132,48 +125,6 @@ defmodule Vxpipe.Calls.Admissions do
 
   def mark_failed(_claim, _reason, _options), do: {:error, :invalid_call_failure}
 
-  defp compile_plan(definition, principal, initial_variables, options) do
-    invocation_input = %{
-      call_definition: %{id: definition.resource_id, revision: definition.revision},
-      initial_variables: initial_variables,
-      transport: %{type: "web"}
-    }
-
-    with {:ok, invocation} <-
-           CallInvocation.new(invocation_input,
-             tenant_id: principal.tenant_key,
-             actor_id: generated_id(options, :actor_id_generator),
-             call_id: generated_id(options, :call_id_generator),
-             room_id: generated_id(options, :room_id_generator)
-           ),
-         {:ok, plan} <- CallPlanCompiler.compile(definition, invocation, options) do
-      {:ok, plan}
-    end
-  end
-
-  defp prepared_call(%ResolvedCallPlan{} = plan, routes, initial_variables, options) do
-    %PreparedCall{
-      id: plan.call_id,
-      tenant_key: plan.tenant_id,
-      definition_id: plan.definition_id,
-      definition_revision: plan.definition_revision,
-      schema_version: plan.schema_version,
-      participant_routes: Map.new(routes, &{&1.key, &1.participant_ref}),
-      entry_caller: plan.entry_caller,
-      entry_receiver: plan.entry_receiver,
-      initial_variables: initial_variables,
-      plan: plan,
-      plan_digest: plan_digest(plan),
-      state: :prepared,
-      room_id: plan.room_id,
-      created_at: now(options),
-      started_at: nil,
-      ended_at: nil,
-      incarnation_id: nil,
-      terminal_reason: nil
-    }
-  end
-
   defp build_token(plan, participant_key, participant_ref, options) do
     with {:ok, ttl_seconds} <- token_ttl(options),
          secret when is_binary(secret) and byte_size(secret) > 0 <-
@@ -231,12 +182,6 @@ defmodule Vxpipe.Calls.Admissions do
       seconds when is_integer(seconds) and seconds >= @default_token_ttl_seconds -> {:ok, seconds}
       _invalid -> {:error, :invalid_join_token_ttl}
     end
-  end
-
-  defp plan_digest(plan) do
-    plan
-    |> :erlang.term_to_binary([:deterministic])
-    |> then(&:crypto.hash(:sha256, &1))
   end
 
   defp token_digest(secret), do: :crypto.hash(:sha256, secret)

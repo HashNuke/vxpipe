@@ -27,7 +27,7 @@ defmodule Vxpipe.CallEngine.CallInvocation do
           definition_id: String.t(),
           definition_revision: pos_integer(),
           initial_variables: map(),
-          transport: :web
+          transport: :web | :telephony
         }
 
   @spec new(map(), keyword()) :: {:ok, t()} | {:error, Vxpipe.CallEngine.Error.t()}
@@ -120,7 +120,13 @@ defmodule Vxpipe.CallEngine.CallInvocation do
            DefinitionValidation.normalize_map(value, [:type], code, message, path),
          {:ok, type_input} <- DefinitionValidation.fetch(input, :type, code, message, path),
          {:ok, type} <-
-           DefinitionValidation.enum(type_input, [web: "web"], code, message, path ++ ["type"]) do
+           DefinitionValidation.enum(
+             type_input,
+             [web: "web", telephony: "telephony"],
+             code,
+             message,
+             path ++ ["type"]
+           ) do
       {:ok, type}
     end
   end

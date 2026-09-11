@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.CallRepository do
   @moduledoc "Persistence port for prepared calls and participant admission credentials."
 
-  alias Vxpipe.Calls.{AdmissionClaim, JoinToken, PreparedCall}
+  alias Vxpipe.Calls.{AdmissionClaim, JoinToken, PreparedCall, TelephonyAdmissionClaim}
 
   @type context :: term()
 
@@ -27,4 +27,9 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @callback mark_call_failed(context(), AdmissionClaim.t(), atom(), DateTime.t()) ::
               {:ok, PreparedCall.t()} | {:error, term()}
+
+  @callback claim_incoming_telephony(context(), TelephonyAdmissionClaim.t()) ::
+              {:ok, TelephonyAdmissionClaim.t()}
+              | {:duplicate, TelephonyAdmissionClaim.t()}
+              | {:error, term()}
 end

@@ -6,6 +6,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
     Admission,
     DefinitionRevision,
     JoinToken,
+    TelephonyLeg,
     Tenant,
     VariableSnapshot
   }
@@ -37,6 +38,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
     belongs_to :definition_revision, DefinitionRevision
     has_many :join_tokens, JoinToken
     has_many :admissions, Admission
+    has_many :telephony_legs, TelephonyLeg
     has_many :variable_snapshots, VariableSnapshot
     belongs_to :latest_variables_snapshot, VariableSnapshot
 

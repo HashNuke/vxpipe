@@ -349,3 +349,63 @@ provider leg; those remain the next checkpoint.
 
 The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
 umbrella test gates all passed against the same isolated PostgreSQL 17 instance.
+
+## Checkpoint 8: atomic incoming provider-leg claim
+
+A verified and normalized incoming event can now select its published telephony route and prepare
+the pinned definition without starting a room. `PreparedCallFactory` owns the common web/telephony
+plan construction so browser admission and carrier admission do not duplicate definition parsing,
+identity generation, compilation, or plan digests. The telephony workflow additionally verifies
+that the routed participant is the entry caller.
+
+The call repository now has one provider-neutral atomic claim operation. The Ecto adapter stores
+the new call in `admitting` state and its initial `telephony_legs` row in one transaction. The row
+retains the configured service plus bounded provider event, connection, control, leg, and session
+identifiers for later live correlation; it contains no credentials or raw provider payload. Both
+provider/service/event ID and provider/service/leg ID are unique. An exact retry returns the
+existing pinned claim without creating another call. Reusing an event ID for a different leg fails
+closed, and the attempted new call is rolled back. Call preparation leaves `started_at` empty;
+room startup owns that timestamp in a later checkpoint.
+
+The persistence refactor kept responsibilities bounded: `PreparedCallRecord` maps between the
+domain call and Ecto record, `TelephonyCallStore` owns the leg-claim transaction and deduplication,
+and the existing `CallStore` delegates instead of absorbing another callback family.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/telephony_admissions_test.exs \
+  test/vxpipe/calls/admissions_test.exs
+# compilation failed because TelephonyAdmissionClaim did not exist
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=ecto://postgres:postgres@127.0.0.1:55434/vxpipe_test \
+  mix test test/vxpipe/persistence/telephony_call_store_test.exs \
+  test/vxpipe/persistence/call_store_test.exs
+# two focused tests failed because CallStore did not implement the claim callback
+```
+
+Focused green evidence after implementation and the SRP extraction:
+
+```text
+cd apps/vxpipe_calls
+mix test test/vxpipe/calls/telephony_admissions_test.exs \
+  test/vxpipe/calls/admissions_test.exs
+# 14 tests, 0 failures
+
+cd apps/vxpipe_persistence
+VXPIPE_TEST_DATABASE_URL=ecto://postgres:postgres@127.0.0.1:55434/vxpipe_test \
+  mix test test/vxpipe/persistence/telephony_call_store_test.exs \
+  test/vxpipe/persistence/call_store_test.exs
+# 18 tests, 0 failures
+```
+
+The first persistence implementation used non-UUID deterministic call and room fixture values,
+which the database correctly rejected as `call_insert_failed`; replacing them with valid UUIDs
+made the fixtures match the public-ID contract. Gateway dispatch into this workflow, room startup,
+and live in-memory incarnation ownership remain the next checkpoint.
+
+The root format, warnings-as-errors compile, strict Credo, unused-dependency, and database-backed
+umbrella test gates passed. The umbrella run covered 682 tests with zero failures and excluded only
+the existing explicitly tagged integration lanes.
