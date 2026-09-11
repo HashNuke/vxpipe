@@ -9,6 +9,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
   @maximum_provider_connection_id_bytes 128
   @maximum_api_key_bytes 4_096
   @maximum_public_url_bytes 2_048
+  @phone_number ~r/\A\+[1-9][0-9]{1,14}\z/
 
   @derive {Inspect, only: [:identity]}
   @enforce_keys [
@@ -16,6 +17,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
     :adapter,
     :adapter_options,
     :media_token_ttl_ms,
+    :outbound_number,
     :public_base_url,
     :verifier_options
   ]
@@ -26,6 +28,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
           adapter: module(),
           adapter_options: keyword(),
           media_token_ttl_ms: pos_integer(),
+          outbound_number: nil | String.t(),
           public_base_url: String.t(),
           verifier_options: keyword()
         }
@@ -41,6 +44,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
              provider_connection_id: nil,
              public_key: nil,
              api_key: nil,
+             outbound_number: nil,
              public_base_url: nil,
              adapter: Adapter,
              media_token_ttl_ms: 60_000,
@@ -57,6 +61,8 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
            ),
          {:ok, api_key} <-
            bounded_string(Keyword.fetch!(options, :api_key), @maximum_api_key_bytes),
+         {:ok, outbound_number} <-
+           optional_phone_number(Keyword.fetch!(options, :outbound_number)),
          {:ok, public_base_url} <- public_base_url(Keyword.fetch!(options, :public_base_url)),
          {:ok, adapter} <- adapter(Keyword.fetch!(options, :adapter)),
          {:ok, media_token_ttl_ms} <-
@@ -81,6 +87,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
            provider_connection_id: provider_connection_id
          },
          media_token_ttl_ms: media_token_ttl_ms,
+         outbound_number: outbound_number,
          public_base_url: public_base_url,
          verifier_options: verifier_options
        }}
@@ -118,6 +125,14 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredService do
 
   defp positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
   defp positive_integer(_invalid), do: :error
+
+  defp optional_phone_number(nil), do: {:ok, nil}
+
+  defp optional_phone_number(value) when is_binary(value) do
+    if Regex.match?(@phone_number, value), do: {:ok, value}, else: :error
+  end
+
+  defp optional_phone_number(_invalid), do: :error
 
   defp public_base_url(value) do
     with {:ok, value} <- bounded_string(value, @maximum_public_url_bytes),

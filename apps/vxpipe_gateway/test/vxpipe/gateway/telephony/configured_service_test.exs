@@ -16,6 +16,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
 
     assert service.public_base_url == "https://voice.example.test/voice"
     assert service.media_token_ttl_ms == 60_000
+    assert service.outbound_number == "+15550001000"
     refute inspect(service) =~ "test-api-key"
   end
 
@@ -30,6 +31,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
             :public_base_url,
             "https://voice.example.test?token=secret"
           ),
+          Keyword.put(valid_options(), :outbound_number, "555-000-1000"),
           Keyword.put(valid_options(), :public_base_url, "not-a-url")
         ] do
       assert {:error, :invalid_telephony_service_configuration} =
@@ -46,6 +48,7 @@ defmodule Vxpipe.Gateway.Telephony.ConfiguredServiceTest do
       provider_connection_id: "voice-application-1",
       public_key: Base.encode64(:binary.copy(<<1>>, 32)),
       api_key: "test-api-key",
+      outbound_number: "+15550001000",
       public_base_url: "https://voice.example.test/voice/"
     ]
   end

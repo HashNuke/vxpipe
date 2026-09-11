@@ -1139,3 +1139,39 @@ pass. The first umbrella run reached the previously recorded 100 ms room-output 
 in the unchanged Gateway media test. Its owning six-test file passed immediately at the same seed;
 a clean umbrella repeat then passed all seven lanes—736 tests with zero failures—against the
 existing isolated PostgreSQL 17 test instance.
+
+## Checkpoint 30: tenant-safe outbound service selection
+
+The dial participant names a configured service but deliberately does not carry a carrier API key,
+provider connection ID, or origination number. The existing Gateway service registry was indexed
+only by its inbound URL key, so an outbound transfer had no tenant-safe way to resolve that service
+reference.
+
+Configured Telnyx services now accept an optional validated E.164 `outbound_number`. It stays in
+deployment configuration and outside the call definition. The registry also indexes a service by
+scope and service ID. Outbound lookup selects an exact tenant-scoped service first, falls back to
+an application-scoped service with the same ID, and never selects another tenant's service.
+Duplicate service IDs are rejected only within the same scope, while ingress keys remain globally
+unique because they occupy one HTTP path namespace.
+
+The tests were first red because `outbound_number` was an unknown option and
+`fetch_for_tenant/3` did not exist. Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/configured_service_test.exs \
+  test/vxpipe/gateway/telephony/service_registry_test.exs \
+  test/vxpipe/gateway/http/telnyx_events_test.exs \
+  test/vxpipe/gateway/call_admission_adapter_test.exs
+# 16 tests, 0 failures
+```
+
+An inbound-only service may omit the origination number. The outbound leg boundary will reject
+that service before submitting a dial rather than weakening inbound configuration or inventing a
+number.
+
+Root formatting, warnings-as-errors compilation, strict Credo, and the unused-dependency check
+pass. Two initial umbrella invocations exited nonzero while their retained tail contained only a
+passing Console lane; the changed Gateway lane independently passed all 162 tests. A failure-focused
+clean umbrella run then passed all seven lanes—738 tests with zero failures—against the isolated
+PostgreSQL 17 test instance.

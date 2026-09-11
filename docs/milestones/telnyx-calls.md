@@ -138,6 +138,10 @@ Accepted Telnyx dial responses now retain call-control, call-leg, and call-sessi
 the common submission contract instead of discarding the identifiers needed to bind the reserved
 media admission. The signed correlated outgoing event remains the fallback when the immediate
 submission is unknown. Outbound leg ownership and dial submission remain pending.
+Configured services can now pin an optional validated E.164 origination number. Outbound service
+selection resolves an exact tenant-scoped service ID before its application-wide fallback and
+cannot select another tenant's configuration. The service ref remains in the call definition while
+credentials, provider connection identity, and the `from` number remain deployment settings.
 
 ## Specification review
 
