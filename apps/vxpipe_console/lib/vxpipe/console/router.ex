@@ -29,6 +29,7 @@ defmodule Vxpipe.Console.Router do
     pipe_through :sample_api
 
     post "/calls", Vxpipe.Console.SampleCallController, :create
+    post "/transfers", Vxpipe.Console.SampleTransferController, :create
   end
 
   scope "/" do

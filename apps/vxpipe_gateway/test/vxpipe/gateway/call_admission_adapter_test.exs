@@ -84,7 +84,26 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
              CallEngine.participant_snapshot(tenant_id, room_id, participant_id)
   end
 
-  defp prepared_call(plan, incarnation_id, started_at) do
+  test "does not let a transfer-only destination start a prepared call" do
+    tenant_id = unique_id("tenant")
+    room_id = unique_id("room")
+    participant_id = unique_id("support")
+    plan = resolved_plan(tenant_id, room_id, participant_id, :transfer)
+
+    claim = %AdmissionClaim{
+      call: prepared_call(plan, nil, nil, :prepared),
+      token_id: unique_id("token"),
+      participant_key: unique_id("route"),
+      participant_ref: "support",
+      participant_id: participant_id,
+      accepted_at: DateTime.utc_now()
+    }
+
+    assert {:join_error, :participant_start_failed} = CallAdmission.start_call([], claim)
+    assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {tenant_id, room_id}) == []
+  end
+
+  defp prepared_call(plan, incarnation_id, started_at, state \\ :running) do
     %PreparedCall{
       id: plan.call_id,
       tenant_key: plan.tenant_id,
@@ -97,9 +116,9 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       initial_variables: %{},
       plan: plan,
       plan_digest: :crypto.hash(:sha256, :erlang.term_to_binary(plan)),
-      state: :running,
+      state: state,
       room_id: plan.room_id,
-      created_at: DateTime.add(started_at, -1, :second),
+      created_at: started_at || DateTime.utc_now(),
       started_at: started_at,
       ended_at: nil,
       incarnation_id: incarnation_id,

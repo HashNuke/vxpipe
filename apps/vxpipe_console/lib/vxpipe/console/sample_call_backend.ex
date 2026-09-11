@@ -10,6 +10,8 @@ defmodule Vxpipe.Console.SampleCallBackend do
   @callback authenticate(term(), String.t(), String.t()) :: {:ok, struct()} | {:error, term()}
   @callback prepare_call(term(), struct(), String.t(), map()) ::
               {:ok, struct(), struct()} | {:error, term()}
+  @callback issue_join_token(term(), struct(), String.t(), String.t()) ::
+              {:ok, struct()} | {:error, term()}
 
   def bootstrap(options, name), do: Calls.bootstrap_tenant(name, [:calls], options)
 
@@ -24,4 +26,7 @@ defmodule Vxpipe.Console.SampleCallBackend do
 
   def prepare_call(options, principal, participant_key, initial_variables),
     do: Calls.prepare_call(principal, participant_key, initial_variables, options)
+
+  def issue_join_token(options, principal, call_id, participant_key),
+    do: Calls.issue_join_token(principal, call_id, participant_key, options)
 end

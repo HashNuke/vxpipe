@@ -10,6 +10,7 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
   @tenant_key "BBBBBBBBBBBBBBBB"
   @definition_id "10000000-0000-4000-8000-000000000001"
   @participant_key "20000000-0000-4000-8000-000000000002"
+  @transfer_participant_key "20000000-0000-4000-8000-000000000006"
   @call_id "30000000-0000-4000-8000-000000000003"
 
   def start_link(options) do
@@ -55,7 +56,7 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
   def publish_definition(agent, tenant_key, definition_id, revision) do
     operation(agent, {:publish_definition, tenant_key, definition_id, revision})
 
-    route = %ParticipantRoute{
+    caller_route = %ParticipantRoute{
       key: @participant_key,
       tenant_key: @tenant_key,
       definition_id: @definition_id,
@@ -64,7 +65,17 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
       published_at: ~U[2026-09-09 13:00:01.000000Z]
     }
 
-    {:ok, %{revision(%{}, [route]) | published_at: route.published_at}}
+    transfer_route = %ParticipantRoute{
+      key: @transfer_participant_key,
+      tenant_key: @tenant_key,
+      definition_id: @definition_id,
+      definition_revision: 1,
+      participant_ref: "human-support",
+      published_at: caller_route.published_at
+    }
+
+    {:ok,
+     %{revision(%{}, [caller_route, transfer_route]) | published_at: caller_route.published_at}}
   end
 
   def authenticate(agent, tenant_key, secret) do
@@ -105,9 +116,30 @@ defmodule Vxpipe.Console.TestSampleCallBackend do
     end
   end
 
+  def issue_join_token(agent, principal, call_id, participant_key) do
+    operation(agent, {:issue_join_token, principal.tenant_key, call_id, participant_key})
+
+    if call_id == @call_id and participant_key == @transfer_participant_key do
+      {:ok,
+       %IssuedJoinToken{
+         id: "50000000-0000-4000-8000-000000000007",
+         secret: "vxj_test-only-transfer-join-token",
+         tenant_key: @tenant_key,
+         call_id: @call_id,
+         participant_key: @transfer_participant_key,
+         participant_ref: "human-support",
+         issued_at: ~U[2026-09-09 13:00:03.000000Z],
+         expires_at: ~U[2026-09-09 13:05:03.000000Z]
+       }}
+    else
+      {:error, :unexpected_transfer_binding}
+    end
+  end
+
   def api_key, do: @api_key
   def call_id, do: @call_id
   def participant_key, do: @participant_key
+  def transfer_participant_key, do: @transfer_participant_key
   def tenant_key, do: @tenant_key
 
   defp revision(source, routes) do

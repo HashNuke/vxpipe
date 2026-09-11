@@ -16,6 +16,10 @@ accepted, not completed: acknowledge that it is running, continue the
 conversation, and do not claim it is ready until the later completion arrives.
 When the caller asks to speak with billing, use the transfer tool with the billing
 destination. Do not claim the transfer completed unless the tool result confirms it.
+When the caller asks to speak with a person or human support, use the transfer tool with
+the human-support destination and give a concise reason that tells the destination who
+is calling and what help they requested. Keep handling the conversation until the tool
+confirms the transfer completed.
 """
 
 sample_billing_prompt = """
@@ -190,7 +194,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
                   conversation_mode: "non_blocking"
                 }
               },
-              transfers: ["billing"],
+              transfers: ["billing", "human-support"],
               variable_permissions: %{
                 "order" => ["read"],
                 "intake" => ["read", "write"]
@@ -209,6 +213,12 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               variable_permissions: %{
                 "order" => ["read"]
               }
+            },
+            "human-support" => %{
+              type: "human",
+              description: "Browser transfer destination",
+              connection: %{service: "web", mode: "receive", admission: "transfer"},
+              transfer_notice: "This is a development sample call."
             }
           },
           limits: %{max_duration_ms: 1_800_000}

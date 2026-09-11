@@ -44,6 +44,35 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   def start_call(options, claim) do
+    participant = Map.fetch!(claim.call.plan.participants, claim.participant_ref)
+
+    if transfer_destination?(participant) do
+      {:join_error, :participant_start_failed}
+    else
+      start_prepared_call(options, claim)
+    end
+  end
+
+  def mark_started(options, claim, incarnation_id, started_at) do
+    Calls.mark_call_started(claim, incarnation_id, started_at, options)
+  end
+
+  def mark_failed(options, claim, reason) do
+    Calls.mark_call_failed(claim, reason, options)
+  end
+
+  defp admit_running_participant(
+         %PreparedCall{} = call,
+         participant
+       ) do
+    if transfer_destination?(participant) do
+      {:transfer_pending, participant}
+    else
+      join_running_participant(call, participant)
+    end
+  end
+
+  defp start_prepared_call(options, claim) do
     case CallEngine.start_call(claim.call.plan, archive: archive_options(options)) do
       {:ok, room} ->
         case CallEngine.participant_snapshot(
@@ -60,23 +89,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
     end
   end
 
-  def mark_started(options, claim, incarnation_id, started_at) do
-    Calls.mark_call_started(claim, incarnation_id, started_at, options)
-  end
-
-  def mark_failed(options, claim, reason) do
-    Calls.mark_call_failed(claim, reason, options)
-  end
-
-  defp admit_running_participant(
-         %PreparedCall{} = _call,
-         %{kind: :human, connection: %{service: :web, mode: :receive, admission: :transfer}} =
-           participant
-       ) do
-    {:transfer_pending, participant}
-  end
-
-  defp admit_running_participant(%PreparedCall{} = call, participant) do
+  defp join_running_participant(%PreparedCall{} = call, participant) do
     with %DateTime{} <- call.started_at,
          incarnation_id when is_binary(incarnation_id) and byte_size(incarnation_id) > 0 <-
            call.incarnation_id,
@@ -95,6 +108,14 @@ defmodule Vxpipe.Gateway.CallAdmission do
       _unavailable -> {:join_error, :participant_start_failed}
     end
   end
+
+  defp transfer_destination?(%{
+         kind: :human,
+         connection: %{service: :web, mode: :receive, admission: :transfer}
+       }),
+       do: true
+
+  defp transfer_destination?(_participant), do: false
 
   defp ttl_options(options, nil), do: options
 

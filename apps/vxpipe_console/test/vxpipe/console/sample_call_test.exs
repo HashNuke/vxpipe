@@ -57,6 +57,38 @@ defmodule Vxpipe.Console.SampleCallTest do
              |> Enum.count(&match?({:bootstrap, _name}, &1))
   end
 
+  test "issues a transfer-destination token only after a sample call is prepared" do
+    backend =
+      start_supervised!(
+        {TestSampleCallBackend, initial_variables: @initial_variables, observer: self()},
+        id: :sample_transfer_backend
+      )
+
+    sample =
+      start_supervised!(
+        {SampleCall,
+         name: :sample_transfer_call,
+         backend: TestSampleCallBackend.backend(backend),
+         definition: @definition,
+         initial_variables: @initial_variables,
+         tenant_name: "Vxpipe transfer sample",
+         transfer_participant: "human-support"}
+      )
+
+    assert {:error, :call_not_prepared} = SampleCall.prepare_transfer(sample)
+    assert {:ok, caller_token} = SampleCall.prepare(sample)
+    assert {:ok, transfer_token} = SampleCall.prepare_transfer(sample)
+
+    assert transfer_token.call_id == caller_token.call_id
+    assert transfer_token.participant_ref == "human-support"
+    assert transfer_token.participant_key == TestSampleCallBackend.transfer_participant_key()
+
+    assert 1 ==
+             backend
+             |> TestSampleCallBackend.operations()
+             |> Enum.count(&match?({:bootstrap, _name}, &1))
+  end
+
   test "reports a disabled sample without exiting the caller" do
     assert {:error, :disabled} = SampleCall.prepare(:sample_call_process_that_is_not_running)
   end

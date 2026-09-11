@@ -99,3 +99,31 @@
   umbrella suite then passed (MCP 37/3 excluded, Agent Runtime 58/2, Call Engine 336/1, Calls 37,
   Persistence 25, Gateway 94/4, and Console 57), and that test instance was stopped afterward
   without touching the existing project test database container.
+
+## Checkpoint: sample transfer admission
+
+- Added the red Console contract for issuing a token to the configured transfer destination of the
+  latest prepared sample call. The first run rejected the new sample option and had no transfer
+  API, as expected.
+- The supervised sample process now resolves and retains the published destination route while
+  keeping its API key private. After caller preparation it can issue a fresh, participant-scoped
+  join token for that same call through the existing Calls workflow. Before any sample call is
+  prepared it returns `call_not_prepared`; an omitted destination keeps this feature disabled. A
+  focused follow-up caught transfer preparation rerunning tenant/definition provisioning; ready
+  sample state now reuses its pinned published routes and the test proves provisioning occurs once.
+- Added same-origin `POST /sample/transfers`. It returns only the public call/participant locator
+  and expiring join token, sends no CORS allowance, and shares the existing admission presenter
+  with caller preparation.
+- A new gateway red test showed that claiming a transfer-only token against a merely prepared call
+  reached the room-start path. Admission now rejects that destination before starting a room;
+  transfer-only participants can receive provisional sessions only after the caller has started
+  the pinned call.
+- The development definition now includes a catalog `human-support` web destination, allows the
+  reception agent to select it with a bounded reason, and configures it as the sample transfer
+  destination. A no-start development check parses all four configured participants successfully.
+- Focused verification: all four sample-process tests, ten Console endpoint tests, and three
+  gateway admission-adapter tests pass.
+- Completion verification passes formatting, warnings-as-errors compilation, strict Credo,
+  unused dependency-lock checks, and the full umbrella suite (MCP 37/3 excluded, Agent Runtime
+  58/2, Call Engine 336/1, Calls 37, Persistence 25, Gateway 95/4, and Console 59). The disposable
+  test database was stopped again after the run.

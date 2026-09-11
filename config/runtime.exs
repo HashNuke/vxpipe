@@ -246,7 +246,8 @@ if config_env() == :dev do
       enabled: true,
       definition: Keyword.fetch!(trusted_call, :definition),
       initial_variables: Keyword.fetch!(trusted_call, :initial_variables),
-      tenant_name: "Vxpipe development sample"
+      tenant_name: "Vxpipe development sample",
+      transfer_participant: "human-support"
   end
 
   console_listener =

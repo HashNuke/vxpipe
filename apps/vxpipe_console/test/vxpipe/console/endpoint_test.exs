@@ -105,6 +105,56 @@ defmodule Vxpipe.Console.EndpointTest do
     assert Plug.Conn.get_resp_header(conn, "access-control-allow-origin") == []
   end
 
+  test "issues the latest sample call's configured transfer locator" do
+    initial_variables = %{"order" => %{"id" => "private-transfer-endpoint-sentinel"}}
+
+    backend =
+      start_supervised!(
+        {TestSampleCallBackend, initial_variables: initial_variables, observer: self()},
+        id: :endpoint_sample_transfer_backend
+      )
+
+    sample =
+      start_supervised!(
+        {SampleCall,
+         backend: TestSampleCallBackend.backend(backend),
+         definition: %{
+           "schema_version" => "20260911.02",
+           "entry_caller" => "caller",
+           "entry_receiver" => "assistant"
+         },
+         initial_variables: initial_variables,
+         tenant_name: "Endpoint transfer sample",
+         transfer_participant: "human-support"},
+        id: :endpoint_sample_transfer_call
+      )
+
+    assert sample == Process.whereis(SampleCall)
+    assert {:ok, _caller_token} = SampleCall.prepare()
+
+    conn =
+      build_conn()
+      |> Plug.Conn.put_req_header("origin", "https://other.example.test")
+      |> post("/sample/transfers", %{})
+
+    assert %{
+             "call_id" => call_id,
+             "join_token" => %{
+               "expires_at" => "2026-09-09T13:05:03.000000Z",
+               "token" => "vxj_test-only-transfer-join-token"
+             },
+             "participant_key" => participant_key,
+             "tenant_key" => tenant_key
+           } = json_response(conn, 201)
+
+    assert call_id == TestSampleCallBackend.call_id()
+    assert participant_key == TestSampleCallBackend.transfer_participant_key()
+    assert tenant_key == TestSampleCallBackend.tenant_key()
+    refute conn.resp_body =~ "private-transfer-endpoint-sentinel"
+    refute conn.resp_body =~ TestSampleCallBackend.api_key()
+    assert Plug.Conn.get_resp_header(conn, "access-control-allow-origin") == []
+  end
+
   test "returns not found when the durable trusted sample is disabled" do
     assert Process.whereis(SampleCall) == nil
 
