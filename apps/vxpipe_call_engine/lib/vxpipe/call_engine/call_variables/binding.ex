@@ -95,16 +95,17 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     end
   end
 
-  @spec projection(t()) :: {:ok, map()} | {:error, :tool_failed}
-  def projection(%__MODULE__{} = binding) do
+  @spec projection(t(), pos_integer()) :: {:ok, map()} | {:error, :tool_failed}
+  def projection(%__MODULE__{} = binding, timeout_ms \\ @command_timeout_ms)
+      when is_integer(timeout_ms) and timeout_ms > 0 do
     options = identity_options(binding)
 
     with {:ok, command} <-
            ReadCallVariables.new(
              options ++
-               [sections: binding.read_sections, deadline: deadline()]
+               [sections: binding.read_sections, deadline: deadline(timeout_ms)]
            ),
-         {:ok, projection} <- CallVariables.read(binding.server, command, @command_timeout_ms) do
+         {:ok, projection} <- CallVariables.read(binding.server, command, timeout_ms) do
       {:ok, projection}
     else
       _error -> {:error, :tool_failed}
@@ -220,5 +221,6 @@ defmodule Vxpipe.CallEngine.CallVariables.Binding do
     {:ok, %{"error" => Error.to_public(error)}}
   end
 
-  defp deadline, do: DateTime.add(DateTime.utc_now(), @command_timeout_ms, :millisecond)
+  defp deadline(timeout_ms \\ @command_timeout_ms),
+    do: DateTime.add(DateTime.utc_now(), timeout_ms, :millisecond)
 end

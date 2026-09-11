@@ -224,3 +224,31 @@
   Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
   Umbrella `mix test` stops before test execution at Persistence database creation because the
   shell has no PostgreSQL password; no credential source was inspected.
+
+## 2026-09-11 — destination model context
+
+- Added the selected transfer room test first. It failed with an empty destination model context,
+  establishing that schema capture alone had not delivered the reason or variables.
+- Added one cohesive Call Engine `ModelContextSource`. Its redacted value retains only the already
+  scoped Call Variables binding and optional transfer reason. It obtains a fresh projection through
+  that binding for every Agent Runtime generation, so the variables owner—not Room Authority or
+  Agent Runtime—continues to enforce participant identity and readable sections.
+- Destination preparation passes the selected request reason into Plan Startup. Runtime graph
+  construction installs the source without putting the reason directly in child options or model
+  messages. The source emits `call_variables` and an optional `transfer.reason`; Agent Runtime owns
+  only generic bounded JSON transport.
+- The selected room fixture declares one billing-readable order section and one reception-only
+  section. Billing receives the order value/revision plus the reason, no reception-only value, and
+  no earlier caller messages. `Inspect` of the model request does not reveal the reason.
+- Extended the existing variable-tool runtime check to prove the first generation sees the initial
+  authorized projection and the private completion generation sees the updated value/global and
+  section revisions. This restores the completed per-generation projection contract on the current
+  ReqLLM runtime path.
+- Call Engine Agent Runtime settings now expose a one-second source timeout and 256 KiB complete
+  encoded model-context limit. The Call Variables call uses the same bounded timeout/deadline.
+- The 25 focused transfer/definition-driven room tests pass. The complete Call Engine suite passes
+  276 tests with one tagged integration exclusion. The complete Agent Runtime suite remains green
+  at 58 tests with two tagged integration exclusions.
+- Root formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  Umbrella `mix test` again stops before test execution at Persistence database creation because
+  the shell has no PostgreSQL password; no credential source was inspected.

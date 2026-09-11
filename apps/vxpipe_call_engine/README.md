@@ -69,8 +69,10 @@ seeds `all_spoken` or the configured `last_n_spoken` window into the destination
 own prompt. `fresh` and `selected` seed no prior messages. A transfer into a `selected` destination
 now requires a non-empty reason of at most 1,024 characters. The descriptor requires it only for
 that destination, and the private transfer request retains it without exposing it through
-inspection. Destination reason delivery, re-entry, and source-capability restoration remain
-unsupported.
+inspection. Each Agent Runtime generation receives a separately bounded transient projection of
+only that participant's readable Call Variables. A selected destination additionally receives the
+transfer reason in that private state, not in conversation history. Re-entry and source-capability
+restoration remain unsupported.
 Schema `20260910.04` added the transfer allowlists and generated binding. Schema `20260910.03`
 added explicitly selected platform
 tools to the participant's unified `tools` map. The fixed initial catalog contains

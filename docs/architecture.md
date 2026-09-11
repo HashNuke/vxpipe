@@ -963,16 +963,21 @@ entry count. At accepted transfer preparation, the room takes one immutable poli
 `all_spoken` supplies all entries, `last_n_spoken` supplies the configured trailing utterance count,
 and `fresh`/`selected` supply no prior messages. Destination startup receives this vetted list
 through the Agent Runtime seed boundary. Later speech during preparation cannot mutate the already
-prepared destination's history. Selected-mode reason delivery and re-entry remain separate
-follow-ups.
+prepared destination's history. Selected-mode transient context is described below; re-entry
+remains a separate follow-up.
 
 For a `selected` destination, the generated transfer schema requires the source agent to provide a
 non-empty transfer reason of at most 1,024 characters. This requirement is destination-specific: a
 single transfer tool can still target ordinary-history destinations without accepting a reason for
 those variants. Call Engine validates the selected variant again while constructing its private
-transfer request and keeps the reason out of `Inspect` and client events. Supplying that reason and
-the destination-readable Call Variables to the destination model remains the next private-context
-checkpoint; schema acceptance alone does not claim delivery.
+transfer request and keeps the reason out of `Inspect` and client events. Plan Startup constructs a
+redacted Call Engine model-context source from the destination's immutable variable binding and
+that reason. Before every destination generation, the source reads through
+`CallVariables.Binding`, so the variables owner independently enforces the pinned participant and
+readable sections. The transient JSON contains `call_variables` and, for selected transfers only,
+`transfer.reason`; it is neither copied into conversation history nor exposed as a client event.
+The application defaults bound this local source call to one second and its complete encoded model
+context to 256 KiB, both configurable through the Call Engine Agent Runtime settings.
 
 The first runtime checkpoint makes this a runnable fresh-history agent-to-agent transfer. The
 activation-owned tool worker constructs a private request and calls Room Authority; Room Authority
@@ -987,9 +992,10 @@ inspection surface.
 
 This checkpoint supports fresh, all-spoken, and bounded-last-spoken destination history and
 implements preparation failure, total-deadline cleanup, duplicate-attempt rejection, and late-result
-exclusion. Selected transfers now require and privately capture a bounded reason, but destination
-reason/variables delivery, re-entry with a fresh activation, and the bounded source-capability
-restoration rule remain follow-up work.
+exclusion. Selected transfers now require and privately deliver a bounded reason alongside only
+the destination-readable variables. Variable projections refresh before every generation, and the
+variable-tool continuation observes its newly accepted revision. Re-entry with a fresh activation
+and the bounded source-capability restoration rule remain follow-up work.
 
 ### Presence-driven media and transcript policy — approved R38
 

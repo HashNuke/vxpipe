@@ -798,6 +798,16 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              "update_variables"
            ]
 
+    assert read_request.model_context == %{
+             "call_variables" => %{
+               "global_revision" => 0,
+               "sections" => %{
+                 "intake" => %{"revision" => 0, "value" => nil},
+                 "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
+               }
+             }
+           }
+
     assert {:ok, read_call} =
              ToolCall.new(
                id: "tool-read-variables",
@@ -872,6 +882,20 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
 
     assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
     assert List.last(completion_request.messages).origin == :engine
+
+    assert completion_request.model_context == %{
+             "call_variables" => %{
+               "global_revision" => 1,
+               "sections" => %{
+                 "intake" => %{
+                   "revision" => 1,
+                   "value" => %{"summary" => "Asked for assistance"}
+                 },
+                 "order" => %{"revision" => 0, "value" => %{"id" => "order-1"}}
+               }
+             }
+           }
+
     assert {:ok, response} = ModelResponse.new(text: "The intake details are saved.")
     send(completion_provider, {:test_agent_runtime_response, {:ok, response}})
 

@@ -28,10 +28,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentTransfer.DestinationPreparer do
   defp destination(request, runtime, initial_messages) do
     participant = Map.fetch!(runtime.plan.participants, request.destination_definition_key)
 
+    options =
+      runtime.startup_options
+      |> Keyword.put(:initial_messages, initial_messages)
+      |> Keyword.put(:transfer_reason, request.reason)
+
     PlanStartup.agent_destination(
       runtime.plan,
       participant,
-      Keyword.put(runtime.startup_options, :initial_messages, initial_messages)
+      options
     )
   end
 

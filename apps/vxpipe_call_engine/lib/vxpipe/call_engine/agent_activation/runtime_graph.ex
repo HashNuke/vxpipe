@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   alias Vxpipe.CallEngine.AgentRuntime.{
     Coordinator,
     InvocationExecutor,
+    ModelContextSource,
     PendingContextSource,
     ToolDescriptors
   }
@@ -180,6 +181,9 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
       tools: tools,
       executor: InvocationExecutor,
       pending_context_source: {PendingContextSource, invocation_registry},
+      maximum_model_context_bytes:
+        Keyword.get(options, :maximum_model_context_bytes, 256 * 1_024),
+      model_context_timeout_ms: Keyword.get(options, :model_context_timeout_ms, 1_000),
       maximum_output_bytes: Keyword.fetch!(options, :maximum_output_bytes),
       maximum_pending_invocations: Keyword.fetch!(options, :maximum_tool_invocations),
       request_timeout_ms: Keyword.fetch!(options, :request_timeout_ms),
@@ -188,7 +192,12 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     ]
 
     session_options =
-      put_optional(session_options, :initial_messages, Keyword.get(options, :initial_messages))
+      session_options
+      |> put_optional(:initial_messages, Keyword.get(options, :initial_messages))
+      |> put_optional(
+        :model_context_source,
+        model_context_source(Keyword.get(options, :model_context_source))
+      )
 
     Supervisor.child_spec(
       {Session, session_options},
@@ -199,6 +208,11 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
 
   defp child_ref(activation_id, role),
     do: AgentActivationSupervisor.child_ref(activation_id, role)
+
+  defp model_context_source(nil), do: nil
+
+  defp model_context_source(%ModelContextSource{} = source),
+    do: {ModelContextSource, source}
 
   defp put_optional(options, _key, nil), do: options
   defp put_optional(options, key, value), do: Keyword.put(options, key, value)

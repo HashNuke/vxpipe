@@ -28,7 +28,7 @@ commit, while the source retains conversation.
 
 - [x] Red-test compiler-derived transfer schema/aliases and runtime source/target authorization.
 - [x] Implement room prepare/commit lifecycle, distinct participant/activation identities, and supervised destination/source ownership.
-- [ ] Integrate private destination history/variable projection and source termination after commit.
+- [x] Integrate private destination history/variable projection and source termination after commit.
 - [ ] Implement total deadline, late-result exclusion, typed failures and single restoration budget.
 - [ ] Emit private transfer history and safe client outcomes without adding new RTVI-core messages.
 
@@ -151,8 +151,19 @@ An optional host source is refreshed before every generation, independently boun
 encoded size, restricted to a JSON object, and excluded from committed conversation. ReqLLM merges
 it with current pending-invocation state in the existing trusted state envelope rather than
 creating a caller or history message. Sixteen focused source, Session, and ReqLLM projection tests
-pass; the complete Agent Runtime suite passes 58 tests with two tagged integration exclusions. Call
-Engine wiring remains unchecked, so selected reason/variables delivery is still open.
+pass; the complete Agent Runtime suite passes 58 tests with two tagged integration exclusions. That
+provider-neutral checkpoint did not itself claim Call Engine delivery.
+
+Call Engine now supplies that source for every agent with readable variables and adds the private
+reason only when preparing a selected-history destination. The source delegates each fresh read to
+the existing permission-enforcing Call Variables binding; it does not hold another mutable snapshot
+or ask Room Authority to authorize values. A selected transfer integration proves the destination
+receives only its readable order section and reason, with no prior source conversation or
+reception-only variable. The existing variable-tool room flow proves a later completion generation
+observes the newly accepted value and revision. The source and ModelRequest inspection surfaces do
+not expose the reason. Twenty-five focused room tests and the complete 276-test Call Engine suite
+pass, each with one tagged integration exclusion where applicable. Selected model-context delivery
+is complete; re-entry and restoration remain open.
 
 ## Specification review
 

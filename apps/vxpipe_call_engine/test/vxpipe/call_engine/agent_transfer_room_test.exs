@@ -215,6 +215,68 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     refute inspect(request) =~ reason
   end
 
+  test "selected history supplies only destination-readable variables and transfer reason" do
+    plan =
+      compile_plan(
+        transfer_history: %{mode: "selected"},
+        selected_variables: true
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    attach_caller(plan, room, caller)
+
+    assert :ok =
+             CallEngine.send_text(
+               send_command(plan, room, caller, "My private reception note must not transfer.")
+             )
+
+    assert_receive {:test_agent_runtime_stream, source_provider, _source_request}
+
+    reason = "The caller needs help understanding invoice 17."
+
+    assert {:ok, transfer_call} =
+             ToolCall.new(
+               id: "selected-context-transfer",
+               name: "transfer",
+               arguments: %{"destination" => "billing", "reason" => reason}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer_call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "selected-context-transfer"}},
+                   2_000
+
+    current = send_command(plan, room, caller, "Can you help with this invoice?")
+    assert :ok = CallEngine.send_text(current)
+
+    {_destination_provider, destination_request} =
+      receive_request_for_prompt("Handle billing requests.")
+
+    assert Enum.map(destination_request.messages, &{&1.role, &1.content}) == [
+             {:system, "Handle billing requests."},
+             {:user, "Can you help with this invoice?"}
+           ]
+
+    assert destination_request.model_context == %{
+             "call_variables" => %{
+               "global_revision" => 0,
+               "sections" => %{
+                 "order" => %{
+                   "revision" => 0,
+                   "value" => %{"id" => "invoice-17"}
+                 }
+               }
+             },
+             "transfer" => %{"reason" => reason}
+           }
+
+    refute inspect(destination_request) =~ reason
+    refute inspect(destination_request.model_context) =~ "private-reception-value"
+  end
+
   test "room authority rejects a stale source activation before destination startup" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
@@ -389,6 +451,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     transfer_timeout_ms = Keyword.get(options, :transfer_timeout_ms, 30_000)
     transfer_history = Keyword.get(options, :transfer_history, %{mode: "fresh"})
 
+    {call_variables, initial_variables, reception_permissions, billing_permissions} =
+      variable_setup(options)
+
     assert {:ok, definition} =
              CallDefinition.new(
                %{
@@ -396,7 +461,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                  entry_caller: "caller",
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},
-                 call_variables: %{sections: %{}},
+                 call_variables: call_variables,
                  transfer_policy: %{attempt_timeout_ms: transfer_timeout_ms},
                  participants: %{
                    "caller" => %{
@@ -413,6 +478,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      first_message: %{mode: "wait_for_input"},
                      capabilities: %{model_inference: "test-model"},
                      tools: %{},
+                     variable_permissions: reception_permissions,
                      transfers: ["billing"]
                    },
                    "billing" => %{
@@ -423,6 +489,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      first_message: %{mode: "wait_for_input"},
                      capabilities: %{model_inference: "billing-model"},
                      tools: %{},
+                     variable_permissions: billing_permissions,
                      transfers: []
                    }
                  },
@@ -436,7 +503,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
              CallInvocation.new(
                %{
                  call_definition: %{id: "transfer-definition", revision: 1},
-                 initial_variables: %{},
+                 initial_variables: initial_variables,
                  transport: %{type: "web"}
                },
                tenant_id: "tenant-transfer",
@@ -463,6 +530,41 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
              })
 
     plan
+  end
+
+  defp variable_setup(options) do
+    if Keyword.get(options, :selected_variables, false) do
+      sections = %{
+        "order" => %{
+          schema: %{
+            "type" => "object",
+            "properties" => %{"id" => %{"type" => "string"}},
+            "additionalProperties" => false
+          }
+        },
+        "reception_private" => %{
+          schema: %{
+            "type" => "object",
+            "properties" => %{"note" => %{"type" => "string"}},
+            "additionalProperties" => false
+          }
+        }
+      }
+
+      initial_variables = %{
+        "order" => %{"id" => "invoice-17"},
+        "reception_private" => %{"note" => "private-reception-value"}
+      }
+
+      {
+        %{sections: sections},
+        initial_variables,
+        %{"reception_private" => ["read"]},
+        %{"order" => ["read"]}
+      }
+    else
+      {%{sections: %{}}, %{}, %{}, %{}}
+    end
   end
 
   defp attach_caller(plan, room, caller) do

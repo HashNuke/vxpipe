@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
 
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.CallVariables.Binding
+  alias Vxpipe.CallEngine.AgentRuntime.ModelContextSource
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan}
@@ -115,6 +116,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       system_prompt: receiver.prompt,
       variable_binding: variable_binding,
       maximum_completed_requests: Keyword.fetch!(settings, :maximum_completed_requests),
+      maximum_model_context_bytes:
+        Keyword.get(settings, :maximum_model_context_bytes, 256 * 1_024),
+      model_context_timeout_ms: Keyword.get(settings, :model_context_timeout_ms, 1_000),
       maximum_output_bytes: Keyword.fetch!(settings, :maximum_output_bytes),
       maximum_pending_requests: Keyword.fetch!(settings, :maximum_pending_requests),
       maximum_tool_result_bytes: Keyword.fetch!(settings, :maximum_tool_result_bytes),
@@ -122,6 +126,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     ]
 
     base
+    |> put_optional(
+      :model_context_source,
+      ModelContextSource.new(variable_binding, Keyword.get(options, :transfer_reason))
+    )
     |> put_optional(:initial_messages, Keyword.get(options, :initial_messages))
     |> put_optional(:mcp_integrations, mcp_integrations)
     |> put_optional(
