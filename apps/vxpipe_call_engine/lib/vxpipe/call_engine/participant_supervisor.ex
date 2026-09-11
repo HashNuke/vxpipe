@@ -40,7 +40,7 @@ defmodule Vxpipe.CallEngine.ParticipantSupervisor do
            Vxpipe.CallEngine.RoomRegistry,
            {:participant_supervisor, tenant_id, room_id, participant_id}
          ) do
-      [{^participant_supervisor, _value}] -> true
+      [{^participant_supervisor, _value}] -> Process.alive?(participant_supervisor)
       _missing_or_replaced -> false
     end
   end

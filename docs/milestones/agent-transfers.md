@@ -324,6 +324,12 @@ gates pass. The rendered console was inspected at desktop and 390 x 844 viewport
 Chromium/CDP because `agent-browser` was unavailable; that substitution is recorded rather than
 claiming the unavailable tool.
 
+A later full-suite run exposed a scheduler-dependent gap in the failed-commit check: Registry could
+briefly return the exact destination supervisor after its `:DOWN` had already been observed. The
+commit guard now requires both exact registry ownership and a live process before admitting the
+prepared participant. The existing killed-before-commit scenario passes 50 consecutive in-VM
+repetitions after the correction; successful commit behavior is unchanged.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

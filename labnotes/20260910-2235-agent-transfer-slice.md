@@ -546,3 +546,16 @@
 - Combined with the green deterministic acceptance suite and complete database-backed umbrella
   gates from the preceding checkpoints, this closes the transfer milestone. Headless Chromium/CDP
   was used because `agent-browser` remains unavailable in this environment.
+
+## 2026-09-11 — stale Registry entry at transfer commit
+
+- The next milestone's complete umbrella run reproduced the killed-before-commit scenario as a
+  failure under broader scheduler load. The test had already received the destination supervisor's
+  `:DOWN`, but Registry still briefly returned that exact PID, so the registry-only commit check
+  admitted a dead destination and published false transfer completion.
+- Kept the existing integration scenario as the red evidence and strengthened the narrow
+  `ParticipantSupervisor.registered?/4` boundary. Exact registry ownership is now necessary but not
+  sufficient; the exact supervisor must also still be alive at the commit check.
+- `mix test test/vxpipe/call_engine/agent_transfer_room_test.exs:554
+  --repeat-until-failure 50 --max-failures 1` passes all 50 in-VM repetitions. This closes the
+  observed stale-registration window without changing normal participant monitoring after commit.
