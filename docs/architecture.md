@@ -987,6 +987,14 @@ this boundary before room control sees them. Provider media remains a packet wit
 codec/clock/sequence metadata until a Membrane gateway pipeline converts it into the existing room
 PCM clock; raw carrier packets do not enter Room Authority.
 
+The Telnyx gateway boundary authenticates the untouched request body before any event decoding.
+It verifies the base64 Ed25519 signature over `timestamp <> "|" <> raw_body` with the configured
+base64 public key and rejects signed timestamps more than five minutes before or after gateway
+receipt. Invalid verifier configuration is kept distinct from an unauthenticated request internally,
+while malformed headers, stale/future timestamps, signature decoding failures, and body tampering
+share one bounded authentication failure. Event decoding and admission cannot run until this check
+succeeds.
+
 The Call Engine runtime now represents a web-human transfer as a generated attempt ID and a
 destination connection with `transfer_preparation` admission. That attachment has no speech input,
 room-audio publication, room-audio subscription, participant snapshot, transcript projection, or

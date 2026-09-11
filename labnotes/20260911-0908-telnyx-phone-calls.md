@@ -138,3 +138,42 @@ application counts remain the same as checkpoint 1.
 
 The next checkpoint is concrete Telnyx webhook verification/normalization and configured service
 resolution. No Telnyx module or network request exists yet.
+
+## Checkpoint 3: raw Telnyx webhook authentication
+
+Current Telnyx documentation and the provider's maintained SDK example confirm that the Mission
+Control webhook public key is base64-encoded, the signature header is a base64 Ed25519 signature,
+and the signed bytes are exactly `timestamp <> "|" <> raw_body`. Telnyx recommends a five-minute
+timestamp tolerance. Vxpipe applies that bound in both directions so a far-future signed timestamp
+cannot extend a replay window. The event ID remains the separate deduplication key for authenticated
+retries.
+
+Red test:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/webhook_verifier_test.exs
+# 4 tests, 4 failures: WebhookVerifier.verify/2 was undefined
+```
+
+`Vxpipe.Gateway.Telephony.Telnyx.WebhookVerifier` now has one responsibility: validate configuration,
+timestamp freshness, signature encoding, and the signature over untouched bytes. It does not parse
+JSON. Configuration failures are distinct internally; every request-authentication failure uses one
+bounded error and reveals no key, signature, header, or body. The tests generate an ephemeral
+Ed25519 key pair and cover the exact five-minute boundary, altered raw bytes, missing/malformed
+headers, stale/future timestamps, and invalid verifier configuration.
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/telephony/telnyx/webhook_verifier_test.exs
+# 4 tests, 0 failures
+```
+
+The umbrella format, warnings-as-errors compile, strict Credo, default test, and unused-dependency
+gates also passed against an isolated disposable PostgreSQL 17 instance.
+
+The verifier is not yet mounted on an HTTP route. The next checkpoint preserves raw Plug request
+bytes, normalizes the supported Telnyx event envelope, and proves verification precedes decoding at
+the ingress boundary.
