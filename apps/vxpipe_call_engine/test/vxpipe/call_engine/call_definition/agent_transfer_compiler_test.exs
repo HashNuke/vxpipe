@@ -100,6 +100,21 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
     assert {:ok, []} = ToolDescriptors.compile(plan.participants["reception"].tools)
   end
 
+  test "rejects an authored tool that collides with the generated transfer alias" do
+    input =
+      put_in(
+        transfer_definition(),
+        [:participants, "reception", :tools],
+        %{"transfer" => %{type: "platform", tool: "hangup"}}
+      )
+
+    assert {:error,
+            %Error{
+              code: :invalid_call_definition,
+              details: %{"path" => ["participants", "reception", "tools", "transfer"]}
+            }} = CallDefinition.new(input, resource_id: "support", revision: 7)
+  end
+
   test "pins a call-level total transfer attempt timeout" do
     assert {:ok, default_definition} =
              transfer_definition()

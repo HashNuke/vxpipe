@@ -424,3 +424,27 @@
   warnings-as-errors compilation, strict Credo, and unused-dependency checks pass. Root `mix test`
   stops at the unchanged Persistence setup failure because PostgreSQL SCRAM authentication needs a
   password absent from this shell; no credential source was inspected.
+
+## 2026-09-11 — automated transfer acceptance consolidation
+
+- Audited each unchecked acceptance clause against its owning boundary instead of treating prior
+  prose as proof. Added direct assertions for authored `transfer` alias rejection, wrong source
+  participant rejection, room/incarnation and entry-ref preservation, stable Call Variables
+  ownership, complete source-subtree shutdown, and suppression of a forged late source text event.
+- Strengthened the controlled deadline flow with a fixed destination greeting. While preparation is
+  blocked, the source participant emits the deterministic default-blocking hold; after expiry and
+  late preparation release, neither the destination greeting nor a completion event appears.
+- Existing focused evidence covers injected targets, duplicate preparation, all four history modes,
+  destination-readable selected variables/reason, generated-but-unplayed exclusion, and rejection
+  of system/tool-bearing Agent Runtime seeds. The focused transfer/compiler/history group passes 22
+  tests, and the focused Agent Runtime seed test passes.
+- Reworded the older “source can converse” acceptance clause to match the later approved tool
+  execution contract. The source retains responsibility throughout preparation, but the generated
+  transfer tool is default-blocking, so later caller turns receive the platform hold without
+  entering either agent's LLM. This changes no runtime behavior.
+- All automated acceptance boxes are now evidence-backed. Manual rendered verification and the
+  common milestone completion gates remain open, so the milestone itself is still partial. The
+  complete Call Engine suite passes 282 tests with one tagged integration exclusion. Root
+  formatting, warnings-as-errors compilation, strict Credo, and unused-dependency checks pass.
+  Root `mix test` stops at the unchanged Persistence setup failure because PostgreSQL SCRAM
+  authentication needs a password absent from this shell; no credential source was inspected.

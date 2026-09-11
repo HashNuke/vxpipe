@@ -16,7 +16,8 @@ now makes at most one bounded room-supervised attempt to restore lost source TTS
 private outcome without exposing the cause. Timed-out startup cleanup is also supervised and
 capacity-bounded, so it cannot block Room Authority while a provider finishes connecting. A
 prepared destination that exits before commit is rejected without transferring authority or
-publishing false completion.
+publishing false completion. Automated acceptance coverage is complete; rendered/manual transfer
+verification and the common completion gates remain.
 The earlier behavior contracts have completed focused review.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on

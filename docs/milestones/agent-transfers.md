@@ -22,7 +22,9 @@ History modes are closed: fresh has no prior model history; all_spoken contains 
 confirmed user/played assistant utterances; last_n_spoken bounds that completed-spoken window;
 selected sends no history, only allowlisted typed variables and an explicit reason. Destination
 preparation may become ready but greeting/TTS/main output stays inaudible to the caller until
-commit, while the source retains conversation.
+commit. The source retains responsibility; because the generated transfer binding is
+default-blocking, later caller turns receive the platform hold response rather than entering either
+agent's LLM until the transfer reaches a terminal continuation.
 
 ## Implementation checklist
 
@@ -35,15 +37,16 @@ commit, while the source retains conversation.
 
 ## Acceptance and failure checks
 
-- [ ] Allowed transfer succeeds; injected target, wrong/stale source, duplicate preparations, and generated-tool alias collision fail before unauthorized startup.
+- [x] Allowed transfer succeeds; injected target, wrong/stale source, duplicate preparations, and generated-tool alias collision fail before unauthorized startup.
 - [x] Destination startup fails or deadline expires: source remains responsible, no completed event, destination cleaned up.
-- [ ] Commit preserves call/variables/entry refs; source capability/tool workers terminate, old output cannot reach new activation.
+- [x] Commit preserves call/variables/entry refs; source capability/tool workers terminate, old output cannot reach new activation.
 - [x] Re-enter agent: same participant ID, new activation, no greeting replay; permitted history only.
 - [x] Restoration attempts exactly once; detailed failure does not leak through speech or full-debug events.
-- [ ] Empty transfers expose no tool. Every history mode excludes private prompts/tool data
+- [x] Empty transfers expose no tool. Every history mode excludes private prompts/tool data
   and generated-but-unplayed text; selected contains only allowed variables/reason.
-- [ ] Block destination preparation: source can converse and destination cannot speak to caller.
-- [ ] One 30s budget starts at accepted preparation across all phases; failed-commit/deadline
+- [x] Block destination preparation: source retains responsibility and serves the configured
+  blocking hold; destination cannot speak to the caller.
+- [x] One 30s budget starts at accepted preparation across all phases; failed-commit/deadline
   races and late completion produce no transfer.completed event or stale destination output.
 
 ## Manual verification
@@ -261,6 +264,24 @@ state. Transfer handling discards the preparation, keeps the source active, expo
 `tool_failed`, and archives the private `destination_commit_unavailable` cause. The focused
 transfer/participant-supervision group passes 13 tests and the complete Call Engine suite passes
 281 tests with one tagged integration exclusion. Root formatting, warnings-as-errors compilation,
+strict Credo, and unused-dependency checks pass. Root `mix test` stops at the unchanged Persistence
+setup failure because PostgreSQL SCRAM authentication needs a password absent from this shell; no
+credential source was inspected.
+
+The automated acceptance consolidation adds direct coverage for the remaining combined checklist
+claims. Authored `transfer` aliases fail at their exact definition path; an injected schema target,
+wrong source participant, stale activation, and duplicate preparation all fail before a second
+destination can start. Successful commit preserves the room/incarnation, Call Variables PID, and
+pinned entry refs while terminating the source participant subtree; a forged late source text event
+is ignored by the new activation's authority boundary. The deadline scenario identifies the source
+on its deterministic hold response and configures a fixed destination greeting, then proves that
+neither that greeting nor completion appears after expired preparation is released. The pure
+projection and Agent Runtime seed tests cover every history mode and reject system/tool-bearing
+history. The focused transfer/compiler/history group passes 22 tests; the focused Agent Runtime seed
+test passes. These checks align the older “source can converse” wording with the subsequently
+approved default-blocking transfer policy. Automated acceptance is complete; rendered/manual
+verification and the common completion gates remain open. The complete Call Engine suite passes
+282 tests with one tagged integration exclusion. Root formatting, warnings-as-errors compilation,
 strict Credo, and unused-dependency checks pass. Root `mix test` stops at the unchanged Persistence
 setup failure because PostgreSQL SCRAM authentication needs a password absent from this shell; no
 credential source was inspected.

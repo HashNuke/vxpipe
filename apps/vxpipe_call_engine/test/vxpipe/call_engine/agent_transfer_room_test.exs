@@ -70,10 +70,15 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                {:agent_activation, reception.activation_id, :supervisor}
              )
 
+    source_capability =
+      AgentActivationSupervisor.whereis_child(reception.activation_id, :coordinator)
+
+    assert is_pid(source_capability)
     source_monitor = Process.monitor(source_activation)
     attach_caller(plan, room, caller)
 
-    assert :ok = CallEngine.send_text(send_command(plan, room, caller, "Please transfer me."))
+    transfer_command = send_command(plan, room, caller, "Please transfer me.")
+    assert :ok = CallEngine.send_text(transfer_command)
 
     assert_receive {:test_agent_runtime_stream, source_provider, source_request}
 
@@ -125,7 +130,26 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert is_pid(AgentActivationSupervisor.whereis_child(billing.activation_id, :session))
     assert CallVariables.whereis(room.incarnation_id) == variables
-    _ = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
+
+    snapshot = RoomAuthority.snapshot(plan.tenant_id, plan.room_id)
+    assert snapshot.tenant_id == room.tenant_id
+    assert snapshot.room_id == room.room_id
+    assert snapshot.incarnation_id == room.incarnation_id
+
+    authority = room_authority(plan)
+    state = :sys.get_state(authority)
+    assert state.agent_transfer_runtime.plan.entry_caller == plan.entry_caller
+    assert state.agent_transfer_runtime.plan.entry_receiver == plan.entry_receiver
+
+    send(
+      authority,
+      {:vxpipe_capability_text, source_capability, transfer_command,
+       "This stale source output must be ignored."}
+    )
+
+    refute_receive {:vxpipe_event,
+                    %TextOutput{text: "This stale source output must be ignored."}},
+                   100
 
     assert {:error, %Vxpipe.CallEngine.Error{code: :participant_not_found}} =
              CallEngine.participant_snapshot(
@@ -311,6 +335,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     request = transfer_request(plan, room, caller, reception, "tool-stale-transfer")
 
+    wrong_source = %{request | source_participant_id: billing.participant_id}
+    assert {:error, :rejected} = RoomAuthority.transfer(wrong_source)
+
     stale_request = %{request | source_activation_id: "act_stale"}
 
     assert {:error, :rejected} = RoomAuthority.transfer(stale_request)
@@ -406,12 +433,15 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     plan =
       compile_plan(
         billing_model: "test:blocked",
+        billing_first_message: %{mode: "fixed", text: "Billing is ready."},
         transfer_timeout_ms: 2_000
       )
 
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
+    reception_participant_id = reception.participant_id
+    billing_participant_id = billing.participant_id
 
     assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
     attach_caller(plan, room, caller)
@@ -452,6 +482,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert_receive {:vxpipe_event,
                     %TextOutput{
+                      participant_id: ^reception_participant_id,
                       correlation_id: held_correlation,
                       text: "Please hold while I finish the current request."
                     }},
@@ -500,6 +531,13 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     send(blocked_preparer, :release_test_agent_runtime_model)
 
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "timed-transfer-to-billing"}},
+                   100
+
+    refute_receive {:vxpipe_event,
+                    %TextOutput{
+                      participant_id: ^billing_participant_id,
+                      text: "Billing is ready."
+                    }},
                    100
 
     assert :ok = CallEngine.send_text(send_command(plan, room, caller, "Are you still there?"))
