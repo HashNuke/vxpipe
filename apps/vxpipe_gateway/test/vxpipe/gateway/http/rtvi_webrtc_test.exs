@@ -187,6 +187,70 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {"tenant-development", room_id})
   end
 
+  test "signals bot departure before closing WebRTC when the room ends" do
+    room_id = "room-webrtc-ended-#{System.unique_integer([:positive, :monotonic])}"
+    session_id = create_room_session(room_id)
+
+    client = start_supervised!({PeerConnection, []})
+    :ok = PeerConnection.controlling_process(client, self())
+
+    {:ok, %DataChannel{ref: client_channel}} =
+      PeerConnection.create_data_channel(client, "chat", ordered: true)
+
+    {:ok, _transceiver} = PeerConnection.add_transceiver(client, :audio, direction: :sendrecv)
+    {:ok, offer} = PeerConnection.create_offer(client)
+    :ok = PeerConnection.set_local_description(client, offer)
+
+    offer_conn =
+      :post
+      |> conn(
+        "/api/rtvi/offer",
+        JSON.encode!(%{
+          "sdp" => offer.sdp,
+          "type" => "offer",
+          "pc_id" => nil,
+          "restart_pc" => false,
+          "requestData" => %{"session_id" => session_id}
+        })
+      )
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(@endpoint_options)
+
+    assert offer_conn.status == 200
+
+    assert %{"pc_id" => connection_id, "sdp" => answer_sdp, "type" => "answer"} =
+             JSON.decode!(offer_conn.resp_body)
+
+    :ok =
+      PeerConnection.set_remote_description(
+        client,
+        %SessionDescription{type: :answer, sdp: answer_sdp}
+      )
+
+    assert_receive {:ex_webrtc, ^client, {:ice_candidate, candidate}}, 5_000
+    patch_candidate(connection_id, candidate)
+    assert_receive {:ex_webrtc, ^client, {:connection_state_change, :connected}}, 5_000
+
+    assert_receive {:ex_webrtc, ^client, {:data_channel_state_change, ^client_channel, :open}},
+                   5_000
+
+    assert [{room, _value}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {"tenant-development", room_id})
+
+    assert [{connection, _value}] =
+             Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, connection_id})
+
+    connection_monitor = Process.monitor(connection)
+    Process.exit(room, :shutdown)
+
+    assert_receive {:ex_webrtc, ^client, {:data, ^client_channel, peer_left}}, 5_000
+
+    assert %{"type" => "signalling", "message" => %{"type" => "peerLeft"}} =
+             JSON.decode!(peer_left)
+
+    assert_receive {:DOWN, ^connection_monitor, :process, ^connection, :shutdown}, 5_000
+  end
+
   test "forwards microphone RTP to speech recognition while agent output is active" do
     configure_audio_capabilities(self())
 

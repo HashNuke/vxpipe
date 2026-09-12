@@ -84,6 +84,13 @@ token. The browser then uses the standard tenant participant-session route; neit
 variables nor the API key cross into it. With persistence absent, the existing database-free
 trusted sample remains runnable.
 
+Pre-delivery terminal-state evidence confirms that an ended room does not enter the deferred
+same-call reconnection path. Gateway sends the Small WebRTC `peerLeft` signal over the established
+RTVI channel before bounded connection shutdown. The unmodified client then performs its normal
+disconnect instead of retrying the already-consumed session, and the development Console returns
+to call creation. A real ExWebRTC boundary test proves signal-before-termination ordering; a
+rendered durable call proved no retry or HTTP 409 after agent hangup.
+
 Acceptance coverage additionally proves all three URL scope components, ended-call rejection,
 separate repeated preparations, unchanged pinned plans after a newer definition publication,
 and an eligible second participant joining an existing room incarnation without room restart or

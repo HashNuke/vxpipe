@@ -3,10 +3,16 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 vi.mock("@pipecat-ai/voice-ui-kit", () => ({
   ConsoleTemplate: ({
+    clientOptions,
     connectParams,
     titleText,
     transportType,
   }: {
+    clientOptions?: {
+      callbacks?: {
+        onDisconnected?: () => void;
+      };
+    };
     connectParams: {
       webrtcRequestParams?: {
         endpoint: string;
@@ -24,6 +30,9 @@ vi.mock("@pipecat-ai/voice-ui-kit", () => ({
       data-session-id={connectParams.webrtcRequestParams?.requestData.session_id}
     >
       {titleText}
+      <button type="button" onClick={() => clientOptions?.callbacks?.onDisconnected?.()}>
+        Simulate client disconnect
+      </button>
     </section>
   ),
 }));
@@ -92,48 +101,7 @@ test("creates a room when randomUUID is unavailable on an HTTP origin", async ()
 test("enters the uncluttered Pipecat page after creating a room", async () => {
   vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
 
-  const fetchMock = vi
-    .fn()
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        tenant_key: "BBBBBBBBBBBBBBBB",
-        participant_key: "20000000-0000-4000-8000-000000000002",
-        call_id: "30000000-0000-4000-8000-000000000003",
-        join_token: {
-          token: "vxj_browser-delegated-token",
-          expires_at: "2026-09-09T13:05:02.000000Z",
-        },
-      }),
-    })
-    .mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        call: {
-          call_id: "30000000-0000-4000-8000-000000000003",
-          state: "running",
-          started_at: "2026-09-09T13:00:02.000000Z",
-        },
-        participant: {
-          participant_id: "part_demo",
-          role: "human",
-          room_id: "room_demo",
-          incarnation_id: "rinc_demo",
-          state: "joined",
-        },
-        session: {
-          session_id: "sess_demo",
-          expires_at: "2026-09-03T18:00:00Z",
-          transport: {
-            type: "smallwebrtc",
-            endpoint: "/api/rtvi/offer",
-            request_data: { session_id: "sess_demo" },
-          },
-        },
-      }),
-    });
-
-  vi.stubGlobal("fetch", fetchMock);
+  const fetchMock = stubDurableAdmission();
 
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Create room" }));
@@ -167,6 +135,19 @@ test("enters the uncluttered Pipecat page after creating a room", async () => {
   expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("private-order-sentinel");
   expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("vxp_");
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test("returns to room creation after a connected client disconnects", async () => {
+  stubDurableAdmission();
+
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+
+  expect(await screen.findByRole("region", { name: "RTVI console" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Simulate client disconnect" }));
+
+  expect(screen.getByRole("button", { name: "Create room" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "RTVI console" })).not.toBeInTheDocument();
 });
 
 test("keeps the database-free trusted room fallback", async () => {
@@ -218,3 +199,49 @@ test("keeps the database-free trusted room fallback", async () => {
   });
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
+
+function stubDurableAdmission() {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        tenant_key: "BBBBBBBBBBBBBBBB",
+        participant_key: "20000000-0000-4000-8000-000000000002",
+        call_id: "30000000-0000-4000-8000-000000000003",
+        join_token: {
+          token: "vxj_browser-delegated-token",
+          expires_at: "2026-09-09T13:05:02.000000Z",
+        },
+      }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        call: {
+          call_id: "30000000-0000-4000-8000-000000000003",
+          state: "running",
+          started_at: "2026-09-09T13:00:02.000000Z",
+        },
+        participant: {
+          participant_id: "part_demo",
+          role: "human",
+          room_id: "room_demo",
+          incarnation_id: "rinc_demo",
+          state: "joined",
+        },
+        session: {
+          session_id: "sess_demo",
+          expires_at: "2026-09-03T18:00:00Z",
+          transport: {
+            type: "smallwebrtc",
+            endpoint: "/api/rtvi/offer",
+            request_data: { session_id: "sess_demo" },
+          },
+        },
+      }),
+    });
+
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}

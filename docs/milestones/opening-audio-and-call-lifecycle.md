@@ -215,6 +215,13 @@ asynchronous-history and call-details milestones. A rendered sample call using t
 model invoked the tool and stopped its WebRTC/media room; the matching durable call-end result was
 verified directly in PostgreSQL.
 
+The corresponding client-terminal checkpoint now closes the observable lifecycle as well. When
+the room ends, Gateway sends Small WebRTC `peerLeft` on the established RTVI channel before a
+bounded transport shutdown. A real ExWebRTC test proves that ordering. The Console treats the
+client's resulting disconnect as terminal for the consumed admission and returns to call creation.
+The rendered Gemini/Morse hangup path completed without reconnect attempts or HTTP 409 responses;
+desktop/mobile rendering, browser-error inspection, and WCAG A/AA checks passed.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

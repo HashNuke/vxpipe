@@ -34,9 +34,12 @@ Browser                 Gateway                         Call engine
    |---------------------->| trickle ICE candidates          |
    | client-ready -------- data channel                      |
    |<------- bot-ready ---- data channel                      |
-   | close channel         |                                 |
-   |---------------------->| stop connection incarnation     |
+   | close channel -------->| stop connection incarnation     |
    |                       | room and participant remain     |
+
+   |<------- peerLeft ----- data channel (if room ends)       |
+   | disconnects --------->| bounded connection shutdown     |
+   |                       | room is already ended           |
 ```
 
 `POST /api/rooms/:room_id/sessions` is a development admission endpoint. It
@@ -90,7 +93,11 @@ the entire connection incarnation shuts down instead of leaving transport
 workers behind. The later deterministic text-turn slice also attaches this
 process to the room authority with mutual monitoring. A browser disconnect does
 not terminate the room or participant, while room or participant loss now
-terminates the stale transport.
+terminates the stale transport. When an established RTVI channel still exists,
+room loss first sends the Small WebRTC `peerLeft` signalling message and gives
+the client a bounded 250-millisecond grace period to disconnect; connection loss
+or expiry of that grace period then stops the transport subtree. Failure to send
+the best-effort signal never keeps a stale connection alive.
 
 ## Compatibility contract
 
@@ -139,6 +146,11 @@ speech, transcription, model, or audio output.
 Reconnection is also deliberately absent. A claimed or expired session cannot
 be reused; a later reconnection policy must issue a new connection credential
 and decide whether it reuses the participant or admits a replacement.
+An ended room is not a temporary transport failure: `peerLeft` lets an
+unmodified client complete its normal disconnect transition instead of retrying
+the consumed session. The development Console discards that terminal
+connection view and returns to its create-room page, so its only offered recovery
+starts a new call.
 
 ## Verification evidence
 
@@ -152,7 +164,13 @@ and decide whether it reuses the participant or admits a replacement.
 - A real ExWebRTC integration test performs offer/answer, trickle ICE, opens the
   data channel, completes readiness, rejects session replay, closes the
   connection, and confirms the room remains registered.
+- A second real ExWebRTC boundary test ends the monitored room, receives the
+  exact `signalling/peerLeft` message on the established channel, and observes
+  the gateway connection terminate after delivery.
 - The unmodified Pipecat React client 1.13.0 was exercised in headless Chrome.
   It reached connected and agent-ready states, reported server RTVI 2.1.0, and
   returned to disconnected without browser errors. The creation and console
   views were inspected at desktop and mobile viewports.
+- A rendered durable Gemini/Morse call invoked platform hangup, received
+  `peerLeft`, returned directly to the create-room view without a retry or HTTP
+  409, and passed desktop/mobile overflow, browser-error, and WCAG A/AA checks.

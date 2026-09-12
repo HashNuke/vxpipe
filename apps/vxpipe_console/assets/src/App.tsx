@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ConsoleTemplate } from "@pipecat-ai/voice-ui-kit";
 
 import CreateRoomPage, { type RoomConnection } from "./CreateRoomPage";
@@ -12,6 +12,16 @@ function offerUrl(sessionEndpoint: string): string {
 
 export default function App() {
   const [connection, setConnection] = useState<RoomConnection>();
+  const clientOptions = useMemo(
+    () => ({
+      enableCam: false,
+      enableMic: true,
+      callbacks: {
+        onDisconnected: () => setConnection(undefined),
+      },
+    }),
+    [],
+  );
 
   if (window.location.pathname === "/transfer") {
     return <TransferPage />;
@@ -26,6 +36,7 @@ export default function App() {
       <ConsoleTemplate
         key={connection.incarnationId}
         transportType="smallwebrtc"
+        clientOptions={clientOptions}
         connectParams={{
           webrtcRequestParams: {
             endpoint: offerUrl(connection.session.transport.endpoint),

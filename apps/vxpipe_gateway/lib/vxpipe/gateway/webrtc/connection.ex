@@ -27,12 +27,19 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   }
 
   alias Vxpipe.Gateway.RTVI.{ToolProjection, TurnState}
-  alias Vxpipe.Gateway.WebRTC.{ConnectionPeerSupervisor, IncomingAudio, TransferSideband}
+
+  alias Vxpipe.Gateway.WebRTC.{
+    ConnectionPeerSupervisor,
+    IncomingAudio,
+    SmallWebRTCSignalling,
+    TransferSideband
+  }
 
   alias Vxpipe.Gateway.RTVI.Codec, as: RTVICodec
 
   @call_timeout 10_000
   @command_timeout_seconds 5
+  @peer_left_grace_ms 250
 
   def start_link(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
@@ -235,6 +242,16 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   def handle_info(
         {:DOWN, room_monitor, :process, _pid, _reason},
         %{room_monitor: room_monitor} = state
+      ) do
+    case signal_peer_left(state) do
+      :sent -> await_peer_disconnect(state)
+      :unavailable -> {:stop, :shutdown, state}
+    end
+  end
+
+  def handle_info(
+        {:vxpipe_peer_left_timeout, token},
+        %{peer_left_timeout_token: token} = state
       ) do
     {:stop, :shutdown, state}
   end
@@ -469,6 +486,27 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   defp remember_data_channel(%DataChannel{}, state), do: state
+
+  defp signal_peer_left(%{rtvi_channel_ref: nil}), do: :unavailable
+
+  defp signal_peer_left(state) do
+    :ok =
+      PeerConnection.send_data(
+        state.peer_connection,
+        state.rtvi_channel_ref,
+        SmallWebRTCSignalling.encode_peer_left()
+      )
+
+    :sent
+  catch
+    :exit, _reason -> :unavailable
+  end
+
+  defp await_peer_disconnect(state) do
+    token = make_ref()
+    Process.send_after(self(), {:vxpipe_peer_left_timeout, token}, @peer_left_grace_ms)
+    {:noreply, Map.put(state, :peer_left_timeout_token, token)}
+  end
 
   defp state_reply({:ok, state}), do: {:noreply, state}
   defp state_reply({:stop, state}), do: {:stop, :shutdown, state}
