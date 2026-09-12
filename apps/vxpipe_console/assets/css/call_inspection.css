@@ -336,6 +336,8 @@ button { cursor: pointer; }
 
 .state-cell[data-state="failed"] { color: var(--coral); }
 .state-cell[data-state="failed"] .state-marker { background: var(--coral); }
+.state-cell[data-state="admitting"] .state-marker,
+.state-cell[data-state="running"] .state-marker,
 .state-cell[data-state="ended"] .state-marker,
 .state-cell[data-state="prepared"] .state-marker { background: var(--divider-strong); }
 
@@ -421,15 +423,18 @@ button { cursor: pointer; }
 .evidence-source strong { color: var(--ink); }
 
 .selected-call-state {
+  display: inline-block;
   margin-left: 8px;
   color: var(--muted);
   font-family: var(--mono);
   font-size: 0.75rem;
   letter-spacing: 0;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .selected-call-state[data-state="live"] { color: var(--green); }
+.selected-call-state[data-state="runtime_unavailable"],
 .selected-call-state[data-state="unavailable"] { color: var(--coral); }
 
 .call-context {

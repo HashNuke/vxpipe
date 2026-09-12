@@ -159,7 +159,7 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
 
     assert html =~ "call-public-id"
     assert html =~ "definition-public-id"
-    assert html =~ "Live"
+    assert html =~ "Running record"
     assert html =~ "Load older calls"
     refute html =~ "resolved_plan"
     refute html =~ "initial_variables"
@@ -229,6 +229,25 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     assert html =~ "r2"
     assert html =~ "1 record dropped"
     assert html =~ "Live and persisted evidence available"
+    assert_receive {:inspect_live_call, _, "call-public-id", []}
+  end
+
+  test "distinguishes a persisted running record from an available live runtime" do
+    call = call_summary()
+
+    configure_backend(%{
+      list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
+      inspect_call: {:ok, persisted_detail(call)},
+      inspect_live_call: {:error, :call_not_live}
+    })
+
+    conn = sign_in()
+    html = html_response(conn |> recycle() |> get("/calls/#{call.id}"), 200)
+
+    assert html =~ "Runtime unavailable"
+    assert html =~ "Persisted running record; live runtime unavailable"
+    assert html =~ "End time unavailable"
+    refute html =~ "In progress"
     assert_receive {:inspect_live_call, _, "call-public-id", []}
   end
 
@@ -460,6 +479,33 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     refute_receive {:inspect_call, _, _, _}
     refute_receive {:list_calls, _, _}
     assert render(view) =~ "Live and persisted evidence available"
+  end
+
+  test "stops polling and exposes uncertainty when a live runtime disappears" do
+    call = call_summary()
+
+    available_responses = %{
+      list_calls: {:ok, %CallListPage{calls: [call], next_cursor: nil}},
+      inspect_call: {:ok, persisted_detail(call)},
+      inspect_live_call: {:ok, live_detail()}
+    }
+
+    configure_backend(available_responses)
+
+    conn = sign_in()
+    {:ok, view, _html} = live(recycle(conn), "/calls/#{call.id}")
+    flush_inspection_messages()
+
+    configure_backend(%{available_responses | inspect_live_call: {:error, :call_not_live}})
+
+    assert_receive {:inspect_live_call, _, "call-public-id", []}, 1_500
+    _ = :sys.get_state(view.pid)
+
+    html = render(view)
+    assert html =~ "Runtime unavailable"
+    assert html =~ "End time unavailable"
+    refute html =~ "In progress"
+    refute_receive {:inspect_live_call, _, "call-public-id", []}, 1_200
   end
 
   test "stops live refresh work when the inspection page closes" do

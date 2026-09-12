@@ -72,7 +72,7 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
          |> reconcile_live_refresh()}
 
       {:error, _reason} ->
-        status = if socket.assigns.persisted, do: :persisted, else: :unavailable
+        status = persisted_status(socket.assigns.persisted)
         {:noreply, assign(socket, detail_status: status, live: nil)}
     end
   end
@@ -175,13 +175,23 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
   end
 
   defp inspection_state({:ok, persisted}, {:ok, live}), do: {:live, persisted, live}
-  defp inspection_state({:ok, persisted}, _live_result), do: {:persisted, persisted, nil}
+
+  defp inspection_state({:ok, persisted}, _live_result),
+    do: {persisted_status(persisted), persisted, nil}
+
   defp inspection_state({:error, _reason}, {:ok, live}), do: {:live_only, nil, live}
 
   defp inspection_state({:error, :call_not_found}, {:error, :call_not_live}),
     do: {:not_found, nil, nil}
 
   defp inspection_state({:error, _reason}, _live_result), do: {:unavailable, nil, nil}
+
+  defp persisted_status(%CallDetailPage{call: %{state: state}})
+       when state in [:admitting, :running],
+       do: :runtime_unavailable
+
+  defp persisted_status(%CallDetailPage{}), do: :persisted
+  defp persisted_status(nil), do: :unavailable
 
   defp option(nil, _option), do: []
   defp option(value, option), do: [{option, value}]

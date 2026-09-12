@@ -164,12 +164,40 @@ the persistence codec delegates to it without dynamically creating atoms. The ne
 existing Calls archive tests pass; the persistence codec test and all 18 database-backed call-store
 tests pass. A fresh deterministic call now remains readable after the same abrupt restart.
 
+The remaining problem was presentation. The persisted list labeled every `running` record `Live`,
+and a readable running detail with no live projection fell back to generic `Persisted` plus an `In
+progress` duration. The focused endpoint test first failed in two expected places: the list still
+contained `Live`, and the detail lacked `Runtime unavailable`. The Console now treats persisted and
+live state independently. It renders `Running record` in the list; a persisted `admitting` or
+`running` detail without live evidence renders `Runtime unavailable`, describes the live runtime as
+unavailable, and reports `End time unavailable`. If a connected live page loses its live projection,
+the same state is rendered and no further poll is scheduled. The focused endpoint file passes 20
+tests and the complete Console suite passes 91 tests.
+
+The call-inspection stylesheet was also moved unchanged from the Elixir `lib` tree to
+`assets/css`; the controller still embeds and content-hashes it at compile time. The status-specific
+rules then give uncertain persisted states a neutral marker and runtime unavailability the existing
+failure color. A first rendered pass showed the two-word state splitting around a long call ID, so
+the label was kept together for the confirmation pass.
+
+The rendered proof used a fresh deterministic room admitted and connected through the real sample
+and WebRTC path, followed by an abrupt development-VM stop and restart. The same current-schema call
+then showed its seven persisted facts plus baseline snapshot, `Running record`, `Runtime
+unavailable`, and `End time unavailable`. Desktop and 390-by-844 captures had matching viewport,
+body, and document widths. Both axe runs reported zero violations and zero incomplete checks; the
+browser reported no page errors. The temporary Console and all three review browser sessions were
+stopped afterward.
+
+Final checkpoint verification passed `mix format --check-formatted`, warnings-as-errors compilation,
+the 994-test umbrella suite with 15 explicitly excluded integrations, unused-dependency checking,
+and strict Credo across 803 source files.
+
 ### Next isolation step
 
 Restart the BEAM, capture the first offer response and narrowly inspect connection/pipeline startup
 timing. Decide from evidence whether the cold 503 is a request timeout, pipeline-start failure or a
 different lifecycle race. Reproduce under a focused project-owned test before implementation.
 
-That restart did not reproduce the 503. The durable sample hangup and client-terminal corrections
-are verified. The next review checkpoint is the stale durable/runtime lifecycle observation above;
-it must be evaluated against approved crash semantics without starting retention or deletion work.
+That restart did not reproduce the 503. The durable sample hangup, client-terminal correction, cold
+archive decoding, and honest durable/runtime presentation are now verified without starting
+retention, deletion, or container work.

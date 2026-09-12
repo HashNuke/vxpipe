@@ -63,7 +63,12 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
           <p>{unavailable_detail(@status)}</p>
         </div>
       <% else %>
-        <.call_context persisted={@persisted} live={@live} participants={@participant_summary} />
+        <.call_context
+          persisted={@persisted}
+          live={@live}
+          participants={@participant_summary}
+          status={@status}
+        />
 
         <CallUsageComponents.panel report={@usage_report} status={@usage_status} />
 
@@ -207,6 +212,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   attr :persisted, Vxpipe.Calls.CallDetailPage, default: nil
   attr :live, Vxpipe.Calls.LiveCallInspection, default: nil
   attr :participants, :string, required: true
+  attr :status, :atom, required: true
 
   defp call_context(assigns) do
     ~H"""
@@ -218,7 +224,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
       <div><dt>Room</dt><dd>{live_value(@live, :room_id)}</dd></div>
       <div><dt>Incarnation</dt><dd>{live_value(@live, :incarnation_id)}</dd></div>
       <div><dt>Started</dt><dd>{started_label(@persisted)}</dd></div>
-      <div><dt>Duration</dt><dd>{call_duration(persisted_call(@persisted))}</dd></div>
+      <div><dt>Duration</dt><dd>{call_duration(persisted_call(@persisted), @status)}</dd></div>
       <div class="call-context-participants"><dt>Participants</dt><dd>{@participants}</dd></div>
     </dl>
     """
@@ -233,12 +239,17 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
 
   defp source_status(:live), do: "Live and persisted evidence available"
   defp source_status(:live_only), do: "Live evidence available"
+
+  defp source_status(:runtime_unavailable),
+    do: "Persisted running record; live runtime unavailable"
+
   defp source_status(:persisted), do: "Persisted evidence selected"
   defp source_status(:not_found), do: "Call not found"
   defp source_status(:unavailable), do: "Evidence unavailable"
 
   defp call_state(:live), do: "Live"
   defp call_state(:live_only), do: "Live only"
+  defp call_state(:runtime_unavailable), do: "Runtime unavailable"
   defp call_state(:persisted), do: "Persisted"
   defp call_state(:not_found), do: "Not found"
   defp call_state(:unavailable), do: "Unavailable"
@@ -374,11 +385,15 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   defp persisted_call(nil), do: nil
   defp persisted_call(persisted), do: persisted.call
 
-  defp call_duration(nil), do: "Unavailable"
-  defp call_duration(%{started_at: nil}), do: "Not started"
-  defp call_duration(%{started_at: _started_at, ended_at: nil}), do: "In progress"
+  defp call_duration(nil, _status), do: "Unavailable"
+  defp call_duration(%{started_at: nil}, _status), do: "Not started"
 
-  defp call_duration(%{started_at: started_at, ended_at: ended_at}) do
+  defp call_duration(%{started_at: _started_at, ended_at: nil}, :runtime_unavailable),
+    do: "End time unavailable"
+
+  defp call_duration(%{started_at: _started_at, ended_at: nil}, _status), do: "In progress"
+
+  defp call_duration(%{started_at: started_at, ended_at: ended_at}, _status) do
     seconds = DateTime.diff(ended_at, started_at, :second)
     "#{seconds} seconds"
   end

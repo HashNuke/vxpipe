@@ -11,7 +11,7 @@ defmodule Vxpipe.Console.CallInspectionFormat do
   @spec state(atom()) :: String.t()
   def state(:prepared), do: "Prepared"
   def state(:admitting), do: "Admitting"
-  def state(:running), do: "Live"
+  def state(:running), do: "Running record"
   def state(:ended), do: "Ended"
   def state(:failed), do: "Failed"
 
