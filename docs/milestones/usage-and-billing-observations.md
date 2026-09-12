@@ -1,8 +1,8 @@
 # Usage, cost observations, and billing enrichment
 
 Status: in progress. Typed observation/settlement, model/text-to-speech/speech-to-text/tool/carrier
-capture, and the asynchronous structured persistence plus tenant-safe report API are implemented
-(2026-09-12); call-inspection presentation and billing enrichment remain. Specification review:
+capture, asynchronous structured persistence, tenant-safe report API, and operator call-inspection
+presentation are implemented (2026-09-12); billing enrichment remains. Specification review:
 approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
@@ -33,7 +33,7 @@ not blind arrival order. Accounting must not start prohibited STT to obtain miss
 - [x] Capture supported usage in buffered/streaming model and hosted speech adapters plus tool/carrier boundaries.
 - [x] Persist private observations/effective projections asynchronously and expose a tenant-safe
   Calls report API with totals by meaningful dimension/currency.
-- [ ] Present the tenant-safe report through existing operator call inspection without exposing it
+- [x] Present the tenant-safe report through existing operator call inspection without exposing it
   to ordinary call clients.
 - [ ] Implement optional billing-enrichment port/workflow with a controlled provider fixture and honest unavailable support.
 - [ ] Verify measurement/provenance semantics and document supported provider billing lookup capabilities.
@@ -323,6 +323,36 @@ Implementation evidence (2026-09-12, persisted usage-projection checkpoint):
 
 This remains a partial milestone. The persisted report is not yet shown in operator call inspection,
 and no billing lookup is claimed.
+
+Implementation evidence (2026-09-12, operator presentation checkpoint):
+
+- Added a Console backend boundary for the tenant-authorized Calls usage report. The selected-call
+  LiveView reads usage separately from persisted history, live evidence, and recordings, so an
+  unavailable usage projection produces its own generic recovery state without hiding other call
+  evidence or exposing an internal reason.
+- Extended the existing call workbench with one compact usage ledger. Non-overlapping totals are
+  immediately visible by capability, configured provider, evidence-backed attribution, exact
+  quantity/currency, and provenance. Individual effective operations remain in a disclosure with
+  local attempt/component, genuine external references when present, attribution, and settlement
+  state. Empty, partial-aggregate, and unavailable states stay distinct.
+- Kept presentation responsibilities separate: the LiveView coordinates reads, one component owns
+  usage markup, and one formatter owns closed value labels and exact quantities. The reusable
+  Gateway and ordinary call clients gain no usage route or event.
+- Red evidence: two presentation cases first failed because the panel was absent; the backend
+  contract first failed because `usage_report/3` was absent. A rendered accessibility audit then
+  exposed keyboard-inaccessible horizontal regions, and focused tests failed before their named,
+  focusable region contract was added.
+- Focused green evidence: the boundary and presentation files pass 4 tests, and the complete
+  Console child suite passes 83 tests. Rendered `agent-browser` checks at 1440x1000 and 390x844
+  showed both exact totals, all three operation rows, no document-level horizontal overflow, and
+  keyboard-local scrolling for each wide table. Separate rendered fixtures showed the empty and
+  unavailable states with no tables or leaked internal reason while the rest of the call evidence
+  remained present. The scoped accessibility audit reports zero violations; its only incomplete
+  result is an indeterminate contrast check for horizontally clipped off-screen cells.
+- All root gates pass: formatting, warnings-as-errors compilation, strict Credo over 705 source
+  files, all 896 tests across eight umbrella applications, and the unused-dependency check.
+
+This remains a partial milestone. Billing lookup and its supported-capability evidence remain.
 
 ## Specification review
 

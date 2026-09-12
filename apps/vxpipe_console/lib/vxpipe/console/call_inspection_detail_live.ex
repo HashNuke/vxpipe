@@ -21,7 +21,9 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
        history_cursor: nil,
        refresh_token: nil,
        recordings: [],
-       recordings_status: :unavailable
+       recordings_status: :unavailable,
+       usage_report: nil,
+       usage_status: :unavailable
      )}
   end
 
@@ -36,6 +38,7 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
       |> maybe_load_list(requested, reload_call?)
       |> maybe_load_detail(requested, reload_call?)
       |> maybe_load_recordings(requested, reload_call?)
+      |> maybe_load_usage(requested, reload_call?)
       |> assign(
         loaded?: true,
         selected_id: requested.call_id,
@@ -127,6 +130,15 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
   end
 
   defp maybe_load_recordings(socket, _requested, false), do: socket
+
+  defp maybe_load_usage(socket, requested, true) do
+    case CallInspection.usage_report(socket.assigns.principal, requested.call_id) do
+      {:ok, report} -> assign(socket, usage_report: report, usage_status: :available)
+      {:error, _reason} -> assign(socket, usage_report: nil, usage_status: :unavailable)
+    end
+  end
+
+  defp maybe_load_usage(socket, _requested, false), do: socket
 
   defp load_live(principal, call_id, {:ok, %CallDetailPage{call: %{state: state}}})
        when state in [:admitting, :running] do

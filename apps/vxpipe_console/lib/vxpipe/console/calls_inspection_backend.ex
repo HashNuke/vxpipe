@@ -19,4 +19,9 @@ defmodule Vxpipe.Console.CallsInspectionBackend do
   def inspect_live_call(options, principal, call_id, request_options) do
     Calls.inspect_live_call(principal, call_id, Keyword.merge(request_options, options))
   end
+
+  @impl true
+  def usage_report(options, principal, call_id, request_options) do
+    Calls.fetch_usage_report(principal, call_id, Keyword.merge(request_options, options))
+  end
 end

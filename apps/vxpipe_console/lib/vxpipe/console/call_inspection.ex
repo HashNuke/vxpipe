@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.CallInspection do
   @moduledoc "Loads validated call-inspection projections for Console pages."
 
-  alias Vxpipe.Calls.{CallDetailPage, CallListPage, LiveCallInspection, Principal}
+  alias Vxpipe.Calls.{CallDetailPage, CallListPage, LiveCallInspection, Principal, UsageReport}
 
   @spec list_calls(Principal.t(), keyword()) ::
           {:ok, CallListPage.t()} | {:error, term()}
@@ -33,6 +33,17 @@ defmodule Vxpipe.Console.CallInspection do
     module
     |> apply(:inspect_live_call, [backend_options, principal, call_id, request_options])
     |> validate_response(LiveCallInspection)
+  end
+
+  @spec usage_report(Principal.t(), String.t(), keyword()) ::
+          {:ok, UsageReport.t()} | {:error, term()}
+  def usage_report(%Principal{} = principal, call_id, options \\ [])
+      when is_binary(call_id) and is_list(options) do
+    {module, backend_options, request_options} = backend(options)
+
+    module
+    |> apply(:usage_report, [backend_options, principal, call_id, request_options])
+    |> validate_response(UsageReport)
   end
 
   defp backend(options) do

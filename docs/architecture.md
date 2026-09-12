@@ -2816,6 +2816,15 @@ provenance dimensions. Genuine provider request, operation, and session IDs rema
 the private individual amounts but do not fragment configured-provider totals. Operator
 presentation consumes this public Calls workflow; Console does not query the Repo directly.
 
+The existing Console call-detail workbench reads the usage report independently from persisted
+history, live inspection, and recording artifacts. A usage-store failure therefore renders a
+generic usage-unavailable state while preserving the other evidence. The compact ledger exposes
+non-overlapping totals first and keeps individual effective operations in an explicit disclosure,
+including genuine external references when present. Empty, incomplete-aggregate, and unavailable
+states are distinct. Wide evidence tables scroll within named keyboard-focusable regions at narrow
+viewports rather than widening the page. This remains an operator-only projection under the
+existing signed `calls`-scoped session; no ordinary caller/client usage event or route is added.
+
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports
 them. It runs outside the media hot path and `RoomAuthority` and can outlive the

@@ -7,7 +7,8 @@ defmodule Vxpipe.Console.CallInspectionTest do
     CallListPage,
     CallSummary,
     LiveCallInspection,
-    Principal
+    Principal,
+    UsageReport
   }
 
   alias Vxpipe.Console.{CallInspection, TestCallInspectionBackend}
@@ -19,6 +20,7 @@ defmodule Vxpipe.Console.CallInspectionTest do
     list_page = %CallListPage{calls: [], next_cursor: nil}
     detail_page = detail_page()
     live_inspection = live_inspection()
+    usage_report = %UsageReport{amounts: [], totals: []}
 
     backend =
       {TestCallInspectionBackend,
@@ -26,7 +28,8 @@ defmodule Vxpipe.Console.CallInspectionTest do
         %{
           list_calls: {:ok, list_page},
           inspect_call: {:ok, detail_page},
-          inspect_live_call: {:ok, live_inspection}
+          inspect_live_call: {:ok, live_inspection},
+          usage_report: {:ok, usage_report}
         }}}
 
     assert {:ok, ^list_page} =
@@ -46,6 +49,11 @@ defmodule Vxpipe.Console.CallInspectionTest do
              CallInspection.inspect_live_call(principal, "call-public-id", backend: backend)
 
     assert_receive {:inspect_live_call, ^principal, "call-public-id", []}
+
+    assert {:ok, ^usage_report} =
+             CallInspection.usage_report(principal, "call-public-id", backend: backend)
+
+    assert_receive {:usage_report, ^principal, "call-public-id", []}
   end
 
   test "fails closed when a backend returns an unexpected value" do
@@ -55,7 +63,8 @@ defmodule Vxpipe.Console.CallInspectionTest do
         %{
           list_calls: {:ok, %{calls: []}},
           inspect_call: :unexpected,
-          inspect_live_call: {:error, :call_not_live}
+          inspect_live_call: {:error, :call_not_live},
+          usage_report: {:ok, %{amounts: []}}
         }}}
 
     assert {:error, :invalid_inspection_response} =
@@ -66,6 +75,9 @@ defmodule Vxpipe.Console.CallInspectionTest do
 
     assert {:error, :call_not_live} =
              CallInspection.inspect_live_call(principal(), "call-public-id", backend: backend)
+
+    assert {:error, :invalid_inspection_response} =
+             CallInspection.usage_report(principal(), "call-public-id", backend: backend)
   end
 
   defp principal do

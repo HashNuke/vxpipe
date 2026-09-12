@@ -7,6 +7,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
     CallInspectionFormat,
     CallInspectionTimeline,
     CallRecordingComponents,
+    CallUsageComponents,
     CallVariableDiff
   }
 
@@ -19,6 +20,8 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   attr :live, Vxpipe.Calls.LiveCallInspection, default: nil
   attr :recordings, :list, default: []
   attr :recordings_status, :atom, default: :unavailable
+  attr :usage_report, Vxpipe.Calls.UsageReport, default: nil
+  attr :usage_status, :atom, default: :unavailable
 
   def workbench(assigns) do
     timeline = CallInspectionTimeline.combine(assigns.persisted, assigns.live)
@@ -57,6 +60,8 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
         </div>
       <% else %>
         <.call_context persisted={@persisted} live={@live} participants={@participant_summary} />
+
+        <CallUsageComponents.panel report={@usage_report} status={@usage_status} />
 
         <CallRecordingComponents.panel
           call_id={@selected_id}

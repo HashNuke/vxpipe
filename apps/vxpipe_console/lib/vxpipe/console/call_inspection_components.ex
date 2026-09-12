@@ -18,6 +18,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   attr :selected_event_id, :string, default: nil
   attr :recordings, :list, default: []
   attr :recordings_status, :atom, default: :unavailable
+  attr :usage_report, Vxpipe.Calls.UsageReport, default: nil
+  attr :usage_status, :atom, default: :unavailable
 
   def index(assigns) do
     ~H"""
@@ -61,6 +63,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
         live={@live}
         recordings={@recordings}
         recordings_status={@recordings_status}
+        usage_report={@usage_report}
+        usage_status={@usage_status}
       />
     </main>
     """

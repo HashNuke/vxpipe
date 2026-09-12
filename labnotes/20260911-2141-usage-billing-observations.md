@@ -409,3 +409,44 @@ Green evidence so far:
   894 tests across eight umbrella apps, and the unused-dependency check pass.
 
 Operator call-inspection presentation and billing lookup remain.
+
+## 2026-09-12: operator usage ledger
+
+The Console now requests the tenant-authorized usage report through a dedicated inspection-backend
+callback. That read is independent from call history, live evidence, and recordings. A failed usage
+read therefore changes only the usage panel to a generic unavailable state; it neither suppresses
+the rest of the workbench nor reveals the storage error.
+
+The existing selected-call surface gained one continuous usage ledger. Non-overlapping totals stay
+visible at a glance with capability, configured provider, evidence-backed attribution, exact
+quantity or currency, and provenance. The individual effective operations sit behind a native
+disclosure and retain local attempts, component inclusion, genuine external references,
+attribution, and settlement state. An empty observation set is distinct from unavailable storage,
+and an included child that arrives before its aggregate has an explicit partial state.
+
+Presentation remains split by responsibility. The LiveView coordinates the extra read,
+`CallUsageComponents` owns the panel states and tables, and `CallUsageFormat` owns closed labels and
+exact formatting. Gateway and ordinary call clients are unchanged.
+
+Red and green evidence:
+
+- The backend boundary first produced two undefined-function failures before the dedicated report
+  callback and validation existed; both focused cases then passed.
+- The presentation cases first failed because totals, operation details, and distinct empty/error
+  states were absent. They passed after the panel was wired into the selected call.
+- A rendered accessibility audit found that the two horizontally scrollable regions could not
+  receive keyboard focus. The added contract failed on the absent attributes, then passed after
+  both regions became named, focusable regions with the existing focus treatment.
+- The boundary and presentation focus passes 4 tests. The complete Console suite passes 83 tests.
+- Rendered `agent-browser` inspection at 1440x1000 and 390x844 shows both exact totals and all three
+  operation rows. At 390px, document width remains 390px while the 840px and 1120px tables scroll
+  locally; arrow-key input moved the focused totals region. The scoped audit reports zero
+  violations. Its remaining incomplete result is an indeterminate contrast calculation for
+  off-screen clipped cells, not a reported violation.
+- Separate rendered fixtures showed the empty state with no tables and the unavailable state with
+  no internal reason. Both retained the remaining selected-call evidence and the 390px document
+  boundary.
+- Root formatting, warnings-as-errors compilation, strict Credo over 705 source files, all 896
+  tests across eight umbrella applications, and unused-dependency validation pass.
+
+Billing lookup remains.

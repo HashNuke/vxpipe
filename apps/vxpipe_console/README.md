@@ -67,6 +67,13 @@ source, revision, gaps, loss, unavailable data, and unknown outcomes rather than
 continuity. Closing or reconnecting the page only stops or repeats these bounded reads; it
 does not start, resume, or end a call.
 
+The call detail page also reads the tenant-safe usage projection independently. It shows
+non-overlapping provider totals and exact known currency values first, with individual effective
+operations and genuine external request/operation/session references in a disclosure. Unknown or
+unavailable measurements are never rendered as zero. An unavailable usage projection does not hide
+the remaining call evidence, and this operator-only view does not change ordinary client tool or
+usage visibility.
+
 ## Development diagnostics
 
 The Console uses Phoenix LiveDashboard for platform VM/runtime inspection and
