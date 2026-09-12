@@ -274,6 +274,23 @@ Implementation evidence (2026-09-12, carrier-leg capture checkpoint):
 This remains a partial milestone. Persisted effective projections/operator totals and billing
 enrichment are not claimed yet.
 
+Implementation evidence (2026-09-12, operator-projection contract checkpoint):
+
+- Added a strict inverse for the private `usage_observed` call-fact representation. It restores the
+  typed observation contract using fixed external-value mappings, rejects an attribution that does
+  not match the fact envelope, and retains exact decimal currency values.
+- Added one Calls-owned report contract for effective amounts and non-overlapping operator totals.
+  Totals include root amounts only, group at every supported provider and attribution dimension,
+  and keep unit/currency and provenance separate. External request/operation/session identifiers
+  remain on individual effective amounts but do not fragment provider totals.
+- Red evidence: the three focused contract cases failed on the deliberately absent projection and
+  report modules. Green evidence: all three pass after the minimum typed decoder, value, and
+  aggregation modules were added. Root formatting, warnings-as-errors compilation, strict Credo
+  over 695 source files, all 891 tests across eight apps, and the unused-dependency check pass.
+
+This is an enabling checkpoint only. No Ecto projection, inspection read, or operator presentation
+is claimed yet.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

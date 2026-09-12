@@ -341,3 +341,26 @@ Focused green evidence so far:
   across eight apps, and the unused-dependency check pass.
 
 Persisted effective projections/operator totals and billing enrichment remain.
+
+## 2026-09-12: operator projection contracts
+
+Before adding storage, the private archive representation needed a strict inverse. The Calls-owned
+projection restores provider, attribution, measurement, outcome, and evidence values using fixed
+mappings. It requires the room, incarnation, participant, activation, turn, and tool attribution to
+agree with the enclosing call fact. This prevents a malformed stored payload from being projected
+under a different fact envelope.
+
+The operator report keeps individual effective amounts and derives a separate non-overlapping total
+view. Only root amounts contribute, so an input/output category already included in an aggregate is
+inspectable but not charged twice. Each total keeps capability, configured provider dimensions,
+participant/activation, service interval, leg, turn, utterance, tool call, unit or currency, and
+provenance distinct. Provider request, operation, and session identifiers remain on individual
+amounts and do not split what should be one configured-provider total.
+
+Red evidence: three focused tests failed because the archive projection and report modules did not
+exist. Green evidence: all three pass with exact decimal restoration, envelope mismatch rejection,
+dimension separation, provider-request aggregation, and included-child exclusion. Root formatting,
+warnings-as-errors compilation, strict Credo over 695 source files, all 891 tests across eight apps,
+and the unused-dependency check pass.
+
+Ecto projection and operator inspection/presentation remain.
