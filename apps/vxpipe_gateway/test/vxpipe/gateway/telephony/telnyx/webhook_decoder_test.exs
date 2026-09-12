@@ -19,6 +19,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookDecoderTest do
               provider_call_leg_id: "call-leg-1",
               provider_call_session_id: "call-session-1",
               occurred_at: @occurred_at,
+              occurred_at_provenance: :provider_reported,
               from: "+15550001001",
               to: "+15550001000"
             }} = WebhookDecoder.decode(webhook)

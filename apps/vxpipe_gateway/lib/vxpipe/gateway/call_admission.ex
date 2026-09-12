@@ -238,11 +238,21 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   defp telephony_activation_options(options) do
-    activation_options = Keyword.take(options, [:media_admission])
+    activation_options =
+      Keyword.take(options, [:media_admission, :telephony_usage_clock, :telephony_usage_reporter])
+      |> rename_option(:telephony_usage_clock, :usage_clock)
+      |> rename_option(:telephony_usage_reporter, :usage_reporter)
 
     case Keyword.fetch(options, :telephony_leg_id) do
       {:ok, generator} -> Keyword.put(activation_options, :leg_id, generator)
       :error -> activation_options
+    end
+  end
+
+  defp rename_option(options, source, destination) do
+    case Keyword.pop(options, source) do
+      {nil, options} -> options
+      {value, options} -> Keyword.put(options, destination, value)
     end
   end
 end

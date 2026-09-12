@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
 
   alias Vxpipe.Gateway.Telephony.{
     ConfiguredService,
+    LegUsage,
     MediaAdmission,
     ProviderEndpoint
   }
@@ -14,10 +15,11 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
           OutboundLegRequest.t(),
           ConfiguredService.t(),
           GenServer.server(),
-          pid()
-        ) :: {:ok, Submission.t()} | {:error, term()}
-  def dial(leg_id, request, service, media_admission, leg)
-      when is_binary(leg_id) and is_pid(leg) do
+          pid(),
+          keyword()
+        ) :: {:ok, Submission.t(), LegUsage.t() | nil} | {:error, term(), LegUsage.t() | nil}
+  def dial(leg_id, request, service, media_admission, leg, usage_options)
+      when is_binary(leg_id) and is_pid(leg) and is_list(usage_options) do
     with :ok <- validate(leg_id, request, service),
          {:ok, token} <-
            MediaAdmission.reserve(
@@ -26,15 +28,28 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
              leg,
              service.media_token_ttl_ms
            ),
-         dial <- dial_request(leg_id, request, service, token),
-         {:ok, submission} <- Adapter.dial(service.adapter, service.adapter_options, dial) do
-      {:ok, submission}
+         dial <- dial_request(leg_id, request, service, token) do
+      usage = LegUsage.start_outgoing(request, service, leg_id, usage_options)
+      submit(service, media_admission, leg, dial, usage)
     else
       {:error, _reason} = error ->
         :ok = MediaAdmission.revoke(media_admission, leg)
-        error
+        append_usage(error, nil)
     end
   end
+
+  defp submit(service, media_admission, leg, dial, usage) do
+    case Adapter.dial(service.adapter, service.adapter_options, dial) do
+      {:ok, submission} ->
+        {:ok, submission, LegUsage.identify(usage, submission)}
+
+      {:error, reason} ->
+        :ok = MediaAdmission.revoke(media_admission, leg)
+        {:error, reason, usage}
+    end
+  end
+
+  defp append_usage({:error, reason}, usage), do: {:error, reason, usage}
 
   defp validate(leg_id, %OutboundLegRequest{} = request, %ConfiguredService{} = service) do
     identity = service.identity

@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
   alias Vxpipe.Gateway.Telephony.{
     ConfiguredService,
     IncomingLegActivationResult,
+    LegUsage,
     MediaAdmission,
     MediaBinding,
     ProviderEndpoint
@@ -32,18 +33,34 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
          {:ok, token} <-
            MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms),
          media_url <- ProviderEndpoint.media_url(service, token),
-         request <- answer_request(binding, media_url),
-         {:ok, submission} <- Adapter.answer(service.adapter, service.adapter_options, request) do
-      {:ok,
-       %IncomingLegActivationResult{
-         binding: binding,
-         media_url: media_url,
-         submission: submission
-       }}
+         request <- answer_request(binding, media_url) do
+      usage = LegUsage.start_incoming(binding, options)
+      submit_answer(service, media_admission, leg, binding, media_url, request, usage)
     else
       {:error, reason} = error ->
         :ok = MediaAdmission.revoke(media_admission, leg)
         if is_atom(reason) or is_tuple(reason), do: error, else: {:error, :activation_failed}
+    end
+  end
+
+  defp submit_answer(service, media_admission, leg, binding, media_url, request, usage) do
+    case Adapter.answer(service.adapter, service.adapter_options, request) do
+      {:ok, submission} ->
+        {:ok,
+         %IncomingLegActivationResult{
+           binding: binding,
+           media_url: media_url,
+           submission: submission,
+           usage: LegUsage.identify(usage, submission)
+         }}
+
+      {:error, reason} ->
+        _usage = LegUsage.fail(usage, :failed)
+        :ok = MediaAdmission.revoke(media_admission, leg)
+
+        if is_atom(reason) or is_tuple(reason),
+          do: {:error, reason},
+          else: {:error, :activation_failed}
     end
   end
 

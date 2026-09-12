@@ -9,6 +9,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     MediaAdmission,
     MediaBinding,
     MediaSupervisor,
+    LegUsage,
     OutgoingLegDialer,
     OutgoingLegIdentity,
     OutgoingLegLifecycle
@@ -63,6 +64,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
        binding: nil,
        result: nil,
        status: :starting,
+       usage: nil,
+       usage_options:
+         [
+           usage_clock: Keyword.fetch!(options, :usage_clock),
+           usage_reporter: Keyword.get(options, :usage_reporter)
+         ]
+         |> Enum.reject(fn {_key, value} -> is_nil(value) end),
        waiters: []
      }, {:continue, :dial}}
   end
@@ -74,19 +82,22 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
            state.request,
            state.service,
            state.media_admission,
-           self()
+           self(),
+           state.usage_options
          ) do
-      {:ok, %Submission{status: :unknown}} ->
-        {:noreply, succeed(state, :unknown, nil)}
+      {:ok, %Submission{status: :unknown}, usage} ->
+        {:noreply, state |> Map.put(:usage, usage) |> succeed(:unknown, nil)}
 
-      {:ok, %Submission{status: :accepted} = submission} ->
+      {:ok, %Submission{status: :accepted} = submission, usage} ->
+        state = %{state | usage: usage}
+
         case adopt_submission(state, submission) do
           {:ok, binding} -> {:noreply, succeed(state, :accepted, binding)}
-          {:error, reason} -> {:noreply, fail(state, reason)}
+          {:error, reason} -> {:noreply, fail(state, reason, :unknown)}
         end
 
-      {:error, reason} ->
-        {:noreply, fail(state, reason)}
+      {:error, reason, usage} ->
+        {:noreply, state |> Map.put(:usage, usage) |> fail(reason, :failed)}
     end
   end
 
@@ -112,10 +123,14 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         :transfer_cancelled
       )
 
-    {:stop, :normal, :ok, state}
+    {:stop, :normal, :ok, finish_usage(state, :cancelled)}
   end
 
-  def handle_call(:disconnect, _from, state), do: {:stop, :normal, :ok, state}
+  def handle_call(:disconnect, _from, %{status: :unknown} = state),
+    do: {:stop, :normal, :ok, finish_usage(state, :unknown)}
+
+  def handle_call(:disconnect, _from, state),
+    do: {:stop, :normal, :ok, finish_usage(state, :cancelled)}
 
   def handle_call(
         {:event, %Event{kind: kind} = event},
@@ -133,7 +148,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
       {:ok, binding} ->
         case register_and_bind(state, binding) do
           :ok -> handle_adopted_event(event, binding, state)
-          {:error, reason} -> {:reply, {:error, reason}, fail(state, reason)}
+          {:error, reason} -> {:reply, {:error, reason}, fail(state, reason, :unknown)}
         end
 
       {:error, reason} ->
@@ -163,29 +178,33 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         {source, _tag},
         %{binding: %MediaBinding{} = binding, status: :accepted} = state
       ) do
-    result =
-      with true <- MediaBinding.matches_event?(binding, event),
-           {:ok, _connection} <-
-             MediaSupervisor.start_outbound_session(
-               state.media_supervisor,
-               state.request,
-               binding,
-               source,
-               stream_id
-             ),
-           :ok <-
-             MediaSupervisor.report_transfer_control(
-               binding.client_state_leg_id,
-               source,
-               :media_ready
-             ) do
-        :ok
-      else
-        false -> {:error, :telephony_leg_mismatch}
-        {:error, reason} -> {:error, reason}
-      end
+    if MediaBinding.matches_event?(binding, event) do
+      state = observe_usage(state, event)
 
-    {:reply, result, state}
+      result =
+        with {:ok, _connection} <-
+               MediaSupervisor.start_outbound_session(
+                 state.media_supervisor,
+                 state.request,
+                 binding,
+                 source,
+                 stream_id
+               ),
+             :ok <-
+               MediaSupervisor.report_transfer_control(
+                 binding.client_state_leg_id,
+                 source,
+                 :media_ready
+               ) do
+          :ok
+        else
+          {:error, reason} -> {:error, reason}
+        end
+
+      {:reply, result, state}
+    else
+      {:reply, {:error, :telephony_leg_mismatch}, state}
+    end
   end
 
   def handle_call(
@@ -238,8 +257,15 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
       )
       when kind in [:answered, :answering_machine, :ended] do
     case OutgoingLegLifecycle.handle(event, binding, state.service, state.leg_id) do
-      {:keep, result} -> {:reply, result, state}
-      {:stop, result} -> {:stop, :normal, result, state}
+      {:keep, {:error, :telephony_leg_mismatch} = result} ->
+        {:reply, result, state}
+
+      {:keep, result} ->
+        {:reply, result, observe_usage(state, event)}
+
+      {:stop, result} ->
+        state = state |> observe_usage(event) |> finish_stopped_usage(event)
+        {:stop, :normal, result, state}
     end
   end
 
@@ -258,11 +284,12 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     %{state | binding: binding, result: :ok, status: status, waiters: []}
   end
 
-  defp fail(state, reason) do
+  defp fail(state, reason, usage_outcome) do
     result = {:error, reason}
     :ok = MediaAdmission.revoke(state.media_admission, self())
     reply_waiters(state.waiters, result)
     Process.send_after(self(), :retire, 1_000)
+    state = finish_usage(state, usage_outcome)
     %{state | result: result, status: :failed, waiters: []}
   end
 
@@ -292,16 +319,17 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     end
   end
 
-  defp handle_adopted_event(%Event{kind: :outgoing}, binding, state) do
+  defp handle_adopted_event(%Event{kind: :outgoing} = event, binding, state) do
+    state = observe_usage(state, event)
     {:reply, :ok, %{state | binding: binding, status: :accepted}}
   end
 
   defp handle_adopted_event(%Event{} = event, binding, state) do
-    state = %{state | binding: binding, status: :accepted}
+    state = state |> Map.merge(%{binding: binding, status: :accepted}) |> observe_usage(event)
 
     case OutgoingLegLifecycle.handle(event, binding, state.service, state.leg_id) do
       {:keep, result} -> {:reply, result, state}
-      {:stop, result} -> {:stop, :normal, result, state}
+      {:stop, result} -> {:stop, :normal, result, finish_stopped_usage(state, event)}
     end
   end
 
@@ -314,6 +342,17 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         Registry.unregister(Vxpipe.Gateway.Telephony.LegRegistry, key)
         {:error, reason}
     end
+  end
+
+  defp observe_usage(state, event) do
+    %{state | usage: LegUsage.observe(state.usage, event)}
+  end
+
+  defp finish_stopped_usage(state, %Event{kind: :ended}), do: state
+  defp finish_stopped_usage(state, %Event{}), do: finish_usage(state, :cancelled)
+
+  defp finish_usage(state, outcome) do
+    %{state | usage: LegUsage.fail(state.usage, outcome)}
   end
 
   defp via(leg_id) do

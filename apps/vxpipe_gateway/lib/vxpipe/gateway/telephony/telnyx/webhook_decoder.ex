@@ -116,7 +116,8 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.WebhookDecoder do
               provider_call_control_id: call_control_id,
               provider_call_leg_id: call_leg_id,
               provider_call_session_id: call_session_id,
-              occurred_at: occurred_at
+              occurred_at: occurred_at,
+              occurred_at_provenance: :provider_reported
             ],
             attributes
           )

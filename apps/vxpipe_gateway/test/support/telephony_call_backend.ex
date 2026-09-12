@@ -13,6 +13,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
     Agent.start_link(fn ->
       %{
         claim: claim(),
+        activation: Keyword.get(options, :activation, :test_activation),
         observer: Keyword.fetch!(options, :observer),
         operations: [],
         activation_failure?: Keyword.get(options, :activation_failure?, false),
@@ -24,6 +25,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
 
   def backend(agent), do: {__MODULE__, agent}
   def claim(agent), do: Agent.get(agent, & &1.claim)
+  def put_activation(agent, activation), do: Agent.update(agent, &%{&1 | activation: activation})
   def operations(agent), do: Agent.get(agent, &Enum.reverse(&1.operations))
 
   @impl true
@@ -59,7 +61,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
     if Agent.get(agent, & &1.activation_failure?) do
       {:error, :command_rejected}
     else
-      {:ok, :test_activation}
+      {:ok, Agent.get(agent, & &1.activation)}
     end
   end
 

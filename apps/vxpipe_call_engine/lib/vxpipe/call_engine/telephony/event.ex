@@ -28,6 +28,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
              :provider_call_session_id,
              :leg_id,
              :occurred_at,
+             :occurred_at_provenance,
              :stream_id,
              :sequence_number,
              :answering_machine,
@@ -42,6 +43,7 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
                 provider_call_session_id: nil,
                 leg_id: nil,
                 occurred_at: nil,
+                occurred_at_provenance: nil,
                 stream_id: nil,
                 sequence_number: nil,
                 from: nil,
@@ -62,6 +64,8 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           | :answering_machine
           | :ended
 
+  @type end_reason :: :hangup | :busy | :no_answer | :failed | :timeout
+
   @type t :: %__MODULE__{
           kind: kind(),
           provider: atom(),
@@ -72,21 +76,34 @@ defmodule Vxpipe.CallEngine.Telephony.Event do
           provider_call_session_id: nil | String.t(),
           leg_id: nil | String.t(),
           occurred_at: nil | DateTime.t(),
+          occurred_at_provenance: nil | :provider_reported | :locally_measured,
           stream_id: nil | String.t(),
           sequence_number: nil | non_neg_integer(),
           from: nil | String.t(),
           to: nil | String.t(),
           digit: nil | String.t(),
           answering_machine: nil | :human | :machine | :unknown,
-          end_reason: nil | :hangup | :busy | :no_answer | :failed | :timeout,
+          end_reason: nil | end_reason(),
           media: nil | MediaPacket.t()
         }
 
   @spec valid?(t()) :: boolean()
   def valid?(%__MODULE__{} = event) do
     event.kind in @kinds and is_atom(event.provider) and
-      present?(event.provider_call_control_id) and valid_kind?(event)
+      present?(event.provider_call_control_id) and valid_time_provenance?(event) and
+      valid_kind?(event)
   end
+
+  defp valid_time_provenance?(%{occurred_at: nil, occurred_at_provenance: nil}), do: true
+
+  defp valid_time_provenance?(%{
+         occurred_at: %DateTime{},
+         occurred_at_provenance: provenance
+       })
+       when provenance in [nil, :provider_reported, :locally_measured],
+       do: true
+
+  defp valid_time_provenance?(%__MODULE__{}), do: false
 
   defp valid_kind?(%__MODULE__{kind: :incoming} = event),
     do:

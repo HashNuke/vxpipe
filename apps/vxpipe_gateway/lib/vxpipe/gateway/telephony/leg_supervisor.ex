@@ -67,7 +67,10 @@ defmodule Vxpipe.Gateway.Telephony.LegSupervisor do
       request: request,
       service: service,
       media_admission: media_admission,
-      media_supervisor: Keyword.get(runtime_options, :media_supervisor, MediaSupervisor)
+      media_supervisor: Keyword.get(runtime_options, :media_supervisor, MediaSupervisor),
+      usage_clock:
+        Keyword.get(runtime_options, :usage_clock, fn -> DateTime.utc_now(:millisecond) end),
+      usage_reporter: Keyword.get(runtime_options, :usage_reporter)
     ]
 
     case DynamicSupervisor.start_child(supervisor, {OutgoingLeg, options}) do

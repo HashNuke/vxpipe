@@ -29,6 +29,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.IncomingEventDecoder do
         provider_call_leg_id: call_sid,
         provider_call_session_id: nil,
         occurred_at: occurred_at,
+        occurred_at_provenance: :locally_measured,
         from: from,
         to: to
       }

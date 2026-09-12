@@ -317,6 +317,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, UsageObservations.record(state, capability, observations)}
   end
 
+  def handle_info({:vxpipe_telephony_usage_observations, observations}, state) do
+    {:noreply, UsageObservations.record_telephony(state, observations)}
+  end
+
   def handle_info({:vxpipe_capability_tool_started, capability, command, call}, state) do
     state = ToolCalls.started(state, capability, command, call)
     {:noreply, CallerIdle.reconcile(state)}

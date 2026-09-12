@@ -84,7 +84,8 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.CallbackEventDecoder do
             provider_call_leg_id: call_sid,
             provider_call_session_id: nil,
             leg_id: leg_id,
-            occurred_at: occurred_at
+            occurred_at: occurred_at,
+            occurred_at_provenance: :locally_measured
           ],
           attributes
         )

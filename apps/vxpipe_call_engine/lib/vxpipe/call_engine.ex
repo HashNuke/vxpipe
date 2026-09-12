@@ -78,6 +78,13 @@ defmodule Vxpipe.CallEngine do
     LiveInspectionBuffer.snapshot(tenant_id, call_id)
   end
 
+  @doc "Records trusted, provider-neutral carrier usage without blocking the live room."
+  @spec record_telephony_usage([Vxpipe.CallEngine.Usage.Observation.t()]) ::
+          :ok | {:error, :invalid_telephony_usage | :room_not_found}
+  def record_telephony_usage(observations) when is_list(observations) do
+    RoomSupervisor.record_telephony_usage(observations)
+  end
+
   @spec join_participant(JoinParticipant.t()) ::
           {:ok, Vxpipe.CallEngine.Participant.Snapshot.t()} | {:error, Error.t()}
   def join_participant(%JoinParticipant{} = command) do

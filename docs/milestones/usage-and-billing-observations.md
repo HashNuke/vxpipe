@@ -1,8 +1,8 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation/settlement plus model, text-to-speech, speech-to-text, and
-tool attempt capture into the private archive are implemented (2026-09-12); carrier boundaries,
-operator totals, and billing enrichment remain. Specification review:
+Status: in progress. Typed observation/settlement plus model, text-to-speech, speech-to-text, tool,
+and carrier-leg capture into the private archive are implemented (2026-09-12); operator totals and
+billing enrichment remain. Specification review:
 approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
@@ -30,19 +30,19 @@ not blind arrival order. Accounting must not start prohibited STT to obtain miss
 ## Implementation checklist
 
 - [x] Red-test typed adapter usage, attribution and observation arithmetic before modifying provider result contracts.
-- [ ] Capture supported usage in buffered/streaming model and hosted speech adapters plus tool/carrier boundaries.
+- [x] Capture supported usage in buffered/streaming model and hosted speech adapters plus tool/carrier boundaries.
 - [ ] Persist private observations/effective projections asynchronously and expose tenant-safe operator totals by meaningful dimension/currency.
 - [ ] Implement optional billing-enrichment port/workflow with a controlled provider fixture and honest unavailable support.
 - [ ] Verify measurement/provenance semantics and document supported provider billing lookup capabilities.
 
 ## Acceptance and failure checks
 
-- [ ] Deltas 100 + 60 = 160; cumulative 100 then 160 = 160; cumulative 1000/1600/final 1700 = 1700; explicit 1650 correction wins over stale 1800 estimate.
-- [ ] Two distinct 50 deltas total 100; proven duplicate delivery does not add; included token categories are not counted twice.
-- [ ] Multi-round model and multi-segment TTS retain separate attempts; interrupted/failed usage survives stale-output filtering.
-- [ ] STT interval/characters are observed without invented turn cost; unknown IDs/price stay absent; units/currencies do not mix.
+- [x] Deltas 100 + 60 = 160; cumulative 100 then 160 = 160; cumulative 1000/1600/final 1700 = 1700; explicit 1650 correction wins over stale 1800 estimate.
+- [x] Two distinct 50 deltas total 100; proven duplicate delivery does not add; included token categories are not counted twice.
+- [x] Multi-round model and multi-segment TTS retain separate attempts; interrupted/failed usage survives stale-output filtering.
+- [x] STT interval/characters are observed without invented turn cost; unknown IDs/price stay absent; units/currencies do not mix.
 - [ ] Later billing can complete after room end without blocking it, violating source privacy, or reviving a purged call.
-- [ ] Finalized non-overlapping deltas 100 + 60 remain 160, not 60; a stale cumulative observation
+- [x] Finalized non-overlapping deltas 100 + 60 remain 160, not 60; a stale cumulative observation
   cannot regress the effective amount solely by arriving later without correction evidence.
 
 ## Manual verification
@@ -239,8 +239,40 @@ Implementation evidence (2026-09-12, tool-invocation checkpoint):
   warnings-as-errors compilation, strict Credo over 685 source files, all 879 tests across the
   eight umbrella apps, and the unused-dependency check.
 
-This remains a partial milestone. Carrier capture, persisted settlement/operator totals, and
-billing enrichment are not claimed yet.
+Implementation evidence (2026-09-12, carrier-leg capture checkpoint):
+
+- Added one provider-neutral carrier attempt contract. It records one locally observed
+  `carrier_legs` request only after local validation/media admission succeeds and immediately before
+  the answer or dial adapter is called. A local leg ID identifies the Vxpipe attempt and attribution;
+  it is never substituted for an external identifier.
+- Accepted carrier identity adds the real provider leg as `operation_id` and the real provider
+  session when present. The first valid answer or media-start event marks connection. A later valid
+  end derives `connection_duration` only from non-regressing evidence; two provider timestamps yield
+  provider-reported provenance, while receipt/local clocks remain locally measured. A later provider
+  answer can improve an earlier local media-start boundary without emitting a duplicate state fact.
+- Rejected dials/answers retain a failed terminal observation without duration or invented provider
+  identity. Local cancellation and ambiguous submission cleanup retain cancelled/unknown outcomes
+  without claiming a carrier end time. Duplicate connected/end handling is idempotent, and a
+  mismatched event cannot mutate usage state.
+- Gateway separates lifecycle adaptation, event-evidence translation, and a failure-isolated
+  reporting port. Call Engine separately owns attempt state transitions and immutable observation
+  projection. Telnyx and Twilio use these same provider-neutral boundaries. The default reporter
+  routes exact tenant/call/room/incarnation/participant/leg observations to the existing private
+  asynchronous archive; no client event or synchronous SQL write is added.
+- Red evidence: the pure attempt tests first failed on the absent module; local-cancellation evidence
+  then failed until unavailable duration was explicit; later provider timing failed to improve a
+  local connected boundary; outgoing and incoming lifecycle tests timed out on absent reporting;
+  rejected dial behavior returned success before the controlled adapter supported rejection; and a
+  mismatched ended event initially emitted a false duration before validation was moved ahead of
+  accounting.
+- Focused green evidence: five pure attempt cases, private-room archive routing, thirteen outgoing
+  lifecycle cases, six incoming lifecycle cases, three incoming activation cases, and the Telnyx and
+  Twilio decoder suites pass. The complete Gateway suite passes 227 tests with six existing
+  integration exclusions. Root formatting, warnings-as-errors compilation, strict Credo over 691
+  source files, all 888 tests across eight apps, and the unused-dependency check pass.
+
+This remains a partial milestone. Persisted effective projections/operator totals and billing
+enrichment are not claimed yet.
 
 ## Specification review
 

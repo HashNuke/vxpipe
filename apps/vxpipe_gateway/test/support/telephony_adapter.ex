@@ -28,6 +28,9 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
       "unknown:" <> _observer ->
         {:ok, %Submission{status: :unknown, provider_call_control_id: nil}}
 
+      "reject:" <> _observer ->
+        {:error, :command_rejected}
+
       _accepted ->
         {:ok,
          %Submission{
@@ -66,6 +69,7 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
     case Keyword.fetch!(options, :api_key) do
       "observer:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "unknown:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
+      "reject:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       _other -> self()
     end
   end

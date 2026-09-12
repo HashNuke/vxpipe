@@ -268,6 +268,106 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     refute_receive {:test_telephony_end_leg, _request}
   end
 
+  test "reports one carrier leg and its provider-timed connection duration", context do
+    service = service(self(), [])
+    started_at = ~U[2026-09-12 04:00:00.000Z]
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request(),
+               service,
+               context.media_admission,
+               usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()},
+               usage_clock: fn -> started_at end
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    assert_receive {:test_usage_observations, [started]}
+    assert_receive {:test_telephony_dial, _dial}
+    assert_receive {:test_usage_observations, [identified]}
+
+    assert started.measurement.component == "carrier_legs"
+    assert started.measurement.quantity == 1
+    assert started.attribution.leg_id == context.leg_id
+    assert started.provider.operation_id == nil
+
+    assert identified.provider.name == "telnyx"
+    assert identified.provider.integration_id == "telnyx-primary"
+    assert identified.provider.operation_id == "outbound-call-leg"
+    assert identified.provider.session_id == "outbound-call-session"
+
+    answered =
+      lifecycle_event(:answered,
+        provider_event_id: "event-answered-usage",
+        occurred_at: ~U[2026-09-12 04:00:03.250Z]
+      )
+
+    assert :ok = OutgoingLeg.dispatch(leg, answered, 1_000)
+    assert_receive {:test_usage_observations, [connected]}
+    assert connected.measurement == nil
+    assert connected.delivery_id == "event-answered-usage"
+
+    assert :ok = OutgoingLeg.dispatch(leg, answered, 1_000)
+    refute_receive {:test_usage_observations, _duplicate_connected}
+
+    mismatched = %{
+      ended_event(:hangup)
+      | provider_event_id: "event-ended-mismatched-usage",
+        provider_call_control_id: "another-call-control",
+        occurred_at: ~U[2026-09-12 04:01:00.000Z]
+    }
+
+    assert {:error, :telephony_leg_mismatch} = OutgoingLeg.dispatch(leg, mismatched, 1_000)
+    refute_receive {:test_usage_observations, _mismatched_usage}
+
+    monitor = Process.monitor(leg)
+
+    ended =
+      lifecycle_event(:ended,
+        provider_event_id: "event-ended-usage",
+        occurred_at: ~U[2026-09-12 04:01:08.750Z],
+        end_reason: :hangup
+      )
+
+    assert :ok = OutgoingLeg.dispatch(leg, ended, 1_000)
+    assert_receive {:test_usage_observations, [duration]}
+    assert duration.outcome == :succeeded
+    assert duration.measurement.component == "connection_duration"
+    assert duration.measurement.quantity == 65_500
+    assert duration.measurement.provenance == :provider_reported
+    assert duration.provider.operation_id == "outbound-call-leg"
+    assert duration.delivery_id == "event-ended-usage"
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+  end
+
+  test "retains a rejected carrier dial without inventing duration or provider identity",
+       context do
+    service = service(self(), api_key: "reject:#{:erlang.pid_to_list(self())}")
+
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request(),
+               service,
+               context.media_admission,
+               usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
+             )
+
+    assert {:error, :command_rejected} = OutgoingLeg.await(leg, 1_000)
+    assert_receive {:test_usage_observations, [started]}
+    assert_receive {:test_telephony_dial, _dial}
+    assert_receive {:test_usage_observations, [failed]}
+
+    assert started.measurement.component == "carrier_legs"
+    assert failed.outcome == :failed
+    assert failed.measurement == nil
+    assert failed.provider.operation_id == nil
+    assert failed.provider.session_id == nil
+  end
+
   test "connector cleanup ends a known exact carrier leg before retiring it", context do
     registry = ServiceRegistry.init!(enabled: true, services: [service_options(self())])
 
@@ -398,7 +498,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
           provider_call_control_id: "outbound-call-control",
           provider_call_leg_id: "outbound-call-leg",
           provider_call_session_id: "outbound-call-session",
-          occurred_at: ~U[2026-09-11 14:30:00Z]
+          occurred_at: ~U[2026-09-11 14:30:00Z],
+          occurred_at_provenance: :provider_reported
         ],
         overrides
       )
@@ -416,6 +517,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
       provider_call_session_id: "outbound-call-session",
       leg_id: leg_id,
       occurred_at: ~U[2026-09-11 13:45:00Z],
+      occurred_at_provenance: :provider_reported,
       from: "+15550001000",
       to: "+15550001001"
     }
@@ -432,6 +534,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
       provider_call_session_id: nil,
       leg_id: leg_id,
       occurred_at: ~U[2026-09-11 13:46:00Z],
+      occurred_at_provenance: :locally_measured,
       sequence_number: 2,
       from: "+15550001000",
       to: "+15550001001"

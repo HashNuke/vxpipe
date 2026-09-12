@@ -292,4 +292,52 @@ Green evidence so far:
 - Root gates: formatting, warnings-as-errors compilation, strict Credo over 685 source files, all
   879 tests across eight apps, and the unused-dependency check pass.
 
-Carrier observations, persisted settlement/operator totals, and billing enrichment remain.
+## 2026-09-12: carrier-leg capture
+
+Carrier accounting now begins at the common answer/dial adapter boundary. Local validation and
+media admission happen first, so a request that never reaches the adapter does not create a carrier
+attempt. Once the adapter is about to run, one locally measured `carrier_legs` request is emitted.
+The internal telephony-leg ID remains the local attempt and attribution ID; it is not copied into an
+external provider identifier.
+
+Accepted submission or event evidence retains the actual external leg as the operation ID and the
+external session when supplied. Answered or media-started evidence sets the first connected
+boundary. An ended event produces `connection_duration` only when the end does not precede that
+boundary. Explicit event-time provenance prevents a locally observed receipt time from being
+reported as provider supplied. Later provider timing can improve an earlier local media-start
+boundary without adding a second connected fact.
+
+Adapter rejection produces a failed terminal observation with no duration. Local cancellation and
+ambiguous submission cleanup use cancelled or unknown outcomes without treating the end-command
+request as proof that the carrier leg ended. Replayed connection or terminal evidence has no second
+effect. A test exposed that the first wiring observed an ended event before binding validation; the
+ordering was corrected so mismatched events cannot settle usage.
+
+Responsibilities remain split: the Call Engine attempt module owns lifecycle state and timing
+boundaries while its projection module builds immutable observations. The Gateway leg-usage adapter
+owns state/reporting coordination, a separate module translates provider-neutral event evidence,
+and the reporting port isolates reporter failure. Incoming/outgoing leg owners retain only the
+current optional usage state. The default reporter sends scoped observations to the live room's
+existing private archive path without SQL or a client event.
+
+Red evidence:
+
+- Five pure attempt scenarios began with the module absent, then exposed unavailable-duration and
+  later-provider-evidence gaps during iteration.
+- Outgoing and incoming lifecycle cases initially timed out waiting for carrier observations.
+- The controlled rejected dial initially returned success.
+- A mismatched ended event initially emitted a false terminal duration.
+
+Focused green evidence so far:
+
+- Pure carrier attempt projection: 5 tests, 0 failures.
+- Private live-room carrier archival: 1 test, 0 failures.
+- Outgoing leg lifecycle: 13 tests, 0 failures.
+- Incoming leg lifecycle: 6 tests, 0 failures.
+- Incoming activation: 3 tests, 0 failures.
+- Carrier webhook decoder focus: 31 tests across the selected lifecycle/decoder files, 0 failures.
+- Complete Gateway: 227 tests, 0 failures, 6 existing integration exclusions.
+- Root formatting, warnings-as-errors compilation, strict Credo over 691 source files, all 888 tests
+  across eight apps, and the unused-dependency check pass.
+
+Persisted effective projections/operator totals and billing enrichment remain.

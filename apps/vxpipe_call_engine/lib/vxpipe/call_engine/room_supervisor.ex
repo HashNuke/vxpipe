@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   alias Vxpipe.CallEngine.Archive.Handoff
   alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
+  alias Vxpipe.CallEngine.Usage.Observation
 
   alias Vxpipe.CallEngine.{
     CallLifecycle,
@@ -97,6 +98,31 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
          details: %{"participant_id" => participant_id}
        )}
   end
+
+  @spec record_telephony_usage([Observation.t()]) ::
+          :ok | {:error, :invalid_telephony_usage | :room_not_found}
+  def record_telephony_usage(
+        [
+          %Observation{
+            tenant_id: tenant_id,
+            capability: :telephony,
+            attribution: %{room_id: room_id}
+          }
+          | _rest
+        ] = observations
+      )
+      when is_binary(tenant_id) and is_binary(room_id) do
+    case lookup_room(tenant_id, room_id) do
+      {:ok, room_authority} ->
+        send(room_authority, {:vxpipe_telephony_usage_observations, observations})
+        :ok
+
+      {:error, %Error{code: :room_not_found}} ->
+        {:error, :room_not_found}
+    end
+  end
+
+  def record_telephony_usage(_observations), do: {:error, :invalid_telephony_usage}
 
   def attach_connection(%AttachConnection{} = command, speech_to_text_options, output_sink) do
     case lookup_room(command.tenant_id, command.room_id) do

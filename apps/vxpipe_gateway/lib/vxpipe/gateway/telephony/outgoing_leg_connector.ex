@@ -64,7 +64,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
   defp start_leg(options, request, service, leg_id, timeout) do
     supervisor = Keyword.get(options, :leg_supervisor, LegSupervisor)
     media_admission = Keyword.get(options, :media_admission, MediaAdmission)
-    runtime_options = Keyword.take(options, [:media_supervisor])
+    runtime_options = Keyword.take(options, [:media_supervisor, :usage_clock, :usage_reporter])
 
     case LegSupervisor.start_outgoing(
            supervisor,

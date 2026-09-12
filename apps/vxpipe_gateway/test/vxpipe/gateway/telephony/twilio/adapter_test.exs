@@ -141,6 +141,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.AdapterTest do
               provider_call_leg_id: @call_sid,
               provider_call_session_id: nil,
               occurred_at: ~U[2026-09-11 16:00:00Z],
+              occurred_at_provenance: :locally_measured,
               from: "+15550001001",
               to: "+15550001000"
             }} =

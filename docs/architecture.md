@@ -2703,8 +2703,7 @@ prepared private-briefing capability, matching the pinned participant and option
 same private asynchronous archive path used for model observations stores the facts; no client
 event or raw synthesis text is added. Definition-selected hosted and deterministic tone providers
 publish a safe provider identity. The legacy room command path lacks a pinned call/profile identity
-and remains unobserved rather than fabricating one. Carrier capture remains a later part of the
-usage milestone.
+and remains unobserved rather than fabricating one.
 
 The third runtime capture path covers definition-selected speech-to-text sessions. The resolved
 runtime pins call, participant/optional activation, configured profile, and a safe provider/model
@@ -2760,6 +2759,36 @@ remain in the existing private tool-history facts; neither is copied into usage 
 ordinary struct inspection. `RoomAuthority` accepts the observations only from the exact active
 agent capability or its committed-transfer teardown source, rechecks the call and activation, and
 uses the same private asynchronous archive/live-inspection path without a client usage event.
+
+The fifth runtime capture path covers incoming and outgoing carrier legs at Gateway's shared
+provider-neutral telephony boundary. A locally generated telephony-leg ID is both the usage attempt
+identity and the optional leg attribution; it is never presented as an external provider ID. After
+request/service validation and media admission, and immediately before the adapter's answer or dial
+call, Gateway records one final locally measured `carrier_legs` request delta. Earlier validation or
+admission failure creates no carrier observation because no carrier operation was attempted.
+
+An accepted submission or authenticated event adds the real provider leg ID as `operation_id` and
+the real provider session ID when one exists. The first valid answered or media-started event marks
+the connected boundary. A later valid ended event records `connection_duration` only when its time
+does not precede the connected boundary. Two provider-envelope timestamps produce
+provider-reported duration; a locally observed receipt/media time produces locally measured
+duration. Event timestamp provenance is explicit: Telnyx webhook envelope time is
+provider-reported, while Twilio's HTTP receipt clock is locally measured. A later provider answer
+may improve an earlier local media-start boundary without creating a second connected observation.
+
+Rejected answer/dial attempts retain failed terminal observations without invented duration or
+provider identity. Local cancellation and an ambiguous submission retain cancelled/unknown terminal
+state without claiming the carrier has ended, so no duration is derived from the local end-command
+request. Duplicate lifecycle evidence changes neither boundaries nor totals. Binding validation runs
+before accounting; a mismatched provider/service/leg event cannot connect or settle another leg.
+
+`Vxpipe.Gateway.Telephony.LegUsage` coordinates lifecycle-to-usage state and delegates event-evidence
+translation and failure-isolated reporting to separate modules. Call Engine separately owns attempt
+state transitions and immutable observation projection. The reporter routes exact
+tenant/call/room/incarnation/participant/leg facts to `RoomAuthority`, which revalidates that scope
+and writes through the existing private asynchronous archive/live-inspection port. Both carrier
+adapters use these same incoming/outgoing leg owners. No client usage event, synchronous SQL write,
+price, or provider-billable-duration claim is introduced by this capture path.
 
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports

@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls.TelephonyAdmissionClaim
-  alias Vxpipe.Gateway.Telephony.IncomingLegActivationResult
+  alias Vxpipe.Gateway.Telephony.{IncomingLegActivationResult, LegUsage}
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) do
@@ -52,6 +52,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       incarnation_id: nil,
       result: nil,
       status: :starting,
+      usage: nil,
       waiters: []
     }
 
@@ -70,6 +71,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
         incarnation_id: incarnation_id,
         result: result,
         status: status,
+        usage: activation_usage(activation),
         waiters: []
     }
 
@@ -96,7 +98,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       )
       when kind in [:answered, :media_started] do
     with :ok <- matching_event(state.claim, event) do
-      state = project_started(state, event)
+      state = state |> observe_usage(event) |> project_started(event)
 
       case dispatch_start_event(state, source, event) do
         :ok -> {:reply, :ok, state}
@@ -109,23 +111,28 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   def handle_call({:event, %Event{kind: :answered} = event}, _from, %{status: :running} = state) do
     case matching_event(state.claim, event) do
-      :ok -> {:reply, :ok, state}
+      :ok -> {:reply, :ok, observe_usage(state, event)}
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
   def handle_call({:event, event}, {source, _tag}, %{status: :running} = state) do
-    with :ok <- matching_event(state.claim, event),
-         :ok <-
-           call_backend(state.backend, :handle_live_event, [
-             state.claim,
-             state.activation,
-             source,
-             event
-           ]) do
-      {:reply, :ok, state}
-    else
-      {:error, reason} -> {:reply, {:error, reason}, state}
+    case matching_event(state.claim, event) do
+      :ok ->
+        state = observe_usage(state, event)
+
+        case call_backend(state.backend, :handle_live_event, [
+               state.claim,
+               state.activation,
+               source,
+               event
+             ]) do
+          :ok -> {:reply, :ok, state}
+          {:error, reason} -> {:reply, {:error, reason}, state}
+        end
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
     end
   end
 
@@ -227,6 +234,13 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     do: {:ok, media_url}
 
   defp activation_result(_custom_activation), do: :ok
+
+  defp activation_usage(%IncomingLegActivationResult{usage: usage}), do: usage
+  defp activation_usage(_custom_activation), do: nil
+
+  defp observe_usage(state, event) do
+    %{state | usage: LegUsage.observe(state.usage, event)}
+  end
 
   defp start_time(%Event{occurred_at: %DateTime{} = occurred_at}, _clock), do: occurred_at
   defp start_time(%Event{kind: :media_started}, clock), do: clock.()

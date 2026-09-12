@@ -23,7 +23,8 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
             %IncomingLegActivationResult{
               binding: binding,
               media_url: media_url,
-              submission: submission
+              submission: submission,
+              usage: usage
             }} =
              IncomingLegActivation.activate(
                service("accept"),
@@ -31,14 +32,22 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
                "rinc_phone-1",
                context.leg,
                media_admission: context.admission,
-               leg_id: fn -> "tleg-incoming-1" end
+               leg_id: fn -> "tleg-incoming-1" end,
+               usage_clock: fn -> ~U[2026-09-12 05:00:00.000Z] end,
+               usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
              )
 
     assert submission.status == :accepted
+    assert usage.attempt.attempt_id == "tleg-incoming-1"
     assert binding.client_state_leg_id == "tleg-incoming-1"
     assert binding.incarnation_id == "rinc_phone-1"
 
     assert_receive {:test_telephony_answer, request}
+    assert_receive {:test_usage_observations, [started]}
+    assert started.measurement.component == "carrier_legs"
+    assert started.attribution.participant_id == context.claim.participant_id
+    assert started.provider.operation_id == "call-leg-1"
+    assert started.provider.session_id == "call-session-1"
     assert media_url == request.media_url
     assert request.leg.leg_id == "tleg-incoming-1"
     assert request.leg.provider_call_control_id == "call-control-1"
@@ -99,10 +108,17 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
                "rinc_phone-1",
                context.leg,
                media_admission: context.admission,
-               leg_id: fn -> "tleg-incoming-2" end
+               leg_id: fn -> "tleg-incoming-2" end,
+               usage_clock: fn -> ~U[2026-09-12 05:30:00.000Z] end,
+               usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
              )
 
     assert_receive {:test_telephony_answer, request}
+    assert_receive {:test_usage_observations, [started]}
+    assert_receive {:test_usage_observations, [failed]}
+    assert started.outcome == :in_progress
+    assert failed.outcome == :failed
+    assert failed.measurement == nil
 
     token =
       request.media_url |> URI.parse() |> Map.fetch!(:path) |> String.split("/") |> List.last()

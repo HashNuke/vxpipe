@@ -47,6 +47,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
   alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Provider.MorseCode.Config, as: MorseConfig
+  alias Vxpipe.CallEngine.Usage.{ProviderContext, TelephonyAttempt}
 
   alias Vxpipe.CallEngine.{
     TestAudioOutputSink,
@@ -819,6 +820,52 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
            end)
 
     refute inspect(usage_facts) =~ "must-not-be-archived"
+    refute_receive {:vxpipe_event, %{kind: :usage_observed}}
+  end
+
+  test "archives trusted telephony usage privately for the exact live room" do
+    room_id = unique_id("room-telephony-usage")
+    plan = compile_plan(room_id)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    archive =
+      archive_options(
+        writer: {TestCollectingArchiveWriter, self()},
+        maximum_pending_facts: 16
+      )
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan, archive: Keyword.put(archive, :enabled, true))
+
+    assert {:ok, provider} =
+             ProviderContext.new(
+               name: "telnyx",
+               integration_id: "primary-phone",
+               operation_id: "provider-leg-private"
+             )
+
+    assert {:ok, _attempt, observations} =
+             TelephonyAttempt.start(
+               %{
+                 tenant_id: plan.tenant_id,
+                 call_id: plan.call_id,
+                 room_id: room_id,
+                 incarnation_id: room.incarnation_id,
+                 participant_id: caller.participant_id
+               },
+               "tleg-private-usage",
+               provider,
+               ~U[2026-09-12 04:30:00.000Z]
+             )
+
+    assert :ok = CallEngine.record_telephony_usage(observations)
+    fact = :usage_observed |> collect_archive_facts_through() |> List.last()
+    assert fact.kind == :usage_observed
+    assert fact.participant_id == caller.participant_id
+    assert fact.activation_id == nil
+    assert fact.payload["capability"] == "telephony"
+    assert fact.payload["attribution"]["leg_id"] == "tleg-private-usage"
+    assert fact.payload["provider"]["operation_id"] == "provider-leg-private"
     refute_receive {:vxpipe_event, %{kind: :usage_observed}}
   end
 
