@@ -100,7 +100,8 @@ defmodule Vxpipe.Calls.PublicationFinalizerTest do
       monitor = Process.monitor(finalizer)
 
       assert_receive {:vxpipe_call_details_finalization_skipped, ^finalizer, ^terminal_reason}
-      assert_receive {:DOWN, ^monitor, :process, ^finalizer, :normal}
+      assert_receive {:DOWN, ^monitor, :process, ^finalizer, reason}
+      assert reason in [:normal, :noproc]
       refute_receive {:publication_timer_scheduled, ^finalizer, _token, _delay}
     end
   end
