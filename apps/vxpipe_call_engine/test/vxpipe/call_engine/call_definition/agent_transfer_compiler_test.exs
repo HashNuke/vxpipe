@@ -193,26 +193,23 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
     assert {:ok, [descriptor]} = ToolDescriptors.compile(reception.tools)
 
     assert descriptor.input_schema == %{
-             "oneOf" => [
-               %{
-                 "type" => "object",
-                 "properties" => %{
-                   "destination" => %{
-                     "type" => "string",
-                     "enum" => ["billing"],
-                     "description" => "Permitted destination: billing (A billing specialist)."
-                   },
-                   "reason" => %{
-                     "type" => "string",
-                     "minLength" => 1,
-                     "maxLength" => 1_024,
-                     "description" => "Explain why the caller is being transferred."
-                   }
-                 },
-                 "required" => ["destination", "reason"],
-                 "additionalProperties" => false
+             "type" => "object",
+             "properties" => %{
+               "destination" => %{
+                 "type" => "string",
+                 "enum" => ["billing"],
+                 "description" => "Permitted destination: billing (A billing specialist)."
+               },
+               "reason" => %{
+                 "type" => "string",
+                 "minLength" => 1,
+                 "maxLength" => 1_024,
+                 "description" =>
+                   "Required for destination billing. Explain why the caller is being transferred."
                }
-             ]
+             },
+             "required" => ["destination", "reason"],
+             "additionalProperties" => false
            }
 
     assert {:ok, registry} = ToolRegistry.new([descriptor])
@@ -271,6 +268,55 @@ defmodule Vxpipe.CallEngine.CallDefinition.AgentTransferCompilerTest do
                "destination" => "human-support",
                "reason" => "Taylor is calling about order 17."
              })
+  end
+
+  test "projects mixed transfer argument requirements without provider combinators" do
+    input =
+      transfer_definition()
+      |> put_in(
+        [:participants, "reception", :transfers],
+        ["billing", "human-support"]
+      )
+      |> put_in(
+        [:participants, "human-support"],
+        %{
+          type: "human",
+          description: "A human support specialist",
+          connection: %{service: "web", mode: "receive", admission: "transfer"},
+          transfer_notice: "This call is recorded."
+        }
+      )
+
+    assert {:ok, definition} =
+             CallDefinition.new(input, resource_id: "support", revision: 7)
+
+    assert {:ok, plan} =
+             DefinitionCompiler.compile(definition, invocation(), registries())
+
+    assert {:ok, [descriptor]} =
+             plan.participants["reception"].tools
+             |> ToolDescriptors.compile()
+
+    assert descriptor.input_schema == %{
+             "type" => "object",
+             "properties" => %{
+               "destination" => %{
+                 "type" => "string",
+                 "enum" => ["billing", "human-support"],
+                 "description" =>
+                   "Permitted destinations: billing (A billing specialist), human-support (A human support specialist)."
+               },
+               "reason" => %{
+                 "type" => "string",
+                 "minLength" => 1,
+                 "maxLength" => 1_024,
+                 "description" =>
+                   "Required for destination human-support. Explain why the caller is being transferred."
+               }
+             },
+             "required" => ["destination"],
+             "additionalProperties" => false
+           }
   end
 
   test "rejects a human transfer target whose connection is an entry admission" do

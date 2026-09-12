@@ -26,6 +26,7 @@ defmodule Vxpipe.AgentRuntime.MixProject do
   defp deps do
     [
       {:jsv, "~> 0.22"},
+      {:plug, "~> 1.20", only: :test},
       {:req_llm, "~> 1.22"}
     ]
   end

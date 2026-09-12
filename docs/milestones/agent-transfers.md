@@ -315,6 +315,18 @@ instance exposed three Persistence fixtures pinned to the superseded `20260910.0
 those fixtures to the current `20260910.06` schema restored the complete green umbrella suite; the
 database was removed after verification.
 
+A later rendered acceptance pass exercised the development sample's mixed allowlist for the first
+time: billing needs only `destination`, while human support also needs a private `reason`. The
+top-level `oneOf` used to express that conditional caused the provider to return a `transfer` call
+with empty arguments, which the runtime correctly rejected and surfaced as a correlated RTVI
+error. A tagged provider test reproduced the exact wire contract. The model-visible schema now
+uses one closed destination enum plus an optional, descriptive reason property; it requires the
+reason at schema level only when every allowed destination needs it. The private transfer request
+continues to enforce the destination-specific reason rule independently, so flattening the model
+projection does not broaden transfer authority. The exact mixed schema now returns a populated
+human-support transfer call in the tagged provider lane. A fresh HTTPS/WebRTC browser call then
+showed `Function call (transfer)` and the source agent's spoken hold response for the same request.
+
 Final milestone evidence combines that rendered happy path and re-entry with deterministic failure
 coverage for unauthorized destinations, stale/wrong sources, duplicate preparation, provider
 startup failure, deadline expiry, failed commit, one-shot source restoration, late-result exclusion,

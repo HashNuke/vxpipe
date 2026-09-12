@@ -16,6 +16,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
 
     options =
       config.generation_options
+      |> put_maximum_output_tokens(request.maximum_output_tokens)
       |> Keyword.put(:api_key, config.api_key)
       |> put_tools(request.tools)
 
@@ -102,5 +103,13 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
       parameter_schema: tool.input_schema,
       callback: fn _arguments -> {:error, :runtime_owned_tool} end
     )
+  end
+
+  defp put_maximum_output_tokens(options, nil), do: options
+
+  defp put_maximum_output_tokens(options, maximum_output_tokens) do
+    options
+    |> Keyword.drop([:max_tokens, :max_completion_tokens, :max_output_tokens])
+    |> Keyword.put(:max_tokens, maximum_output_tokens)
   end
 end

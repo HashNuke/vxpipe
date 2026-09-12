@@ -1,7 +1,14 @@
 defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.AgentRuntime.{ModelResponse, PendingInvocation, Session, ToolCall, ToolDescriptor}
+  alias Vxpipe.AgentRuntime.{
+    Event,
+    ModelResponse,
+    PendingInvocation,
+    Session,
+    ToolCall,
+    ToolDescriptor
+  }
 
   alias Vxpipe.CallEngine.AgentRuntime.{
     Coordinator,
@@ -102,6 +109,52 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
                false
            end)
 
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
+  end
+
+  test "hands compaction usage to the room as a separate model attempt" do
+    runtime = start_runtime()
+    command = command("compaction-usage", "Make room before this model round")
+
+    assert :ok = Coordinator.respond(runtime.coordinator, command)
+    assert_receive {:test_agent_runtime_stream, provider, request}
+
+    send(
+      runtime.coordinator,
+      {:agent_runtime_event,
+       Event.new(:context_compaction_usage, request.correlation, %{
+         outcome: :failed,
+         usage: %{input_tokens: 25, output_tokens: 7, total_tokens: 32},
+         provider_metadata: %{request_id: "provider-compaction-request"}
+       })}
+    )
+
+    assert_receive {:vxpipe_usage_observations, coordinator, compaction_observations}
+    assert coordinator == runtime.coordinator
+
+    assert Enum.map(compaction_observations, & &1.measurement.component) == [
+             "context_compaction_input_tokens",
+             "context_compaction_output_tokens",
+             "context_compaction_total_tokens"
+           ]
+
+    assert [compaction_attempt] =
+             compaction_observations |> Enum.map(& &1.attempt_id) |> Enum.uniq()
+
+    assert Enum.all?(compaction_observations, fn observation ->
+             observation.attribution.turn_id == command.correlation_id and
+               observation.provider.request_id == "provider-compaction-request" and
+               observation.outcome == :failed
+           end)
+
+    assert {:ok, response} =
+             ModelResponse.new(text: "Ready.", usage: %{total_tokens: 11})
+
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_usage_observations, ^coordinator, conversation_observations}
+    refute hd(conversation_observations).attempt_id == compaction_attempt
+    assert hd(conversation_observations).measurement.component == "total_tokens"
     assert_receive {:vxpipe_capability_text_complete, ^coordinator, ^command}
   end
 

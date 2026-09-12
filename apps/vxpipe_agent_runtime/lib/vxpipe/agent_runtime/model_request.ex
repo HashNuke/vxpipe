@@ -5,14 +5,15 @@ defmodule Vxpipe.AgentRuntime.ModelRequest do
 
   @derive {Inspect, only: [:correlation]}
   @enforce_keys [:messages, :tools, :pending_invocations, :model_context, :correlation]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [maximum_output_tokens: nil]
 
   @type t :: %__MODULE__{
           messages: [Message.t()],
           tools: [ModelTool.t()],
           pending_invocations: [PendingInvocation.t()],
           model_context: map(),
-          correlation: map()
+          correlation: map(),
+          maximum_output_tokens: pos_integer() | nil
         }
 
   @spec new([Message.t()], [ModelTool.t()], [PendingInvocation.t()], map()) :: t()
@@ -33,5 +34,18 @@ defmodule Vxpipe.AgentRuntime.ModelRequest do
       model_context: model_context,
       correlation: correlation
     }
+  end
+
+  @doc false
+  @spec with_messages(t(), [Message.t()]) :: t()
+  def with_messages(%__MODULE__{} = request, messages) when is_list(messages) do
+    %{request | messages: messages}
+  end
+
+  @doc false
+  @spec with_maximum_output_tokens(t(), pos_integer()) :: t()
+  def with_maximum_output_tokens(%__MODULE__{} = request, maximum_output_tokens)
+      when is_integer(maximum_output_tokens) and maximum_output_tokens > 0 do
+    %{request | maximum_output_tokens: maximum_output_tokens}
   end
 end

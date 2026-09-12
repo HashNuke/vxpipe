@@ -659,12 +659,31 @@ exceed the model limit when compaction cannot make room.
 Compaction consumes only that agent's authorized live conversation, never an
 unrestricted room archive. A summary is derived data, not system authority, a tool
 result, or permission to execute tools. It does not modify `CallVariables`, grants,
-or the full permitted archive. Source-interval restrictions also apply to derived
-transcript summaries; denied transcript storage cannot be bypassed by saving a
-summary. If work uses a snapshot, preserve intervening messages and unresolved
-invocations when incorporating its result. The summarizer model/execution choice
-and configuration encoding are not selected; no new model recipient is authorized.
-This resolves the budget/conditions policy, not an implemented compaction engine.
+or the full permitted archive. The summary remains private to the owning Agent
+Runtime Session and subsequent model requests: it is not emitted to clients or
+storage at all. The original permitted transcript remains intact, and denied
+transcript storage cannot be bypassed by saving derived prose. If work uses a
+snapshot, preserve intervening messages and unresolved invocations when
+incorporating its result.
+
+The selected production compactor reuses the active activation's pinned model,
+provider, credential, and native routing policy in one buffered, tool-less request.
+It receives selected history as JSON data under fixed summary-only instructions;
+it receives no tools, transient variables, pending projection, or execution
+bindings. Cross-provider accounting uses a conservative encoded-byte estimate plus
+fixed message/tool envelope margins and the 75% trigger safety margin because
+ReqLLM does not expose one exact tokenizer for every provider. The context window
+and effective output reserve come from validated pinned-model metadata/options;
+unknown limits fail closed. See [model-context compaction](context-compaction.md)
+for the precise limits and failure behavior.
+
+Only bounded provider identifiers, reported usage, and the compaction outcome
+cross into Call Engine. Project them through the ordinary private usage/archive
+path as a distinct model attempt attributed to the triggering real turn, using
+`context_compaction_` measurement components rather than inventing another turn.
+Retain known usage from a rejected summary and an unmeasured failed operation for
+an attempted request that reports no usage. A failure before the model attempt
+creates no usage observation.
 
 R49 requires a configurable hard maximum acceptable MCP response size, default
 1 MiB (1,048,576 bytes) of decoded/decompressed response data. Enforce it
@@ -684,8 +703,11 @@ implementation details; the deferred general result/document-inspection design
 is unchanged.
 
 R50 permits explicitly configured LLM provider-native/router fallback only where
-the selected agent-runtime/ReqLLM provider surface supports the provider options. It does not add a Vxpipe fallback schema,
-direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
+the selected agent-runtime/ReqLLM provider surface supports the provider options. A pinned model
+capability profile may contribute recursively data-valued generation options over application
+defaults; credentials, streaming selection, and executable transport/hooks remain
+application-owned. The provider constructor validates the merged settings before room startup.
+This does not add a Vxpipe fallback schema, direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
 permission, privacy, and usage constraints, recording actual observed provider/
 model attribution without inventing hidden upstream attempts or IDs. This does
 not authorize MCP retries or promise replay of already-emitted speech/tool actions
@@ -1392,13 +1414,17 @@ through the Agent Runtime seed boundary. Later speech during preparation cannot 
 prepared destination's history. Selected-mode transient context is described below; re-entry
 remains a separate follow-up.
 
-For a `selected` destination, the generated transfer schema requires the source agent to provide a
-non-empty transfer reason of at most 1,024 characters. This requirement is destination-specific: a
-single transfer tool can still target ordinary-history destinations without accepting a reason for
-those variants. Call Engine validates the selected variant again while constructing its private
-transfer request and keeps the reason out of `Inspect` and client events. Plan Startup constructs a
-redacted Call Engine model-context source from the destination's immutable variable binding and
-that reason. Before every destination generation, the source reads through
+For a `selected` destination, the generated transfer schema asks the source agent to provide a
+non-empty transfer reason of at most 1,024 characters. The model-visible schema stays one flat
+object with a closed destination enum: it marks `reason` as required when every permitted
+destination needs one, and otherwise names the reason-requiring destinations in the property
+description. This avoids provider-specific combinators while still allowing one transfer tool to
+target ordinary and selected-history destinations. Call Engine independently enforces the exact
+destination-specific contract while constructing its private transfer request, so an ordinary
+destination rejects a reason and a selected destination rejects a missing, blank, oversized, or
+extra-valued reason regardless of model output. The engine keeps the reason out of `Inspect` and
+client events. Plan Startup constructs a redacted Call Engine model-context source from the
+destination's immutable variable binding and that reason. Before every destination generation, the source reads through
 `CallVariables.Binding`, so the variables owner independently enforces the pinned participant and
 readable sections. The transient JSON contains `call_variables` and, for selected transfers only,
 `transfer.reason`; it is neither copied into conversation history nor exposed as a client event.

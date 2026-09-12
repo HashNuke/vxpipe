@@ -176,7 +176,13 @@ if config_env() == :dev do
           Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider
         )
         |> Keyword.put(:model_provider_options, fixture: fixture_server)
-        |> Keyword.put(:model_provider_label, :local_fixture),
+        |> Keyword.put(:model_provider_label, :local_fixture)
+        |> Keyword.put(
+          :context_compaction,
+          enabled: true,
+          context_window_tokens: 1_048_576,
+          output_reserve_tokens: 65_536
+        ),
         model_fixture
         |> Keyword.put(:enabled, true)
         |> Keyword.put(:default_scenario, fixture_scenario)
@@ -190,7 +196,9 @@ if config_env() == :dev do
       config :req_llm, google_api_key: gemini_api_key
 
       {
-        Keyword.put(agent_runtime, :model_provider_options, api_key: gemini_api_key),
+        agent_runtime
+        |> Keyword.put(:model_provider_options, api_key: gemini_api_key)
+        |> Keyword.put(:context_compaction, enabled: true),
         model_fixture
       }
     end

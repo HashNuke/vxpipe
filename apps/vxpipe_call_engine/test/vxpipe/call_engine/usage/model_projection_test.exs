@@ -105,6 +105,55 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjectionTest do
     assert observation.attribution.tool_call_id == "tool-call-1"
   end
 
+  test "names compaction measurements separately without inventing another turn" do
+    assert {:ok, observations} =
+             ModelProjection.project(
+               %{usage: %{input_tokens: 25, output_tokens: 7, total_tokens: 32}},
+               correlation(),
+               provider_context(),
+               call_id: "call-usage",
+               activation_id: "activation-agent",
+               attempt_id: "model-attempt-compaction",
+               observed_at: @observed_at,
+               purpose: :context_compaction
+             )
+
+    measurements = Enum.map(observations, & &1.measurement)
+
+    assert Enum.map(measurements, & &1.component) == [
+             "context_compaction_input_tokens",
+             "context_compaction_output_tokens",
+             "context_compaction_total_tokens"
+           ]
+
+    assert Enum.map(measurements, & &1.included_in) == [
+             "context_compaction_total_tokens",
+             "context_compaction_total_tokens",
+             nil
+           ]
+
+    assert Enum.all?(observations, &(&1.attribution.turn_id == "turn-usage"))
+  end
+
+  test "retains a failed compaction operation when token usage is unavailable" do
+    assert {:ok, [observation]} =
+             ModelProjection.project(
+               %{usage: %{}, provider_metadata: %{}},
+               correlation(),
+               provider_context(),
+               call_id: "call-usage",
+               activation_id: "activation-agent",
+               attempt_id: "model-attempt-failed-compaction",
+               observed_at: @observed_at,
+               outcome: :failed,
+               purpose: :context_compaction
+             )
+
+    assert observation.measurement == nil
+    assert observation.outcome == :failed
+    assert String.starts_with?(observation.id, "uobs_")
+  end
+
   defp provider_context do
     assert {:ok, provider} =
              ProviderContext.new(

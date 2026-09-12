@@ -79,6 +79,59 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMProviderTest do
     assert_received {:provider_delta, "continuation", delta} when byte_size(delta) > 0
   end
 
+  test "Gemini accepts a transfer allowlist with destination-specific arguments" do
+    config = provider_config()
+
+    transfer = %ModelTool{
+      name: "transfer",
+      description: "Transfer the caller to one permitted participant.",
+      input_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "destination" => %{
+            "type" => "string",
+            "enum" => ["billing", "human-support"],
+            "description" =>
+              "Permitted destinations: billing (A billing specialist), human-support (Browser transfer destination)."
+          },
+          "reason" => %{
+            "type" => "string",
+            "minLength" => 1,
+            "maxLength" => 1_024,
+            "description" =>
+              "Required for destination human-support. Explain why the caller is being transferred."
+          }
+        },
+        "required" => ["destination"],
+        "additionalProperties" => false
+      }
+    }
+
+    request =
+      ModelRequest.new(
+        [
+          Message.system(
+            "Use the transfer tool when the caller asks for human support. Do not invent destinations."
+          ),
+          Message.user(
+            "Transfer me to human support because I need help with my sample order.",
+            :caller
+          )
+        ],
+        [transfer],
+        [],
+        %{request_id: "interop_mixed_transfer"}
+      )
+
+    assert {:ok, %ModelResponse{tool_calls: [call]}} =
+             Provider.stream(config, request, &emit_delta("mixed_transfer", &1))
+
+    assert call.name == "transfer"
+    assert %{"destination" => "human-support", "reason" => reason} = call.arguments
+    assert is_binary(reason)
+    assert String.trim(reason) != ""
+  end
+
   test "cancelling a live provider stream leaves its session usable" do
     config = provider_config()
 

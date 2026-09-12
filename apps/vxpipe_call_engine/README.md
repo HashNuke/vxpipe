@@ -145,6 +145,13 @@ bounded one-for-all restart budget. A participant supervisor owns that activatio
 participant shutdown or an exhausted activation restart ends that participant subtree without
 restarting the room.
 
+A trusted model capability profile pins its ReqLLM model and may add recursively data-valued
+`generation_options`. Profile values override matching application generation defaults, while
+credentials, streaming selection, and executable/provider-transport settings remain application
+configuration. Plan startup asks the configured provider constructor to validate the merged
+settings, so a known unsupported native routing/fallback option rejects the plan before the room
+starts. Vxpipe does not add another fallback list or retry coordinator.
+
 Every model-requested host or Call Variables operation is submitted to a bounded temporary worker
 under the active agent. `Tool.Invocation` owns one attempt, result bound, and deadline. The
 authoritative registry retains accepted work through leased and explicitly consumed completion,

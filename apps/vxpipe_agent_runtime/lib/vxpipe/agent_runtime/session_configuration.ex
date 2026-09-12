@@ -1,7 +1,7 @@
 defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   @moduledoc false
 
-  alias Vxpipe.AgentRuntime.{Message, ToolRegistry}
+  alias Vxpipe.AgentRuntime.{CompactionConfiguration, Message, ToolRegistry}
 
   @derive {Inspect, only: []}
   @enforce_keys [
@@ -22,6 +22,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
     :model_context_source,
     :model_context_timeout_ms,
     :maximum_model_context_bytes,
+    :context_preparation,
     :commit_timeout_ms,
     :request_timeout_ms,
     :event_destination
@@ -61,6 +62,12 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
            positive(Keyword.get(options, :model_context_timeout_ms, 1_000)),
          {:ok, maximum_model_context_bytes} <-
            positive(Keyword.get(options, :maximum_model_context_bytes, 256 * 1_024)),
+         {:ok, context_preparation} <-
+           CompactionConfiguration.new(
+             model_provider,
+             Keyword.get(options, :model),
+             Keyword.get(options, :context_compaction)
+           ),
          {:ok, commit_timeout_ms} <- positive(Keyword.get(options, :commit_timeout_ms, 1_000)),
          {:ok, request_timeout_ms} <-
            positive(Keyword.get(options, :request_timeout_ms, 30_000)),
@@ -85,6 +92,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          model_context_source: model_context_source,
          model_context_timeout_ms: model_context_timeout_ms,
          maximum_model_context_bytes: maximum_model_context_bytes,
+         context_preparation: context_preparation,
          commit_timeout_ms: commit_timeout_ms,
          request_timeout_ms: request_timeout_ms,
          event_destination: event_destination
@@ -102,12 +110,14 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
         %{
           begin_submission: begin_submission,
           commit: commit,
+          emit_context_compaction_usage: emit_context_compaction_usage,
           emit_model_attempt_started: emit_model_attempt_started,
           emit_model_usage: emit_model_usage,
           emit_text_delta: emit_text_delta
         }
       )
       when is_function(begin_submission, 0) and is_function(commit, 1) and
+             is_function(emit_context_compaction_usage, 3) and
              is_function(emit_model_attempt_started, 0) and is_function(emit_model_usage, 2) and
              is_function(emit_text_delta, 1) do
     %{
@@ -125,8 +135,10 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       model_context_source: config.model_context_source,
       model_context_timeout_ms: config.model_context_timeout_ms,
       maximum_model_context_bytes: config.maximum_model_context_bytes,
+      context_preparation: config.context_preparation,
       begin_submission: begin_submission,
       commit: commit,
+      emit_context_compaction_usage: emit_context_compaction_usage,
       emit_model_attempt_started: emit_model_attempt_started,
       emit_model_usage: emit_model_usage,
       emit_text_delta: emit_text_delta
@@ -152,6 +164,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       :model_context_source,
       :model_context_timeout_ms,
       :maximum_model_context_bytes,
+      :context_compaction,
       :commit_timeout_ms,
       :request_timeout_ms,
       :event_destination

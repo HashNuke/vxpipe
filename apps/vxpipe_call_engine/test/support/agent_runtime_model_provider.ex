@@ -15,7 +15,10 @@ defmodule Vxpipe.CallEngine.TestAgentRuntimeModelProvider do
   end
 
   @impl true
-  def generate(_model, _request), do: {:error, :unexpected_buffered_generation}
+  def generate(model, request) do
+    send(Map.fetch!(model, :owner), {:test_agent_runtime_generate, self(), request})
+    await_response(fn _text -> :ok end)
+  end
 
   @impl true
   def stream(model, request, emit) do

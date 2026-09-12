@@ -44,6 +44,7 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
              :attempt_id,
              :observed_at,
              :outcome,
+             purpose: :conversation,
              tool_call_id: nil
            ]),
          {:ok, _call_id} <- Keyword.fetch(options, :call_id),
@@ -51,7 +52,9 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
          {:ok, _attempt_id} <- Keyword.fetch(options, :attempt_id),
          {:ok, _observed_at} <- Keyword.fetch(options, :observed_at),
          outcome when outcome in [:succeeded, :failed, :cancelled] <-
-           Keyword.get(options, :outcome) do
+           Keyword.get(options, :outcome),
+         purpose when purpose in [:conversation, :context_compaction] <-
+           Keyword.get(options, :purpose) do
       {:ok, options}
     end
   end
@@ -88,17 +91,18 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
   defp observations(data, correlation, provider, attribution, options) do
     attempt_id = Keyword.fetch!(options, :attempt_id)
     usage = usage(data)
+    purpose = Keyword.fetch!(options, :purpose)
 
     measurements =
       @token_components
-      |> Enum.flat_map(&measurement(usage, &1))
-      |> add_inclusion_relations()
+      |> Enum.flat_map(&measurement(usage, &1, purpose))
+      |> add_inclusion_relations(component(purpose, "total_tokens"))
 
     measurements = if measurements == [], do: [nil], else: measurements
 
     measurements
     |> Enum.reduce_while({:ok, []}, fn measurement, {:ok, observations} ->
-      component = if measurement, do: measurement.component, else: "operation"
+      component = if measurement, do: measurement.component, else: component(purpose, "operation")
 
       case Observation.new(
              id: observation_id(attempt_id, component),
@@ -122,12 +126,12 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
     end
   end
 
-  defp measurement(usage, component) do
-    case fetch(usage, component) do
+  defp measurement(usage, source_component, purpose) do
+    case fetch(usage, source_component) do
       quantity when is_integer(quantity) and quantity >= 0 ->
         {:ok, measurement} =
           Measurement.new(
-            component: component,
+            component: component(purpose, source_component),
             unit: :tokens,
             quantity: quantity,
             mode: :cumulative,
@@ -142,12 +146,12 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
     end
   end
 
-  defp add_inclusion_relations(measurements) do
-    if Enum.any?(measurements, &(&1.component == "total_tokens")) do
+  defp add_inclusion_relations(measurements, total_component) do
+    if Enum.any?(measurements, &(&1.component == total_component)) do
       Enum.map(measurements, fn
         %Measurement{component: component} = measurement
-        when component in ["input_tokens", "output_tokens"] ->
-          %{measurement | included_in: "total_tokens"}
+        when component != total_component ->
+          %{measurement | included_in: total_component}
 
         measurement ->
           measurement
@@ -156,6 +160,9 @@ defmodule Vxpipe.CallEngine.Usage.ModelProjection do
       measurements
     end
   end
+
+  defp component(:conversation, component), do: component
+  defp component(:context_compaction, component), do: "context_compaction_" <> component
 
   defp usage(data) do
     case fetch(data, :usage) do

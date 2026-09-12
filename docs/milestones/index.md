@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 20 complete and 4 incomplete. Milestone 17, Telnyx calls and
+Status: 24 milestone specifications: 21 complete and 3 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -10,10 +10,9 @@ its guarded live-provider audio check still needs credentials and an approved de
 observations, is complete, including typed capture/settlement, asynchronous structured persistence,
 tenant-safe operator inspection, and optional bounded billing enrichment. Milestone 21, versioned
 call-details publications, is complete, including immutable late revisions and private operator
-retrieval. Milestone 22, context compaction and supported LLM fallback, is next. The earlier behavior
-contracts have completed focused review.
-Implementation continues through milestone 22, including the runnable samples and their
-cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain
+retrieval. Milestone 22, context compaction and supported LLM fallback, is complete, including
+bounded private summaries, provider-native routing, truthful usage, and runnable HTTPS/WebRTC
+acceptance. The platform is now at its pre-delivery review hold. Milestones 23 and 24 remain
 unimplemented until the user has exercised the working platform and decided which fixes or
 changes should precede packaging and retention.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
@@ -65,7 +64,7 @@ progress without claiming the entire milestone is complete.
 19. [x] [Permitted live recordings streamed to S3](streaming-recordings.md) — Record live mix and separate tracks without blocking participants or saving denied intervals.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
-22. [ ] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
+22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
 23. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Run the same platform through host application settings or a standalone JSON-configured image.
 24. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -121,8 +120,8 @@ The current platform already supports durable admission, streamed agent text/aud
 services, engine-owned local and remote tools, room-scoped Call Variables, asynchronous history,
 call inspection, multi-party mixing, presence-driven media policy, transfers, Telnyx and the common
 telephony boundary, and permitted S3-compatible recordings with private operator playback. The
-Twilio implementation still awaits its guarded live-provider proof. Context compaction and native
-fallback, container delivery, and whole-call retention remain unimplemented. Reuse working code;
+Twilio implementation still awaits its guarded live-provider proof. Container delivery and
+whole-call retention remain unimplemented. Reuse working code;
 do not recreate applications or label existing primitives as
 newly implemented.
 
