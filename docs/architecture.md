@@ -2952,9 +2952,17 @@ projection, and explicit component states. Calls rejects a mismatched source ide
 reporting window to that persisted end time, and either returns a wait decision or constructs and
 submits an immutable snapshot stamped with the assessment time. Reassessment is intentionally the
 same operation: an unchanged source digest resolves to the existing revision, while changed late
-facts receive a new identity, record timestamp, filename, and immutable object. Timer-driven first
-assessment and the production persistence source are separate collaborators, not responsibilities
-of this pure orchestration boundary.
+facts receive a new identity, record timestamp, filename, and immutable object.
+
+`finalize_call_details` starts a short-lived Calls-owned finalizer keyed by tenant and call outside
+the room supervision tree. It assesses immediately, then uses an injected clock and timer to poll
+only while persisted components remain unsettled before the reporting deadline. The next wake-up
+is bounded by both the configured polling interval and remaining reporting-window time. Source-read
+failure is reported internally and retried without restarting or extending the ended room. Once an
+assessment is publishable, the finalizer submits it to the independently supervised delivery worker
+and stops normally; delivery recovery retains responsibility for any durable pending revision.
+Simultaneous finalizer starts for the same call share the registered process. Clock, timer,
+assessment, delivery, and the production persistence source remain separate collaborators.
 
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,

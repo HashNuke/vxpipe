@@ -11,6 +11,10 @@ defmodule Vxpipe.Calls.PublicationSupervisor do
       {Registry, keys: :unique, name: Vxpipe.Calls.PublicationRegistry},
       {Task.Supervisor, name: Vxpipe.Calls.PublicationTaskSupervisor},
       {DynamicSupervisor,
+       strategy: :one_for_one,
+       name: Vxpipe.Calls.PublicationFinalizerSupervisor,
+       max_children: 1_024},
+      {DynamicSupervisor,
        strategy: :one_for_one, name: Vxpipe.Calls.PublicationWorkerSupervisor, max_children: 1_024}
     ]
 

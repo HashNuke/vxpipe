@@ -88,7 +88,14 @@ Implementation evidence:
   `ended_at`, permitted facts, and explicit component states; Calls validates tenant/call scope and
   applies the reporting window before constructing a snapshot. Focused tests prove pre-deadline
   waiting, deadline publication with honest incompleteness, and a new source revision for changed
-  late facts. Timer-driven initial assessment and the production persistence source remain pending.
+  late facts. The production persistence source remains pending.
+- Checkpoint C3b adds the short-lived Calls-owned finalizer process. It assesses immediately outside
+  the room, wakes through injected clock/timer boundaries at a bounded polling interval, publishes
+  exactly at the persisted-end reporting deadline when facts remain pending, and retries source
+  outages. Tenant/call registration coalesces simultaneous starts, while delivery continues through
+  the existing independently supervised workers. Focused tests use deterministic clocks and manual
+  timer delivery rather than sleeping. The production persistence source and lifecycle trigger
+  remain pending.
 
 ## Specification review
 

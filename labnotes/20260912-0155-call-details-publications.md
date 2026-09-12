@@ -245,3 +245,49 @@ missing behavior and callback before implementation.
 - Root formatting, warnings-as-errors compilation, unused-dependency checks, and strict Credo over
   748 source files passed. The complete database-backed umbrella run exited successfully with 932
   tests across all children and the existing external integration exclusions.
+
+## 2026-09-12 — checkpoint C3b
+
+### Decisions
+
+- Start one short-lived finalizer per tenant/call under a dedicated Calls-owned dynamic supervisor.
+  Registration coalesces simultaneous requests, while the existing delivery supervisor continues
+  to own immutable snapshot writes independently.
+- Assess immediately after start. If persisted components are unsettled before the reporting
+  deadline, schedule the next assessment for the smaller of the configured polling interval and
+  remaining reporting-window time. The room is neither retained nor consulted.
+- Keep wall-clock and timer operations behind separate behaviors. Production uses UTC system time
+  and `Process.send_after/3`; tests advance an Agent-backed clock and deliver the recorded timer
+  token directly without sleeping.
+- Treat source failure as retryable finalization unavailability. The finalizer reports the reason
+  internally and polls again; it does not fabricate a snapshot, change `ended_at`, or report the
+  call as published.
+- Stop the finalizer normally once it hands a publishable snapshot to the existing delivery worker.
+  Any reserved-but-undelivered revision remains the responsibility of durable pending-publication
+  recovery rather than keeping this assessment process alive.
+- Keep configuration validation, finalizer state, clock, timer, admission, process lifecycle, and
+  supervision in separate cohesive modules. The largest new production module is 116 lines.
+
+### Red evidence
+
+The two focused tests first failed because `PublicationFinalizers`, `PublicationClock`, and
+`PublicationTimer` did not exist. Before production behavior could be evaluated, the initial test
+harness also exposed two fixture defects: a fake source returned a bare assessment instead of the
+source-port tuple, and use of the application-global dynamic supervisor could leak a retrying child
+between failed tests. The fixtures now return the exact port contract and give every test its own
+supervised finalizer tree.
+
+### Green evidence
+
+- `cd apps/vxpipe_calls && mix test test/vxpipe/calls/publication_finalizer_test.exs` — 2 tests,
+  0 failures.
+- `cd apps/vxpipe_calls && mix test` — 74 tests, 0 failures.
+- Focused behavior covers pending facts at 30 seconds, a deterministic wake-up at the exact
+  60-second deadline, incomplete publication submission, source-read outage, and later successful
+  complete publication.
+- Root `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+  `mix deps.unlock --check-unused`, and `mix credo --strict` passed; Credo checked 756 source files
+  without issues.
+- Root `VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix
+  test` passed 934 tests across all umbrella children with the existing external integration-tag
+  exclusions.

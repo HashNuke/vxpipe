@@ -11,6 +11,7 @@ defmodule Vxpipe.Calls do
     CallDetailsPublications,
     Definitions,
     Inspections,
+    PublicationFinalizers,
     PublicationWorkers,
     TelephonyAdmissions,
     UsageProjections
@@ -118,6 +119,9 @@ defmodule Vxpipe.Calls do
 
   def assess_call_details(tenant_key, call_id, assessed_at, options \\ []),
     do: CallDetailsFinalization.assess(tenant_key, call_id, assessed_at, options)
+
+  def finalize_call_details(tenant_key, call_id, options \\ []),
+    do: PublicationFinalizers.start(tenant_key, call_id, options)
 
   def fetch_call_history(principal, call_id, options \\ []),
     do: Archives.fetch_call_history(principal, call_id, options)

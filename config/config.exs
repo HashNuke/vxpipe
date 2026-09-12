@@ -22,6 +22,7 @@ config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
 config :vxpipe_calls, Vxpipe.Calls,
   call_details_publication: [
     window_seconds: 60,
+    settlement_poll_ms: 5_000,
     maximum_attempts: 3,
     retry_delay_ms: 1_000,
     attempt_timeout_ms: 15_000
