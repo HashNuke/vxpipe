@@ -3,8 +3,9 @@
 Status: implementation in progress. Context budgeting, protected snapshot
 replacement, one bounded compaction attempt, production summarizer/accounting
 selection, Agent Runtime Session integration, and Call Engine queued-input
-integration are implemented. Summary provenance/privacy and metered usage are
-next. Specification review: approved (2026-09-08).
+integration, runtime-only summary privacy, and distinct metered compaction usage
+are implemented. Supported native fallback coverage is next. Specification
+review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -17,10 +18,10 @@ can be exercised without adding Vxpipe's own provider chain.
 
 ## Specification
 
-- Before each conversational inference/tool continuation, measure all model input including instructions, tool definitions, transient variable projection, selected history and current work. Reserve output capacity; at75% of usable input budget compact older completed conversation toward below50%.
+- Before each conversational inference/tool continuation, measure all model input including instructions, tool definitions, transient variable projection, selected history and current work. Reserve output capacity; at 75% of usable input budget compact older completed conversation toward below 50%.
 - Preserve instructions/tools, recent/current messages, unresolved invocation relationships and valid call/result pairing. Targets are not guaranteed if protected content is too large; never silently discard it or exceed model limit. Use a typed bounded failure when safe compaction cannot create room, rather than recursive/unbounded compaction attempts.
-- Summarizer model/provider/execution selection remains unapproved. Before production requests, explicitly settle that narrow selection and record it; do not silently add a cheaper/new provider, local model, or broaden data recipients. A controlled fake compactor proves orchestration independently. Define concrete token accounting/safety margin and failure/deadline behavior without claiming exact counting for unsupported models.
-- Compaction sees only agent-authorized conversation. Summary is derived untrusted data, not system policy, tool result or tool-execution authority. It never updates CallVariables/grants or replaces full permitted archival history. Derived transcripts retain source-interval storage restrictions.
+- Production summary work reuses the active activation's pinned model/provider/credential and validated provider-native routing options in one bounded, buffered, tool-less request. It does not select a cheaper/new provider or local model, broaden data recipients, or expose execution tools. A controlled fake compactor proves orchestration independently. Concrete conservative accounting, safety margins, and deadlines apply without claiming exact tokenizer parity.
+- Compaction sees only agent-authorized conversation. Summary is derived untrusted data, not system policy, tool result or tool-execution authority. It never updates CallVariables/grants or replaces full permitted archival history. Keep it private to the Agent Runtime Session and subsequent model requests; never publish it to clients or storage.
 - Snapshot-based work preserves messages/tool completions arriving afterward; stale results from terminated activations cannot attach to another agent. Keep bounded work outside RoomAuthority/media and attribute observed compaction usage without inventing a user turn or changing retention.
 - Expose only provider-native/router fallback options supported through the agent runtime's
   ReqLLM provider layer and existing configured profiles. No Vxpipe fallback schema/chain/
@@ -33,7 +34,7 @@ can be exercised without adding Vxpipe's own provider chain.
 - [x] Red-test token-budget trigger/target with fake compactor and realistic tool/history/variable input envelopes.
 - [x] Resolve and document summarizer selection and token accounting/limits before authorizing its production data flow.
 - [x] Implement bounded summary work, protected-history replacement and late-message/activation checks.
-- [ ] Preserve summary provenance/privacy and metered usage through existing event/storage boundaries.
+- [x] Preserve summary provenance/privacy and metered usage through existing event/storage boundaries.
 - [ ] Validate/pass through supported native fallback options and add controlled plus tagged adapter interoperability coverage.
 
 ## Acceptance and failure checks
@@ -57,7 +58,7 @@ can be exercised without adding Vxpipe's own provider chain.
 
 ## Scope boundaries
 
-No Vxpipe-managed provider fallback chain, automatic tool retry, automatic oversized-result summarizer/document inspection, transfer-history summarization, newly approved summarizer provider, or local models. This milestone is not complete until its explicitly outstanding execution-model choice is settled and tested.
+No Vxpipe-managed provider fallback chain, automatic tool retry, automatic oversized-result summarizer/document inspection, transfer-history summarization, separate summarizer provider, or local models.
 
 ## Completion and evidence
 
@@ -83,13 +84,20 @@ tool-less request. Conservative encoded-byte accounting includes every normalize
 input class and explicit envelope margins; context/output limits come from the
 validated ReqLLM model/options. Unsupported native options fail configuration,
 while a supported Zenmux routing policy passes through unchanged. See
-[model-context compaction](../context-compaction.md). Event/privacy integration
-remains open. The Session now prepares and commits a safe summary before every
+[model-context compaction](../context-compaction.md). The Session now prepares and
+commits a safe summary before every
 inference/tool-continuation round, and terminating it kills blocked compaction
 work. Call Engine passes its application setting into every agent activation. A
 room-level test proves caller input explicitly queued during a blocked summary
 request runs afterward using the committed compacted history; the ordinary
-immediate-input path correctly remains an interruption.
+immediate-input path correctly remains an interruption. Derived summaries stay
+inside Session/model context and are never published to clients or storage. The
+runtime emits only bounded compaction usage/provider metadata and outcome; Call
+Engine records it as a distinct model attempt on the triggering real turn, with
+`context_compaction_` components. Rejected summaries retain known usage, and an
+attempt without reported measurements retains a failed operation. The room
+archive test proves original permitted input/output facts remain while the
+summary sentinel never reaches an archive payload.
 
 ## Specification review
 

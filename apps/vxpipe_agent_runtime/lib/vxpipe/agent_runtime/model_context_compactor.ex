@@ -4,6 +4,7 @@ defmodule Vxpipe.AgentRuntime.ModelContextCompactor do
   @behaviour Vxpipe.AgentRuntime.ContextCompactor
 
   alias Vxpipe.AgentRuntime.{
+    CompactionObservation,
     CompactionProjection,
     CompactionRequest,
     CompactionResult,
@@ -25,15 +26,8 @@ defmodule Vxpipe.AgentRuntime.ModelContextCompactor do
 
     with true <- Code.ensure_loaded?(model_provider),
          true <- function_exported?(model_provider, :generate, 2),
-         {:ok, %ModelResponse{tool_calls: []} = response} <-
-           model_provider.generate(model, model_request),
-         {:ok, result} <-
-           CompactionResult.new(
-             summary: response.text,
-             usage: response.usage,
-             provider_metadata: response.provider_metadata
-           ) do
-      {:ok, result}
+         {:ok, %ModelResponse{} = response} <- model_provider.generate(model, model_request) do
+      normalize_response(response)
     else
       _invalid -> {:error, :context_compaction_unavailable}
     end
@@ -45,4 +39,31 @@ defmodule Vxpipe.AgentRuntime.ModelContextCompactor do
 
   def compact(_state, %CompactionRequest{}),
     do: {:error, :context_compaction_unavailable}
+
+  defp normalize_response(%ModelResponse{tool_calls: []} = response) do
+    case CompactionResult.new(
+           summary: response.text,
+           usage: response.usage,
+           provider_metadata: response.provider_metadata
+         ) do
+      {:ok, result} -> {:ok, result}
+      {:error, :invalid_compaction_result} -> observed_failure(response)
+    end
+  end
+
+  defp normalize_response(%ModelResponse{} = response), do: observed_failure(response)
+
+  defp observed_failure(%ModelResponse{} = response) do
+    case CompactionObservation.new(
+           usage: response.usage,
+           provider_metadata: response.provider_metadata,
+           outcome: :failed
+         ) do
+      {:ok, observation} ->
+        {:error, :context_compaction_unavailable, observation}
+
+      {:error, :invalid_compaction_observation} ->
+        {:error, :context_compaction_unavailable}
+    end
+  end
 end

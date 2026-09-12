@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{
     ActiveRequest,
+    CompactionUsage,
     Configuration,
     History,
     Interruption,
@@ -235,6 +236,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
         |> RequestOutcome.fail_uncommitted(:invalid_response, request_outcome_options(state))
         |> transition(state)
     end
+  end
+
+  def handle_info(
+        {:agent_runtime_event,
+         %Event{kind: :context_compaction_usage, correlation: correlation, data: data}},
+        %State{current: %ActiveRequest{correlation: correlation}} = state
+      ) do
+    {:noreply, CompactionUsage.record(state, correlation, data)}
   end
 
   def handle_info(

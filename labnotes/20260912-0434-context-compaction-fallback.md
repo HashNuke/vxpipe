@@ -174,8 +174,8 @@ mix test
 ```
 
 The second implementation checklist item is complete. Runtime configuration,
-Session/RequestRunner preparation, compaction lifecycle events, and source-policy
-storage projection remain open.
+Session/RequestRunner preparation, compaction lifecycle events, and privacy-safe
+usage projection remain open.
 
 ## 2026-09-12 — Agent Runtime session checkpoint
 
@@ -253,4 +253,80 @@ mix test
 ```
 
 The third milestone checklist item is complete. Summary usage events and
-source-policy-aware persistence are the next checkpoint.
+runtime-only summary privacy are the next checkpoint.
+
+## 2026-09-12 — Private summary and usage checkpoint
+
+- Kept derived summaries entirely inside the owning Agent Runtime Session and
+  subsequent model requests. No summary text or selected source message is sent
+  through runtime events, client projection, or archive handoff; the original
+  permitted transcript facts remain untouched.
+- Added a bounded `context_compaction_usage` runtime event containing only
+  usage, safe provider metadata, and outcome. Call Engine projects it as a
+  separate model attempt attributed to the triggering real turn with
+  `context_compaction_input_tokens`, `context_compaction_output_tokens`,
+  `context_compaction_total_tokens`, or an unmeasured
+  `context_compaction_operation`.
+- Added the focused `CompactionUsage` coordinator module rather than mixing a
+  second attempt lifecycle into conversational `ModelUsage` tracking.
+- A valid accepted summary reports a successful attempt. A tool-calling,
+  malformed, or still-oversized response reports a failed attempt and preserves
+  known incurred usage/provider identifiers. A compactor attempt that returns no
+  measurement reports a failed operation; budget failures before any model call
+  create no observation.
+- Extended the room/archive test to acknowledge its initial Variables baseline,
+  retain the original first caller and agent transcript facts, observe the
+  separately named compaction usage, and prove a unique summary sentinel appears
+  in no archived payload.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/session_compaction_test.exs
+# 1 failure: no context_compaction_usage event
+
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/usage/model_projection_test.exs \
+  test/vxpipe/call_engine/agent_runtime/coordinator_test.exs
+# 2 failures: compaction purpose/event projection was unsupported
+
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/session_compaction_test.exs \
+  test/vxpipe/agent_runtime/context_preparation_test.exs \
+  test/vxpipe/agent_runtime/model_context_compactor_test.exs
+# compilation failed because CompactionObservation did not exist
+
+mix test test/vxpipe/agent_runtime/context_preparation_test.exs
+# 5 tests, 1 failure: an attempted compactor failure had no observation
+```
+
+Focused green evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/session_compaction_test.exs \
+  test/vxpipe/agent_runtime/context_preparation_test.exs \
+  test/vxpipe/agent_runtime/model_context_compactor_test.exs
+# 10 tests, 0 failures
+
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/agent_runtime/coordinator_test.exs \
+  test/vxpipe/call_engine/usage/model_projection_test.exs \
+  test/vxpipe/call_engine/agent_runtime/context_compaction_room_test.exs
+# 27 tests, 0 failures
+
+mix test
+# 401 tests, 0 failures (1 excluded)
+
+cd ../..
+mix format --check-formatted
+mix compile --warnings-as-errors
+mix credo --strict
+# all pass; Credo checked 801 source files with no issues
+mix deps.unlock --check-unused
+# exit 0
+```
+
+The fourth milestone checklist item is complete. Provider-native fallback
+controlled and tagged coverage is the remaining implementation checkpoint.

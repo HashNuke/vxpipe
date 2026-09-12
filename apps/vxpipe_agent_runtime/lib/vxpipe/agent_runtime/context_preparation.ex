@@ -4,6 +4,7 @@ defmodule Vxpipe.AgentRuntime.ContextPreparation do
   alias Vxpipe.AgentRuntime.Conversation.Entry
 
   alias Vxpipe.AgentRuntime.{
+    CompactionObservation,
     CompactionRequest,
     CompactionRunner,
     ContextBudget,
@@ -23,7 +24,9 @@ defmodule Vxpipe.AgentRuntime.ContextPreparation do
           | :protected_context_too_large
 
   @spec prepare(Conversation.t(), ModelRequest.t(), map()) ::
-          {:ok, PreparedContext.t()} | {:error, preparation_error()}
+          {:ok, PreparedContext.t()}
+          | {:error, preparation_error()}
+          | {:error, preparation_error(), CompactionObservation.t()}
   def prepare(%Conversation{} = conversation, %ModelRequest{} = request, config)
       when is_map(config) do
     with {:ok, staged_messages} <- staged_messages(conversation, request),
@@ -62,40 +65,120 @@ defmodule Vxpipe.AgentRuntime.ContextPreparation do
          {:ok, maximum_summary_tokens, required_maximum} <-
            summary_limits(Map.fetch!(config, :budget), protected.input_tokens),
          {:ok, compaction_request} <-
-           compaction_request(snapshot, maximum_summary_tokens, request.correlation),
-         {:ok, result} <-
-           CompactionRunner.run(
-             Map.fetch!(config, :compactor),
-             compaction_request,
-             Map.fetch!(config, :compactor_timeout_ms)
-           ),
-         {:ok, compacted_conversation} <-
-           ConversationCompaction.apply(conversation, snapshot, result.summary),
-         compacted_request <-
-           ModelRequest.with_messages(
-             request,
-             compacted_conversation.messages ++ staged_messages
-           ),
-         {:ok, compacted} <- assess(compacted_request, config),
-         true <- compacted.input_tokens <= required_maximum do
-      {:ok,
-       %PreparedContext{
-         conversation: compacted_conversation,
-         request: compacted_request,
-         input_tokens: compacted.input_tokens,
-         compaction: result
-       }}
+           compaction_request(snapshot, maximum_summary_tokens, request.correlation) do
+      run_and_apply_compaction(
+        conversation,
+        snapshot,
+        staged_messages,
+        request,
+        config,
+        required_maximum,
+        compaction_request
+      )
     else
-      {:error, :no_compactable_history} -> {:error, :protected_context_too_large}
-      {:error, :invalid_compaction_options} -> {:error, :invalid_compaction_context}
-      {:error, :invalid_compaction_request} -> {:error, :invalid_compaction_context}
-      {:error, :stale_compaction_snapshot} -> {:error, :invalid_compaction_context}
-      {:error, reason} when is_atom(reason) -> {:error, reason}
-      false -> {:error, :compacted_context_too_large}
-      _invalid -> {:error, :invalid_compaction_context}
+      {:error, :no_compactable_history} ->
+        {:error, :protected_context_too_large}
+
+      {:error, :invalid_compaction_options} ->
+        {:error, :invalid_compaction_context}
+
+      {:error, :invalid_compaction_request} ->
+        {:error, :invalid_compaction_context}
+
+      {:error, :stale_compaction_snapshot} ->
+        {:error, :invalid_compaction_context}
+
+      {:error, reason, %CompactionObservation{} = observation} ->
+        {:error, reason, observation}
+
+      {:error, reason} when is_atom(reason) ->
+        {:error, reason}
+
+      _invalid ->
+        {:error, :invalid_compaction_context}
     end
   rescue
     _error -> {:error, :invalid_compaction_context}
+  end
+
+  defp run_compactor(compaction_request, config) do
+    CompactionRunner.run(
+      Map.fetch!(config, :compactor),
+      compaction_request,
+      Map.fetch!(config, :compactor_timeout_ms)
+    )
+  end
+
+  defp run_and_apply_compaction(
+         conversation,
+         snapshot,
+         staged_messages,
+         request,
+         config,
+         required_maximum,
+         compaction_request
+       ) do
+    case run_compactor(compaction_request, config) do
+      {:ok, result} ->
+        apply_compaction_result(
+          conversation,
+          snapshot,
+          result,
+          staged_messages,
+          request,
+          config,
+          required_maximum
+        )
+
+      {:error, reason, %CompactionObservation{} = observation} ->
+        {:error, reason, observation}
+
+      {:error, reason} ->
+        {:error, reason, CompactionObservation.unmeasured_failure()}
+    end
+  end
+
+  defp apply_compaction_result(
+         conversation,
+         snapshot,
+         result,
+         staged_messages,
+         request,
+         config,
+         required_maximum
+       ) do
+    outcome =
+      with {:ok, compacted_conversation} <-
+             ConversationCompaction.apply(conversation, snapshot, result.summary),
+           compacted_request <-
+             ModelRequest.with_messages(
+               request,
+               compacted_conversation.messages ++ staged_messages
+             ),
+           {:ok, compacted} <- assess(compacted_request, config),
+           true <- compacted.input_tokens <= required_maximum do
+        {:ok,
+         %PreparedContext{
+           conversation: compacted_conversation,
+           request: compacted_request,
+           input_tokens: compacted.input_tokens,
+           compaction: result
+         }}
+      else
+        {:error, :invalid_compaction_options} -> {:error, :invalid_compaction_context}
+        {:error, :stale_compaction_snapshot} -> {:error, :invalid_compaction_context}
+        {:error, reason} when is_atom(reason) -> {:error, reason}
+        false -> {:error, :compacted_context_too_large}
+        _invalid -> {:error, :invalid_compaction_context}
+      end
+
+    case outcome do
+      {:ok, %PreparedContext{}} = prepared ->
+        prepared
+
+      {:error, reason} ->
+        {:error, reason, CompactionObservation.from_result(result, :failed)}
+    end
   end
 
   defp staged_messages(conversation, request) do

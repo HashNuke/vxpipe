@@ -2,6 +2,7 @@ defmodule Vxpipe.AgentRuntime.ModelContextCompactorTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.AgentRuntime.{
+    CompactionObservation,
     CompactionRequest,
     CompactionResult,
     Message,
@@ -71,10 +72,23 @@ defmodule Vxpipe.AgentRuntime.ModelContextCompactorTest do
 
     assert_receive {:model_provider_process, provider, _model_request}
     {:ok, call} = ToolCall.new(id: "forbidden", name: "update_variables", arguments: %{})
-    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+
+    {:ok, response} =
+      ModelResponse.new(
+        text: "",
+        tool_calls: [call],
+        usage: %{total_tokens: 37},
+        provider_metadata: %{request_id: "forbidden-summary-tool"}
+      )
+
     send(provider, {:test_model_response, {:ok, response}})
 
-    assert {:error, :context_compaction_unavailable} = Task.await(task)
+    assert {:error, :context_compaction_unavailable,
+            %CompactionObservation{
+              outcome: :failed,
+              usage: %{total_tokens: 37},
+              provider_metadata: %{request_id: "forbidden-summary-tool"}
+            }} = Task.await(task)
   end
 
   defp compaction_request do

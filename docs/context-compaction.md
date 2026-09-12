@@ -1,8 +1,8 @@
 # Model-context compaction
 
-Status: production selection, accounting, Agent Runtime integration, and Call
-Engine activation wiring implemented. Event/privacy projection remains in
-progress.
+Status: production selection, accounting, Agent Runtime integration, Call
+Engine activation wiring, and private usage projection implemented. Supported
+provider-native fallback verification remains in progress.
 
 ## Decision
 
@@ -59,12 +59,21 @@ Vxpipe therefore uses these concrete rules:
   15 seconds and also remains inside the owning conversational request deadline.
   Four recent committed conversation entries remain protected by default.
 
-Observed summary usage and actual provider/model metadata follow the existing
-usage-event path under a compaction purpose. They are not assigned to a fake
-user turn. Source conversation correlations remain on the derived entry so Call
-Engine can apply the source intervals' transcript-storage permissions before an
-asynchronous subscriber sees the summary. The complete permitted transcript
-archive remains unchanged.
+The derived summary stays inside the owning Agent Runtime Session and its model
+requests. It is never emitted as a runtime event, archive fact, client event, or
+replacement transcript. Consequently, permitted original transcript facts stay
+unchanged and a transcript-storage denial cannot be bypassed by persisting
+derived prose. Source correlations remain attached to the in-memory derived
+entry for safe snapshot replacement, not publication.
+
+Observed compaction usage and bounded provider/model identifiers follow the
+existing private usage path without the summary or its source messages. Each
+summary request is a separate model attempt attributed to the real turn that
+triggered it; component names use the `context_compaction_` prefix, so no fake
+user turn is invented and conversation usage remains distinct. A rejected
+summary retains known incurred usage with a failed outcome. An attempted
+compaction with no reported measurement still records a failed
+`context_compaction_operation`; failures before a model attempt record nothing.
 
 ## Provider-native fallback
 
@@ -98,10 +107,12 @@ Focused Agent Runtime tests prove model metadata/output-limit resolution,
 unsupported native-option rejection, supported routing pass-through,
 conservative measurement of every normalized input class, correlation exclusion,
 UTF-8 handling, tool-less JSON summary projection, pinned provider reuse, output
-cap projection, usage preservation, rejection of summary tool calls, safe Session
-commit ordering, and compactor termination with its Session. Call Engine passes
-the application compaction setting into each activation; a room test proves that
-an explicitly queued caller turn waits for compaction and then sees the committed
-summary. Immediate caller input still uses the existing interruption semantics.
-Source-privacy publication and tagged provider interoperability remain milestone
-work.
+cap projection, successful and rejected usage preservation, rejection of summary
+tool calls, safe Session commit ordering, and compactor termination with its
+Session. Call Engine passes the application compaction setting into each
+activation; a room test proves that an explicitly queued caller turn waits for
+compaction and then sees the committed summary. The same room/archive boundary
+retains original permitted input/output facts, stores separately named
+compaction usage, and never stores the derived summary. Immediate caller input
+still uses the existing interruption semantics. Tagged provider interoperability
+remains milestone work.

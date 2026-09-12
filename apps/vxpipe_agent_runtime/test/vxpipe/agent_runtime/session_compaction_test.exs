@@ -1,7 +1,7 @@
 defmodule Vxpipe.AgentRuntime.SessionCompactionTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.AgentRuntime.{CompactionResult, ModelResponse, Result, Session}
+  alias Vxpipe.AgentRuntime.{CompactionResult, Event, ModelResponse, Result, Session}
 
   test "commits one safe compaction before the conversational provider request" do
     session = start_session()
@@ -28,6 +28,25 @@ defmodule Vxpipe.AgentRuntime.SessionCompactionTest do
     send(compactor, {:context_compaction_result, {:ok, summary}})
     assert_count(350)
 
+    assert_receive {:agent_runtime_event,
+                    %Event{
+                      kind: :context_compaction_usage,
+                      correlation: %{request_id: "second"},
+                      data: %{
+                        outcome: :succeeded,
+                        usage: %{input_tokens: 30, output_tokens: 12},
+                        provider_metadata: %{model: "same:pinned-model"}
+                      }
+                    } = event}
+
+    assert event.data == %{
+             outcome: :succeeded,
+             usage: %{input_tokens: 30, output_tokens: 12},
+             provider_metadata: %{model: "same:pinned-model"}
+           }
+
+    refute inspect(event) =~ "same:pinned-model"
+
     assert_receive {:model_provider_process, provider, model_request}
     assert Enum.any?(model_request.messages, &(&1.origin == :derived_summary))
     assert List.last(model_request.messages).content == "second request"
@@ -43,6 +62,43 @@ defmodule Vxpipe.AgentRuntime.SessionCompactionTest do
     refute Enum.any?(third_request.messages, &(&1.content == "first request"))
     reply(provider, "third response")
     assert {:ok, %Result{status: :completed}} = Task.await(third)
+  end
+
+  test "reports incurred compaction usage when the rebuilt context remains too large" do
+    session = start_session()
+    complete_initial_exchange(session)
+
+    caller = request(session, "second request", "rejected-summary")
+    assert_pending_context("rejected-summary")
+    assert_count(700)
+
+    assert_receive {:input_tokens_counted, counter, _protected_request}
+    send(counter, {:input_token_count, 300})
+    assert_receive {:context_compaction_requested, compactor, _compaction_request}
+
+    {:ok, summary} =
+      CompactionResult.new(
+        summary: "This valid summary still leaves too much context.",
+        usage: %{input_tokens: 30, output_tokens: 12},
+        provider_metadata: %{request_id: "compaction-rejected-1"}
+      )
+
+    send(compactor, {:context_compaction_result, {:ok, summary}})
+    assert_count(450)
+
+    assert_receive {:agent_runtime_event,
+                    %Event{
+                      kind: :context_compaction_usage,
+                      correlation: %{request_id: "rejected-summary"},
+                      data: %{
+                        outcome: :failed,
+                        usage: %{input_tokens: 30, output_tokens: 12},
+                        provider_metadata: %{request_id: "compaction-rejected-1"}
+                      }
+                    }}
+
+    assert {:ok, %Result{status: :failed, reason: :compacted_context_too_large}} =
+             Task.await(caller)
   end
 
   test "terminating the session terminates its in-flight compactor" do
@@ -102,7 +158,9 @@ defmodule Vxpipe.AgentRuntime.SessionCompactionTest do
     refute Enum.any?(request.messages, &(&1.origin == :derived_summary))
     reply(provider, "first response")
     assert {:ok, %Result{status: :completed}} = Task.await(caller)
-    assert :ok = Session.record_assistant(session, "transition message", %{request_id: "transition"})
+
+    assert :ok =
+             Session.record_assistant(session, "transition message", %{request_id: "transition"})
   end
 
   defp request(session, content, request_id) do

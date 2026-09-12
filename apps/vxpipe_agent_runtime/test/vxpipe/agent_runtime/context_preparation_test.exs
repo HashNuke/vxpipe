@@ -2,6 +2,7 @@ defmodule Vxpipe.AgentRuntime.ContextPreparationTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.AgentRuntime.{
+    CompactionObservation,
     CompactionResult,
     ContextBudget,
     ContextPreparation,
@@ -119,7 +120,13 @@ defmodule Vxpipe.AgentRuntime.ContextPreparationTest do
     assert_receive {:context_compaction_requested, compactor, _compaction_request}
     send(compactor, {:context_compaction_result, {:error, :provider_timeout}})
 
-    assert {:error, :context_compaction_unavailable} = Task.await(task)
+    assert {:error, :context_compaction_unavailable,
+            %CompactionObservation{
+              outcome: :failed,
+              usage: %{},
+              provider_metadata: %{}
+            }} = Task.await(task)
+
     assert Enum.any?(conversation.messages, &(&1.content == "old user"))
     refute Enum.any?(conversation.messages, &(&1.origin == :derived_summary))
   end
@@ -139,13 +146,25 @@ defmodule Vxpipe.AgentRuntime.ContextPreparationTest do
     send(counter, {:input_token_count, 300})
     assert_receive {:context_compaction_requested, compactor, _compaction_request}
 
-    {:ok, result} = CompactionResult.new(summary: "A summary that is still too large")
+    {:ok, result} =
+      CompactionResult.new(
+        summary: "A summary that is still too large",
+        usage: %{total_tokens: 21},
+        provider_metadata: %{request_id: "compaction-too-large"}
+      )
+
     send(compactor, {:context_compaction_result, {:ok, result}})
 
     assert_receive {:input_tokens_counted, counter, _compacted_request}
     send(counter, {:input_token_count, 450})
 
-    assert {:error, :compacted_context_too_large} = Task.await(task)
+    assert {:error, :compacted_context_too_large,
+            %CompactionObservation{
+              outcome: :failed,
+              usage: %{total_tokens: 21},
+              provider_metadata: %{request_id: "compaction-too-large"}
+            }} = Task.await(task)
+
     refute Enum.any?(conversation.messages, &(&1.origin == :derived_summary))
   end
 

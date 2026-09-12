@@ -160,7 +160,11 @@ and receives the selected history as JSON data rather than executable message/to
 [model-context compaction](context-compaction.md). The Session commits an accepted summary before
 ordinary inference, and Call Engine passes application compaction settings into every activation.
 Input explicitly queued while a summary request runs is admitted afterward against that compacted
-history; immediate input retains the existing interruption behavior.
+history; immediate input retains the existing interruption behavior. The derived summary remains
+private Session/model context and never becomes a client or archive event. Only bounded provider
+metadata, usage, and the successful/failed compaction outcome cross the runtime boundary. Call
+Engine attributes those observations to a distinct compaction model attempt on the triggering real
+turn, including an unmeasured failed operation when an attempted request reports no usage.
 
 Text deltas can be delivered promptly to the owner, but tool calls execute only after their
 complete identifiers and arguments have been assembled and validated. Mixed text/tool

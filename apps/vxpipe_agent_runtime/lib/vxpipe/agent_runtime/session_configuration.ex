@@ -110,12 +110,14 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
         %{
           begin_submission: begin_submission,
           commit: commit,
+          emit_context_compaction_usage: emit_context_compaction_usage,
           emit_model_attempt_started: emit_model_attempt_started,
           emit_model_usage: emit_model_usage,
           emit_text_delta: emit_text_delta
         }
       )
       when is_function(begin_submission, 0) and is_function(commit, 1) and
+             is_function(emit_context_compaction_usage, 3) and
              is_function(emit_model_attempt_started, 0) and is_function(emit_model_usage, 2) and
              is_function(emit_text_delta, 1) do
     %{
@@ -136,6 +138,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       context_preparation: config.context_preparation,
       begin_submission: begin_submission,
       commit: commit,
+      emit_context_compaction_usage: emit_context_compaction_usage,
       emit_model_attempt_started: emit_model_attempt_started,
       emit_model_usage: emit_model_usage,
       emit_text_delta: emit_text_delta

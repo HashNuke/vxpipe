@@ -2,6 +2,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   @moduledoc false
 
   alias Vxpipe.AgentRuntime.{
+    CompactionObservation,
     Conversation,
     ContextPreparation,
     Executor,
@@ -215,15 +216,41 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   end
 
   defp prepare_context(conversation, model_request, config) do
-    with {:ok, prepared} <-
-           ContextPreparation.prepare(conversation, model_request, config.context_preparation),
-         :ok <- commit_compaction(prepared, config) do
-      {:ok, prepared.conversation, prepared.request}
+    case ContextPreparation.prepare(conversation, model_request, config.context_preparation) do
+      {:ok, prepared} ->
+        with :ok <- emit_context_compaction_usage(prepared, config),
+             :ok <- commit_compaction(prepared, config) do
+          {:ok, prepared.conversation, prepared.request}
+        end
+
+      {:error, reason, %CompactionObservation{} = observation} ->
+        with :ok <- emit_context_compaction_usage(observation, config) do
+          {:error, reason}
+        end
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
   defp commit_compaction(%{compaction: nil}, _config), do: :ok
   defp commit_compaction(%{conversation: conversation}, config), do: config.commit.(conversation)
+
+  defp emit_context_compaction_usage(%{compaction: nil}, _config), do: :ok
+
+  defp emit_context_compaction_usage(%{compaction: compaction}, config) do
+    compaction
+    |> CompactionObservation.from_result(:succeeded)
+    |> emit_context_compaction_usage(config)
+  end
+
+  defp emit_context_compaction_usage(%CompactionObservation{} = observation, config) do
+    config.emit_context_compaction_usage.(
+      observation.usage,
+      observation.provider_metadata,
+      observation.outcome
+    )
+  end
 
   defp generate_response(config, model_request, output) do
     try do

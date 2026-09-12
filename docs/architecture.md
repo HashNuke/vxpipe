@@ -659,10 +659,12 @@ exceed the model limit when compaction cannot make room.
 Compaction consumes only that agent's authorized live conversation, never an
 unrestricted room archive. A summary is derived data, not system authority, a tool
 result, or permission to execute tools. It does not modify `CallVariables`, grants,
-or the full permitted archive. Source-interval restrictions also apply to derived
-transcript summaries; denied transcript storage cannot be bypassed by saving a
-summary. If work uses a snapshot, preserve intervening messages and unresolved
-invocations when incorporating its result.
+or the full permitted archive. The summary remains private to the owning Agent
+Runtime Session and subsequent model requests: it is not emitted to clients or
+storage at all. The original permitted transcript remains intact, and denied
+transcript storage cannot be bypassed by saving derived prose. If work uses a
+snapshot, preserve intervening messages and unresolved invocations when
+incorporating its result.
 
 The selected production compactor reuses the active activation's pinned model,
 provider, credential, and native routing policy in one buffered, tool-less request.
@@ -674,6 +676,14 @@ ReqLLM does not expose one exact tokenizer for every provider. The context windo
 and effective output reserve come from validated pinned-model metadata/options;
 unknown limits fail closed. See [model-context compaction](context-compaction.md)
 for the precise limits and failure behavior.
+
+Only bounded provider identifiers, reported usage, and the compaction outcome
+cross into Call Engine. Project them through the ordinary private usage/archive
+path as a distinct model attempt attributed to the triggering real turn, using
+`context_compaction_` measurement components rather than inventing another turn.
+Retain known usage from a rejected summary and an unmeasured failed operation for
+an attempted request that reports no usage. A failure before the model attempt
+creates no usage observation.
 
 R49 requires a configurable hard maximum acceptable MCP response size, default
 1 MiB (1,048,576 bytes) of decoded/decompressed response data. Enforce it

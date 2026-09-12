@@ -4,6 +4,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
   alias Vxpipe.AgentRuntime.ModelResponse
   alias Vxpipe.CallEngine
 
+  alias Vxpipe.CallEngine.Archive.{Fact, Handoff}
+  alias Vxpipe.CallEngine.Archive.Supervisor, as: ArchiveSupervisor
+  alias Vxpipe.CallEngine.CallVariables.BaselineSnapshot
+  alias Vxpipe.CallEngine.TestArchiveWriter
+
   alias Vxpipe.CallEngine.{
     CallDefinition,
     CallInvocation,
@@ -51,7 +56,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
   test "caller input queued during compaction runs afterward with compacted history" do
     plan = compile_plan()
     connection_id = unique_id("conn-compaction")
-    {room, caller} = start_room(plan, connection_id)
+    handoff = open_archive()
+    {room, caller} = start_room(plan, connection_id, archive_handoff: handoff)
+    assert_receive {:test_archive_write, baseline_writer, %BaselineSnapshot{}}
+    send(baseline_writer, {:test_archive_write_result, :ok})
 
     first = send_text(plan, room, caller, connection_id, "first request")
     assert_count(500)
@@ -82,7 +90,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
         run_immediately: false
       )
 
-    reply(compactor, "The caller completed the first request.")
+    summary = "The caller completed the first request."
+
+    reply(compactor, summary,
+      usage: %{input_tokens: 40, output_tokens: 9, total_tokens: 49},
+      provider_metadata: %{request_id: "compaction-request-1"}
+    )
 
     assert_receive {:test_agent_runtime_input_count, counter, compacted_request}
     assert Enum.any?(compacted_request.messages, &(&1.origin == :derived_summary))
@@ -100,6 +113,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
     assert List.last(fourth_request.messages).content == fourth.content
     reply(provider, "fourth response")
     assert_turn_completed(fourth)
+
+    facts = collect_through_compaction_usage(handoff, [])
+    assert Enum.any?(facts, &accepted_first_request?/1)
+    assert Enum.any?(facts, &generated_first_response?/1)
+    refute Enum.any?(facts, &(inspect(&1.payload) =~ summary))
   end
 
   defp compile_plan do
@@ -158,9 +176,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
     plan
   end
 
-  defp start_room(plan, connection_id) do
+  defp start_room(plan, connection_id, options) do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = CallEngine.start_call(plan, options)
 
     assert {:ok, command} =
              AttachConnection.new(
@@ -201,10 +219,76 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
     send(counter, {:test_agent_runtime_input_tokens, tokens})
   end
 
-  defp reply(provider, text) do
-    assert {:ok, response} = ModelResponse.new(text: text)
+  defp reply(provider, text, options \\ []) do
+    assert {:ok, response} =
+             ModelResponse.new(
+               text: text,
+               usage: Keyword.get(options, :usage, %{}),
+               provider_metadata: Keyword.get(options, :provider_metadata, %{})
+             )
+
     send(provider, {:test_agent_runtime_response, {:ok, response}})
   end
+
+  defp open_archive do
+    assert {:ok, handoff} =
+             ArchiveSupervisor.open(
+               writer: {TestArchiveWriter, self()},
+               maximum_pending_facts: 64,
+               retry_delay_ms: 5,
+               drain_timeout_ms: 1_000
+             )
+
+    on_exit(fn ->
+      if Process.alive?(handoff.subscriber) do
+        Handoff.source_stopped(handoff, :test_cleanup)
+      end
+    end)
+
+    handoff
+  end
+
+  defp collect_through_compaction_usage(handoff, facts) do
+    receive do
+      {:test_archive_fact,
+       %Fact{
+         kind: :usage_observed,
+         payload: %{
+           "measurement" => %{"component" => "context_compaction_total_tokens"}
+         }
+       } = fact} ->
+        Enum.reverse([fact | facts])
+
+      {:test_archive_fact, %Fact{} = fact} ->
+        collect_through_compaction_usage(handoff, [fact | facts])
+    after
+      2_000 ->
+        evidence =
+          facts
+          |> Enum.reverse()
+          |> Enum.map(fn fact ->
+            {fact.kind, get_in(fact.payload, ["measurement", "component"])}
+          end)
+
+        flunk("timed out waiting for archived compaction usage: #{inspect(evidence)}")
+    end
+  end
+
+  defp accepted_first_request?(%Fact{
+         kind: :accepted_input,
+         payload: %{"content" => "first request"}
+       }),
+       do: true
+
+  defp accepted_first_request?(%Fact{}), do: false
+
+  defp generated_first_response?(%Fact{
+         kind: :agent_output_generated,
+         payload: %{"text" => "first response"}
+       }),
+       do: true
+
+  defp generated_first_response?(%Fact{}), do: false
 
   defp assert_turn_completed(command) do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: correlation_id}}
