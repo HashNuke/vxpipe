@@ -3,6 +3,9 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   import Ecto.Query
 
+  alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
+  alias Vxpipe.CallEngine
+  alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, VariableSnapshot}
   alias Vxpipe.Artifacts.{Manifest, Result}
@@ -18,7 +21,8 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     DefinitionStore,
     EctoStorage,
     InspectionStore,
-    Repo
+    Repo,
+    UsageStore
   }
 
   alias Vxpipe.Persistence.Schema.Admission, as: StoredAdmission
@@ -49,6 +53,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       archive_repository: {ArchiveStore, Repo},
       artifact_repository: {ArtifactStore, Repo},
       inspection_repository: {InspectionStore, Repo},
+      usage_repository: {UsageStore, Repo},
       tenant_key_generator: fn -> @tenant_key end,
       uuid_generator: sequence([@key_id, @definition_id, @route_id, @support_route_id]),
       api_key_generator: fn -> @api_key end,
@@ -858,6 +863,81 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert ended.terminal_reason == nil
   end
 
+  test "an agent hangup closes the durable call archive", context do
+    configure_agent_runtime_provider(self())
+    assert {:ok, call, token} = prepare(context)
+
+    assert {:ok, claim} =
+             Calls.claim_join_token(token.secret, scope(context, call), context.options)
+
+    assert {:ok, archive_handoff} =
+             ArchiveSupervisor.open(
+               writer: {EctoStorage, context.options},
+               maximum_pending_facts: 32,
+               retry_delay_ms: 5,
+               drain_timeout_ms: 1_000
+             )
+
+    archive_monitor = Process.monitor(archive_handoff.subscriber)
+
+    assert {:ok, room} =
+             CallEngine.start_call(claim.call.plan, archive_handoff: archive_handoff)
+
+    assert {:ok, _running} =
+             Calls.mark_call_started(
+               claim,
+               room.incarnation_id,
+               DateTime.utc_now(),
+               context.options
+             )
+
+    caller = Map.fetch!(claim.call.plan.participants, claim.call.plan.entry_caller)
+    connection_id = "conn-durable-hangup"
+
+    assert {:ok, attach_command} =
+             AttachConnection.new(
+               tenant_id: claim.call.tenant_key,
+               actor_id: claim.call.plan.actor_id,
+               room_id: claim.call.room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: caller.participant_id,
+               connection_id: connection_id,
+               deadline: future_deadline()
+             )
+
+    assert {:ok, attachment} = CallEngine.attach_connection(attach_command)
+
+    assert {:ok, send_command} =
+             SendText.new(
+               tenant_id: claim.call.tenant_key,
+               actor_id: claim.call.plan.actor_id,
+               room_id: claim.call.room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: caller.participant_id,
+               connection_id: connection_id,
+               correlation_id: "turn-durable-hangup",
+               content: "Please end this call.",
+               deadline: future_deadline()
+             )
+
+    assert :ok = CallEngine.send_text(send_command)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    assert {:ok, tool_call} = ToolCall.new(id: "hangup-durable", name: "hangup", arguments: %{})
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [tool_call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:DOWN, monitor, :process, _room, _reason}
+    assert monitor == attachment.room_monitor
+    assert_receive {:DOWN, ^archive_monitor, :process, _subscriber, :normal}, 2_000
+
+    assert {:ok, ended} = Calls.fetch_call(context.tenant.key, call.id, context.options)
+    assert ended.state == :ended
+    assert %DateTime{microsecond: {_value, 6}} = ended.ended_at
+
+    assert {:ok, facts} = Calls.fetch_call_facts(context.principal, call.id, context.options)
+    assert %Vxpipe.Calls.CallFact{kind: :archive_stream_closed} = List.last(facts)
+  end
+
   defp prepare(context) do
     Calls.prepare_call(
       context.principal,
@@ -983,7 +1063,11 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   defp registries do
     %{
       capability_profiles: %{
-        "test-model" => %{kind: :model_inference, provider: :test, options: %{model: "test"}}
+        "test-model" => %{
+          kind: :model_inference,
+          provider: :req_llm,
+          options: %{model: "test:scripted"}
+        }
       },
       host_tools: %{}
     }
@@ -1021,10 +1105,32 @@ defmodule Vxpipe.Persistence.CallStoreTest do
           prompt: "Help the caller.",
           first_message: %{mode: "wait_for_input"},
           variable_permissions: %{"order" => ["read"]},
-          tools: %{},
+          tools: %{"hangup" => %{type: "platform", tool: "hangup"}},
           transfers: []
         }
       }
     }
   end
+
+  defp configure_agent_runtime_provider(owner) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    agent_runtime =
+      settings
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:model_provider, Vxpipe.CallEngine.TestAgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider_options, owner: owner)
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(settings, :agent_runtime, agent_runtime)
+    )
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, settings)
+    end)
+  end
+
+  defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
 end

@@ -15,6 +15,8 @@ defmodule Vxpipe.Persistence.CallEndProjection do
         %CallFact{kind: :archive_stream_closed, occurred_at: %DateTime{} = ended_at}
       ) do
     if DateTime.compare(ended_at, call.started_at) in [:eq, :gt] do
+      ended_at = microsecond_precision(ended_at)
+
       call
       |> Call.end_changeset(ended_at)
       |> repo.update()
@@ -36,6 +38,10 @@ defmodule Vxpipe.Persistence.CallEndProjection do
 
   def apply(_repo, %Call{}, %CallFact{kind: :archive_stream_closed}),
     do: {:error, :call_not_running}
+
+  defp microsecond_precision(%DateTime{microsecond: {value, _precision}} = datetime) do
+    %{datetime | microsecond: {value, 6}}
+  end
 
   defp normalize_update({:ok, %Call{} = call}), do: {:ok, call}
   defp normalize_update({:error, _changeset}), do: {:error, :call_end_projection_failed}

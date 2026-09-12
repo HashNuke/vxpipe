@@ -8,9 +8,11 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
     CallDefinition,
     CallInvocation,
     DefinitionCompiler,
-    TestAgentRuntimeModelProvider
+    TestAgentRuntimeModelProvider,
+    TestCollectingArchiveWriter
   }
 
+  alias Vxpipe.CallEngine.Archive.Fact
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallStarted}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
@@ -59,7 +61,16 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     connection_id = "conn-platform-hangup"
-    assert {:ok, room} = CallEngine.start_call(plan)
+
+    archive = [
+      enabled: true,
+      writer: {TestCollectingArchiveWriter, self()},
+      maximum_pending_facts: 32,
+      retry_delay_ms: 5,
+      drain_timeout_ms: 1_000
+    ]
+
+    assert {:ok, room} = CallEngine.start_call(plan, archive: archive)
     assert {:ok, attach} = attach(plan, room, caller, connection_id)
 
     assert :ok = send_text(plan, room, caller, connection_id, "Please end the call.")
@@ -80,6 +91,9 @@ defmodule Vxpipe.CallEngine.PlatformToolsRoomTest do
 
     assert_receive {:DOWN, monitor, :process, _pid, _reason}
     assert monitor == attach.room_monitor
+
+    assert_receive {:test_archive_fact, %Fact{kind: :archive_stream_closed} = closure}
+    assert closure.payload["source_reason"] == "shutdown"
   end
 
   defp compile_plan do

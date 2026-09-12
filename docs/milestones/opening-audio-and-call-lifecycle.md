@@ -206,6 +206,15 @@ PostgreSQL password. Rendered diagnostics checks at 1440×1000 and 390×844 show
 the existing workbench without horizontal overflow; the browser accessibility audit reported zero
 violations.
 
+Pre-delivery review checkpoint (2026-09-12): the runnable development definition now grants its two
+sample agents the existing platform `hangup` tool and explicitly instructs them to use it when the
+caller asks to end the call. A focused configuration contract prevents that manual lifecycle path
+from disappearing. Engine coverage now also proves that the permitted tool completion terminates
+the room and drains an `archive_stream_closed` fact; durable projection evidence is recorded in the
+asynchronous-history and call-details milestones. A rendered sample call using the real Gemini
+model invoked the tool and stopped its WebRTC/media room; the matching durable call-end result was
+verified directly in PostgreSQL.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,
