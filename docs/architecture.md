@@ -703,8 +703,11 @@ implementation details; the deferred general result/document-inspection design
 is unchanged.
 
 R50 permits explicitly configured LLM provider-native/router fallback only where
-the selected agent-runtime/ReqLLM provider surface supports the provider options. It does not add a Vxpipe fallback schema,
-direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
+the selected agent-runtime/ReqLLM provider surface supports the provider options. A pinned model
+capability profile may contribute recursively data-valued generation options over application
+defaults; credentials, streaming selection, and executable transport/hooks remain
+application-owned. The provider constructor validates the merged settings before room startup.
+This does not add a Vxpipe fallback schema, direct-provider chain/coordinator, or STT/TTS fallback feature. Keep tool,
 permission, privacy, and usage constraints, recording actual observed provider/
 model attribution without inventing hidden upstream attempts or IDs. This does
 not authorize MCP retries or promise replay of already-emitted speech/tool actions

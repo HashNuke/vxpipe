@@ -372,3 +372,57 @@ mix test test/integration/req_llm_native_routing_test.exs
 `ZENMUX_API_KEY` is unset in this workspace, so the live provider request was
 not run. Configured call-profile pass-through remains before the final milestone
 checklist item can be marked complete.
+
+## 2026-09-12 — configured model-profile checkpoint
+
+- Confirmed the remaining exposure gap: application-wide Agent Runtime options
+  could configure native routing, but a pinned model capability profile could
+  carry only its model. Direct adapter coverage alone did not make per-profile
+  routing usable by a compiled call plan.
+- Added the cohesive `PlanStartup.AgentModelProfile` boundary. It accepts only
+  the closed profile keys `model` and `generation_options`, merges profile
+  generation values over application defaults, and calls the configured model
+  provider constructor before room startup.
+- Credentials, streaming mode, controlled test transport, and other provider
+  constructor settings remain application-owned. The model profile contributes
+  only recursively data-valued generation settings, with no executable hook,
+  module tuple, process, or credential selector.
+- A real ReqLLM configuration test proves a Zenmux profile retains an
+  application timeout, overrides an application temperature, and carries the
+  native routing/fallback object. A Google profile with the same unsupported
+  provider option rejects the call plan.
+- A regression run exposed that always injecting `generation_options: []`
+  changed the constructor contract for profiles and test providers that did not
+  configure generation options. The merger now omits that key unless the
+  application or selected profile actually supplied it.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/plan_startup/agent_model_profile_test.exs --trace
+# 2 tests, 1 failure: the existing model-only profile restriction rejected routing options
+
+mix test test/vxpipe/call_engine/definition_driven_call_test.exs --max-failures 1
+# 1 test, 1 failure: synthetic empty generation options broke the existing test provider
+
+mix test test/vxpipe/call_engine/plan_startup/agent_model_profile_test.exs --trace
+# 3 tests, 1 failure: ReqLLM accepted an executable output-repair callback from the profile
+```
+
+Green evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/plan_startup/agent_model_profile_test.exs \
+  test/vxpipe/call_engine/definition_driven_call_test.exs
+# 28 tests, 0 failures
+
+mix test
+# 404 tests, 0 failures (1 excluded)
+```
+
+The fifth implementation checklist item is complete. The milestone acceptance
+matrix, root gates, and runnable cross-slice evidence remain to audit before
+claiming milestone completion. The tagged Zenmux request remains unrun because
+its credential is unavailable.

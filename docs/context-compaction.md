@@ -2,8 +2,8 @@
 
 Status: production selection, accounting, Agent Runtime integration, Call
 Engine activation wiring, and private usage projection implemented. Controlled
-provider-native fallback verification is complete, while configured-profile
-wiring and the credentialed interoperability run remain in progress.
+provider-native fallback verification and configured-profile wiring are
+complete; the credentialed interoperability run remains external evidence.
 
 ## Decision
 
@@ -84,6 +84,41 @@ native routing/fallback object accepted by a provider such as Zenmux passes
 through unchanged. The same object presented to a provider that does not expose
 that option is rejected before network I/O.
 
+The pinned model capability profile may supply validated `generation_options`
+beside its `model`. These are merged over application-level generation defaults;
+matching profile values win. Credentials, streaming selection, and other
+runtime-only provider constructor settings remain application-owned. The
+profile layer accepts recursively data-valued generation settings rather than
+executable hooks or transport tuples. The selected provider constructor then
+validates the merged configuration during plan startup, so a known unsupported
+model/provider option combination rejects the plan before a room is registered.
+
+For example, trusted Elixir capability-profile configuration can select Zenmux
+native routing without carrying its credential:
+
+```elixir
+%{
+  kind: :model_inference,
+  provider: :req_llm,
+  options: %{
+    model: "zenmux:openai/gpt-5",
+    generation_options: [
+      provider_options: [
+        provider: %{
+          fallback: "anthropic",
+          routing: %{type: "priority", providers: ["openai", "anthropic"]}
+        }
+      ]
+    ]
+  }
+}
+```
+
+The application supplies the API key through Agent Runtime
+`model_provider_options`. JSON configuration translation belongs to the later
+container-delivery milestone; it must produce this same trusted profile shape
+rather than introduce a second fallback schema.
+
 Vxpipe does not define a fallback list, retry coordinator, alternate credential
 selector, or cross-provider replay policy. Native routing does not resubmit MCP
 work, restart a partially emitted conversational stream, or replay TTS.
@@ -131,5 +166,6 @@ retains original permitted input/output facts, stores separately named
 compaction usage, and never stores the derived summary. Immediate caller input
 still uses the existing interruption semantics. Tagged provider interoperability
 now has a separately excluded Zenmux lane. Controlled adapter and partial-stream
-failure coverage pass; the credentialed request and configured-profile wiring
-remain milestone work.
+failure coverage pass, and Call Engine tests prove profile-over-application
+generation-option precedence plus unsupported-combination rejection. The
+credentialed request remains external evidence.

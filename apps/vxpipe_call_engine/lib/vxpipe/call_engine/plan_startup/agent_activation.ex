@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.CallVariables.Binding
   alias Vxpipe.CallEngine.AgentRuntime.ModelContextSource
+  alias Vxpipe.CallEngine.PlanStartup.AgentModelProfile
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Usage.ProviderContext
@@ -16,11 +17,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
           {:ok, keyword()} | {:error, Error.t()}
   def new(%ResolvedCallPlan{} = plan, %ResolvedCallPlan.Participant{} = receiver, options)
       when is_list(options) do
-    with %CapabilitySelection{provider: :req_llm, options: provider_options} <-
+    with %CapabilitySelection{provider: :req_llm} = model_selection <-
            receiver.capabilities.model_inference,
-         {:ok, model} <- agent_model(provider_options),
          owner when is_pid(owner) <- Keyword.get(options, :owner),
          settings when is_list(settings) <- Keyword.get(options, :agent_runtime),
+         {:ok, model_profile} <- AgentModelProfile.resolve(model_selection, settings),
          {:ok, variable_binding} <- variable_binding(plan, receiver, options),
          {:ok, mcp_integrations} <- mcp_integrations(receiver, options),
          {:ok, activation_options} <-
@@ -28,7 +29,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
              Keyword.get(settings, :implementation, :agent_runtime),
              plan,
              receiver,
-             model,
+             model_profile,
              variable_binding,
              mcp_integrations,
              owner,
@@ -48,23 +49,14 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
          :agent_runtime,
          plan,
          receiver,
-         model,
+         %AgentModelProfile{} = model_profile,
          variable_binding,
          mcp_integrations,
          owner,
          options,
          settings
        ) do
-    provider_module = Keyword.get(settings, :model_provider)
-    provider_options = Keyword.get(settings, :model_provider_options)
-
-    with provider_module when is_atom(provider_module) <- provider_module,
-         true <- Code.ensure_loaded?(provider_module),
-         true <- function_exported?(provider_module, :new, 1),
-         provider_options when is_list(provider_options) <- provider_options,
-         {:ok, usage_provider} <- model_usage_provider(receiver, model),
-         {:ok, provider_config} <-
-           provider_module.new(Keyword.put(provider_options, :model, model)) do
+    with {:ok, usage_provider} <- model_usage_provider(receiver, model_profile.model) do
       {:ok,
        common_options(
          plan,
@@ -77,8 +69,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
        ) ++
          [
            runtime: :agent_runtime,
-           model_provider: provider_module,
-           model: provider_config,
+           model_provider: model_profile.provider,
+           model: model_profile.configuration,
            provider: Keyword.get(settings, :model_provider_label, :req_llm),
            usage_provider: usage_provider,
            tools: receiver.tools
@@ -229,16 +221,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     end
   end
 
-  defp agent_model(%{model: model} = options)
-       when map_size(options) == 1 and is_binary(model),
-       do: nonempty_model(model)
-
-  defp agent_model(%{"model" => model} = options)
-       when map_size(options) == 1 and is_binary(model),
-       do: nonempty_model(model)
-
-  defp agent_model(_unsupported), do: {:error, :unsupported_provider_options}
-
   defp model_usage_provider(receiver, model) do
     selection = receiver.capabilities.model_inference
 
@@ -254,10 +236,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       [provider, _model] when provider != "" -> provider
       _other -> "req_llm"
     end
-  end
-
-  defp nonempty_model(model) do
-    if String.trim(model) == "", do: {:error, :invalid_model}, else: {:ok, model}
   end
 
   defp unsupported_model(receiver) do

@@ -5,8 +5,9 @@ replacement, one bounded compaction attempt, production summarizer/accounting
 selection, Agent Runtime Session integration, and Call Engine queued-input
 integration, runtime-only summary privacy, and distinct metered compaction usage
 are implemented. Controlled native-routing wire/failure coverage and a tagged
-Zenmux interoperability lane are implemented; configured-profile pass-through
-is next. Specification
+Zenmux interoperability lane are implemented. Pinned model capability profiles
+now pass validated provider generation options into application-owned provider
+configuration. Acceptance/gate review is next. Specification
 review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
@@ -37,7 +38,7 @@ can be exercised without adding Vxpipe's own provider chain.
 - [x] Resolve and document summarizer selection and token accounting/limits before authorizing its production data flow.
 - [x] Implement bounded summary work, protected-history replacement and late-message/activation checks.
 - [x] Preserve summary provenance/privacy and metered usage through existing event/storage boundaries.
-- [ ] Validate/pass through supported native fallback options and add controlled plus tagged adapter interoperability coverage.
+- [x] Validate/pass through supported native fallback options and add controlled plus tagged adapter interoperability coverage.
 
 ## Acceptance and failure checks
 
@@ -109,6 +110,13 @@ second model stream, buffered generation, or tool submission. A separately
 tagged live Zenmux test exercises the same native routing and exact schema when
 `ZENMUX_API_KEY` is available; it compiles under the default excluded lane but
 has not been run against the provider because that credential is not configured.
+The resolved model capability profile may now add `generation_options` alongside
+its model. Those options override matching application defaults while the
+application retains credentials and runtime-only provider settings. The selected
+ReqLLM adapter validates the merged configuration before room startup; a known
+unsupported model/provider option combination rejects the call plan. Profiles
+accept only recursively data-valued generation settings, and profiles without
+generation options preserve the prior provider constructor contract.
 
 ## Specification review
 
