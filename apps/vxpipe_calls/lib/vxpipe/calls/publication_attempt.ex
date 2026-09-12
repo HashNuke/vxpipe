@@ -1,7 +1,13 @@
 defmodule Vxpipe.Calls.PublicationAttempt do
   @moduledoc "Runs one reserve, immutable-object write, and publication-commit attempt."
 
-  alias Vxpipe.Calls.{CallDetailsObject, CallDetailsPublication, PublicationJob, Repositories}
+  alias Vxpipe.Calls.{
+    CallDetailsObject,
+    CallDetailsPublication,
+    CallDetailsSnapshot,
+    PublicationJob,
+    Repositories
+  }
 
   @type outcome ::
           {:ok, CallDetailsPublication.t(), :published | :already_published} | {:error, term()}
@@ -16,9 +22,12 @@ defmodule Vxpipe.Calls.PublicationAttempt do
     end
   end
 
-  defp reserve(job) do
-    Repositories.call(job.repository, :reserve, [job.tenant_key, job.call_id, job.snapshot])
+  defp reserve(%PublicationJob{source: %CallDetailsSnapshot{} = snapshot} = job) do
+    Repositories.call(job.repository, :reserve, [job.tenant_key, job.call_id, snapshot])
   end
+
+  defp reserve(%PublicationJob{source: %CallDetailsPublication{} = publication}),
+    do: {:ok, publication, :existing}
 
   defp deliver(_job, %CallDetailsPublication{status: :published} = publication),
     do: {:ok, publication, :already_published}

@@ -24,7 +24,7 @@ definition revision and resolved-plan digest, not only a generic call identifier
 ## Implementation checklist
 
 - [x] Red-test publication projection and fake-clock reporting window with complete, delayed, prohibited and missing components.
-- [ ] Implement Calls publication state/workers outside room lifecycle with persistence/artifact ports.
+- [x] Implement Calls publication state/workers outside room lifecycle with persistence/artifact ports.
 - [x] Store immutable publication records, timestamp filenames/checksums and nonregressing latest reference with collision handling.
 - [ ] Integrate late usage/artifact/history observations as refreshed immutable publications.
 - [ ] Add authorized operator retrieval and document incompleteness/available evidence without exposing private data to ordinary clients.
@@ -78,8 +78,12 @@ Implementation evidence:
   coalesces concurrent submissions of the same tenant/call/source digest, while short-lived workers
   perform reserve, immutable write, and receipt commit in bounded supervised attempts outside room
   lifetime. Successful and already-published paths stop normally; timeouts and storage failures
-  retry only to the configured limit and leave a reserved revision pending on exhaustion. Automatic
-  discovery of pending rows after node restart remains for the next checkpoint.
+  retry only to the configured limit and leave a reserved revision pending on exhaustion.
+- Checkpoint C2b adds bounded oldest-first pending-row discovery and a periodic Calls-owned recovery
+  child that resumes exact persisted revisions without rebuilding or reserving them. The persistence
+  application can supervise recovery after its Repo through explicit OTP settings and injects its
+  own repository adapter. Failed scans remain observable and retry later without crashing the room
+  or claiming delivery.
 
 ## Specification review
 

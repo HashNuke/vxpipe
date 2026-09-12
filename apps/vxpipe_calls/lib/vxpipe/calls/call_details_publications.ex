@@ -27,4 +27,14 @@ defmodule Vxpipe.Calls.CallDetailsPublications do
 
   def mark_published(_tenant_key, _call_id, _publication_id, _object, _options),
     do: {:error, :invalid_call_details_publication}
+
+  @spec list_pending(pos_integer(), keyword()) ::
+          {:ok, [Vxpipe.Calls.CallDetailsPublication.t()]} | {:error, term()}
+  def list_pending(limit, options) when is_integer(limit) and limit > 0 and is_list(options) do
+    with {:ok, repository} <- Repositories.fetch(options, :publication_repository) do
+      Repositories.call(repository, :list_pending, [limit])
+    end
+  end
+
+  def list_pending(_limit, _options), do: {:error, :invalid_publication_limit}
 end

@@ -6,7 +6,11 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.{CallDetailsObject, CallDetailsPublication, CallDetailsSnapshot}
-  alias Vxpipe.Persistence.{CallDetailsPublicationHead, CallDetailsPublicationRecord}
+  alias Vxpipe.Persistence.{
+    CallDetailsPublicationHead,
+    CallDetailsPublicationPending,
+    CallDetailsPublicationRecord
+  }
   alias Vxpipe.Persistence.Schema.{Call, Tenant}
   alias Vxpipe.Persistence.Schema.CallDetailsPublication, as: StoredPublication
 
@@ -42,6 +46,11 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStore do
         {:error, reason} -> repo.rollback(reason)
       end
     end)
+  end
+
+  @impl true
+  def list_pending(repo, limit) when is_integer(limit) and limit > 0 do
+    CallDetailsPublicationPending.list(repo, limit)
   end
 
   defp reserve_transaction(repo, tenant_key, call_id, snapshot) do
@@ -143,4 +152,5 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStore do
     })
     |> repo.update()
   end
+
 end

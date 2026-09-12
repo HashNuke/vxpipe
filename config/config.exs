@@ -15,6 +15,8 @@ config :vxpipe_persistence,
   ecto_repos: [Vxpipe.Persistence.Repo],
   enabled: false
 
+config :vxpipe_persistence, :call_details_publication_recovery, enabled: false
+
 config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
 
 config :vxpipe_calls, Vxpipe.Calls,

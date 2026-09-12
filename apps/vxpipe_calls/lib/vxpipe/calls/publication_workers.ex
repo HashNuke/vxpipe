@@ -1,7 +1,12 @@
 defmodule Vxpipe.Calls.PublicationWorkers do
   @moduledoc "Starts call-details delivery through the Calls-owned worker supervisor."
 
-  alias Vxpipe.Calls.{CallDetailsSnapshot, PublicationJob, PublicationWorker}
+  alias Vxpipe.Calls.{
+    CallDetailsPublication,
+    CallDetailsSnapshot,
+    PublicationJob,
+    PublicationWorker
+  }
 
   @default_supervisor Vxpipe.Calls.PublicationWorkerSupervisor
 
@@ -17,6 +22,17 @@ defmodule Vxpipe.Calls.PublicationWorkers do
 
   def start(_tenant_key, _call_id, _snapshot, _options),
     do: {:error, :invalid_publication_job}
+
+  @spec resume(CallDetailsPublication.t(), keyword()) ::
+          {:ok, pid(), :started | :existing} | {:error, term()}
+  def resume(%CallDetailsPublication{} = publication, options) when is_list(options) do
+    with {:ok, job} <- PublicationJob.resume(publication, options),
+         {:ok, supervisor} <- supervisor(options) do
+      start_child(supervisor, job)
+    end
+  end
+
+  def resume(_publication, _options), do: {:error, :invalid_publication_job}
 
   defp start_child(supervisor, job) do
     case DynamicSupervisor.start_child(supervisor, {PublicationWorker, job}) do

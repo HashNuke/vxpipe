@@ -16,10 +16,14 @@ defmodule Vxpipe.Calls.PublicationRepository do
               CallDetailsObject.t()
             ) :: {:ok, CallDetailsPublication.t()} | {:error, term()}
 
+  @callback list_pending(context(), pos_integer()) ::
+              {:ok, [CallDetailsPublication.t()]} | {:error, term()}
+
   @spec valid?(module()) :: boolean()
   def valid?(module) when is_atom(module) do
     Code.ensure_loaded?(module) and function_exported?(module, :reserve, 4) and
-      function_exported?(module, :mark_published, 5)
+      function_exported?(module, :mark_published, 5) and
+      function_exported?(module, :list_pending, 2)
   end
 
   def valid?(_module), do: false

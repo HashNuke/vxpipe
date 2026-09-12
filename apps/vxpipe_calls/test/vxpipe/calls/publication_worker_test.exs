@@ -3,10 +3,12 @@ defmodule Vxpipe.Calls.PublicationWorkerTest do
 
   alias Vxpipe.Calls.{
     CallDetailsObject,
+    CallDetailsPublication,
     CallDetailsSnapshot,
     CallDetailsSource,
     PublicationComponent,
     PublicationDecision,
+    PublicationRecovery,
     PublicationWindow,
     TestPublicationArtifactWriter,
     TestPublicationRepository
@@ -172,6 +174,72 @@ defmodule Vxpipe.Calls.PublicationWorkerTest do
 
     assert_receive {:vxpipe_call_details_published, ^worker, "publication-worker-1", 1}
     refute_receive {:publication_write_started, _other_attempt, "publication-worker-1"}
+  end
+
+  test "periodic recovery resumes a durable pending revision without reserving it again" do
+    observer = self()
+    snapshot = snapshot()
+    assert {:ok, pending} = CallDetailsPublication.pending(@tenant_key, @call_id, snapshot)
+
+    repository =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{observer: observer, publications: %{snapshot.source_digest => pending}}
+         end}
+      )
+
+    recovery =
+      start_supervised!(
+        {PublicationRecovery,
+         publication_repository: {TestPublicationRepository, repository},
+         publication_artifact_writer:
+           {TestPublicationArtifactWriter,
+            %{observer: observer, response: :success, published_at: @published_at}},
+         scan_on_start: false,
+         scan_interval_ms: 60_000,
+         batch_size: 10,
+         observer: observer}
+      )
+
+    assert {:ok, %{found: 1, started: 1, existing: 0, unavailable: 0}} =
+             PublicationRecovery.scan(recovery)
+
+    assert_receive {:pending_publications_listed, recovery_caller, 10}
+    assert recovery_caller == recovery
+    assert_receive {:publication_write_started, _attempt, "publication-worker-1"}
+    assert_receive {:vxpipe_call_details_published, _worker, "publication-worker-1", 1}
+    refute_received {:publication_reserved, _, _, _}
+  end
+
+  test "keeps the recovery process available after a pending-row query failure" do
+    observer = self()
+    repository = repository(observer)
+
+    Agent.update(repository, &Map.put(&1, :list_result, {:error, :database_unavailable}))
+
+    recovery =
+      start_supervised!(
+        {PublicationRecovery,
+         publication_repository: {TestPublicationRepository, repository},
+         publication_artifact_writer:
+           {TestPublicationArtifactWriter,
+            %{observer: observer, response: :success, published_at: @published_at}},
+         scan_on_start: false,
+         scan_interval_ms: 60_000,
+         observer: observer},
+        id: :failed_publication_recovery
+      )
+
+    assert {:error, :database_unavailable} = PublicationRecovery.scan(recovery)
+
+    assert_receive {:vxpipe_call_details_recovery_scan, ^recovery,
+                    {:error, :database_unavailable}}
+
+    Agent.update(repository, &Map.delete(&1, :list_result))
+
+    assert {:ok, %{found: 0, started: 0, existing: 0, unavailable: 0}} =
+             PublicationRecovery.scan(recovery)
   end
 
   defp snapshot do

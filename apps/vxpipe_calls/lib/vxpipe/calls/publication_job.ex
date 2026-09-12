@@ -1,17 +1,22 @@
 defmodule Vxpipe.Calls.PublicationJob do
   @moduledoc "Validated dependencies and limits for delivering one call-details snapshot."
 
-  alias Vxpipe.Calls.{CallDetailsSnapshot, PublicationArtifactWriter, PublicationRepository}
+  alias Vxpipe.Calls.{
+    CallDetailsPublication,
+    CallDetailsSnapshot,
+    PublicationArtifactWriter,
+    PublicationRepository
+  }
 
   @default_maximum_attempts 3
   @default_retry_delay_ms 1_000
   @default_attempt_timeout_ms 15_000
 
-  @derive {Inspect, except: [:snapshot, :repository, :artifact_writer]}
+  @derive {Inspect, except: [:source, :repository, :artifact_writer]}
   @enforce_keys [
     :tenant_key,
     :call_id,
-    :snapshot,
+    :source,
     :repository,
     :artifact_writer,
     :registry,
@@ -28,7 +33,7 @@ defmodule Vxpipe.Calls.PublicationJob do
   @type t :: %__MODULE__{
           tenant_key: String.t(),
           call_id: String.t(),
-          snapshot: CallDetailsSnapshot.t(),
+          source: CallDetailsSnapshot.t() | CallDetailsPublication.t(),
           repository: adapter(),
           artifact_writer: adapter(),
           registry: atom(),
@@ -44,6 +49,34 @@ defmodule Vxpipe.Calls.PublicationJob do
   def new(tenant_key, call_id, %CallDetailsSnapshot{} = snapshot, options)
       when is_binary(tenant_key) and tenant_key != "" and is_binary(call_id) and call_id != "" and
              is_list(options) do
+    build(tenant_key, call_id, snapshot, options)
+  end
+
+  def new(_tenant_key, _call_id, _snapshot, _options), do: {:error, :invalid_publication_job}
+
+  @spec resume(CallDetailsPublication.t(), keyword()) ::
+          {:ok, t()} | {:error, :invalid_publication_job}
+  def resume(%CallDetailsPublication{} = publication, options) when is_list(options) do
+    build(publication.tenant_key, publication.call_id, publication, options)
+  end
+
+  def resume(_publication, _options), do: {:error, :invalid_publication_job}
+
+  @spec key(t()) :: {String.t(), String.t(), binary()}
+  def key(%__MODULE__{} = job),
+    do: {job.tenant_key, job.call_id, job.source.source_digest}
+
+  @spec publication_id(t()) :: String.t()
+  def publication_id(%__MODULE__{source: %CallDetailsSnapshot{} = snapshot}),
+    do: snapshot.publication_id
+
+  def publication_id(%__MODULE__{source: %CallDetailsPublication{} = publication}),
+    do: publication.id
+
+  @spec via(t()) :: {:via, Registry, {atom(), term()}}
+  def via(%__MODULE__{} = job), do: {:via, Registry, {job.registry, key(job)}}
+
+  defp build(tenant_key, call_id, source, options) do
     settings = configured_settings()
 
     with {:ok, repository} <-
@@ -70,7 +103,7 @@ defmodule Vxpipe.Calls.PublicationJob do
        %__MODULE__{
          tenant_key: tenant_key,
          call_id: call_id,
-         snapshot: snapshot,
+         source: source,
          repository: repository,
          artifact_writer: artifact_writer,
          registry: registry,
@@ -84,15 +117,6 @@ defmodule Vxpipe.Calls.PublicationJob do
       _invalid -> {:error, :invalid_publication_job}
     end
   end
-
-  def new(_tenant_key, _call_id, _snapshot, _options), do: {:error, :invalid_publication_job}
-
-  @spec key(t()) :: {String.t(), String.t(), binary()}
-  def key(%__MODULE__{} = job),
-    do: {job.tenant_key, job.call_id, job.snapshot.source_digest}
-
-  @spec via(t()) :: {:via, Registry, {atom(), term()}}
-  def via(%__MODULE__{} = job), do: {:via, Registry, {job.registry, key(job)}}
 
   defp configured_settings do
     configured = Application.get_env(:vxpipe_calls, Vxpipe.Calls, [])

@@ -168,3 +168,45 @@ than the actual publication-attempt caller; the fixture now captures and reports
 - Root formatting, warnings-as-errors compilation, unused-dependency checks, and strict Credo over
   740 source files passed. The complete database-backed umbrella run then exited successfully with
   923 tests across all children and the existing external integration exclusions.
+
+## 2026-09-12 — checkpoint C2b
+
+### Decisions
+
+- Extend the publication repository port with a bounded oldest-first pending query that returns
+  public tenant/call ownership alongside each exact persisted revision. Recovery does not rebuild a
+  snapshot from whichever source data happens to exist later.
+- A publication job may originate from a new snapshot or an already-reserved revision. Both share
+  the same tenant/call/source-digest worker key. The latter skips reservation and therefore safely
+  handles process or node restart without creating a second record.
+- A periodic Calls-owned recovery child scans and resubmits pending revisions. Repository failure is
+  an observable failed scan, not a process terminal condition; later scans can recover.
+- Persistence composes this child after its Repo only when an embedding host enables it and supplies
+  an artifact writer through OTP application settings. Persistence injects
+  `CallDetailsPublicationStore` and its Repo rather than accepting a second repository setting.
+- Pending query/decode logic lives in `CallDetailsPublicationPending`, leaving the main Ecto adapter
+  focused on transactional reservation and receipt commits.
+
+### Red evidence
+
+- The PostgreSQL test failed with `UndefinedFunctionError` for
+  `Vxpipe.Calls.list_pending_call_details/2` before the repository port/query existed.
+- The recovery test failed because `Vxpipe.Calls.PublicationRecovery` did not exist.
+- The OTP composition tests failed because
+  `Vxpipe.Persistence.PublicationRecoveryConfiguration.children/1` did not exist.
+
+### Green evidence
+
+- The PostgreSQL test now proves a bounded query returns only pending revisions, oldest first, with
+  their public tenant and call identifiers.
+- The Calls recovery tests prove an exact pending revision is uploaded and committed without a
+  second reservation, and that a database-unavailable scan leaves the recovery process available
+  for a successful later scan.
+- The persistence configuration tests prove recovery is opt-in, injects the owning repository, and
+  rejects an enabled configuration without a valid artifact writer.
+- `cd apps/vxpipe_calls && mix test` — 69 tests, 0 failures.
+- `cd apps/vxpipe_persistence && VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix test`
+  — 43 tests, 0 failures.
+- Root formatting, warnings-as-errors compilation, unused-dependency checks, and strict Credo over
+  744 source files passed. The complete database-backed umbrella run exited successfully with 929
+  tests across all children and the existing external integration exclusions.

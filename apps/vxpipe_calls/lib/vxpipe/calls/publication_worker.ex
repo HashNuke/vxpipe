@@ -87,8 +87,8 @@ defmodule Vxpipe.Calls.PublicationWorker do
     if state.attempt < state.job.maximum_attempts do
       notify(
         state,
-        {:vxpipe_call_details_retrying, self(), state.job.snapshot.publication_id, state.attempt,
-         reason}
+        {:vxpipe_call_details_retrying, self(), PublicationJob.publication_id(state.job),
+         state.attempt, reason}
       )
 
       _timer = Process.send_after(self(), :retry, state.job.retry_delay_ms)
@@ -96,7 +96,7 @@ defmodule Vxpipe.Calls.PublicationWorker do
     else
       notify(
         state,
-        {:vxpipe_call_details_unavailable, self(), state.job.snapshot.publication_id,
+        {:vxpipe_call_details_unavailable, self(), PublicationJob.publication_id(state.job),
          state.attempt, reason}
       )
 

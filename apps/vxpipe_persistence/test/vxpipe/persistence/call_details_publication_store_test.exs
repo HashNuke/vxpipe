@@ -211,6 +211,36 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
     assert Repo.aggregate(CallDetailsPublication, :count) == 0
   end
 
+  test "lists bounded pending revisions oldest first with public call ownership", context do
+    oldest = snapshot("publication-oldest", ~U[2026-09-12 16:01:00.100Z], 1)
+    published = snapshot("publication-delivered", ~U[2026-09-12 16:01:01.200Z], 2)
+    newest = snapshot("publication-newest", ~U[2026-09-12 16:01:02.300Z], 3)
+
+    assert {:ok, oldest_record, :created} =
+             Calls.reserve_call_details(@tenant_key, @call_id, oldest, context.options)
+
+    assert {:ok, published_record, :created} =
+             Calls.reserve_call_details(@tenant_key, @call_id, published, context.options)
+
+    assert {:ok, _newest_record, :created} =
+             Calls.reserve_call_details(@tenant_key, @call_id, newest, context.options)
+
+    assert {:ok, _published_record} =
+             Calls.mark_call_details_published(
+               @tenant_key,
+               @call_id,
+               published_record.id,
+               object(published_record, "etag-published", ~U[2026-09-12 16:01:03.000Z]),
+               context.options
+             )
+
+    assert {:ok, [pending]} = Calls.list_pending_call_details(1, context.options)
+    assert pending.id == oldest_record.id
+    assert pending.tenant_key == @tenant_key
+    assert pending.call_id == @call_id
+    assert pending.status == :pending
+  end
+
   defp snapshot(id, recorded_at, variable_revision) do
     assert {:ok, history} = PublicationComponent.new("history", :complete)
     assert {:ok, usage} = PublicationComponent.new("usage", :complete)

@@ -2936,9 +2936,15 @@ tenant, call, and source digest, so simultaneous submissions of the same snapsho
 worker. Each attempt reserves the immutable database revision before writing its exact object bytes
 and commits the protected receipt last. An already-published reservation completes without another
 object write. Object or database failures receive bounded retries and attempt deadlines; exhaustion
-leaves any successfully reserved revision pending rather than claiming delivery. Discovering those
-pending rows after process/node restart is a separate recovery adapter still required by this
-milestone.
+leaves any successfully reserved revision pending rather than claiming delivery.
+
+The publication repository exposes a bounded oldest-first pending-revision query. A periodic
+Calls-owned recovery child can be supervised after the configured Repo and submits those exact
+persisted revisions to the same delivery workers without reserving or rebuilding them. A failed
+scan reports unavailability, stays alive, and tries again on a later interval. The persistence
+application keeps this child disabled by default and composes it only when the embedding host
+supplies an artifact-writer adapter through OTP application settings; persistence injects its own
+repository adapter so callers cannot accidentally bind recovery to a different database contract.
 
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,

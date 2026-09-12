@@ -109,6 +109,12 @@ defmodule Vxpipe.Calls do
   def publish_call_details(tenant_key, call_id, snapshot, options \\ []),
     do: PublicationWorkers.start(tenant_key, call_id, snapshot, options)
 
+  def list_pending_call_details(limit, options \\ []),
+    do: CallDetailsPublications.list_pending(limit, options)
+
+  def resume_call_details(publication, options \\ []),
+    do: PublicationWorkers.resume(publication, options)
+
   def fetch_call_history(principal, call_id, options \\ []),
     do: Archives.fetch_call_history(principal, call_id, options)
 

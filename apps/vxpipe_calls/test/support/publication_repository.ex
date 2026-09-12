@@ -46,4 +46,33 @@ defmodule Vxpipe.Calls.TestPublicationRepository do
       end
     end)
   end
+
+  @impl true
+  def list_pending(agent, limit) do
+    caller = self()
+
+    Agent.get(agent, fn state ->
+      case Map.get(state, :list_result) do
+        nil ->
+          pending(state, caller, limit)
+
+        result ->
+          send(state.observer, {:pending_publications_listed, caller, limit})
+          result
+      end
+    end)
+  end
+
+  defp pending(state, caller, limit) do
+    send(state.observer, {:pending_publications_listed, caller, limit})
+
+    publications =
+      state.publications
+      |> Map.values()
+      |> Enum.filter(&(&1.status == :pending))
+      |> Enum.sort_by(&{&1.recorded_at, &1.id}, DateTime)
+      |> Enum.take(limit)
+
+    {:ok, publications}
+  end
 end
