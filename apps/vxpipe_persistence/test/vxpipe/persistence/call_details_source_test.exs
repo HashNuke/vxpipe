@@ -17,12 +17,17 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     ArchiveStore,
     ArtifactStore,
     CallDetailsSource,
+    CallDetailsPublicationStore,
     CallStore,
     CredentialStore,
     DefinitionStore,
     Repo,
+    TestPublicationArtifactWriter,
+    TestPublicationClock,
     UsageStore
   }
+
+  alias Vxpipe.Persistence.Schema.{Call, CallDetailsPublication}
 
   @tenant_key "DETAILSSOURCE001"
   @call_id "11111111-2222-4333-8444-555555555555"
@@ -169,6 +174,52 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
              CallDetailsSource.read([repo: Repo, recording: :unconfigured], @tenant_key, @call_id)
 
     assert component_status(unconfigured, "recording") == :unconfigured
+  end
+
+  test "publishes at the deadline and refreshes after late recording metadata", context do
+    clock = start_supervised!({Agent, fn -> DateTime.add(@ended_at, 60, :second) end})
+
+    publication_options =
+      Keyword.merge(context.options,
+        publication_enabled: true,
+        publication_source: {CallDetailsSource, [repo: Repo, recording: :configured]},
+        publication_repository: {CallDetailsPublicationStore, Repo},
+        publication_artifact_writer:
+          {TestPublicationArtifactWriter, %{observer: self(), clock: clock}},
+        publication_clock: {TestPublicationClock, clock},
+        maximum_attempts: 1,
+        observer: self()
+      )
+
+    archive_variables(context)
+    archive_history(%{context | options: publication_options})
+
+    assert_receive {:vxpipe_call_details_published, _worker, first_id, 1}, 1_000
+
+    [first] = Repo.all(CallDetailsPublication)
+    assert first.public_id == first_id
+    assert first.completeness == :incomplete
+    assert first.status == :published
+
+    Agent.update(clock, fn _time -> DateTime.add(@ended_at, 61, :second) end)
+    archive_recording(%{context | options: publication_options})
+
+    assert_receive {:vxpipe_call_details_published, _worker, second_id, 1}, 1_000
+    refute second_id == first_id
+
+    publications =
+      CallDetailsPublication
+      |> Repo.all()
+      |> Enum.sort_by(& &1.recorded_at, DateTime)
+
+    assert [persisted_first, persisted_second] = publications
+    assert persisted_first.completeness == :incomplete
+    assert persisted_second.completeness == :complete
+    assert persisted_first.source_digest != persisted_second.source_digest
+    assert persisted_first.filename != persisted_second.filename
+
+    call = Call |> Repo.get_by!(public_id: @call_id) |> Repo.preload(:latest_details_publication)
+    assert call.latest_details_publication.public_id == second_id
   end
 
   defp archive_history(context) do

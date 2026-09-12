@@ -43,6 +43,25 @@ standard provider chain, including `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KE
 Do not put credentials, bucket settings, or endpoint settings in call definitions or
 client requests.
 
+## Call-details publication composition
+
+When PostgreSQL is configured, the repository host can publish immutable post-call JSON revisions
+to the same S3-compatible call-artifact bucket or a dedicated bucket:
+
+```shell
+VXPIPE_DATABASE_URL=postgres://user:password@database/vxpipe
+VXPIPE_CALL_DETAILS_S3_BUCKET=vxpipe-call-details
+VXPIPE_CALL_DETAILS_S3_REGION=us-east-1
+# VXPIPE_CALL_DETAILS_S3_ENDPOINT=http://127.0.0.1:9000
+```
+
+If a dedicated value is absent, each `VXPIPE_CALL_DETAILS_S3_*` setting falls back to its matching
+`VXPIPE_RECORDING_S3_*` setting. A configured database and resulting bucket enable post-commit
+finalization plus pending-revision recovery; without either one, automatic publication remains
+disabled. The endpoint accepts only a root HTTP(S) origin and uses path-style access. ExAws obtains
+credentials from its standard provider chain. These settings do not enable recording, and none of
+the bucket, endpoint, or credentials belong in a definition or browser request.
+
 The development profile captures the live full mix and all individual tracks only
 for intervals permitted by the effective room media policy. Raw PCM objects and
 terminal metadata are internal at this checkpoint; authenticated operator playback

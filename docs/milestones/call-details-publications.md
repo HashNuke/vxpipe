@@ -26,7 +26,7 @@ definition revision and resolved-plan digest, not only a generic call identifier
 - [x] Red-test publication projection and fake-clock reporting window with complete, delayed, prohibited and missing components.
 - [x] Implement Calls publication state/workers outside room lifecycle with persistence/artifact ports.
 - [x] Store immutable publication records, timestamp filenames/checksums and nonregressing latest reference with collision handling.
-- [ ] Integrate late usage/artifact/history observations as refreshed immutable publications.
+- [x] Integrate late usage/artifact/history observations as refreshed immutable publications.
 - [ ] Add authorized operator retrieval and document incompleteness/available evidence without exposing private data to ordinary clients.
 
 ## Acceptance and failure checks
@@ -119,6 +119,14 @@ Implementation evidence:
   end exits cleanly as not yet eligible; the later closure starts the authoritative assessment.
   Production object-writer/recovery configuration and end-to-end late revision proof remain
   pending.
+- Checkpoint C3e2 configures automatic repository delivery when PostgreSQL and an S3-compatible
+  call-details bucket are present. The runtime injects the artifacts writer into Calls and the
+  persistence-owned pending-revision recovery child; dedicated call-details storage settings may
+  fall back to the recording artifact target without enabling recording. A database-backed flow
+  proves closure produces an incomplete deadline revision when expected recording is pending, then
+  late terminal artifact metadata produces and publishes a distinct complete revision and advances
+  the nonregressing latest pointer. Focused trigger coverage separately proves newly stored billing
+  enrichment requests the same refresh path. Operator retrieval remains pending.
 
 ## Specification review
 

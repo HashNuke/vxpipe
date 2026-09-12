@@ -31,6 +31,45 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
       {Vxpipe.Persistence.CallDetailsPublicationStore, Vxpipe.Persistence.Repo}
 end
 
+nonempty_env = fn name ->
+  case System.get_env(name) do
+    nil -> nil
+    value -> if String.trim(value) == "", do: nil, else: value
+  end
+end
+
+call_details_bucket =
+  nonempty_env.("VXPIPE_CALL_DETAILS_S3_BUCKET") ||
+    nonempty_env.("VXPIPE_RECORDING_S3_BUCKET")
+
+if database_url && call_details_bucket do
+  call_details_storage = [
+    bucket: call_details_bucket,
+    region:
+      nonempty_env.("VXPIPE_CALL_DETAILS_S3_REGION") ||
+        nonempty_env.("VXPIPE_RECORDING_S3_REGION"),
+    endpoint:
+      nonempty_env.("VXPIPE_CALL_DETAILS_S3_ENDPOINT") ||
+        nonempty_env.("VXPIPE_RECORDING_S3_ENDPOINT")
+  ]
+
+  {:ok, document_store_options} =
+    Vxpipe.Artifacts.S3DocumentConfiguration.build(call_details_storage)
+
+  publication_writer =
+    {Vxpipe.Artifacts.CallDetailsWriter, [document_store_options: document_store_options]}
+
+  config :vxpipe_calls, Vxpipe.Calls,
+    call_details_publication: [
+      enabled: true,
+      publication_artifact_writer: publication_writer
+    ]
+
+  config :vxpipe_persistence, :call_details_publication_recovery,
+    enabled: true,
+    publication_artifact_writer: publication_writer
+end
+
 if config_env() == :dev do
   config :vxpipe_console, :recording,
     enabled: System.get_env("VXPIPE_RECORDING_ENABLED"),

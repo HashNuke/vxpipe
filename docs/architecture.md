@@ -2997,6 +2997,27 @@ and stops normally; delivery recovery retains responsibility for any durable pen
 Simultaneous finalizer starts for the same call share the registered process. Clock, timer,
 assessment, delivery, and the production persistence source remain separate collaborators.
 
+Automatic assessment is an explicit post-commit policy rather than behavior hidden in an Ecto
+adapter. Persisting `archive_stream_closed` requests the initial assessment after the call/end
+transaction commits. Persisting terminal recording metadata or a newly stored billing-enrichment
+result requests the same operation again, allowing changed permitted evidence to create another
+immutable revision. Ordinary live facts do not repeatedly start finalizers; the archive subscriber
+drains those facts, Variables and usage observations before it emits closure. An artifact or billing
+result that arrives before closure may start an assessment, but `call_not_ended` ends that
+short-lived request normally and closure remains the authoritative later trigger. Trigger startup
+is best effort after the owning write: failure cannot reinterpret committed evidence as failed.
+
+The repository runtime enables this policy only when PostgreSQL and a call-details S3-compatible
+bucket are both configured. It injects the persistence source/repository and the artifacts-owned
+conditional JSON writer into Calls, and supervises oldest-first pending-revision recovery after the
+Repo. `VXPIPE_CALL_DETAILS_S3_BUCKET` selects the document bucket; optional
+`VXPIPE_CALL_DETAILS_S3_REGION` and `VXPIPE_CALL_DETAILS_S3_ENDPOINT` select its request target. If
+the dedicated values are absent, the corresponding `VXPIPE_RECORDING_S3_*` values are reused so a
+single call-artifact bucket is sufficient. The endpoint accepts only a root HTTP(S) origin and uses
+path-style access. ExAws retains credential discovery/signing; no credential enters a call plan,
+publication row, object reference, or log. Configuring this document target neither enables nor
+grants recording.
+
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,
 revisions, and local acceptance timestamp. Do not read a later live state and

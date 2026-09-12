@@ -420,3 +420,47 @@ supervised finalizer tree.
   `mix deps.unlock --check-unused` passed; Credo checked 771 source files without issues. The
   database-backed umbrella test command also exited successfully across all child applications
   with the existing tagged external integrations excluded.
+
+## 2026-09-12 — checkpoint C3e2
+
+### Decisions
+
+- Configure automatic delivery only when the runtime has both PostgreSQL and a non-empty
+  call-details object bucket. This keeps the default embeddable Calls application side-effect free
+  and avoids creating retrying finalizers without a valid writer.
+- Allow dedicated `VXPIPE_CALL_DETAILS_S3_*` settings to fall back individually to the existing
+  `VXPIPE_RECORDING_S3_*` target. One call-artifact bucket therefore suffices, while deployments can
+  separate JSON documents when required. Call-details configuration never enables recording.
+- Put S3 document-target validation in the artifacts application. It accepts a bucket, optional
+  region and a root HTTP(S) endpoint, constructs path-style ExAws request options, and rejects paths,
+  embedded credentials and non-HTTP schemes without copying the supplied value into an error.
+- Enable Calls trigger admission and persistence recovery with the exact same artifact-writer
+  adapter. Runtime configuration preserves the common reporting-window and retry settings instead
+  of replacing the nested application configuration.
+- Verify the composed behavior against PostgreSQL: closure at the reporting deadline creates and
+  commits an incomplete revision when configured recording is pending; later terminal recording
+  metadata starts reassessment, commits a distinct complete revision and advances the latest
+  pointer while retaining the first object record.
+
+### Red evidence
+
+- The new artifacts tests failed three times with `UndefinedFunctionError` because
+  `Vxpipe.Artifacts.S3DocumentConfiguration.build/1` did not exist.
+
+### Green evidence
+
+- `cd apps/vxpipe_artifacts && mix test
+  test/vxpipe/artifacts/s3_document_configuration_test.exs` — 3 tests, 0 failures.
+- `cd apps/vxpipe_persistence &&
+  VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix test
+  test/vxpipe/persistence/call_details_source_test.exs` — 3 tests, 0 failures. The added flow uses
+  the production PostgreSQL source/repository with independently supervised finalizer and delivery
+  workers and a deterministic test object writer.
+- A `MIX_ENV=test mix run --no-start` configuration probe with non-secret dummy database and S3
+  values showed the existing window/retry settings preserved, trigger delivery enabled with the
+  validated writer, and recovery bound to that same writer. No database or object-store application
+  was started and no network request was made.
+- The complete Artifacts suite passed 17 tests with its existing live S3 case excluded, and the
+  complete Persistence suite passed 46 tests. Root formatting, warnings-as-errors compilation,
+  strict Credo over 772 source files, unused-dependency checking, and the database-backed umbrella
+  suite all exited successfully with only the existing tagged external integrations excluded.
