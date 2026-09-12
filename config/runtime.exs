@@ -23,6 +23,8 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
     credential_repository: {Vxpipe.Persistence.CredentialStore, Vxpipe.Persistence.Repo},
     definition_repository: {Vxpipe.Persistence.DefinitionStore, Vxpipe.Persistence.Repo},
     call_repository: {Vxpipe.Persistence.CallStore, Vxpipe.Persistence.Repo},
+    call_details_inspection_repository:
+      {Vxpipe.Persistence.CallDetailsInspectionStore, Vxpipe.Persistence.Repo},
     inspection_repository: {Vxpipe.Persistence.InspectionStore, Vxpipe.Persistence.Repo},
     publication_source:
       {Vxpipe.Persistence.CallDetailsSource,

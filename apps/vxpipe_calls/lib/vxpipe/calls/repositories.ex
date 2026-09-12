@@ -9,6 +9,7 @@ defmodule Vxpipe.Calls.Repositories do
           | :credential_repository
           | :definition_repository
           | :call_repository
+          | :call_details_inspection_repository
           | :inspection_repository
           | :publication_repository
         ) ::

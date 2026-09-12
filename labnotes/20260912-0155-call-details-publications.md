@@ -464,3 +464,43 @@ supervised finalizer tree.
   complete Persistence suite passed 46 tests. Root formatting, warnings-as-errors compilation,
   strict Credo over 772 source files, unused-dependency checking, and the database-backed umbrella
   suite all exited successfully with only the existing tagged external integrations excluded.
+
+## 2026-09-12 — checkpoint C4a
+
+### Decisions
+
+- Keep operator reads behind a dedicated `CallDetailsInspectionRepository` rather than expanding
+  the delivery-worker repository. Calls owns tenant/scope authorization, request validation and
+  pagination; persistence owns table joins and decoding.
+- List both pending and published revision metadata so an operator can distinguish unavailable
+  delivery from an absent publication. Expose identity, timestamp, filename, completeness, state,
+  SHA-256, exact byte size and latest-head status without exposing object keys or references.
+- Return exact persisted canonical JSON only for a published revision. A pending row has not proven
+  object delivery and therefore shares the not-found result with foreign-tenant or absent rows.
+- Use a bounded page of 25 by default and 100 at most. The continuation encodes recorded time and
+  publication identity as opaque URL-safe JSON; repository ordering is newest first.
+- Keep the future Console presenter/controller separate from Calls and persistence. The backend
+  document struct suppresses contents from `Inspect`, preventing accidental log output before the
+  HTTP boundary deliberately sends it.
+
+### Red evidence
+
+- The Calls test first failed while compiling its fake adapter because `CallDetailsCursor` and the
+  call-details inspection repository behavior did not exist.
+- The PostgreSQL test then failed with `UndefinedFunctionError` for
+  `Vxpipe.Persistence.CallDetailsInspectionStore.list/5`.
+
+### Green evidence
+
+- `cd apps/vxpipe_calls && mix test test/vxpipe/calls/call_details_inspections_test.exs` — 2 tests,
+  0 failures. It proves bounded continuation, exact published bytes, scope rejection and invalid
+  request/cursor rejection before repository access.
+- `cd apps/vxpipe_persistence &&
+  VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix test
+  test/vxpipe/persistence/call_details_publication_store_test.exs` — 6 tests, 0 failures. It proves
+  safe newest-first metadata, cursor continuation, nonregressing head indication, exact canonical
+  bytes, pending denial and cross-tenant denial.
+- The complete Calls suite passed 79 tests and the complete Persistence suite passed 47 tests. Root
+  formatting, warnings-as-errors compilation, strict Credo over 779 source files,
+  unused-dependency checking, and the database-backed umbrella suite all exited successfully with
+  only the existing tagged external integrations excluded.

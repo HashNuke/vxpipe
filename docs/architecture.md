@@ -3018,6 +3018,16 @@ path-style access. ExAws retains credential discovery/signing; no credential ent
 publication row, object reference, or log. Configuring this document target neither enables nor
 grants recording.
 
+Operator retrieval uses a separate Calls-owned read workflow and repository port rather than the
+delivery-worker write port. A `calls`-scoped tenant principal can page bounded revision summaries
+through an opaque recorded-time/publication cursor. Summaries expose publication identity,
+timestamp, filename, completeness, delivery state, exact byte size, SHA-256 and whether the
+revision is the current published head. They omit object keys, object references, bucket/endpoint
+settings and document contents. Exact canonical JSON bytes are fetched from the persisted revision
+only after its object receipt is committed as `published`; pending or foreign-tenant revisions use
+the same not-found result. This makes availability explicit without treating a database reservation
+as successful remote storage.
+
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,
 revisions, and local acceptance timestamp. Do not read a later live state and

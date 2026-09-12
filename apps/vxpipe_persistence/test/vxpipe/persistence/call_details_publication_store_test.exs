@@ -7,6 +7,8 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
 
   alias Vxpipe.Calls.{
     CallDetailsObject,
+    CallDetailsCursor,
+    CallDetailsDocument,
     CallDetailsSnapshot,
     CallDetailsSource,
     PublicationComponent,
@@ -14,7 +16,7 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
     PublicationWindow
   }
 
-  alias Vxpipe.Persistence.{CallDetailsPublicationStore, Repo}
+  alias Vxpipe.Persistence.{CallDetailsInspectionStore, CallDetailsPublicationStore, Repo}
 
   alias Vxpipe.Persistence.Schema.{
     Call,
@@ -239,6 +241,71 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
     assert pending.tenant_key == @tenant_key
     assert pending.call_id == @call_id
     assert pending.status == :pending
+  end
+
+  test "lists safe operator revisions and fetches only published exact contents", context do
+    pending = snapshot("operator-pending", ~U[2026-09-12 16:01:00.100Z], 1)
+    published = snapshot("operator-published", ~U[2026-09-12 16:01:01.200Z], 2)
+
+    assert {:ok, pending_record, :created} =
+             Calls.reserve_call_details(@tenant_key, @call_id, pending, context.options)
+
+    assert {:ok, published_record, :created} =
+             Calls.reserve_call_details(@tenant_key, @call_id, published, context.options)
+
+    assert {:ok, _published_record} =
+             Calls.mark_call_details_published(
+               @tenant_key,
+               @call_id,
+               published_record.id,
+               object(published_record, "etag-operator", ~U[2026-09-12 16:01:02.000Z]),
+               context.options
+             )
+
+    assert {:ok, [latest, older]} =
+             CallDetailsInspectionStore.list(Repo, @tenant_key, @call_id, 3, nil)
+
+    assert latest.id == published_record.id
+    assert latest.status == :published
+    assert latest.latest?
+    assert latest.checksum == "sha256:" <> Base.encode16(published.checksum, case: :lower)
+    assert latest.size_bytes == byte_size(published.contents)
+
+    assert older.id == pending_record.id
+    assert older.status == :pending
+    refute older.latest?
+
+    cursor = %CallDetailsCursor{
+      recorded_at: latest.recorded_at,
+      publication_id: latest.id
+    }
+
+    assert {:ok, [^older]} =
+             CallDetailsInspectionStore.list(Repo, @tenant_key, @call_id, 3, cursor)
+
+    assert {:ok, %CallDetailsDocument{} = document} =
+             CallDetailsInspectionStore.fetch(
+               Repo,
+               @tenant_key,
+               @call_id,
+               published_record.id
+             )
+
+    assert document.id == published_record.id
+    assert document.contents == published.contents
+    assert document.filename == published.filename
+    refute inspect(document) =~ "Hello revision 2"
+
+    assert {:error, :call_details_not_found} =
+             CallDetailsInspectionStore.fetch(Repo, @tenant_key, @call_id, pending_record.id)
+
+    assert {:error, :call_details_not_found} =
+             CallDetailsInspectionStore.fetch(
+               Repo,
+               "OTHERPUBLICATION",
+               @call_id,
+               published_record.id
+             )
   end
 
   defp snapshot(id, recorded_at, variable_revision) do

@@ -127,6 +127,13 @@ Implementation evidence:
   late terminal artifact metadata produces and publishes a distinct complete revision and advances
   the nonregressing latest pointer. Focused trigger coverage separately proves newly stored billing
   enrichment requests the same refresh path. Operator retrieval remains pending.
+- Checkpoint C4a adds the operator retrieval backend without widening publication delivery ports.
+  Calls authorizes `calls`-scoped tenant principals, validates bounded opaque pagination and exposes
+  safe revision/document structs. A separate PostgreSQL read adapter lists pending and published
+  revisions with completeness, checksum, byte size and latest-head state, but fetches exact JSON
+  bytes only for a published revision in the same tenant/call. Object keys, provider references,
+  bucket settings and credentials never enter the read model. The Console download/presentation
+  remains pending.
 
 ## Specification review
 
