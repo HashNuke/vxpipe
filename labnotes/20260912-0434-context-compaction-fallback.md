@@ -506,3 +506,70 @@ cd ../vxpipe_agent_runtime
 mix test --include integration test/integration/req_llm_provider_test.exs:82 --trace
 # 1 test, 0 failures: populated human-support destination and non-empty reason
 ```
+
+## 2026-09-12 — final acceptance and review hold
+
+- Audited every milestone acceptance sentence against focused tests. The
+  accepted summary cannot carry tools, tool results, execution hooks, Variables,
+  or permission authority; the original permitted archive stays intact and the
+  summary sentinel remains runtime-private.
+- The controlled native-routing request preserves its exact tool schema and
+  private-executor boundary, retains the actual routed model and reported usage,
+  and never retries a partial stream. The separately tagged live Zenmux lane is
+  still excluded because `ZENMUX_API_KEY` is not configured.
+- Exercised an unmodified RTVI 1.13.0 client over the default HTTPS/WebRTC stack.
+  It reached READY, completed an ordinary typed text/audio turn, and exposed the
+  exact mixed-transfer schema regression described above. After the schema fix,
+  a fresh call projected the transfer function call and the source agent's
+  hold/recovery responses without a correlated protocol error.
+- Rechecked the connected conversation at 390 x 844. The Voice UI Kit switches
+  to its mobile tabs cleanly, the complete tool and recovery exchange remains
+  readable, and document/body width stays 390 pixels with no horizontal
+  overflow.
+- The rendered audit still reports inaccessible third-party icon/tab controls,
+  third-party contrast failures, and the Vxpipe playground shell's missing
+  level-one heading. Preserved that debt in
+  `docs/issues/sample-voice-ui-accessibility.md`; no unrelated UI was changed
+  during this runtime milestone.
+- The separate transfer desk could not connect in this run because the
+  development BEAM had no database URL and therefore did not enable durable
+  sample calls. This run claims the model/tool/protocol path only; the owning
+  human-transfer milestone already contains database-backed destination proof.
+
+Final verification:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/context_budget_test.exs \
+  test/vxpipe/agent_runtime/context_preparation_test.exs \
+  test/vxpipe/agent_runtime/conversation_compaction_test.exs \
+  test/vxpipe/agent_runtime/model_context_compactor_test.exs \
+  test/vxpipe/agent_runtime/session_compaction_test.exs \
+  test/vxpipe/agent_runtime/provider/req_llm_test.exs \
+  test/vxpipe/agent_runtime/provider/req_llm_native_routing_test.exs \
+  test/vxpipe/agent_runtime/streaming_test.exs --trace
+# 34 tests, 0 failures
+
+cd ../vxpipe_call_engine
+mix test test/vxpipe/call_engine/agent_runtime/context_compaction_room_test.exs \
+  test/vxpipe/call_engine/plan_startup/agent_model_profile_test.exs \
+  test/vxpipe/call_engine/agent_transfer_room_test.exs \
+  test/vxpipe/call_engine/usage/model_projection_test.exs --trace
+# 19 tests, 0 failures
+
+cd ../..
+mix assets.build
+# TypeScript check and esbuild production asset build pass
+mix assets.test
+# 3 files, 7 tests, 0 failures
+mix format --check-formatted
+mix compile --warnings-as-errors
+mix credo --strict
+# 802 source files, no issues
+mix deps.unlock --check-unused
+VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix test
+# exit 0; all default umbrella child suites pass
+```
+
+Milestone 22 is complete. The ordered index now pauses at the requested
+pre-delivery platform review before container delivery or retention work.

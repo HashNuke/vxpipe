@@ -1,14 +1,12 @@
 # Context compaction and supported LLM fallback
 
-Status: implementation in progress. Context budgeting, protected snapshot
-replacement, one bounded compaction attempt, production summarizer/accounting
-selection, Agent Runtime Session integration, and Call Engine queued-input
-integration, runtime-only summary privacy, and distinct metered compaction usage
-are implemented. Controlled native-routing wire/failure coverage and a tagged
-Zenmux interoperability lane are implemented. Pinned model capability profiles
-now pass validated provider generation options into application-owned provider
-configuration. Acceptance/gate review is next. Specification
-review: approved (2026-09-08).
+Status: complete. Long conversations now use bounded, private context
+compaction without changing tool or variable authority. Supported
+provider-native routing options pass through the pinned model profile with
+truthful routed-model usage; Vxpipe adds no provider chain. Focused, full-suite,
+tagged-provider, HTTPS/WebRTC, and responsive browser evidence is recorded
+below. The guarded live Zenmux check remains unrun because its credential is not
+configured. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -42,14 +40,14 @@ can be exercised without adding Vxpipe's own provider chain.
 
 ## Acceptance and failure checks
 
-- [ ] Below/at75% trigger after output reserve and target below50%; protected oversized input fails safely without deletion or oversized request.
+- [x] Below/at75% trigger after output reserve and target below50%; protected oversized input fails safely without deletion or oversized request.
 - [x] In-flight tool acknowledgement/result links and new user/tool messages survive compaction; terminated-agent summary cannot leak into another activation.
-- [ ] Inject instructions in history/result/summary: no tool execution or grant/variable mutation follows from summarization.
-- [ ] Full permitted archive is intact; denied transcript summary is not stored; other-agent private history is not read.
-- [ ] Native configured fallback preserves tools/schema/privacy and truthful actual model/usage; partial-stream failure doesn't resubmit tools or silently restart emitted speech.
+- [x] Inject instructions in history/result/summary: no tool execution or grant/variable mutation follows from summarization.
+- [x] Full permitted archive is intact; denied transcript summary is not stored; other-agent private history is not read.
+- [x] Native configured fallback preserves tools/schema/privacy and truthful actual model/usage; partial-stream failure doesn't resubmit tools or silently restart emitted speech.
 - [x] Timeout/error/malformed summary leaves original live context intact; merge intervening
   input/tool completions, then recheck budget before inference without dropping protected work.
-- [ ] Compactor has no execution/tool authority; this is not a promise that later LLM reasoning
+- [x] Compactor has no execution/tool authority; this is not a promise that later LLM reasoning
   is immune to adversarial text. Known unsupported native fallback/profile options fail validation.
 
 ## Manual verification
@@ -65,9 +63,9 @@ No Vxpipe-managed provider fallback chain, automatic tool retry, automatic overs
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence: the first budget checkpoint reserves output before
@@ -123,6 +121,27 @@ retains a complete tool-call/result exchange appended after selection, while the
 existing pending-tool protection, queued-caller remeasurement, and Session-owned
 worker termination prove that current work survives and a terminated activation
 cannot publish or attach a stale result.
+
+Final acceptance used the focused Agent Runtime compaction/routing suite (34
+tests) and focused Call Engine integration suite (19 tests), both with zero
+failures. The exact tagged Gemini transfer-schema interoperability check and the
+Call Engine transfer-focused suite also pass after flattening the mixed transfer
+schema exposed by the live replay. The Phoenix assets typecheck/build succeeds,
+all seven Vitest checks pass, and the PostgreSQL-backed umbrella `mix test`
+exits successfully with every default child suite green. Root formatting,
+warnings-as-errors compilation, strict Credo over 802 source files, and unused
+dependency checks pass.
+
+An unmodified RTVI 1.13.0 client reached READY over the default HTTPS/WebRTC
+development stack, completed ordinary typed text/audio, and projected the mixed
+human-transfer function call plus the agent's hold/recovery responses. Desktop
+and 390 x 844 mobile rendering have no horizontal overflow. Existing
+third-party console accessibility findings and the sample shell's missing page
+heading are retained as an explicit
+[review issue](../issues/sample-voice-ui-accessibility.md), not concealed as
+milestone success. This no-database development run could not admit the separate
+human destination, so it does not replace the database-backed transfer proof
+already recorded by the owning milestone.
 
 ## Specification review
 
