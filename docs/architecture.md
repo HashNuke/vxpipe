@@ -1414,13 +1414,17 @@ through the Agent Runtime seed boundary. Later speech during preparation cannot 
 prepared destination's history. Selected-mode transient context is described below; re-entry
 remains a separate follow-up.
 
-For a `selected` destination, the generated transfer schema requires the source agent to provide a
-non-empty transfer reason of at most 1,024 characters. This requirement is destination-specific: a
-single transfer tool can still target ordinary-history destinations without accepting a reason for
-those variants. Call Engine validates the selected variant again while constructing its private
-transfer request and keeps the reason out of `Inspect` and client events. Plan Startup constructs a
-redacted Call Engine model-context source from the destination's immutable variable binding and
-that reason. Before every destination generation, the source reads through
+For a `selected` destination, the generated transfer schema asks the source agent to provide a
+non-empty transfer reason of at most 1,024 characters. The model-visible schema stays one flat
+object with a closed destination enum: it marks `reason` as required when every permitted
+destination needs one, and otherwise names the reason-requiring destinations in the property
+description. This avoids provider-specific combinators while still allowing one transfer tool to
+target ordinary and selected-history destinations. Call Engine independently enforces the exact
+destination-specific contract while constructing its private transfer request, so an ordinary
+destination rejects a reason and a selected destination rejects a missing, blank, oversized, or
+extra-valued reason regardless of model output. The engine keeps the reason out of `Inspect` and
+client events. Plan Startup constructs a redacted Call Engine model-context source from the
+destination's immutable variable binding and that reason. Before every destination generation, the source reads through
 `CallVariables.Binding`, so the variables owner independently enforces the pinned participant and
 readable sections. The transient JSON contains `call_variables` and, for selected transfers only,
 `transfer.reason`; it is neither copied into conversation history nor exposed as a client event.

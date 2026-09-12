@@ -457,3 +457,52 @@ mix test
 
 No production change was required; the existing bounded runner and atomic
 snapshot replacement already satisfied the newly explicit cases.
+
+## 2026-09-12 — rendered acceptance transfer regression
+
+- During milestone acceptance, the first ordinary typed RTVI turn completed over the live HTTPS
+  WebRTC sample, but requests for human support produced no assistant row. Subsequent ordinary
+  typed turns still completed, disproving the initial suspicion that caller-idle handling or the
+  data channel had become stuck.
+- Captured the browser's actual outbound data-channel frame. It contained one valid RTVI
+  `send-text` request with the expected content and open `chat` channel. Browser protocol logs then
+  showed the matching correlated `error-response`; a fresh call reproduced the same result before
+  any idle notification.
+- Isolated the distinguishing contract to the development sample's mixed transfer schema: billing
+  accepts only `destination`, while human support also requires `reason`. Separate historical
+  provider checks had covered ordinary and reason-required schemas, but not their combined
+  top-level `oneOf`.
+- Added the exact mixed schema to the tagged Agent Runtime provider lane. The red run returned a
+  `transfer` call with empty arguments, proving the provider projection—not room admission or
+  transport state—caused the visible failure.
+- Replaced the model-visible combinator with one flat object containing a closed destination enum
+  and a reason property that identifies its applicable destinations. The property is schema-required
+  only when every allowed target needs a reason. The private Call Engine request remains the
+  authority boundary and still enforces the exact per-destination argument shape.
+- Replayed a fresh room through the HTTPS/WebRTC sample after the dev reloader applied the fix. The
+  same request now showed `Function call (transfer)`, followed by the source agent's spoken hold
+  response; no correlated error was emitted.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test --include integration test/integration/req_llm_provider_test.exs:82 --trace
+# 1 test, 1 failure: provider returned transfer arguments %{}
+
+cd ../vxpipe_call_engine
+mix test test/vxpipe/call_engine/call_definition/agent_transfer_compiler_test.exs:276 --trace
+# 1 test, 1 failure: generated schema still used top-level oneOf
+```
+
+Green evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/call_definition/agent_transfer_compiler_test.exs --trace
+# 13 tests, 0 failures
+
+cd ../vxpipe_agent_runtime
+mix test --include integration test/integration/req_llm_provider_test.exs:82 --trace
+# 1 test, 0 failures: populated human-support destination and non-empty reason
+```

@@ -11,22 +11,18 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
       binding.targets
       |> Enum.sort_by(fn {definition_key, _target} -> definition_key end)
 
-    parameters =
-      if Enum.any?(targets, fn {_definition_key, target} -> target.reason_required end) do
-        %{"oneOf" => Enum.map(targets, &target_parameters/1)}
-      else
-        ordinary_parameters(targets)
-      end
-
     %Definition{
       name: "transfer",
       description: "Transfer the caller to one permitted participant.",
-      parameters: parameters
+      parameters: parameters(targets)
     }
   end
 
-  defp ordinary_parameters(targets) do
-    %{
+  defp parameters(targets) do
+    required_reason_targets =
+      Enum.filter(targets, fn {_definition_key, target} -> target.reason_required end)
+
+    parameters = %{
       "type" => "object",
       "properties" => %{
         "destination" => destination_schema(targets)
@@ -34,33 +30,39 @@ defmodule Vxpipe.CallEngine.Tool.ParticipantTransfer do
       "required" => ["destination"],
       "additionalProperties" => false
     }
+
+    add_reason(
+      parameters,
+      required_reason_targets,
+      length(required_reason_targets) == length(targets)
+    )
   end
 
-  defp target_parameters({_definition_key, %{reason_required: true}} = target) do
-    %{
-      "type" => "object",
-      "properties" => %{
-        "destination" => destination_schema([target]),
-        "reason" => %{
-          "type" => "string",
-          "minLength" => 1,
-          "maxLength" => 1_024,
-          "description" => "Explain why the caller is being transferred."
-        }
-      },
-      "required" => ["destination", "reason"],
-      "additionalProperties" => false
+  defp add_reason(parameters, [], _required_for_every_target?), do: parameters
+
+  defp add_reason(parameters, required_targets, required_for_every_target?) do
+    destination_keys =
+      Enum.map(required_targets, fn {definition_key, _target} -> definition_key end)
+
+    reason = %{
+      "type" => "string",
+      "minLength" => 1,
+      "maxLength" => 1_024,
+      "description" =>
+        "Required for #{destination_label(destination_keys)}. Explain why the caller is being transferred."
     }
+
+    parameters = put_in(parameters, ["properties", "reason"], reason)
+
+    if required_for_every_target? do
+      Map.put(parameters, "required", ["destination", "reason"])
+    else
+      parameters
+    end
   end
 
-  defp target_parameters(target) do
-    %{
-      "type" => "object",
-      "properties" => %{"destination" => destination_schema([target])},
-      "required" => ["destination"],
-      "additionalProperties" => false
-    }
-  end
+  defp destination_label([definition_key]), do: "destination #{definition_key}"
+  defp destination_label(definition_keys), do: "destinations #{Enum.join(definition_keys, ", ")}"
 
   defp destination_schema(targets) do
     label = if match?([_target], targets), do: "destination", else: "destinations"
