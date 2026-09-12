@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.CallInspectionAssetController do
 
   use Phoenix.Controller, formats: [:html]
 
-  stylesheet_path = Path.expand("call_inspection_styles.css", __DIR__)
+  stylesheet_path = Path.expand("../../../assets/css/call_inspection.css", __DIR__)
   phoenix_path = Application.app_dir(:phoenix, ["priv", "static", "phoenix.min.js"])
 
   live_view_path =
