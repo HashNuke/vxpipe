@@ -13,7 +13,8 @@ milestone 18 because no Twilio credentials or approved destination are configure
 
 ## Environment
 
-- Branch: `review/pre-delivery-cross-slice`.
+- Branches: `review/pre-delivery-cross-slice` for the durable hangup checkpoint, followed by
+  `review/sample-terminal-state` for the client-terminal checkpoint.
 - PostgreSQL: local `vxpipe_review` database on the existing development server.
 - Runtime: `VXPIPE_DEV_MODEL_FIXTURE=true`, `VXPIPE_DEV_SPEECH_PROFILE=morse`, HTTP loopback
   Console, and durable sample admission.
@@ -108,6 +109,42 @@ Disconnect control and did not log a final disconnected transport state. Preserv
 that a disconnected caller does not silently resume an ended call; investigate why the sample does
 not project the exhausted transport state before changing protocol or token semantics.
 
+Inspection of the installed client transport found that retry exhaustion calls its transport stop
+path directly. That path emits its disconnect callback but does not itself advance the transport
+state shown by the Console. The transport's graceful remote-terminal path instead expects a Small
+WebRTC `signalling` message whose nested type is `peerLeft`; its default bot-disconnect behavior then
+performs the full client disconnect transition. This is an ended-call notification, not a new
+reconnection mechanism or permission to reuse the single-use session.
+
+A new real ExWebRTC boundary test established a client, ended the monitored room, and initially
+failed after five seconds because the connection closed without delivering `peerLeft`. Sending the
+signal and immediately stopping remained red: SCTP teardown overtook observable delivery. Gateway
+now encodes the transport signal in a dedicated signalling module, sends it when the monitored room
+exits, and allows at most 250 milliseconds for peer-initiated disconnect before stopping the
+connection itself. If no RTVI channel exists or the send process is unavailable, it closes
+immediately. The focused test now receives the exact signal before the connection's monitored
+`:shutdown`; the complete WebRTC boundary file passes three tests.
+
+The sample UI test first proved the stale-state behavior by failing to find its Create room action
+after the client's disconnect callback. The Console now treats that callback as terminal for the
+consumed admission, unmounts the old console, and returns to the dedicated creation page; all six
+App tests and all nine frontend tests pass with TypeScript checks green.
+
+The rendered browser verification used a durable call, the real Gemini model, and local Morse
+speech. Asking the agent to end the call produced the expected platform tool lifecycle, delivered
+`peerLeft`, logged the client's bot-disconnect transition, and returned to Create room without a
+reconnect attempt or HTTP 409. The desktop and 390-by-844 mobile terminal views matched the existing
+surface, had no horizontal overflow, and produced no browser errors. The WCAG A/AA audit reported
+zero violations and zero incomplete checks.
+
+The owning verification lanes pass with Gateway at 228 tests and six excluded integrations,
+Console at 89 tests, frontend assets at nine tests, and TypeScript checking clean. Formatting,
+warnings-as-errors compilation, unused-dependency checking, and strict Credo all pass. The first
+umbrella run reported one Gateway failure whose detail was lost when the verbose media output was
+truncated; the same Gateway seed passed immediately, the complete umbrella rerun passed all 990
+tests with 15 external integrations excluded, and the new signal-ordering test passed 20 consecutive
+in-VM repetitions. No deterministic failure was reproduced, so no unrelated timing change was made.
+
 ### Durable/runtime lifecycle observation
 
 The review database contains multiple rows still marked `running` although their earlier BEAM room
@@ -121,5 +158,6 @@ Restart the BEAM, capture the first offer response and narrowly inspect connecti
 timing. Decide from evidence whether the cold 503 is a request timeout, pipeline-start failure or a
 different lifecycle race. Reproduce under a focused project-owned test before implementation.
 
-That restart did not reproduce the 503. The durable sample hangup correction is verified; the next
-isolation checkpoint is the stale client state after its rejected post-hangup reconnect attempts.
+That restart did not reproduce the 503. The durable sample hangup and client-terminal corrections
+are verified. The next review checkpoint is the stale durable/runtime lifecycle observation above;
+it must be evaluated against approved crash semantics without starting retention or deletion work.
