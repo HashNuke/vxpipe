@@ -8,7 +8,8 @@ defmodule Vxpipe.Calls do
     Artifacts,
     Definitions,
     Inspections,
-    TelephonyAdmissions
+    TelephonyAdmissions,
+    UsageProjections
   }
 
   def bootstrap_tenant(name, scopes, options \\ []),
@@ -74,6 +75,9 @@ defmodule Vxpipe.Calls do
   def archive_call_artifact(artifact, options \\ []),
     do: Artifacts.store(artifact, options)
 
+  def store_usage_observation(observation, options \\ []),
+    do: UsageProjections.store(observation, options)
+
   def fetch_variable_snapshots(principal, call_id, options \\ []),
     do: Archives.fetch_variable_snapshots(principal, call_id, options)
 
@@ -85,6 +89,9 @@ defmodule Vxpipe.Calls do
 
   def fetch_call_artifact(principal, call_id, artifact_id, options \\ []),
     do: Artifacts.fetch_one(principal, call_id, artifact_id, options)
+
+  def fetch_usage_report(principal, call_id, options \\ []),
+    do: UsageProjections.fetch_report(principal, call_id, options)
 
   def fetch_call_history(principal, call_id, options \\ []),
     do: Archives.fetch_call_history(principal, call_id, options)

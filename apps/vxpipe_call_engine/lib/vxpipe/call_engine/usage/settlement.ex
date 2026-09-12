@@ -31,22 +31,42 @@ defmodule Vxpipe.CallEngine.Usage.Settlement do
           | :ambiguous_cumulative_order
           | :invalid_inclusion
 
+  @type derivation_error ::
+          :empty_observations
+          | :mixed_calls
+          | :conflicting_delivery
+          | :mixed_measurement_modes
+          | :ambiguous_cumulative_order
+
   @spec derive([Observation.t()]) :: {:ok, t()} | {:error, error()}
   def derive([%Observation{} = first | _rest] = observations) do
-    with :ok <- one_call?(observations, first),
-         {:ok, amounts} <- AmountDerivation.derive(observations),
+    with {:ok, amounts} <- effective_amounts(observations),
          :ok <- ComponentInclusion.validate(amounts) do
-      {:ok,
-       %__MODULE__{
-         tenant_id: first.tenant_id,
-         call_id: first.call_id,
-         amounts: Enum.sort_by(amounts, &amount_sort_key/1)
-       }}
+      {:ok, %__MODULE__{tenant_id: first.tenant_id, call_id: first.call_id, amounts: amounts}}
     end
   end
 
   def derive([]), do: {:error, :empty_observations}
   def derive(_observations), do: {:error, :mixed_calls}
+
+  @doc """
+  Derives the currently effective amounts without requiring every referenced aggregate to have
+  arrived yet.
+
+  This supports incrementally delivered observations. Included amounts remain excluded from totals
+  by their `included_in` relationship; `derive/1` remains the strict completeness check.
+  """
+  @spec effective_amounts([Observation.t()]) ::
+          {:ok, [EffectiveAmount.t()]} | {:error, derivation_error()}
+  def effective_amounts([%Observation{} = first | _rest] = observations) do
+    with :ok <- one_call?(observations, first),
+         {:ok, amounts} <- AmountDerivation.derive(observations) do
+      {:ok, Enum.sort_by(amounts, &amount_sort_key/1)}
+    end
+  end
+
+  def effective_amounts([]), do: {:error, :empty_observations}
+  def effective_amounts(_observations), do: {:error, :mixed_calls}
 
   @spec total(t(), Measurement.unit(), keyword()) ::
           {:ok, Measurement.quantity()}

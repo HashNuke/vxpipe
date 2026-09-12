@@ -212,6 +212,21 @@ defmodule Vxpipe.CallEngine.Usage.SettlementTest do
     assert {:ok, 160} = Settlement.total(settlement, :tokens)
   end
 
+  test "derives an included amount while its aggregate observation is still in transit" do
+    observations = [
+      observation("input", 100,
+        component: "input_tokens",
+        included_in: "total_tokens"
+      )
+    ]
+
+    assert {:error, :invalid_inclusion} = Settlement.derive(observations)
+    assert {:ok, [amount]} = Settlement.effective_amounts(observations)
+    assert amount.component == "input_tokens"
+    assert amount.included_in == "total_tokens"
+    assert amount.quantity == 100
+  end
+
   test "keeps monetary quantities exact and separates currencies" do
     observations = [
       observation("usd-1", "0.0012",

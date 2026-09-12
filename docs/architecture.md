@@ -2790,6 +2790,32 @@ and writes through the existing private asynchronous archive/live-inspection por
 adapters use these same incoming/outgoing leg owners. No client usage event, synchronous SQL write,
 price, or provider-billable-duration claim is introduced by this capture path.
 
+The existing bounded `EctoStorage` subscriber now maintains a database projection of those private
+usage facts without adding PostgreSQL to the room, media, model, or carrier hot paths. It first
+archives the immutable `usage_observed` call fact, then strictly restores the typed observation and
+stores it in `usage_observations`. The raw fact remains the authoritative timeline evidence; the
+structured row is a rebuildable query projection and also permits a later billing observation to be
+appended after room shutdown. Replayed observation IDs are idempotent only when every typed value
+matches. Conflicting reuse is rejected rather than silently replacing history.
+
+Within a call-locked transaction, `Vxpipe.Persistence.UsageStore` derives the current effective
+amounts from all accepted observations and atomically replaces that call's `usage_amounts`
+projection. Scalar and monetary quantities use exact PostgreSQL numeric storage; typed decoding
+restores integer scalar units and `Decimal` currency values without floating-point conversion.
+Amounts keep provider context, every evidence-backed attribution dimension, component, inclusion,
+mode, status, provenance, and contributing observation IDs. Included child components may arrive
+before their aggregate: they remain inspectable and excluded from totals until the aggregate
+arrives, rather than causing the asynchronous subscriber to discard or indefinitely retry a valid
+partial stream.
+
+Calls owns the `UsageRepository` port and the `fetch_usage_report/3` workflow. Reads require a
+tenant principal with `calls` scope, and the persistence query joins through that tenant before
+returning any amount. The report derives non-overlapping root totals at the most-specific supported
+provider, participant, activation, service-interval, leg, turn, utterance, tool, unit/currency, and
+provenance dimensions. Genuine provider request, operation, and session IDs remain available on
+the private individual amounts but do not fragment configured-provider totals. Operator
+presentation consumes this public Calls workflow; Console does not query the Repo directly.
+
 A provider integration may optionally include asynchronous billing lookup alongside
 its streaming service, using persisted provider IDs where a billing API supports
 them. It runs outside the media hot path and `RoomAuthority` and can outlive the

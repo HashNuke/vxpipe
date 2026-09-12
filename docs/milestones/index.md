@@ -7,8 +7,9 @@ duplicate events and a simulated post-admission storage outage do not recreate o
 Milestone 18, Twilio through the common telephony contract, remains formally incomplete only because
 its guarded live-provider audio check still needs credentials and an approved destination. Milestone
 19, permitted live recordings streamed to S3, is complete. Milestone 20, usage and cost
-observations, is active: its typed settlement and model/STT/TTS/tool/carrier capture checkpoints are
-complete, while operator totals and billing enrichment remain. The earlier behavior
+observations, is active: typed settlement, model/STT/TTS/tool/carrier capture, structured
+persistence, and its tenant-safe report API are complete, while operator presentation and billing
+enrichment remain. The earlier behavior
 contracts have completed focused review.
 Implementation continues through milestone 22, including the runnable samples and their
 cross-slice review, then pauses before container delivery. Milestones 23 and 24 remain

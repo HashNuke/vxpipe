@@ -5,6 +5,7 @@ defmodule Vxpipe.Calls.Repositories do
           keyword(),
           :archive_repository
           | :artifact_repository
+          | :usage_repository
           | :credential_repository
           | :definition_repository
           | :call_repository

@@ -8,10 +8,11 @@ defmodule Vxpipe.Persistence.EctoStorage do
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.Archive.Fact, as: EngineFact
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.EngineArchiveProjection
+  alias Vxpipe.Calls.{CallFact, EngineArchiveProjection, UsageObservationProjection}
   alias Vxpipe.Persistence.ArtifactResultProjection
 
   @terminal_errors [
+    :ambiguous_cumulative_order,
     :call_incarnation_mismatch,
     :call_fact_conflict,
     :call_fact_insert_failed,
@@ -20,7 +21,17 @@ defmodule Vxpipe.Persistence.EctoStorage do
     :call_artifact_insert_failed,
     :call_not_found,
     :call_not_started,
+    :conflicting_delivery,
     :invalid_variable_snapshot,
+    :invalid_usage_amount,
+    :invalid_usage_observation,
+    :invalid_usage_observation_fact,
+    :mixed_calls,
+    :mixed_measurement_modes,
+    :usage_amount_delete_failed,
+    :usage_amount_insert_failed,
+    :usage_observation_conflict,
+    :usage_observation_insert_failed,
     :invalid_call_artifact,
     :invalid_call_fact,
     :variable_snapshot_conflict,
@@ -66,14 +77,30 @@ defmodule Vxpipe.Persistence.EctoStorage do
   defp store({:error, reason}, _options), do: {:discard, reason}
 
   defp store_call_fact({:ok, fact}, options) do
-    case Calls.archive_call_fact(fact, options) do
-      {:ok, _stored} -> :ok
+    case archive_and_project_usage(fact, options) do
+      :ok -> :ok
       {:error, reason} when reason in @terminal_errors -> {:discard, reason}
       {:error, reason} -> {:retry, reason}
     end
   end
 
   defp store_call_fact({:error, reason}, _options), do: {:discard, reason}
+
+  defp archive_and_project_usage(fact, options) do
+    with {:ok, archived} <- Calls.archive_call_fact(fact, options),
+         :ok <- project_usage(archived, options) do
+      :ok
+    end
+  end
+
+  defp project_usage(%CallFact{kind: :usage_observed} = fact, options) do
+    with {:ok, observation} <- UsageObservationProjection.project(fact),
+         {:ok, _stored} <- Calls.store_usage_observation(observation, options) do
+      :ok
+    end
+  end
+
+  defp project_usage(%CallFact{}, _options), do: :ok
 
   defp store_call_artifact({:ok, artifact}, options) do
     case Calls.archive_call_artifact(artifact, options) do

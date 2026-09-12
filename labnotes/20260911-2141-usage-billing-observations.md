@@ -364,3 +364,48 @@ warnings-as-errors compilation, strict Credo over 695 source files, all 891 test
 and the unused-dependency check pass.
 
 Ecto projection and operator inspection/presentation remain.
+
+## 2026-09-12: persisted usage projection
+
+The existing bounded archive subscriber remains the write path. It stores the immutable private
+call fact first, strictly restores its typed observation, and then updates a structured database
+projection. The room still receives no database acknowledgement and does no SQL work.
+
+The raw call fact remains authoritative history. `usage_observations` is an immutable typed query
+projection, while `usage_amounts` is the rebuildable current settlement. This distinction also
+allows a later billing observation to be added without inventing a live-room fact sequence. Exact
+observation replay is idempotent; conflicting reuse of an observation ID is rejected.
+
+Each observation update locks only the owning call, inserts the observation, derives effective
+amounts from that call's observations, and atomically replaces its amount projection. A separate
+incremental settlement API was required because model child components can arrive before their
+declared aggregate. Those children remain inspectable but excluded from operator totals until the
+aggregate arrives. The strict settlement API still rejects an incomplete inclusion graph when a
+caller explicitly asks for full validation.
+
+Database numeric storage preserves exact quantities. Record decoding restores scalar units to
+integers and currencies to `Decimal`. Provider and attribution maps are reconstructed through fixed
+mappings; no stored value creates an atom. The public Calls workflow requires `calls` scope and
+passes the authenticated tenant key into a tenant-joined query. Console can therefore consume the
+workflow later without direct Repo access.
+
+Red evidence:
+
+- The new persistence integration first reached `UndefinedFunctionError` for the deliberately
+  absent `Vxpipe.Calls.fetch_usage_report/3` after raw-fact storage and exact replay were proven.
+- The incremental inclusion case first failed because `Settlement.effective_amounts/1` did not
+  exist.
+- An initial replay fixture used three-digit timestamp precision while the schema returns six-digit
+  precision; aligning it with existing immutable archive fixtures removed a false conflict.
+- The first stable amount ID implementation reversed the arguments to `:crypto.hash/2`; the
+  transaction rolled back and the focused test exposed it before broader verification.
+
+Green evidence so far:
+
+- Settlement: 8 tests, 0 failures.
+- Persistence projection: 2 tests, 0 failures.
+- Complete Persistence: 34 tests, 0 failures.
+- Root gates: formatting, warnings-as-errors compilation, strict Credo over 703 source files, all
+  894 tests across eight umbrella apps, and the unused-dependency check pass.
+
+Operator call-inspection presentation and billing lookup remain.

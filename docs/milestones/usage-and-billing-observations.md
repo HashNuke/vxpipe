@@ -1,8 +1,8 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation/settlement plus model, text-to-speech, speech-to-text, tool,
-and carrier-leg capture into the private archive are implemented (2026-09-12); operator totals and
-billing enrichment remain. Specification review:
+Status: in progress. Typed observation/settlement, model/text-to-speech/speech-to-text/tool/carrier
+capture, and the asynchronous structured persistence plus tenant-safe report API are implemented
+(2026-09-12); call-inspection presentation and billing enrichment remain. Specification review:
 approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
@@ -31,7 +31,10 @@ not blind arrival order. Accounting must not start prohibited STT to obtain miss
 
 - [x] Red-test typed adapter usage, attribution and observation arithmetic before modifying provider result contracts.
 - [x] Capture supported usage in buffered/streaming model and hosted speech adapters plus tool/carrier boundaries.
-- [ ] Persist private observations/effective projections asynchronously and expose tenant-safe operator totals by meaningful dimension/currency.
+- [x] Persist private observations/effective projections asynchronously and expose a tenant-safe
+  Calls report API with totals by meaningful dimension/currency.
+- [ ] Present the tenant-safe report through existing operator call inspection without exposing it
+  to ordinary call clients.
 - [ ] Implement optional billing-enrichment port/workflow with a controlled provider fixture and honest unavailable support.
 - [ ] Verify measurement/provenance semantics and document supported provider billing lookup capabilities.
 
@@ -290,6 +293,36 @@ Implementation evidence (2026-09-12, operator-projection contract checkpoint):
 
 This is an enabling checkpoint only. No Ecto projection, inspection read, or operator presentation
 is claimed yet.
+
+Implementation evidence (2026-09-12, persisted usage-projection checkpoint):
+
+- Extended the existing bounded `EctoStorage` path so a private usage fact is archived first and
+  then projected into immutable structured observations. The room still observes only asynchronous
+  handoff acceptance; SQL success or failure does not become room, media, model, tool, or carrier
+  success.
+- Added a Calls-owned usage repository port and report workflow. A `calls`-scoped principal can read
+  only a call belonging to its tenant. The persistence adapter joins through the tenant and returns
+  typed effective amounts; Calls derives the non-overlapping dimensioned totals.
+- Added separate observation/amount schemas and focused record/value codecs. PostgreSQL numeric
+  values restore scalar quantities as integers and currency as exact `Decimal` values. Private
+  external provider identifiers remain on individual amounts and outside ordinary struct/schema
+  inspection.
+- Each observation transaction locks only its call, deduplicates exact replay, derives from the
+  immutable observation set, and atomically replaces the rebuildable effective-amount projection.
+  Included component facts may precede their aggregate: they stay inspectable but excluded from
+  totals, preventing valid archive delivery order from becoming a retry deadlock.
+- Red evidence: the persistence integration first failed on the absent public report workflow; the
+  incremental-settlement case separately failed on the absent partial effective-amount API. During
+  green iteration, immutable replay exposed an inaccurate millisecond-precision fixture and the
+  first stable-ID attempt exposed reversed hash arguments; both were corrected at their owning
+  boundary.
+- Focused green evidence: eight settlement tests and two persistence projection tests pass. The
+  complete Persistence suite passes 34 tests. All root gates pass: formatting,
+  warnings-as-errors compilation, strict Credo over 703 source files, all 894 tests across eight
+  umbrella apps, and the unused-dependency check.
+
+This remains a partial milestone. The persisted report is not yet shown in operator call inspection,
+and no billing lookup is claimed.
 
 ## Specification review
 
