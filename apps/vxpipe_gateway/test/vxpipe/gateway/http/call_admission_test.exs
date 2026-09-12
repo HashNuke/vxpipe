@@ -286,8 +286,10 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
                "state" => "running"
              },
              "participant" => %{
+               "incarnation_id" => "rinc_test-admission",
                "participant_id" => "part_test-support",
                "role" => "human",
+               "room_id" => "60000000-0000-4000-8000-000000000006",
                "state" => "pending_transfer"
              },
              "session" => %{
