@@ -1,8 +1,8 @@
 # Context compaction and supported LLM fallback
 
-Status: implementation in progress. The context-budget and complete-request
-measurement boundary is implemented; protected-history selection and the fake
-compactor are next. Specification review: approved (2026-09-08).
+Status: implementation in progress. Context budgeting, complete-request
+measurement, and protected snapshot replacement are implemented; the bounded
+fake-compactor orchestration is next. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -68,8 +68,11 @@ Implementation evidence: the first budget checkpoint reserves output before
 deriving the input budget, triggers at the 75% threshold, targets strictly below
 50%, and gives a bounded counter the complete normalized model request. Focused
 tests cover threshold rounding, invalid windows/counts, realistic message/tool/
-pending-variable envelopes, and counter failure. The compactor and production
-counter are not implemented yet, so no implementation checkbox is marked.
+pending-variable envelopes, and counter failure. Protected-history tests cover
+permanent/recent/pending-tool retention, whole-entry selection, late-entry merge,
+durable-correlation preservation, derived-summary authority, and stale rejection.
+The compactor and production counter are not implemented yet, so no
+implementation checkbox is marked.
 
 ## Specification review
 

@@ -45,3 +45,42 @@ mix test test/vxpipe/agent_runtime/context_budget_test.exs
 The first milestone checklist item remains open until a fake compactor consumes
 the decision and proves replacement against realistic protected conversation
 entries.
+
+## 2026-09-12 — protected conversation checkpoint
+
+- Added snapshot selection over committed `Conversation.Entry` values. Permanent
+  system/transfer entries and a configurable recent tail are protected.
+- Entries containing a tool call or result whose invocation ID is currently
+  pending are protected as one relationship. Selection is a contiguous old
+  prefix and therefore never reorders a summary around protected work.
+- Replacement verifies the complete snapshotted prefix against current state.
+  Entries appended after the snapshot are retained; a changed prefix returns
+  `:stale_compaction_snapshot` without attaching the summary.
+- A derived summary is structurally an assistant message with no tool calls or
+  tool-result identity. Its fixed envelope identifies it as untrusted historical
+  data with no instruction, policy, tool, variable, or permission authority.
+- Compacted durable entries carry their prior correlations in the derived entry,
+  preserving the existing interruption/recovery query without retaining their
+  full model-facing text.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/conversation_compaction_test.exs
+# 5 tests, 5 failures: ConversationCompaction was absent
+```
+
+Green evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/conversation_compaction_test.exs
+# 5 tests, 0 failures
+mix test
+# 69 tests, 0 failures (2 excluded)
+```
+
+The selection/replacement primitive does not call a summarizer. The first
+milestone checklist item remains open until one bounded fake-compactor attempt
+is orchestrated and the final request is remeasured.

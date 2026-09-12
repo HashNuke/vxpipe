@@ -50,6 +50,10 @@ defmodule Vxpipe.AgentRuntime.Conversation do
     Enum.any?(conversation.entries, &Entry.durable_for?(&1, correlation))
   end
 
+  @doc false
+  @spec from_entries([Entry.t()]) :: t()
+  def from_entries(entries) when is_list(entries), do: rebuild(entries)
+
   defp rebuild(entries) do
     messages = Enum.flat_map(entries, & &1.messages)
     %__MODULE__{entries: entries, messages: messages, size: length(messages)}
