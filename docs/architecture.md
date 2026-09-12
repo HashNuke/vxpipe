@@ -2825,17 +2825,38 @@ states are distinct. Wide evidence tables scroll within named keyboard-focusable
 viewports rather than widening the page. This remains an operator-only projection under the
 existing signed `calls`-scoped session; no ordinary caller/client usage event or route is added.
 
-A provider integration may optionally include asynchronous billing lookup alongside
-its streaming service, using persisted provider IDs where a billing API supports
-them. It runs outside the media hot path and `RoomAuthority` and can outlive the
-room; it neither blocks the live call nor resets `ended_at` or retention. Not every
-provider offers request-level billing, and eventual cost resolution is not promised.
-Use existing tenant integration authentication/isolation, not per-call credentials.
-No billing API/schema/dependency/provider implementation is chosen. R46's initial
-pricing policy and R41's asynchronous storage contract are resolved.
-Usage-history writes and optional provider billing lookup run outside the room.
-Locally accepted variable snapshots and all existing media/privacy and whole-call
-retention boundaries still apply.
+A provider integration may optionally resolve delayed billing from persisted provider IDs through
+the Calls-owned `BillingLookup` port. `Calls.enrich_usage_billing/3` requires a tenant principal
+with `calls` scope, reads that tenant's immutable observations through `UsageRepository`, and
+coalesces multiple components from the same local provider attempt into one candidate. An attempt
+without a genuine request, operation, or session ID is counted as missing evidence. Conflicting
+external IDs make only that candidate unavailable; they are not guessed or sent to a provider.
+
+The configured port is a tenant-aware dispatcher. Its context owns application/tenant integration
+resolution and credentials; its request contains only tenant/call scope, configured provider
+identity, evidence-backed attribution, outcome, and genuine external IDs. It contains no
+transcript, media, tool argument, or tool result. Calls invokes candidates through a bounded
+`Task.async_stream/3` pass (default concurrency four and five-second per-lookup timeout), entirely
+outside the media hot path and `RoomAuthority`. A missing port/provider implementation is reported
+as unsupported, not-yet-settled provider data as pending, and transport, credential, timeout, crash,
+or invalid-result cases as unavailable. One bad provider result does not become a zero cost.
+
+A successful adapter result supplies a stable provider delivery/revision identity, source sequence
+when one exists, source timestamp, exact non-negative amount, currency, component, and settlement
+status. Calls turns it into an immutable cumulative observation with `billing_lookup` provenance,
+the original attempt/provider/attribution/outcome, and a deterministic local observation ID. This
+makes exact repeated retrieval idempotent while a conflicting reuse of provider delivery evidence
+still fails settlement. The adapter must explicitly normalize provider-specific sign conventions;
+the common measurement never accepts a negative charge.
+
+The existing `UsageStore` call-locked transaction remains the acknowledgement boundary. A fetched
+amount is not reported as stored until the observation and rebuilt projection commit. The workflow
+can be started by a later background subscriber/job and can finish after room and call end; it does
+not alter `ended_at` or retention. Its tenant-joined fetch and ordinary usage-store insert both fail
+for a purged call, so enrichment cannot recreate it. Actual network adapters remain optional and
+must be added only with provider-specific API evidence and tests. R46's initial pricing policy and
+R41's asynchronous storage contract are resolved. Locally accepted variable snapshots and all
+existing media/privacy and whole-call retention boundaries still apply.
 
 Post-call finalization runs outside the call room with a configurable 60-second
 waiting window from call end. Publish earlier when all expected work is settled;

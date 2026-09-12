@@ -450,3 +450,72 @@ Red and green evidence:
   tests across eight umbrella applications, and unused-dependency validation pass.
 
 Billing lookup remains.
+
+## 2026-09-12: billing lookup capability check
+
+Official provider references do not support one universal billing-lookup assumption:
+
+- Deepgram's project-request endpoint accepts a project ID plus request ID and returns the
+  completed request's detailed usage, including its USD cost. Its documentation warns that usage
+  can remain pending before it becomes available.
+- Twilio's completed Call resource can be fetched by Call SID and later exposes `price` and
+  `price_unit`. That price covers connectivity only, may not be immediately available, and is
+  represented with Twilio's charge sign convention rather than Vxpipe's non-negative cost
+  quantity.
+- Telnyx can include call cost in configured call webhooks and exposes cost/billable-time fields
+  through its reporting surfaces. That is provider evidence, but it is not the same request/lookup
+  shape as the two APIs above.
+- Gemini returns token usage and a response ID with generation results, while its billing
+  documentation points to aggregate Cloud Billing cost management. No official per-response
+  billed-price lookup was verified.
+
+The implementation therefore needs one configured tenant-aware lookup port, not provider-shaped
+conditionals inside Calls. A request may cross that port only when a persisted observation has a
+genuine provider request, operation, or session ID. The adapter owns credential resolution and
+provider-specific interpretation; Calls owns candidate deduplication, immutable
+`billing_lookup` observation construction, and persistence. Missing configuration/support,
+not-yet-settled provider data, and lookup failure must remain distinct outcomes. The port receives
+only call scope, configured provider identity, attribution, and the genuine external identifiers;
+it receives no transcript, tool arguments/results, or media.
+
+The controlled fixture will prove that lookup work can be delayed across call end without room
+involvement. Persistence remains the success boundary, so a fetched amount is not reported as
+enriched until its observation transaction commits. A missing/purged call cannot be recreated by
+the workflow.
+
+## 2026-09-12: billing enrichment completed
+
+Calls now owns a tenant-scoped `enrich_usage_billing/3` workflow and a narrow lookup behaviour.
+Candidate projection coalesces all measurement components for one local attempt/configured provider
+and attribution. It merges consistent genuine request, operation, and session IDs; an absent ID is
+reported as missing evidence and conflicting IDs make only that candidate unavailable.
+
+The lookup request deliberately has no transcript, media, tool argument, or tool result field, and
+its inspection hides the nested external IDs. The configured dispatcher receives tenant scope and
+therefore owns application/tenant integration and credential selection. Calls runs independent
+candidates with bounded concurrency and timeout. The report preserves pending, unsupported,
+unavailable, missing-reference, and committed counts instead of converting any of them to zero.
+
+Successful adapter output must include an exact non-negative currency amount, settlement status,
+stable delivery identity, and source timestamp. The last point fixed the important red replay case:
+using the local lookup time caused the same provider delivery to conflict on a later pass. Source
+time makes the immutable observation identical, while its deterministic local ID and existing
+delivery conflict checks still reject a changed result that reuses the same identity.
+
+The Ecto adapter now exposes tenant-scoped immutable observations through the Calls repository port.
+Its existing call lock and transaction remain the write acknowledgement. A controlled lookup was
+left waiting while the persisted call moved from running to ended, then released; the cost committed
+and `ended_at` remained unchanged. Deleting that call made a later pass fail before adapter dispatch,
+with no recreated call or usage records.
+
+Verification:
+
+- Initial red: the focused Calls test could not expand the absent enrichment report contract.
+- Replay red: the second identical pass returned `usage_observation_conflict` until stable source
+  observation time became part of the adapter result.
+- Focused Calls: 7 tests, 0 failures.
+- Complete Calls: 56 tests, 0 failures.
+- Focused Persistence: 3 tests, 0 failures.
+- Complete Persistence: 35 tests, 0 failures.
+- Root gates: formatting, warnings-as-errors compilation, strict Credo over 712 source files, all
+  904 tests across eight umbrella applications, and unused-dependency validation pass.

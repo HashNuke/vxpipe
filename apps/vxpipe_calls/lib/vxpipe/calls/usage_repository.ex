@@ -10,4 +10,7 @@ defmodule Vxpipe.Calls.UsageRepository do
 
   @callback fetch_usage_amounts(context(), String.t(), String.t()) ::
               {:ok, [EffectiveAmount.t()]} | {:error, term()}
+
+  @callback fetch_usage_observations(context(), String.t(), String.t()) ::
+              {:ok, [Observation.t()]} | {:error, term()}
 end

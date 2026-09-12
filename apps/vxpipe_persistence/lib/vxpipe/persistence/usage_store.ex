@@ -44,6 +44,14 @@ defmodule Vxpipe.Persistence.UsageStore do
     end
   end
 
+  @impl true
+  def fetch_usage_observations(repo, tenant_key, call_id) do
+    case fetch_call(repo, tenant_key, call_id, false) do
+      nil -> {:error, :call_not_found}
+      call -> decode_call_observations(repo, call, tenant_key)
+    end
+  end
+
   defp fetch_call(repo, tenant_key, call_id, lock?) do
     query =
       from(call in Call,
@@ -95,9 +103,10 @@ defmodule Vxpipe.Persistence.UsageStore do
   end
 
   defp rebuild_amounts(repo, call, tenant_key) do
-    with {:ok, observations} <- fetch_observations(repo, call, tenant_key),
+    with {:ok, observations} <- decode_call_observations(repo, call, tenant_key),
          {:ok, amounts} <- Settlement.effective_amounts(observations),
-         {_, nil} <- repo.delete_all(from(amount in StoredAmount, where: amount.call_id == ^call.id)),
+         {_, nil} <-
+           repo.delete_all(from(amount in StoredAmount, where: amount.call_id == ^call.id)),
          :ok <- insert_amounts(repo, call, amounts) do
       :ok
     else
@@ -106,7 +115,7 @@ defmodule Vxpipe.Persistence.UsageStore do
     end
   end
 
-  defp fetch_observations(repo, call, tenant_key) do
+  defp decode_call_observations(repo, call, tenant_key) do
     stored =
       repo.all(
         from(observation in StoredObservation,

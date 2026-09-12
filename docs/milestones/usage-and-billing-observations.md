@@ -1,9 +1,9 @@
 # Usage, cost observations, and billing enrichment
 
-Status: in progress. Typed observation/settlement, model/text-to-speech/speech-to-text/tool/carrier
-capture, asynchronous structured persistence, tenant-safe report API, and operator call-inspection
-presentation are implemented (2026-09-12); billing enrichment remains. Specification review:
-approved (2026-09-08).
+Status: complete (2026-09-12). Typed observation/settlement, model/text-to-speech/speech-to-text/
+tool/carrier capture, asynchronous structured persistence, tenant-safe report API, operator
+call-inspection presentation, and optional bounded billing enrichment are implemented.
+Specification review: approved (2026-09-08).
 Prerequisites: [Asynchronous history](asynchronous-call-history.md); [Remote MCP](remote-mcp-tools.md); [Telnyx](telnyx-calls.md); [Twilio](twilio-calls.md).
 Sources: [Usage contracts](../../labnotes/20260905-0405-call-definition-design.md#usage-observations-and-call-participant-and-turn-attribution--approved-r44r46); [R44–R46](../call-definition-gap-review.md).
 
@@ -35,8 +35,8 @@ not blind arrival order. Accounting must not start prohibited STT to obtain miss
   Calls report API with totals by meaningful dimension/currency.
 - [x] Present the tenant-safe report through existing operator call inspection without exposing it
   to ordinary call clients.
-- [ ] Implement optional billing-enrichment port/workflow with a controlled provider fixture and honest unavailable support.
-- [ ] Verify measurement/provenance semantics and document supported provider billing lookup capabilities.
+- [x] Implement optional billing-enrichment port/workflow with a controlled provider fixture and honest unavailable support.
+- [x] Verify measurement/provenance semantics and document supported provider billing lookup capabilities.
 
 ## Acceptance and failure checks
 
@@ -44,7 +44,7 @@ not blind arrival order. Accounting must not start prohibited STT to obtain miss
 - [x] Two distinct 50 deltas total 100; proven duplicate delivery does not add; included token categories are not counted twice.
 - [x] Multi-round model and multi-segment TTS retain separate attempts; interrupted/failed usage survives stale-output filtering.
 - [x] STT interval/characters are observed without invented turn cost; unknown IDs/price stay absent; units/currencies do not mix.
-- [ ] Later billing can complete after room end without blocking it, violating source privacy, or reviving a purged call.
+- [x] Later billing can complete after room end without blocking it, violating source privacy, or reviving a purged call.
 - [x] Finalized non-overlapping deltas 100 + 60 remain 160, not 60; a stale cumulative observation
   cannot regress the effective amount solely by arriving later without correction evidence.
 
@@ -61,9 +61,9 @@ No made-up prices/usage, per-turn forced allocation, floating-point billing reco
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence (2026-09-11, typed observation and settlement checkpoint):
@@ -352,7 +352,58 @@ Implementation evidence (2026-09-12, operator presentation checkpoint):
 - All root gates pass: formatting, warnings-as-errors compilation, strict Credo over 705 source
   files, all 896 tests across eight umbrella applications, and the unused-dependency check.
 
-This remains a partial milestone. Billing lookup and its supported-capability evidence remain.
+This was a partial checkpoint. Billing lookup and its supported-capability evidence remained.
+
+Implementation evidence (2026-09-12, billing-enrichment completion):
+
+- Added one Calls-owned, tenant-aware billing lookup port and public workflow. It reads persisted
+  observations, deduplicates multiple measurement components into one candidate per configured
+  provider attempt, and invokes only candidates carrying a genuine provider request, operation, or
+  session ID. Its inspect-safe request contains no transcript, media, or tool payload.
+- Lookups run outside room ownership with explicit five-second/default timeout and concurrency of
+  four. The bounded report distinguishes pending, unsupported, unavailable, missing-reference, and
+  committed outcomes. Missing configuration does not invent a price; crashes, timeouts, malformed
+  results, and adapter/credential errors remain unavailable.
+- A successful result must carry a stable delivery identity and source timestamp. Calls appends an
+  exact cumulative `billing_lookup` observation with a deterministic local ID. Repeating the same
+  provider version is idempotent even in a later pass; conflicting delivery reuse is rejected by
+  existing settlement.
+- Extended the repository port with a tenant-scoped immutable-observation read. The Ecto adapter
+  joins through the owning tenant, and its existing call-locked observation transaction remains the
+  success boundary. A controlled lookup was held in flight while the call moved to `ended`; it then
+  committed without changing `ended_at`. After deleting the call, the workflow returned
+  `call_not_found`, never invoked the adapter, and recreated no call or usage rows.
+- Red evidence: the first Calls test failed on the absent enrichment result contract. After the
+  delayed path became green, a repeat pass failed with `usage_observation_conflict` because local
+  lookup time changed an otherwise identical fact. Requiring the provider result's stable source
+  timestamp made exact replay idempotent.
+- Focused green evidence: seven Calls enrichment tests and three Persistence projection/enrichment
+  tests pass. The complete Calls suite passes 56 tests and Persistence passes 35. Root formatting,
+  warnings-as-errors compilation, strict Credo over 712 source files, all 904 tests across eight
+  umbrella applications, and unused-dependency validation pass.
+
+### Verified provider evidence surfaces
+
+Checked against official references on 2026-09-12; these findings select honest adapter outcomes,
+not bundled network implementations:
+
+- [Deepgram Get a Project Request](https://developers.deepgram.com/reference/manage/requests/get)
+  accepts project/request IDs and returns request details including USD cost. Its
+  [usage guidance](https://developers.deepgram.com/docs/using-logs-usage) notes that request data can
+  remain pending, so an adapter must preserve `pending` rather than store zero.
+- [Twilio's Call resource](https://www.twilio.com/docs/voice/api/call-resource) can be fetched by Call
+  SID and exposes `price`/`price_unit` after completion, possibly with delay. The value covers
+  connectivity only and uses Twilio's signed charge representation; a future adapter must normalize
+  that sign explicitly without claiming other feature costs.
+- Telnyx can enable call-cost webhooks on a
+  [Call Control Application](https://developers.telnyx.com/api-reference/call-control-applications/update-a-call-control-application),
+  while its [voice detail-record fields](https://developers.telnyx.com/api-reference/cdr-reports/get-available-cdr-report-fields)
+  include cost, rate, and billable time. Those surfaces can feed provider-specific adapters or
+  observations, but no single lookup shape is assumed here.
+- [Gemini generation responses](https://ai.google.dev/api/generate-content) provide token usage and
+  a response ID, while official [billing guidance](https://ai.google.dev/gemini-api/docs/billing)
+  directs costs to Cloud Billing management. No per-response billed-price retrieval endpoint was
+  verified, so that lookup remains unsupported until provider evidence changes.
 
 ## Specification review
 

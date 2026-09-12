@@ -13,7 +13,7 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
 
   alias Vxpipe.Calls.{Principal, UsageReport}
 
-  alias Vxpipe.Persistence.{ArchiveStore, EctoStorage, Repo, UsageStore}
+  alias Vxpipe.Persistence.{ArchiveStore, EctoStorage, Repo, TestBillingLookup, UsageStore}
 
   alias Vxpipe.Persistence.Schema.{
     Call,
@@ -155,6 +155,93 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     totals = Map.new(report.totals, &{&1.unit, &1.quantity})
     assert totals[:tokens] == 160
     assert Decimal.equal?(totals[{:currency, "USD"}], Decimal.new("0.0046"))
+  end
+
+  test "delayed billing enrichment commits after call end and cannot revive a purged call",
+       context do
+    source = observation("usage-before-end", "model-attempt-ended", 160, 1, :final)
+
+    assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+
+    billing_observed_at = DateTime.add(@observed_at, 120, :second)
+
+    {:ok, lookup_result} =
+      Vxpipe.Calls.BillingLookupResult.new(
+        delivery_id: "provider-bill-ended-v1",
+        amount: "0.0046",
+        currency: "USD",
+        status: :final,
+        observed_at: billing_observed_at
+      )
+
+    release_ref = make_ref()
+    test_pid = self()
+    task_supervisor = start_supervised!({Task.Supervisor, []})
+
+    task =
+      Task.Supervisor.async_nolink(task_supervisor, fn ->
+        Vxpipe.Calls.enrich_usage_billing(
+          context.principal,
+          @call_id,
+          Keyword.put(
+            context.options,
+            :billing_lookup,
+            {TestBillingLookup,
+             %{
+               owner: test_pid,
+               release_ref: release_ref,
+               response: {:ok, lookup_result}
+             }}
+          )
+        )
+      end)
+
+    assert_receive {:billing_lookup_started, lookup_pid, request}
+    assert request.provider.request_id == "provider-request-model-attempt-ended"
+
+    ended_at = DateTime.add(@observed_at, 60, :second)
+
+    context.call
+    |> Call.changeset(%{state: :ended, ended_at: ended_at})
+    |> Repo.update!()
+
+    send(lookup_pid, {:release_billing_lookup, release_ref})
+
+    assert {:ok, %{stored_count: 1}} = Task.await(task)
+
+    persisted_call = Repo.get!(Call, context.call.id)
+    assert persisted_call.state == :ended
+    assert persisted_call.ended_at == ended_at
+
+    assert {:ok, %UsageReport{} = report} =
+             Vxpipe.Calls.fetch_usage_report(context.principal, @call_id, context.options)
+
+    assert Enum.any?(report.amounts, fn amount ->
+             amount.provenance == :billing_lookup and amount.unit == {:currency, "USD"} and
+               Decimal.equal?(amount.quantity, Decimal.new("0.0046"))
+           end)
+
+    Repo.delete!(persisted_call)
+
+    assert {:error, :call_not_found} =
+             Vxpipe.Calls.enrich_usage_billing(
+               context.principal,
+               @call_id,
+               Keyword.put(
+                 context.options,
+                 :billing_lookup,
+                 {TestBillingLookup,
+                  %{
+                    owner: self(),
+                    release_ref: make_ref(),
+                    response: {:ok, lookup_result}
+                  }}
+               )
+             )
+
+    refute_receive {:billing_lookup_started, _lookup_pid, _request}
+    assert Repo.aggregate(Call, :count) == 0
+    assert Repo.aggregate(UsageObservation, :count) == 0
   end
 
   defp observation(id, attempt_id, quantity, source_sequence, status, options \\ []) do
