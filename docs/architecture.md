@@ -2891,7 +2891,21 @@ mechanism is an implementation detail, not permission to invent a record timesta
 All publication revisions are call-owned and deleted with the call. Known call-owned
 jobs and references must respect retention deletion and source-interval privacy:
 late work cannot recreate purged data or capture/copy a denied interval. These
-R42/R43 decisions add no runtime implementation or new configuration key/hierarchy.
+R42/R43 decisions do not by themselves select a configuration key/hierarchy.
+
+The Calls-owned publication projection represents each expected component explicitly as
+`complete`, `pending`, `failed`, `missing`, `prohibited`, `unconfigured`, or `not_produced`.
+Only `pending` remains unsettled. `pending`, `failed`, and `missing` make the projected document
+incomplete; the three intentional-absence states are settled without pretending that media or
+facts exist. A pure reporting-window decision accepts persisted `ended_at` and an injected
+assessment timestamp, so it neither sleeps nor couples publication to room lifetime.
+
+Call-details snapshots use schema `20260912.01` and canonical JSON with lexically sorted object
+keys. Each proposal carries both a source digest (permitted source plus component states) and a
+checksum of the final bytes. This separates same-source retry recognition from final object
+integrity, because the final bytes also contain the persisted publication identity and UTC record
+timestamp. Canonicalization is Calls-owned; storage adapters must persist or upload those exact
+bytes rather than re-encoding the document.
 
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,

@@ -23,7 +23,7 @@ definition revision and resolved-plan digest, not only a generic call identifier
 
 ## Implementation checklist
 
-- [ ] Red-test publication projection and fake-clock reporting window with complete, delayed, prohibited and missing components.
+- [x] Red-test publication projection and fake-clock reporting window with complete, delayed, prohibited and missing components.
 - [ ] Implement Calls publication state/workers outside room lifecycle with persistence/artifact ports.
 - [ ] Store immutable publication records, timestamp filenames/checksums and nonregressing latest reference with collision handling.
 - [ ] Integrate late usage/artifact/history observations as refreshed immutable publications.
@@ -55,8 +55,14 @@ No automatic post-call LLM summary/evaluation, cross-store atomic transaction, g
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence:
+
+- Checkpoint A implements Calls-owned, database-neutral component states, a fake-clock reporting
+  window, validated permitted source data, canonical JSON snapshots, content/source SHA-256
+  digests, and exact millisecond filenames. Focused tests prove early settled publication,
+  pre-deadline waiting, deadline publication, intentional absence versus missing/failure, UTC
+  record timestamps, and stable bytes independent of map insertion order. Persistence,
+  object-store publication, late refresh, and operator retrieval remain pending.
 
 ## Specification review
 
