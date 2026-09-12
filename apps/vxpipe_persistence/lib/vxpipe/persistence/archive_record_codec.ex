@@ -6,26 +6,30 @@ defmodule Vxpipe.Persistence.ArchiveRecordCodec do
   @spec call_fact(struct(), String.t(), String.t()) ::
           {:ok, CallFact.t()} | {:error, :invalid_call_fact}
   def call_fact(stored, tenant_key, call_id) do
-    CallFact.new(
-      id: stored.public_id,
-      kind: String.to_existing_atom(stored.kind),
-      sequence: stored.sequence,
-      tenant_key: tenant_key,
-      call_id: call_id,
-      room_id: stored.room_id,
-      incarnation_id: stored.incarnation_id,
-      participant_id: stored.participant_id,
-      activation_id: stored.activation_id,
-      source_participant_id: stored.source_participant_id,
-      connection_id: stored.connection_id,
-      command_id: stored.command_id,
-      correlation_id: stored.correlation_id,
-      tool_call_id: stored.tool_call_id,
-      public_sequence: stored.public_sequence,
-      occurred_at: stored.occurred_at,
-      source_policy: stored.source_policy,
-      payload: stored.payload
-    )
+    with {:ok, kind} <- CallFact.decode_kind(stored.kind) do
+      CallFact.new(
+        id: stored.public_id,
+        kind: kind,
+        sequence: stored.sequence,
+        tenant_key: tenant_key,
+        call_id: call_id,
+        room_id: stored.room_id,
+        incarnation_id: stored.incarnation_id,
+        participant_id: stored.participant_id,
+        activation_id: stored.activation_id,
+        source_participant_id: stored.source_participant_id,
+        connection_id: stored.connection_id,
+        command_id: stored.command_id,
+        correlation_id: stored.correlation_id,
+        tool_call_id: stored.tool_call_id,
+        public_sequence: stored.public_sequence,
+        occurred_at: stored.occurred_at,
+        source_policy: stored.source_policy,
+        payload: stored.payload
+      )
+    else
+      :error -> {:error, :invalid_call_fact}
+    end
   rescue
     ArgumentError -> {:error, :invalid_call_fact}
   end

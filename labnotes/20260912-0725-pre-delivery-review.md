@@ -148,9 +148,21 @@ in-VM repetitions. No deterministic failure was reproduced, so no unrelated timi
 ### Durable/runtime lifecycle observation
 
 The review database contains multiple rows still marked `running` although their earlier BEAM room
-trees no longer exist. This is expected to arise when the development VM stops without a terminal
-room event, but the final desired state is not yet assumed. Investigate the approved crash semantics
-and existing reconciliation contracts before changing it; this is separate from retention/deletion.
+trees no longer exist. The approved architecture already makes this outcome explicit: whole-runtime
+loss does not replay or restart a call, and a terminal state is recorded only when the bounded
+archive retains its actual `archive_stream_closed` fact. Fabricating an end time or terminal reason
+would erase the distinction between observed history and a lost terminal event. The durable row can
+therefore remain `running`; this review adds no reconciliation, deletion, retention, or call replay.
+
+The first rendered check against those rows exposed a separate cold-read defect. Even a freshly
+created current-schema sample call returned `invalid_call_fact` after an abrupt development-VM
+restart. `ArchiveRecordCodec` used `String.to_existing_atom/1` on the stored kind before the
+Calls-owned `CallFact` module was necessarily loaded; touching that module first made the identical
+row decode. A new Calls contract test first failed because `CallFact.decode_kind/1` did not exist.
+The implemented decoder owns a fixed allow-list from persisted kind strings to domain atoms, and
+the persistence codec delegates to it without dynamically creating atoms. The new test and ten
+existing Calls archive tests pass; the persistence codec test and all 18 database-backed call-store
+tests pass. A fresh deterministic call now remains readable after the same abrupt restart.
 
 ### Next isolation step
 

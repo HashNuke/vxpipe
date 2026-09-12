@@ -31,6 +31,7 @@ defmodule Vxpipe.Calls.CallFact do
     :usage_observed,
     :archive_stream_closed
   ]
+  @kinds_by_name Map.new(@kinds, fn kind -> {Atom.to_string(kind), kind} end)
   @required_fields [
     :id,
     :kind,
@@ -106,6 +107,10 @@ defmodule Vxpipe.Calls.CallFact do
   end
 
   def new(_attributes), do: {:error, :invalid_call_fact}
+
+  @spec decode_kind(String.t()) :: {:ok, atom()} | :error
+  def decode_kind(name) when is_binary(name), do: Map.fetch(@kinds_by_name, name)
+  def decode_kind(_name), do: :error
 
   defp required(attributes) do
     if Enum.all?(@required_fields, &Keyword.has_key?(attributes, &1)),
