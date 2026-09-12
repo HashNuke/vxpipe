@@ -34,4 +34,10 @@ defmodule Vxpipe.AgentRuntime.ModelRequest do
       correlation: correlation
     }
   end
+
+  @doc false
+  @spec with_messages(t(), [Message.t()]) :: t()
+  def with_messages(%__MODULE__{} = request, messages) when is_list(messages) do
+    %{request | messages: messages}
+  end
 end

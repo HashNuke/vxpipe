@@ -5,14 +5,15 @@ defmodule Vxpipe.AgentRuntime.Conversation.Entry do
 
   @derive {Inspect, only: [:retention]}
   @enforce_keys [:messages, :retention]
-  defstruct @enforce_keys ++ [correlation: nil, durable_correlations: []]
+  defstruct @enforce_keys ++ [correlation: nil, durable_correlations: [], source_correlations: []]
 
   @type retention :: :permanent | :durable | :discardable
   @type t :: %__MODULE__{
           messages: [Message.t()],
           retention: retention(),
           correlation: map() | nil,
-          durable_correlations: [map()]
+          durable_correlations: [map()],
+          source_correlations: [map()]
         }
 
   @spec new([Message.t()], retention(), map() | nil) :: t()
@@ -25,13 +26,15 @@ defmodule Vxpipe.AgentRuntime.Conversation.Entry do
   end
 
   @doc false
-  @spec summary([Message.t()], [map()]) :: t()
-  def summary(messages, durable_correlations)
-      when is_list(messages) and is_list(durable_correlations) do
+  @spec summary([Message.t()], [map()], [map()]) :: t()
+  def summary(messages, source_correlations, durable_correlations)
+      when is_list(messages) and is_list(source_correlations) and
+             is_list(durable_correlations) do
     %__MODULE__{
       messages: messages,
       retention: :durable,
-      durable_correlations: durable_correlations
+      durable_correlations: durable_correlations,
+      source_correlations: source_correlations
     }
   end
 
@@ -56,4 +59,13 @@ defmodule Vxpipe.AgentRuntime.Conversation.Entry do
   end
 
   def durable_correlations(%__MODULE__{}), do: []
+
+  @doc false
+  @spec source_correlations(t()) :: [map()]
+  def source_correlations(%__MODULE__{} = entry) do
+    case entry.correlation do
+      correlation when is_map(correlation) -> [correlation | entry.source_correlations]
+      nil -> entry.source_correlations
+    end
+  end
 end

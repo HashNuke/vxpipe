@@ -92,7 +92,11 @@ defmodule Vxpipe.AgentRuntime.ConversationCompaction do
       durable_correlations =
         Enum.flat_map(snapshot.selected_entries, &Entry.durable_correlations/1)
 
-      summary_entry = Entry.summary([Message.summary(summary)], durable_correlations)
+      source_correlations =
+        Enum.flat_map(snapshot.selected_entries, &Entry.source_correlations/1)
+
+      summary_entry =
+        Entry.summary([Message.summary(summary)], source_correlations, durable_correlations)
 
       entries =
         snapshot.leading_entries ++

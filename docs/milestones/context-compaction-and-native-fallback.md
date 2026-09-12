@@ -1,8 +1,8 @@
 # Context compaction and supported LLM fallback
 
-Status: implementation in progress. Context budgeting, complete-request
-measurement, and protected snapshot replacement are implemented; the bounded
-fake-compactor orchestration is next. Specification review: approved (2026-09-08).
+Status: implementation in progress. Context budgeting, protected snapshot
+replacement, and one bounded fake-compactor attempt are implemented. Production
+summarizer selection/accounting is next. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -28,7 +28,7 @@ can be exercised without adding Vxpipe's own provider chain.
 
 ## Implementation checklist
 
-- [ ] Red-test token-budget trigger/target with fake compactor and realistic tool/history/variable input envelopes.
+- [x] Red-test token-budget trigger/target with fake compactor and realistic tool/history/variable input envelopes.
 - [ ] Resolve and document summarizer selection and token accounting/limits before authorizing its production data flow.
 - [ ] Implement bounded summary work, protected-history replacement and late-message/activation checks.
 - [ ] Preserve summary provenance/privacy and metered usage through existing event/storage boundaries.
@@ -71,8 +71,12 @@ tests cover threshold rounding, invalid windows/counts, realistic message/tool/
 pending-variable envelopes, and counter failure. Protected-history tests cover
 permanent/recent/pending-tool retention, whole-entry selection, late-entry merge,
 durable-correlation preservation, derived-summary authority, and stale rejection.
-The compactor and production counter are not implemented yet, so no
-implementation checkbox is marked.
+A controlled fake compactor now receives only selected messages and their source
+correlations, performs one bounded attempt, and has its complete rebuilt request
+remeasured. Tests prove no invocation below threshold, protected-input failure,
+failed compaction preservation, strict achievable targets, and unchanged full
+request tools/pending/variable projection. Production summarizer/counter selection
+is not implemented yet.
 
 ## Specification review
 
