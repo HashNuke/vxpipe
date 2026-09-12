@@ -180,6 +180,17 @@ Calls 24, Persistence 23, Gateway 66, and Console 25 tests; six network/provider
 integration cases remained explicitly excluded. The database was a disposable PostgreSQL
 18 cluster created empty, migrated through all five migrations, and removed afterward.
 
+Pre-delivery review checkpoint (2026-09-12): a browser hangup exposed that the engine emitted its
+terminal archive fact but Ecto could not apply its millisecond timestamp directly to the
+microsecond-precision `calls.ended_at` field. The writer retried until the bounded drain expired,
+correctly leaving history unconfirmed but incorrectly preventing an ordinary call from reaching its
+durable ended state. A persistence-owned integration now drives a real agent hangup through Call
+Engine, the bounded subscriber and EctoStorage. The terminal projection normalizes the valid engine
+timestamp at the database boundary; the test proves clean subscriber drain, a stored closure and an
+atomically ended call with six-digit timestamp precision. The repeat rendered-browser flow stored
+the terminal fact as sequence 14 and marked the exact Gemini-backed sample call `ended`, confirming
+the fix outside the deterministic test boundary.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

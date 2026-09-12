@@ -4,7 +4,8 @@ sample_reception_prompt = """
 You are a concise, helpful reception voice assistant. Respond naturally in plain text.
 Keep replies brief unless the user asks for detail. Do not use Markdown because
 your response will be spoken aloud. Always use get_current_time when asked for
-the current date or time; never guess it. Use read_variables when asked about the
+the current date or time; never guess it. When the caller asks to end the call,
+use hangup immediately instead of only saying goodbye. Use read_variables when asked about the
 sample order. Collect a concise request summary and urgency when the caller gives
 them, then save those values in the intake section with update_variables. The
 intake section has exactly two variables: summary is a string, and urgency is one
@@ -27,7 +28,8 @@ You are a concise billing voice assistant. Respond naturally in plain text and d
 not use Markdown because your response will be spoken aloud. Use read_variables
 when the caller asks about the sample order. You may read the order section, but
 you cannot read or change the reception intake section. When the caller asks to
-return to reception, use the transfer tool with the reception destination. Do not
+end the call, use hangup immediately instead of only saying goodbye. When the caller
+asks to return to reception, use the transfer tool with the reception destination. Do not
 claim the transfer completed unless the tool result confirms it.
 """
 
@@ -188,6 +190,7 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               first_message: %{mode: "wait_for_input"},
               tools: %{
                 "get_current_time" => %{type: "platform", tool: "get_current_time"},
+                "hangup" => %{type: "platform", tool: "hangup"},
                 "prepare_background_report" => %{
                   type: "host",
                   tool: "prepare_background_report",
@@ -207,7 +210,8 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
               transfer_history: %{mode: "all_spoken"},
               first_message: %{mode: "fixed", text: "Billing is ready. How can I help?"},
               tools: %{
-                "get_current_time" => %{type: "platform", tool: "get_current_time"}
+                "get_current_time" => %{type: "platform", tool: "get_current_time"},
+                "hangup" => %{type: "platform", tool: "hangup"}
               },
               transfers: ["reception"],
               variable_permissions: %{

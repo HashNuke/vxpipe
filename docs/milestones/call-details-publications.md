@@ -148,6 +148,12 @@ Implementation evidence:
   at 1440×1000 and 390×844 shows the revision panel without page overflow; axe reports zero
   violations and the browser reports no page errors. The first visual pass exposed a wasteful
   desktop action wrap, which the confirmation pass verifies is corrected.
+- Pre-delivery review on 2026-09-12 strengthened checkpoint C3c with the actual agent-hangup path.
+  Ecto now normalizes the archive stop timestamp to the `:utc_datetime_usec` representation at the
+  call-end projection boundary. The database-backed integration proves the closure transaction
+  commits and supplies the durable `ended_at` anchor needed by automatic finalization instead of
+  retrying until the archive drain deadline. A rendered Gemini-backed sample then stored the same
+  closure and durable end anchor in PostgreSQL after the platform hangup tool stopped its room.
 
 ## Specification review
 
