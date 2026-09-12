@@ -84,6 +84,11 @@ Implementation evidence:
   application can supervise recovery after its Repo through explicit OTP settings and injects its
   own repository adapter. Failed scans remain observable and retry later without crashing the room
   or claiming delivery.
+- Checkpoint C3a adds the Calls-owned assessment boundary. A source adapter supplies persisted
+  `ended_at`, permitted facts, and explicit component states; Calls validates tenant/call scope and
+  applies the reporting window before constructing a snapshot. Focused tests prove pre-deadline
+  waiting, deadline publication with honest incompleteness, and a new source revision for changed
+  late facts. Timer-driven initial assessment and the production persistence source remain pending.
 
 ## Specification review
 

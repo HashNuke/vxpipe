@@ -2946,6 +2946,16 @@ application keeps this child disabled by default and composes it only when the e
 supplies an artifact-writer adapter through OTP application settings; persistence injects its own
 repository adapter so callers cannot accidentally bind recovery to a different database contract.
 
+Initial and late publication assessment enter Calls through a separate source-read port. The port
+returns one tenant/call-scoped `CallDetailsAssessment`: its persisted `ended_at`, permitted source
+projection, and explicit component states. Calls rejects a mismatched source identity, applies the
+reporting window to that persisted end time, and either returns a wait decision or constructs and
+submits an immutable snapshot stamped with the assessment time. Reassessment is intentionally the
+same operation: an unchanged source digest resolves to the existing revision, while changed late
+facts receive a new identity, record timestamp, filename, and immutable object. Timer-driven first
+assessment and the production persistence source are separate collaborators, not responsibilities
+of this pure orchestration boundary.
+
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,
 revisions, and local acceptance timestamp. Do not read a later live state and

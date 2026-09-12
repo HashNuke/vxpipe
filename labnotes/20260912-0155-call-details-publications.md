@@ -210,3 +210,38 @@ than the actual publication-attempt caller; the fixture now captures and reports
 - Root formatting, warnings-as-errors compilation, unused-dependency checks, and strict Credo over
   744 source files passed. The complete database-backed umbrella run exited successfully with 929
   tests across all children and the existing external integration exclusions.
+
+## 2026-09-12 — checkpoint C3a
+
+### Decisions
+
+- Introduce a source-read port that returns one `CallDetailsAssessment`: exact persisted
+  `ended_at`, an already-permitted `CallDetailsSource`, and explicit component states. Calls remains
+  independent of Ecto table/query details.
+- Reject source results whose embedded tenant or call identity differs from the requested scope.
+- Keep assessment synchronous and pure with respect to waiting. Before the reporting deadline it
+  returns a `PublicationDecision` instead of sleeping; at or after the deadline it constructs and
+  submits an immutable snapshot through the existing worker boundary.
+- Use the supplied assessment time as the new publication record timestamp. A changed late source
+  therefore gets a distinct digest and filename; an unchanged source remains deduplicated by the
+  persistence contract already implemented.
+- Separate assessment data, source behavior, configured source lookup, and orchestration into four
+  cohesive modules. They are 30, 17, 35, and 88 lines respectively.
+
+### Red evidence
+
+The three focused tests failed because `CallDetailsAssessment`, `PublicationSource`, and
+`Vxpipe.Calls.assess_call_details/4` did not exist. The test support compiler also reported the
+missing behavior and callback before implementation.
+
+### Green evidence
+
+- `cd apps/vxpipe_calls && mix test test/vxpipe/calls/call_details_finalization_test.exs` — 3 tests,
+  0 failures.
+- The tests prove an unsettled pre-deadline component performs no reservation, the same component
+  publishes as incomplete exactly at 60 seconds, and changed late permitted facts produce a second
+  immutable source revision.
+- `cd apps/vxpipe_calls && mix test` — 72 tests, 0 failures.
+- Root formatting, warnings-as-errors compilation, unused-dependency checks, and strict Credo over
+  748 source files passed. The complete database-backed umbrella run exited successfully with 932
+  tests across all children and the existing external integration exclusions.
