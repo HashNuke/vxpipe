@@ -4,7 +4,9 @@ Status: implementation in progress. Context budgeting, protected snapshot
 replacement, one bounded compaction attempt, production summarizer/accounting
 selection, Agent Runtime Session integration, and Call Engine queued-input
 integration, runtime-only summary privacy, and distinct metered compaction usage
-are implemented. Supported native fallback coverage is next. Specification
+are implemented. Controlled native-routing wire/failure coverage and a tagged
+Zenmux interoperability lane are implemented; configured-profile pass-through
+is next. Specification
 review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
@@ -98,6 +100,15 @@ Engine records it as a distinct model attempt on the triggering real turn, with
 attempt without reported measurements retains a failed operation. The room
 archive test proves original permitted input/output facts remain while the
 summary sentinel never reaches an archive payload.
+The ReqLLM boundary now has a controlled Zenmux-adapter request proving that one
+request carries the configured native routing/fallback object, the exact
+model-visible tool schema, and no private executor correlation. Its normalized
+response retains the actual model and reported usage. A partial-stream failure
+test proves that emitted text is followed by one typed failed result without a
+second model stream, buffered generation, or tool submission. A separately
+tagged live Zenmux test exercises the same native routing and exact schema when
+`ZENMUX_API_KEY` is available; it compiles under the default excluded lane but
+has not been run against the provider because that credential is not configured.
 
 ## Specification review
 

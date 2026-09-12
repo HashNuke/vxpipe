@@ -330,3 +330,45 @@ mix deps.unlock --check-unused
 
 The fourth milestone checklist item is complete. Provider-native fallback
 controlled and tagged coverage is the remaining implementation checkpoint.
+
+## 2026-09-12 — controlled native-routing checkpoint
+
+- Added a controlled ReqLLM/Zenmux adapter test using `Req.Test`. The single
+  observed HTTP request contains the configured provider-native routing/fallback
+  object and exact tool JSON Schema while omitting private executor correlation.
+- The controlled provider response names a routed model different from the
+  requested primary; normalization retains that actual model and reported token
+  usage rather than substituting the configured model.
+- Added a Session-level partial-stream failure characterization. After one text
+  delta, an upstream failure produces `:provider_unavailable` without a second
+  stream request, buffered generation, or tool submission.
+- Added a separately tagged live Zenmux interoperability test. It requires
+  `ZENMUX_API_KEY`, optionally reads `VXPIPE_ZENMUX_MODEL`, sends native routing
+  plus an exact tool schema, and checks non-empty model/usage observations. It is
+  excluded from the default suite.
+- `Req.Test` needs Plug at runtime, so `vxpipe_agent_runtime` now declares Plug
+  as a test-only direct dependency. The lockfile is unchanged because the
+  umbrella already locked the dependency.
+- The first controlled attempt failed before reaching the stub because Plug was
+  only a transitive dependency of another umbrella child. After adding the
+  direct test dependency, it reached the adapter and exposed the authoritative
+  Zenmux path as `/api/v1/chat/completions`, which the test now verifies.
+
+Green evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/streaming_test.exs \
+  test/vxpipe/agent_runtime/provider/req_llm_native_routing_test.exs --trace
+# 6 tests, 0 failures
+
+mix test
+# 84 tests, 0 failures (3 excluded)
+
+mix test test/integration/req_llm_native_routing_test.exs
+# 0 tests, 0 failures (1 excluded)
+```
+
+`ZENMUX_API_KEY` is unset in this workspace, so the live provider request was
+not run. Configured call-profile pass-through remains before the final milestone
+checklist item can be marked complete.

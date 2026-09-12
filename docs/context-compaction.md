@@ -1,8 +1,9 @@
 # Model-context compaction
 
 Status: production selection, accounting, Agent Runtime integration, Call
-Engine activation wiring, and private usage projection implemented. Supported
-provider-native fallback verification remains in progress.
+Engine activation wiring, and private usage projection implemented. Controlled
+provider-native fallback verification is complete, while configured-profile
+wiring and the credentialed interoperability run remain in progress.
 
 ## Decision
 
@@ -87,6 +88,20 @@ Vxpipe does not define a fallback list, retry coordinator, alternate credential
 selector, or cross-provider replay policy. Native routing does not resubmit MCP
 work, restart a partially emitted conversational stream, or replay TTS.
 
+A controlled ReqLLM/Zenmux adapter test observes the encoded HTTP request. It
+proves that one request contains the selected model, native routing/fallback
+object, and exact tool JSON Schema while omitting private Vxpipe executor data.
+The response projection retains the provider-reported actual model and usage.
+At the Session boundary, a separate partial-stream failure test proves there is
+no hidden Vxpipe model resubmission, buffered fallback, or tool submission after
+text has been emitted.
+
+The tagged live lane requires `ZENMUX_API_KEY` and optionally accepts
+`VXPIPE_ZENMUX_MODEL`; it is excluded from the default suite. It verifies a real
+Zenmux request with native routing and an exact tool schema, then requires a
+non-empty provider-reported model and usage. The lane is present and compiles,
+but has not been executed in this workspace because the credential is unset.
+
 ## Alternatives rejected
 
 - A dedicated cheaper summarizer would introduce a new recipient and model
@@ -115,4 +130,6 @@ compaction and then sees the committed summary. The same room/archive boundary
 retains original permitted input/output facts, stores separately named
 compaction usage, and never stores the derived summary. Immediate caller input
 still uses the existing interruption semantics. Tagged provider interoperability
-remains milestone work.
+now has a separately excluded Zenmux lane. Controlled adapter and partial-stream
+failure coverage pass; the credentialed request and configured-profile wiring
+remain milestone work.

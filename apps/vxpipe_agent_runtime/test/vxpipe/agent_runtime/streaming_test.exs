@@ -1,7 +1,7 @@
 defmodule Vxpipe.AgentRuntime.StreamingTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.AgentRuntime.{Event, ModelResponse, Result, Session}
+  alias Vxpipe.AgentRuntime.{Event, ModelResponse, Result, Session, ToolDescriptor}
 
   test "emits ordered provisional text and commits only the final response" do
     session = start_session([])
@@ -94,6 +94,32 @@ defmodule Vxpipe.AgentRuntime.StreamingTest do
     assert {:ok, %Result{status: :failed, reason: :stream_event_limit}} = Task.await(caller)
   end
 
+  test "does not resubmit tools or model work after a partial stream fails" do
+    session =
+      start_session(
+        tools: [tool_descriptor()],
+        executor: Vxpipe.AgentRuntime.TestExecutor
+      )
+
+    caller = request(session, "Look up policy 17", "req_partial_stream_failure")
+    release_pending_context("req_partial_stream_failure")
+
+    assert_receive {:model_stream_process, provider, request}
+    assert [%{name: "lookup_policy"}] = request.tools
+
+    send(provider, {:test_stream_delta, "I found"})
+
+    assert_receive {:agent_runtime_event, %Event{kind: :text_delta, data: %{text: "I found"}}}
+
+    send(provider, {:test_stream_response, {:error, :upstream_failed}})
+
+    assert {:ok, %Result{status: :failed, reason: :provider_unavailable}} = Task.await(caller)
+
+    refute_receive {:model_stream_process, _provider, _request}
+    refute_receive {:unexpected_buffered_generation, _provider, _request}
+    refute_receive {:tool_submitted, _executor, _identity, _arguments, _context, _invocation_id}
+  end
+
   defp start_session(options) do
     defaults = [
       instructions: "Be concise",
@@ -119,5 +145,26 @@ defmodule Vxpipe.AgentRuntime.StreamingTest do
   defp reply_with_text(provider, text) do
     {:ok, response} = ModelResponse.new(text: text)
     send(provider, {:test_stream_response, {:ok, response}})
+  end
+
+  defp tool_descriptor do
+    {:ok, descriptor} =
+      ToolDescriptor.new(
+        name: "lookup_policy",
+        description: "Look up one policy",
+        input_schema: %{
+          "type" => "object",
+          "properties" => %{"policy_id" => %{"type" => "string"}},
+          "required" => ["policy_id"],
+          "additionalProperties" => false
+        },
+        binding: %{
+          test_owner: self(),
+          identity: :policy,
+          submission: {:accepted, :blocking}
+        }
+      )
+
+    descriptor
   end
 end
