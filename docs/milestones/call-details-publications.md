@@ -103,6 +103,14 @@ Implementation evidence:
   conflicting end is rejected. This keeps archive latency out of call duration and gives the
   publication window a real persisted end time. Production source projection and automatic
   finalizer triggering remain pending.
+- Checkpoint C3d implements and configures the production PostgreSQL source adapter. One
+  repeatable-read tenant/call transaction loads the pinned plan, ordered permitted history,
+  Variables snapshots, usage observations/effective amounts, recording metadata and telephony
+  legs. Concern-specific projectors construct the publication source without prompts or destination
+  numbers, retain exact private tool/usage provenance, and expose explicit history, Variables,
+  usage and recording component states. Configured missing recording work remains pending;
+  unconfigured or prohibited recording is an intentional absence. Automatic finalizer triggering,
+  late refresh delivery and operator retrieval remain pending.
 
 ## Specification review
 

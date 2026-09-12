@@ -2965,6 +2965,28 @@ submits an immutable snapshot stamped with the assessment time. Reassessment is 
 same operation: an unchanged source digest resolves to the existing revision, while changed late
 facts receive a new identity, record timestamp, filename, and immutable object.
 
+The PostgreSQL implementation reads that assessment in one repeatable-read transaction. It resolves
+the pinned definition and plan, ordered archive facts and Variables snapshots, structured usage
+observations/effective amounts, terminal recording metadata, and telephony legs through the
+tenant/call key. Small concern-specific projectors then expose lifecycle/route identity, safe
+participant and activation metadata, protected telephony-leg references, transcript delivery and
+interruption evidence, tool/transfer facts, Variables history, exact usage provenance, and protected
+recording references. Participant prompts and telephony destination numbers are not copied. Stored
+fact payloads have already passed source-time transcript policy and credential sanitization;
+recording objects have already passed the room's source-interval recording policy. A statically
+prohibited recording policy suppresses artifact references again at final projection as a
+defence-in-depth boundary.
+
+Component assessment derives archive completeness from the persisted closure and sequence evidence,
+checks a contiguous Variables history against its nonregressing latest pointer, retains usage with
+unknown price as observed rather than zero, and distinguishes no produced usage from missing usage
+evidence. The source binding must also say whether recording was configured for this runtime: no
+terminal artifact is `pending` when configured and `unconfigured` otherwise; terminal incomplete
+artifacts are `failed`, while an explicit call policy denial is `prohibited`. This setting describes
+expected work and never grants recording permission. Embedders must bind it consistently with the
+recording runtime used for the call; future per-call recording selection must persist that expectation
+rather than infer it from whatever application configuration exists later.
+
 `finalize_call_details` starts a short-lived Calls-owned finalizer keyed by tenant and call outside
 the room supervision tree. It assesses immediately, then uses an injected clock and timer to poll
 only while persisted components remain unsettled before the reporting deadline. The next wake-up

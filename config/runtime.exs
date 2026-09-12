@@ -9,6 +9,13 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
   config :vxpipe_persistence, :enabled, true
   config :vxpipe_persistence, Vxpipe.Persistence.Repo, url: database_url, pool_size: pool_size
 
+  publication_recording =
+    if config_env() == :dev and System.get_env("VXPIPE_RECORDING_ENABLED") in ["1", "true"] do
+      :configured
+    else
+      :unconfigured
+    end
+
   config :vxpipe_calls, Vxpipe.Calls,
     archive_repository: {Vxpipe.Persistence.ArchiveStore, Vxpipe.Persistence.Repo},
     artifact_repository: {Vxpipe.Persistence.ArtifactStore, Vxpipe.Persistence.Repo},
@@ -17,6 +24,9 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
     definition_repository: {Vxpipe.Persistence.DefinitionStore, Vxpipe.Persistence.Repo},
     call_repository: {Vxpipe.Persistence.CallStore, Vxpipe.Persistence.Repo},
     inspection_repository: {Vxpipe.Persistence.InspectionStore, Vxpipe.Persistence.Repo},
+    publication_source:
+      {Vxpipe.Persistence.CallDetailsSource,
+       [repo: Vxpipe.Persistence.Repo, recording: publication_recording]},
     publication_repository:
       {Vxpipe.Persistence.CallDetailsPublicationStore, Vxpipe.Persistence.Repo}
 end

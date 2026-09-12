@@ -334,3 +334,47 @@ supervised finalizer tree.
 - Root `VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix
   test` completed successfully across every umbrella child with the existing external integration
   exclusions.
+
+## 2026-09-12 — checkpoint C3d
+
+### Decisions
+
+- Implement the production source as a Persistence adapter for the Calls-owned `PublicationSource`
+  port. It loads every source relation in one PostgreSQL repeatable-read transaction, while Calls
+  continues to own assessment, reporting-window and delivery behavior.
+- Split query coordination, call/participant projection, archive-fact projection, Variables,
+  structured usage, recording artifacts, timestamps and component assessment into focused modules.
+  The public adapter coordinates them but does not accumulate each concern's encoding rules.
+- Project only safe participant definition metadata and protected leg references. Do not copy agent
+  prompts or connection destination numbers into the publication. Tool arguments/results remain in
+  this private operator object after the existing archive sanitizer removes credential-shaped keys.
+- Reuse source-time transcript filtering and recording source-interval policy as the primary privacy
+  boundaries. Statically prohibited recording also suppresses all artifact references in the final
+  projection, even if inconsistent metadata exists.
+- Treat unknown usage price as observed data rather than zero or incomplete. No usage observations
+  is `not_produced`; internally inconsistent amount evidence is `missing`.
+- Bind recording expectation explicitly to the source adapter. An empty artifact set is `pending`
+  when recording was configured and `unconfigured` otherwise; this expectation cannot grant
+  recording. Runtime configuration currently mirrors the application-wide recording choice. If
+  recording becomes per-call later, the expectation must be persisted with that call.
+
+### Red evidence
+
+- The new PostgreSQL integration test first reached the intended
+  `UndefinedFunctionError` for `Vxpipe.Persistence.CallDetailsSource.read/3`. An earlier attempt was
+  corrected because an unrelated invalid host-tool fixture stopped definition publication before
+  the missing adapter could be exercised.
+
+### Green evidence
+
+- `cd apps/vxpipe_persistence && VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix test test/vxpipe/persistence/call_details_source_test.exs`
+  passed 2 tests. The complete source case covers pinned identity, lifecycle/route, safe participant
+  activations, ordered transcript/delivery, tool/transfer history, latest and historical Variables,
+  typed usage, protected recording references, component completeness and tenant isolation. The
+  second case distinguishes configured-pending from unconfigured recording and absent usage.
+- Root `mix compile --warnings-as-errors` passed after adding the adapter and projectors. Root
+  `mix credo --strict` checked 769 source files and reported no issues.
+- The complete Persistence suite passed 45 tests. Root `mix format --check-formatted`,
+  `mix compile --warnings-as-errors`, `mix credo --strict`, and `mix deps.unlock --check-unused`
+  passed. The database-backed umbrella run passed 936 tests across all eight child applications,
+  with only the existing explicitly excluded external integration cases.
