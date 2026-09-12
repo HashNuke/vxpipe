@@ -32,7 +32,8 @@ defmodule Vxpipe.Artifacts.MixProject do
       {:ex_aws_s3, "~> 2.5"},
       {:req, "~> 0.7.4"},
       {:sweet_xml, "~> 0.7.5"},
-      {:vxpipe_call_engine, in_umbrella: true, runtime: false}
+      {:vxpipe_call_engine, in_umbrella: true, runtime: false},
+      {:vxpipe_calls, in_umbrella: true, runtime: false}
     ]
   end
 end

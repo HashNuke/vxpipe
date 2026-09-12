@@ -69,6 +69,11 @@ Implementation evidence:
   published revisions. The latest pointer advances only after a protected object receipt commits
   and cannot regress when an older revision completes later. Concurrent collision, idempotent and
   conflicting receipt, tenant isolation, non-terminal call, and call-owned cascade tests pass.
+- Checkpoint C1 adds the Artifacts implementation of the Calls-owned write port. It writes exact
+  JSON bytes below an encoded call-owned prefix with conditional create semantics, stores the
+  SHA-256 checksum as object metadata, verifies an existing object's checksum before treating a
+  retry as successful, and rejects same-key/different-content collisions. Returned references
+  contain only the protected object key and optional ETag; bearer URLs are never retained.
 
 ## Specification review
 

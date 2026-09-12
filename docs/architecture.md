@@ -2922,6 +2922,14 @@ published revision is a conflict. Pending revisions never become the latest read
 late older upload cannot move the head backward. Both pending and published rows are deleted with
 their owning call.
 
+Artifacts implements the publication write port without reusing the streaming-audio multipart
+pipeline. A call-details document is a small immutable JSON object, so its S3-compatible adapter
+uses a conditional single-object create (`If-None-Match: *`) and stores the lowercase SHA-256 as
+object metadata. A retry that encounters an existing key succeeds only after a metadata read
+matches the persisted checksum; a different checksum is an object-key conflict and is never
+overwritten. The resulting receipt is limited to the protected object key and optional ETag. It
+does not persist a signed URL or provider response location.
+
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,
 revisions, and local acceptance timestamp. Do not read a later live state and

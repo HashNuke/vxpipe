@@ -92,3 +92,37 @@ A final boundary test supplied a PID inside component details and exposed an unc
 - Root formatting, warnings-as-errors compilation, and unused-dependency checks passed. Strict
   Credo checked 726 source files with no issues. The complete umbrella suite passed 915 tests with
   its existing integration-tag exclusions.
+
+## 2026-09-12 — checkpoint C1
+
+### Decisions
+
+- Use a focused immutable-document object-store boundary rather than forcing JSON through the
+  PCM/multipart recording pipeline. The document adapter and recording pipeline share the S3
+  client ecosystem but have different lifecycle and buffering concerns.
+- A create carries `If-None-Match: *` and checksum metadata. If the key already exists, read its
+  metadata and accept it only when the SHA-256 matches. This allows the object-success/DB-failure
+  retry path without permitting a different publication to clobber an object.
+- Generate the object key under an encoded tenant/call prefix and a `details/` segment. Expose only
+  object key and ETag through `CallDetailsObject`; provider locations and signed URLs are discarded.
+- Keep the generic document, object-store behavior, S3 document client, ExAws adapter, S3 policy,
+  and call-details path adapter in separate cohesive modules.
+
+### Red evidence
+
+The four focused tests failed because `Document`, `S3DocumentStore`, `S3DocumentClient`, and
+`CallDetailsWriter` did not exist. The initial test compile also caught an invalid dynamic value in
+an assertion pattern before the intended red run; binding the checksum corrected the test itself.
+
+### Green evidence
+
+`cd apps/vxpipe_artifacts && mix test test/vxpipe/artifacts/s3_document_store_test.exs
+test/vxpipe/artifacts/call_details_writer_test.exs` — 4 tests, 0 failures. Tests cover first write,
+matching retry, content collision, unavailable storage, call-owned paths, exact bytes, and protected
+receipts.
+
+The full Artifacts suite passed 14 tests with one external integration test excluded. Root
+formatting, warnings-as-errors compilation, unused-dependency checks, and strict Credo over 733
+source files passed. The first umbrella run exposed a pre-existing timing failure in the Twilio
+audio-ingress test while every changed child was green; its two focused tests passed immediately,
+and a second complete umbrella run passed all 919 tests with the existing integration exclusions.
