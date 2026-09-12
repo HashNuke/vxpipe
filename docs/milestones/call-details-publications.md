@@ -96,6 +96,13 @@ Implementation evidence:
   the existing independently supervised workers. Focused tests use deterministic clocks and manual
   timer delivery rather than sleeping. The production persistence source and lifecycle trigger
   remain pending.
+- Checkpoint C3c makes the publication clock anchor durable. The archive subscriber captures the
+  monitored room-incarnation stop time before draining retained writes. Persisting its completion
+  fact atomically transitions the matching running call to `ended` with that same timestamp,
+  preserving `started_at`; identical closure delivery is idempotent and an end-before-start or
+  conflicting end is rejected. This keeps archive latency out of call duration and gives the
+  publication window a real persisted end time. Production source projection and automatic
+  finalizer triggering remain pending.
 
 ## Specification review
 

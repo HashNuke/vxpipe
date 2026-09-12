@@ -6,7 +6,7 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.{CallFact, VariableSnapshot, VariableSnapshotHistory}
-  alias Vxpipe.Persistence.ArchiveRecordCodec
+  alias Vxpipe.Persistence.{ArchiveRecordCodec, CallEndProjection}
   alias Vxpipe.Persistence.Schema.{Call, Tenant}
   alias Vxpipe.Persistence.Schema.CallFact, as: StoredFact
   alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredSnapshot
@@ -18,6 +18,7 @@ defmodule Vxpipe.Persistence.ArchiveStore do
            :ok <- archive_available(call),
            :ok <- fact_incarnation_matches(repo, call, fact),
            {:ok, stored} <- insert_or_deduplicate_fact(repo, call, fact),
+           {:ok, _call} <- CallEndProjection.apply(repo, call, fact),
            {:ok, archived} <- to_call_fact(stored, fact.tenant_key, call.public_id) do
         archived
       else

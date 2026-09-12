@@ -3,8 +3,7 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.Archive.{Fact, Handoff, Subscriber.State}
-  alias Vxpipe.CallEngine.Id
+  alias Vxpipe.CallEngine.Archive.{CompletionFact, Fact, Handoff, Subscriber.State}
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
 
@@ -25,7 +24,8 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
     with {:ok, writer} <- writer(options),
          {:ok, capacity} <- positive_integer(options, :maximum_pending_facts),
          {:ok, retry_delay_ms} <- non_negative_integer(options, :retry_delay_ms),
-         {:ok, drain_timeout_ms} <- positive_integer(options, :drain_timeout_ms) do
+         {:ok, drain_timeout_ms} <- positive_integer(options, :drain_timeout_ms),
+         {:ok, now} <- now(options) do
       handoff = Handoff.new(self(), capacity)
 
       {:ok,
@@ -42,6 +42,8 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
          drain_timer: nil,
          archive_context: nil,
          source_reason: nil,
+         source_stopped_at: nil,
+         now: now,
          completion_enqueued?: false,
          completion_finished?: false
        }}
@@ -214,13 +216,15 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
     Handoff.close(state.handoff)
     demonitor_source(state.source_monitor)
     timer = Process.send_after(self(), :drain_timeout, state.drain_timeout_ms)
+    source_stopped_at = state.now.()
 
     %{
       state
       | closing?: true,
         source_monitor: nil,
         drain_timer: timer,
-        source_reason: reason
+        source_reason: reason,
+        source_stopped_at: source_stopped_at
     }
   end
 
@@ -261,28 +265,11 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   end
 
   defp completion_fact(state) do
-    context = state.archive_context
-    stats = Handoff.stats(state.handoff)
-
-    Fact.new!(
-      id: Id.generate(:event),
-      kind: :archive_stream_closed,
-      sequence: context.maximum_sequence + 1,
-      tenant_id: context.tenant_id,
-      call_id: context.call_id,
-      room_id: context.room_id,
-      incarnation_id: context.incarnation_id,
-      occurred_at: DateTime.utc_now(:millisecond),
-      source_policy: context.source_policy,
-      payload: %{
-        "accepted" => stats.accepted,
-        "discarded" => stats.discarded,
-        "incomplete" => stats.incomplete?,
-        "overflow" => stats.overflow,
-        "retries" => stats.retries,
-        "source_reason" => state.source_reason,
-        "unavailable" => stats.unavailable
-      }
+    CompletionFact.build(
+      state.archive_context,
+      Handoff.stats(state.handoff),
+      state.source_reason,
+      state.source_stopped_at
     )
   end
 
@@ -318,6 +305,13 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
     case Keyword.get(options, key) do
       value when is_integer(value) and value >= 0 -> {:ok, value}
       _invalid -> {:error, {:invalid_archive_option, key}}
+    end
+  end
+
+  defp now(options) do
+    case Keyword.get(options, :now, fn -> DateTime.utc_now(:millisecond) end) do
+      now when is_function(now, 0) -> {:ok, now}
+      _invalid -> {:error, {:invalid_archive_option, :now}}
     end
   end
 

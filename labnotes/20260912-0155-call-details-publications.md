@@ -291,3 +291,46 @@ supervised finalizer tree.
 - Root `VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix
   test` passed 934 tests across all umbrella children with the existing external integration-tag
   exclusions.
+
+## 2026-09-12 — checkpoint C3c
+
+### Decisions
+
+- Capture the room-incarnation source-stop timestamp as soon as its monitor reports termination,
+  before draining queued archive writes. The completion fact reuses that captured value rather than
+  measuring storage completion time.
+- Let the asynchronous persistence subscriber project call end as part of storing the private
+  `archive_stream_closed` fact. `ArchiveStore` holds the owning call lock and writes the closure and
+  `running`-to-`ended` transition in one transaction; the live room never waits for it.
+- Preserve the original `started_at` and accept only an end at or after it. An identical closure
+  retry is idempotent; a conflicting timestamp is rejected rather than changing call duration.
+- Keep `terminal_reason` null for a normally ended durable call at this boundary. The monitored
+  outer room supervisor does not preserve all semantic inner shutdown reasons, while the closure
+  fact already retains the observed source reason. Null is more honest than inventing a reason.
+- Extract completion-fact construction from the existing archive subscriber and call-end projection
+  from the existing persistence store. The new modules are 30 and 42 lines respectively; neither
+  the Engine nor persistence adapter gains the other's responsibility.
+
+### Red evidence
+
+- The focused Engine test expected a fixed source-stop time in the completion fact and instead saw
+  current time measured after drain.
+- The focused PostgreSQL test persisted a closure successfully but reloaded the call in its prior
+  `running` state.
+
+### Green evidence
+
+- `cd apps/vxpipe_call_engine && mix test test/vxpipe/call_engine/archive/subscriber_test.exs` —
+  6 tests, 0 failures.
+- `cd apps/vxpipe_persistence && VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix test test/vxpipe/persistence/call_store_test.exs`
+  — 17 tests, 0 failures.
+- The persistence behavior covers closure replay idempotency, exact `ended_at`, unchanged
+  `started_at`, and the full bounded-subscriber path from monitored source exit through reload of
+  the ended call.
+- The complete Call Engine suite passed 397 tests with 1 existing integration exclusion; the
+  complete Persistence suite passed 43 tests.
+- Umbrella `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix credo --strict`,
+  and `mix deps.unlock --check-unused` passed; Credo checked 758 files and reported no issues.
+- Root `VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix
+  test` completed successfully across every umbrella child with the existing external integration
+  exclusions.

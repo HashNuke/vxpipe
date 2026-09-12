@@ -16,6 +16,8 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber.State do
     :drain_timer,
     :archive_context,
     :source_reason,
+    :source_stopped_at,
+    :now,
     :completion_enqueued?,
     :completion_finished?
   ]
@@ -34,6 +36,8 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber.State do
           drain_timer: nil | reference(),
           archive_context: nil | map(),
           source_reason: nil | term(),
+          source_stopped_at: nil | DateTime.t(),
+          now: (-> DateTime.t()),
           completion_enqueued?: boolean(),
           completion_finished?: boolean()
         }

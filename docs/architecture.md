@@ -2557,6 +2557,17 @@ reports `unconfirmed`. The marker remains subject to the same finite drain deadl
 so a database failure cannot become a false completion claim. Diagnostic missing-
 sequence samples are bounded while the total missing count remains exact.
 
+The marker's `occurred_at` is captured when the monitored room-incarnation source exits, before
+the subscriber drains retained work; database or queue latency therefore cannot extend the logical
+call duration. `EctoStorage` archives that exact marker and transitions the matching `running` call
+to `ended` with the same timestamp in one PostgreSQL transaction. It preserves `started_at`, checks
+the established incarnation, rejects an end before start, and accepts an identical marker retry
+without changing the time. The outer room supervisor does not retain every semantic inner exit
+reason, so the durable call's `terminal_reason` remains null rather than inventing one; detailed
+observed source-exit evidence remains in the private closure fact. Failure to retain the marker can
+leave the database projection stale without holding the room open or changing what participants
+experienced.
+
 Subscribers may persist directly or publish to a future queue, such as SQS;
 no queue dependency is selected. Database/storage failures must not themselves
 fail/stop the room, undo accepted variables, or backpressure media/`RoomAuthority`.

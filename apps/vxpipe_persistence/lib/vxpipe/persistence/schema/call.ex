@@ -116,6 +116,12 @@ defmodule Vxpipe.Persistence.Schema.Call do
     |> check_constraint(:terminal_reason, name: :calls_terminal_reason)
   end
 
+  def end_changeset(call, ended_at) do
+    call
+    |> change(state: :ended, terminal_reason: nil, ended_at: ended_at)
+    |> check_constraint(:state, name: :calls_state)
+  end
+
   def latest_variables_snapshot_changeset(call, snapshot_id) do
     change(call, latest_variables_snapshot_id: snapshot_id)
   end

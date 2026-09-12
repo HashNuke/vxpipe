@@ -551,6 +551,11 @@ defmodule Vxpipe.Persistence.CallStoreTest do
       })
 
     assert :ok = EctoStorage.write(context.options, closure)
+    assert :ok = EctoStorage.write(context.options, closure)
+
+    assert {:ok, ended} = Calls.fetch_call(context.tenant.key, call.id, context.options)
+    assert ended.state == :ended
+    assert ended.ended_at == closure.occurred_at
 
     assert {:ok, [stored_earlier, stored_later, stored_closure]} =
              Calls.fetch_call_facts(context.principal, call.id, context.options)
@@ -765,13 +770,15 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   test "the bounded subscriber projects retained facts and snapshots before archive closure",
        context do
     {call, incarnation_id} = running_call(context)
+    ended_at = DateTime.add(@now, 10, :second)
 
     assert {:ok, handoff} =
              ArchiveSupervisor.open(
                writer: {EctoStorage, context.options},
                maximum_pending_facts: 4,
                retry_delay_ms: 5,
-               drain_timeout_ms: 1_000
+               drain_timeout_ms: 1_000,
+               now: fn -> ended_at end
              )
 
     source = spawn(fn -> Process.sleep(:infinity) end)
@@ -843,6 +850,12 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
     assert call_history.archive_status.state == :complete
     assert call_history.archive_status.complete?
+
+    assert {:ok, ended} = Calls.fetch_call(context.tenant.key, call.id, context.options)
+    assert ended.state == :ended
+    assert ended.started_at == call.started_at
+    assert ended.ended_at == ended_at
+    assert ended.terminal_reason == nil
   end
 
   defp prepare(context) do

@@ -10,7 +10,14 @@ defmodule Vxpipe.CallEngine.Archive.SubscriberTest do
   }
 
   test "writes an explicit archive closure after retained room facts drain" do
-    handoff = open_archive(writer: {TestCollectingArchiveWriter, self()})
+    source_stopped_at = ~U[2026-09-12 20:00:00.123Z]
+
+    handoff =
+      open_archive(
+        writer: {TestCollectingArchiveWriter, self()},
+        now: fn -> source_stopped_at end
+      )
+
     subscriber = handoff.subscriber
     monitor = Process.monitor(subscriber)
     source = spawn(fn -> Process.sleep(:infinity) end)
@@ -25,6 +32,7 @@ defmodule Vxpipe.CallEngine.Archive.SubscriberTest do
                     %Fact{
                       kind: :archive_stream_closed,
                       sequence: 2,
+                      occurred_at: ^source_stopped_at,
                       payload: %{
                         "incomplete" => false,
                         "overflow" => 0,
