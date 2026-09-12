@@ -74,6 +74,12 @@ Implementation evidence:
   SHA-256 checksum as object metadata, verifies an existing object's checksum before treating a
   retry as successful, and rejects same-key/different-content collisions. Returned references
   contain only the protected object key and optional ETag; bearer URLs are never retained.
+- Checkpoint C2a adds the Calls-owned supervision and execution boundary. A unique registry
+  coalesces concurrent submissions of the same tenant/call/source digest, while short-lived workers
+  perform reserve, immutable write, and receipt commit in bounded supervised attempts outside room
+  lifetime. Successful and already-published paths stop normally; timeouts and storage failures
+  retry only to the configured limit and leave a reserved revision pending on exhaustion. Automatic
+  discovery of pending rows after node restart remains for the next checkpoint.
 
 ## Specification review
 

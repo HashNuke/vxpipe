@@ -126,3 +126,45 @@ formatting, warnings-as-errors compilation, unused-dependency checks, and strict
 source files passed. The first umbrella run exposed a pre-existing timing failure in the Twilio
 audio-ingress test while every changed child was green; its two focused tests passed immediately,
 and a second complete umbrella run passed all 919 tests with the existing integration exclusions.
+
+## 2026-09-12 — checkpoint C2a
+
+### Decisions
+
+- Calls now starts a dedicated publication supervision tree containing a unique registry, a task
+  supervisor for bounded attempts, and a dynamic supervisor for short-lived delivery workers. No
+  room process owns or waits for this work.
+- A worker is unique by tenant, call, and source digest. A simultaneous duplicate receives the
+  existing worker PID rather than starting a second object write.
+- Each attempt runs reserve, artifact write, then receipt commit. A persisted published revision
+  skips the artifact writer, making a later submission harmless. A failed object write leaves the
+  already reserved database row pending.
+- Attempt timeouts and retry counts are explicit application settings and may be overridden at the
+  call boundary for focused tests or an embedding host. Exhaustion reports an internal unavailable
+  outcome and stops normally; it never changes the pending row to published.
+- The worker modules are separated by responsibility: validated job configuration, one delivery
+  attempt, retry/lifecycle state, worker lifecycle, worker admission, and supervision. The largest
+  production module is 119 lines.
+- This checkpoint does not claim node-restart recovery. The persistence adapter still needs a
+  bounded pending-row query and a post-Repo recovery process that resubmits those durable records.
+
+### Red evidence
+
+The first focused worker test failed with `UndefinedFunctionError` because
+`Vxpipe.Calls.publish_call_details/4` and its supervision path did not exist. The first compilation
+after implementation also rejected a project typespec named `port/0`, because Elixir reserves that
+built-in type name; renaming the type to `adapter/0` fixed the project code without weakening the
+contract. A fixture assertion then exposed that an `Agent` callback reported its own PID rather
+than the actual publication-attempt caller; the fixture now captures and reports the calling task.
+
+### Green evidence
+
+- `cd apps/vxpipe_calls && mix test test/vxpipe/calls/publication_worker_test.exs` — 4 tests,
+  0 failures.
+- The tests cover asynchronous successful delivery, a later already-published submission with no
+  second write, simultaneous active-job coalescing, a two-attempt storage failure that retains a
+  pending revision, and forceful termination of a blocked attempt at its deadline.
+- `cd apps/vxpipe_calls && mix test` — 67 tests, 0 failures.
+- Root formatting, warnings-as-errors compilation, unused-dependency checks, and strict Credo over
+  740 source files passed. The complete database-backed umbrella run then exited successfully with
+  923 tests across all children and the existing external integration exclusions.

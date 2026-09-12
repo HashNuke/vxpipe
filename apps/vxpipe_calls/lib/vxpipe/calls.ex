@@ -10,6 +10,7 @@ defmodule Vxpipe.Calls do
     CallDetailsPublications,
     Definitions,
     Inspections,
+    PublicationWorkers,
     TelephonyAdmissions,
     UsageProjections
   }
@@ -104,6 +105,9 @@ defmodule Vxpipe.Calls do
   def mark_call_details_published(tenant_key, call_id, publication_id, object, options \\ []),
     do:
       CallDetailsPublications.mark_published(tenant_key, call_id, publication_id, object, options)
+
+  def publish_call_details(tenant_key, call_id, snapshot, options \\ []),
+    do: PublicationWorkers.start(tenant_key, call_id, snapshot, options)
 
   def fetch_call_history(principal, call_id, options \\ []),
     do: Archives.fetch_call_history(principal, call_id, options)

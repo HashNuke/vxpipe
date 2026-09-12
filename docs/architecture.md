@@ -2930,6 +2930,16 @@ matches the persisted checksum; a different checksum is an object-key conflict a
 overwritten. The resulting receipt is limited to the protected object key and optional ETag. It
 does not persist a signed URL or provider response location.
 
+Calls owns a publication supervision tree independently of every room: a unique registry, bounded
+attempt tasks, and a dynamic supervisor for short-lived delivery workers. The worker key combines
+tenant, call, and source digest, so simultaneous submissions of the same snapshot share one active
+worker. Each attempt reserves the immutable database revision before writing its exact object bytes
+and commits the protected receipt last. An already-published reservation completes without another
+object write. Object or database failures receive bounded retries and attempt deadlines; exhaustion
+leaves any successfully reserved revision pending rather than claiming delivery. Discovering those
+pending rows after process/node restart is a separate recovery adapter still required by this
+milestone.
+
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,
 revisions, and local acceptance timestamp. Do not read a later live state and

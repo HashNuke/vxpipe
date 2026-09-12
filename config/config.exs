@@ -18,6 +18,11 @@ config :vxpipe_persistence,
 config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
 
 config :vxpipe_calls, Vxpipe.Calls,
+  call_details_publication: [
+    maximum_attempts: 3,
+    retry_delay_ms: 1_000,
+    attempt_timeout_ms: 15_000
+  ],
   call_duration: [max_duration_ms: 1_800_000, tenants: %{}],
   live_inspection_source: {Vxpipe.Calls.EngineLiveInspectionSource, []},
   registries: %{capability_profiles: %{}, host_tools: %{}}
