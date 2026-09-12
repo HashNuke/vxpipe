@@ -1,6 +1,8 @@
 # Context compaction and supported LLM fallback
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: implementation in progress. The context-budget and complete-request
+measurement boundary is implemented; protected-history selection and the fake
+compactor are next. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -62,8 +64,12 @@ No Vxpipe-managed provider fallback chain, automatic tool retry, automatic overs
 - [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
-Implementation evidence: none yet. Do not mark this slice complete because its specification
-has been reviewed.
+Implementation evidence: the first budget checkpoint reserves output before
+deriving the input budget, triggers at the 75% threshold, targets strictly below
+50%, and gives a bounded counter the complete normalized model request. Focused
+tests cover threshold rounding, invalid windows/counts, realistic message/tool/
+pending-variable envelopes, and counter failure. The compactor and production
+counter are not implemented yet, so no implementation checkbox is marked.
 
 ## Specification review
 
