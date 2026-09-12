@@ -49,3 +49,46 @@ A final boundary test supplied a PID inside component details and exposed an unc
 - The six production modules remain focused: component state, decision data, reporting-window
   policy, permitted source data, canonical JSON, and immutable snapshot construction. The largest
   is 107 lines; persistence, upload, worker lifecycle, and HTTP concerns are absent.
+
+## 2026-09-12 — checkpoint B
+
+### Decisions
+
+- Persist the exact canonical JSON bytes while a revision is pending. This gives object-upload
+  retries durable content and prevents storage adapters from re-encoding or silently changing a
+  revision.
+- Use two independent per-call unique keys: the schema-aware source digest for same-source retry,
+  and the timestamp-derived filename for collision detection. A retry may propose a fresh ID and
+  timestamp, but the repository returns the first persisted revision for that source.
+- Advance the latest pointer only after a protected object receipt is stored. A reserved row is not
+  yet a readable object. The call row lock serializes pointer decisions, and record timestamps—not
+  upload completion time—prevent a late older upload from regressing the head.
+- Store operational `pending`/`published` state beside immutable snapshot columns. Publishing may
+  add the protected object key/reference and publication timestamp; it cannot rewrite identity,
+  source, contents, filename, or hashes.
+- Object receipts accept relative protected keys and limited server-side metadata only. URL-like,
+  query-bearing, or fragment-bearing keys are rejected so bearer URLs cannot become durable
+  references or inspection output.
+- A green refactor extracted persistence record encoding and latest-pointer policy from the Ecto
+  adapter. The adapter is 146 lines; its focused collaborators are 44 and 28 lines.
+
+### Red evidence
+
+- The initial database tests failed because `reserve_call_details/4`,
+  `mark_call_details_published/5`, and `CallDetailsObject` did not exist.
+- A receipt-boundary refinement expected `:publication_not_found` and exposed that a missing
+  publication was incorrectly reported as `:call_not_found`.
+- A protected-reference test demonstrated that an HTTPS bearer URL was initially accepted as an
+  object key.
+
+### Green evidence
+
+- `cd apps/vxpipe_calls && mix test` — 63 tests, 0 failures.
+- `cd apps/vxpipe_persistence && VXPIPE_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55433/vxpipe_test mix test`
+  — 39 tests, 0 failures.
+- The persistence tests cover same-source identity/byte reuse, corrected-source revision creation,
+  concurrent timestamp collision, nonregressing latest selection, idempotent and conflicting
+  receipts, non-terminal and cross-tenant rejection, and call-owned cascading deletion.
+- Root formatting, warnings-as-errors compilation, and unused-dependency checks passed. Strict
+  Credo checked 726 source files with no issues. The complete umbrella suite passed 915 tests with
+  its existing integration-tag exclusions.

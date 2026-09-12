@@ -2907,6 +2907,21 @@ integrity, because the final bytes also contain the persisted publication identi
 timestamp. Canonicalization is Calls-owned; storage adapters must persist or upload those exact
 bytes rather than re-encoding the document.
 
+PostgreSQL stores those exact bytes in a call-owned publication revision before object upload.
+Within one call, source digest and filename are independently unique: the source digest makes a
+same-snapshot retry reuse its original identity, timestamp, bytes, and name, while the filename
+constraint detects two distinct sources that share a millisecond-derived name. Reservation locks
+the owning call and accepts only a terminal call with persisted `ended_at`; it does not mutate call
+lifecycle timestamps.
+
+A revision begins `pending`. A protected object receipt may move it to `published`, but cannot
+change its source, record timestamp, filename, contents, or checksums. The call's latest-publication
+pointer advances transactionally only for a published revision whose record timestamp is newer
+than the current head. Retrying the same receipt is idempotent; a different receipt for an already
+published revision is a conflict. Pending revisions never become the latest readable object, and a
+late older upload cannot move the head backward. Both pending and published rows are deleted with
+their owning call.
+
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,
 revisions, and local acceptance timestamp. Do not read a later live state and

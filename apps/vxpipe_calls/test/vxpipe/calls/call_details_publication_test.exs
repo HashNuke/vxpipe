@@ -4,6 +4,7 @@ defmodule Vxpipe.Calls.CallDetailsPublicationTest do
   alias Vxpipe.Calls.{
     CallDetailsSnapshot,
     CallDetailsSource,
+    CallDetailsObject,
     PublicationComponent,
     PublicationDecision,
     PublicationWindow
@@ -175,6 +176,17 @@ defmodule Vxpipe.Calls.CallDetailsPublicationTest do
   test "rejects non-JSON component details at the component boundary" do
     assert {:error, :invalid_component} =
              PublicationComponent.new("usage", :failed, %{"worker" => self()})
+  end
+
+  test "rejects a bearer URL where a protected object key is required" do
+    signed_url = "https://objects.example.test/details.json?signature=test-only"
+
+    assert {:error, :invalid_call_details_object} =
+             CallDetailsObject.new(
+               signed_url,
+               %{"object_key" => signed_url},
+               ~U[2026-09-08 12:34:56.789Z]
+             )
   end
 
   defp component(name, status, details \\ %{}) do

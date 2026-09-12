@@ -5,6 +5,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
   alias Vxpipe.Persistence.Schema.{
     Admission,
     CallArtifact,
+    CallDetailsPublication,
     DefinitionRevision,
     JoinToken,
     TelephonyLeg,
@@ -15,34 +16,36 @@ defmodule Vxpipe.Persistence.Schema.Call do
   @derive {Inspect, except: [:initial_variables, :resolved_plan]}
 
   schema "calls" do
-    field :public_id, Ecto.UUID
-    field :participant_routes, :map
-    field :entry_caller, :string
-    field :entry_receiver, :string
-    field :initial_variables, :map
-    field :resolved_plan, :binary
-    field :plan_digest, :binary
+    field(:public_id, Ecto.UUID)
+    field(:participant_routes, :map)
+    field(:entry_caller, :string)
+    field(:entry_receiver, :string)
+    field(:initial_variables, :map)
+    field(:resolved_plan, :binary)
+    field(:plan_digest, :binary)
 
-    field :state, Ecto.Enum,
-      values: [:prepared, :admitting, :running, :ended, :failed]
+    field(:state, Ecto.Enum, values: [:prepared, :admitting, :running, :ended, :failed])
 
-    field :room_id, Ecto.UUID
-    field :created_at, :utc_datetime_usec
-    field :started_at, :utc_datetime_usec
-    field :ended_at, :utc_datetime_usec
-    field :incarnation_id, :string
+    field(:room_id, Ecto.UUID)
+    field(:created_at, :utc_datetime_usec)
+    field(:started_at, :utc_datetime_usec)
+    field(:ended_at, :utc_datetime_usec)
+    field(:incarnation_id, :string)
 
-    field :terminal_reason, Ecto.Enum,
+    field(:terminal_reason, Ecto.Enum,
       values: [:room_start_failed, :session_start_failed, :startup_unknown]
+    )
 
-    belongs_to :tenant, Tenant
-    belongs_to :definition_revision, DefinitionRevision
-    has_many :join_tokens, JoinToken
-    has_many :admissions, Admission
-    has_many :telephony_legs, TelephonyLeg
-    has_many :variable_snapshots, VariableSnapshot
-    has_many :artifacts, CallArtifact
-    belongs_to :latest_variables_snapshot, VariableSnapshot
+    belongs_to(:tenant, Tenant)
+    belongs_to(:definition_revision, DefinitionRevision)
+    has_many(:join_tokens, JoinToken)
+    has_many(:admissions, Admission)
+    has_many(:telephony_legs, TelephonyLeg)
+    has_many(:variable_snapshots, VariableSnapshot)
+    has_many(:artifacts, CallArtifact)
+    has_many(:details_publications, CallDetailsPublication)
+    belongs_to(:latest_variables_snapshot, VariableSnapshot)
+    belongs_to(:latest_details_publication, CallDetailsPublication)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -115,6 +118,10 @@ defmodule Vxpipe.Persistence.Schema.Call do
 
   def latest_variables_snapshot_changeset(call, snapshot_id) do
     change(call, latest_variables_snapshot_id: snapshot_id)
+  end
+
+  def latest_details_publication_changeset(call, publication_id) do
+    change(call, latest_details_publication_id: publication_id)
   end
 
   defp validate_binary_size(changeset, field, expected_size) do

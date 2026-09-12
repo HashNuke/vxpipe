@@ -25,15 +25,15 @@ definition revision and resolved-plan digest, not only a generic call identifier
 
 - [x] Red-test publication projection and fake-clock reporting window with complete, delayed, prohibited and missing components.
 - [ ] Implement Calls publication state/workers outside room lifecycle with persistence/artifact ports.
-- [ ] Store immutable publication records, timestamp filenames/checksums and nonregressing latest reference with collision handling.
+- [x] Store immutable publication records, timestamp filenames/checksums and nonregressing latest reference with collision handling.
 - [ ] Integrate late usage/artifact/history observations as refreshed immutable publications.
 - [ ] Add authorized operator retrieval and document incompleteness/available evidence without exposing private data to ordinary clients.
 
 ## Acceptance and failure checks
 
 - [ ] Early complete versus 60-second incomplete publication; no change to ended_at/duration/retention and pending jobs are not cancelled.
-- [ ] Timestamp 2026-09-08T12:34:56.789Z yields details-20260908123456789.json; retries reuse it, corrected contents get a new record/object.
-- [ ] Simultaneous timestamp collision cannot overwrite or deduplicate distinct publications; late older completion cannot regress latest pointer.
+- [x] Timestamp 2026-09-08T12:34:56.789Z yields details-20260908123456789.json; retries reuse it, corrected contents get a new record/object.
+- [x] Simultaneous timestamp collision cannot overwrite or deduplicate distinct publications; late older completion cannot regress latest pointer.
 - [ ] Outage/build/upload failure never reports published/complete or erases underlying history; artifact acceptance isn't remote hearing.
 - [ ] Denied transcript/audio intervals remain absent in exports; missing queued observations remain honest, and late publication respects deletion coordination.
 
@@ -63,6 +63,12 @@ Implementation evidence:
   pre-deadline waiting, deadline publication, intentional absence versus missing/failure, UTC
   record timestamps, and stable bytes independent of map insertion order. Persistence,
   object-store publication, late refresh, and operator retrieval remain pending.
+- Checkpoint B adds a Calls-owned publication record/receipt contract and a PostgreSQL adapter.
+  Per-call transactions reserve exact canonical bytes, deduplicate by schema-aware source digest,
+  reject distinct revisions that collide on the timestamp filename, and retain both pending and
+  published revisions. The latest pointer advances only after a protected object receipt commits
+  and cannot regress when an older revision completes later. Concurrent collision, idempotent and
+  conflicting receipt, tenant isolation, non-terminal call, and call-owned cascade tests pass.
 
 ## Specification review
 

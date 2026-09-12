@@ -7,6 +7,7 @@ defmodule Vxpipe.Calls do
     Archives,
     Artifacts,
     BillingEnrichments,
+    CallDetailsPublications,
     Definitions,
     Inspections,
     TelephonyAdmissions,
@@ -96,6 +97,13 @@ defmodule Vxpipe.Calls do
 
   def enrich_usage_billing(principal, call_id, options \\ []),
     do: BillingEnrichments.enrich(principal, call_id, options)
+
+  def reserve_call_details(tenant_key, call_id, snapshot, options \\ []),
+    do: CallDetailsPublications.reserve(tenant_key, call_id, snapshot, options)
+
+  def mark_call_details_published(tenant_key, call_id, publication_id, object, options \\ []),
+    do:
+      CallDetailsPublications.mark_published(tenant_key, call_id, publication_id, object, options)
 
   def fetch_call_history(principal, call_id, options \\ []),
     do: Archives.fetch_call_history(principal, call_id, options)

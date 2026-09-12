@@ -16,7 +16,9 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
     credential_repository: {Vxpipe.Persistence.CredentialStore, Vxpipe.Persistence.Repo},
     definition_repository: {Vxpipe.Persistence.DefinitionStore, Vxpipe.Persistence.Repo},
     call_repository: {Vxpipe.Persistence.CallStore, Vxpipe.Persistence.Repo},
-    inspection_repository: {Vxpipe.Persistence.InspectionStore, Vxpipe.Persistence.Repo}
+    inspection_repository: {Vxpipe.Persistence.InspectionStore, Vxpipe.Persistence.Repo},
+    publication_repository:
+      {Vxpipe.Persistence.CallDetailsPublicationStore, Vxpipe.Persistence.Repo}
 end
 
 if config_env() == :dev do

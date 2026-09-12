@@ -13,6 +13,7 @@ defmodule Vxpipe.Calls.CallDetailsSnapshot do
   @derive {Inspect, except: [:contents, :document]}
   @enforce_keys [
     :publication_id,
+    :schema_version,
     :recorded_at,
     :filename,
     :completeness,
@@ -25,6 +26,7 @@ defmodule Vxpipe.Calls.CallDetailsSnapshot do
 
   @type t :: %__MODULE__{
           publication_id: String.t(),
+          schema_version: String.t(),
           recorded_at: DateTime.t(),
           filename: String.t(),
           completeness: :complete | :incomplete,
@@ -69,6 +71,7 @@ defmodule Vxpipe.Calls.CallDetailsSnapshot do
     {:ok,
      %__MODULE__{
        publication_id: publication_id,
+       schema_version: @schema_version,
        recorded_at: recorded_at,
        filename: filename(recorded_at),
        completeness: decision.completeness,

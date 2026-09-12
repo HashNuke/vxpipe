@@ -10,6 +10,7 @@ defmodule Vxpipe.Calls.Repositories do
           | :definition_repository
           | :call_repository
           | :inspection_repository
+          | :publication_repository
         ) ::
           {:ok, {module(), term()}} | {:error, :repository_unavailable}
   def fetch(options, key) do
