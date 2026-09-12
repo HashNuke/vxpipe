@@ -2,7 +2,31 @@ defmodule Vxpipe.Calls.ArtifactsTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.{CallArtifact, Principal, TestArtifactRepository}
+
+  alias Vxpipe.Calls.{
+    CallArtifact,
+    Principal,
+    TestArtifactRepository,
+    TestPublicationFinalizerStarter
+  }
+
+  test "requests a refreshed publication after terminal artifact metadata commits" do
+    repository = start_supervised!(TestArtifactRepository)
+
+    options = [
+      artifact_repository: TestArtifactRepository.repository(repository),
+      publication_enabled: true,
+      publication_finalizer_starter: TestPublicationFinalizerStarter,
+      publication_trigger_observer: self()
+    ]
+
+    assert {:ok, artifact} = CallArtifact.new(attributes())
+    assert {:ok, ^artifact} = Calls.archive_call_artifact(artifact, options)
+
+    assert_receive {:publication_finalization_requested, tenant_key, call_id}
+    assert tenant_key == artifact.tenant_key
+    assert call_id == artifact.call_id
+  end
 
   test "stores terminal recording metadata and authorizes tenant-scoped reads" do
     repository = start_supervised!(TestArtifactRepository)

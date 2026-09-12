@@ -1,13 +1,22 @@
 defmodule Vxpipe.Calls.Archives do
   @moduledoc "Database-neutral private call-history workflows."
 
-  alias Vxpipe.Calls.{CallFact, CallHistory, Principal, Repositories, VariableSnapshot}
+  alias Vxpipe.Calls.{
+    CallFact,
+    CallHistory,
+    Principal,
+    PublicationTriggers,
+    Repositories,
+    VariableSnapshot
+  }
 
   @spec store_call_fact(CallFact.t(), keyword()) ::
           {:ok, CallFact.t()} | {:error, term()}
   def store_call_fact(%CallFact{} = fact, options) when is_list(options) do
-    with {:ok, repository} <- Repositories.fetch(options, :archive_repository) do
-      Repositories.call(repository, :store_call_fact, [fact])
+    with {:ok, repository} <- Repositories.fetch(options, :archive_repository),
+         {:ok, stored} <- Repositories.call(repository, :store_call_fact, [fact]) do
+      maybe_request_publication(stored, options)
+      {:ok, stored}
     end
   end
 
@@ -72,4 +81,11 @@ defmodule Vxpipe.Calls.Archives do
   defp authorize(%Principal{scopes: scopes}) do
     if MapSet.member?(scopes, :calls), do: :ok, else: {:error, :insufficient_scope}
   end
+
+  defp maybe_request_publication(%CallFact{kind: :archive_stream_closed} = fact, options) do
+    _result = PublicationTriggers.request(fact.tenant_key, fact.call_id, options)
+    :ok
+  end
+
+  defp maybe_request_publication(_fact, _options), do: :ok
 end

@@ -83,6 +83,28 @@ defmodule Vxpipe.Calls.PublicationFinalizerTest do
     assert_receive {:vxpipe_call_details_published, ^worker, _publication_id, 1}
   end
 
+  test "stops cleanly when a refresh reaches a missing or still-live call" do
+    for terminal_reason <- [:call_not_found, :call_not_ended] do
+      observer = self()
+      clock = start_agent(fn -> ~U[2026-09-12 18:00:10.000Z] end)
+      repository = repository(observer)
+      source = source_agent(observer, {:error, terminal_reason})
+
+      assert {:ok, finalizer, :started} =
+               Vxpipe.Calls.finalize_call_details(
+                 @tenant_key,
+                 @call_id <> Atom.to_string(terminal_reason),
+                 options(observer, repository, source, clock)
+               )
+
+      monitor = Process.monitor(finalizer)
+
+      assert_receive {:vxpipe_call_details_finalization_skipped, ^finalizer, ^terminal_reason}
+      assert_receive {:DOWN, ^monitor, :process, ^finalizer, :normal}
+      refute_receive {:publication_timer_scheduled, ^finalizer, _token, _delay}
+    end
+  end
+
   defp options(observer, repository, source, clock) do
     finalizer_supervisor =
       start_supervised!(

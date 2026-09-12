@@ -7,6 +7,7 @@ defmodule Vxpipe.Calls.BillingEnrichments do
     BillingLookupResult,
     BillingObservation,
     Principal,
+    PublicationTriggers,
     Repositories
   }
 
@@ -26,8 +27,10 @@ defmodule Vxpipe.Calls.BillingEnrichments do
              call_id
            ]),
          {:ok, candidates} <-
-           BillingCandidates.build(observations, principal.tenant_key, call_id) do
-      run(candidates, repository, call_id, settings)
+           BillingCandidates.build(observations, principal.tenant_key, call_id),
+         {:ok, report} <- run(candidates, repository, call_id, settings) do
+      maybe_request_publication(report, principal.tenant_key, options)
+      {:ok, report}
     end
   end
 
@@ -125,4 +128,16 @@ defmodule Vxpipe.Calls.BillingEnrichments do
   end
 
   defp increment(report, field), do: Map.update!(report, field, &(&1 + 1))
+
+  defp maybe_request_publication(
+         %BillingEnrichmentReport{stored_count: count} = report,
+         tenant,
+         options
+       )
+       when count > 0 do
+    _result = PublicationTriggers.request(tenant, report.call_id, options)
+    :ok
+  end
+
+  defp maybe_request_publication(_report, _tenant, _options), do: :ok
 end

@@ -378,3 +378,45 @@ supervised finalizer tree.
   `mix compile --warnings-as-errors`, `mix credo --strict`, and `mix deps.unlock --check-unused`
   passed. The database-backed umbrella run passed 936 tests across all eight child applications,
   with only the existing explicitly excluded external integration cases.
+
+## 2026-09-12 — checkpoint C3e1
+
+### Decisions
+
+- Keep finalization trigger policy in Calls rather than the Ecto adapter. Archive closure, terminal
+  artifact metadata and successfully stored billing enrichment are the only current authoritative
+  inputs that request an assessment. Ordinary facts, Variables snapshots and raw usage
+  observations do not start repeated finalizers.
+- Request only after the owning repository operation succeeds. Starting assessment is a
+  best-effort follow-on: its failure cannot reinterpret a committed history, artifact or billing
+  write as failed.
+- Make automatic triggering opt-in and resolve a narrow finalizer-starter behavior from application
+  settings. Production uses the existing `PublicationFinalizers` boundary; tests observe the
+  request without constructing unrelated delivery dependencies.
+- Treat `call_not_found` and `call_not_ended` as terminal for that short-lived assessment request.
+  This is expected when artifact or billing metadata lands before archive closure. Closure later
+  requests a new assessment, while genuine source outages continue to poll.
+- Separate trigger policy and finalizer admission behind focused modules. Archive, artifact and
+  billing workflows only identify their post-commit trigger points; they do not own publication
+  timing or delivery.
+
+### Red evidence
+
+- The focused Calls run had four intended failures: committed closure, artifact and billing
+  enrichment produced no finalization request, and a finalizer receiving `call_not_found` retried
+  instead of stopping cleanly.
+
+### Green evidence
+
+- `cd apps/vxpipe_calls && mix test test/vxpipe/calls/archives_test.exs
+  test/vxpipe/calls/artifacts_test.exs test/vxpipe/calls/billing_enrichment_test.exs
+  test/vxpipe/calls/publication_finalizer_test.exs` — 22 tests, 0 failures.
+- `cd apps/vxpipe_calls && mix test` — 77 tests, 0 failures.
+- Focused behavior proves only archive closure triggers from the fact stream, committed artifact and
+  billing results request refresh, and missing/still-live calls terminate without a retry timer.
+  Production object-store enablement and database-backed late revision verification are the next
+  checkpoint.
+- Root `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix credo --strict`, and
+  `mix deps.unlock --check-unused` passed; Credo checked 771 source files without issues. The
+  database-backed umbrella test command also exited successfully across all child applications
+  with the existing tagged external integrations excluded.

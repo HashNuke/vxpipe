@@ -1,6 +1,8 @@
 defmodule Vxpipe.Calls.PublicationFinalizers do
   @moduledoc "Starts post-call assessment through the Calls-owned finalizer supervisor."
 
+  @behaviour Vxpipe.Calls.PublicationFinalizerStarter
+
   alias Vxpipe.Calls.{PublicationFinalizer, PublicationFinalizerJob}
 
   @default_supervisor Vxpipe.Calls.PublicationFinalizerSupervisor

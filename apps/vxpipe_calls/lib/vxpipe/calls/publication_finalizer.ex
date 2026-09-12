@@ -68,6 +68,10 @@ defmodule Vxpipe.Calls.PublicationFinalizer do
 
         {:stop, :normal, state}
 
+      {:error, reason} when reason in [:call_not_found, :call_not_ended] ->
+        notify(state, {:vxpipe_call_details_finalization_skipped, self(), reason})
+        {:stop, :normal, state}
+
       {:error, reason} ->
         notify(state, {:vxpipe_call_details_finalization_retrying, self(), reason})
         {:noreply, schedule(state, state.job.settlement_poll_ms)}

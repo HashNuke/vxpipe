@@ -8,6 +8,7 @@ defmodule Vxpipe.Calls.BillingEnrichmentTest do
     BillingLookupResult,
     Principal,
     TestBillingLookup,
+    TestPublicationFinalizerStarter,
     TestUsageRepository
   }
 
@@ -39,6 +40,7 @@ defmodule Vxpipe.Calls.BillingEnrichmentTest do
 
   test "stores one delayed lookup result for one persisted provider attempt", context do
     release_ref = make_ref()
+    observer = self()
 
     lookup =
       {TestBillingLookup,
@@ -64,7 +66,10 @@ defmodule Vxpipe.Calls.BillingEnrichmentTest do
           context.principal,
           @call_id,
           usage_repository: TestUsageRepository.repository(context.repository),
-          billing_lookup: lookup
+          billing_lookup: lookup,
+          publication_enabled: true,
+          publication_finalizer_starter: TestPublicationFinalizerStarter,
+          publication_trigger_observer: observer
         )
       end)
 
@@ -91,6 +96,8 @@ defmodule Vxpipe.Calls.BillingEnrichmentTest do
               unavailable_count: 0,
               missing_reference_count: 0
             }} = Task.await(task)
+
+    assert_receive {:publication_finalization_requested, @tenant_key, @call_id}
 
     assert [_total, _input, cost] = TestUsageRepository.observations(context.repository)
     assert cost.attempt_id == "model-attempt-1"

@@ -111,6 +111,14 @@ Implementation evidence:
   usage and recording component states. Configured missing recording work remains pending;
   unconfigured or prohibited recording is an intentional absence. Automatic finalizer triggering,
   late refresh delivery and operator retrieval remain pending.
+- Checkpoint C3e1 adds the Calls-owned post-commit trigger policy. A committed archive closure
+  requests initial assessment; committed terminal artifact metadata and newly stored billing
+  enrichment request a refreshed assessment. Ordinary live facts do not churn finalizers. Triggers
+  are explicitly enabled, use the existing tenant/call finalizer coalescing boundary, and remain
+  best effort after the owning write commits. A recording or billing result arriving before call
+  end exits cleanly as not yet eligible; the later closure starts the authoritative assessment.
+  Production object-writer/recovery configuration and end-to-end late revision proof remain
+  pending.
 
 ## Specification review
 

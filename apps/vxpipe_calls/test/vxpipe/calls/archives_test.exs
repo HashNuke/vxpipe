@@ -2,7 +2,37 @@ defmodule Vxpipe.Calls.ArchivesTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.{CallFact, Principal, TestArchiveRepository, VariableSnapshot}
+
+  alias Vxpipe.Calls.{
+    CallFact,
+    Principal,
+    TestArchiveRepository,
+    TestPublicationFinalizerStarter,
+    VariableSnapshot
+  }
+
+  test "requests call-details finalization only after archive closure commits" do
+    repository = start_supervised!(TestArchiveRepository)
+
+    options = [
+      archive_repository: TestArchiveRepository.repository(repository),
+      publication_enabled: true,
+      publication_finalizer_starter: TestPublicationFinalizerStarter,
+      publication_trigger_observer: self()
+    ]
+
+    fact = call_fact(:accepted_input, 1, %{"content" => "Hello"})
+    closure = call_fact(:archive_stream_closed, 2, %{"incomplete" => false})
+
+    assert {:ok, ^fact} = Calls.archive_call_fact(fact, options)
+    refute_receive {:publication_finalization_requested, _, _}
+
+    assert {:ok, ^closure} = Calls.archive_call_fact(closure, options)
+
+    assert_receive {:publication_finalization_requested, tenant_key, call_id}
+    assert tenant_key == closure.tenant_key
+    assert call_id == closure.call_id
+  end
 
   test "stores private call facts and authorizes ordered tenant-scoped reads" do
     repository = start_supervised!(TestArchiveRepository)

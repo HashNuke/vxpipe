@@ -1,12 +1,14 @@
 defmodule Vxpipe.Calls.Artifacts do
   @moduledoc "Database-neutral workflows for terminal call-artifact metadata."
 
-  alias Vxpipe.Calls.{CallArtifact, Principal, Repositories}
+  alias Vxpipe.Calls.{CallArtifact, Principal, PublicationTriggers, Repositories}
 
   @spec store(CallArtifact.t(), keyword()) :: {:ok, CallArtifact.t()} | {:error, term()}
   def store(%CallArtifact{} = artifact, options) when is_list(options) do
-    with {:ok, repository} <- Repositories.fetch(options, :artifact_repository) do
-      Repositories.call(repository, :store_call_artifact, [artifact])
+    with {:ok, repository} <- Repositories.fetch(options, :artifact_repository),
+         {:ok, stored} <- Repositories.call(repository, :store_call_artifact, [artifact]) do
+      _result = PublicationTriggers.request(stored.tenant_key, stored.call_id, options)
+      {:ok, stored}
     end
   end
 
