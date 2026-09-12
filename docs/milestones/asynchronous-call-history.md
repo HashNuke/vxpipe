@@ -191,6 +191,15 @@ atomically ended call with six-digit timestamp precision. The repeat rendered-br
 the terminal fact as sequence 14 and marked the exact Gemini-backed sample call `ended`, confirming
 the fix outside the deterministic test boundary.
 
+A later cold-restart check found that the persistence decoder converted stored fact-kind strings
+with `String.to_existing_atom/1` before the Calls-owned `CallFact` module was necessarily loaded.
+A valid persisted history could therefore fail closed as `invalid_call_fact` until unrelated code
+happened to load those atoms. `CallFact.decode_kind/1` now owns a fixed mapping of supported wire
+names to the existing domain atoms, and the persistence codec delegates to that mapping without
+dynamically creating atoms. A freshly archived call remains inspectable after an abrupt development
+VM restart. The focused Calls contract/archive lane passes 11 tests, the persistence codec test
+passes, and the database-backed call-store lane passes 18 tests.
+
 ## Specification review
 
 Reviewed independently by milestone_review_c on 2026-09-08 for approved contracts,

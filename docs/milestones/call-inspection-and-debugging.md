@@ -221,6 +221,22 @@ Implementation evidence to date:
 - A rendered 390px archive-gap check showed `Archive gap: 2 missing sequences · 1 duplicate
   ID · 1 duplicate sequence` with the unknown tool payload, retained equal 390px document
   and viewport widths, and produced no browser errors.
+- A pre-delivery runtime-loss check now distinguishes persisted lifecycle state from a live
+  room. The list labels `running` rows as `Running record`; when the live projection is absent,
+  detail and refresh paths show `Runtime unavailable` and `End time unavailable`, then stop
+  polling instead of claiming the call is live or still timing it. No terminal fact, end time,
+  replay, reconciliation, retention, or deletion is invented. The focused endpoint contract
+  first failed twice on the former `Live`/`Persisted` labels, then passed 20 tests; the complete
+  Console suite passes 91 tests. Full umbrella verification passes 994 tests with 15 explicitly
+  excluded integrations, plus formatting, warnings-as-errors compilation, unused-dependency
+  checking, and strict Credo over 803 files.
+- The LiveView inspection stylesheet now lives in `assets/css` rather than the Elixir `lib`
+  tree. Its controller continues to embed, hash, and serve the same bounded asset, so this
+  source-boundary correction changes neither the route nor its immutable caching contract.
+- A fresh deterministic WebRTC call was left running while the development VM was stopped,
+  then inspected after restart. Its current-schema persisted ledger rendered with the explicit
+  runtime-unavailable state. Desktop and 390px confirmation captures had equal viewport/body/
+  document widths, zero axe violations or incomplete checks, and no browser errors.
 
 - Final root verification passed: `mix format --check-formatted`,
   `mix compile --warnings-as-errors`, `mix credo --strict`, `mix test`, and

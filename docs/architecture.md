@@ -3296,6 +3296,13 @@ URL-backed event selection is local to the loaded evidence, while connected runn
 pages refresh only the live projection. Ended calls require no room process. Console and
 Gateway gain neither Repo access nor unrestricted process inspection through this flow.
 
+A persisted `admitting` or `running` state is historical evidence, not proof that its room
+incarnation is live. When the bounded live projection is unavailable, inspection labels the
+row as a running record and the detail as runtime unavailable; a started record without a
+terminal fact has an unavailable end time rather than an in-progress duration. Inspection
+must not synthesize an end, restart/replay the call, or mutate the persisted record to make
+the two projections appear consistent.
+
 Phoenix is approved for the separate `vxpipe_console` application, not a gateway
 migration. Preserve the existing gateway protocol handlers, React sample,
 application-option ownership and engine/persistence dependency direction.
