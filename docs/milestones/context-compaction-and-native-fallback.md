@@ -1,8 +1,9 @@
 # Context compaction and supported LLM fallback
 
 Status: implementation in progress. Context budgeting, protected snapshot
-replacement, and one bounded fake-compactor attempt are implemented. Production
-summarizer selection/accounting is next. Specification review: approved (2026-09-08).
+replacement, one bounded fake-compactor attempt, and production summarizer/
+accounting selection are implemented. Session integration is next. Specification
+review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -29,7 +30,7 @@ can be exercised without adding Vxpipe's own provider chain.
 ## Implementation checklist
 
 - [x] Red-test token-budget trigger/target with fake compactor and realistic tool/history/variable input envelopes.
-- [ ] Resolve and document summarizer selection and token accounting/limits before authorizing its production data flow.
+- [x] Resolve and document summarizer selection and token accounting/limits before authorizing its production data flow.
 - [ ] Implement bounded summary work, protected-history replacement and late-message/activation checks.
 - [ ] Preserve summary provenance/privacy and metered usage through existing event/storage boundaries.
 - [ ] Validate/pass through supported native fallback options and add controlled plus tagged adapter interoperability coverage.
@@ -76,7 +77,13 @@ correlations, performs one bounded attempt, and has its complete rebuilt request
 remeasured. Tests prove no invocation below threshold, protected-input failure,
 failed compaction preservation, strict achievable targets, and unchanged full
 request tools/pending/variable projection. Production summarizer/counter selection
-is not implemented yet.
+now reuses the activation's pinned model/provider/routing state in a buffered,
+tool-less request. Conservative encoded-byte accounting includes every normalized
+input class and explicit envelope margins; context/output limits come from the
+validated ReqLLM model/options. Unsupported native options fail configuration,
+while a supported Zenmux routing policy passes through unchanged. See
+[model-context compaction](../context-compaction.md). Runtime-session and event/
+privacy integration remain open.
 
 ## Specification review
 

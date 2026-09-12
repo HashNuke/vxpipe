@@ -662,9 +662,18 @@ result, or permission to execute tools. It does not modify `CallVariables`, gran
 or the full permitted archive. Source-interval restrictions also apply to derived
 transcript summaries; denied transcript storage cannot be bypassed by saving a
 summary. If work uses a snapshot, preserve intervening messages and unresolved
-invocations when incorporating its result. The summarizer model/execution choice
-and configuration encoding are not selected; no new model recipient is authorized.
-This resolves the budget/conditions policy, not an implemented compaction engine.
+invocations when incorporating its result.
+
+The selected production compactor reuses the active activation's pinned model,
+provider, credential, and native routing policy in one buffered, tool-less request.
+It receives selected history as JSON data under fixed summary-only instructions;
+it receives no tools, transient variables, pending projection, or execution
+bindings. Cross-provider accounting uses a conservative encoded-byte estimate plus
+fixed message/tool envelope margins and the 75% trigger safety margin because
+ReqLLM does not expose one exact tokenizer for every provider. The context window
+and effective output reserve come from validated pinned-model metadata/options;
+unknown limits fail closed. See [model-context compaction](context-compaction.md)
+for the precise limits and failure behavior.
 
 R49 requires a configurable hard maximum acceptable MCP response size, default
 1 MiB (1,048,576 bytes) of decoded/decompressed response data. Enforce it

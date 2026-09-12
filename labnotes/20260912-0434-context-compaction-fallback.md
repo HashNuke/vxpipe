@@ -127,3 +127,52 @@ mix test
 The first implementation checklist item is now complete. The production
 summarizer/model selection, conservative token accounting, and runtime-session
 integration remain open.
+
+## 2026-09-12 — production selection and accounting checkpoint
+
+- Inspected the locked ReqLLM 1.22 and LLMDB surfaces. ReqLLM exposes model
+  context/output limits and provider option validation, but no exact local input
+  tokenizer covering every provider.
+- Selected the active activation's same pinned provider, model, credential, and
+  native routing configuration for summary work. The compactor cannot silently
+  select another configured model or recipient.
+- Added conservative input accounting over messages/tool relationships, exact
+  tool schemas, pending invocation state, and transient model context. It charges
+  encoded UTF-8 bytes plus fixed base/message/tool envelope margins; request
+  correlation is correctly excluded because it is not model input.
+- The production `ModelContextCompactor` projects selected history into JSON data
+  under fixed summary-only instructions and calls the pinned provider with no
+  tools, pending state, or model context. Any returned tool call is rejected.
+- Added a per-request maximum-output token field so the summary allowance reaches
+  the ordinary ReqLLM adapter without changing the pinned provider configuration.
+- ReqLLM configuration now forces unsupported-option validation to error. A
+  supported Zenmux provider-routing fallback is retained; the same provider
+  option on Google is rejected before I/O.
+- Recorded the complete decision, limits, rejected alternatives, and remaining
+  verification in `docs/context-compaction.md`.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/conservative_input_token_counter_test.exs \
+  test/vxpipe/agent_runtime/model_context_compactor_test.exs \
+  test/vxpipe/agent_runtime/provider/req_llm_test.exs
+# 9 tests, 7 failures: counter/compactor/output projection and validated metadata absent
+```
+
+Green evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/conservative_input_token_counter_test.exs \
+  test/vxpipe/agent_runtime/model_context_compactor_test.exs \
+  test/vxpipe/agent_runtime/provider/req_llm_test.exs
+# 9 tests, 0 failures
+mix test
+# 79 tests, 0 failures (2 excluded)
+```
+
+The second implementation checklist item is complete. Runtime configuration,
+Session/RequestRunner preparation, compaction lifecycle events, and source-policy
+storage projection remain open.

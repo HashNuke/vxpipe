@@ -20,12 +20,15 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
              Provider.new(
                api_key: "runtime-secret",
                model: "google:gemini-3.5-flash-lite",
-               generation_options: [temperature: 0.2],
+               generation_options: [temperature: 0.2, max_tokens: 256],
                streaming: false
              )
 
     refute Provider.streaming?(config)
     refute inspect(config) =~ "runtime-secret"
+    assert config.context_window_tokens == 1_048_576
+    assert config.maximum_output_tokens == 256
+    assert config.generation_options[:on_unsupported] == :error
 
     assert {:error, :invalid_configuration} =
              Provider.new(model: "google:gemini-3.5-flash-lite")
@@ -36,6 +39,37 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
                model: "google:gemini-3.5-flash-lite",
                generation_options: [api_key: "override"]
              )
+
+    assert {:error, :invalid_configuration} =
+             Provider.new(
+               api_key: "runtime-secret",
+               model: "google:gemini-3.5-flash-lite",
+               generation_options: [provider_options: [provider: %{fallback: true}]]
+             )
+  end
+
+  test "accepts and passes through routing fallback only for a supporting provider" do
+    routing = %{
+      fallback: "anthropic",
+      routing: %{
+        type: "priority",
+        providers: ["openai", "anthropic"]
+      }
+    }
+
+    assert {:ok, config} =
+             Provider.new(
+               api_key: "runtime-secret",
+               model: "zenmux:openai/gpt-5",
+               generation_options: [provider_options: [provider: routing]],
+               streaming: false
+             )
+
+    request = ModelRequest.new([Message.system("policy"), Message.user("hello")], [], [], %{})
+    {_model, _context, options} = Provider.prepare_request(config, request)
+
+    assert get_in(options, [:provider_options, :provider]) == routing
+    assert options[:on_unsupported] == :error
   end
 
   test "projects messages, exact tools, and pending state without private bindings" do
@@ -94,10 +128,13 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
         %{request_id: "req_1"}
       )
 
+    request = ModelRequest.with_maximum_output_tokens(request, 37)
+
     assert {model, context, options} = Provider.prepare_request(config, request)
     assert model.provider == :google
     assert model.id == "gemini-3.5-flash-lite"
     assert Keyword.fetch!(options, :api_key) == "runtime-secret"
+    assert Keyword.fetch!(options, :max_tokens) == 37
 
     assert [%Elixir.ReqLLM.Tool{name: "check_balance"}] = Keyword.fetch!(options, :tools)
 
