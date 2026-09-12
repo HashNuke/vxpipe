@@ -115,6 +115,8 @@ export function isSessionResponse(value: unknown): value is SessionResponse {
     typeof participant === "object" &&
     "participant_id" in participant &&
     typeof participant.participant_id === "string" &&
+    "room_id" in participant &&
+    typeof participant.room_id === "string" &&
     "incarnation_id" in participant &&
     typeof participant.incarnation_id === "string" &&
     !!session &&

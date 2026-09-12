@@ -115,6 +115,22 @@ excluded, Agent Runtime 58/2, Call Engine 338/1, Calls 37, Persistence 25, Gatew
 59). The final checkpoint changed no UI; its rendered-browser evidence is the immediately
 preceding sample checkpoint.
 
+Pre-delivery regression correction (2026-09-12): a durable two-tab browser review found that the
+Gateway returned HTTP 201 and consumed the destination token but omitted the pinned `room_id` and
+`incarnation_id` from the provisional participant projection. The sample client therefore rejected
+the otherwise valid session before opening its transfer connection. A red Gateway HTTP contract
+test reproduced the response defect before the projection was corrected, and a red client guard
+test now requires the declared room identity. The full Gateway suite passes 227 tests with 6
+integration tests excluded; the Console suite passes 88 tests; all 8 asset tests and TypeScript
+checking pass. Repeating the real HTTPS flow with
+Gemini and local Morse audio reaches `Private briefing line open`, enables acceptance, and records
+destination admission, media connection, private briefing, and acceptance without the former
+invalid-session error. The deterministic Morse briefing exceeds the unchanged total-attempt timer,
+so completed main-room promotion continues to be evidenced by the real two-peer Gateway integration
+test rather than this regression run. Formatting, warnings-as-errors compilation, strict Credo,
+unused dependency checking, and the correctly configured PostgreSQL-backed umbrella suite also
+pass.
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

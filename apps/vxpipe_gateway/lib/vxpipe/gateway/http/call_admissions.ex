@@ -176,8 +176,10 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
             "state" => "running"
           },
           "participant" => %{
+            "incarnation_id" => claim.call.incarnation_id,
             "participant_id" => participant.participant_id,
             "role" => Atom.to_string(participant.kind),
+            "room_id" => claim.call.room_id,
             "state" => "pending_transfer"
           },
           "session" => session_public(session)
