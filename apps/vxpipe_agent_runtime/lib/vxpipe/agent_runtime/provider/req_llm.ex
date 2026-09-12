@@ -13,6 +13,12 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
   @impl true
   def streaming?(%Config{} = config), do: config.streaming
 
+  @impl true
+  def context_window_tokens(%Config{} = config), do: config.context_window_tokens
+
+  @impl true
+  def maximum_output_tokens(%Config{} = config), do: config.maximum_output_tokens
+
   @doc false
   @spec prepare_request(Config.t(), Vxpipe.AgentRuntime.ModelRequest.t()) ::
           {term(), Elixir.ReqLLM.Context.t(), keyword()}

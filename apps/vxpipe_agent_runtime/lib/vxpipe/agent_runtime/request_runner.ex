@@ -3,6 +3,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
 
   alias Vxpipe.AgentRuntime.{
     Conversation,
+    ContextPreparation,
     Executor,
     Message,
     ModelContext,
@@ -41,11 +42,13 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              model_context,
              request.correlation
            ),
+         {:ok, prepared_conversation, model_request} <-
+           prepare_context(conversation, model_request, config),
          :ok <- config.emit_model_attempt_started.(),
          {:ok, response} <- generate_observed_response(config, model_request, output) do
       handle_response(
         response,
-        conversation,
+        prepared_conversation,
         staged_messages,
         output,
         round,
@@ -206,6 +209,21 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
 
   defp model_tools(_registry, false), do: []
   defp model_tools(registry, true), do: ToolRegistry.model_tools(registry)
+
+  defp prepare_context(conversation, model_request, %{context_preparation: nil}) do
+    {:ok, conversation, model_request}
+  end
+
+  defp prepare_context(conversation, model_request, config) do
+    with {:ok, prepared} <-
+           ContextPreparation.prepare(conversation, model_request, config.context_preparation),
+         :ok <- commit_compaction(prepared, config) do
+      {:ok, prepared.conversation, prepared.request}
+    end
+  end
+
+  defp commit_compaction(%{compaction: nil}, _config), do: :ok
+  defp commit_compaction(%{conversation: conversation}, config), do: config.commit.(conversation)
 
   defp generate_response(config, model_request, output) do
     try do

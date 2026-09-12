@@ -2,8 +2,9 @@
 
 Status: implementation in progress. Context budgeting, protected snapshot
 replacement, one bounded fake-compactor attempt, and production summarizer/
-accounting selection are implemented. Session integration is next. Specification
-review: approved (2026-09-08).
+accounting selection are implemented. Agent Runtime Session integration is green;
+Call Engine configuration and queued-input coverage are next. Specification review:
+approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -83,7 +84,10 @@ input class and explicit envelope margins; context/output limits come from the
 validated ReqLLM model/options. Unsupported native options fail configuration,
 while a supported Zenmux routing policy passes through unchanged. See
 [model-context compaction](../context-compaction.md). Runtime-session and event/
-privacy integration remain open.
+privacy integration remain open. The Session now prepares and commits a safe
+summary before every inference/tool-continuation round, and terminating it kills
+blocked compaction work. Call Engine has not yet enabled this configuration or
+proved queued input across the compaction interval.
 
 ## Specification review
 

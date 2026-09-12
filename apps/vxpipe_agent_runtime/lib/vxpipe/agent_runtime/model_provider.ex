@@ -14,5 +14,12 @@ defmodule Vxpipe.AgentRuntime.ModelProvider do
 
   @callback streaming?(model :: term()) :: boolean()
 
-  @optional_callbacks stream: 3, streaming?: 1
+  @callback context_window_tokens(model :: term()) :: pos_integer() | nil
+
+  @callback maximum_output_tokens(model :: term()) :: pos_integer() | nil
+
+  @optional_callbacks stream: 3,
+                      streaming?: 1,
+                      context_window_tokens: 1,
+                      maximum_output_tokens: 1
 end

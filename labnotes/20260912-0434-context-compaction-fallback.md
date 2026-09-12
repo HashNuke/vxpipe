@@ -176,3 +176,43 @@ mix test
 The second implementation checklist item is complete. Runtime configuration,
 Session/RequestRunner preparation, compaction lifecycle events, and source-policy
 storage projection remain open.
+
+## 2026-09-12 — Agent Runtime session checkpoint
+
+- Added a cohesive `CompactionConfiguration` boundary instead of expanding
+  `SessionConfiguration` with provider-specific logic. It resolves explicit
+  trusted overrides or optional provider-reported context/output limits, validates
+  counter/compactor callbacks, and applies the decided 4-entry/1-second/15-second
+  defaults.
+- Added optional provider limit callbacks. The ReqLLM adapter exposes only its
+  already validated config metadata; other providers must supply explicit trusted
+  limits or remain unable to enable compaction.
+- `RequestRunner` now prepares context before every conversational inference and
+  tool-continuation round. A successful compaction is committed to the owning
+  Session before the ordinary provider request; a failed later inference therefore
+  cannot restore the oversized history.
+- The existing active-token commit callback remains the attachment boundary. An
+  old task cannot commit into another request/session generation.
+- Confirmed that stopping the Session while its fake compactor is blocked also
+  terminates that linked compaction task. No stale summary worker survives its
+  activation.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/session_compaction_test.exs
+# 2 tests, 2 failures: context_compaction was rejected by Session configuration
+```
+
+Green evidence:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/session_compaction_test.exs
+# 2 tests, 0 failures
+```
+
+The third checklist item remains open until Call Engine passes the application
+settings into each activation and a queued user/tool completion is proven to
+survive the compaction interval.
