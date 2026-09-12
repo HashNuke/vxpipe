@@ -3028,6 +3028,18 @@ only after its object receipt is committed as `published`; pending or foreign-te
 the same not-found result. This makes availability explicit without treating a database reservation
 as successful remote storage.
 
+Console consumes that public Calls workflow through its own narrow backend behavior; Phoenix does
+not query the Repo or object storage. The call-inspection LiveView loads at most 25 immutable
+revision summaries per page and presents published, incomplete, pending, and latest-head states
+separately. Its metadata view includes only the safe read model above. A published row links to the
+operator-session-protected `GET /calls/:call_id/details/:publication_id` route, which returns the
+exact persisted canonical JSON as a private, non-cacheable attachment. Pending revisions have no
+download action, inaccessible revisions share a generic not-found response, and backend failures
+produce a generic temporary-unavailability response. The controller validates the persisted
+timestamp filename before constructing `Content-Disposition`; it never redirects to a bearer URL
+or exposes an object key. This is an operator inspection mechanism, not RTVI or ordinary-client
+visibility.
+
 For every locally accepted variable update, `CallVariables` emits its exact full
 post-update snapshot with call/incarnation, original turn/tool, source participant,
 revisions, and local acceptance timestamp. Do not read a later live state and

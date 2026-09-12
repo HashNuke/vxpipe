@@ -4,10 +4,11 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
   use Phoenix.LiveView, layout: false
 
   alias Vxpipe.Calls.CallDetailPage
-  alias Vxpipe.Console.{CallInspection, CallInspectionComponents, CallRecording}
+  alias Vxpipe.Console.{CallDetails, CallInspection, CallInspectionComponents, CallRecording}
 
   @list_page_size 25
   @history_page_size 50
+  @details_page_size 25
   @refresh_interval_ms 1_000
 
   @impl true
@@ -19,11 +20,14 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
        selected_event_id: nil,
        list_cursor: nil,
        history_cursor: nil,
+       details_cursor: nil,
        refresh_token: nil,
        recordings: [],
        recordings_status: :unavailable,
        usage_report: nil,
-       usage_status: :unavailable
+       usage_status: :unavailable,
+       call_details_page: nil,
+       call_details_status: :unavailable
      )}
   end
 
@@ -39,12 +43,14 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
       |> maybe_load_detail(requested, reload_call?)
       |> maybe_load_recordings(requested, reload_call?)
       |> maybe_load_usage(requested, reload_call?)
+      |> maybe_load_call_details(requested, reload_call?)
       |> assign(
         loaded?: true,
         selected_id: requested.call_id,
         selected_event_id: requested.event,
         list_cursor: requested.list_cursor,
-        history_cursor: requested.history_cursor
+        history_cursor: requested.history_cursor,
+        details_cursor: requested.details_cursor
       )
       |> reconcile_live_refresh()
 
@@ -78,7 +84,8 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
       call_id: call_id,
       event: query_value(params, "event"),
       list_cursor: query_value(params, "cursor"),
-      history_cursor: query_value(params, "history_cursor")
+      history_cursor: query_value(params, "history_cursor"),
+      details_cursor: query_value(params, "details_cursor")
     }
   end
 
@@ -139,6 +146,22 @@ defmodule Vxpipe.Console.CallInspectionDetailLive do
   end
 
   defp maybe_load_usage(socket, _requested, false), do: socket
+
+  defp maybe_load_call_details(socket, requested, reload_call?) do
+    if reload_call? or socket.assigns.details_cursor != requested.details_cursor do
+      options = [limit: @details_page_size] ++ option(requested.details_cursor, :cursor)
+
+      case CallDetails.list(socket.assigns.principal, requested.call_id, options) do
+        {:ok, page} ->
+          assign(socket, call_details_page: page, call_details_status: :available)
+
+        {:error, _reason} ->
+          assign(socket, call_details_page: nil, call_details_status: :unavailable)
+      end
+    else
+      socket
+    end
+  end
 
   defp load_live(principal, call_id, {:ok, %CallDetailPage{call: %{state: state}}})
        when state in [:admitting, :running] do

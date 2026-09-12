@@ -15,11 +15,14 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   attr :detail_status, :atom, default: :none
   attr :list_cursor, :string, default: nil
   attr :history_cursor, :string, default: nil
+  attr :details_cursor, :string, default: nil
   attr :selected_event_id, :string, default: nil
   attr :recordings, :list, default: []
   attr :recordings_status, :atom, default: :unavailable
   attr :usage_report, Vxpipe.Calls.UsageReport, default: nil
   attr :usage_status, :atom, default: :unavailable
+  attr :call_details_page, Vxpipe.Calls.CallDetailsRevisionPage, default: nil
+  attr :call_details_status, :atom, default: :unavailable
 
   def index(assigns) do
     ~H"""
@@ -51,6 +54,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
         selected_event_id={@selected_event_id}
         list_cursor={@list_cursor}
         history_cursor={@history_cursor}
+        details_cursor={@details_cursor}
       />
       <CallInspectionDetailComponents.workbench
         :if={@selected_id}
@@ -65,6 +69,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
         recordings_status={@recordings_status}
         usage_report={@usage_report}
         usage_status={@usage_status}
+        call_details_page={@call_details_page}
+        call_details_status={@call_details_status}
       />
     </main>
     """
@@ -106,6 +112,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   attr :selected_event_id, :string, default: nil
   attr :list_cursor, :string, default: nil
   attr :history_cursor, :string, default: nil
+  attr :details_cursor, :string, default: nil
 
   defp matrix(%{status: :unavailable} = assigns) do
     ~H"""
@@ -180,7 +187,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
               @selected_id,
               @page.next_cursor,
               @history_cursor,
-              @selected_event_id
+              @selected_event_id,
+              @details_cursor
             )
           }
         >
@@ -203,13 +211,14 @@ defmodule Vxpipe.Console.CallInspectionComponents do
   defp call_count(nil), do: "—"
   defp call_count(page), do: length(page.calls)
 
-  defp next_page_path(nil, cursor, _history_cursor, _selected_event_id),
+  defp next_page_path(nil, cursor, _history_cursor, _selected_event_id, _details_cursor),
     do: path_with_query("/calls", %{"cursor" => cursor})
 
-  defp next_page_path(call_id, cursor, history_cursor, selected_event_id) do
+  defp next_page_path(call_id, cursor, history_cursor, selected_event_id, details_cursor) do
     call_path(call_id, cursor,
       history_cursor: history_cursor,
-      selected_event_id: selected_event_id
+      selected_event_id: selected_event_id,
+      details_cursor: details_cursor
     )
   end
 
@@ -217,7 +226,8 @@ defmodule Vxpipe.Console.CallInspectionComponents do
     path_with_query("/calls/" <> URI.encode_www_form(call_id), %{
       "cursor" => list_cursor,
       "history_cursor" => Keyword.get(options, :history_cursor),
-      "event" => Keyword.get(options, :selected_event_id)
+      "event" => Keyword.get(options, :selected_event_id),
+      "details_cursor" => Keyword.get(options, :details_cursor)
     })
   end
 

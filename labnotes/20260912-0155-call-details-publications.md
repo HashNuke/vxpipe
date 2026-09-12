@@ -504,3 +504,63 @@ supervised finalizer tree.
   formatting, warnings-as-errors compilation, strict Credo over 779 source files,
   unused-dependency checking, and the database-backed umbrella suite all exited successfully with
   only the existing tagged external integrations excluded.
+
+## 2026-09-12 — checkpoint C4b and milestone completion
+
+### Decisions
+
+- Keep call-details presentation behind a dedicated Console backend behavior. The Calls adapter
+  delegates only to public authorization/read functions, so neither the LiveView nor controller
+  gains a Repo or object-store dependency. Call inspection, recording playback, call-details reads,
+  presentation and HTTP delivery remain separate modules.
+- Load at most 25 revision summaries per page. The `details_cursor` is independent of call-list and
+  event-history cursors, and its navigation preserves the currently selected event and other page
+  state.
+- Show operators honest publication state: complete versus incomplete source evidence, pending
+  versus published delivery, and which published revision is the current head. A pending revision
+  has no download action. No object key/reference, bucket, endpoint or bearer URL enters the
+  presenter.
+- Serve published JSON only through the existing operator-session guard. The controller validates
+  the exact `details-YYYYMMDDHHMMSSmmm.json` filename before using it in a response header, sends
+  the persisted canonical bytes without re-encoding, and marks the attachment private/no-store and
+  nosniff. Missing/inaccessible and backend-failure responses remain generic.
+- Match the Operator's Bench visual system with divided evidence rows rather than nested cards.
+  The first 1440px render exposed an unnecessary action wrap; a narrower intermediate breakpoint
+  retains it only where the three-column row cannot fit.
+
+### Red evidence
+
+`cd apps/vxpipe_console && mix test test/vxpipe/console/call_details_endpoint_test.exs` ran five
+new externally observable scenarios. All five failed as expected: the document route did not exist,
+the call page had no publication panel, and revision pagination had no action.
+
+### Green and acceptance evidence
+
+- The focused Console file passes 5 tests. It covers operator-session enforcement, exact JSON and
+  attachment headers, generic not-found behavior, published-versus-pending actions, safe metadata,
+  and independent bounded pagination.
+- The complete Console suite passes 88 tests.
+- One database-backed cross-application run passes 52 tests: 16 Call Engine privacy/routing tests,
+  21 Calls reporting/finalizer/delivery/read tests, 1 Artifacts immutable-write test, 9 Persistence
+  source/publication tests, and the 5 Console scenarios.
+- Existing call-end persistence tests prove the archive closure preserves `started_at` and stores
+  the actual source-stop `ended_at`. Reporting-window and finalizer modules have no port capable of
+  cancelling recording, billing or archive jobs; at the deadline they only read, project and submit
+  available facts. Source/read failures retry, while bounded upload failures retain a pending
+  revision and never commit a published receipt.
+- Transcript routing fails closed for denied/stale source-policy revisions and the room mixer emits
+  only permitted recording intervals. The publication source consumes those persisted permitted
+  facts, suppresses statically prohibited recording again, and projects archive gaps and component
+  failures explicitly rather than inventing missing data.
+- A disposable fixture server was inspected with `agent-browser` at 1440×1000 and 390×844. The
+  page visibly distinguishes latest/complete, older/incomplete, and delivery-pending revisions;
+  only published rows expose download actions. The mobile document width equals its 390px viewport,
+  axe reports 0 violations, and browser error inspection reports none. A second bounded render pass
+  confirms the desktop density correction and unchanged mobile layout.
+- The Impeccable design hook reports no finding for this checkpoint's UI changes.
+- Root formatting, warnings-as-errors compilation, strict Credo over 784 source files, and the
+  unused-dependency check pass. The complete database-backed umbrella suite also exits successfully
+  across all child applications with only the existing tagged external integrations excluded.
+
+Milestone 21 is complete. Milestone 22 (context compaction and supported LLM fallback) is next;
+milestone 18 still awaits its guarded external Twilio verification.

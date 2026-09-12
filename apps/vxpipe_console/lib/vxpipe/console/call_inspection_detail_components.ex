@@ -6,6 +6,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   alias Vxpipe.Console.{
     CallInspectionFormat,
     CallInspectionTimeline,
+    CallDetailsComponents,
     CallRecordingComponents,
     CallUsageComponents,
     CallVariableDiff
@@ -15,6 +16,7 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   attr :selected_event_id, :string, default: nil
   attr :list_cursor, :string, default: nil
   attr :history_cursor, :string, default: nil
+  attr :details_cursor, :string, default: nil
   attr :status, :atom, required: true
   attr :persisted, Vxpipe.Calls.CallDetailPage, default: nil
   attr :live, Vxpipe.Calls.LiveCallInspection, default: nil
@@ -22,6 +24,8 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
   attr :recordings_status, :atom, default: :unavailable
   attr :usage_report, Vxpipe.Calls.UsageReport, default: nil
   attr :usage_status, :atom, default: :unavailable
+  attr :call_details_page, Vxpipe.Calls.CallDetailsRevisionPage, default: nil
+  attr :call_details_status, :atom, default: :unavailable
 
   def workbench(assigns) do
     timeline = CallInspectionTimeline.combine(assigns.persisted, assigns.live)
@@ -63,6 +67,16 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
 
         <CallUsageComponents.panel report={@usage_report} status={@usage_status} />
 
+        <CallDetailsComponents.panel
+          call_id={@selected_id}
+          page={@call_details_page}
+          status={@call_details_status}
+          list_cursor={@list_cursor}
+          history_cursor={@history_cursor}
+          details_cursor={@details_cursor}
+          selected_event_id={@selected_event_id}
+        />
+
         <CallRecordingComponents.panel
           call_id={@selected_id}
           recordings={@recordings}
@@ -80,7 +94,15 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
             <ol :if={@timeline != []} class="event-list">
               <li :for={event <- @timeline} data-selected={to_string(event == @selected_event)}>
                 <.link
-                  patch={event_path(@selected_id, event, @list_cursor, @history_cursor)}
+                  patch={
+                    event_path(
+                      @selected_id,
+                      event,
+                      @list_cursor,
+                      @history_cursor,
+                      @details_cursor
+                    )
+                  }
                   data-event-key={CallInspectionTimeline.selection_key(event)}
                   aria-current={to_string(event == @selected_event)}
                 >
@@ -106,7 +128,8 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
                     @selected_id,
                     next_history_cursor(@persisted),
                     @list_cursor,
-                    @selected_event
+                    @selected_event,
+                    @details_cursor
                   )
                 }
               >
@@ -368,17 +391,19 @@ defmodule Vxpipe.Console.CallInspectionDetailComponents do
     "r#{diff.from_revision} → r#{diff.to_revision}"
   end
 
-  defp event_path(call_id, event, list_cursor, history_cursor) do
+  defp event_path(call_id, event, list_cursor, history_cursor, details_cursor) do
     path_with_query(call_id, %{
       "cursor" => list_cursor,
+      "details_cursor" => details_cursor,
       "event" => CallInspectionTimeline.selection_key(event),
       "history_cursor" => history_cursor
     })
   end
 
-  defp history_path(call_id, history_cursor, list_cursor, selected_event) do
+  defp history_path(call_id, history_cursor, list_cursor, selected_event, details_cursor) do
     path_with_query(call_id, %{
       "cursor" => list_cursor,
+      "details_cursor" => details_cursor,
       "event" => selected_event_key(selected_event),
       "history_cursor" => history_cursor
     })

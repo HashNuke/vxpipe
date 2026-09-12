@@ -1,6 +1,6 @@
 # Versioned call-details publications
 
-Status: not implemented. Specification review: approved (2026-09-08).
+Status: implemented (2026-09-12). Specification review: approved (2026-09-08).
 Prerequisites: [Streaming recordings](streaming-recordings.md); [Usage/billing observations](usage-and-billing-observations.md).
 Sources: [CallDetailsPublisher](../../labnotes/20260905-0405-call-definition-design.md#calldetailspublisher-is-a-final-projector-not-the-live-recorder); [R42/R43](../call-definition-gap-review.md).
 
@@ -27,15 +27,15 @@ definition revision and resolved-plan digest, not only a generic call identifier
 - [x] Implement Calls publication state/workers outside room lifecycle with persistence/artifact ports.
 - [x] Store immutable publication records, timestamp filenames/checksums and nonregressing latest reference with collision handling.
 - [x] Integrate late usage/artifact/history observations as refreshed immutable publications.
-- [ ] Add authorized operator retrieval and document incompleteness/available evidence without exposing private data to ordinary clients.
+- [x] Add authorized operator retrieval and document incompleteness/available evidence without exposing private data to ordinary clients.
 
 ## Acceptance and failure checks
 
-- [ ] Early complete versus 60-second incomplete publication; no change to ended_at/duration/retention and pending jobs are not cancelled.
+- [x] Early complete versus 60-second incomplete publication; no change to ended_at/duration/retention and pending jobs are not cancelled.
 - [x] Timestamp 2026-09-08T12:34:56.789Z yields details-20260908123456789.json; retries reuse it, corrected contents get a new record/object.
 - [x] Simultaneous timestamp collision cannot overwrite or deduplicate distinct publications; late older completion cannot regress latest pointer.
-- [ ] Outage/build/upload failure never reports published/complete or erases underlying history; artifact acceptance isn't remote hearing.
-- [ ] Denied transcript/audio intervals remain absent in exports; missing queued observations remain honest, and late publication respects deletion coordination.
+- [x] Outage/build/upload failure never reports published/complete or erases underlying history; artifact acceptance isn't remote hearing.
+- [x] Denied transcript/audio intervals remain absent in exports; missing queued observations remain honest, and late publication respects deletion coordination.
 
 ## Manual verification
 
@@ -50,9 +50,9 @@ No automatic post-call LLM summary/evaluation, cross-store atomic transaction, g
 
 ## Completion and evidence
 
-- [ ] Demonstrate the runnable outcome and every acceptance/failure check above.
-- [ ] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
-- [ ] Update this milestone, the index checkbox, relevant architecture/user docs, and
+- [x] Demonstrate the runnable outcome and every acceptance/failure check above.
+- [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
+- [x] Update this milestone, the index checkbox, relevant architecture/user docs, and
   implementation labnote with actual test/browser/integration evidence in the implementation commit.
 
 Implementation evidence:
@@ -134,6 +134,20 @@ Implementation evidence:
   bytes only for a published revision in the same tenant/call. Object keys, provider references,
   bucket settings and credentials never enter the read model. The Console download/presentation
   remains pending.
+- Checkpoint C4b completes the private operator surface. Console uses a dedicated backend behavior
+  to page safe revision summaries through Calls, keeping Phoenix independent of Repo and object
+  storage. The call workbench distinguishes complete, incomplete, pending, published and latest
+  states, gives only published revisions a JSON action, and preserves the other inspection cursors
+  while paging 25 revisions at a time. The protected download controller sends the exact canonical
+  bytes with private/no-store and nosniff headers after validating the persisted timestamp filename;
+  inaccessible revisions and backend failures return generic responses. Focused endpoint tests
+  prove session enforcement, exact bytes/headers, safe failure projection, bounded pagination and
+  absence of storage references. The complete Console suite passes 88 tests. A cross-application
+  acceptance run passes 52 tests over media-policy privacy, window/finalizer/retry behavior,
+  immutable storage/source projection, authorized reads and Console delivery. Rendered inspection
+  at 1440×1000 and 390×844 shows the revision panel without page overflow; axe reports zero
+  violations and the browser reports no page errors. The first visual pass exposed a wasteful
+  desktop action wrap, which the confirmation pass verifies is corrected.
 
 ## Specification review
 
