@@ -426,3 +426,34 @@ The fifth implementation checklist item is complete. The milestone acceptance
 matrix, root gates, and runnable cross-slice evidence remain to audit before
 claiming milestone completion. The tagged Zenmux request remains unrun because
 its credential is unavailable.
+
+## 2026-09-12 — acceptance hardening checkpoint
+
+- Audited the milestone acceptance sentences against focused tests rather than
+  treating implementation checkboxes as completion evidence.
+- Generic compactor-error coverage did not directly prove the timeout and
+  malformed-return cases. Added both: a timed-out compactor worker is killed,
+  and both outcomes return an unmeasured failed observation with the original
+  conversation unchanged.
+- Existing snapshot coverage retained appended user/assistant work but did not
+  explicitly carry a late tool relationship. Added a snapshot-application test
+  that retains both the appended assistant tool call and its matching tool
+  result ID.
+- Together with pending-tool protection, Call Engine's queued-caller
+  remeasurement, and termination of the Session-owned compactor, these tests
+  close the current-work/stale-activation and summary-failure acceptance rows.
+
+Verification:
+
+```text
+cd apps/vxpipe_agent_runtime
+mix test test/vxpipe/agent_runtime/context_preparation_test.exs \
+  test/vxpipe/agent_runtime/conversation_compaction_test.exs --trace
+# 13 tests, 0 failures
+
+mix test
+# 87 tests, 0 failures (3 excluded)
+```
+
+No production change was required; the existing bounded runner and atomic
+snapshot replacement already satisfied the newly explicit cases.

@@ -43,11 +43,11 @@ can be exercised without adding Vxpipe's own provider chain.
 ## Acceptance and failure checks
 
 - [ ] Below/at75% trigger after output reserve and target below50%; protected oversized input fails safely without deletion or oversized request.
-- [ ] In-flight tool acknowledgement/result links and new user/tool messages survive compaction; terminated-agent summary cannot leak into another activation.
+- [x] In-flight tool acknowledgement/result links and new user/tool messages survive compaction; terminated-agent summary cannot leak into another activation.
 - [ ] Inject instructions in history/result/summary: no tool execution or grant/variable mutation follows from summarization.
 - [ ] Full permitted archive is intact; denied transcript summary is not stored; other-agent private history is not read.
 - [ ] Native configured fallback preserves tools/schema/privacy and truthful actual model/usage; partial-stream failure doesn't resubmit tools or silently restart emitted speech.
-- [ ] Timeout/error/malformed summary leaves original live context intact; merge intervening
+- [x] Timeout/error/malformed summary leaves original live context intact; merge intervening
   input/tool completions, then recheck budget before inference without dropping protected work.
 - [ ] Compactor has no execution/tool authority; this is not a promise that later LLM reasoning
   is immune to adversarial text. Known unsupported native fallback/profile options fail validation.
@@ -117,6 +117,12 @@ ReqLLM adapter validates the merged configuration before room startup; a known
 unsupported model/provider option combination rejects the call plan. Profiles
 accept only recursively data-valued generation settings, and profiles without
 generation options preserve the prior provider constructor contract.
+Acceptance hardening directly covers compactor timeout and malformed-return
+termination without changing the original conversation. Snapshot application
+retains a complete tool-call/result exchange appended after selection, while the
+existing pending-tool protection, queued-caller remeasurement, and Session-owned
+worker termination prove that current work survives and a terminated activation
+cannot publish or attach a stale result.
 
 ## Specification review
 

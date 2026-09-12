@@ -96,6 +96,33 @@ defmodule Vxpipe.AgentRuntime.ConversationCompactionTest do
     assert Conversation.durable?(compacted, %{request_id: "late completion"})
   end
 
+  test "retains a tool exchange appended after the compaction snapshot" do
+    conversation =
+      base_conversation()
+      |> exchange("first", :discardable)
+      |> exchange("recent", :discardable)
+
+    assert {:ok, snapshot} =
+             ConversationCompaction.snapshot(conversation, [], recent_entries: 1)
+
+    with_late_tool = tool_exchange(conversation, "late_tool_call")
+
+    assert {:ok, compacted} =
+             ConversationCompaction.apply(
+               with_late_tool,
+               snapshot,
+               "The caller discussed the first item."
+             )
+
+    assert Enum.any?(compacted.messages, fn message ->
+             Enum.any?(message.tool_calls, &(&1.id == "late_tool_call"))
+           end)
+
+    assert Enum.any?(compacted.messages, fn message ->
+             message.tool_call_id == "late_tool_call"
+           end)
+  end
+
   test "rejects a stale snapshot without changing current history" do
     conversation =
       base_conversation()

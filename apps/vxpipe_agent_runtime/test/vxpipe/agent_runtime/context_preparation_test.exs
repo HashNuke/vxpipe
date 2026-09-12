@@ -131,6 +131,67 @@ defmodule Vxpipe.AgentRuntime.ContextPreparationTest do
     refute Enum.any?(conversation.messages, &(&1.origin == :derived_summary))
   end
 
+  test "kills a timed-out compactor and leaves original context intact" do
+    conversation =
+      base_conversation()
+      |> append_exchange("old", :discardable)
+      |> append_exchange("recent", :discardable)
+
+    request = model_request(conversation.messages ++ [Message.user("current")], [])
+
+    configuration =
+      budget()
+      |> config()
+      |> Map.put(:compactor_timeout_ms, 50)
+
+    task = Task.async(fn -> ContextPreparation.prepare(conversation, request, configuration) end)
+
+    assert_count_request(request, 700)
+    assert_receive {:input_tokens_counted, counter, _protected_request}
+    send(counter, {:input_token_count, 300})
+    assert_receive {:context_compaction_requested, compactor, _compaction_request}
+    monitor = Process.monitor(compactor)
+
+    assert {:error, :context_compaction_unavailable,
+            %CompactionObservation{outcome: :failed, usage: %{}, provider_metadata: %{}}} =
+             Task.await(task)
+
+    assert_receive {:DOWN, ^monitor, :process, ^compactor, _reason}
+    assert Enum.any?(conversation.messages, &(&1.content == "old user"))
+    refute Enum.any?(conversation.messages, &(&1.origin == :derived_summary))
+  end
+
+  test "rejects a malformed compactor return and leaves original context intact" do
+    conversation =
+      base_conversation()
+      |> append_exchange("old", :discardable)
+      |> append_exchange("recent", :discardable)
+
+    request = model_request(conversation.messages ++ [Message.user("current")], [])
+
+    configuration =
+      budget()
+      |> config()
+      |> Map.put(
+        :compactor,
+        {Vxpipe.AgentRuntime.TestContextCompactor, %{owner: self(), result: {:ok, :malformed}}}
+      )
+
+    task = Task.async(fn -> ContextPreparation.prepare(conversation, request, configuration) end)
+
+    assert_count_request(request, 700)
+    assert_receive {:input_tokens_counted, counter, _protected_request}
+    send(counter, {:input_token_count, 300})
+    assert_receive {:context_compaction_requested, _compactor, _compaction_request}
+
+    assert {:error, :context_compaction_unavailable,
+            %CompactionObservation{outcome: :failed, usage: %{}, provider_metadata: %{}}} =
+             Task.await(task)
+
+    assert Enum.any?(conversation.messages, &(&1.content == "old user"))
+    refute Enum.any?(conversation.messages, &(&1.origin == :derived_summary))
+  end
+
   test "rejects a summary that misses an achievable below-half target" do
     conversation =
       base_conversation()
