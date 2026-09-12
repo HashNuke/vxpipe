@@ -1,10 +1,10 @@
 # Context compaction and supported LLM fallback
 
 Status: implementation in progress. Context budgeting, protected snapshot
-replacement, one bounded fake-compactor attempt, and production summarizer/
-accounting selection are implemented. Agent Runtime Session integration is green;
-Call Engine configuration and queued-input coverage are next. Specification review:
-approved (2026-09-08).
+replacement, one bounded compaction attempt, production summarizer/accounting
+selection, Agent Runtime Session integration, and Call Engine queued-input
+integration are implemented. Summary provenance/privacy and metered usage are
+next. Specification review: approved (2026-09-08).
 Prerequisites: [Remote MCP](remote-mcp-tools.md); [Agent transfers](agent-transfers.md); [Usage/billing](usage-and-billing-observations.md).
 Sources: [Approved context/provider boundaries](../../labnotes/20260905-0405-call-definition-design.md#provider-profiles-context-compaction-and-response-limits--approved-r47r50); [R47–R50](../call-definition-gap-review.md).
 
@@ -32,7 +32,7 @@ can be exercised without adding Vxpipe's own provider chain.
 
 - [x] Red-test token-budget trigger/target with fake compactor and realistic tool/history/variable input envelopes.
 - [x] Resolve and document summarizer selection and token accounting/limits before authorizing its production data flow.
-- [ ] Implement bounded summary work, protected-history replacement and late-message/activation checks.
+- [x] Implement bounded summary work, protected-history replacement and late-message/activation checks.
 - [ ] Preserve summary provenance/privacy and metered usage through existing event/storage boundaries.
 - [ ] Validate/pass through supported native fallback options and add controlled plus tagged adapter interoperability coverage.
 
@@ -83,11 +83,13 @@ tool-less request. Conservative encoded-byte accounting includes every normalize
 input class and explicit envelope margins; context/output limits come from the
 validated ReqLLM model/options. Unsupported native options fail configuration,
 while a supported Zenmux routing policy passes through unchanged. See
-[model-context compaction](../context-compaction.md). Runtime-session and event/
-privacy integration remain open. The Session now prepares and commits a safe
-summary before every inference/tool-continuation round, and terminating it kills
-blocked compaction work. Call Engine has not yet enabled this configuration or
-proved queued input across the compaction interval.
+[model-context compaction](../context-compaction.md). Event/privacy integration
+remains open. The Session now prepares and commits a safe summary before every
+inference/tool-continuation round, and terminating it kills blocked compaction
+work. Call Engine passes its application setting into every agent activation. A
+room-level test proves caller input explicitly queued during a blocked summary
+request runs afterward using the committed compacted history; the ordinary
+immediate-input path correctly remains an interruption.
 
 ## Specification review
 

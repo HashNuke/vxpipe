@@ -216,3 +216,41 @@ mix test test/vxpipe/agent_runtime/session_compaction_test.exs
 The third checklist item remains open until Call Engine passes the application
 settings into each activation and a queued user/tool completion is proven to
 survive the compaction interval.
+
+## 2026-09-12 — Call Engine activation checkpoint
+
+- Passed the application-level `context_compaction` setting through plan startup
+  and the activation runtime graph into each Agent Runtime Session. The base
+  setting is disabled; development enables it with provider-derived limits for
+  ReqLLM and explicit conservative limits for the deterministic fixture.
+- Added a room-level test with a controllable token counter and buffered summary
+  response. Two completed exchanges establish history, the third turn triggers
+  compaction, and a fourth caller turn is explicitly queued while the summary is
+  blocked.
+- The queued turn runs only after the compacted conversation has been committed.
+  Both the triggering request and queued request contain the derived summary.
+- The first red attempt accidentally used `SendText`'s default
+  `run_immediately: true`; that correctly interrupted and killed the active
+  compaction request. Setting `run_immediately: false` exercised the intended
+  existing queue contract without changing interruption semantics.
+
+Red evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/agent_runtime/context_compaction_room_test.exs
+# 1 test, 1 failure: Call Engine did not pass context_compaction into the Session
+```
+
+Green evidence:
+
+```text
+cd apps/vxpipe_call_engine
+mix test test/vxpipe/call_engine/agent_runtime/context_compaction_room_test.exs --trace
+# 1 test, 0 failures
+mix test
+# 398 tests, 0 failures (1 excluded)
+```
+
+The third milestone checklist item is complete. Summary usage events and
+source-policy-aware persistence are the next checkpoint.

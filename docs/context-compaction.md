@@ -1,6 +1,7 @@
 # Model-context compaction
 
-Status: production selection and accounting decided; runtime integration in
+Status: production selection, accounting, Agent Runtime integration, and Call
+Engine activation wiring implemented. Event/privacy projection remains in
 progress.
 
 ## Decision
@@ -97,6 +98,10 @@ Focused Agent Runtime tests prove model metadata/output-limit resolution,
 unsupported native-option rejection, supported routing pass-through,
 conservative measurement of every normalized input class, correlation exclusion,
 UTF-8 handling, tool-less JSON summary projection, pinned provider reuse, output
-cap projection, usage preservation, and rejection of summary tool calls. Runtime
-session integration, source-privacy publication, and tagged provider
-interoperability remain milestone work.
+cap projection, usage preservation, rejection of summary tool calls, safe Session
+commit ordering, and compactor termination with its Session. Call Engine passes
+the application compaction setting into each activation; a room test proves that
+an explicitly queued caller turn waits for compaction and then sees the committed
+summary. Immediate caller input still uses the existing interruption semantics.
+Source-privacy publication and tagged provider interoperability remain milestone
+work.

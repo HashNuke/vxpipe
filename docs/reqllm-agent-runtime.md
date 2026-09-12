@@ -151,14 +151,16 @@ pending-invocation state under the existing fixed “state, not instructions” 
 boundary does not grant access or fetch Call Variables itself; Call Engine remains responsible for
 constructing a permission-filtered source and deciding whether a transfer reason is applicable.
 
-Context compaction is now being added behind a separate measured preparation boundary. It
+Context compaction runs behind a separate measured preparation boundary. It
 preserves pending invocation state, including the committed acknowledgement and invocation
 correlation, until the matching completion is consumed. Permanent transfer history and a recent
 tail remain intact; only a whole old prefix can be replaced. The selected production compactor
 reuses the activation's pinned provider/model configuration in one buffered, tool-less request
 and receives the selected history as JSON data rather than executable message/tool roles. See
-[model-context compaction](context-compaction.md). Session and Call Engine integration remain
-milestone work at this checkpoint.
+[model-context compaction](context-compaction.md). The Session commits an accepted summary before
+ordinary inference, and Call Engine passes application compaction settings into every activation.
+Input explicitly queued while a summary request runs is admitted afterward against that compacted
+history; immediate input retains the existing interruption behavior.
 
 Text deltas can be delivered promptly to the owner, but tool calls execute only after their
 complete identifiers and arguments have been assembled and validated. Mixed text/tool

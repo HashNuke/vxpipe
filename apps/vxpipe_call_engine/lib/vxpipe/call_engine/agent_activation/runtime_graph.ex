@@ -201,6 +201,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
         :model_context_source,
         model_context_source(Keyword.get(options, :model_context_source))
       )
+      |> put_optional(:context_compaction, Keyword.get(options, :context_compaction))
 
     Supervisor.child_spec(
       {Session, session_options},

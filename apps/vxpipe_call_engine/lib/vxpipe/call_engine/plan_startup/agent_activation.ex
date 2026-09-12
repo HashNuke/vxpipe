@@ -123,6 +123,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       maximum_model_context_bytes:
         Keyword.get(settings, :maximum_model_context_bytes, 256 * 1_024),
       model_context_timeout_ms: Keyword.get(settings, :model_context_timeout_ms, 1_000),
+      context_compaction: Keyword.get(settings, :context_compaction, false),
       maximum_output_bytes: Keyword.fetch!(settings, :maximum_output_bytes),
       maximum_pending_requests: Keyword.fetch!(settings, :maximum_pending_requests),
       maximum_tool_result_bytes: Keyword.fetch!(settings, :maximum_tool_result_bytes),
