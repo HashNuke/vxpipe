@@ -549,3 +549,11 @@ opening-gate release preserve the binding and queued work; held frames are disca
 focused engine checks and all five root gates pass with 1,111 tests, zero failures and 15 integrations
 excluded. Gateway normalizer binding, prospective policy preparation, complete inventory and lifecycle
 orchestration remain unfinished; this does not establish the milestone's coordinated handoff.
+
+WebRTC decoder preparation now supplies format information without sending a packet and waits for
+an ordered acknowledgement from the PCM sink. This closes the gap between a playing Membrane graph
+and an initialized decoder/normalization path. Early requests defer until playing; repeated requests
+retain the existing track and buffered partial frames. Twenty-one focused checks and all five root
+gates pass with 1,114 tests, zero failures and 15 integrations excluded. Common room-ingress wiring,
+phone input evidence, prospective resource/policy preparation and startup/transfer orchestration
+remain incomplete. No rendered or live-provider acceptance is claimed.

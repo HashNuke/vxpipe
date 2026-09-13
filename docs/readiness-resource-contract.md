@@ -265,7 +265,30 @@ Codec/direction checks cover incompatible codecs, ambiguous inputs and independe
 Phone transport evidence, actual ingress track binding and complete lifecycle inventory remain
 outstanding; negotiated input readiness does not itself prove the STT/normalizer handoffs are bound.
 
-## Prepared speech input
+## Prepared input handoffs
+
+WebRTC's decoder path now has its own `AudioPipeline.prepare_track/2` and readiness descriptor.
+The previous child-playing acknowledgement describes the running graph, not initialized decoding:
+the dependency's Opus parser emits its first format only after a packet, and its decoder allocates
+native state after receiving a format. A preparation filter supplies the negotiated Opus format
+before any packet. An ordered, correlated event then traverses the decoder, mono conversion and
+frame parser; the PCM sink acknowledges only after its 48 kHz mono format is installed. This is
+operational codec/path evidence without fabricated microphone samples or advancing the media clock.
+
+Preparation retains the existing observed format for a path that already has audio, and repeated
+preparation of an identical track emits no new format/event and preserves buffered partial frames.
+The pipeline generation remains unchanged. Negotiated Opus channel capacity and actual packet
+channels can differ; ordinary dependency handling of packet formats continues. Invalid or different
+track/format requests cannot silently replace the binding. A missing or failed matching PCM
+acknowledgement cannot satisfy readiness. A collector test establishes readiness before any PCM,
+then combines two 10 ms packets across repeated preparation into one complete 20 ms frame.
+Preparation arriving before the filter starts playing is held as one pending request; format/event
+emission begins only when Membrane permits it. The element boundary regression and twenty related
+WebRTC/phone/room-ingress checks pass (21 focused tests).
+
+The common room-ingress descriptor still describes its current pipeline/policy acknowledgement;
+its prospective inventory must additionally include this prepared decoder resource. That inventory,
+common input-preparation wiring and corresponding phone readiness remain unfinished.
 
 Engine STT ingress now supports explicit `prepare_track/2` using the normalized track ID, codec,
 sample rate and channel count. It queries the actual STT owner's identity and media format outside

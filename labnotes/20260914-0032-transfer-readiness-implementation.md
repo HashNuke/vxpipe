@@ -458,3 +458,33 @@ unchecked; the milestone and index are still incomplete.
   normalizers already receive an authenticated stream ID, but Telnyx uses Opus at 16 kHz and Twilio
   uses PCMU at 8 kHz; neither may inherit WebRTC's negotiated 48 kHz input assumption. Their
   prepared input must preserve these transport formats and the common 48 kHz mono room output.
+
+## Decoder preparation before packets
+
+- Inspection of the installed Opus parser/decoder source found that graph-playing acknowledgements
+  precede actual decoder allocation for WebRTC: the parser waits for a packet to emit a format.
+  Added a preparation filter that sends the negotiated format and an ordered reference-bearing
+  Membrane event through the decoder/mono conversion/frame parser to the PCM sink. Only the matching
+  sink acknowledgement can mark the prepared input resource ready; no sample or probe is generated.
+- Repeated preparation is idempotent and preserves queued partial frames and the pipeline generation.
+  A path with an observed Opus format keeps it rather than resetting it to negotiated channel capacity;
+  the dependency retains its normal packet-format handling. Different/invalid input bindings fail.
+- Two new real-pipeline tests first failed on missing APIs (six tests, two failures), then all six
+  passed. The collector reaches ready before PCM, wrong tracks cannot become the first accepted
+  input, and two 10 ms packets still form one 20 ms frame across repeated preparation.
+- This corrects the distinction between a playing graph and a prepared decoder in the resource
+  contract. Common room-ingress preparation/inventory and phone evidence remain unfinished.
+  Broader focused checks and root gates follow. No rendered/browser/provider acceptance is claimed.
+- Twenty related checks and an initial full root pass succeeded. Review then found that an early
+  preparation notification could emit a stream format before Membrane permits output. A focused
+  element-boundary regression failed on those premature actions. The filter now retains one pending
+  request until playing; the combined 21 focused checks pass. Root gates are repeated for this fix.
+- Rechecked orchestration rather than inferring it from component tests: StartupReadiness still
+  marks startup from caller/STT attachment, and HumanHandoff still cancels its timer and calls the
+  committer immediately after acceptance/briefing. Neither uses the collector or wait players yet.
+  These remain mandatory runtime changes under the same startup/transfer deadlines; the component
+  work does not establish the requested end-to-end behavior.
+- Final root gates pass after the early-preparation fix: formatting, warnings-as-errors compilation,
+  strict Credo, 1,114 umbrella tests with zero failures (15 integrations excluded), and unused
+  dependency checks. Milestone evidence records the prepared decoder boundary and its remaining
+  integration requirements. No running server was restarted.
