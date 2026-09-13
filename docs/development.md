@@ -1,7 +1,7 @@
 # Developing Vxpipe
 
 For a first voice call, follow [Get started with Elixir](getting-started-elixir.md).
-This guide covers the development stack, local fixtures, optional persistence,
+This guide covers the development stack, local fixtures, PostgreSQL storage,
 and how the sample works.
 
 For the primary packaged deployment, see
@@ -10,7 +10,7 @@ Vxpipe from source.
 
 ## Prerequisites
 
-The localhost demo requires Elixir 1.19 / Erlang/OTP 28, Node.js 24 and npm,
+The localhost demo requires Elixir 1.19 / Erlang/OTP 28, PostgreSQL, Node.js 24 and npm,
 Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
 
 For `bin/dev`, also install [Goreman](https://github.com/mattn/goreman) and
@@ -31,6 +31,14 @@ Install the application and frontend dependencies from the repository root:
 mix deps.get
 mix assets.setup
 npm --prefix vxpipe-docs ci
+```
+
+With PostgreSQL running, initialize the default `vxpipe_dev` database. The local
+fixture settings let these setup commands run without provider credentials:
+
+```shell
+VXPIPE_DEV_MODEL_FIXTURE=true VXPIPE_DEV_SPEECH_PROFILE=morse \
+  mix do ecto.create, ecto.migrate
 ```
 
 Development enables Gemini model inference plus the Deepgram Flux
@@ -141,21 +149,27 @@ root selected by `-basedir`, including when `bin/dev` is launched from another
 directory. Values reach its child processes without being exported into the
 parent shell.
 
-## Optional PostgreSQL storage
+## PostgreSQL storage
 
-PostgreSQL-backed tenant/API-key, call-definition, and prepared-call storage is
-opt-in through `VXPIPE_DATABASE_URL`. When it is configured in development, the
-Console provisions a fresh private sample tenant, API key, and published definition
+Development defaults to `postgres://localhost/vxpipe_dev` in `config/dev.exs`.
+`VXPIPE_DATABASE_URL` is an optional runtime override for a different database.
+The Console provisions a fresh private sample tenant, API key, and published definition
 when the BEAM starts. PostgreSQL retains only the API-key digest; the plaintext key
 and configured initial variables stay inside the supervised Console sample process.
 Each **Create room** action then prepares a new durable call and obtains its
 participant-bound join token through the public Calls workflows.
 
-Without `VXPIPE_DATABASE_URL`, no Repo or managed sample process starts and the
-development UI falls back to the existing database-free trusted definition route.
+The Repo and managed caller/transfer sample start without any database environment
+variable. PostgreSQL must be running and the database migrated before `bin/dev`.
 Migration, one-time tenant/key bootstrap, key rotation/revocation, and immutable
 definition publication are documented in
 [Tenant control-plane operations](tenant-control-plane.md).
+
+The human transfer desk at `/transfer` requires this PostgreSQL-backed sample.
+After migrating the database, start `bin/dev`, create
+a new room in `/pipecat-console`, and request human support before connecting the
+desk. Follow the [human-transfer walkthrough](../apps/vxpipe_console/assets/README.md#manual-human-transfer-test)
+for the two-browser flow.
 
 The umbrella test alias creates and migrates the configured test database. Use
 `VXPIPE_TEST_DATABASE_URL`, or standard PostgreSQL variables plus
@@ -171,7 +185,7 @@ second asset port is involved.
 The gateway reads its listener and CORS options from the `vxpipe_gateway`
 application environment. In development, `APP_HOST` becomes the exact allowed
 origin on port 4000, using the selected HTTPS or HTTP scheme. Environment variables
-are read from `config/runtime.exs`, while `config/dev.exs` only enables the listener.
+are read from `config/runtime.exs`; `config/dev.exs` supplies local defaults.
 
 With PostgreSQL enabled, the playground's **Create room** action first asks the
 Console's same-origin sample endpoint for a managed admission. The Console uses its

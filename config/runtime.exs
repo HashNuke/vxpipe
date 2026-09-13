@@ -1,6 +1,22 @@
 import Config
 
-if database_url = System.get_env("VXPIPE_DATABASE_URL") do
+nonempty_env = fn name ->
+  case System.get_env(name) do
+    nil -> nil
+    value -> if String.trim(value) == "", do: nil, else: value
+  end
+end
+
+database_url =
+  case {config_env(), nonempty_env.("VXPIPE_DATABASE_URL")} do
+    {:dev, nil} ->
+      Keyword.fetch!(Application.fetch_env!(:vxpipe_persistence, Vxpipe.Persistence.Repo), :url)
+
+    {_env, url} ->
+      url
+  end
+
+if database_url do
   pool_size =
     "VXPIPE_DATABASE_POOL_SIZE"
     |> System.get_env("10")
@@ -31,13 +47,6 @@ if database_url = System.get_env("VXPIPE_DATABASE_URL") do
        [repo: Vxpipe.Persistence.Repo, recording: publication_recording]},
     publication_repository:
       {Vxpipe.Persistence.CallDetailsPublicationStore, Vxpipe.Persistence.Repo}
-end
-
-nonempty_env = fn name ->
-  case System.get_env(name) do
-    nil -> nil
-    value -> if String.trim(value) == "", do: nil, else: value
-  end
 end
 
 call_details_bucket =

@@ -7,11 +7,12 @@ own Elixir application. The repository is
 ## Requirements
 
 - Elixir 1.19 / Erlang/OTP 28.
+- PostgreSQL running locally.
 - Node.js 24 and npm for the browser Console.
 - Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
 - Gemini and Deepgram API keys for the voice demo.
 
-PostgreSQL, Docker, Tailscale, and the development reloader are not required for
+Docker, Tailscale, and the development reloader are not required for
 this local demo. For a run without provider keys, see the
 [local fixture instructions](development.md#local-fixtures).
 
@@ -26,15 +27,19 @@ mix deps.get
 mix assets.setup
 ```
 
-Export your provider keys in the same terminal and start Vxpipe:
+Export your provider keys, initialize the local database, and start Vxpipe:
 
 ```shell
 export GEMINI_API_KEY="your-gemini-api-key"
 export DEEPGRAM_API_KEY="your-deepgram-api-key"
+mix ecto.create
+mix ecto.migrate
 APP_HOST=localhost VXPIPE_DEV_TLS=http mix run --no-halt
 ```
 
 This command reads the keys from your shell; it does not load `.env`.
+Development uses `vxpipe_dev` on localhost by default. Set `VXPIPE_DATABASE_URL`
+only to connect to a different database.
 
 Open [the voice console](http://localhost:4000/pipecat-console), select
 **Create room**, then **Connect**, and allow microphone access. You can speak or

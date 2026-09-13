@@ -20,7 +20,8 @@ The initial screen uses `ConsoleTemplate` from
 client, and uses the Small WebRTC transport. The default offer URL is
 `/api/rtvi/offer`.
 
-With `VXPIPE_DATABASE_URL` configured, the **Create room** control calls
+Development uses the local `vxpipe_dev` PostgreSQL database by default;
+`VXPIPE_DATABASE_URL` optionally overrides that connection. The **Create room** control calls
 `POST /sample/calls` on the same Phoenix origin. The Console's supervised sample
 backend uses its private development API key and configured initial variables to
 prepare a call, then returns only its public tenant/call/participant locator and
@@ -28,8 +29,8 @@ five-minute join token. The browser presents that token to the matching gateway
 participant-session route. Its atomic claim starts the stored pinned plan and returns
 the Small WebRTC session. The API key and initial variables never enter the browser.
 
-Without PostgreSQL, `POST /sample/calls` returns 404 and the control keeps the
-database-free development fallback: it calls `POST /api/rooms` with a random room ID,
+For hosts that disable the managed sample, `POST /sample/calls` returns 404 and
+the control keeps the database-free fallback: it calls `POST /api/rooms` with a random room ID,
 and the trusted gateway adapter starts the configured plan and returns its session.
 Only after either path succeeds does the creation screen give the whole viewport to
 the responsive Pipecat console.
@@ -42,8 +43,8 @@ spoken through the configured Deepgram path.
 
 ## Manual prepared-call admission test
 
-1. Configure and migrate a development PostgreSQL database, then set its URL as
-   `VXPIPE_DATABASE_URL` before starting `bin/dev`.
+1. Create and migrate the local `vxpipe_dev` PostgreSQL database before starting
+   `bin/dev`. Set `VXPIPE_DATABASE_URL` only to use a different database.
 2. Open the Console and choose **Create room**. Verify a new call row is initially
    prepared with no `started_at` and that no room process exists before admission.
 3. Verify the browser receives a join token and public locator, but no API key or
@@ -74,7 +75,7 @@ is a failed test.
 
 ## Manual human-transfer test
 
-1. Configure and migrate `VXPIPE_DATABASE_URL`, provide valid Gemini and Deepgram
+1. Create and migrate the local `vxpipe_dev` database, provide valid Gemini and Deepgram
    development keys, and start `bin/dev`.
 2. Open `/pipecat-console` as the caller, choose **Create room**, then connect the Pipecat console.
 3. Open `/transfer` in a second browser or device. Use headphones when both clients are on one
