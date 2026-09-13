@@ -15,6 +15,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
   defstruct @enforce_keys ++
               [
                 current: nil,
+                pending_clear: nil,
+                delivered_sequence_next: 0,
                 in_flight: nil,
                 next_sequence_number: 0,
                 pending_finish: nil,

@@ -38,6 +38,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
            maximum_packets: Keyword.get(options, :maximum_packets, 500),
            pace_ref: nil,
            pending_finish: nil,
+           pending_clear: nil,
            pending_push: nil,
            peer_connection: Keyword.fetch!(options, :peer_connection),
            progress_interval_packets: Keyword.get(options, :progress_interval_packets, 5),
@@ -61,7 +62,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   def handle_call(
         {:vxpipe_audio_output, %AudioOutputFrame{} = frame},
         from,
-        %{pending_push: nil} = state
+        %{pending_push: nil, pending_clear: nil} = state
       ) do
     with :ok <- validate_frame(frame, state),
          {:ok, state} <- establish_turn(frame, state) do
@@ -101,6 +102,20 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     {:reply, {:error, :recording_already_bound}, state}
   end
 
+  def handle_call(:vxpipe_audio_output_clear, from, %{pending_clear: nil} = state) do
+    state = state |> reply_to_pending_calls() |> discard_queued()
+
+    if is_nil(state.pace_ref) do
+      {played, state} = complete_clear(state)
+      {:reply, {:ok, played}, state}
+    else
+      {:noreply, %{state | pending_clear: from}}
+    end
+  end
+
+  def handle_call(:vxpipe_audio_output_clear, _from, state),
+    do: {:reply, {:error, :clearing}, state}
+
   def handle_call({:vxpipe_audio_output, %AudioOutputFrame{}}, _from, state) do
     {:reply, {:error, :busy}, state}
   end
@@ -108,7 +123,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   def handle_call(
         {:vxpipe_audio_output_finish, turn, callback},
         from,
-        %{pending_finish: nil} = state
+        %{pending_finish: nil, pending_clear: nil} = state
       ) do
     with :ok <- validate_finish(turn, callback, state) do
       case prepare_finish(state) do
@@ -131,6 +146,15 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
   def handle_call({:vxpipe_audio_output_finish, _turn, _callback}, _from, state) do
     {:reply, {:error, :busy}, state}
+  end
+
+  def handle_call(
+        {:vxpipe_audio_output_interrupt, _turn, _callback},
+        _from,
+        %{pending_clear: pending} = state
+      )
+      when not is_nil(pending) do
+    {:reply, {:error, :clearing}, state}
   end
 
   def handle_call({:vxpipe_audio_output_interrupt, turn, callback}, _from, state) do
@@ -158,6 +182,16 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_audio_pace, pace_ref},
+        %{pace_ref: pace_ref, pending_clear: from} = state
+      )
+      when not is_nil(from) do
+    {played, state} = state |> advance_playout() |> complete_clear()
+    GenServer.reply(from, {:ok, played})
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_audio_pace, pace_ref}, %{pace_ref: pace_ref} = state) do
     state = state |> Map.put(:pace_ref, nil) |> advance_playout()
 
@@ -302,6 +336,15 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     end
 
     state
+  end
+
+  defp discard_queued(state) do
+    %{state | queue: :queue.new(), remainder: <<>>, pending_push: nil, pending_finish: nil}
+  end
+
+  defp complete_clear(state) do
+    played = if state.current, do: state.current.played_packets * @frame_duration_ms, else: 0
+    {played, %{state | current: nil, pending_clear: nil, pace_ref: nil}}
   end
 
   defp enqueue_final_remainder(%{remainder: <<>>} = state), do: {:ok, state}

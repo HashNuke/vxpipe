@@ -428,3 +428,8 @@ playback checkpoint remains unchecked until the shared recipient output arbiter 
 All five root gates pass for the playback primitive checkpoint: formatting, warnings-as-errors
 compilation, strict Credo, 1,032 umbrella tests with zero failures, and unused-dependency checks.
 Runtime integration and rendered/provider acceptance remain pending.
+
+The native-output clear primitive now discards queued audio and drains the in-flight frame before
+acknowledging. WebRTC retains its encoder/SSRC/RTP timeline; phone retains its encoding pipeline and
+sequence clock while clearing remote queued media. This enables phase changes without codec
+restarts, but does not itself integrate shared output or establish remote phone playback marks.

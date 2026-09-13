@@ -8,8 +8,17 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Delivery do
     case :queue.out(state.queue) do
       {{:value, frame}, queue} ->
         case safe_push(state.pipeline, state.pipeline_id, frame) do
-          :ok -> {:ok, %{state | in_flight: frame, queue: queue}}
-          {:error, reason} -> {:error, reason, state}
+          :ok ->
+            {:ok,
+             %{
+               state
+               | in_flight: frame,
+                 queue: queue,
+                 delivered_sequence_next: frame.sequence_number + 1
+             }}
+
+          {:error, reason} ->
+            {:error, reason, state}
         end
 
       {:empty, _queue} ->

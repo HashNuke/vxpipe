@@ -92,3 +92,23 @@ socket submission; provider marks still need explicit integration for the milest
 All five root gates pass for the playback primitive checkpoint: formatting, warnings-as-errors
 compilation, strict Credo, 1,032 umbrella tests with zero failures, and unused-dependency checks.
 Runtime integration and rendered/provider acceptance remain pending.
+
+## Ordered native-output clear checkpoint
+
+- The shared-output integration needs to stop queued audio without replacing a codec. Added a
+  separate `OutputSink.clear/1` boundary; ordinary TTS interruption keeps its existing contract.
+- Both native output regressions first failed on the missing clear message. WebRTC now discards
+  queued packets and acknowledges clear only after its already-sent packet's paced boundary,
+  preserving encoder, SSRC and RTP sequence/timestamps. Common phone output discards queued PCM,
+  drains its one in-flight encoded frame, sends the provider clear action, then acknowledges.
+  Its pipeline PID and delivered sequence clock survive; dropped queued frames do not create
+  a timestamp gap before the next output.
+- New writes are rejected while clear is pending. Pending producer calls receive interruption
+  errors, and a cleared turn never emits a false complete-playback callback. Fifteen focused
+  native output tests pass, including unchanged recording and ordinary interruption behavior.
+- The operation is a transport primitive, not proof of remote phone speaker playback. Provider
+  mark integration, shared recipient arbitration, lifecycle gates and all runtime acceptance
+  remain part of the active goal.
+Native clear checkpoint root verification: formatting, warnings-as-errors compilation, strict
+Credo, 1,034 umbrella tests with zero failures (15 integration tests excluded), and unused
+dependency checks all passed. Shared output integration and provider playback marks remain pending.

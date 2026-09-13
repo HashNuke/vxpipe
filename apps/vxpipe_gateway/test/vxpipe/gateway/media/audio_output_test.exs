@@ -164,6 +164,29 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
     refute_receive {:vxpipe_recording_egress, ^handoff, _}
   end
 
+  test "phase clearing drains the in-flight frame and preserves the codec and output clock" do
+    {output, connection} = start_output(maximum_frames: 4)
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, pipeline, ^output}
+    send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+    assert :ok = push(output, connection, :binary.copy(<<1, 0>>, 3 * 960))
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id, %PlaybackFrame{timestamp: 0}}
+    request = :gen_server.send_request(output, :vxpipe_audio_output_clear)
+    _ = :sys.get_state(output)
+    assert :timeout = :gen_server.wait_response(request, 0)
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 0})
+    assert {:reply, {:ok, 20}} = :gen_server.wait_response(request, 1_000)
+    assert_receive {:test_remote_playback_cleared, _}
+    refute_receive {:test_audio_output_pipeline_stopped, _, _}
+    refute_receive {:test_audio_output_pipeline_started, _, _, _}
+    assert :sys.get_state(output).pipeline_pid == pipeline
+    assert :ok = push(output, connection, :binary.copy(<<2, 0>>, 960))
+
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id,
+                    %PlaybackFrame{sequence_number: 1, timestamp: 960, payload: payload}}
+
+    assert payload == :binary.copy(<<2, 0>>, 960)
+  end
+
   defp start_output(options) do
     connection_id = unique_id("connection")
 

@@ -12,6 +12,10 @@ defmodule Vxpipe.CallEngine.Media.OutputSink do
   end
 
   @doc false
+  @spec clear(pid()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def clear(sink) when is_pid(sink), do: safe_call(sink, :vxpipe_audio_output_clear)
+
+  @doc false
   @spec bind_recording(pid(), EgressHandoff.t()) :: :ok | {:error, term()}
   def bind_recording(sink, %EgressHandoff{} = handoff) when is_pid(sink) do
     safe_call(sink, {:vxpipe_bind_recording_egress, handoff})

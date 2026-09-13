@@ -80,10 +80,26 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
     {:reply, {:error, :recording_already_bound}, state}
   end
 
+  def handle_call(:vxpipe_audio_output_clear, from, %{pending_clear: nil} = state) do
+    state = state |> reply_pending() |> discard_queued()
+
+    if is_nil(state.in_flight) do
+      case complete_clear(state) do
+        {:ok, played, state} -> {:reply, {:ok, played}, state}
+        {:error, reason} -> {:reply, {:error, reason}, state}
+      end
+    else
+      {:noreply, %{state | pending_clear: from}}
+    end
+  end
+
+  def handle_call(:vxpipe_audio_output_clear, _from, state),
+    do: {:reply, {:error, :clearing}, state}
+
   def handle_call(
         {:vxpipe_audio_output, %AudioOutputFrame{} = frame},
         from,
-        %{pending_push: nil} = state
+        %{pending_push: nil, pending_clear: nil} = state
       ) do
     with :ok <- Validation.frame(frame, state),
          {:ok, state} <- Validation.establish_turn(frame, state) do
@@ -100,7 +116,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   def handle_call(
         {:vxpipe_audio_output_finish, turn, callback},
         from,
-        %{pending_finish: nil, pending_push: nil} = state
+        %{pending_finish: nil, pending_push: nil, pending_clear: nil} = state
       ) do
     with :ok <- Validation.turn(turn, callback, state) do
       prepare_finish(from, state)
@@ -111,6 +127,15 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
 
   def handle_call({:vxpipe_audio_output_finish, _turn, _callback}, _from, state) do
     {:reply, {:error, :busy}, state}
+  end
+
+  def handle_call(
+        {:vxpipe_audio_output_interrupt, _turn, _callback},
+        _from,
+        %{pending_clear: pending} = state
+      )
+      when not is_nil(pending) do
+    {:reply, {:error, :clearing}, state}
   end
 
   def handle_call({:vxpipe_audio_output_interrupt, turn, callback}, _from, state) do
@@ -132,6 +157,25 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
       ) do
     Enum.each(state.ready_waiters, &GenServer.reply(&1, :ok))
     continue(%{state | pipeline_ready?: true, ready_waiters: []})
+  end
+
+  def handle_info(
+        {:vxpipe_audio_output_pipeline_sent, pipeline_id, timestamp},
+        %{pipeline_id: pipeline_id, in_flight: %{timestamp: timestamp}, pending_clear: from} =
+          state
+      )
+      when not is_nil(from) do
+    state = acknowledge_playout(state)
+
+    case complete_clear(state) do
+      {:ok, played, state} ->
+        GenServer.reply(from, {:ok, played})
+        {:noreply, state}
+
+      {:error, reason} ->
+        GenServer.reply(from, {:error, reason})
+        stop_unavailable(reason, state)
+    end
   end
 
   def handle_info(
@@ -305,6 +349,26 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
     state
     |> clear_turn()
     |> Map.put(:next_sequence_number, 0)
+    |> Map.put(:delivered_sequence_next, 0)
+  end
+
+  defp discard_queued(state) do
+    %{
+      state
+      | queue: :queue.new(),
+        remainder: <<>>,
+        pending_push: nil,
+        pending_finish: nil,
+        next_sequence_number: state.delivered_sequence_next
+    }
+  end
+
+  defp complete_clear(state) do
+    played = if state.current, do: state.current.played_frames * @frame_duration_ms, else: 0
+
+    with :ok <- state.playback_clearer.clear(state.pipeline_options) do
+      {:ok, played, %{clear_turn(state) | pending_clear: nil}}
+    end
   end
 
   defp reply_pending(state) do

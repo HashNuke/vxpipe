@@ -353,6 +353,40 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     refute_receive {:vxpipe_recording_egress, ^handoff, _}
   end
 
+  test "phase clearing drains the sent packet and retains the encoder and RTP timeline" do
+    observer = self()
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         send_rtp: fn _, _, packet ->
+           send(observer, {:test_rtp, packet})
+           :ok
+         end,
+         schedule: fn target, message, _ ->
+           send(observer, {:pace, target, message})
+           make_ref()
+         end}
+      )
+
+    assert :ok = OutputSink.push(egress, frame(:binary.copy(<<1, 0>>, 3 * 960)))
+    assert_receive {:test_rtp, %Packet{sequence_number: 0, timestamp: 0, ssrc: ssrc}}
+    assert_receive {:pace, ^egress, message}
+    encoder = :sys.get_state(egress).encoder
+    request = :gen_server.send_request(egress, :vxpipe_audio_output_clear)
+    _ = :sys.get_state(egress)
+    assert :timeout = :gen_server.wait_response(request, 0)
+    send(egress, message)
+    assert {:reply, {:ok, 20}} = :gen_server.wait_response(request, 1_000)
+    assert :sys.get_state(egress).encoder == encoder
+    assert :ok = OutputSink.push(egress, frame(:binary.copy(<<2, 0>>, 960)))
+    assert_receive {:test_rtp, %Packet{sequence_number: 1, timestamp: 960, ssrc: ^ssrc}}
+  end
+
   defp frame(payload) do
     %AudioOutputFrame{
       tenant_id: "tenant-test",
