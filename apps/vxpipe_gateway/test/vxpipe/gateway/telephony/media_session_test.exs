@@ -140,7 +140,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
 
   defp compile_plan do
     definition_input = %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       entry_caller: "caller",
       entry_receiver: "assistant",
       defaults: %{capabilities: %{model_inference: "test-model"}},

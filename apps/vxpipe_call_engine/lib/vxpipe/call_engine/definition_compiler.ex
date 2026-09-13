@@ -43,6 +43,8 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
     with :ok <- matching_definition(definition, invocation),
          {:ok, capability_profiles} <- registry(registries, :capability_profiles),
          {:ok, host_tools} <- registry(registries, :host_tools),
+         {:ok, opening_audio} <-
+           resolve_opening_audio(definition.opening_audio, capability_profiles),
          {:ok, call_variables} <-
            resolve_call_variables(definition.call_variables, invocation.initial_variables),
          {:ok, base_participants} <-
@@ -78,13 +80,34 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          transport: invocation.transport,
          entry_caller: definition.entry_caller,
          entry_receiver: definition.entry_receiver,
-         opening_audio: definition.opening_audio,
+         opening_audio: opening_audio,
          media_policy: media_policy,
          participants: participants,
          transfer_policy: definition.transfer_policy,
          call_variables: call_variables,
          tool_visibility: tool_visibility,
          max_duration_ms: max_duration_ms
+       }}
+    end
+  end
+
+  defp resolve_opening_audio(nil, _profiles), do: {:ok, nil}
+
+  defp resolve_opening_audio(%CallDefinition.OpeningAudio{} = source, profiles) do
+    with {:ok, selection} <-
+           resolve_capability(
+             source.text_to_speech,
+             :text_to_speech,
+             profiles,
+             ["opening_audio", "text_to_speech"],
+             :human
+           ) do
+      {:ok,
+       %ResolvedCallPlan.OpeningAudio{
+         type: source.type,
+         text: source.text,
+         url: source.url,
+         text_to_speech: selection
        }}
     end
   end

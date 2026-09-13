@@ -9,11 +9,11 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
 
   @derive {Inspect, only: [:type]}
   @enforce_keys [:type]
-  defstruct [:type, :text, :url]
+  defstruct [:type, :text, :url, :text_to_speech]
 
   @type t ::
-          %__MODULE__{type: :text, text: String.t(), url: nil}
-          | %__MODULE__{type: :file_url, text: nil, url: String.t()}
+          %__MODULE__{type: :text, text: String.t(), url: nil, text_to_speech: String.t()}
+          | %__MODULE__{type: :file_url, text: nil, url: String.t(), text_to_speech: nil}
 
   @code :invalid_call_definition
   @message "The call definition is invalid."
@@ -26,7 +26,7 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
     with {:ok, input} <-
            DefinitionValidation.normalize_map(
              value,
-             [:type, :text, :url],
+             [:type, :text, :url, :text_to_speech],
              @code,
              @message,
              @path
@@ -56,13 +56,24 @@ defmodule Vxpipe.CallEngine.CallDefinition.OpeningAudio do
              @message,
              @path ++ ["text"],
              maximum: 4_096
+           ),
+         {:ok, profile_input} <-
+           DefinitionValidation.fetch(input, :text_to_speech, @code, @message, @path),
+         {:ok, profile} <-
+           DefinitionValidation.string(
+             profile_input,
+             @code,
+             @message,
+             @path ++ ["text_to_speech"],
+             maximum: 128
            ) do
-      {:ok, %__MODULE__{type: :text, text: text, url: nil}}
+      {:ok, %__MODULE__{type: :text, text: text, url: nil, text_to_speech: profile}}
     end
   end
 
   defp build(:file_url, input) do
     with :ok <- reject_present(input, :text),
+         :ok <- reject_present(input, :text_to_speech),
          {:ok, url_input} <-
            DefinitionValidation.fetch(input, :url, @code, @message, @path),
          {:ok, url} <- valid_https_url(url_input) do

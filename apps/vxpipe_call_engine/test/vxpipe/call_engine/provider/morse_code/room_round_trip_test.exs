@@ -271,7 +271,7 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
 
   defp definition_input do
     %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       entry_caller: "caller",
       entry_receiver: "assistant",
       defaults: %{

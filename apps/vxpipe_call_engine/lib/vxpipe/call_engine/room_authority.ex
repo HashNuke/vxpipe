@@ -475,7 +475,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         reply
 
       :unhandled ->
-        if OpeningAudio.awaiting_text_playback?(state.opening_audio) do
+        if OpeningAudio.capability?(state.opening_audio, capability) do
           OpeningAudio.failed(state.opening_audio)
           {:stop, :opening_audio_unavailable, state}
         else
@@ -498,13 +498,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {:DOWN, monitor, :process, _pid, _reason},
         %{text_to_speech_capability: %{monitor: monitor}} = state
       ) do
-    if OpeningAudio.awaiting_text_playback?(state.opening_audio) do
-      OpeningAudio.failed(state.opening_audio)
-      {:stop, :opening_audio_unavailable, state}
-    else
-      ConnectionLifecycle.notify(state.connections, :agent_unavailable)
-      {:noreply, %{state | text_to_speech_capability: nil}}
-    end
+    ConnectionLifecycle.notify(state.connections, :agent_unavailable)
+    {:noreply, %{state | text_to_speech_capability: nil}}
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
@@ -606,8 +601,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
       :unhandled ->
         opening_result =
-          if state.text_to_speech_capability != nil and
-               state.text_to_speech_capability.pid == capability do
+          if OpeningAudio.capability?(state.opening_audio, capability) do
             OpeningAudio.playback(state.opening_audio, request, status)
           else
             :unrelated
@@ -664,7 +658,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
              state.opening_audio,
              command,
              connection,
-             state.text_to_speech_capability,
              state.snapshot,
              self()
            ),

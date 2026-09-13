@@ -1,7 +1,8 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.CallDefinition.OpeningAudio, as: OpeningSource
+  alias Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio, as: OpeningSource
+  alias Vxpipe.CallEngine.RoomAuthority.Startup
   alias Vxpipe.CallEngine.Command.{AttachConnection, CreateRoom}
 
   alias Vxpipe.CallEngine.OpeningAudio.{
@@ -22,7 +23,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
 
   @derive {Inspect, only: [:phase, :target_participant_id]}
   @enforce_keys [:participant_id, :phase, :settings, :source, :target_participant_id]
-  defstruct @enforce_keys ++ [monitor: nil, request: nil, started_at: nil, worker: nil]
+  defstruct @enforce_keys ++
+              [capability: nil, monitor: nil, request: nil, started_at: nil, worker: nil]
 
   @type phase :: :open | :awaiting_connection | :playing
   @type request ::
@@ -33,6 +35,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
           participant_id: nil | String.t(),
           target_participant_id: nil | String.t(),
           settings: nil | Settings.t(),
+          capability: nil | map(),
           request: request(),
           started_at: nil | integer(),
           worker: nil | pid(),
@@ -48,10 +51,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
         settings
       ) do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
     %__MODULE__{
-      participant_id: receiver.participant_id,
+      participant_id: caller.participant_id,
       phase: :awaiting_connection,
       settings: settings,
       source: source,
@@ -74,13 +76,27 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   def admission(%__MODULE__{phase: :open}), do: :open
   def admission(%__MODULE__{}), do: :opening_audio
 
-  @spec start(t(), AttachConnection.t(), map(), nil | map(), struct(), pid()) ::
+  @spec prepare(t(), nil | Vxpipe.CallEngine.TextToSpeechRuntime.t(), struct()) ::
+          {:ok, t()} | {:error, term()}
+  def prepare(opening, nil, _state), do: {:ok, opening}
+
+  def prepare(%__MODULE__{} = opening, runtime, state) do
+    with {:ok, capability} <-
+           Startup.prepare_text_to_speech(runtime, opening.participant_id, state) do
+      {:ok, %{opening | capability: Startup.activate_text_to_speech(capability)}}
+    end
+  end
+
+  @spec capability?(t(), pid()) :: boolean()
+  def capability?(%__MODULE__{capability: %{pid: pid}}, pid), do: true
+  def capability?(%__MODULE__{}, _pid), do: false
+
+  @spec start(t(), AttachConnection.t(), map(), struct(), pid()) ::
           {:ok, t()} | {:error, Error.t()}
   def start(
         %__MODULE__{phase: :open} = opening,
         _command,
         _connection,
-        _capability,
         _snapshot,
         _owner
       ),
@@ -90,7 +106,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
         %__MODULE__{phase: :awaiting_connection, target_participant_id: target} = opening,
         %AttachConnection{participant_id: participant_id},
         _connection,
-        _capability,
         _snapshot,
         _owner
       )
@@ -99,14 +114,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
 
   def start(
         %__MODULE__{
-          participant_id: agent_participant_id,
+          participant_id: participant_id,
+          capability: %{asset_cache_identity: cache_identity, pid: capability},
           phase: :awaiting_connection,
           settings: %Settings{},
           source: %OpeningSource{type: :text, text: text}
         } = opening,
         %AttachConnection{} = command,
         %{output_sink: output_sink},
-        %{asset_cache_identity: cache_identity, pid: capability},
         snapshot,
         owner
       )
@@ -119,7 +134,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
       capability: capability,
       cache_identity: cache_identity,
       snapshot: snapshot,
-      participant_id: agent_participant_id,
+      participant_id: participant_id,
       owner: owner,
       settings: opening.settings
     ]
@@ -156,7 +171,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
         } = opening,
         %AttachConnection{} = command,
         %{output_sink: output_sink},
-        _capability,
         snapshot,
         owner
       )
@@ -202,7 +216,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
         %__MODULE__{phase: :awaiting_connection},
         _command,
         _connection,
-        _capability,
         _snapshot,
         _owner
       ) do
@@ -213,7 +226,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
         %__MODULE__{phase: :playing} = opening,
         _command,
         _connection,
-        _capability,
         _snapshot,
         _owner
       ),
@@ -280,20 +292,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   def asset_failure?(%__MODULE__{}, _worker, _request), do: false
 
   @spec worker_monitor?(t(), reference()) :: boolean()
+  def worker_monitor?(%__MODULE__{capability: %{monitor: monitor}}, monitor)
+      when is_reference(monitor),
+      do: true
+
   def worker_monitor?(%__MODULE__{phase: :playing, monitor: monitor}, monitor)
       when is_reference(monitor),
       do: true
 
   def worker_monitor?(%__MODULE__{}, _monitor), do: false
-
-  @spec awaiting_text_playback?(t()) :: boolean()
-  def awaiting_text_playback?(%__MODULE__{
-        phase: :playing,
-        request: %TextToSpeechRequest{}
-      }),
-      do: true
-
-  def awaiting_text_playback?(%__MODULE__{}), do: false
 
   @spec failed(t()) :: :ok
   def failed(%__MODULE__{
@@ -341,7 +348,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
 
   defp opened(%__MODULE__{source: %OpeningSource{type: source}, started_at: started_at} = opening) do
     Telemetry.opening_audio_stop(started_at, source, :completed)
-    %{opening | monitor: nil, phase: :open, request: nil, started_at: nil, worker: nil}
+    release_capability(opening)
+
+    %{
+      opening
+      | capability: nil,
+        monitor: nil,
+        phase: :open,
+        request: nil,
+        started_at: nil,
+        worker: nil
+    }
+  end
+
+  defp release_capability(%__MODULE__{capability: nil}), do: :ok
+
+  defp release_capability(%__MODULE__{capability: capability, request: request}) do
+    Process.demonitor(capability.monitor, [:flush])
+    RoomCapabilitySupervisor.stop_capability(request.incarnation_id, capability.pid)
   end
 
   defp unavailable do

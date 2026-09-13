@@ -211,7 +211,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
 
   defp definition_input do
     %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       name: "Inbound phone",
       entry_caller: "caller",
       entry_receiver: "assistant",

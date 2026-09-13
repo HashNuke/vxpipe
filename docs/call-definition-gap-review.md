@@ -1247,10 +1247,10 @@ before `entry_receiver` starts normal conversation. It is call-level, not a
 participant greeting or mandatory notice. R11 separately leaves personalization
 to agent instructions, without a prompt/variable interpolation engine.
 
-For text, render/cache audio using the initial receiving agent's resolved TTS
-service and voice, including defaults. No LLM generates the text; no arbitrary
-first map member or later transfer agent supplies the voice. Text applicability
-without an initial agent/usable TTS remains open. The cache distinguishes exact
+The 2026-09-14 user refinement replaces inherited initial-agent TTS: text requires its own
+`opening_audio.text_to_speech` capability-profile reference in schema `20260913.01`. Render/cache
+using that pinned provider and voice, with no participant/default fallback. Human initial
+receivers are supported without an agent. No LLM generates the text. The cache distinguishes exact
 text, resolved provider/model/voice, output-affecting settings, and tenant/
 configured binding. Changed inputs must not reuse stale output; no secrets in
 cache keys/logs. Reusable configured assets are not per-call recordings/exports.
@@ -1805,7 +1805,7 @@ Use scenario fixtures rather than copying complete third-party definitions:
 | Stall required startup readiness, return a terminal error, and separately play long opening audio | The configurable 30-second readiness clock begins after join/startup, terminal errors fail early, expiry releases resources with clear failure, and deliberate playback is not truncated or mistaken for provider failure; timestamps and input gating remain honest |
 | Wait for caller input, play output, dial/hold, and run a long tool | Only genuine agent waiting produces the configurable 15-second idle notification; instructions decide the next action, no automatic hangup/progress cadence or wait music appears, and background conversation retains one voice |
 | Resolve duration at each scope, then transfer/recover into human-only conversation | Definition wins over tenant/application/default 1800000, the resolved limit stays pinned despite later settings changes, actual started_at anchors the deadline without preparation wait/reset, and expiry ends with a clear reason without unapproved closing grace |
-| Configure fixed text opening audio and reuse/change its resolved voice binding | Render/cache with the initial agent's resolved TTS/voice; capability warmup need not wait but ordinary conversation and participant media do; changed text/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no implicit agent/voice is chosen when unavailable |
+| Configure fixed text opening audio and reuse/change its resolved voice binding | Require an explicit opening TTS profile independent of participants/defaults; support a human initial receiver. Capability warmup need not wait but ordinary conversation and participant media do; changed text/profile/provider/model/voice/output settings cannot reuse stale output, and cache scope follows tenant/binding; rendering is not playback completion or call start; no fallback voice is chosen when unavailable |
 | Enter a restricted human-only segment | Denied processing/routes stop before bridging; unaffected permitted audio continues; later restart does not replay the denied interval |
 | Slow a recording upload or history store | Keep SQL/disk/S3 work outside live mixing; storage failure itself does not fail/stop the room or undo accepted variables, unavailable sinks do not backpressure media/authority, and bounded storage reports incompleteness rather than claiming durability |
 | Repeat authorized API creation, then separately replay provider events or same-call token claims | Creation may produce separate prepared records without an idempotency header/cache; same-call/provider identities still prevent double startup, and no deletion endpoint/UI is implied |
@@ -2170,7 +2170,8 @@ direct WebSocket setup supersedes R09 and does not adopt its proposed limits on
 other routes. Optional call-level `opening_audio` plays a file URL or cached audio
 from fixed text before receiver/normal service activation. Text rendering uses
 the initial agent's resolved TTS voice/profile as a narrow asset-preparation
-exception; no LLM or implicit human-only agent is needed. Cache identity tracks
+exception at that historical checkpoint; the 2026-09-14 decision above supersedes that selection
+with an explicit opening TTS profile. No LLM or implicit human-only agent is needed. Cache identity tracks
 text, resolved TTS/output settings, and tenant/configured binding. Omission means
 normal startup. Playback completion, not download/render/enqueue, releases the
 gate; exact evidence/failure/source/cache mechanisms remain unselected. R11's

@@ -87,7 +87,9 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
   test "saves, publishes, and reads a definition through trusted commands" do
     {:ok, tenant, _issued} = Administration.bootstrap_tenant("Definitions tenant", [:admin])
 
-    path = Path.join(System.tmp_dir!(), "vxpipe-definition-#{System.unique_integer([:positive])}.json")
+    path =
+      Path.join(System.tmp_dir!(), "vxpipe-definition-#{System.unique_integer([:positive])}.json")
+
     File.write!(path, JSON.encode!(definition_input()))
     on_exit(fn -> File.rm(path) end)
 
@@ -130,7 +132,7 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
 
   defp definition_input do
     %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       name: "Operator example",
       entry_caller: "caller",
       entry_receiver: "assistant",

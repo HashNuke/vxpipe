@@ -220,7 +220,7 @@ defmodule Vxpipe.Calls.DefinitionsTest do
 
   defp definition_input do
     %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       name: "Example",
       entry_caller: "caller",
       entry_receiver: "assistant",

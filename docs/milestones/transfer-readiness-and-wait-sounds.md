@@ -6,7 +6,7 @@ Prerequisites: [Call lifecycle and opening audio](opening-audio-and-call-lifecyc
 [Human web transfers](human-web-transfers.md), [Common phone transfers](telnyx-calls.md),
 and [Usage observations](usage-and-billing-observations.md).
 Design sources: [approved transfer contract](../../labnotes/20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline),
-[opening playback contract](../../labnotes/20260905-0405-call-definition-design.md#optional-opening-audio-before-entry-reception--approved-startup-decision),
+[opening playback contract](../opening-audio-contract.md),
 [incremental policy application](../incremental-media-policy.md), and the user's 2026-09-13
 request for complete readiness, independent wait playback, and an audible connection cue.
 
@@ -62,7 +62,7 @@ Example proposed definition (not accepted by today's parser; the schema version 
 
 ```json
 {
-  "schema_version": "20260913.01",
+  "schema_version": "NEXT_SCHEMA_REVISION",
   "name": "Support with participant wait sounds",
   "entry_caller": "caller",
   "entry_receiver": "reception",
@@ -136,7 +136,7 @@ Omit `wait_sounds` entirely to use the defaults; URLs above are illustrative, no
   An authorized receive-only monitor never gains microphone permission from this feature.
 - The mandatory built-in connection cue is finite and validated for audibility. Failed cue playback
   cannot silently open the bridge. Cue customization is not part of `wait_sounds`.
-- Introduce a new schema revision and explicit compatibility parsing for current `20260911.03`
+- Introduce a new schema revision and explicit compatibility parsing for current `20260913.01`
   definitions. Old JSON still rejects unknown fields; new calls resolve its omitted sounds to the
   approved defaults. Existing saved revisions/history remain immutable, and running calls retain
   their pinned plan. Cover stored-definition loading and plan serialization in the migration.

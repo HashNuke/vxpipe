@@ -252,7 +252,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
       if conversation_mode, do: Map.put(tool, :conversation_mode, conversation_mode), else: tool
 
     input = %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},

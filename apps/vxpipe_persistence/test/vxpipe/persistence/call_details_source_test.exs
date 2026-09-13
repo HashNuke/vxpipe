@@ -94,7 +94,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
              "call_id" => @call_id,
              "definition_id" => context.call.definition_id,
              "definition_revision" => 1,
-             "definition_schema_version" => "20260911.03",
+             "definition_schema_version" => "20260913.01",
              "plan_digest" => "sha256:" <> Base.encode16(context.call.plan_digest, case: :lower),
              "tenant_key" => @tenant_key
            }
@@ -479,7 +479,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
 
   defp definition do
     %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       name: "Support call",
       entry_caller: "caller",
       entry_receiver: "assistant",

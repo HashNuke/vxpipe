@@ -718,14 +718,14 @@ remain separate from runtime implementation.
 ### First messages and transfer responsibility
 
 Optional call-level `opening_audio` plays to `entry_caller` before
-`entry_receiver` begins the normal conversation. Schema `20260910.02` represents its source
+`entry_receiver` begins the normal conversation. Schema `20260913.01` represents its source
 as the closed tagged object documented in [the opening-audio contract](opening-audio-contract.md):
-fixed text or an HTTPS file URL. For text, render and cache
-audio using the initial receiving agent's resolved TTS service and voice,
-including configured defaults. Do not generate its text through an LLM, choose
-an arbitrary first participant, or start a later transfer agent to supply a voice.
-Without an initial agent/usable TTS profile, startup fails before registering a room rather
-than silently inventing one.
+fixed text or an HTTPS file URL. Text requires its own `opening_audio.text_to_speech` capability
+profile, resolved independently of participant capabilities and call defaults. Its temporary
+supervised TTS capability is attributed to the entry caller with no agent activation and released
+after playback. An initial human receiver is supported. There is no inherited/fallback agent
+voice, and an absent or unavailable opening profile fails explicitly. The text itself is fixed;
+an LLM does not generate it. File playback requires no TTS profile.
 
 Room and participant capabilities may start and warm up while opening audio
 plays. The gate controls media delivery, not process startup: do not route user
@@ -739,13 +739,19 @@ mechanism is introduced. Downloading, rendering, caching, or enqueueing audio is
 not completed playback. Omission means normal startup with no announcement
 delay; failed/incomplete configured playback cannot silently open the media gate.
 
+The room mixer also starts closed for configured opening audio. Actual playout completion opens
+it before ordinary input/greeting admission, preserving existing media policy and capability
+instances. Both full-mix and individual-track recordings exclude held audio; the mixer rejects
+frames from before its completion timestamp even if decoding/delivery finishes after release.
+
 Cache reusable generated audio by exact text, resolved TTS provider/model/voice,
 and output-affecting settings, scoped to the tenant/configured binding. Changed
 text or voice must not reuse stale audio; secrets belong in neither cache keys
 nor logs. The configured reusable asset is not a per-call recording/export, and
 does not acquire per-call retention. The application owns one bounded in-memory LRU for file and
 generated-text assets. File keys hash tenant, exact URL, and a media profile. Text keys hash tenant,
-exact text, provider/model/voice, output-affecting settings, and a render profile. A supervised
+exact text, selected capability-profile reference, provider/model/voice, output-affecting settings,
+and a render profile. A supervised
 forwarding sink collects only bounded complete provider PCM on a text miss; a hit uses the ordinary
 temporary asset player without a new TTS request. Asset preparation itself starts no call tree
 and does not set `started_at`.

@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
     TextToSpeechRuntime
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.{ParticipantLifecycle, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, ParticipantLifecycle, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime,
     as: ParticipantTransferRuntime
@@ -84,9 +84,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         | speech_to_text_runtime: startup.speech_to_text_runtimes
       }
 
-      with {:ok, state} <- activate_entry_receiver(startup, receiver_snapshot, state) do
+      with {:ok, state} <- activate_entry_receiver(startup, receiver_snapshot, state),
+           {:ok, opening_audio} <-
+             OpeningAudio.prepare(state.opening_audio, startup.opening_text_to_speech, state) do
         runtime = %ParticipantTransferRuntime{plan: plan, startup_options: startup_options}
-        {:ok, %{state | participant_transfer_runtime: runtime}}
+        {:ok, %{state | participant_transfer_runtime: runtime, opening_audio: opening_audio}}
       end
     else
       _error -> {:error, :entry_start_failed}

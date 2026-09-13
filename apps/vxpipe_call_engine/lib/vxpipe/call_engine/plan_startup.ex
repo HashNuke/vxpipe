@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.CallDefinition.ConnectionIntent
-  alias Vxpipe.CallEngine.CallDefinition.OpeningAudio
+  alias Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation, as: AgentActivationOptions
   alias Vxpipe.CallEngine.PlanStartup.AgentDestination
@@ -32,7 +32,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     :receiver_command,
     :agent_activation,
     :speech_to_text_runtimes,
-    :text_to_speech
+    :text_to_speech,
+    :opening_text_to_speech
   ]
   defstruct @enforce_keys
 
@@ -45,7 +46,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           speech_to_text_runtimes: %{
             required(String.t()) => nil | SpeechToTextRuntime.t()
           },
-          text_to_speech: nil | TextToSpeechRuntime.t()
+          text_to_speech: nil | TextToSpeechRuntime.t(),
+          opening_text_to_speech: nil | TextToSpeechRuntime.t()
         }
 
   @spec validate(ResolvedCallPlan.t(), keyword()) ::
@@ -67,7 +69,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, speech_to_text_runtimes} <-
            speech_to_text_runtimes(plan, [caller, receiver], plan.opening_audio, options),
          {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options),
-         :ok <- supported_opening_audio(plan.opening_audio, text_to_speech, options),
+         {:ok, opening_text_to_speech} <- opening_text_to_speech_runtime(plan, caller, options),
          {:ok, caller_command} <- participant_command(plan, caller),
          {:ok, receiver_command} <- participant_command(plan, receiver) do
       {:ok,
@@ -78,7 +80,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          receiver_command: receiver_command,
          agent_activation: activation_options,
          speech_to_text_runtimes: speech_to_text_runtimes,
-         text_to_speech: text_to_speech
+         text_to_speech: text_to_speech,
+         opening_text_to_speech: opening_text_to_speech
        }}
     end
   end
@@ -400,28 +403,52 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     end
   end
 
-  defp supported_opening_audio(nil, _text_to_speech, _options), do: :ok
+  defp opening_text_to_speech_runtime(%ResolvedCallPlan{opening_audio: nil}, _caller, _options),
+    do: {:ok, nil}
 
-  defp supported_opening_audio(
-         %OpeningAudio{type: :text},
-         %TextToSpeechRuntime{},
-         _options
-       ),
-       do: :ok
-
-  defp supported_opening_audio(%OpeningAudio{type: :text}, nil, _options) do
-    unsupported(["opening_audio"], "text opening audio requires text-to-speech")
+  defp opening_text_to_speech_runtime(
+         %ResolvedCallPlan{
+           opening_audio: %OpeningAudio{
+             type: :text,
+             text_to_speech: %CapabilitySelection{} = selection
+           }
+         } = plan,
+         caller,
+         options
+       ) do
+    text_to_speech_runtime(plan, selection, caller, options, ["opening_audio", "text_to_speech"])
   end
 
-  defp supported_opening_audio(%OpeningAudio{type: :file_url}, _text_to_speech, options) do
+  defp opening_text_to_speech_runtime(
+         %ResolvedCallPlan{opening_audio: %OpeningAudio{type: :file_url}},
+         _caller,
+         options
+       ) do
     case Keyword.get(options, :opening_audio) do
-      %OpeningAudioSettings{} -> :ok
+      %OpeningAudioSettings{} -> {:ok, nil}
       _invalid -> unsupported(["opening_audio"], "file opening audio is not configured")
     end
   end
 
+  defp opening_text_to_speech_runtime(_plan, _caller, _options) do
+    unsupported(
+      ["opening_audio", "text_to_speech"],
+      "requires its own resolved text-to-speech profile"
+    )
+  end
+
   defp text_to_speech_runtime(plan, receiver, options) do
-    case resolve_provider(receiver.capabilities.text_to_speech, options, :text_to_speech) do
+    text_to_speech_runtime(
+      plan,
+      receiver.capabilities.text_to_speech,
+      receiver,
+      options,
+      ["participants", receiver.definition_key, "capabilities", "text_to_speech"]
+    )
+  end
+
+  defp text_to_speech_runtime(plan, selection, participant, options, path) do
+    case resolve_provider(selection, options, :text_to_speech) do
       {:ok, nil} ->
         {:ok, nil}
 
@@ -434,30 +461,29 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              asset_cache_identity when is_map(asset_cache_identity) <-
                provider_module.asset_cache_identity(provider_config),
              {:ok, usage_provider} <-
-               text_to_speech_usage_provider(receiver, provider_module, provider_config) do
+               text_to_speech_usage_provider(selection, provider_module, provider_config) do
           {:ok,
            %TextToSpeechRuntime{
-             asset_cache_identity: asset_cache_identity,
+             asset_cache_identity: Map.put(asset_cache_identity, "profile", selection.profile),
              call_id: plan.call_id,
-             participant_id: receiver.participant_id,
-             activation_id: receiver.activation_id,
+             participant_id: participant.participant_id,
+             activation_id: participant.activation_id,
              provider: provider,
              transport: {transport, transport_options},
              maximum_requests: maximum_requests,
              usage_provider: usage_provider
            }}
         else
-          _invalid_runtime -> unsupported_speech_configuration(receiver, :text_to_speech)
+          _invalid_runtime ->
+            unsupported(path, unsupported_speech_configuration_reason(:text_to_speech))
         end
 
       {:error, _reason} ->
-        unsupported_speech_configuration(receiver, :text_to_speech)
+        unsupported(path, unsupported_speech_configuration_reason(:text_to_speech))
     end
   end
 
-  defp text_to_speech_usage_provider(receiver, provider_module, provider_config) do
-    selection = receiver.capabilities.text_to_speech
-
+  defp text_to_speech_usage_provider(selection, provider_module, provider_config) do
     with true <- function_exported?(provider_module, :usage_identity, 1),
          identity when is_list(identity) <- provider_module.usage_identity(provider_config) do
       identity

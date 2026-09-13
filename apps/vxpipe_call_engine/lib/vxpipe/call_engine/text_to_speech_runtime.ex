@@ -21,7 +21,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
           asset_cache_identity: map(),
           call_id: String.t(),
           participant_id: String.t(),
-          activation_id: String.t(),
+          activation_id: String.t() | nil,
           usage_provider: Vxpipe.CallEngine.Usage.ProviderContext.t()
         }
 end

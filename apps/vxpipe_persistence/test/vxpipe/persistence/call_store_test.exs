@@ -45,7 +45,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   @join_token "vxj_test-only-persisted-token"
   @now ~U[2026-09-09 11:00:00.000000Z]
 
-  setup do
+  setup context do
     repository_options = [
       credential_repository: {CredentialStore, Repo},
       definition_repository: {DefinitionStore, Repo},
@@ -71,8 +71,18 @@ defmodule Vxpipe.Persistence.CallStoreTest do
                repository_options
              )
 
-    assert {:ok, draft} =
-             Calls.save_definition(tenant.key, definition_input(), repository_options)
+    input =
+      if context[:opening_audio] do
+        Map.put(definition_input(), :opening_audio, %{
+          type: "text",
+          text: "A private opening.",
+          text_to_speech: "opening-voice"
+        })
+      else
+        definition_input()
+      end
+
+    assert {:ok, draft} = Calls.save_definition(tenant.key, input, repository_options)
 
     assert {:ok, published} =
              Calls.publish_definition(tenant.key, draft.definition_id, 1, repository_options)
@@ -100,6 +110,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     ]
   end
 
+  @tag opening_audio: true
   test "atomically stores and reconstructs a private prepared call and its first token",
        context do
     variables = %{"order" => %{"id" => "ORD-2048"}}
@@ -130,6 +141,8 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert {:ok, reloaded} = Calls.fetch_call(context.tenant.key, @call_id, context.options)
     assert reloaded.initial_variables == variables
     assert reloaded.plan == prepared.plan
+    assert reloaded.plan.opening_audio.text_to_speech.profile == "opening-voice"
+    assert reloaded.plan.opening_audio.text_to_speech.options == %{model: "notice-voice"}
     assert reloaded.plan_digest == prepared.plan_digest
     assert Repo.aggregate(StoredCall, :count) == 1
     assert Repo.aggregate(StoredJoinToken, :count) == 1
@@ -1063,6 +1076,11 @@ defmodule Vxpipe.Persistence.CallStoreTest do
   defp registries do
     %{
       capability_profiles: %{
+        "opening-voice" => %{
+          kind: :text_to_speech,
+          provider: :test_tts,
+          options: %{model: "notice-voice"}
+        },
         "test-model" => %{
           kind: :model_inference,
           provider: :req_llm,
@@ -1075,7 +1093,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
 
   defp definition_input do
     %{
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       name: "Persistence admission",
       entry_caller: "caller",
       entry_receiver: "assistant",

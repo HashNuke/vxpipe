@@ -2,7 +2,7 @@
 
 Status: complete (2026-09-10). Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Background tools](background-tool-conversation.md).
-Sources: [Opening audio](../../labnotes/20260905-0405-call-definition-design.md#optional-opening-audio-before-entry-reception--approved-startup-decision); [greetings](../../labnotes/20260905-0405-call-definition-design.md#first-message-behavior--approved-g7-decision); [timers](../../labnotes/20260905-0405-call-definition-design.md#startup-idle-tool-waiting-and-duration--approved-r27r30).
+Sources: [Current opening-audio contract](../opening-audio-contract.md); [greetings](../../labnotes/20260905-0405-call-definition-design.md#first-message-behavior--approved-g7-decision); [timers](../../labnotes/20260905-0405-call-definition-design.md#startup-idle-tool-waiting-and-duration--approved-r27r30).
 
 ## Runnable outcome
 
@@ -10,14 +10,19 @@ A caller hears optional configured opening audio before normal conversation. The
 
 ## Specification
 
-- Optional call-level opening_audio accepts a supported file URL or fixed text rendered with the initial receiving agent's resolved TTS service/voice. No LLM-generated notice, variable interpolation, arbitrary later agent, or implicit fallback voice. Cache by exact text/output settings/provider/model/voice and tenant/binding without secrets.
+- Optional call-level opening_audio accepts a supported file URL or fixed text with its own required `text_to_speech` capability-profile reference (schema `20260913.01`). Resolve and supervise opening TTS independently of every participant/default voice; an initial human receiver works without any agent. No LLM-generated notice, variable interpolation, or fallback voice. Cache by exact text/output settings/provider/model/voice and tenant/profile binding without secrets.
 - Capabilities may warm up during opening playback but receive no participant audio until actual playout completion. Neither downloaded/enqueued audio nor provider readiness opens the gate. Do not record/replay blocked audio; incomplete playback cannot silently release it. Omission adds no opening delay.
-- Resolve the still-unspecified source wire/format, fetch/cache and transport-completion details before implementation; document safe supported behavior. If text has no initial agent/TTS, fail explicitly rather than inventing one. Playback failure/text barge-in behavior needs a narrow explicit design decision, not silent normal conversation.
+- The [opening-audio contract](../opening-audio-contract.md) specifies source format, fetch/cache, transport completion and failure behavior. Text with an absent/unavailable opening TTS profile fails explicitly. File playback requires no TTS. Failed/incomplete playback ends the attempt with input closed; no text barge-in is admitted.
 - Each agent's first activation chooses wait, fixed greeting, or generated greeting; wait for opening completion and readiness. Re-entry does not replay greeting. Hard hangup/closing wording is agent instructions, not a platform speak-then-end/drain workflow.
 - Required startup readiness defaults 30s after join/start attempt, fails early on terminal errors; deliberate opening playback is not a 30s file limit. Genuine caller-idle notification defaults 15s, excluding opening, own speech, holding/dialing/tool wait; instructions choose action, no automatic repeated nudge/hangup.
 - limits.max_duration_ms defaults 1800000, definition > tenant > app > platform, pinned per call from actual started_at; includes human-only/held time without reset on transfer. No unapproved unlimited mode/grace warning. Date/current-time tool uses permitted instructions/application time context; no timezone hierarchy or personalization engine.
 
 ## Implementation checklist
+
+- [x] Replace inherited opening TTS with a required independent profile, pinned resolved selection,
+  separate capability lifecycle, and direct human-receiver playback; migrate current schema examples.
+- [x] Gate later room-mixer/recording ingress through actual opening completion, including delayed
+  frames from the held interval, without restarting capabilities.
 
 - [x] Red-test fixed-text input gating and actual playout completion with controllable media fakes.
 - [x] Red-test wait/fixed/generated first-message modes with controllable model/media fakes.
@@ -61,6 +66,24 @@ A caller hears optional configured opening audio before normal conversation. The
 No wait music, voicemail speech, local VAD/models, mandatory notice/legal-compliance guarantee, automatic templates, platform closing-message API, or new WebSocket transport. Reusable asset caching is not call audio recording.
 
 ## Completion and evidence
+
+2026-09-14 independent TTS update: the user explicitly replaced the initial-agent voice contract.
+Text openings now require `text_to_speech` in schema `20260913.01`; no legacy inherited voice is
+retained. The compiler pins a dedicated profile and runtime starts/releases its own TTS capability.
+Human entry, separate greeting/opening voices, failure handling, cache binding isolation and stored
+plan reconstruction are covered. Current contract and migration guidance live in
+[the opening-audio contract](../opening-audio-contract.md).
+
+Final verification for this refinement: all five root gates pass, including 1,013 umbrella tests
+with zero failures. Focused persistence reconstruction passes, and the 14-test opening runtime
+file covers human entry, distinct voices, cleanup, caching, failures, and recording exclusion for
+both text and file sources plus their private egress. No live-provider or rendered UI evidence
+is claimed for this backend/schema checkpoint.
+
+Separate local design review: verified human entry dependency order, profile/credential ownership,
+absence of fallback, capability monitoring/cleanup, attribution without an agent activation,
+cache/persistence identity, unchanged privacy intervals, and recording release ordering. This is
+an approved opening-audio refinement; it does not implement the pending wait-sound proposal.
 
 2026-09-13 recording correction: the later room-mixing path bypassed the original STT opening
 gate. A regression through the real room mixer and recording subscriber reproduced caller audio

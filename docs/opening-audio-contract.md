@@ -1,15 +1,16 @@
 # Opening audio contract
 
 Status: fixed-text and HTTPS-file playback, bounded reusable-asset caching, and input gating are
-implemented.
+implemented. The 2026-09-14 update gives text openings an explicit, independent TTS profile and
+closes the room-recording path during opening playback.
 
 ## Decision
 
-Call-definition schema `20260910.02` adds one optional call-level `opening_audio` value. It is
-either fixed text:
+Call-definition schema `20260913.01` supports one optional call-level `opening_audio` value.
+Fixed text requires its own TTS capability-profile reference:
 
 ```json
-{"type": "text", "text": "This call may be recorded."}
+{"type": "text", "text": "This call may be recorded.", "text_to_speech": "opening-voice"}
 ```
 
 or a remotely fetched file:
@@ -18,7 +19,15 @@ or a remotely fetched file:
 {"type": "file_url", "url": "https://assets.example.test/opening.wav"}
 ```
 
-The object is closed. Text and URL cannot be mixed, unknown types and keys fail, text is a
+`opening-voice` names a `text_to_speech` entry in the existing capability-profile registry.
+That profile supplies the provider and public voice/model/output settings; credentials and
+transport configuration stay in the application's provider configuration. The compiler resolves
+and pins this selection independently of every participant's capabilities and defaults. It works
+with an initial human receiver and needs no agent activation to obtain a voice.
+
+The object is closed. A text source must contain a nonempty `text_to_speech` profile reference;
+missing/null/unknown/wrong-kind profiles fail explicitly. File sources reject that field and
+require no TTS. Text and URL cannot be mixed, unknown types and keys fail, text is a
 non-empty UTF-8 value of at most 4096 bytes, and URLs are HTTPS values of at most 2048 bytes
 with a host and without user information or fragments. Query strings remain syntactically
 valid because ordinary asset CDNs use them, but operators must not put credentials or signed
@@ -26,13 +35,31 @@ URLs into definitions. The typed source is copied into the immutable resolved pl
 room starts and its routine inspection exposes only the source type.
 
 Omission means there is no opening-audio phase. It does not insert silence or delay startup.
-The runtime targets only the entry caller. Text uses the initially resolved receiving
-agent's TTS binding. Normal text and media input remain closed until the output sink reports
+The runtime targets only the entry caller. Text uses a separate supervised TTS capability owned
+by the opening lifecycle, attributed to the caller with no agent activation, and released after
+opening completion. Agent greetings keep their own TTS capability. Normal text and media input
+remain closed until the output sink reports
 actual playout completion; preparation, synthesis completion, enqueueing, or provider
 readiness do not open the gate. Input received while the gate is closed is discarded rather
 than buffered or replayed. A preparation or playback failure ends the room explicitly and
 never silently opens normal conversation. A text source without a resolved TTS binding fails
 validation before a room is registered; file playback is independent of TTS.
+
+Room mixing and both full-mix and individual-track recording obey the same opening boundary.
+The mixer starts closed when the pinned plan has opening audio; confirmed playout completion
+opens it before ordinary input/greeting admission. Frames timestamped before that boundary are
+discarded even when decoding or delivery finishes afterward. Recording workers may initialize
+earlier, but receive no held caller audio. Private opening output does not enter room recordings.
+Opening completion does not revise privacy policy or restart warmed capabilities.
+
+## Migration
+
+This replaces the previous schema's inherited initial-agent voice. Publish definitions using
+`20260913.01` and add `opening_audio.text_to_speech` to every text opening. There is no fallback
+to participant capabilities, call defaults, another agent, or an invented voice. Existing schema
+versions are not accepted as newly authored definitions. Reprepare unstarted calls from an updated
+definition instead of silently supplying a voice to an old pinned plan. Historical definitions
+and completed-call plans remain immutable. Omitted openings and file URLs need no TTS reference.
 
 ## File asset profile
 
@@ -62,7 +89,8 @@ credentials are retained in keys or routine inspection. A different tenant, URL,
 cannot reuse the entry. Download/preparation failures are not cached.
 
 Fixed-text synthesis uses the same bounded cache and asset-size/duration limits. Its digest covers
-the public tenant key, exact text, provider identity, voice/model, encoding, sample rate, and a
+the public tenant key, exact text, selected capability-profile reference, provider identity,
+voice/model, encoding, sample rate, and a
 render-profile revision. Provider implementations expose only output-affecting identity; API keys
 and transport credentials are excluded. On a miss, a temporary supervised sink forwards provider
 PCM to the caller while collecting at most the configured bounds, then inserts only a complete,
@@ -75,6 +103,8 @@ only the destination sink's correlated playout-completion acknowledgement does t
 - A single untagged string is ambiguous between fixed text and a URL and cannot evolve safely.
 - Accepting both text and URL and choosing one by precedence hides definition mistakes.
 - LLM-generated notices are nondeterministic and can change the meaning of a fixed opening.
+- Inheriting the initial agent's TTS couples call-level playback to an optional participant.
+  Requiring a dedicated profile makes human entry work and prevents implicit voice selection.
 - Releasing input on synthesis or enqueue completion is too early; the caller may still be
   hearing the opening.
 - Buffering caller media during the opening would later submit speech uttered before consent
@@ -90,6 +120,16 @@ while a temporary sink owns bounded collection. `RoomAuthority` owns only the op
 correlated outcome decision; it does not fetch, decode, cache, synthesize, or push opening media.
 
 ## Verification
+
+The 2026-09-14 regressions prove explicit profile resolution for a human initial receiver,
+rejection of absent/malformed/unknown/wrong-kind references, independent opening/greeting voices,
+opening TTS cleanup, and cache isolation across configured profile references. The recording
+regression initially delivered both full-mix and individual-track audio during the notice; it now
+delivers neither, discards delayed held frames, and records subsequent audio normally. The
+prepared-call persistence check reloads the pinned opening profile and options unchanged.
+Commands and final gate results are in the [implementation labnote](../labnotes/20260913-2345-opening-tts-recording.md).
+
+Earlier implementation evidence:
 
 The compiler contract is covered by `opening_audio_compiler_test.exs`: missing runtime type and
 schema-version assertions were observed red first, then 2 focused tests passed. The fixed-text

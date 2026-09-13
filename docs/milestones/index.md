@@ -99,6 +99,12 @@ announcement in the later room-mixing path. The [opening milestone](opening-audi
 records the regression and completion-boundary fix; all root checks pass with 1,008 tests and
 zero failures. This correction does not implement the proposed wait sounds.
 
+The subsequent independent-opening-TTS checkpoint uses schema `20260913.01`: text openings
+require their own profile and work with a human initial receiver, with no inherited voice.
+Recording checks cover both text/file openings and announcement egress as well as caller audio.
+All five root gates pass; the final umbrella suite reports 1,013 tests and zero failures. See
+[the current contract and migration guidance](../opening-audio-contract.md).
+
 ## Common implementation and verification gates
 
 Every milestone inherits these requirements; its own checklist adds the slice-specific gates.

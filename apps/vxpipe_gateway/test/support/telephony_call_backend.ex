@@ -111,7 +111,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
         tenant_key: "AAAAAAAAAAAAAAAA",
         definition_id: "50000000-0000-4000-8000-000000000005",
         definition_revision: 1,
-        schema_version: "20260911.03",
+        schema_version: "20260913.01",
         participant_routes: %{},
         entry_caller: "caller",
         entry_receiver: "assistant",
@@ -143,7 +143,7 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
     %ResolvedCallPlan{
       definition_id: "50000000-0000-4000-8000-000000000005",
       definition_revision: 1,
-      schema_version: "20260911.03",
+      schema_version: "20260913.01",
       tenant_id: "AAAAAAAAAAAAAAAA",
       actor_id: "actor_phone",
       call_id: "30000000-0000-4000-8000-000000000003",

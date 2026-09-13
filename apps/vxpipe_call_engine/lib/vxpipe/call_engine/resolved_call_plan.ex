@@ -44,7 +44,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           transport: :web,
           entry_caller: String.t(),
           entry_receiver: String.t(),
-          opening_audio: nil | Vxpipe.CallEngine.CallDefinition.OpeningAudio.t(),
+          opening_audio: nil | Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio.t(),
           media_policy: MediaPolicy.t(),
           participants: %{String.t() => Participant.t()},
           transfer_policy: TransferPolicy.t(),
