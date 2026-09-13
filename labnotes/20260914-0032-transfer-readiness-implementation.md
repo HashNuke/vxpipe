@@ -265,3 +265,29 @@ unchecked; the milestone and index are still incomplete.
   warnings-as-errors compilation, strict Credo, 1,083 umbrella tests with zero failures
   (15 integration tests excluded), and unused-dependency checks. The collector is recorded in the
   next checkpoint; no startup/transfer barrier or browser/provider acceptance is claimed here.
+
+## Asynchronous readiness collection
+
+- Added a collector owned by RoomCapabilitySupervisor and a named task supervisor for bounded
+  adapter observations. Its task batch keeps calls out of the room authority, limits concurrency,
+  and periodically retries preparing resources. Ready instances retain their evidence on unchanged
+  reconciliation; an explicit refresh rechecks evidence without restarting capabilities.
+- Every result is fenced to the current batch and exact expected resource. Changed returned
+  configuration/policy/generation fails the old binding and requires owner reconciliation. Monitored
+  resource loss revokes readiness. Missing adapters and explicit failed reports fail closed.
+- One absolute deadline applies through reconciliation. A controlled-clock regression reproduced
+  a late ready result being accepted before the timer message; results and snapshot calls now check
+  the clock directly. A timed-out observation also initially poisoned the resource generation;
+  this now remains preparing and can recover on another bounded observation without replacement.
+- Owner loss and cancellation stop outstanding batch/probe tasks while leaving the observed
+  resources running. Focused checks monitor those task exits and use acknowledgement-controlled
+  adapters; no sleeps or PID-liveness assertions were added.
+- Eleven collector checks pass, including actual STT/mixer evidence, relevant policy changes,
+  independent delayed resources, automatic polling, concurrency bounds, resource death, stale
+  results, deadline races and cleanup. Together with the barrier/provider/core-room checks the
+  focused lane passes 61 tests. All five root gates pass with 1,083 tests and zero failures
+  (15 integrations excluded). This is collection infrastructure; RoomAuthority does not use it yet.
+- Next integration evidence: MCP Connections.open already requires the exact ready protocol revision;
+  IntegrationOwner completes scoped binding/lease setup before returning. The agent session validates
+  its configuration and context but has no initialization query yet. Add model/tool and recording/
+  media adapters, then derive the full prospective inventory and connect startup/transfer phases.

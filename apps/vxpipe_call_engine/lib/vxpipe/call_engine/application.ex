@@ -25,6 +25,7 @@ defmodule Vxpipe.CallEngine.Application do
       {Task.Supervisor, name: Vxpipe.CallEngine.SpeechToTextConnectionTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ModelInferenceTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ArchiveWriterTaskSupervisor},
+      {Task.Supervisor, name: Vxpipe.CallEngine.ReadinessTaskSupervisor},
       Vxpipe.CallEngine.Archive.Supervisor,
       {Vxpipe.CallEngine.RemoteMCP.CatalogStore, name: Vxpipe.CallEngine.RemoteMCP.CatalogStore},
       opening_audio_cache(settings)

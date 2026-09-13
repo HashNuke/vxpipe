@@ -484,3 +484,12 @@ archive require open local handoffs, with archive also requiring a bound produce
 archive writes preserve the existing asynchronous contract. Forty focused room-service tests pass.
 Recording, model/tool readiness, the full prospective inventory and lifecycle integration remain
 pending; this is partial progress on common readiness.
+
+Readiness collection is now supervised and asynchronous. It retains unchanged evidence, bounds
+parallel observations, monitors resource death and fences responses to the current attempt/batch.
+A timed-out observation can be retried without replacing its resource, while missing adapters and
+explicit failures block. Reconciliation preserves the original absolute deadline; late ready replies
+cannot beat deadline enforcement. Eleven collector checks, including actual STT/mixer integration,
+pass. The combined focused lane has 61 passing tests and all five root gates pass with 1,083 tests,
+zero failures and 15 excluded integrations. The collector is not yet connected to RoomAuthority;
+model/tool, recording/media adapters, complete inventory and lifecycle acceptance remain pending.

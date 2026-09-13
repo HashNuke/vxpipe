@@ -174,6 +174,15 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
     )
   end
 
+  def start_readiness(incarnation_id, options) when is_list(options) do
+    options = Keyword.put(options, :incarnation_id, incarnation_id)
+
+    DynamicSupervisor.start_child(
+      via(incarnation_id),
+      {Vxpipe.CallEngine.Readiness.Collector, options}
+    )
+  end
+
   def stop_capability(incarnation_id, capability) do
     DynamicSupervisor.terminate_child(via(incarnation_id), capability)
   end

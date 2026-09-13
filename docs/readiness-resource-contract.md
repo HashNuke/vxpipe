@@ -1,7 +1,8 @@
 # Resource readiness evidence
 
-Status: barrier, speech-provider adapters and core room-service adapters implemented; lifecycle
-collection and the complete prospective resource inventory remain in progress. This is a decision for
+Status: barrier, asynchronous collection, speech-provider adapters and core room-service adapters
+implemented; the complete prospective inventory and lifecycle integration remain in progress.
+This is a decision for
 [transfer readiness and wait sounds](milestones/transfer-readiness-and-wait-sounds.md), not a
 claim that calls or transfers now wait for the full barrier.
 
@@ -43,11 +44,35 @@ binding. Hold/output generations are separate from resource lifetime and privacy
 Global policy revision numbers must not stand in for a resource's relevant interval: unrelated
 membership, audio policy or hold changes must preserve that resource's descriptor and evidence.
 
-The barrier is pure state. Bounded adapter calls, process monitors and preparation belong in a
-collector outside RoomAuthority's receive loop. The collector must bind each actual response to
-its request, preserve report ordering and revoke evidence on resource loss; it cannot fabricate
-readiness from a successful child start. The barrier alone neither monitors processes nor releases
-media. Collection and release fencing are still pending.
+The barrier is pure state. The supervised collector performs bounded adapter calls outside
+RoomAuthority's receive loop, binds each response to its current batch/request and monitors required
+processes. The barrier alone neither monitors processes nor releases media. Lifecycle use and media
+release fencing are still pending.
+
+## Collection and deadlines
+
+`RoomCapabilitySupervisor.start_readiness/2` owns each collector. It accepts the complete required
+resource set and one absolute deadline; reconciliation never extends that deadline. Its worker
+limits concurrent adapter calls, automatically revisits preparing resources and stops polling once
+ready. Reconciliation retains unchanged evidence and does not invoke provider initialization.
+
+Explicit refresh rechecks current evidence before a lifecycle transition. It closes the evidence
+barrier during that check without replacing resource processes. A changed returned binding cannot
+be adopted silently: the lifecycle owner must validate and reconcile it against the desired plan
+and policy. Missing adapters, explicit failures and monitored process loss fail closed. A timed-out
+observation remains preparing and may be retried within the same deadline; it is not proof that a
+healthy provider must be restarted.
+
+Late results from cancelled batches are ignored. Owner loss cancels the collector's outstanding
+probe work, and deadline checks occur when results are accepted as well as when the timer arrives.
+The owner receives only safe status/blocker summaries. Resources themselves are not stopped by
+the collector. After successful lifecycle release the owner must retire the completed collector;
+its deadline covers that lifecycle attempt, not the subsequent conversation.
+
+Eleven collector tests include actual STT and mixer reports, delayed readiness, changed policy
+evidence, unsupported adapters, bounded concurrency, automatic polling, loss of a ready resource,
+owner cleanup, stale batches and deadline races. Inventory construction, the remaining adapters,
+and startup/transfer use are still required before this becomes a complete room barrier.
 
 ## Speech-provider adapters
 
