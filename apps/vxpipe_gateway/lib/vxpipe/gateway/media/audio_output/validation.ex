@@ -15,6 +15,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Validation do
       frame.sample_rate != 48_000 -> {:error, :unsupported_audio}
       frame.channels != 1 -> {:error, :unsupported_audio}
       frame.byte_order != :little -> {:error, :unsupported_audio}
+      frame.audio_scope not in [:conversation, :private] -> {:error, :invalid_frame}
       not is_pid(frame.reply_to) -> {:error, :invalid_frame}
       not is_binary(frame.payload) or byte_size(frame.payload) == 0 -> {:error, :invalid_frame}
       true -> :ok
@@ -25,6 +26,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Validation do
   def establish_turn(%AudioOutputFrame{} = frame, %State{current: nil} = state) do
     current = %{
       callback: frame.reply_to,
+      audio_scope: frame.audio_scope,
       command_id: frame.command_id,
       correlation_id: frame.correlation_id,
       incarnation_id: frame.incarnation_id,
@@ -44,7 +46,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Validation do
   def establish_turn(%AudioOutputFrame{} = frame, %State{} = state) do
     current = state.current
 
-    if current.correlation_id == frame.correlation_id and current.command_id == frame.command_id and
+    if current.audio_scope == frame.audio_scope and current.correlation_id == frame.correlation_id and
+         current.command_id == frame.command_id and
          current.callback == frame.reply_to and current.tenant_id == frame.tenant_id and
          current.room_id == frame.room_id and current.incarnation_id == frame.incarnation_id and
          current.source_participant_id == frame.participant_id and not current.finished? do

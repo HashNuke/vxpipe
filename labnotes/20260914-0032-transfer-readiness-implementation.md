@@ -53,3 +53,42 @@ Final first-checkpoint gates: `mix format --check-formatted`, `mix compile --war
 `mix deps.unlock --check-unused` all pass. No UI behavior changed in this checkpoint; rendered
 browser/live-provider acceptance remains part of the following runtime work. The development
 sample selects the new schema and omitted-slot defaults with `wait_sounds: %{}`.
+
+## Playback primitive checkpoint
+
+- Four initial player regressions failed because no player existed. A supervised player now owns
+  one participant/episode cursor. It sends at most one PCM frame per output and waits for actual
+  completion on every sink before advancing. Asynchronous OTP request IDs keep the player
+  responsive while output calls are pending; generation/correlation checks reject stale completion.
+- Pause and stop drain the outstanding frame before acknowledging, with no codec restart and no
+  queued loop tail. Resume uses that listener's own cursor. The cursor wraps within a frame rather
+  than padding every loop boundary. A five-second frame deadline and output/owner monitors bound
+  failed playback; the enclosing attempt deadline remains the room controller's responsibility.
+- Five focused player tests pass: shared ten-second audio at seven/three seconds, independent
+  resume, no premature advance, gapless sample wrapping, finite cue completion, sink failure
+  isolation, and multiple output sinks following one participant cursor.
+- Private PCM initially entered both native WebRTC and common phone recording handoffs. The two
+  red boundary tests now pass after adding an explicit private audio scope, pinned for the whole
+  output turn and excluded from recording acceptance. Conversation output retains its existing
+  recording behavior. The player always emits private frames. Thirteen focused Gateway native
+  output tests pass.
+- This primitive is exposed through the owning RoomCapabilitySupervisor. It is not yet attached
+  to startup/transfer orchestration. The shared recipient output arbiter, initial output-before-
+  capability startup, readiness descriptors/adapters, coordinated transfer release, restoration,
+  telemetry and browser/phone acceptance still require implementation.
+
+### Next integration decisions
+
+Existing WebRTC uses separate direct-output and room-mix encoders; phone uses separate direct and
+room-output pipelines too. They must converge before encoding. A shared recipient output owner
+must serialize private frames and permitted mixed frames on the same native output timeline,
+relay correlated completion, prioritize private phases, and clear/drain old room generations.
+Retain upstream RoomAudioEgress subscription/policy checks while replacing its second encoder
+with delivery into that shared output. Do not implement this by starting another codec per wait.
+The common phone output's existing interrupt currently replaces its pipeline; wait transitions
+must use ordered drain/clear that retains the codec. Native phone sinks currently acknowledge
+socket submission; provider marks still need explicit integration for the milestone's cue proof.
+
+All five root gates pass for the playback primitive checkpoint: formatting, warnings-as-errors
+compilation, strict Credo, 1,032 umbrella tests with zero failures, and unused-dependency checks.
+Runtime integration and rendered/provider acceptance remain pending.

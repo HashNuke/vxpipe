@@ -417,3 +417,14 @@ Older serialized plans hydrate missing wait fields only at the explicit preparat
 the original saved bytes/schema/identities remain unchanged. Already prepared audio is reused
 without refetching. Playback, the common readiness barrier and the remaining acceptance items
 remain incomplete.
+
+The playback primitive checkpoint adds supervised independent cursors, one pending frame per sink,
+completion-driven pacing, drain-before-pause/stop, cursor-preserving resume, and finite cue
+completion. Focused checks demonstrate two listeners at seven/three seconds and one participant's
+multiple sinks sharing a cursor. Private audio is explicitly excluded from native WebRTC and phone
+recording handoffs. These primitives are not yet connected to call/transfer phases; the private
+playback checkpoint remains unchecked until the shared recipient output arbiter is integrated.
+
+All five root gates pass for the playback primitive checkpoint: formatting, warnings-as-errors
+compilation, strict Credo, 1,032 umbrella tests with zero failures, and unused-dependency checks.
+Runtime integration and rendered/provider acceptance remain pending.

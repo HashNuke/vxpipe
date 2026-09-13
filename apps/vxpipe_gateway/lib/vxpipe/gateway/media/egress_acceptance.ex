@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.Media.EgressAcceptance do
 
   @spec record(nil | EgressHandoff.t(), map(), String.t(), binary()) :: :ok
   def record(nil, _current, _connection_id, _payload), do: :ok
+  def record(_handoff, %{audio_scope: :private}, _connection_id, _payload), do: :ok
 
   def record(%EgressHandoff{} = handoff, current, connection_id, payload)
       when is_map(current) and is_binary(connection_id) and is_binary(payload) do

@@ -149,6 +149,21 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
     assert_receive {:DOWN, ^monitor, :process, ^output, :audio_output_unavailable}
   end
 
+  test "private wait audio plays without entering the telephony recording handoff" do
+    {output, connection} = start_output(maximum_frames: 4)
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, _pipeline, ^output}
+    send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+    handoff = recording_handoff(connection)
+    assert :ok = OutputSink.bind_recording(output, handoff)
+    private = frame(:binary.copy(<<1, 0>>, 960), connection) |> Map.put(:audio_scope, :private)
+    assert :ok = AudioOutput.push(output, private)
+    assert :ok = finish(output)
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id, %PlaybackFrame{timestamp: 0}}
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 0})
+    assert_receive {:vxpipe_audio_playback, ^output, "turn-test", {:completed, 20}}
+    refute_receive {:vxpipe_recording_egress, ^handoff, _}
+  end
+
   defp start_output(options) do
     connection_id = unique_id("connection")
 

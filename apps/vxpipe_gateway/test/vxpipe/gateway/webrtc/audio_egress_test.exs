@@ -321,6 +321,38 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     refute_receive {:vxpipe_recording_egress, ^handoff, %NormalizedFrame{}}
   end
 
+  test "private wait audio plays without entering the WebRTC recording handoff" do
+    observer = self()
+
+    egress =
+      start_supervised!(
+        {AudioEgress,
+         connection_id: "connection-test",
+         peer_connection: self(),
+         track_id: "track-output",
+         encoder: {TestOpusEncoder, [observer: self()]},
+         send_rtp: fn _, _, packet ->
+           send(observer, {:test_rtp, packet})
+           :ok
+         end,
+         schedule: fn target, message, _ ->
+           send(observer, {:pace, target, message})
+           make_ref()
+         end}
+      )
+
+    handoff = recording_handoff("connection-test")
+    assert :ok = OutputSink.bind_recording(egress, handoff)
+    private = frame(:binary.copy(<<1, 0>>, 960)) |> Map.put(:audio_scope, :private)
+    assert :ok = OutputSink.push(egress, private)
+    assert :ok = OutputSink.finish(egress, "turn-test", self())
+    assert_receive {:test_rtp, %Packet{sequence_number: 0}}
+    assert_receive {:pace, ^egress, message}
+    send(egress, message)
+    assert_receive {:vxpipe_audio_playback, ^egress, "turn-test", {:completed, 20}}
+    refute_receive {:vxpipe_recording_egress, ^handoff, _}
+  end
+
   defp frame(payload) do
     %AudioOutputFrame{
       tenant_id: "tenant-test",

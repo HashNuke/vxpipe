@@ -165,6 +165,15 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
     DynamicSupervisor.start_child(via(incarnation_id), {TextCacheSink, options})
   end
 
+  def start_wait_audio(incarnation_id, options) when is_list(options) do
+    options = Keyword.put(options, :incarnation_id, incarnation_id)
+
+    DynamicSupervisor.start_child(
+      via(incarnation_id),
+      {Vxpipe.CallEngine.WaitSounds.Player, options}
+    )
+  end
+
   def stop_capability(incarnation_id, capability) do
     DynamicSupervisor.terminate_child(via(incarnation_id), capability)
   end
