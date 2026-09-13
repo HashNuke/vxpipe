@@ -149,8 +149,8 @@ Implementation checkpoint 2 added the `vxpipe_console` umbrella application usin
 1.8.13 and the `Vxpipe.Console` namespace. Its application prepares the gateway mount from
 runtime application settings and passes it to `Vxpipe.Console.Endpoint`; the endpoint invokes
 the mounted gateway before its own router. Development now disables the gateway listener and
-enables the Console listener. Focused and live checks show the Console root and gateway health
-route on the same port, one BEAM listener on port 4000, no gateway HTTP supervisor, and the
+enables the Console listener. Focused and live checks show Console browser pages and the gateway
+health route on the same port, one BEAM listener on port 4000, no gateway HTTP supervisor, and the
 gateway session/connection runtime still active. The gateway has no Phoenix dependency. React
 asset ownership, dashboard dependencies, diagnostics, and full call transport through
 the shared endpoint remain pending.

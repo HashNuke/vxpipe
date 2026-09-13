@@ -17,7 +17,7 @@ defmodule Vxpipe.Console.OperatorSignInPage do
       <body class="operator-page">
         <main class="sign-in-shell">
           <header class="sign-in-brand">
-            <a href="/" aria-label="Open Vxpipe voice console">Vxpipe</a>
+            <a href="/pipecat-console" aria-label="Open Vxpipe voice console">Vxpipe</a>
             <span>Call inspection</span>
           </header>
           <section class="sign-in-panel" aria-labelledby="sign-in-heading">

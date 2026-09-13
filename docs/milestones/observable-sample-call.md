@@ -440,6 +440,12 @@ horizontal overflow, browser errors, or axe accessibility findings. Full umbrell
 passes 996 tests with 15 explicitly excluded integrations, formatting, warnings-as-errors
 compilation, unused-dependency checking, and strict Credo over 801 files.
 
+Implementation evidence, pre-delivery route cleanup (2026-09-13): `/` now renders a compact
+directory linking every stable Console UI entry point. The Pipecat caller sample moved intact to
+`/pipecat-console`; `/transfer` remains its separate transfer-destination page. Existing navigation
+from diagnostics, call inspection, operator sign-in, and the transfer desk points directly to the
+new caller URL rather than assuming the sample owns the root route.
+
 ## Specification review
 
 Local design review on 2026-09-08 checked the early prerequisite, observable browser

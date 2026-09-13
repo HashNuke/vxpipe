@@ -33,7 +33,7 @@ defmodule Vxpipe.Console.CallInspectionComponents do
           <p>Inspect and debug voice calls with a bounded event timeline and source revisions.</p>
         </div>
         <div class="inspection-actions">
-          <a class="nav-link" href="/">Voice console</a>
+          <a class="nav-link" href="/pipecat-console">Voice console</a>
           <a class="nav-link nav-link--primary" href="/diagnostics">Diagnostics</a>
           <div class="operator-readout">
             <span>Tenant</span>

@@ -69,7 +69,9 @@ instance. The Console's Phoenix endpoint supervises its esbuild development watc
 serves the React assets, and mounts the reusable gateway. It is the only HTTP server.
 By default Phoenix listens with TLS on the machine's Tailscale address at
 `https://<machine-fqdn>:4000/`. The machine FQDN and Tailscale IPv4 address are
-discovered automatically; WebRTC media continues to use its negotiated ICE path.
+discovered automatically; WebRTC media continues to use its negotiated ICE path. The root page
+lists the available Console interfaces. The Pipecat sample itself is available at
+`/pipecat-console`.
 
 Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
 Mix manifests, or runtime configuration ask Goreman to restart only the
