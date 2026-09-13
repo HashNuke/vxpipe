@@ -8,6 +8,12 @@ wrapper as its development watcher and uses LiveReload for browser refreshes;
 ignored `priv/static/assets` directory. Phoenix serves the UI and mounted gateway
 from one listener.
 
+The esbuild profile has independent named entries for the React sample, the shared LiveView client,
+call-inspection styles, and diagnostics styles. Operator assets are served by the same Phoenix
+`Plug.Static` boundary as the sample; they are not embedded into Elixir modules. The shared client
+reads the page's `phx-socket` attribute, so call inspection and diagnostics retain their distinct
+socket endpoints without duplicating Phoenix or LiveView in the browser bundle.
+
 The initial screen uses `ConsoleTemplate` from
 `@pipecat-ai/voice-ui-kit`. It pulls in `@pipecat-ai/client-react` and the core
 client, and uses the Small WebRTC transport. The default offer URL is

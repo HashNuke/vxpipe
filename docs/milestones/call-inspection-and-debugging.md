@@ -227,12 +227,17 @@ Implementation evidence to date:
   polling instead of claiming the call is live or still timing it. No terminal fact, end time,
   replay, reconciliation, retention, or deletion is invented. The focused endpoint contract
   first failed twice on the former `Live`/`Persisted` labels, then passed 20 tests; the complete
-  Console suite passes 91 tests. Full umbrella verification passes 994 tests with 15 explicitly
+  Console suite passes 93 tests. Full umbrella verification passes 996 tests with 15 explicitly
   excluded integrations, plus formatting, warnings-as-errors compilation, unused-dependency
-  checking, and strict Credo over 803 files.
-- The LiveView inspection stylesheet now lives in `assets/css` rather than the Elixir `lib`
-  tree. Its controller continues to embed, hash, and serve the same bounded asset, so this
-  source-boundary correction changes neither the route nor its immutable caching contract.
+  checking, and strict Credo over 801 files.
+- The LiveView inspection stylesheet lives in `assets/css` rather than the Elixir `lib` tree. A
+  follow-up pre-delivery cleanup makes it a separate esbuild entry served through the Console's
+  existing `/assets/*` `Plug.Static` boundary. Call inspection and diagnostics share one compiled
+  LiveView bootstrap that reads each page's existing socket path. The bespoke inspection asset
+  controller and route are removed without combining inspection styles with the React sample.
+  The frontend passes 10 tests and the production asset build. Chromium confirms the unchanged
+  sign-in surface at 1440×1000 and 390×844 with no horizontal overflow, browser errors, or axe
+  accessibility findings.
 - A fresh deterministic WebRTC call was left running while the development VM was stopped,
   then inspected after restart. Its current-schema persisted ledger rendered with the explicit
   runtime-unavailable state. Desktop and 390px confirmation captures had equal viewport/body/

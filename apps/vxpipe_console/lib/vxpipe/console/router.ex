@@ -40,7 +40,6 @@ defmodule Vxpipe.Console.Router do
     get "/operator/sign-in", Vxpipe.Console.OperatorSessionController, :new
     post "/operator/session", Vxpipe.Console.OperatorSessionController, :create
     post "/operator/sign-out", Vxpipe.Console.OperatorSessionController, :delete
-    get "/calls/assets/:kind/:hash", Vxpipe.Console.CallInspectionAssetController, :show
   end
 
   scope "/calls" do
@@ -60,8 +59,6 @@ defmodule Vxpipe.Console.Router do
 
   scope "/diagnostics" do
     pipe_through [:diagnostics, :browser]
-
-    get "/assets/live/:hash", Vxpipe.Console.DiagnosticsAssetController, :show
 
     live_session :vxpipe_diagnostics,
       root_layout: {Vxpipe.Console.DiagnosticsLayout, :root} do

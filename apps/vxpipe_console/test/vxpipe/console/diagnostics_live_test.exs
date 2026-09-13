@@ -46,6 +46,15 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     on_exit(fn -> Application.put_env(:vxpipe_console, :diagnostics, original) end)
   end
 
+  test "loads diagnostics through compiled static assets" do
+    html = html_response(get(build_conn(), "/diagnostics"), 200)
+
+    assert html =~ ~s(href="/assets/diagnostics.css")
+    assert html =~ ~s(type="module" src="/assets/live.js")
+    refute html =~ "/diagnostics/assets/"
+    refute html =~ "<style>"
+  end
+
   test "renders live bounded call-path measurements" do
     {_child_id, reporter} = start_reporter({__MODULE__, make_ref()}, 32)
     configure_reporter(reporter)

@@ -135,7 +135,7 @@ config :esbuild,
   version: "0.25.4",
   vxpipe_console: [
     args:
-      ~w(src/main.tsx --bundle --format=esm --target=es2022 --outdir=../priv/static/assets --entry-names=app),
+      ~w(app=src/main.tsx live=src/live.ts call_inspection=css/call_inspection.css diagnostics=css/diagnostics.css --bundle --format=esm --target=es2022 --outdir=../priv/static/assets --entry-names=[name]),
     cd: Path.expand("../apps/vxpipe_console/assets", __DIR__),
     env: %{
       "NODE_PATH" => Path.expand("../apps/vxpipe_console/assets/node_modules", __DIR__)

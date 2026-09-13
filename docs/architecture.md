@@ -3322,8 +3322,12 @@ shell and LiveDashboard route are
 implemented. The Vxpipe LiveView measurement page reads the bounded reporter with a short
 timeout and presents only its latest aggregate snapshot. It distinguishes current, stale,
 missing, dropped and unavailable observations without creating a second history buffer.
-Its locally packaged, content-hashed client connects through the existing diagnostics
-socket. The diagnostics enablement decision is shared by the HTTP pipeline and socket
+Its Console-owned LiveView client is a normal esbuild entry shared with call inspection. Each
+page selects its existing socket through a root `phx-socket` attribute; page-specific hooks remain
+inert where no matching `phx-hook` exists. The compiled module and the separate operator
+stylesheets are served by the endpoint's existing `Plug.Static`, alongside the React sample,
+rather than being embedded into Elixir modules or exposed through custom asset controllers. The
+diagnostics enablement decision is shared by the HTTP pipeline and socket
 connect callback: disabled HTTP requests return 404 and disabled socket connections are
 refused. No hosted browser asset or additional Console or LiveDashboard authentication is
 introduced.

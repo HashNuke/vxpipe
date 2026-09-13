@@ -56,6 +56,19 @@ defmodule Vxpipe.Console.CallInspectionEndpointTest do
     assert html_response(get(build_conn(), "/diagnostics"), 200) =~ "Vxpipe diagnostics"
   end
 
+  test "loads call inspection through compiled static assets" do
+    configure_list_response(%CallListPage{calls: [], next_cursor: nil})
+
+    sign_in_html = html_response(get(build_conn(), "/operator/sign-in"), 200)
+    calls_html = html_response(sign_in() |> recycle() |> get("/calls"), 200)
+
+    assert sign_in_html =~ ~s(href="/assets/call_inspection.css")
+    assert calls_html =~ ~s(href="/assets/call_inspection.css")
+    assert calls_html =~ ~s(type="module" src="/assets/live.js")
+    refute sign_in_html =~ "/calls/assets/"
+    refute calls_html =~ "/calls/assets/"
+  end
+
   test "signs in with a calls-scoped API key without reflecting the secret" do
     configure_list_response(%CallListPage{calls: [], next_cursor: nil})
 
