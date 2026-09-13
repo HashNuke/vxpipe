@@ -33,7 +33,7 @@ files and the two earlier sound-authoring labnotes remain outside this checkpoin
   setup using phone-ring remains proposed. The two supplied loops are nine seconds long; the
   seven-second/three-second cursor acceptance example uses a separate ten-second fixture.
 - The final schema proposal uses one call-level `wait_sounds` object with `call_setup`,
-  `transfer_to_agent`, `transfer_to_human`, and `transfer_receiver`. Missing slots use defaults;
+  `transfer_to_agent`, `transfer_to_human`, and `transfer_joining`. Missing slots use defaults;
   a URL fetches that file; null / Elixir `nil` silences that slot. Whole-object null is proposed
   shorthand for silencing all waits. Earlier asset-name and participant-layer ideas were removed
   after the user required URL-or-nil call configuration. There is no `override` field.

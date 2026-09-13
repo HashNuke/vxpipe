@@ -50,7 +50,7 @@ not an optional `wait_until_ready` setting.
 | `call_setup` | Entry caller, once its output connection can play audio, while initial room/capability setup is incomplete | `phone-ring` (proposed) |
 | `transfer_to_agent` | Existing audience, including the caller, when the transfer destination is an AI agent | `cafe-bossa` |
 | `transfer_to_human` | Existing audience, including the caller, when the transfer destination is a human | `phone-ring` |
-| `transfer_receiver` | Incoming human destination, immediately after accepted transfer control, until readiness permits the connection cue | `cafe-bossa` |
+| `transfer_joining` | Incoming human destination, immediately after accepted transfer control, until readiness permits the connection cue | `cafe-bossa` |
 
 The transfer defaults above reflect the user's follow-up: AI-to-AI uses café-bossa; AI-to-human
 uses phone-ring for the caller/audience and café-bossa for the receiving human. The initial caller
@@ -77,7 +77,7 @@ Example proposed definition (not accepted by today's parser; the schema version 
     "call_setup": null,
     "transfer_to_agent": "https://media.example.com/cafe-bossa.wav",
     "transfer_to_human": "https://media.example.com/phone-ring.wav",
-    "transfer_receiver": "https://media.example.com/receiver-wait.wav"
+    "transfer_joining": "https://media.example.com/receiver-wait.wav"
   },
   "participants": {
     "caller": {
@@ -247,7 +247,7 @@ flowchart LR
    acceptance window server-side for web and phone. Premature controls do not accept or end the
    attempt; they do not reset the deadline. This replaces today's permitted early-accept latch and
    ensures receiver waiting begins immediately after acceptance without masking a required notice.
-3. On accepted control, start `transfer_receiver` at that listener's zero position. Complete
+3. On accepted control, start `transfer_joining` at that listener's zero position. Complete
    preparation of its configured capabilities and held media paths. Preparing STT before main
    admission requires a narrowly authorized attempt-bound binding; it grants no microphone input,
    room audio, transcripts, recording, or unrestricted history during preparation.
