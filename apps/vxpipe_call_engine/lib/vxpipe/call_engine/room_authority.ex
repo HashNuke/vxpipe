@@ -40,6 +40,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     InputTurns,
     OpeningAudio,
     ParticipantLifecycle,
+    ReadinessBinding,
     State,
     Startup,
     StartupReadiness,
@@ -62,6 +63,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def input_admission(tenant_id, room_id) do
     GenServer.call(via(tenant_id, room_id), :input_admission, @call_timeout)
+  end
+
+  @doc "Captures current resource bindings without querying their dependencies."
+  def readiness_binding(room_authority, timeout \\ 1_000) do
+    GenServer.call(room_authority, :readiness_binding, timeout)
   end
 
   def join_participant(room_authority, %JoinParticipant{} = command) do
@@ -154,6 +160,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           room_mixer
         )
 
+      state = %{state | readiness_options: ReadinessBinding.options(options)}
+
       case Startup.start_entries(room_source, options, state) do
         {:ok, state} ->
           archive_recorder = ArchiveRecorder.room_opened(state.archive_recorder, state.snapshot)
@@ -169,6 +177,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
+
+  def handle_call(:readiness_binding, _from, state),
+    do: {:reply, ReadinessBinding.capture(state), state}
 
   def handle_call(:input_admission, _from, state) do
     {:reply, OpeningAudio.admission(state.opening_audio), state}

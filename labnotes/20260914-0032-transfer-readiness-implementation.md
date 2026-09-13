@@ -613,3 +613,42 @@ unchecked; the milestone and index are still incomplete.
   one attached connection, with track metadata available to recording preparation. The full
   prospective room inventory, actual candidate-resource installation and startup/transfer waiting,
   cues and release orchestration remain unfinished. The running development server was not restarted.
+
+## Prospective requirements and authoritative room bindings
+
+- The rename-only response was a no-progress goal turn. Revalidated the clean worktree and resumed
+  the inventory gap without changing the full milestone objective.
+- Seven selection contracts first failed at the absent inventory API. The implementation derives
+  requirements from the prospective membership and pinned capability choices, including all five
+  resulting listeners, every authorized sink, a receive-only monitor and a private destination
+  bound to its attempt. Departing/unused participants are excluded while the live source can remain
+  available for recovery. Missing humans and missing selected agent actors never shrink the set.
+- Audio normalization is demanded for permitted routes or enabled/selected recording tracks;
+  recording permission alone is insufficient. Speech demand additionally requires a selected STT
+  capability and a microphone-capable connection. Agent model readiness retains its tool/MCP
+  dependency contract; TTS is required when selected and its output is demanded.
+- The first green iteration caught a test helper mistake: `put_in(context.plan...)` returns the
+  updated context, not the plan. Bound the plan first and corrected that fixture. This was not a
+  production defect.
+- Two real-room capture contracts failed at the absent API, then passed. RoomAuthority exposes a
+  small binding projection without dependency calls; bounded candidate validation and inventory
+  construction happen outside its loop. Planned room recorders now have an incarnation-scoped
+  registry entry. Standalone fixtures keep their previous unnamed startup unless explicitly named.
+- A third red contract showed that validating only the source binding allowed a caller to shorten
+  the derived inventory. Validation now reconstructs the complete projection and rejects changes.
+  Recorder termination invalidates the old capture, while the next capture keeps recording required
+  with an explicit missing instance. Suspending policy validation leaves room binding reads usable,
+  and the capture respects its bounded timeout.
+- A recording-target contract first rejected valid pinned participant IDs. Added their supported
+  form and validation for empty, duplicate, unknown and incompatible target selections, matching
+  the recorder's supported full-mix/individual-track shapes.
+- Focused verification passes: 51 inventory, policy-authority, collector, recording and connection
+  checks. All five root gates pass: formatting, warnings-as-errors compilation, strict Credo,
+  1,148 umbrella tests with zero failures and 15 integrations excluded, and unused-dependency checks.
+- Design review is recorded in `docs/readiness-resource-contract.md`. This is requirements plus
+  authoritative roots, not complete prepared-resource collection or transfer authorization. Next:
+  expand every selected connection graph and required participant/room adapter, prepare recording
+  writers using exact tracks, then connect candidate preparation and the readiness collector to the
+  startup/transfer lifecycle. Existing state still has one active TTS handle plus pending transfer
+  preparation; any additional required actor correctly appears missing until its lifecycle owns it.
+  No development-server restart, rendered-browser check or live-provider acceptance was performed.

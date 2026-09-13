@@ -595,3 +595,19 @@ and 15 integrations excluded. Full prospective room inventory, candidate-resourc
 startup/transfer wait/cue/release orchestration remain unfinished. The speech fixture uses the current
 post-promotion attachment; phone graph fixtures do not select STT, and rendered/live-provider
 acceptance is not claimed.
+
+Prospective inventory selection now includes every resulting participant, every authorized human
+connection, selected participant capabilities and enabled room handoffs. Disconnected humans and
+missing enabled actors remain required; monitors never demand microphone processing. Audio and
+recording demand follow the effective policy and configured recording targets. A bounded capture
+reads the room's authoritative bindings, validates the candidate outside the room callback and
+rejects stale, changed or shortened inventories. An incarnation-scoped recorder binding makes local
+recording an explicit requirement even after its actor disappears. Fifty-one focused inventory,
+policy, collector, recording and connection checks pass. This establishes requirements and bindings;
+expanding them into the complete prepared resource graph, candidate-resource installation and
+startup/transfer orchestration remain unfinished. Common readiness and lifecycle acceptance stay
+unchecked; no rendered or live-provider verification is claimed.
+
+All five root gates pass for this inventory checkpoint: formatting, warnings-as-errors compilation,
+strict Credo, 1,148 umbrella tests with zero failures and 15 integrations excluded, and unused
+dependency checks. The full milestone remains incomplete.

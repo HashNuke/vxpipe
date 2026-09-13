@@ -40,6 +40,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor.RecordingChildren do
 
   defp recording_options(%ResolvedCallPlan{} = plan, incarnation_id, recording_token) do
     [
+      name: RoomRecording.ref(incarnation_id),
       tenant_id: plan.tenant_id,
       call_id: plan.call_id,
       room_id: plan.room_id,

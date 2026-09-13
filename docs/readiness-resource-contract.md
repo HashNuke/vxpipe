@@ -77,6 +77,49 @@ changes; the second misses restrictions from other remaining participants and th
 Preparing affected enforcer resources behind closed gates and installing those prepared bindings at
 commit remain unfinished. A valid policy preview alone is not readiness or permission to release media.
 
+## Prospective requirements and room bindings
+
+`Readiness.Inventory.build/4` derives required paths from the pinned plan, the prospective policy
+and authorized connections. It indexes the plan by participant ID, rather than confusing definition
+keys with runtime identities. Every resulting human remains required when disconnected; every
+authorized connection is selected when a participant has multiple sinks. A private destination
+connection is included only for the matching attempt. Its inclusion describes future demand and
+does not grant main-room access. Departing and unselected participants are excluded.
+
+The selector distinguishes room audio input, room output and selected speech recognition. A monitor
+never demands microphone processing. Policy-forbidden or unselected speech is absent. Recording
+permission alone does not demand a decoder: recording must also be enabled and target that source
+through a full mix or an individual track. Required remaining/incoming agents retain selected model
+inference and usable TTS requirements even when their actors have not started. Model readiness
+includes its existing tool/MCP dependency contract. Core mixer, transcript router and Variables
+requirements are always present for a planned room; configured local recording, archive and live
+inspection handoffs remain required independently of whether their processes are available.
+
+`Readiness.RoomInventory.capture/3` obtains these requirements from RoomAuthority's pinned state
+and binds the current resource owners. Its short room callback reads bindings and registry entries;
+it does not query providers or dependent actors. Candidate-policy validation runs outside that
+callback, within one bounded observation budget. Capture and subsequent validation reject changed
+room bindings, foreign/stale policy evidence and altered or shortened inventories. The capture pins
+the current transfer attempt/deadline when present, but it does not authorize a transfer or extend
+its clock. Repeated captures retain exact unchanged bindings. Production room recorders now have
+an incarnation-scoped registry entry; a missing enabled recorder stays explicitly required with a
+nil binding. Standalone recorders remain unnamed unless their owner supplies a name.
+
+This inventory is a requirements/binding snapshot, not a ready report. The next preparation step
+must expand every selected connection through its graph adapter, prepare individual recording
+writers from the resulting track identities, query all required participant/room adapters, and
+revalidate the inventory before using the collector's result. Candidate enforcer preparation,
+private destination prewarming and lifecycle release remain unfinished. A captured PID never
+satisfies readiness by itself.
+
+Local design review rejected deriving requirements from whichever PIDs happen to exist, accepting
+a caller's shortened resource list, demanding microphone paths for monitors, and treating recording
+permission as enabled recording. Checks cover five resulting listeners, multiple sinks, missing and
+foreign-attempt destinations, selected/denied capabilities, recording targets, source retention
+during policy preview, actual room/recorder bindings, a lost recorder, altered inventories and a busy
+policy authority. These are selection and binding checks, not the milestone's five-listener playback
+or transfer-release acceptance.
+
 ## Collection and deadlines
 
 `RoomCapabilitySupervisor.start_readiness/2` owns each collector. It accepts the complete required

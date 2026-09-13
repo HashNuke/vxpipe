@@ -11,7 +11,13 @@ defmodule Vxpipe.CallEngine.RoomRecording do
 
   @call_timeout 1_000
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options),
+    do: GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
+
+  def ref(incarnation_id),
+    do: {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {:room_recording, incarnation_id}}}
+
+  def whereis(incarnation_id), do: GenServer.whereis(ref(incarnation_id))
 
   def child_spec(options) do
     %{
