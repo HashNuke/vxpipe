@@ -148,6 +148,63 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSocketTest do
     :ok = :sys.resume(context.leg)
   end
 
+  test "attests only the validated stream without waiting on the leg dispatcher", context do
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
+    socket_pid = self()
+
+    request =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        Vxpipe.Gateway.Telephony.SocketReadiness.snapshot(socket_pid)
+      end)
+
+    assert_receive {:vxpipe_phone_readiness, receiver, reference}
+
+    assert {:ok, _socket} =
+             MediaSocket.handle_info(
+               {:vxpipe_phone_readiness, receiver, reference},
+               context.socket
+             )
+
+    assert {:ok, initial} = Task.await(request)
+    assert initial.status == :preparing
+    assert initial.input_track == nil
+
+    leg = context.binding.leg
+    :ok = :sys.suspend(leg)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(leg)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+    assert {:ok, socket} = MediaSocket.handle_in(text(start_message()), context.socket)
+
+    request =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        Vxpipe.Gateway.Telephony.SocketReadiness.snapshot(socket_pid)
+      end)
+
+    assert_receive {:vxpipe_phone_readiness, receiver, reference}
+
+    assert {:ok, ^socket} =
+             MediaSocket.handle_info({:vxpipe_phone_readiness, receiver, reference}, socket)
+
+    assert {:ok, ready} = Task.await(request)
+    assert ready.status == :ready
+    assert ready.resource.instance == self()
+    assert ready.resource.generation == initial.resource.generation
+    assert ready.resource.configuration != initial.resource.configuration
+    assert ready.identity.incarnation_id == context.binding.incarnation_id
+    assert ready.identity.connection_id == context.binding.client_state_leg_id
+    assert ready.input_track.track_id == socket.stream_id
+    assert ready.input_track.codec == :pcmu
+    assert ready.input_track.sample_rate == 8000
+    :ok = :sys.resume(leg)
+  end
+
   defp mark_message(name),
     do: %{
       "event" => "mark",

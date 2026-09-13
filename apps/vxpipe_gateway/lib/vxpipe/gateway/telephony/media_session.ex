@@ -3,10 +3,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.Command.ParticipantTransferControl
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket}
+  alias Vxpipe.Gateway.Telephony.MediaSession.Readiness
 
   alias Vxpipe.Gateway.Telephony.{
     IncomingAudio,
@@ -45,6 +49,21 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   def snapshot(session), do: safe_call(session, :snapshot)
 
   @impl true
+  def readiness(session), do: Readiness.readiness(session, :output)
+  def input_readiness(session), do: Readiness.readiness(session, :input)
+  def input_track(session), do: Readiness.input_track(session)
+  def readiness_resources(session, options \\ []), do: Readiness.resources(session, options)
+
+  @impl true
+  def readiness_binding(%Resource{kind: :media_connection, instance: session}),
+    do: readiness(session)
+
+  def readiness_binding(%Resource{kind: :media_input, instance: session}),
+    do: input_readiness(session)
+
+  def readiness_binding(_invalid), do: {:error, :unavailable}
+
+  @impl true
   def init(options) do
     socket_owner = Keyword.fetch!(options, :socket_owner)
     binding = Keyword.fetch!(options, :binding)
@@ -61,6 +80,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
         {:ok,
          Map.merge(setup, %{
            binding: binding,
+           readiness_resource:
+             Resource.new(
+               :media_connection,
+               {:participant, binding.participant_id},
+               __MODULE__,
+               {binding, socket_owner, Keyword.fetch!(options, :stream_id)},
+               binding: Keyword.fetch!(options, :connection_id)
+             ),
            connection_id: Keyword.fetch!(options, :connection_id),
            monitors: monitors,
            reported_transfer_controls: MapSet.new(),
@@ -74,6 +101,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   @impl true
+  def handle_call(:readiness_binding, _from, state) do
+    {:reply, {:ok, Readiness.binding(state)}, state}
+  end
+
   def handle_call(:snapshot, _from, state) do
     {:reply,
      {:ok,

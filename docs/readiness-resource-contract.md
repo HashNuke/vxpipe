@@ -301,7 +301,28 @@ Twilio PCMU/8 kHz mono input; both produce the common 48 kHz mono room format. T
 bound from the authenticated stream at startup. Repeated preparation validates that exact existing
 binding without resetting sequence/timestamp state or re-emitting formats. Real pipeline/collector
 checks cover all three transports through the common ingress and require no microphone sample.
-Phone socket/transport evidence, prospective inventory and lifecycle integration remain unfinished.
+Prospective inventory and lifecycle integration remain unfinished.
+
+## Phone transport
+
+Phone sockets now expose a bounded readiness query based on their validated media-start state.
+Before a valid start, their transport resource is preparing. Afterward, its descriptor pins the
+socket instance, complete binding, stream and provider input format. Queries remain responsive while
+the asynchronous leg dispatcher is busy: transport evidence does not wait on room setup through the
+leg, which would create a dependency cycle. A process reply alias discards responses after the
+bounded query ends. No playback command, media sample or provider request is sent by this query.
+
+`MediaSession` checks that socket evidence against its exact provider, stream, socket owner and full
+room/participant/connection identity outside its receive loop, then rechecks its own binding. It
+exposes separate connection/input descriptors plus the actual socket dependency; input selection is
+explicit, as with WebRTC. A changed or foreign stream fails readiness and cannot supply an input
+track. Actual audio delivery preserves descriptors. These descriptors prove the configured transport;
+the decoder, STT handoff, outputs and candidate policy remain separately required resources.
+Socket callback checks cover validated starts while leg dispatch is suspended; deterministic media
+session fixtures collect before audio, exchange audio, retain bindings and reject a changed stream.
+Complete prospective inventory, preparation/orchestration and live phone acceptance remain unfinished.
+
+## Speech input handoff
 
 Engine STT ingress now supports explicit `prepare_track/2` using the normalized track ID, codec,
 sample rate and channel count. It queries the actual STT owner's identity and media format outside

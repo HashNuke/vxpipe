@@ -32,8 +32,6 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     assistant = Map.fetch!(plan.participants, plan.entry_receiver)
     assert {:ok, room} = CallEngine.start_call(plan)
 
-    socket = socket(self())
-
     leg =
       start_supervised!(
         {Task, fn -> receive do: (:stop -> :ok) end},
@@ -41,6 +39,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       )
 
     binding = binding(plan, room.incarnation_id, caller.participant_id, leg)
+    socket = socket(self(), binding)
     claim = claim(plan, room.incarnation_id, caller.participant_id)
     root = start_supervised!({MediaSupervisor, name: nil})
 
@@ -61,6 +60,32 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     assert {:ok, private_output, :ready} = OutputArbiter.readiness(snapshot.audio_output)
     assert private_output.scope == {:participant, caller.participant_id}
     assert {:ok, _room_output, :ready} = RoomAudioEgress.readiness(snapshot.room_audio_egress)
+
+    assert {:ok, [media_connection, input, transport] = resources} =
+             Vxpipe.Gateway.Telephony.MediaSession.readiness_resources(
+               binding.client_state_leg_id,
+               input?: true
+             )
+
+    assert transport.instance == socket
+    assert input.kind == :media_input
+
+    collector =
+      start_supervised!(
+        {Vxpipe.CallEngine.Readiness.Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "phone-media",
+         resources: resources,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+
+    assert {:ok, media_track} =
+             Vxpipe.Gateway.Telephony.MediaSession.input_track(binding.client_state_leg_id)
+
+    assert media_track == %{track_id: "stream-1", codec: :opus, sample_rate: 16_000, channels: 1}
 
     assert :ok =
              AudioOutput.push(
@@ -92,6 +117,18 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
                media_event(binding, "stream-1")
              )
 
+    assert {:ok, ^media_connection, :ready} =
+             Vxpipe.Gateway.Telephony.MediaSession.readiness(binding.client_state_leg_id)
+
+    send(socket, {:test_stream, "wrong-stream", self()})
+    assert_receive :test_stream_changed
+
+    assert {:ok, _resource, :failed} =
+             Vxpipe.Gateway.Telephony.MediaSession.readiness(binding.client_state_leg_id)
+
+    assert {:error, :unavailable} =
+             Vxpipe.Gateway.Telephony.MediaSession.input_track(binding.client_state_leg_id)
+
     monitor = Process.monitor(connection)
     send(socket, :stop)
     assert_receive {:DOWN, ^monitor, :process, ^connection, :shutdown}, 2_000
@@ -105,8 +142,6 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     assert {:ok, room} = CallEngine.start_call(plan)
 
-    socket = socket(self())
-
     leg =
       start_supervised!(
         {Task, fn -> receive do: (:stop -> :ok) end},
@@ -114,6 +149,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
       )
 
     binding = binding(plan, room.incarnation_id, caller.participant_id, leg)
+    socket = socket(self(), binding)
     claim = claim(plan, room.incarnation_id, caller.participant_id)
     root = start_supervised!({MediaSupervisor, name: nil})
 
@@ -330,20 +366,34 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     packet
   end
 
-  defp socket(observer) do
+  defp socket(observer, binding) do
     start_supervised!(
       {Task,
        fn ->
-         socket_loop(observer)
+         state = %{
+           binding: binding,
+           stream_id: "stream-1",
+           readiness_resource: Vxpipe.Gateway.Telephony.SocketReadiness.new(binding)
+         }
+
+         socket_loop(observer, state)
        end}
     )
   end
 
-  defp socket_loop(observer) do
+  defp socket_loop(observer, state) do
     receive do
       {:vxpipe_telnyx_socket_send, message} ->
         send(observer, {:test_telnyx_socket_send, message})
-        socket_loop(observer)
+        socket_loop(observer, state)
+
+      {:vxpipe_phone_readiness, receiver, reference} ->
+        Vxpipe.Gateway.Telephony.SocketReadiness.reply(state, receiver, reference)
+        socket_loop(observer, state)
+
+      {:test_stream, stream, sender} ->
+        send(sender, :test_stream_changed)
+        socket_loop(observer, %{state | stream_id: stream})
 
       :stop ->
         :ok

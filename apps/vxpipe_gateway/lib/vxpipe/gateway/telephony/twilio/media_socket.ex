@@ -4,6 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSocket do
   @behaviour WebSock
 
   alias Vxpipe.CallEngine.Telephony.Event
+  alias Vxpipe.Gateway.Telephony.SocketReadiness
   alias Vxpipe.Gateway.Telephony.{MediaBinding, PlaybackMarks, SocketDispatch}
   alias Vxpipe.Gateway.Telephony.Twilio.MediaDecoder
 
@@ -12,6 +13,7 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSocket do
     {:ok,
      %{
        binding: binding,
+       readiness_resource: SocketReadiness.new(binding),
        clock: clock,
        leg_monitor: Process.monitor(binding.leg),
        playback_marks: %PlaybackMarks{},
@@ -47,6 +49,11 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSocket do
   def handle_in({_message, opcode: :binary}, state), do: invalid_message(state)
 
   @impl true
+  def handle_info({:vxpipe_phone_readiness, receiver, reference}, state) do
+    :ok = SocketReadiness.reply(state, receiver, reference)
+    {:ok, state}
+  end
+
   def handle_info(
         {:vxpipe_playback_command, stream, action, receiver, request},
         %{stream_id: stream} = state

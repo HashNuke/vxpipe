@@ -565,3 +565,11 @@ ordered format acknowledgement while retaining their authenticated stream and na
 Sixteen focused checks include real WebRTC, Telnyx and Twilio pipelines. All five root gates pass
 with 1,120 tests, zero failures and 15 integrations excluded. Phone socket/transport readiness,
 prospective policy/resource preparation and startup/transfer orchestration remain unfinished.
+
+Phone sockets now attest their validated stream and provider format independently of the leg
+dispatcher. Media sessions require exact socket, stream and full connection identity and expose the
+actual transport dependency for collection. Eighteen focused socket/session checks pass, including
+collection before audio, stable bindings after delivery and rejection of a changed stream. All five
+root gates pass with 1,122 tests, zero failures and 15 integrations excluded. Prospective inventory,
+candidate-policy preparation and startup/transfer orchestration remain unfinished; these component
+checks do not establish live-provider or coordinated handoff acceptance.

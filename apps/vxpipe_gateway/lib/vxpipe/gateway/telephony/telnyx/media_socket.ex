@@ -4,6 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
   @behaviour WebSock
 
   alias Vxpipe.CallEngine.Telephony.Event
+  alias Vxpipe.Gateway.Telephony.SocketReadiness
   alias Vxpipe.Gateway.Telephony.MediaBinding
   alias Vxpipe.Gateway.Telephony.PlaybackMarks
   alias Vxpipe.Gateway.Telephony.SocketDispatch
@@ -16,6 +17,7 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
     {:ok,
      %{
        binding: binding,
+       readiness_resource: SocketReadiness.new(binding),
        decoder_options: decoder_options(binding),
        leg_monitor: monitor,
        playback_marks: %PlaybackMarks{},
@@ -47,6 +49,11 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
   def handle_in({_message, opcode: :binary}, state), do: invalid_message(state)
 
   @impl true
+  def handle_info({:vxpipe_phone_readiness, receiver, reference}, state) do
+    :ok = SocketReadiness.reply(state, receiver, reference)
+    {:ok, state}
+  end
+
   def handle_info(
         {:vxpipe_playback_command, stream, action, receiver, request},
         %{stream_id: stream} = state

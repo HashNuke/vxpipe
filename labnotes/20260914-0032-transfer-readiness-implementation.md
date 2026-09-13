@@ -514,3 +514,29 @@ unchecked; the milestone and index are still incomplete.
   dispatches them asynchronously to the exact leg. MediaSession currently has no readiness descriptor.
   A socket query must attest the exact accepted stream/binding, rather than treating its PID or the
   configured decoder as proof of a live transport; preserve the asynchronous socket dispatch contract.
+
+## Phone socket and connection evidence
+
+- Added a bounded socket query that reports preparing before a validated stream start and pins the
+  exact socket, stream, provider format and binding afterward. It remains responsive with the leg
+  dispatcher suspended. Replies use a process alias so a timeout does not accumulate late messages.
+  No output command or input probe is emitted. Two new socket tests first failed on the missing API;
+  all 15 socket checks passed after implementation. An initial local `binding/1` call conflicted with
+  Kernel.binding/1; the query is named `snapshot/1` instead.
+- MediaSession now observes and validates the socket outside its receive loop, rechecks its binding,
+  and supplies connection/input resources plus the actual socket dependency. Complete identity,
+  provider, stream and actor must match. Its normalized input projection is available only while
+  that evidence is ready. Input demand is explicit and does not grant microphone permission.
+- Both deterministic media-session regressions failed on absent resource APIs, then the combined
+  18 socket/session checks passed: collection before audio, stable evidence after delivery, and
+  failed readiness/unavailable input on a changed stream. The fixtures model socket evidence;
+  actual callback validation is covered separately. No live-provider acceptance is implied.
+- Added the input format to the socket configuration digest and updated the decision document.
+  Root gates follow. Prospective inventory and startup/transfer orchestration remain unfinished.
+- The first root run passed the phone checks but failed an existing MCP refresher fixture waiting
+  for its worker-start notification. Its 100 ms deadline lacked scheduler headroom under umbrella
+  load. The separate catalog-timeout labnote records the test-only adjustment; full gates repeat.
+- All five final root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,122
+  umbrella tests with zero failures (15 integrations excluded), and unused-dependency checks.
+  The socket/session checkpoint closes the component transport-evidence gap; prospective inventory,
+  candidate-policy preparation and startup/transfer orchestration remain unfinished.
