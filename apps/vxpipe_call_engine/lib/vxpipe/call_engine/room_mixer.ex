@@ -18,6 +18,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     State,
     Subscription,
     SubscriptionCatalog,
+    SubscriptionReadiness,
     TimestampBuffer
   }
 
@@ -97,6 +98,16 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   @impl Vxpipe.CallEngine.Readiness.Adapter
   def readiness(server), do: safe_call(server, :readiness)
 
+  @doc false
+  def subscription_readiness(server, id, token) do
+    safe_call(server, {:subscription_readiness, id, token})
+  end
+
+  @doc false
+  def recording_configuration(server, token) do
+    safe_call(server, {:recording_configuration, token})
+  end
+
   @spec ingress_configuration(GenServer.server()) :: {:ok, map()} | {:error, :unavailable}
   def ingress_configuration(server), do: safe_call(server, :ingress_configuration)
 
@@ -117,6 +128,28 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     interval = Map.take(state.policy.intervals, [:audio_input, :audio_output, :recording])
     resource = %{state.readiness_resource | policy_interval: interval}
     {:reply, {:ok, resource, :ready}, state}
+  end
+
+  def handle_call({:subscription_readiness, id, token}, _from, state) do
+    result = SubscriptionReadiness.fetch(state, id, token)
+    {:reply, result, state}
+  end
+
+  def handle_call({:recording_configuration, token}, _from, state) do
+    result =
+      if is_reference(token) and token == state.recording_token and not is_nil(state.policy) do
+        {:ok,
+         %{
+           format: state.format,
+           interval: state.policy.intervals.recording,
+           permitted?: state.policy.effective.record_audio,
+           present: state.policy.present_participant_ids
+         }}
+      else
+        {:error, :recording_not_authorized}
+      end
+
+    {:reply, result, state}
   end
 
   def handle_call({:vxpipe_apply_media_policy, snapshot}, _from, state) do

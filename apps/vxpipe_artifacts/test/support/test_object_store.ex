@@ -6,6 +6,13 @@ defmodule Vxpipe.Artifacts.TestObjectStore do
   def open(spec, options) do
     observer = Keyword.fetch!(options, :observer)
     send(observer, {:test_object_store_opened, self(), spec})
+
+    if Keyword.get(options, :pause_open, false) do
+      receive do
+        :test_object_store_resume_open -> :ok
+      end
+    end
+
     {:ok, %{observer: observer, spec: spec}}
   end
 

@@ -16,6 +16,7 @@ defmodule Vxpipe.Artifacts.Writer.State do
   defstruct @enforce_keys ++
               [
                 upload: nil,
+                readiness_resource: nil,
                 current: nil,
                 task: nil,
                 operation: nil,

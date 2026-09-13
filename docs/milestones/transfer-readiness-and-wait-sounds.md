@@ -503,3 +503,14 @@ delayed initialization and credential revocation. Nine focused model/provider te
 engine checks pass. All five root gates pass with 1,089 tests, zero failures and 15 integrations
 excluded. Recording/media adapters, the complete prospective inventory, initial caller waiting and
 coordinated transfer release remain incomplete; the common readiness checkpoint is still unchecked.
+
+Recording readiness now covers exact mixer subscriptions and initialized local artifact writers.
+The collector can query separate bindings on one mixer process. Individual track preparation opens
+only demanded missing writers under the installed recording interval, retains unchanged writers
+through retries/policy changes, and prevents audio from creating an unprepared writer afterward.
+The recorder exposes its required writer/subscription descriptors so writer loss revokes readiness
+even if the recorder stays alive. Malformed writer evidence fails closed; remote storage waits and
+saturation retain the bounded asynchronous gap contract. Thirty-one focused engine checks and nine
+artifact checks pass. All five root gates pass with 1,096 tests, zero failures and 15 integrations
+excluded. Gateway media readiness, complete prospective inventory, initial waiting and coordinated
+transfer lifecycle integration remain pending; no browser/live-provider acceptance is claimed.

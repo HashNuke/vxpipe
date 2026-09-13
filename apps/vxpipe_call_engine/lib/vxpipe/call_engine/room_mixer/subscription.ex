@@ -1,6 +1,9 @@
 defmodule Vxpipe.CallEngine.RoomMixer.Subscription do
   @moduledoc "An opaque handle for one bounded room-mixer output subscription."
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.RoomMixer
 
   @derive {Inspect, except: [:token]}
@@ -36,5 +39,15 @@ defmodule Vxpipe.CallEngine.RoomMixer.Subscription do
           {:ok, [Vxpipe.CallEngine.Media.MixedFrame.t()]} | {:error, term()}
   def take(%__MODULE__{} = subscription, maximum_frames) do
     RoomMixer.take(subscription, maximum_frames)
+  end
+
+  @impl true
+  def readiness(%__MODULE__{} = subscription) do
+    RoomMixer.subscription_readiness(subscription.mixer, subscription.id, subscription.token)
+  end
+
+  @impl true
+  def readiness_binding(%Resource{} = resource) do
+    RoomMixer.subscription_readiness(resource.instance, resource.binding, resource.generation)
   end
 end

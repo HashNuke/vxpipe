@@ -12,6 +12,119 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
     incarnation_id: "incarnation-recording"
   }
 
+  test "prepares required track writers before audio and retains them through policy changes" do
+    token = make_ref()
+    mixer = start_mixer(token)
+    :ok = apply_policy(mixer, 0, true)
+    recording = start_recording(mixer, token, [:full_mix, {:individual_tracks, ["alice"]}])
+    assert_receive {:test_recording_writer_opened, _caller, ^recording, %{mode: :full_mix}}
+    assert {:ok, pending, :preparing} = RoomRecording.readiness(recording)
+    alice = {:individual_track, "alice", "connection-alice", "track-alice"}
+
+    assert {:error, :invalid_recording_tracks} =
+             RoomRecording.prepare_tracks(recording, [{:individual_track, "bob", "c", "t"}], 0)
+
+    refute_receive {:test_recording_writer_opened, _caller, ^recording, _stream}
+    assert :ok = RoomRecording.prepare_tracks(recording, [alice], 0)
+    assert_receive {:test_recording_writer_opened, _caller, ^recording, %{mode: ^alice}}
+    refute_receive {:test_recording_chunk, _stream_id, _chunk}
+    assert {:ok, resource, :ready} = RoomRecording.readiness(recording)
+    assert resource.kind == :recording
+    assert resource.scope == :room
+    assert resource.generation == pending.generation
+    assert :ok = RoomRecording.prepare_tracks(recording, [alice], 0)
+    assert {:ok, ^resource, :ready} = RoomRecording.readiness(recording)
+    refute_receive {:test_recording_writer_opened, _caller, ^recording, _stream}
+
+    assert :ok = RoomMixer.push(mixer, frame("alice", 1, 0, 0))
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+    assert_receive {:test_recording_chunk, "full-mix", _chunk}
+    assert_receive {:test_recording_chunk, _individual, _chunk}
+    refute_receive {:test_recording_writer_opened, _caller, ^recording, _stream}
+    assert {:ok, ^resource, :ready} = RoomRecording.readiness(recording)
+
+    :ok = apply_policy(mixer, 1, true, transcript_routes: %{})
+    assert {:ok, ^resource, :ready} = RoomRecording.readiness(recording)
+    :ok = apply_policy(mixer, 2, false)
+    assert {:ok, _changed, :preparing} = RoomRecording.readiness(recording)
+    assert {:error, :stale_recording_policy} = RoomRecording.prepare_tracks(recording, [alice], 0)
+
+    assert {:error, :recording_not_permitted} =
+             RoomRecording.prepare_tracks(recording, [alice], 2)
+
+    assert :ok = RoomRecording.prepare_tracks(recording, [], 2)
+    assert {:ok, _silent, :ready} = RoomRecording.readiness(recording)
+
+    :ok = apply_policy(mixer, 3, true)
+    assert :ok = RoomRecording.prepare_tracks(recording, [alice], 3)
+    assert {:ok, restored, :ready} = RoomRecording.readiness(recording)
+    assert restored.generation == resource.generation
+    assert restored.configuration == resource.configuration
+    assert restored.policy_interval == 3
+    refute_receive {:test_recording_writer_opened, _caller, ^recording, _stream}
+  end
+
+  test "a known failed local writer blocks a running recorder" do
+    token = make_ref()
+    mixer = start_mixer(token)
+    :ok = apply_policy(mixer, 0, true)
+    readiness = :atomics.new(1, [])
+    recording = start_recording(mixer, token, [:full_mix], readiness: readiness)
+    assert {:ok, resource, :ready} = RoomRecording.readiness(recording)
+    :ok = :atomics.put(readiness, 1, 1)
+    assert {:ok, ^resource, :failed} = RoomRecording.readiness(recording)
+    assert %{streams: 1} = RoomRecording.stats(recording)
+  end
+
+  test "malformed writer evidence cannot make a required recording resource ready" do
+    token = make_ref()
+    mixer = start_mixer(token)
+    :ok = apply_policy(mixer, 0, true)
+
+    recording =
+      start_recording(mixer, token, [:full_mix],
+        readiness_reply: {:ok, %{policy_interval: nil}, :ready}
+      )
+
+    assert {:ok, _resource, :failed} = RoomRecording.readiness(recording)
+  end
+
+  test "a partial preparation retains opened writers and never opens a missing writer on audio" do
+    token = make_ref()
+    mixer = start_mixer(token)
+    :ok = apply_policy(mixer, 0, true)
+    alice = {:individual_track, "alice", "connection-alice", "track-alice"}
+    bob = {:individual_track, "bob", "connection-bob", "track-bob"}
+    failure = :atomics.new(1, [])
+    :ok = :atomics.put(failure, 1, 1)
+
+    recording =
+      start_recording(mixer, token, [{:individual_tracks, ["alice", "bob"]}],
+        failure: failure,
+        fail_mode: bob
+      )
+
+    assert {:error, :test_open_failed} = RoomRecording.prepare_tracks(recording, [alice, bob], 0)
+    assert_receive {:test_recording_writer_opened, _caller, ^recording, %{mode: ^alice}}
+    assert_receive {:test_recording_writer_rejected, ^bob}
+    assert {:ok, _resource, :preparing} = RoomRecording.readiness(recording)
+
+    :ok = :atomics.put(failure, 1, 0)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, 0))
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 0)
+    refute_receive {:test_recording_writer_opened, _caller, ^recording, _stream}
+    refute_receive {:test_recording_chunk, _stream, _chunk}
+    assert %{streams: 1, rejected_chunks: 1} = RoomRecording.stats(recording)
+
+    assert :ok = RoomRecording.prepare_tracks(recording, [alice, bob], 0)
+    assert_receive {:test_recording_writer_opened, _caller, ^recording, %{mode: ^bob}}
+    refute_receive {:test_recording_writer_opened, _caller, ^recording, _duplicate}
+    assert {:ok, _resource, :ready} = RoomRecording.readiness(recording)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 2, 2, 0))
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 2)
+    assert_receive {:test_recording_chunk, _stream, %{sequence: 0, offset_samples: 2}}
+  end
+
   test "offers only permitted full-mix intervals to its injected writer" do
     recording_token = make_ref()
     mixer = start_mixer(recording_token)
@@ -101,13 +214,27 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
     start_supervised!({RoomMixer, options})
   end
 
-  defp apply_policy(mixer, revision, record_audio?) do
+  defp start_recording(mixer, token, targets, writer_options \\ []) do
+    start_supervised!(
+      {RoomRecording,
+       Map.to_list(@identity) ++
+         [
+           mixer: mixer,
+           recording_token: token,
+           targets: targets,
+           writer: {TestRecordingWriter, Keyword.put(writer_options, :observer, self())},
+           maximum_pull_frames: 2
+         ]}
+    )
+  end
+
+  defp apply_policy(mixer, revision, record_audio?, options \\ []) do
     snapshot = %Snapshot{
       revision: revision,
       present_participant_ids: MapSet.new(["alice", "bob"]),
       effective: %Effective{
         audio_routes: :unrestricted,
-        transcript_routes: :unrestricted,
+        transcript_routes: Keyword.get(options, :transcript_routes, :unrestricted),
         record_audio: record_audio?,
         save_transcripts: true
       }

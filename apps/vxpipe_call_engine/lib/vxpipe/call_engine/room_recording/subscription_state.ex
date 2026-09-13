@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.SubscriptionState do
   alias Vxpipe.CallEngine.RoomRecording.{Configuration, Output}
 
   @enforce_keys [:subscription, :target, :outputs]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [required_modes: nil]
 
   @type t :: %__MODULE__{
           subscription: Subscription.t(),

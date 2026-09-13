@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
   alias Vxpipe.CallEngine.Media.{EgressAcceptedFrame, MixedFrame, NormalizedFrame}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Recording.EgressHandoff
+  alias Vxpipe.CallEngine.Readiness.Collector
   alias Vxpipe.CallEngine.RoomMixer
   alias Vxpipe.CallEngine.RoomMixer.Subscription
 
@@ -29,6 +30,44 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert revised.generation == resource.generation
     assert revised.configuration == resource.configuration
     assert revised.policy_interval != resource.policy_interval
+  end
+
+  test "collects separate subscription bindings without consuming audio or restarting the mixer" do
+    mixer = start_mixer()
+    :ok = apply_policy(mixer, 0, ["alice", "bob"])
+    assert {:ok, alice} = subscribe(mixer, "alice-output", "alice", :mix_minus)
+    assert {:ok, bob} = subscribe(mixer, "bob-output", "bob", :mix_minus)
+    assert {:ok, alice_resource, :ready} = Subscription.readiness(alice)
+    assert {:ok, bob_resource, :ready} = Subscription.readiness(bob)
+    assert alice_resource.instance == mixer
+    assert alice_resource.binding == "alice-output"
+    assert alice_resource.scope == {:participant, "alice"}
+    refute alice_resource.generation == bob_resource.generation
+    assert {:error, :unavailable} = Subscription.readiness(%{alice | token: make_ref()})
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: @identity.incarnation_id,
+         attempt_id: "subscription-readiness",
+         resources: [alice_resource, bob_resource],
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [3_000, -5_000]))
+    assert {:ok, %{delivered: 1}} = RoomMixer.flush_through(mixer, 0)
+    assert {:ok, ^alice_resource, :ready} = Subscription.readiness(alice)
+    assert_frame(Subscription.take(alice, 1), "alice", ["bob"], [3_000, -5_000], 0)
+
+    :ok = apply_policy(mixer, 1, ["alice", "bob"], transcript_routes: %{})
+    assert {:ok, ^alice_resource, :ready} = Subscription.readiness(alice)
+    :ok = apply_policy(mixer, 2, ["alice", "bob"], audio_routes: %{})
+    assert {:ok, changed, :ready} = Subscription.readiness(alice)
+    assert changed.generation == alice_resource.generation
+    assert changed.configuration == alice_resource.configuration
+    refute changed.policy_interval == alice_resource.policy_interval
   end
 
   test "aligns PCM sources and emits policy-filtered mix-minus, full-mix, and track output" do

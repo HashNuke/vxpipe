@@ -24,10 +24,11 @@ defmodule Vxpipe.CallEngine.Readiness.Probe do
   defp readiness(resource) do
     adapter = resource.adapter
 
-    if Code.ensure_loaded?(adapter) and function_exported?(adapter, :readiness, 1) do
-      adapter.readiness(resource.instance)
-    else
-      {:error, :unsupported_adapter}
+    cond do
+      not Code.ensure_loaded?(adapter) -> {:error, :unsupported_adapter}
+      function_exported?(adapter, :readiness_binding, 1) -> adapter.readiness_binding(resource)
+      function_exported?(adapter, :readiness, 1) -> adapter.readiness(resource.instance)
+      true -> {:error, :unsupported_adapter}
     end
   rescue
     _exception -> {:error, :unavailable}

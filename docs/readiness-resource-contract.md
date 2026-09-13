@@ -1,6 +1,6 @@
 # Resource readiness evidence
 
-Status: barrier, asynchronous collection, speech/model/tool adapters and core room-service adapters
+Status: barrier, asynchronous collection, speech/model/tool, recording and core room-service adapters
 implemented; the complete prospective inventory and lifecycle integration remain in progress.
 This is a decision for
 [transfer readiness and wait sounds](milestones/transfer-readiness-and-wait-sounds.md), not a
@@ -12,6 +12,12 @@ A required resource is identified by capability kind, room/participant scope, an
 binding key. The binding distinguishes multiple connections belonging to the same participant,
 or independently prepared routes for the same capability. Duplicate required identities are an
 error; overwriting one would hide a missing resource.
+
+When one process owns multiple resources, an adapter can implement `readiness_binding/1`. The
+collector supplies the exact expected descriptor so the owner can check that binding's token and
+return its current evidence. The default `readiness/1` query remains appropriate for one resource
+per process. Mixer subscriptions use the binding callback: each queue has its own generation even
+though several queues share a mixer PID. A query does not take or flush buffered audio.
 
 Each descriptor pins the actual process, an explicit instance/session generation, an opaque
 configuration signature, the relevant policy interval and its adapter. The configuration hash
@@ -123,7 +129,7 @@ resource; production activation graphs supply it explicitly.
 
 Focused checks cover installed context privacy, busy/cancelled session reuse, unsupported providers,
 delayed MCP initialization, client loss/revocation, bounded tool capacity, and collection over an
-actual activation graph. Recording/media adapters, complete prospective inventory, and lifecycle
+actual activation graph. Media adapters, complete prospective inventory, and lifecycle
 waiting/release remain outstanding.
 
 ## Room services and local handoffs
@@ -141,7 +147,43 @@ values and snapshots never appear in readiness reports.
 Live inspection requires an open local observation port. Archive readiness requires an open
 handoff and a bound producer. Closing either local handoff revokes readiness even while its process
 still exists. A pending remote archive write does not block readiness or alter the existing bounded
-asynchronous storage/gap contract. Recording writer adapters remain pending.
+asynchronous storage/gap contract.
+
+## Recording preparation and dependency monitoring
+
+The artifact writer acknowledges an initialized, open local handoff. Pending remote initialization,
+writes or queue saturation retain the existing bounded acceptance/gap semantics; they are not new
+synchronous storage dependencies. A closed or draining local handoff reports failed. Writer evidence
+includes the actual process/generation, configured artifact identity and opaque configuration digest.
+Malformed or unbound writer evidence fails closed instead of being omitted from monitoring.
+
+`RoomRecording.prepare_tracks/3` takes the complete demanded individual-track set and installed
+recording interval. The lifecycle owner must derive that set from the prospective media inventory;
+the recorder cannot infer a negotiated track from microphone samples while input is held. The
+recorder validates participant membership, configured targets and recording permission, then opens
+only missing writers. Repeating preparation retains existing handles and sequences. Stale policy,
+unselected tracks and disallowed recording fail preparation explicitly.
+
+Individual-track readiness stays preparing until that set is supplied and every required writer
+is initialized under the current recording interval. Relevant recording changes require a new
+acknowledgement, while unrelated transcript/audio changes preserve evidence. Partial preparation
+retains successfully opened writers for a bounded retry. Once preparation is used, audio cannot
+create a missing writer or reintroduce a track outside the required set. Existing lazy recording
+remains compatible for callers that have not entered this preparation lifecycle.
+
+`RoomRecording.readiness_resources/1` returns the recorder plus its required writer and subscription
+descriptors. The full inventory must collect all of them, because an artifact writer can fail while
+the recorder process remains alive. Old track writers can continue their existing archival lifetime
+without becoming requirements of the prospective room. The lifecycle owner omits recording resources
+when recording is not demanded by the resulting plan/policy.
+
+Local design review rejected consuming a frame as a queue probe, using a single mixer PID for every
+subscription, preparing writers on the first released sample, and waiting for S3 as readiness.
+Those alternatives respectively change playback, hide missing bindings, lose preparation guarantees,
+or change the approved asynchronous storage contract. Checks cover exact subscription tokens,
+unchanged intervals/generations, preparation before samples, partial failure/retry, closed local
+handoffs, pending/saturated storage, and monitored writer loss with the recorder still running.
+Gateway media adapters and complete startup/transfer inventory and orchestration are still pending.
 
 ## Rejected alternatives and verification
 

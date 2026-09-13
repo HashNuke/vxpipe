@@ -319,3 +319,38 @@ unchecked; the milestone and index are still incomplete.
 - All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,089 umbrella
   tests with zero failures (15 integrations excluded), and unused-dependency checks. The milestone
   records this partial readiness progress and retains its unchecked lifecycle/acceptance gates.
+
+## Recording resources and mixer subscriptions
+
+- Added binding-specific readiness queries for processes that own multiple resources. Mixer queues
+  acknowledge their exact token/generation and relevant interval without consuming audio; the
+  collector can now distinguish multiple subscriptions on one mixer. The first subscription test
+  failed on the missing API, then exposed an incorrect fixture assumption that mix-minus would
+  deliver a source's own isolated audio. Correcting the expected recipient count preserved routing.
+- Artifact writers report their initialized open local handoff, without waiting for remote storage.
+  A paused storage-open fixture first failed on the missing readiness API and now proves local
+  readiness before remote completion, then failure after handoff closure. Existing saturation/gap
+  pipeline checks also retain ready generation/configuration with a pending remote write.
+- Added explicit preparation of the complete demanded individual-track set under an installed
+  recording interval. It validates membership, selected targets and permission; opens only missing
+  writers; and retains existing handles/sequences through retries and relevant policy changes.
+  Initial preparation/readiness checks failed on missing APIs before implementation.
+- A focused partial-failure test reproduced audio lazily opening a writer after its preparation
+  failed. Prepared subscriptions now reject missing or out-of-set tracks until explicit preparation
+  succeeds. Successfully opened writers survive a partial failure and are reused on retry.
+- Exposed the recorder's required writer/subscription descriptors for collector monitoring. The
+  integration first failed on the missing inventory API. Standalone artifact tests do not start
+  Call Engine (a runtime-false dependency), so this fixture explicitly supervises the collector's
+  named task supervisor when absent. It verifies writer death revokes a ready barrier while the
+  recorder remains available. This avoids relying only on the recorder's PID.
+- Final review found that an arbitrary map returned as writer evidence could be accepted as ready
+  and omitted from dependency monitoring. A regression reproduced that false readiness. The owning
+  boundary now requires a bound recording-writer descriptor and rejects malformed evidence.
+- Thirty-one engine mixer/recording/collector checks and nine artifact writer/pipeline checks pass.
+  The resource decision document records the separate design review and rejected frame probes,
+  PID-only subscription checks, first-sample preparation and synchronous remote-storage waits.
+  Root gates follow. Media bindings, complete room inventory and lifecycle use remain outstanding.
+- The final recording checkpoint passes all five root gates: formatting, warnings-as-errors
+  compilation, strict Credo, 1,096 umbrella tests with zero failures (15 integrations excluded), and
+  unused-dependency checks. A transient build lock cleared without restarting a running process.
+  The milestone records the implemented recording boundary and leaves lifecycle acceptance open.

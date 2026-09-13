@@ -1,8 +1,55 @@
 defmodule Vxpipe.Artifacts.RecordingWriterTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.Artifacts.{RecordingWriter, TestObjectStore}
+  alias Vxpipe.Artifacts.{Handoff, RecordingWriter, TestObjectStore}
   alias Vxpipe.CallEngine.Recording.{Chunk, Stream}
+
+  test "readiness requires an open local handoff but does not wait for remote storage" do
+    source = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})
+
+    assert {:ok, stream} =
+             Stream.new(
+               %{
+                 tenant_id: "tenant",
+                 call_id: "call",
+                 room_id: "room",
+                 incarnation_id: "instance"
+               },
+               :full_mix,
+               %{sample_rate: 8_000, channels: 1}
+             )
+
+    assert {:ok, handle} =
+             RecordingWriter.open(stream,
+               source: source,
+               object_store: TestObjectStore,
+               object_store_options: [
+                 observer: self(),
+                 pause_open: true,
+                 private: "private-readiness-sentinel"
+               ],
+               maximum_pending_chunks: 2,
+               drain_timeout_ms: 1_000
+             )
+
+    assert_receive {:test_object_store_opened, storage, _spec}
+    assert {:ok, resource, :ready} = RecordingWriter.readiness(handle)
+    assert resource.kind == :recording_writer
+    assert resource.scope == :room
+    assert resource.instance == handle.writer
+    assert is_reference(resource.generation)
+    assert byte_size(resource.configuration) == 32
+    refute inspect(resource) =~ "private-readiness-sentinel"
+
+    assert :ok = Handoff.close(handle.handoff)
+    assert {:ok, ^resource, :failed} = RecordingWriter.readiness(handle)
+
+    monitor = Process.monitor(handle.writer)
+    send(storage, :test_object_store_resume_open)
+    send(source, :stop)
+    assert_receive {:DOWN, ^monitor, :process, _writer, :normal}, 1_000
+    assert {:error, :unavailable} = RecordingWriter.readiness(handle)
+  end
 
   test "adapts a room recording stream to one bounded artifact writer" do
     source = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end})

@@ -10,6 +10,12 @@ defmodule Vxpipe.CallEngine.Readiness.Adapter do
 
   alias Vxpipe.CallEngine.Readiness.{Report, Resource}
 
-  @callback readiness(GenServer.server()) ::
+  @callback readiness(GenServer.server() | struct()) ::
               {:ok, Resource.t(), Report.status()} | {:error, :unavailable}
+
+  @doc "Queries one exact binding when a process owns multiple independently initialized resources."
+  @callback readiness_binding(Resource.t()) ::
+              {:ok, Resource.t(), Report.status()} | {:error, :unavailable}
+
+  @optional_callbacks readiness_binding: 1
 end

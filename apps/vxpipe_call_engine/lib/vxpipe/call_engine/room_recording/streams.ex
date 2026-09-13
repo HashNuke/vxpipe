@@ -39,6 +39,19 @@ defmodule Vxpipe.CallEngine.RoomRecording.Streams do
     end)
   end
 
+  @doc false
+  def prepare_output(%SubscriptionState{} = state, mode, format, configuration) do
+    if Map.has_key?(state.outputs, mode) do
+      {:ok, state}
+    else
+      with {:ok, stream} <- Stream.new(configuration.identity, mode, format),
+           {:ok, handle} <- open_writer(configuration, stream, self()) do
+        output = %Output{writer_handle: handle, next_sequence: 0}
+        {:ok, put_output(state, mode, output)}
+      end
+    end
+  end
+
   @spec pull(SubscriptionState.t(), Configuration.t()) ::
           {:ok, SubscriptionState.t(), non_neg_integer(), non_neg_integer()} | {:error, term()}
   def pull(%SubscriptionState{} = state, %Configuration{} = configuration) do
@@ -73,9 +86,14 @@ defmodule Vxpipe.CallEngine.RoomRecording.Streams do
   end
 
   defp output(state, frame, configuration) do
-    case Map.fetch(state.outputs, frame.mode) do
-      {:ok, output} -> {:ok, output, state}
-      :error -> open_output(state, frame, configuration)
+    if is_nil(state.required_modes) or MapSet.member?(state.required_modes, frame.mode) do
+      case Map.fetch(state.outputs, frame.mode) do
+        {:ok, output} -> {:ok, output, state}
+        :error when is_nil(state.required_modes) -> open_output(state, frame, configuration)
+        :error -> {:error, :unprepared_recording_track}
+      end
+    else
+      {:error, :unprepared_recording_track}
     end
   end
 

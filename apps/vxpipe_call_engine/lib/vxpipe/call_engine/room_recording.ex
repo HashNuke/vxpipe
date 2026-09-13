@@ -3,8 +3,11 @@ defmodule Vxpipe.CallEngine.RoomRecording do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.RoomMixer
-  alias Vxpipe.CallEngine.RoomRecording.{Configuration, State, Streams}
+  alias Vxpipe.CallEngine.RoomRecording.{Configuration, Preparation, Readiness, State, Streams}
 
   @call_timeout 1_000
 
@@ -22,6 +25,17 @@ defmodule Vxpipe.CallEngine.RoomRecording do
   @spec stats(GenServer.server()) :: map() | {:error, :unavailable}
   def stats(recording), do: safe_call(recording, :stats)
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  defdelegate readiness(recording), to: Readiness
+
+  @doc "Returns the recorder and its required local writers/subscriptions for lifecycle monitoring."
+  defdelegate readiness_resources(recording), to: Readiness, as: :resources
+
+  @doc "Prepares the complete demanded recording track set under the installed recording interval."
+  def prepare_tracks(recording, tracks, interval) do
+    safe_call(recording, {:prepare_tracks, tracks, interval})
+  end
+
   @impl true
   def init(options) do
     with {:ok, configuration} <- Configuration.new(options),
@@ -30,6 +44,7 @@ defmodule Vxpipe.CallEngine.RoomRecording do
       {:ok,
        %State{
          configuration: configuration,
+         readiness_resource: Resource.new(:recording, :room, __MODULE__, configuration),
          mixer_monitor: Process.monitor(configuration.mixer),
          streams: streams,
          accepted_chunks: 0,
@@ -42,6 +57,17 @@ defmodule Vxpipe.CallEngine.RoomRecording do
   end
 
   @impl true
+  def handle_call(:readiness_binding, _from, state) do
+    {:reply, {:ok, Readiness.binding(state)}, state}
+  end
+
+  def handle_call({:prepare_tracks, tracks, interval}, _from, state) do
+    case Preparation.prepare(state, tracks, interval) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, reason, state} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call(:stats, _from, state) do
     stats = %{
       accepted_chunks: state.accepted_chunks,

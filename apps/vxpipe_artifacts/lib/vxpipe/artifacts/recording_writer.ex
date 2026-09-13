@@ -27,6 +27,9 @@ defmodule Vxpipe.Artifacts.RecordingWriter do
   def open(_stream, _options), do: {:error, :invalid_recording_writer_options}
 
   @impl true
+  def readiness(%Handle{} = handle), do: Writer.readiness(handle.writer)
+
+  @impl true
   def offer(%Handle{} = handle, %Chunk{} = chunk) do
     artifact_chunk = %Vxpipe.Artifacts.Chunk{
       sequence: chunk.sequence,

@@ -3,6 +3,9 @@ defmodule Vxpipe.Artifacts.Writer do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.Artifacts.{ArtifactSpec, Chunk, Handoff, ObjectStore, Result}
   alias Vxpipe.Artifacts.Metadata.{Configuration, Publishers}
   alias Vxpipe.Artifacts.Writer.{Progress, State}
@@ -26,6 +29,13 @@ defmodule Vxpipe.Artifacts.Writer do
   @spec handoff(GenServer.server()) :: Handoff.t()
   def handoff(writer), do: GenServer.call(writer, :handoff, @call_timeout)
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(writer) do
+    GenServer.call(writer, :readiness, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     with source when is_pid(source) <- Keyword.get(options, :source),
@@ -40,6 +50,7 @@ defmodule Vxpipe.Artifacts.Writer do
 
       state = %State{
         source_monitor: Process.monitor(source),
+        readiness_resource: readiness_resource(spec, options),
         handoff: handoff,
         spec: spec,
         object_store: object_store,
@@ -68,12 +79,22 @@ defmodule Vxpipe.Artifacts.Writer do
   @impl true
   def handle_call(:handoff, _from, state), do: {:reply, state.handoff, state}
 
+  def handle_call(:readiness, _from, state) do
+    status = if state.closing? or Handoff.stats(state.handoff).closed?, do: :failed, else: :ready
+    {:reply, {:ok, state.readiness_resource, status}, state}
+  end
+
   @impl true
   def handle_info(message, state) do
     case Handoff.message(state.handoff, message) do
       {:ok, chunk} -> state |> enqueue(chunk) |> continue()
       :error -> handle_non_handoff(message, state)
     end
+  end
+
+  defp readiness_resource(spec, options) do
+    scope = if spec.kind == :full_mix, do: :room, else: {:participant, spec.participant_id}
+    Resource.new(:recording_writer, scope, __MODULE__, options, binding: spec.artifact_id)
   end
 
   defp handle_non_handoff(

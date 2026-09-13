@@ -4,6 +4,7 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
   alias Vxpipe.Artifacts.{RecordingWriter, TestObjectStore}
   alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
+  alias Vxpipe.CallEngine.Readiness.Collector
   alias Vxpipe.CallEngine.{RoomMixer, RoomRecording}
 
   @identity %{
@@ -12,6 +13,60 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
     room_id: "room-recording-pipeline",
     incarnation_id: "incarnation-recording-pipeline"
   }
+
+  test "exposes required writer and subscription instances so writer loss revokes the barrier" do
+    if is_nil(Process.whereis(Vxpipe.CallEngine.ReadinessTaskSupervisor)) do
+      start_supervised!({Task.Supervisor, name: Vxpipe.CallEngine.ReadinessTaskSupervisor})
+    end
+
+    token = make_ref()
+    mixer = start_mixer(token)
+    :ok = apply_policy(mixer, 0, true)
+
+    recording =
+      start_supervised!(
+        {RoomRecording,
+         Map.to_list(@identity) ++
+           [
+             mixer: mixer,
+             recording_token: token,
+             targets: [:full_mix],
+             writer:
+               {RecordingWriter,
+                [
+                  object_store: TestObjectStore,
+                  object_store_options: [observer: self()],
+                  maximum_pending_chunks: 2,
+                  drain_timeout_ms: 1_000
+                ]},
+             maximum_pull_frames: 4
+           ]}
+      )
+
+    assert {:ok, resources} = RoomRecording.readiness_resources(recording)
+
+    assert Enum.sort(Enum.map(resources, & &1.kind)) ==
+             [:recording, :recording_subscription, :recording_writer]
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: @identity.incarnation_id,
+         attempt_id: "recording-writer-loss",
+         resources: resources,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    writer = Enum.find(resources, &(&1.kind == :recording_writer)).instance
+    monitor = Process.monitor(writer)
+    Process.exit(writer, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^writer, :killed}
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :failed}}, 1_000
+    assert %{streams: 1} = RoomRecording.stats(recording)
+    assert {:error, :unavailable} = RoomRecording.readiness(recording)
+  end
 
   test "keeps live output responsive and stores only accepted recording intervals" do
     recording_token = make_ref()
@@ -42,6 +97,7 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
 
     assert_receive {:test_object_store_opened, _task, spec}
     assert spec.kind == :full_mix
+    assert {:ok, ready, :ready} = RoomRecording.readiness(recording)
 
     first_mix = [4_000, -3_000]
     flush_mix(mixer, 1, 0, 0, [1_000, 2_000], [3_000, -5_000])
@@ -70,6 +126,10 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
     _state = :sys.get_state(recording)
 
     assert %{accepted_chunks: 2, rejected_chunks: 1} = RoomRecording.stats(recording)
+    assert {:ok, saturated, :ready} = RoomRecording.readiness(recording)
+    assert saturated.generation == ready.generation
+    assert saturated.configuration == ready.configuration
+    assert saturated.policy_interval == 2
 
     send(first_task, {:test_object_store_continue, first_reference})
 
