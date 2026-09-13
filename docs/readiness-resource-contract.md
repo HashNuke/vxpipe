@@ -265,6 +265,30 @@ Codec/direction checks cover incompatible codecs, ambiguous inputs and independe
 Phone transport evidence, actual ingress track binding and complete lifecycle inventory remain
 outstanding; negotiated input readiness does not itself prove the STT/normalizer handoffs are bound.
 
+## Prepared speech input
+
+Engine STT ingress now supports explicit `prepare_track/2` using the normalized track ID, codec,
+sample rate and channel count. It queries the actual STT owner's identity and media format outside
+the ingress loop, then pins that track only if its local binding is unchanged. Invalid formats,
+another connection/incarnation, and attempts to replace an already prepared track fail explicitly.
+Repeated preparation of the same track does not query a busy provider, purge queues, open input or
+restart anything. Existing streams can prepare their already learned track; a different track still
+requires a new owning ingress.
+
+Its composite readiness requires the provider's connection evidence, matching installed STT policy
+interval, a prepared track and capacity in the bounded handoff. The inventory receives the actual
+provider descriptor as a dependency as well. Queries recheck the local binding after observing the
+provider. Provider configuration is represented by a digest; the input-binding query exposes only
+identity and public codec/rate fields. Unrelated policy changes, opening-gate release and ordinary
+delivery retain readiness generations. Prepared ingress rejects a later frame's changed format
+before provider delivery, and microphone frames received while closed are discarded.
+
+Local design review rejected first-sample readiness, assuming every STT provider accepts negotiated
+Opus, and calling providers synchronously from the ingress receive loop. Ten ingress checks plus
+the STT and collector checks pass (42 focused tests). This prepares the bounded STT handoff under
+installed policy; it does not authorize prospective destination input or bind gateway normalizers.
+Candidate-policy preparation and lifecycle integration remain separate unfinished requirements.
+
 ## Rejected alternatives and verification
 
 Checking PIDs would release while providers are still connecting. Resetting all ready state on

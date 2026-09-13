@@ -541,3 +541,11 @@ with 1,107 tests, zero failures and 15 integrations excluded. The negotiated inp
 available for preparing actual ingress handoffs, which remain unfinished along with phone transport
 evidence, prospective inventory and lifecycle orchestration. Common readiness and full milestone
 acceptance remain unchecked.
+
+Engine STT ingress now prepares the exact normalized track against its actual provider identity and
+codec/rate before microphone release. Its readiness includes the provider, bounded handoff capacity
+and matching installed speech-policy interval. Repeated preparation, unrelated policy changes and
+opening-gate release preserve the binding and queued work; held frames are discarded. Forty-two
+focused engine checks and all five root gates pass with 1,111 tests, zero failures and 15 integrations
+excluded. Gateway normalizer binding, prospective policy preparation, complete inventory and lifecycle
+orchestration remain unfinished; this does not establish the milestone's coordinated handoff.

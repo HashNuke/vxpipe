@@ -434,3 +434,27 @@ unchecked; the milestone and index are still incomplete.
   tests with zero failures (15 integrations excluded), and unused-dependency checks. The completed
   gate process was polled and its final zero exit verified on continuation. No server was restarted.
   Milestone evidence records this boundary without checking off common readiness or lifecycle work.
+
+## Prepared speech input handoff
+
+- Added explicit track preparation to Engine Media.Ingress. The external query validates the actual
+  STT owner, complete connection identity and public codec/rate before committing a still-current
+  ingress binding. Repeating the same preparation preserves queued work even while the provider is
+  busy. Closed input continues to discard frames; preparation does not open it or start a session.
+- Readiness combines prepared track/capacity, provider connection evidence and matching installed
+  speech-policy intervals. The resource inventory includes the actual STT dependency. Both queries
+  run outside the ingress loop and recheck the local binding. Prepared streams reject changed
+  tracks/formats before provider delivery. Unrelated recording policy changes retain resources.
+- Four new tests first failed on the missing APIs (10 ingress tests, four failures). All ten then
+  passed; the combined ingress, STT and readiness checks pass 42 tests. One intermediate focused run
+  was launched from the root; the combined focused run used the owning engine child's directory.
+- Reviewed current policy/opening contracts and recorded the preparation decision and alternatives
+  in the resource contract. Candidate-policy preparation, gateway normalizer track binding and
+  orchestration remain unfinished. Root gates follow; no browser/provider acceptance is claimed.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,111 umbrella
+  tests with zero failures (15 integrations excluded), and unused-dependency checks. The milestone
+  records component evidence and retains every unfinished orchestration/acceptance requirement.
+- Next inspected boundary: WebRTC's normalizer still learns its track from first RTP. Phone
+  normalizers already receive an authenticated stream ID, but Telnyx uses Opus at 16 kHz and Twilio
+  uses PCMU at 8 kHz; neither may inherit WebRTC's negotiated 48 kHz input assumption. Their
+  prepared input must preserve these transport formats and the common 48 kHz mono room output.

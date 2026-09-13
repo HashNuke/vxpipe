@@ -3,13 +3,22 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.Capability.SpeechToText
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Media.Ingress.Readiness
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
+  alias Vxpipe.CallEngine.Readiness.Resource
 
   @call_timeout 1_000
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
+
+  @impl true
+  def readiness(ingress), do: Readiness.readiness(ingress)
+  def readiness_resources(ingress), do: Readiness.resources(ingress)
+  def prepare_track(ingress, track), do: Readiness.prepare_track(ingress, track)
 
   def child_spec(options) do
     %{
@@ -25,6 +34,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
              :media_overloaded
              | :queue_full
              | :stale_frame
+             | :unsupported_audio
              | :unavailable
              | :wrong_connection
              | :wrong_track}
@@ -71,6 +81,26 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
        owner: Keyword.get(options, :owner),
        policy: nil,
        policy_demand?: true,
+       prepared_track: nil,
+       readiness_resource:
+         Resource.new(
+           :speech_to_text_ingress,
+           {:participant, Keyword.fetch!(options, :participant_id)},
+           __MODULE__,
+           {capability,
+            Keyword.take(options, [
+              :tenant_id,
+              :room_id,
+              :incarnation_id,
+              :participant_id,
+              :connection_id,
+              :maximum_age_ms,
+              :maximum_bytes,
+              :maximum_frames,
+              :maximum_consecutive_overflows
+            ])},
+           binding: Keyword.fetch!(options, :connection_id)
+         ),
        queue: :queue.new(),
        track_id: nil,
        total_bytes: 0
@@ -78,6 +108,20 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   @impl true
+  def handle_call(:readiness_binding, _from, state) do
+    {:reply, {:ok, Readiness.binding(state)}, state}
+  end
+
+  def handle_call({:prepare_track, expected, track}, _from, state) do
+    with true <- Readiness.binding(state).resource == expected,
+         :ok <- Readiness.validate_track_binding(state, track) do
+      {:reply, :ok, %{state | prepared_track: track, track_id: track.track_id}}
+    else
+      false -> {:reply, {:error, :unavailable}, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
   def handle_call(:open, _from, state) do
     {:reply, :ok, %{state | opening_input_admission: :open}}
   end
@@ -117,6 +161,9 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
 
       not accepted_track?(frame, state.track_id) ->
         {:reply, {:error, :wrong_track}, state}
+
+      not accepted_format?(frame, state.prepared_track) ->
+        {:reply, {:error, :unsupported_audio}, state}
 
       stale?(frame, state) ->
         {:reply, {:error, :stale_frame}, state}
@@ -283,6 +330,13 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     do: is_binary(frame.track_id) and byte_size(frame.track_id) > 0
 
   defp accepted_track?(frame, track_id), do: frame.track_id == track_id
+
+  defp accepted_format?(_frame, nil), do: true
+
+  defp accepted_format?(frame, track),
+    do:
+      frame.codec == track.codec and frame.sample_rate == track.sample_rate and
+        frame.channels == track.channels
 
   defp notify_owner(owner, message) when is_pid(owner) do
     send(owner, {:vxpipe_media_ingress, self(), message})

@@ -17,6 +17,100 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     connection_id: "conn-demo"
   ]
 
+  @track %{track_id: "track-audio", codec: :opus, sample_rate: 48_000, channels: 1}
+
+  test "prepares the STT handoff before microphone release without replaying held audio" do
+    {capability, transport} = start_capability()
+    ingress = start_ingress(capability, input_admission: :closed)
+    policy = snapshot(0, ["part-human"], %{}, true)
+    assert :ok = Enforcer.apply(capability, policy, 500)
+    assert :ok = Enforcer.apply(ingress, policy, 500)
+    assert {:ok, _unbound, :preparing} = Ingress.readiness(ingress)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert {:ok, resource, :preparing} = Ingress.readiness(ingress)
+
+    connect_transport(capability, transport)
+    assert {:ok, ^resource, :ready} = Ingress.readiness(ingress)
+    assert {:ok, [^resource, stt]} = Ingress.readiness_resources(ingress)
+    assert stt.instance == capability
+    assert stt.kind == :speech_to_text
+    assert resource.policy_interval == stt.policy_interval
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
+    assert :ok = Ingress.open(ingress)
+    assert {:ok, ^resource, :ready} = Ingress.readiness(ingress)
+
+    assert {:error, :wrong_track} =
+             Ingress.push(ingress, audio_frame(2, <<2>>, track_id: "other"))
+
+    assert {:error, :unsupported_audio} =
+             Ingress.push(ingress, audio_frame(3, <<3>>, codec: :linear16))
+
+    assert :ok = Ingress.push(ingress, audio_frame(4, <<4>>))
+    assert_receive {:test_stt_audio, ^transport, <<4>>}
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 4}}
+    refute_receive {:test_stt_audio, ^transport, <<1>>}
+    assert {:ok, ^resource, :ready} = Ingress.readiness(ingress)
+  end
+
+  test "rejects invalid and incompatible preparations without pinning a track" do
+    {capability, _transport} = start_capability()
+    ingress = start_ingress(capability)
+
+    assert {:error, :invalid_track} =
+             Ingress.prepare_track(ingress, %{track_id: "missing-format"})
+
+    assert {:error, :invalid_track} = Ingress.prepare_track(ingress, %{@track | channels: 0})
+
+    assert {:error, :unsupported_audio} =
+             Ingress.prepare_track(ingress, %{@track | codec: :linear16})
+
+    assert {:error, :unsupported_audio} =
+             Ingress.prepare_track(ingress, %{@track | sample_rate: 16_000})
+
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert {:error, :wrong_track} = Ingress.prepare_track(ingress, %{@track | track_id: "other"})
+
+    assert {:error, :track_already_prepared} =
+             Ingress.prepare_track(ingress, %{@track | channels: 2})
+  end
+
+  test "does not prepare a provider belonging to another room incarnation" do
+    {capability, _transport} = start_capability()
+    ingress = start_ingress(capability, incarnation_id: "rinc-other")
+    assert {:error, :wrong_connection} = Ingress.prepare_track(ingress, @track)
+    assert {:ok, _resource, :failed} = Ingress.readiness(ingress)
+  end
+
+  test "preserves readiness bindings and queued work across unrelated policy changes" do
+    {capability, transport} = start_capability(send_mode: :manual)
+    ingress = start_ingress(capability, maximum_frames: 1)
+    policy = snapshot(0, ["part-human"], %{}, true)
+    assert :ok = Enforcer.apply(capability, policy, 500)
+    assert :ok = Enforcer.apply(ingress, policy, 500)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    assert {:ok, resource, :ready} = Ingress.readiness(ingress)
+    assert :ok = Ingress.push(ingress, audio_frame(1, <<1>>))
+    assert_receive {:test_stt_audio, ^transport, <<1>>}
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    # The provider is deliberately busy until its send is acknowledged.
+    changed = %{policy | revision: 1, effective: %{policy.effective | record_audio: false}}
+    assert :ok = Enforcer.apply(ingress, changed, 500)
+    assert {:error, :queue_full} = Ingress.push(ingress, audio_frame(2, <<2>>))
+    TestSpeechToTextTransport.allow_audio(transport)
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 1}}
+    assert :ok = Enforcer.apply(capability, changed, 500)
+    assert {:ok, ^resource, :ready} = Ingress.readiness(ingress)
+    refute_receive {:test_stt_transport_started, _replacement, _connection}
+
+    required = snapshot(2, ["part-human", "part-recipient"], :unrestricted, true)
+    assert :ok = Enforcer.apply(ingress, required, 500)
+    assert {:ok, changed_resource, :preparing} = Ingress.readiness(ingress)
+    assert changed_resource.policy_interval == 2
+    assert changed_resource.generation == resource.generation
+  end
+
   test "bounds queued audio while preserving accepted frame order" do
     {capability, transport} = start_capability(send_mode: :manual)
 
@@ -205,6 +299,34 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert_receive {:test_stt_audio, ^transport, <<4>>}
     TestSpeechToTextTransport.allow_audio(transport)
     assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 4}}
+  end
+
+  defp start_ingress(capability, options \\ []) do
+    start_supervised!(
+      {Ingress,
+       Keyword.merge(
+         @identity ++
+           [
+             capability: capability,
+             owner: self(),
+             maximum_frames: 3,
+             maximum_bytes: 32,
+             maximum_age_ms: 1_000,
+             maximum_consecutive_overflows: 3,
+             clock: fn -> 1_000 end
+           ],
+         options
+       )}
+    )
+  end
+
+  defp connect_transport(capability, transport) do
+    TestSpeechToTextTransport.deliver(
+      transport,
+      JSON.encode!(%{"type" => "Connected", "request_id" => "prepared-input", "sequence_id" => 0})
+    )
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _identity, %{kind: :connected}}
   end
 
   defp start_capability(transport_options \\ []) do
