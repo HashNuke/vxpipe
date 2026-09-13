@@ -31,3 +31,5 @@ erl_crash.dump
 .impeccable/build
 .impeccable/mocks
 .impeccable/review/diff
+
+sounds/*.wav
