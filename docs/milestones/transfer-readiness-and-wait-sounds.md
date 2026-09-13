@@ -453,5 +453,11 @@ the same socket's playback acknowledgements. Both provider checks pass with the 
 deliberately suspended while a mark is processed.
 
 All five root gates pass for the playback-marks checkpoint, including 1,053 umbrella tests with
-zero failures (15 integrations excluded). Local phone pacing after idle, initial waits, common
+zero failures (15 integrations excluded). Initial waits, common
 readiness, coordinated transfer release, and rendered/live-provider acceptance remain incomplete.
+
+Native phone output now also enforces a local 20 ms pacing boundary after idle gaps, preventing
+overdue pipeline timestamps from producing a catch-up burst. Small encoding delays are absorbed
+without accumulating drift; the codec and output sequence remain intact. Controlled-clock and
+phone integration fixtures pass, followed by all five root gates with 1,054 tests and zero failures
+(15 integrations excluded). This proves local queue pacing, not audible live-provider acceptance.

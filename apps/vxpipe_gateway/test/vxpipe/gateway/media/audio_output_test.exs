@@ -262,6 +262,55 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
     assert :ok = OutputSink.release(output, 0)
   end
 
+  test "paces resumed output after idle without a catch-up burst or accumulated encoder delay" do
+    clock = start_supervised!({Agent, fn -> 0 end})
+    observer = self()
+
+    {output, connection} =
+      start_output(
+        clock: fn -> Agent.get(clock, & &1) end,
+        schedule: fn target, message, delay ->
+          send(observer, {:paced, target, message, delay})
+          make_ref()
+        end
+      )
+
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, _, ^output}
+    send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+    assert :ok = push(output, connection, :binary.copy(<<1, 0>>, 960))
+    assert :ok = finish(output)
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 0})
+    assert_receive {:paced, ^output, first_tick, 20}
+    refute_receive {:vxpipe_audio_playback, ^output, "turn-test", {:completed, _}}
+    Agent.update(clock, fn _ -> 20 end)
+    send(output, first_tick)
+    assert_receive {:vxpipe_audio_playback, ^output, "turn-test", {:completed, 20}}
+
+    Agent.update(clock, fn _ -> 20_000 end)
+    assert :ok = push(output, connection, :binary.copy(<<2, 0>>, 3 * 960))
+
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id,
+                    %PlaybackFrame{timestamp: 960}}
+
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 960})
+    assert_receive {:paced, ^output, second_tick, 20}
+    send(output, first_tick)
+    _ = :sys.get_state(output)
+
+    refute_receive {:test_audio_output_pipeline_push, ^pipeline_id,
+                    %PlaybackFrame{timestamp: 1920}}
+
+    Agent.update(clock, fn _ -> 20_020 end)
+    send(output, second_tick)
+
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id,
+                    %PlaybackFrame{timestamp: 1920}}
+
+    Agent.update(clock, fn _ -> 20_024 end)
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 1920})
+    assert_receive {:paced, ^output, _third_tick, 16}
+  end
+
   defp start_output(options) do
     connection_id = unique_id("connection")
 

@@ -186,11 +186,30 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
 
   def handle_info(
         {:vxpipe_audio_output_pipeline_sent, pipeline_id, timestamp},
-        %{pipeline_id: pipeline_id, in_flight: %{timestamp: timestamp}, pending_clear: from} =
-          state
+        %{pipeline_id: pipeline_id, in_flight: %{timestamp: timestamp}, pace_ref: nil} = state
+      ) do
+    now = state.clock.()
+
+    deadline =
+      case state.paced_until do
+        previous when is_integer(previous) and previous + @frame_duration_ms > now ->
+          previous + @frame_duration_ms
+
+        _ ->
+          now + @frame_duration_ms
+      end
+
+    ref = make_ref()
+    _ = state.schedule.(self(), {:vxpipe_audio_output_paced, ref}, deadline - now)
+    {:noreply, %{state | pace_ref: ref, paced_until: deadline}}
+  end
+
+  def handle_info(
+        {:vxpipe_audio_output_paced, ref},
+        %{pace_ref: ref, pending_clear: from} = state
       )
-      when not is_nil(from) do
-    state = acknowledge_playout(state)
+      when is_reference(ref) and not is_nil(from) do
+    state = acknowledge_playout(%{state | pace_ref: nil})
 
     case complete_clear(state) do
       {:ok, played, state} ->
@@ -207,10 +226,16 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   end
 
   def handle_info(
-        {:vxpipe_audio_output_pipeline_sent, pipeline_id, timestamp},
-        %{pipeline_id: pipeline_id, in_flight: %{timestamp: timestamp}} = state
-      ) do
-    state = state |> acknowledge_playout() |> drain_pending_push() |> drain_pending_finish()
+        {:vxpipe_audio_output_paced, ref},
+        %{pace_ref: ref} = state
+      )
+      when is_reference(ref) do
+    state =
+      %{state | pace_ref: nil}
+      |> acknowledge_playout()
+      |> drain_pending_push()
+      |> drain_pending_finish()
+
     continue(state)
   end
 
@@ -391,6 +416,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
     %{
       state
       | current: nil,
+        pace_ref: nil,
         in_flight: nil,
         pending_finish: nil,
         pending_push: nil,
@@ -404,6 +430,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
     |> clear_turn()
     |> Map.put(:next_sequence_number, 0)
     |> Map.put(:delivered_sequence_next, 0)
+    |> Map.put(:paced_until, nil)
   end
 
   defp discard_queued(state) do

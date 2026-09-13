@@ -15,6 +15,10 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
   defstruct @enforce_keys ++
               [
                 current: nil,
+                clock: nil,
+                schedule: nil,
+                pace_ref: nil,
+                paced_until: nil,
                 playback_control: nil,
                 remote_playback: nil,
                 pending_clear: nil,
@@ -40,6 +44,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
   def new(options) do
     %__MODULE__{
       connection_id: Keyword.fetch!(options, :connection_id),
+      clock: Keyword.get(options, :clock, fn -> System.monotonic_time(:millisecond) end),
+      schedule: Keyword.get(options, :schedule, &Process.send_after/3),
       identity: %{
         tenant_id: Keyword.fetch!(options, :tenant_id),
         room_id: Keyword.fetch!(options, :room_id),

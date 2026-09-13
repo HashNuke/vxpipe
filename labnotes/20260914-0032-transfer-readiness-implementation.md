@@ -183,13 +183,27 @@ compilation, strict Credo, 1,053 umbrella tests with zero failures (15 excluded 
 and unused-dependency checks. Existing complete phone-transfer harnesses now explicitly await
 the asynchronous start-event acknowledgement before inspecting their media sessions.
 
-- Native phone output still relies on Membrane.Realtimer for local pacing. Its installed
+- Inspection found native phone output relying on Membrane.Realtimer for local pacing. Its installed
   implementation sends timestamps that are behind wall time immediately. Because the retained
   output sequence excludes idle gaps, restarting a loop after idle can enqueue audio faster than
-  playback until the stream catches up. Before enabling lifecycle waits, add a native pacing
+  playback until the stream catches up. The following checkpoint adds a native pacing
   boundary that prevents this burst while retaining the codec/timeline. Provider final marks
   prove drain but are not a substitute for bounded local pacing.
 - `Startup.start_entries/3` still performs entry activation and TTS/opening preparation in the
   room startup path; `StartupReadiness` still keys completion to caller attachment/STT. The next
   orchestration work must expose early caller output, prepare resources asynchronously and build
   the complete candidate resource set before using the new holds, players and drain barrier.
+
+## Phone pacing across idle gaps
+
+- Native output now retains the in-flight frame until its local 20 ms pacing boundary before
+  admitting the next frame. After a real idle gap the next boundary starts from the current time;
+  small encoding delays use the remaining time to the existing boundary, avoiding accumulated
+  per-frame drift. Codec processes and the delivered sequence clock are preserved.
+- The controlled-clock regression first failed because no paced acknowledgement was scheduled.
+  It now covers normal completion, a 20-second idle gap, stale timer rejection and a four-millisecond
+  encoding delay absorbed by the next boundary. Existing native output and full phone call checks
+  also pass: 16 focused tests with zero failures.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,054
+  umbrella tests with zero failures (15 integrations excluded), and unused-dependency checks.
+  Initial wait orchestration, common readiness and coordinated transfer release remain pending.
