@@ -21,6 +21,23 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
     incarnation_id: "rinc-inspection"
   }
 
+  test "readiness requires an open local observation handoff and never exposes retained data" do
+    buffer =
+      start_supervised!(
+        {Buffer, identity: @identity, maximum_pending_records: 8, maximum_retained_records: 3}
+      )
+
+    assert {:ok, resource, :ready} = Buffer.readiness(buffer)
+    assert resource.kind == :live_inspection
+    assert {:ok, port} = Buffer.port(buffer)
+    assert :ok = Port.offer(port, variable_update())
+    assert {:ok, ^resource, :ready} = Buffer.readiness(buffer)
+    refute inspect(resource) =~ "private-live-value"
+
+    :ok = Port.close(port)
+    assert {:ok, ^resource, :failed} = Buffer.readiness(buffer)
+  end
+
   test "retains a bounded private live projection without blocking its producers" do
     buffer =
       start_supervised!(

@@ -21,10 +21,11 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber.State do
     :completion_enqueued?,
     :completion_finished?
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [readiness_resource: nil]
 
   @type t :: %__MODULE__{
           handoff: Handoff.t(),
+          readiness_resource: Vxpipe.CallEngine.Readiness.Resource.t(),
           writer: {module(), term()},
           retry_delay_ms: non_neg_integer(),
           drain_timeout_ms: pos_integer(),

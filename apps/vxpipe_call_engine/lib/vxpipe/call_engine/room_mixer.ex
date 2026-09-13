@@ -3,6 +3,8 @@ defmodule Vxpipe.CallEngine.RoomMixer do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
 
   alias Vxpipe.CallEngine.RoomMixer.{
@@ -92,6 +94,9 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   @spec stats(GenServer.server()) :: map() | {:error, :unavailable}
   def stats(server), do: safe_call(server, :stats)
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(server), do: safe_call(server, :readiness)
+
   @spec ingress_configuration(GenServer.server()) :: {:ok, map()} | {:error, :unavailable}
   def ingress_configuration(server), do: safe_call(server, :ingress_configuration)
 
@@ -104,6 +109,16 @@ defmodule Vxpipe.CallEngine.RoomMixer do
   end
 
   @impl true
+  def handle_call(:readiness, _from, %{policy: nil} = state) do
+    {:reply, {:ok, state.readiness_resource, :preparing}, state}
+  end
+
+  def handle_call(:readiness, _from, state) do
+    interval = Map.take(state.policy.intervals, [:audio_input, :audio_output, :recording])
+    resource = %{state.readiness_resource | policy_interval: interval}
+    {:reply, {:ok, resource, :ready}, state}
+  end
+
   def handle_call({:vxpipe_apply_media_policy, snapshot}, _from, state) do
     case Policy.install(state, snapshot) do
       {:ok, state} -> {:reply, :ok, state}

@@ -3,7 +3,10 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TranscriptRouter.{Decision, Projection}
 
   @call_timeout 1_000
@@ -49,6 +52,9 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
   @spec stats(GenServer.server()) :: map() | {:error, :unavailable}
   def stats(server), do: safe_call(server, :stats)
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(server), do: safe_call(server, :readiness)
+
   @impl true
   def init(options) do
     with {:ok, identity} <- identity(options),
@@ -56,6 +62,7 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
       {:ok,
        %{
          identity: identity,
+         readiness_resource: Resource.new(:transcript_router, :room, __MODULE__, options),
          current: nil,
          maximum_retained_revisions: maximum_retained_revisions,
          snapshots: %{}
@@ -66,6 +73,19 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
   end
 
   @impl true
+  def handle_call(:readiness, _from, %{current: nil} = state) do
+    {:reply, {:ok, state.readiness_resource, :preparing}, state}
+  end
+
+  def handle_call(:readiness, _from, state) do
+    resource = %{
+      state.readiness_resource
+      | policy_interval: state.current.intervals.speech_to_text
+    }
+
+    {:reply, {:ok, resource, :ready}, state}
+  end
+
   def handle_call({:vxpipe_apply_media_policy, snapshot}, _from, state) do
     case Snapshot.prepare(snapshot, state.current) do
       {:ok, snapshot} ->

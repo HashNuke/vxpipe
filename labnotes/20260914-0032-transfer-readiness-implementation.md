@@ -246,3 +246,22 @@ dependency checks. The private playback checkpoint can now be checked off: its i
 shared native output, clear/drain, cue, generation fencing and idle pacing boundaries are implemented
 and verified. The separate initial/transfer lifecycle and rendered/provider acceptance gates remain
 unchecked; the milestone and index are still incomplete.
+
+## Core room-service readiness
+
+- Added owning-boundary readiness for the room mixer, transcript router, Variables, live inspection
+  and archive subscriber. Mixer/router require an installed policy and report only their relevant
+  intervals; applying a new relevant interval preserves their initialized process generation.
+  Ordinary variable updates also retain the initialized configuration and generation.
+- The observation port must be open. Archive requires an open local handoff and bound producer;
+  its pending remote write can remain asynchronous. Closed local handoffs report failed while
+  still-running processes drain, rather than being mistaken for usable interfaces.
+- Five new checks first failed on missing readiness APIs. The five owning test files now pass
+  40 tests with zero failures, covering unrelated/relevant policy changes, variable privacy and
+  updates, closed observation ports, and storage-independent archive readiness.
+- Extended the resource contract with these boundaries. Recording writer readiness, the complete
+  prospective inventory, model/tools and lifecycle orchestration remain outstanding.
+- Combined room-service/collector verification passes all five root gates: formatting,
+  warnings-as-errors compilation, strict Credo, 1,083 umbrella tests with zero failures
+  (15 integration tests excluded), and unused-dependency checks. The collector is recorded in the
+  next checkpoint; no startup/transfer barrier or browser/provider acceptance is claimed here.

@@ -1,13 +1,39 @@
 defmodule Vxpipe.CallEngine.Archive.SubscriberTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.CallEngine.Archive.{Fact, Handoff, Supervisor}
+  alias Vxpipe.CallEngine.Archive.{Fact, Handoff, Subscriber, Supervisor}
 
   alias Vxpipe.CallEngine.{
     TestArchiveWriter,
     TestBlockingArchiveWriter,
     TestCollectingArchiveWriter
   }
+
+  test "readiness requires a bound open producer but does not wait for archival storage" do
+    subscriber =
+      start_supervised!(
+        {Subscriber,
+         writer: {TestArchiveWriter, self()},
+         maximum_pending_facts: 4,
+         retry_delay_ms: 5,
+         drain_timeout_ms: 1_000}
+      )
+
+    handoff = Subscriber.handoff(subscriber)
+    assert {:ok, resource, :preparing} = Subscriber.readiness(subscriber)
+    assert resource.kind == :archive
+    assert :ok = Handoff.source_started(handoff, self())
+    assert {:ok, ^resource, :ready} = Subscriber.readiness(subscriber)
+    assert :ok = Handoff.offer(handoff, :retained_while_storage_waits)
+    assert_receive {:test_archive_write, writer, :retained_while_storage_waits}
+    assert {:ok, ^resource, :ready} = Subscriber.readiness(subscriber)
+
+    monitor = Process.monitor(subscriber)
+    assert :ok = Handoff.source_stopped(handoff, :finished)
+    assert {:ok, ^resource, :failed} = Subscriber.readiness(subscriber)
+    send(writer, {:test_archive_write_result, :ok})
+    assert_receive {:DOWN, ^monitor, :process, ^subscriber, :normal}
+  end
 
   test "writes an explicit archive closure after retained room facts drain" do
     source_stopped_at = ~U[2026-09-12 20:00:00.123Z]

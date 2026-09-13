@@ -16,7 +16,7 @@ defmodule Vxpipe.CallEngine.CallVariables.State do
     :source_policy,
     :global_revision
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [readiness_resource: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -28,6 +28,7 @@ defmodule Vxpipe.CallEngine.CallVariables.State do
           archival_port: ArchivalPort.t(),
           inspection_port: InspectionPort.t(),
           source_policy: map(),
-          global_revision: non_neg_integer()
+          global_revision: non_neg_integer(),
+          readiness_resource: Vxpipe.CallEngine.Readiness.Resource.t()
         }
 end

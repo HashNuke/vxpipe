@@ -25,7 +25,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
     :buffer_overflows,
     :policy_dropped_frames
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [readiness_resource: nil]
 
   @type t :: %__MODULE__{
           identity: %{tenant_id: String.t(), room_id: String.t(), incarnation_id: String.t()},
@@ -40,6 +40,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.State do
           recording_egress: nil | RecordingEgress.t(),
           playout: Playout.t() | nil,
           policy: nil | Snapshot.t(),
+          readiness_resource: Vxpipe.CallEngine.Readiness.Resource.t(),
           buffer: TimestampBuffer.t(),
           subscriptions: SubscriptionCatalog.t(),
           source_sequences: %{

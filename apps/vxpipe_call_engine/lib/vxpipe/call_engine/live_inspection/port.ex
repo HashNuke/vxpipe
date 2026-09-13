@@ -64,8 +64,12 @@ defmodule Vxpipe.CallEngine.LiveInspection.Port do
   @doc false
   def close(%__MODULE__{} = port), do: :atomics.put(port.counters, @open, 0)
 
+  @doc false
+  @spec open?(t()) :: boolean()
+  def open?(%__MODULE__{} = port), do: :atomics.get(port.counters, @open) == 1
+
   defp available?(port) do
-    :atomics.get(port.counters, @open) == 1 and Process.alive?(port.buffer)
+    open?(port) and Process.alive?(port.buffer)
   end
 
   defp reserve(port) do

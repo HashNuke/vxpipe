@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Readiness.Resource
+
   alias Vxpipe.CallEngine.RoomMixer.{
     OpeningGate,
     Playout,
@@ -30,6 +32,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
       {:ok,
        %State{
          identity: identity,
+         readiness_resource:
+           Resource.new(:room_mixer, :room, Vxpipe.CallEngine.RoomMixer, options),
          clock_origin_ms: clock_origin_ms,
          format: format,
          opening_gate: OpeningGate.new(options, clock_origin_ms, format.sample_rate),

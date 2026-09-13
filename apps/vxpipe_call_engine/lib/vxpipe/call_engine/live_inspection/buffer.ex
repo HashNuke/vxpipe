@@ -3,11 +3,22 @@ defmodule Vxpipe.CallEngine.LiveInspection.Buffer do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
+  alias Vxpipe.CallEngine.Readiness.Resource
+
   alias Vxpipe.CallEngine.Archive.Fact
   alias Vxpipe.CallEngine.CallVariables.{BaselineSnapshot, UpdateSnapshot}
   alias Vxpipe.CallEngine.LiveInspection.{Port, Snapshot}
 
   @call_timeout 250
+
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(buffer) do
+    GenServer.call(buffer, :readiness, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
 
   def start_link(options) do
     identity = Keyword.fetch!(options, :identity)
@@ -59,6 +70,7 @@ defmodule Vxpipe.CallEngine.LiveInspection.Buffer do
     {:ok,
      %{
        identity: identity,
+       readiness_resource: Resource.new(:live_inspection, :room, __MODULE__, options),
        port: port,
        maximum_retained_records: maximum_retained_records,
        records: :queue.new(),
@@ -70,6 +82,11 @@ defmodule Vxpipe.CallEngine.LiveInspection.Buffer do
   end
 
   @impl true
+  def handle_call(:readiness, _from, state) do
+    status = if Port.open?(state.port), do: :ready, else: :failed
+    {:reply, {:ok, state.readiness_resource, status}, state}
+  end
+
   def handle_call(:port, _from, state), do: {:reply, state.port, state}
 
   def handle_call(:snapshot, _from, state) do

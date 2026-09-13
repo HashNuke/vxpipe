@@ -13,6 +13,24 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     incarnation_id: "incarnation-mixer"
   }
 
+  test "readiness requires installed audio policy and retains the mixer across unrelated changes" do
+    mixer = start_mixer()
+    assert {:ok, pending, :preparing} = RoomMixer.readiness(mixer)
+    :ok = apply_policy(mixer, 0, ["alice", "bob"])
+    assert {:ok, resource, :ready} = RoomMixer.readiness(mixer)
+    assert resource.kind == :room_mixer
+    assert resource.scope == :room
+    assert resource.generation == pending.generation
+
+    :ok = apply_policy(mixer, 1, ["alice", "bob"], transcript_routes: %{})
+    assert {:ok, ^resource, :ready} = RoomMixer.readiness(mixer)
+    :ok = apply_policy(mixer, 2, ["alice", "bob"], audio_routes: %{})
+    assert {:ok, revised, :ready} = RoomMixer.readiness(mixer)
+    assert revised.generation == resource.generation
+    assert revised.configuration == resource.configuration
+    assert revised.policy_interval != resource.policy_interval
+  end
+
   test "aligns PCM sources and emits policy-filtered mix-minus, full-mix, and track output" do
     mixer = start_mixer()
     :ok = apply_policy(mixer, 0, ["alice", "bob", "monitor", "debugger"])

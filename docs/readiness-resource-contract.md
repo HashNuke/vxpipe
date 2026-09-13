@@ -1,7 +1,7 @@
 # Resource readiness evidence
 
-Status: barrier and speech-provider adapters implemented; lifecycle collection and the complete
-prospective resource inventory remain in progress. This is an implementation decision for
+Status: barrier, speech-provider adapters and core room-service adapters implemented; lifecycle
+collection and the complete prospective resource inventory remain in progress. This is a decision for
 [transfer readiness and wait sounds](milestones/transfer-readiness-and-wait-sounds.md), not a
 claim that calls or transfers now wait for the full barrier.
 
@@ -68,6 +68,23 @@ These queries prove the provider component's readiness. Codec/ingress binding, p
 room routing, selected model/tools and room services remain separate required resources. In
 particular, a ready speech provider cannot substitute for an unprepared destination input/output
 route. Startup and transfer gating will consume the combined required set.
+
+## Room services and local handoffs
+
+The room mixer and transcript router report preparing until their first policy is installed.
+Their ready descriptors include only the relevant audio/recording or transcript intervals.
+Applying an unrelated policy revision retains the exact descriptor. Applying a relevant revision
+changes its policy evidence while preserving the process generation and configured buffers.
+Participant subscriptions/codecs remain additional bindings in the prospective required set.
+
+Variables reports its initialized schema, grants and local handoff configuration after baseline
+handoff. Ordinary value updates do not change its resource generation or configuration signature;
+values and snapshots never appear in readiness reports.
+
+Live inspection requires an open local observation port. Archive readiness requires an open
+handoff and a bound producer. Closing either local handoff revokes readiness even while its process
+still exists. A pending remote archive write does not block readiness or alter the existing bounded
+asynchronous storage/gap contract. Recording writer adapters remain pending.
 
 ## Rejected alternatives and verification
 

@@ -14,6 +14,25 @@ defmodule Vxpipe.CallEngine.CallVariablesTest do
 
   @schema_version "20260913.01"
 
+  test "readiness exposes initialized bindings without values or invalidation by ordinary updates" do
+    %{server: server, identity: identity} = start_variables()
+    assert {:ok, resource, :ready} = CallVariables.readiness(server)
+    assert resource.kind == :call_variables
+    assert resource.scope == :room
+    refute inspect(resource) =~ "customer-1"
+    refute inspect(resource) =~ "Exampleville"
+
+    assert {:ok, command} =
+             update_command(identity,
+               section: "intake",
+               expected_revision: 0,
+               operation: {:merge, %{"note" => "new value"}}
+             )
+
+    assert {:ok, _result} = CallVariables.update(server, command)
+    assert {:ok, ^resource, :ready} = CallVariables.readiness(server)
+  end
+
   test "reads only requested authorized sections and fails a mixed forbidden read without values" do
     %{server: server, identity: identity} = start_variables()
 

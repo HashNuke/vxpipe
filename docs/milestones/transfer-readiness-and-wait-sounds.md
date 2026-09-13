@@ -476,3 +476,11 @@ warnings-as-errors compilation, strict Credo, 1,067 umbrella tests with zero fai
 excluded), and unused-dependency checks. The private playback checkpoint is now complete based on
 the independent player, shared output, clear/drain, generation and phone pacing evidence above;
 this does not check off the separate rendered/live-provider or lifecycle acceptance requirements.
+
+Core room services now expose readiness at their owning boundaries. Mixer/router require an
+installed policy and preserve their generations across policy updates; only relevant interval
+evidence changes. Variables retains its evidence through ordinary updates. Live inspection and
+archive require open local handoffs, with archive also requiring a bound producer. Pending remote
+archive writes preserve the existing asynchronous contract. Forty focused room-service tests pass.
+Recording, model/tool readiness, the full prospective inventory and lifecycle integration remain
+pending; this is partial progress on common readiness.

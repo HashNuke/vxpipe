@@ -11,6 +11,24 @@ defmodule Vxpipe.CallEngine.TranscriptRouterTest do
     incarnation_id: "incarnation-transcript"
   }
 
+  test "readiness follows transcript policy without invalidation by unrelated audio changes" do
+    router = start_router()
+    assert {:ok, pending, :preparing} = TranscriptRouter.readiness(router)
+    :ok = apply_policy(router, 0, ["alice", "bob"])
+    assert {:ok, resource, :ready} = TranscriptRouter.readiness(router)
+    assert resource.kind == :transcript_router
+    assert resource.scope == :room
+    assert resource.generation == pending.generation
+
+    :ok = apply_policy(router, 1, ["alice", "bob"], audio_routes: %{})
+    assert {:ok, ^resource, :ready} = TranscriptRouter.readiness(router)
+    :ok = apply_policy(router, 2, ["alice", "bob"], save_transcripts: false)
+    assert {:ok, revised, :ready} = TranscriptRouter.readiness(router)
+    assert revised.generation == resource.generation
+    assert revised.configuration == resource.configuration
+    assert revised.policy_interval != resource.policy_interval
+  end
+
   test "routes a current transcript and pins its storage permission to the source revision" do
     router = start_router()
     :ok = apply_policy(router, 0, ["alice", "bob"])

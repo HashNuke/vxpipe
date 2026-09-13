@@ -3,6 +3,10 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
+  alias Vxpipe.CallEngine.Readiness.Resource
+
   alias Vxpipe.CallEngine.Archive.{CompletionFact, Fact, Handoff, Subscriber.State}
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
@@ -19,6 +23,13 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   @spec handoff(pid()) :: Handoff.t()
   def handoff(subscriber), do: GenServer.call(subscriber, :handoff)
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(subscriber) do
+    GenServer.call(subscriber, :readiness, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     with {:ok, writer} <- writer(options),
@@ -31,6 +42,7 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
       {:ok,
        %State{
          handoff: handoff,
+         readiness_resource: Resource.new(:archive, :room, __MODULE__, options),
          writer: writer,
          retry_delay_ms: retry_delay_ms,
          drain_timeout_ms: drain_timeout_ms,
@@ -53,6 +65,17 @@ defmodule Vxpipe.CallEngine.Archive.Subscriber do
   end
 
   @impl true
+  def handle_call(:readiness, _from, state) do
+    status =
+      cond do
+        state.closing? or not Handoff.stats(state.handoff).open? -> :failed
+        state.source_monitor == nil -> :preparing
+        true -> :ready
+      end
+
+    {:reply, {:ok, state.readiness_resource, status}, state}
+  end
+
   def handle_call(:handoff, _from, state), do: {:reply, state.handoff, state}
 
   @impl true

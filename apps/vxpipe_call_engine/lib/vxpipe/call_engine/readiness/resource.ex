@@ -28,6 +28,20 @@ defmodule Vxpipe.CallEngine.Readiness.Resource do
   @spec key(t()) :: key()
   def key(%__MODULE__{} = resource), do: {resource.kind, resource.scope, resource.binding}
 
+  @spec new(atom(), scope(), module(), term(), keyword()) :: t()
+  def new(kind, scope, adapter, configuration, options \\ []) do
+    %__MODULE__{
+      kind: kind,
+      scope: scope,
+      binding: Keyword.get(options, :binding),
+      instance: self(),
+      generation: make_ref(),
+      configuration: signature(configuration),
+      policy_interval: nil,
+      adapter: adapter
+    }
+  end
+
   # Keep configuration (including private provider options) out of readiness reports.
   @spec signature(term()) :: binary()
   def signature(configuration) do

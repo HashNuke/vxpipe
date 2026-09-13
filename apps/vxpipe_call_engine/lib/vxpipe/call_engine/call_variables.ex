@@ -5,6 +5,8 @@ defmodule Vxpipe.CallEngine.CallVariables do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.CallVariables.{
     ArchivalPort,
     BaselineSnapshot,
@@ -15,6 +17,7 @@ defmodule Vxpipe.CallEngine.CallVariables do
 
   alias Vxpipe.CallEngine.Command.{ReadCallVariables, UpdateCallVariables}
   alias Vxpipe.CallEngine.{Error, Id}
+  alias Vxpipe.CallEngine.Readiness.Resource
 
   @call_timeout 5_000
   @max_update_bytes 16_384
@@ -54,6 +57,13 @@ defmodule Vxpipe.CallEngine.CallVariables do
     GenServer.call(server, {:update, command}, timeout)
   end
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(server) do
+    GenServer.call(server, :readiness, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     plan = Keyword.fetch!(options, :plan)
@@ -67,6 +77,7 @@ defmodule Vxpipe.CallEngine.CallVariables do
     state =
       %State{
         tenant_id: plan.tenant_id,
+        readiness_resource: Resource.new(:call_variables, :room, __MODULE__, options),
         call_id: plan.call_id,
         room_id: plan.room_id,
         incarnation_id: incarnation_id,
@@ -90,6 +101,10 @@ defmodule Vxpipe.CallEngine.CallVariables do
   end
 
   @impl true
+  def handle_call(:readiness, _from, state) do
+    {:reply, {:ok, state.readiness_resource, :ready}, state}
+  end
+
   def handle_call({:read, command}, _from, state) do
     result =
       with :ok <- authorize_identity(command, state),
