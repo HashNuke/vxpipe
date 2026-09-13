@@ -91,10 +91,23 @@ defmodule Vxpipe.CallEngine.TranscriptRouterTest do
              TranscriptRouter.project(router, projection(0, "missing", ["alice"]))
   end
 
+  test "retains an active speech interval across unrelated revisions" do
+    router = start_router(maximum_retained_revisions: 2)
+    :ok = apply_policy(router, 0, ["alice", "bob"])
+    :ok = apply_policy(router, 1, ["alice", "bob", "carol"])
+    :ok = apply_policy(router, 2, ["alice", "bob"], audio_routes: %{})
+    :ok = apply_policy(router, 3, ["alice", "bob"])
+
+    assert {:ok, %Decision{recipient_participant_ids: recipients}} =
+             TranscriptRouter.project(router, projection(0, "alice", ["bob"]))
+
+    assert recipients == MapSet.new(["bob"])
+  end
+
   test "bounds retained source-policy revisions and fails closed after eviction" do
     router = start_router(maximum_retained_revisions: 2)
     :ok = apply_policy(router, 0, ["alice"])
-    :ok = apply_policy(router, 1, ["alice"])
+    :ok = apply_policy(router, 1, ["alice"], save_transcripts: false)
     :ok = apply_policy(router, 2, ["alice"])
 
     assert %{policy_revision: 2, retained_policy_revisions: 2} =

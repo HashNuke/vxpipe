@@ -67,12 +67,12 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
 
   @impl true
   def handle_call({:vxpipe_apply_media_policy, snapshot}, _from, state) do
-    case Snapshot.validate_transition(snapshot, state.current) do
-      :ok ->
+    case Snapshot.prepare(snapshot, state.current) do
+      {:ok, snapshot} ->
         snapshots =
           state.snapshots
           |> Map.put(snapshot.revision, snapshot)
-          |> retain_latest(state.maximum_retained_revisions)
+          |> retain_latest(state.maximum_retained_revisions, snapshot)
 
         {:reply, :ok, %{state | current: snapshot, snapshots: snapshots}}
 
@@ -95,7 +95,7 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
       room_id: state.identity.room_id,
       incarnation_id: state.identity.incarnation_id,
       source_participant_id: source_participant_id,
-      policy_revision: current.revision,
+      policy_revision: Snapshot.interval(current, :speech_to_text, source_participant_id),
       recipient_participant_ids: recipient_participant_ids
     }
 
@@ -133,14 +133,16 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
     end
   end
 
-  defp live_recipients(%Projection{policy_revision: revision}, %Snapshot{
-         revision: current_revision
-       })
-       when revision != current_revision do
-    MapSet.new()
+  defp live_recipients(%Projection{} = projection, %Snapshot{} = current) do
+    if projection.policy_revision ==
+         Snapshot.interval(current, :speech_to_text, projection.source_participant_id) do
+      permitted_recipients(projection, current)
+    else
+      MapSet.new()
+    end
   end
 
-  defp live_recipients(%Projection{} = projection, %Snapshot{} = current) do
+  defp permitted_recipients(projection, current) do
     Enum.reduce(projection.recipient_participant_ids, MapSet.new(), fn recipient_id, allowed ->
       if MapSet.member?(current.present_participant_ids, recipient_id) and
            Effective.transcript_route_permitted?(
@@ -200,14 +202,17 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
     end
   end
 
-  defp retain_latest(snapshots, maximum) do
+  defp retain_latest(snapshots, maximum, current) do
+    active_revisions =
+      Enum.map(current.present_participant_ids, &Snapshot.interval(current, :speech_to_text, &1))
+
     retained_revisions =
       snapshots
       |> Map.keys()
       |> Enum.sort(:desc)
       |> Enum.take(maximum)
 
-    Map.take(snapshots, retained_revisions)
+    Map.take(snapshots, retained_revisions ++ active_revisions)
   end
 
   defp nonempty(options, key) do

@@ -83,10 +83,20 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
-    case Snapshot.validate_transition(snapshot, state.policy) do
-      :ok ->
+    case Snapshot.prepare(snapshot, state.policy) do
+      {:ok, snapshot} ->
         demand? = SpeechToTextDemand.required?(snapshot, state.identity.participant_id)
-        {:reply, :ok, install_policy(state, snapshot, demand?)}
+
+        state =
+          if state.policy != nil and
+               Snapshot.interval(state.policy, :speech_to_text, state.identity.participant_id) ==
+                 Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) do
+            %{state | policy: snapshot}
+          else
+            install_policy(state, snapshot, demand?)
+          end
+
+        {:reply, :ok, state}
 
       {:error, reason} ->
         {:reply, {:error, reason}, state}

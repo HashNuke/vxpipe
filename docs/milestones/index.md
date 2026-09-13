@@ -81,6 +81,12 @@ that review is complete and the user explicitly chooses to proceed. This is a se
 not a change to either milestone's approved scope or completion state. Retention/deletion remains
 the final milestone.
 
+The 2026-09-13 pre-delivery review requests
+[incremental media policy application](../incremental-media-policy.md): preserve
+unchanged services during membership revisions. The live-mixing and human-transfer
+milestones track the speech and audio checkpoints; this does not change milestone
+ordering or lift the packaging/retention hold.
+
 ## Common implementation and verification gates
 
 Every milestone inherits these requirements; its own checklist adds the slice-specific gates.

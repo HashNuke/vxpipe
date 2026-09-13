@@ -143,6 +143,8 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
           effective: effective
         }
 
+        {:ok, snapshot} = Snapshot.prepare(snapshot, state.snapshot)
+
         case Barrier.apply(state.enforcers, snapshot, state.enforcement_timeout_ms) do
           :ok ->
             {:reply, {:ok, snapshot}, %{state | contributions: contributions, snapshot: snapshot}}

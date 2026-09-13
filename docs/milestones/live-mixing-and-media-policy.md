@@ -348,6 +348,16 @@ behavior for actual enforcer/provider failure. The focused STT/transfer checks a
 umbrella completion gates pass; evidence is recorded in the
 [human transfer investigation](../../labnotes/20260913-1906-human-transfer-failure.md).
 
+Pre-delivery incremental-policy correction (2026-09-13): the user requested applying
+only the service changes implied by the new permissions. The
+[incremental policy decision](../incremental-media-policy.md) supersedes the
+revision-wide reset behavior described in the historical checkpoints above.
+
+- [x] Review permission scopes, stale-data rejection, admission ordering, and bounded
+  provenance retention; preserve unchanged speech sessions and STT ingress queues.
+- [ ] Preserve unaffected audio pipelines, mixer queues, and recording intervals in
+  the following checkpoint.
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

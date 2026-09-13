@@ -103,8 +103,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @spec install_policy(t(), Snapshot.t()) ::
           {:ok, t()} | {:error, term(), t()}
   def install_policy(%__MODULE__{} = state, %Snapshot{} = snapshot) do
-    case Snapshot.validate_transition(snapshot, state.policy) do
-      :ok -> apply_policy(state, snapshot)
+    case Snapshot.prepare(snapshot, state.policy) do
+      {:ok, snapshot} -> apply_policy(state, snapshot)
       {:error, reason} -> {:error, reason, state}
     end
   end
@@ -128,6 +128,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   defp apply_policy(%__MODULE__{} = state, snapshot) do
+    if state.policy_revision ==
+         Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) do
+      {:ok, %{state | policy: snapshot}}
+    else
+      replace_session(state, snapshot)
+    end
+  end
+
+  defp replace_session(state, snapshot) do
     state = close(state)
 
     if demanded?(state, snapshot) do
@@ -145,7 +154,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   defp put_policy(state, snapshot) do
-    %{state | last_provider_sequence: -1, policy: snapshot, policy_revision: snapshot.revision}
+    %{
+      state
+      | last_provider_sequence: -1,
+        policy: snapshot,
+        policy_revision:
+          Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id)
+    }
   end
 
   defp demanded?(state, snapshot) do
