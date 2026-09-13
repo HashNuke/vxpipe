@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Umbrella and Console checks
+    # Newest available Ubuntu image; 26.04 is in public preview as of 2026-09-13.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+
+    env:
+      MIX_ENV: test
+      VXPIPE_TEST_DATABASE_URL: ecto://postgres@localhost:5432/vxpipe_test
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: vxpipe_test
+          # This disposable CI service contains only test data.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vxpipe_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential pkg-config libssl-dev
+          rustc --version
+          cargo --version
+
+      - name: Set up Erlang and Elixir
+        id: beam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28.5'
+          elixir-version: '1.19.5'
+          version-type: strict
+
+      - name: Cache Mix dependencies
+        uses: actions/cache@v6
+        with:
+          path: deps
+          key: mix-ubuntu-26.04-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock', 'mix.exs', 'apps/*/mix.exs') }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/vxpipe_console/assets/package-lock.json
+
+      - name: Fetch locked Mix dependencies
+        run: mix deps.get --check-locked
+
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Compile with warnings as errors
+        run: mix compile --warnings-as-errors
+
+      - name: Run Credo
+        run: mix credo --strict
+
+      - name: Check for unused locked dependencies
+        run: mix deps.unlock --check-unused
+
+      - name: Install Console assets
+        run: mix assets.setup
+
+      - name: Type-check and build Console assets
+        run: mix assets.build
+
+      - name: Test Console assets
+        run: mix assets.test
+
+      - name: Test umbrella
+        run: mix test
