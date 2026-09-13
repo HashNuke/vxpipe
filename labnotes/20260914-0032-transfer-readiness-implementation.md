@@ -540,3 +540,25 @@ unchecked; the milestone and index are still incomplete.
   umbrella tests with zero failures (15 integrations excluded), and unused-dependency checks.
   The socket/session checkpoint closes the component transport-evidence gap; prospective inventory,
   candidate-policy preparation and startup/transfer orchestration remain unfinished.
+
+## Prospective membership policy
+
+- Inspection found that policy authority admission/leave immediately applies enforcers; using those
+  calls to discover a transfer's final policy would prematurely change permissions and resources.
+  Added a read-only exact-membership preview that recomposes pinned policies and scoped intervals.
+  It excludes the departing source's contribution without removing the live source or starting the
+  incoming participant. Unchanged target membership retains the exact installed snapshot.
+- Candidates pin the actual authority and base snapshot. Validation recomputes the expected result;
+  foreign/altered candidates and stale live-policy bases cannot pass. This does not authorize a
+  transfer or replace its attempt/deadline and resource checks. No enforcer is called by preview.
+- Five new authority checks first failed on the missing API (14 tests, five failures), then all 14
+  passed. Coverage includes four retained listeners plus the incoming participant, host restrictions,
+  unchanged output intervals, invalid membership, stale/foreign candidates and exact agreement with
+  the corresponding live transition. Refactored live transitions to share candidate composition only
+  after those checks were green; broader focused and root verification follow.
+- The resource-contract document records this boundary and rejected alternatives. Actual prospective
+  resource enumeration, gated enforcer preparation and lifecycle integration remain unfinished.
+- All 45 focused policy/readiness checks and all five root gates pass after the shared-composition
+  refactor: formatting, warnings-as-errors compilation, strict Credo, 1,127 umbrella tests with zero
+  failures (15 integrations excluded), and unused-dependency checks. No browser or live-provider
+  acceptance is claimed, and the common-readiness/lifecycle milestone requirements remain unchecked.

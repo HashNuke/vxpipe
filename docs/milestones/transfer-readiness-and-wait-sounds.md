@@ -573,3 +573,12 @@ collection before audio, stable bindings after delivery and rejection of a chang
 root gates pass with 1,122 tests, zero failures and 15 integrations excluded. Prospective inventory,
 candidate-policy preparation and startup/transfer orchestration remain unfinished; these component
 checks do not establish live-provider or coordinated handoff acceptance.
+
+The policy authority now previews exact prospective membership without invoking enforcers or changing
+live permissions. Candidates retain unchanged permission intervals and are validated against the
+actual authority, current base snapshot and recomposed pinned policies. Forty-five focused
+policy/readiness checks pass, including four retained listeners plus an incoming participant and
+rejection of stale/altered candidates. All five root gates pass with 1,127 tests, zero failures and
+15 integrations excluded. Complete resource enumeration, preparing affected enforcers behind closed
+gates, installing prepared bindings at commit and startup/transfer lifecycle integration remain
+unfinished. This preview is a planning boundary, not transfer authorization or a readiness barrier.

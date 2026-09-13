@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.MediaPolicy.{Barrier, Effective, Enforcer, Snapshot}
+  alias Vxpipe.CallEngine.MediaPolicy.{Barrier, Candidate, Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.{MediaPolicy, Participant}
 
@@ -34,6 +34,16 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
 
   @spec snapshot(GenServer.server(), timeout()) :: Snapshot.t()
   def snapshot(server, timeout \\ @call_timeout), do: GenServer.call(server, :snapshot, timeout)
+
+  @spec preview_presence(GenServer.server(), MapSet.t(String.t()), timeout()) ::
+          {:ok, Candidate.t()} | {:error, atom()}
+  def preview_presence(server, present, timeout \\ @call_timeout),
+    do: GenServer.call(server, {:preview_presence, present}, timeout)
+
+  @spec validate_candidate(GenServer.server(), Candidate.t(), timeout()) ::
+          :ok | {:error, :invalid_candidate | :stale_candidate}
+  def validate_candidate(server, candidate, timeout \\ @call_timeout),
+    do: GenServer.call(server, {:validate_candidate, candidate}, timeout)
 
   @spec register_enforcer(GenServer.server(), pid(), timeout()) ::
           {:ok, Snapshot.t()} | {:error, :already_registered | :enforcement_failed}
@@ -87,6 +97,14 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 
+  def handle_call({:preview_presence, present}, _from, state) do
+    {:reply, Candidate.new(self(), present, state), state}
+  end
+
+  def handle_call({:validate_candidate, candidate}, _from, state) do
+    {:reply, Candidate.validate(candidate, self(), state), state}
+  end
+
   def handle_call({:register_enforcer, enforcer}, _from, state) do
     if Map.has_key?(state.enforcers, enforcer) do
       {:reply, {:error, :already_registered}, state}
@@ -135,16 +153,10 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
   end
 
   defp commit(contributions, state) do
-    case Effective.compose(state.host_ceiling, state.normal_policy, contributions) do
-      {:ok, effective} ->
-        snapshot = %Snapshot{
-          revision: state.snapshot.revision + 1,
-          present_participant_ids: contributions |> Map.keys() |> MapSet.new(),
-          effective: effective
-        }
+    present = contributions |> Map.keys() |> MapSet.new()
 
-        {:ok, snapshot} = Snapshot.prepare(snapshot, state.snapshot)
-
+    case Candidate.new(self(), present, state) do
+      {:ok, %Candidate{snapshot: snapshot}} ->
         case Barrier.apply(state.enforcers, snapshot, state.enforcement_timeout_ms) do
           :ok ->
             {:reply, {:ok, snapshot}, %{state | contributions: contributions, snapshot: snapshot}}
@@ -153,7 +165,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
             {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
         end
 
-      {:error, :invalid_policy} ->
+      {:error, _invalid_policy} ->
         {:stop, :invalid_policy, {:error, :invalid_policy}, state}
     end
   end

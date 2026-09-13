@@ -102,6 +102,108 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
              )
   end
 
+  test "previews the complete resulting membership without changing live privacy or enforcers" do
+    audience = ["listener-1", "listener-2", "listener-3", "listener-4"]
+
+    policies =
+      Map.new(audience ++ ["joining", "unused"], &{&1, MediaPolicy.inherit()})
+      |> Map.put("departing", policy(record_audio: false, save_transcripts: false))
+
+    server = start_authority(plan(policies))
+
+    for participant <- audience ++ ["departing"] do
+      assert {:ok, _snapshot} = Authority.admit(server, participant)
+    end
+
+    current = Authority.snapshot(server)
+    enforcer = start_enforcer()
+    assert {:ok, ^current} = Authority.register_enforcer(server, enforcer)
+    assert_receive {:media_policy_applied, ^enforcer, ^current}
+    resulting_presence = MapSet.new(audience ++ ["joining"])
+
+    assert {:ok, candidate} = Authority.preview_presence(server, resulting_presence)
+    assert candidate.base_snapshot == current
+    assert candidate.snapshot.revision == current.revision + 1
+    assert candidate.snapshot.present_participant_ids == resulting_presence
+    assert candidate.snapshot.effective.record_audio
+    assert candidate.snapshot.effective.save_transcripts
+
+    for listener <- audience do
+      assert Snapshot.interval(candidate.snapshot, :audio_output, listener) ==
+               Snapshot.interval(current, :audio_output, listener)
+
+      assert Snapshot.interval(candidate.snapshot, :speech_to_text, listener) ==
+               candidate.snapshot.revision
+    end
+
+    assert Snapshot.interval(candidate.snapshot, :audio_input, "joining") ==
+             candidate.snapshot.revision
+
+    assert :ok = Authority.validate_candidate(server, candidate)
+    assert {:ok, ^candidate} = Authority.preview_presence(server, resulting_presence)
+    assert Authority.snapshot(server) == current
+    refute current.effective.record_audio
+    refute_receive {:media_policy_applied, ^enforcer, _candidate}
+  end
+
+  test "candidate validation fences the authority, live policy and recomputed result" do
+    definition = plan(%{"caller" => MediaPolicy.inherit(), "joining" => MediaPolicy.inherit()})
+    server = start_authority(definition)
+    other = start_authority(definition)
+    assert {:ok, current} = Authority.admit(server, "caller")
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(server, MapSet.new(["caller", "joining"]))
+
+    assert {:error, :invalid_candidate} = Authority.validate_candidate(other, candidate)
+    changed_policy = %{candidate.snapshot.effective | record_audio: false}
+    forged = %{candidate | snapshot: %{candidate.snapshot | effective: changed_policy}}
+    assert {:error, :invalid_candidate} = Authority.validate_candidate(server, forged)
+    assert {:error, :invalid_candidate} = Authority.validate_candidate(server, nil)
+    assert Authority.snapshot(server) == current
+
+    assert {:ok, _snapshot} = Authority.admit(server, "joining")
+    assert {:error, :stale_candidate} = Authority.validate_candidate(server, candidate)
+  end
+
+  test "preview retains the host ceiling and rejects unknown or malformed membership" do
+    server =
+      start_authority(
+        plan(%{"caller" => MediaPolicy.inherit()}),
+        media_policy_ceiling: policy(record_audio: false)
+      )
+
+    current = Authority.snapshot(server)
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["caller"]))
+    refute candidate.snapshot.effective.record_audio
+
+    assert {:error, :unknown_participant} =
+             Authority.preview_presence(server, MapSet.new(["unplanned"]))
+
+    assert {:error, :invalid_presence} = Authority.preview_presence(server, ["caller"])
+    assert {:error, :invalid_presence} = Authority.preview_presence(server, MapSet.new([nil]))
+    assert Authority.snapshot(server) == current
+  end
+
+  test "unchanged prospective membership retains the exact installed snapshot" do
+    server = start_authority(plan(%{"caller" => MediaPolicy.inherit()}))
+    assert {:ok, current} = Authority.admit(server, "caller")
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(server, current.present_participant_ids)
+
+    assert candidate.snapshot == current
+    assert :ok = Authority.validate_candidate(server, candidate)
+  end
+
+  test "a preview and the corresponding live transition compute identical permission intervals" do
+    server = start_authority(plan(%{"caller" => policy(record_audio: false)}))
+    assert {:ok, _current} = Authority.admit(server, "caller")
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new())
+    assert {:ok, installed} = Authority.leave(server, "caller")
+    assert candidate.snapshot == installed
+  end
+
   test "refuses startup with a non-positive enforcement timeout" do
     Process.flag(:trap_exit, true)
 
@@ -181,7 +283,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
                    1_000
   end
 
-  defp start_authority(plan) do
+  defp start_authority(plan, overrides \\ []) do
     options = [
       plan: plan,
       incarnation_id: "incarnation-#{System.unique_integer([:positive])}",
@@ -190,6 +292,7 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     ]
 
     options
+    |> Keyword.merge(overrides)
     |> Authority.child_spec()
     |> Map.put(:significant, false)
     |> start_supervised!()

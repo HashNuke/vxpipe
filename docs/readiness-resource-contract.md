@@ -55,6 +55,28 @@ RoomAuthority's receive loop, binds each response to its current batch/request a
 processes. The barrier alone neither monitors processes nor releases media. Lifecycle use and media
 release fencing are still pending.
 
+## Prospective policy
+
+The policy authority can now preview an exact resulting membership without applying it. It
+recomposes the pinned host ceiling, normal policy and only those participants' presence restrictions,
+then calculates the same scoped permission intervals used by live transitions. This lets inventory
+planning exclude the departing source while it remains present and available for recovery. Remaining
+participants retain unaffected intervals; an unchanged target membership retains the entire installed
+snapshot. Unknown participants and malformed membership fail rather than producing a partial plan.
+
+A candidate pins its authority instance and base snapshot. Validation checks both and recomputes the
+result from pinned policies, rejecting stale or altered candidates. A live revision requires a fresh
+preview even when some resource intervals remain unchanged; those resources can still retain their
+readiness evidence. Preview and validation do not invoke enforcers, start/stop capabilities, alter
+live permissions or grant transfer authorization. The lifecycle owner must separately fence the
+attempt/deadline and validate the complete resource inventory.
+
+Rejected alternatives are temporarily admitting the destination to discover its policy, or computing
+only the destination's restrictions. The first exposes premature permissions and invokes runtime
+changes; the second misses restrictions from other remaining participants and the host ceiling.
+Preparing affected enforcer resources behind closed gates and installing those prepared bindings at
+commit remain unfinished. A valid policy preview alone is not readiness or permission to release media.
+
 ## Collection and deadlines
 
 `RoomCapabilitySupervisor.start_readiness/2` owns each collector. It accepts the complete required
