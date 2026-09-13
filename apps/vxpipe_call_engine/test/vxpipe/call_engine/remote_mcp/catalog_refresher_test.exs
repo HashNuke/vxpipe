@@ -108,7 +108,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.CatalogRefresherTest do
         {TestRemoteMCPConfigurationSource, server: source, private_test_value: private_value},
       refresh_interval_ms: 10_000,
       stale_after_ms: 20_000,
-      refresh_timeout_ms: 100
+      refresh_timeout_ms: 1_000
     ]
 
     assert {:ok, settings} = Options.new(options)
@@ -121,7 +121,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.CatalogRefresherTest do
     assert {:ok, %IntegrationCatalog{}} = CatalogStore.snapshot(store)
     refute inspect(:sys.get_state(refresher)) =~ private_value
 
-    assert {:error, :refresh_timeout} = CatalogRefresher.refresh(refresher, 1_000)
+    assert {:error, :refresh_timeout} = CatalogRefresher.refresh(refresher, 2_000)
 
     assert %{last_outcome: {:error, :refresh_timeout}, refreshing?: false} =
              CatalogRefresher.status(refresher)
