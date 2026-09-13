@@ -136,8 +136,10 @@ APP_HOST=localhost bin/dev
 
 The repository-root `.env.example` documents the development credential and
 optional Goreman process overrides. A static `APP_HOST` can be placed in `.env`
-for HTTP mode; `--tailscale` derives it from Tailscale automatically. Goreman loads
-`.env` into its child processes without exporting values into the parent shell.
+for HTTP mode; `--tailscale` derives it from Tailscale automatically. Goreman
+automatically loads `.env` from the repository root selected by `-basedir`,
+including when `bin/dev` is launched from another directory. Values reach its
+child processes without being exported into the parent shell.
 
 ## Optional PostgreSQL storage
 

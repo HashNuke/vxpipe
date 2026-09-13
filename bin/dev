@@ -92,8 +92,5 @@ if [[ "$dev_mode" == "tailscale" ]]; then
   fi
 fi
 
-if [[ -f "$repo_root/.env" ]]; then
-  goreman_args+=(-env "$repo_root/.env")
-fi
-
+# Goreman loads .env automatically from the configured base directory.
 exec goreman "${goreman_args[@]}" start "${processes[@]}"
