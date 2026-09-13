@@ -207,3 +207,42 @@ the asynchronous start-event acknowledgement before inspecting their media sessi
 - All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,054
   umbrella tests with zero failures (15 integrations excluded), and unused-dependency checks.
   Initial wait orchestration, common readiness and coordinated transfer release remain pending.
+
+## Required-resource barrier
+
+- Added explicit resource descriptors and ordered reports with room incarnation, attempt, request,
+  instance/session generation, configuration signature and relevant policy interval. Separate
+  binding keys preserve multiple connections belonging to one participant. Missing required
+  resources remain preparing; missing adapters fail. Neither can satisfy readiness.
+- Reconciliation preserves exact unchanged ready bindings and returns only the preparation/removal
+  diff. New attempts and remove/re-add cycles invalidate old request references. Failed generations
+  cannot be revived by delayed ready reports; monotonically ordered reports prevent an old ready
+  message from erasing a later preparing report.
+- Nine focused barrier tests pass after first failing for the missing barrier, missing ordered
+  report field and collapsed connection bindings. The barrier is pure state; prospective inventory,
+  asynchronous collection/monitoring and lifecycle use remain pending.
+- Decision and local design review are recorded in `docs/readiness-resource-contract.md`, including
+  rejected PID-only/global-revision approaches and the boundary between binding changes and process
+  replacement. This is separate from claiming runtime milestone acceptance.
+
+## Speech-provider readiness adapters
+
+- STT and TTS now expose bounded initialization evidence using the common resource descriptor.
+  STT remembers a provider's normalized connected signal and invalidates its generation/evidence
+  when that session is closed or replaced. Unrelated policy revisions retain the exact descriptor.
+  Stale callbacks from the replaced transport cannot restore readiness.
+- Providers explicitly choose connection acknowledgement or validated initialization. Deepgram STT
+  and TTS and local Morse STT use their connection signal; local Morse TTS is usable when initialized.
+  Missing/unsupported readiness contracts fail closed. No probe utterance or tool invocation is sent.
+- New focused tests first failed on missing STT/TTS readiness APIs and missing provider contracts.
+  The combined barrier, speech-capability and local-provider lane passes 37 tests with zero failures.
+  Provider readiness does not establish ingress/output-route readiness; these must be separate
+  required bindings in the complete prospective set. Model/tools, room-service adapters, collection,
+  initial waiting and coordinated transfer release are still pending. Root gate results follow.
+
+The combined checkpoint passes all five root gates: formatting, warnings-as-errors compilation,
+strict Credo, 1,067 umbrella tests with zero failures (15 integrations excluded), and unused
+dependency checks. The private playback checkpoint can now be checked off: its independent player,
+shared native output, clear/drain, cue, generation fencing and idle pacing boundaries are implemented
+and verified. The separate initial/transfer lifecycle and rendered/provider acceptance gates remain
+unchecked; the milestone and index are still incomplete.

@@ -3,9 +3,12 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.Capability.TextToSpeech.Usage
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
   alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
+  alias Vxpipe.CallEngine.Readiness.{Provider, Resource}
   alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.TextToSpeechRequest
 
@@ -22,6 +25,13 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       start: {__MODULE__, :start_link, [options]},
       restart: :temporary
     }
+  end
+
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(capability) do
+    GenServer.call(capability, :readiness, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
   end
 
   @spec synthesize(pid(), TextToSpeechRequest.t()) ::
@@ -63,6 +73,8 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
            pending: :queue.new(),
            playback_offset_ms: 0,
            provider_module: provider_module,
+           readiness_resource: readiness_resource(options),
+           readiness_status: Provider.initial_status(provider_module),
            task_supervisor: Keyword.fetch!(options, :task_supervisor),
            transport: transport,
            transport_module: transport_module,
@@ -76,6 +88,10 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   end
 
   @impl true
+  def handle_call(:readiness, _from, state) do
+    {:reply, {:ok, state.readiness_resource, state.readiness_status}, state}
+  end
+
   def handle_call({:synthesize, request}, _from, state) do
     cond do
       not valid_request?(request) ->
@@ -261,6 +277,26 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     stop_audio_output(state.audio_output)
     _ = safe_close(state.transport_module, state.transport)
     :ok
+  end
+
+  defp readiness_resource(options) do
+    %Resource{
+      kind: :text_to_speech,
+      scope: {:participant, Keyword.fetch!(options, :participant_id)},
+      binding: Keyword.get(options, :readiness_binding),
+      instance: self(),
+      generation: make_ref(),
+      configuration:
+        Resource.signature(
+          {Keyword.fetch!(options, :provider), Keyword.fetch!(options, :transport)}
+        ),
+      policy_interval: nil,
+      adapter: __MODULE__
+    }
+  end
+
+  defp handle_signal(%Signal{kind: :connected}, state) do
+    {:noreply, %{state | readiness_status: Provider.connected(state.readiness_status)}}
   end
 
   defp handle_signal(%Signal{kind: :speech_started, provider_speech_id: speech_id}, state) do

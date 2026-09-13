@@ -106,6 +106,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.LocalTransportTest do
          task_supervisor: Vxpipe.CallEngine.AudioOutputTaskSupervisor}
       )
 
+    assert {:ok, readiness, :ready} = TextToSpeech.readiness(capability)
+    assert readiness.scope == {:participant, participant_id}
+
     text = "PACK MY BOX WITH FIVE DOZEN JUGS"
     request = request(participant_id, "turn-one", text, sink)
     assert :ok = TextToSpeech.synthesize(capability, request)

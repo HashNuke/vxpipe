@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Capability.SpeechToText.TransportConnector
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
+  alias Vxpipe.CallEngine.Readiness.{Provider, Resource}
 
   @maximum_audio_bytes 131_072
 
@@ -23,7 +24,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     :usage,
     :usage_context
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [readiness_generation: nil, readiness_status: :preparing]
 
   @type t :: %__MODULE__{
           connection: map(),
@@ -35,6 +36,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
           policy: Snapshot.t() | nil,
           policy_revision: non_neg_integer() | nil,
           provider_module: module(),
+          readiness_generation: reference(),
+          readiness_status: :preparing | :ready | :failed,
           transport: pid() | nil,
           transport_module: module(),
           transport_options: keyword(),
@@ -70,6 +73,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
            policy: nil,
            policy_revision: nil,
            provider_module: provider_module,
+           readiness_generation: make_ref(),
+           readiness_status: Provider.initial_status(provider_module),
            transport: transport,
            transport_module: transport_module,
            transport_options: transport_options,
@@ -112,14 +117,50 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @spec close(t()) :: t()
   def close(%__MODULE__{connector: connector} = state) when is_map(connector) do
     :ok = TransportConnector.stop(connector)
-    %{state | connector: nil, transport: nil}
+    %{state | connector: nil, transport: nil} |> invalidate_readiness()
   end
 
   def close(%__MODULE__{transport: nil} = state), do: state
 
   def close(%__MODULE__{} = state) do
     _ = safe_close(state.transport_module, state.transport)
-    %{state | transport: nil}
+    %{state | transport: nil} |> invalidate_readiness()
+  end
+
+  @spec readiness(t()) :: {:ok, Resource.t(), :preparing | :ready | :failed}
+  def readiness(%__MODULE__{} = state) do
+    resource = %Resource{
+      kind: :speech_to_text,
+      scope: {:participant, state.identity.participant_id},
+      binding: state.identity.connection_id,
+      instance: self(),
+      generation: state.readiness_generation,
+      configuration:
+        Resource.signature({
+          state.provider_module,
+          state.connection,
+          state.media_format,
+          state.transport_module,
+          state.transport_options
+        }),
+      policy_interval: state.policy_revision,
+      adapter: Vxpipe.CallEngine.Capability.SpeechToText
+    }
+
+    status =
+      if state.readiness_status == :ready and state.transport == nil,
+        do: :preparing,
+        else: state.readiness_status
+
+    {:ok, resource, status}
+  end
+
+  defp invalidate_readiness(state) do
+    %{
+      state
+      | readiness_generation: make_ref(),
+        readiness_status: Provider.initial_status(state.provider_module)
+    }
   end
 
   defp apply_policy(%__MODULE__{policy: nil} = state, snapshot) do

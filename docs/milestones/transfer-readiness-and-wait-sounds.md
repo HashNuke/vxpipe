@@ -1,7 +1,7 @@
 # Transfer readiness and participant wait sounds
 
-Status: implementation in progress (2026-09-14); definition/asset checkpoint complete.
-Playback, readiness and coordinated transfer acceptance remain incomplete.
+Status: implementation in progress (2026-09-14); definition/assets and private playback checkpoints
+complete. Common readiness, lifecycle waiting and coordinated transfer acceptance remain incomplete.
 Prerequisites: [Call lifecycle and opening audio](opening-audio-and-call-lifecycle.md),
 [Agent transfers](agent-transfers.md), [Live mixing and media policy](live-mixing-and-media-policy.md),
 [Human web transfers](human-web-transfers.md), [Common phone transfers](telnyx-calls.md),
@@ -301,7 +301,7 @@ documentation and labnotes; preserve a runnable umbrella between commits.
   compatibility parsing and the development sample configuration.
   Normalize bundled stereo PCM16 to canonical 48 kHz mono once per cached asset; generate the
   connection beep. Reject invalid/oversized assets before starting the dependent call/transfer.
-- [ ] **Private paced playback:** implement supervised independent looping players and the shared
+- [x] **Private paced playback:** implement supervised independent looping players and the shared
   per-recipient output arbiter, including pause/resume, clear/drain, cue playback and generation
   fencing. Integrate web and common phone output without recreating their pipelines per phase.
 - [ ] **Common readiness:** define resource descriptors/reports and prepared bindings for all selected
@@ -461,3 +461,18 @@ overdue pipeline timestamps from producing a catch-up burst. Small encoding dela
 without accumulating drift; the codec and output sequence remain intact. Controlled-clock and
 phone integration fixtures pass, followed by all five root gates with 1,054 tests and zero failures
 (15 integrations excluded). This proves local queue pacing, not audible live-provider acceptance.
+
+The common readiness foundation now has exact resource descriptors, ordered attempt-bound reports
+and incremental reconciliation that preserves unchanged evidence. Missing resources/adapters,
+foreign or stale reports, multiple connections per participant and readiness loss have focused
+coverage. STT/TTS expose actual provider initialization evidence and preserve unchanged session
+generations. The [resource contract](../readiness-resource-contract.md) explains the ownership and
+fencing decisions. Thirty-seven focused barrier/speech/local-provider tests pass. The full
+prospective inventory, other capability/room adapters, asynchronous collector and lifecycle use
+remain pending, so the common readiness checkpoint is not yet complete.
+
+All five root gates pass for the readiness foundation and speech-adapter checkpoint: formatting,
+warnings-as-errors compilation, strict Credo, 1,067 umbrella tests with zero failures (15 integrations
+excluded), and unused-dependency checks. The private playback checkpoint is now complete based on
+the independent player, shared output, clear/drain, generation and phone pacing evidence above;
+this does not check off the separate rendered/live-provider or lifecycle acceptance requirements.

@@ -8,6 +8,8 @@ defmodule Vxpipe.CallEngine.Provider.TextToSpeech do
   @callback media_format(struct()) :: map()
   @callback asset_cache_identity(struct()) :: map()
   @callback usage_identity(struct()) :: keyword()
+  @callback readiness_mode() :: :initialized | :provider_connected
+  @optional_callbacks readiness_mode: 0
   @callback encode_speak(String.t()) :: binary()
   @callback encode_flush() :: binary()
   @callback encode_interrupt(non_neg_integer()) :: binary()

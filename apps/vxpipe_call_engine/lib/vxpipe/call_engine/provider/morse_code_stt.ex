@@ -3,6 +3,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTT do
 
   @behaviour Vxpipe.CallEngine.Provider.SpeechToText
 
+  @impl true
+  def readiness_mode, do: :provider_connected
+
   alias Vxpipe.CallEngine.Provider.MorseCode.Config
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
 

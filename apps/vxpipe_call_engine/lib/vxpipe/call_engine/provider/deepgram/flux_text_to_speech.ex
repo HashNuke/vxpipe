@@ -3,6 +3,9 @@ defmodule Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech do
 
   @behaviour Vxpipe.CallEngine.Provider.TextToSpeech
 
+  @impl true
+  def readiness_mode, do: :provider_connected
+
   alias Vxpipe.CallEngine.Provider.TextToSpeech.Signal
 
   @endpoint "wss://api.deepgram.com/v2/speak"

@@ -3,6 +3,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.Capability.SpeechToText.Usage
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
@@ -13,6 +15,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   @call_timeout 5_000
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
+
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(capability) do
+    GenServer.call(capability, :readiness, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
 
   def child_spec(options) do
     %{
@@ -55,6 +64,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   @impl true
+  def handle_call(:readiness, _from, state), do: {:reply, State.readiness(state), state}
+
   def handle_call({:push_audio, frame}, _from, state) do
     case State.send_audio(state, frame) do
       :ok -> {:reply, :ok, Usage.accept_input(state)}
@@ -167,6 +178,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   defp handle_signal(%Signal{} = signal, state) do
+    readiness =
+      if signal.kind == :connected,
+        do: Vxpipe.CallEngine.Readiness.Provider.connected(state.readiness_status),
+        else: state.readiness_status
+
+    state = %{state | readiness_status: readiness}
     signal = %{signal | policy_revision: state.policy_revision}
     state = Usage.observe_signal(state, signal)
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})

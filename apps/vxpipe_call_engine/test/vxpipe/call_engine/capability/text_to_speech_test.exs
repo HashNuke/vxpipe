@@ -12,6 +12,27 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechTest do
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
 
+  test "readiness waits for the selected provider without synthesizing a probe utterance" do
+    capability = start_capability(maximum_requests: 1)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+    assert {:ok, resource, :preparing} = TextToSpeech.readiness(capability)
+    assert resource.kind == :text_to_speech
+    assert resource.scope == {:participant, "agent-test"}
+    assert resource.instance == capability
+    refute inspect(resource) =~ "test-key"
+    refute_receive {:test_tts_control, ^transport, _payload}
+
+    connected = ~s({"type":"Connected","request_id":"tts-ready"})
+    send(capability, {:vxpipe_tts_transport, self(), {:control, connected}})
+    assert {:ok, ^resource, :preparing} = TextToSpeech.readiness(capability)
+
+    send(capability, {:vxpipe_tts_transport, transport, {:control, connected}})
+    assert {:ok, ^resource, :ready} = TextToSpeech.readiness(capability)
+    assert {:ok, []} = TextToSpeech.interrupt(capability)
+    assert {:ok, ^resource, :ready} = TextToSpeech.readiness(capability)
+    refute_receive {:test_tts_control, ^transport, _payload}
+  end
+
   test "reports provider first audio once without text or audio payloads" do
     attach_telemetry_events([@tts_first_audio_event, @provider_failure_event])
     sink = start_supervised!({TestAudioOutputSink, observer: self()})

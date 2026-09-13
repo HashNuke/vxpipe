@@ -8,10 +8,64 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
   alias Vxpipe.CallEngine.Provider.Deepgram.Flux
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.TestSpeechToTextTransport
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
+
+  test "readiness requires the provider acknowledgement and preserves unchanged session evidence" do
+    {capability, transport} = start_capability()
+    assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
+
+    assert {:ok, %Resource{} = resource, :preparing} = SpeechToText.readiness(capability)
+    assert resource.kind == :speech_to_text
+    assert resource.scope == {:participant, "part-human"}
+    assert resource.binding == "conn-demo"
+    assert resource.instance == capability
+    assert resource.policy_interval == 0
+    refute inspect(resource) =~ "runtime-secret"
+
+    TestSpeechToTextTransport.deliver(transport, connected_message("session", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert {:ok, ^resource, :ready} = SpeechToText.readiness(capability)
+
+    assert :ok =
+             Enforcer.apply(
+               capability,
+               snapshot(1, ["part-human", "part-support"], :unrestricted, true),
+               500
+             )
+
+    assert {:ok, ^resource, :ready} = SpeechToText.readiness(capability)
+    refute_receive {:test_stt_transport_started, _, _}
+  end
+
+  test "a replacement STT session needs its own acknowledgement before readiness returns" do
+    {capability, transport} = start_capability()
+    assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
+    TestSpeechToTextTransport.deliver(transport, connected_message("first-session", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert {:ok, original, :ready} = SpeechToText.readiness(capability)
+
+    assert :ok = Enforcer.apply(capability, snapshot(1, ["part-human"], %{}, false), 500)
+    assert {:ok, _disabled, :preparing} = SpeechToText.readiness(capability)
+
+    assert :ok = Enforcer.apply(capability, snapshot(2, ["part-human"], :unrestricted, true), 500)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    assert {:ok, resource, :preparing} = SpeechToText.readiness(capability)
+    assert resource.generation != original.generation
+    assert resource.configuration == original.configuration
+    assert resource.policy_interval == 2
+    assert resource.instance == original.instance
+
+    send(capability, {:vxpipe_stt_transport, transport, {:message, connected_message("late", 1)}})
+    assert {:ok, ^resource, :preparing} = SpeechToText.readiness(capability)
+
+    TestSpeechToTextTransport.deliver(replacement, connected_message("new-session", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert {:ok, ^resource, :ready} = SpeechToText.readiness(capability)
+  end
 
   test "validates audio and relays normalized provider signals without raw payloads" do
     assert {:ok, provider} =
