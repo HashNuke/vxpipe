@@ -105,12 +105,11 @@ its clock. Repeated captures retain exact unchanged bindings. Production room re
 an incarnation-scoped registry entry; a missing enabled recorder stays explicitly required with a
 nil binding. Standalone recorders remain unnamed unless their owner supplies a name.
 
-This inventory is a requirements/binding snapshot, not a ready report. The next preparation step
-must expand every selected connection through its graph adapter, prepare individual recording
-writers from the resulting track identities, query all required participant/room adapters, and
-revalidate the inventory before using the collector's result. Candidate enforcer preparation,
-private destination prewarming and lifecycle release remain unfinished. A captured PID never
-satisfies readiness by itself.
+This inventory is a requirements/binding snapshot, not a ready report. Preparation for collection
+is described below. Candidate enforcer preparation, private destination prewarming and lifecycle
+release remain unfinished. A captured PID never satisfies readiness by itself. Participant TTS
+bindings come from the owning capability supervisor's incarnation/participant registry, including
+actors outside the room's active conversation handle.
 
 Local design review rejected deriving requirements from whichever PIDs happen to exist, accepting
 a caller's shortened resource list, demanding microphone paths for monitors, and treating recording
@@ -119,6 +118,42 @@ foreign-attempt destinations, selected/denied capabilities, recording targets, s
 during policy preview, actual room/recorder bindings, a lost recorder, altered inventories and a busy
 policy authority. These are selection and binding checks, not the milestone's five-listener playback
 or transfer-release acceptance.
+
+## Preparing the resource set for collection
+
+`Readiness.Preparation.run/3` captures authoritative requirements, expands every selected connection
+through the transport-independent graph protocol, and queries selected participant and room adapters.
+It runs under the existing readiness task supervisor, with at most eight concurrent observations,
+one bounded preparation budget and at most 256 distinct resulting resources. Lifecycle callers must
+cap that budget to their remaining attempt time. Once captured, an existing attempt deadline also
+caps preparation. Cancelled or expired observations terminate their workers without killing the
+connection/capability actors. The returned descriptors still require operational collection; this
+operation does not install policy, open media gates, or report transfer completion.
+
+Missing connections/actors, failed required resources, inconsistent bindings, conflicting resource
+identities and foreign participant scopes cannot return a partial usable set. Preparation checks
+the candidate's relevant policy intervals, then revalidates the complete room inventory and policy
+after dependent work. A policy change can reject either an individual observation or final
+validation. Diagnostics identify capability kind/scope and a bounded reason, without provider
+payloads. Unchanged instances retain their actual generations and descriptors through preparation.
+
+Recording preparation initializes selected individual human writers from exact prepared input
+track identities and collects recorder, subscription and writer resources. Full-mix writers use
+their existing initialized local handoff. A preparing local writer keeps collection closed; remote
+storage retains the existing asynchronous contract. Individual agent recording is still an explicit
+`output_track_unavailable` preparation failure: its source is the receiving native output's
+recording tap, not an agent microphone. That tap's exact binding and readiness must be exposed before
+claiming complete recording preparation. No agent track is guessed or silently omitted.
+
+Local design review rejected returning whatever subset answered, accepting current-policy evidence
+for an uninstalled candidate, learning recording tracks from the first packet, and treating an
+active room handle as the inventory of all supervised TTS instances. Engine checks exercise five
+participants, writer preparation before audio, delayed/failed writers, resource retention, stale
+policy, foreign dependencies and cancellation. Real WebRTC checks collect both human connection
+graphs plus room services before audio and retain them after audio exchange. The agent fixture also
+collects model/tool and TTS resources, stays closed until the TTS provider's explicit Connected
+message, then proceeds with the existing transfer. This is collection evidence; coordinated
+startup/transfer waiting, candidate installation, cues and release are still unimplemented.
 
 ## Collection and deadlines
 

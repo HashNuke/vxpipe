@@ -91,12 +91,56 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
 
-    assert_receive {:test_tts_transport_started, _source_tts, _connection}, 2_000
+    assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
     caller_client =
       plan
       |> issue_session(room, caller.participant_id)
       |> then(&connect(&1.session_id, "chat"))
+
+    authority = Vxpipe.CallEngine.MediaPolicy.Authority.whereis(room.incarnation_id)
+    policy = Vxpipe.CallEngine.MediaPolicy.Authority.snapshot(authority)
+
+    assert {:ok, candidate} =
+             Vxpipe.CallEngine.MediaPolicy.Authority.preview_presence(
+               authority,
+               policy.present_participant_ids
+             )
+
+    [{room_authority, _}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    assert {:ok, prepared_room} =
+             Vxpipe.CallEngine.Readiness.Preparation.run(room_authority, candidate)
+
+    assert Enum.any?(prepared_room.resources, &(&1.kind == :model_inference))
+    assert Enum.any?(prepared_room.resources, &(&1.kind == :text_to_speech))
+
+    readiness =
+      start_supervised!(
+        {Vxpipe.CallEngine.Readiness.Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "initial-room",
+         resources: prepared_room.resources,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000},
+        id: :initial_room_readiness
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^readiness,
+                    %{status: :preparing, blockers: [%{kind: :text_to_speech}]}},
+                   1_000
+
+    refute_receive {:vxpipe_readiness_changed, ^readiness, %{status: :ready}}
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    assert :ok = Vxpipe.CallEngine.Readiness.Collector.refresh(readiness)
+    assert_receive {:vxpipe_readiness_changed, ^readiness, %{status: :ready}}, 1_000
+    stop_supervised!(:initial_room_readiness)
 
     assert :ok = send_rtvi_text(caller_client)
     assert_receive {:test_agent_runtime_stream, source_provider, _request}, 2_000

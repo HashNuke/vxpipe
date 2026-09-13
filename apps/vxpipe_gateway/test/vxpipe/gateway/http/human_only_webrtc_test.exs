@@ -98,13 +98,31 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
                room_output?: true
              )
 
+    policy_authority = Vxpipe.CallEngine.MediaPolicy.Authority.whereis(room.incarnation_id)
+
+    assert {:ok, candidate} =
+             Vxpipe.CallEngine.MediaPolicy.Authority.preview_presence(
+               policy_authority,
+               current_policy.present_participant_ids
+             )
+
+    [{room_authority, _}] =
+      Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    assert {:ok, prepared_room} =
+             Vxpipe.CallEngine.Readiness.Preparation.run(room_authority, candidate)
+
+    assert map_size(prepared_room.connections) == 2
+    assert length(prepared_room.resources) == 22
+    assert MapSet.subset?(MapSet.new(graph), MapSet.new(prepared_room.resources))
+
     collector =
       start_supervised!(
         {Vxpipe.CallEngine.Readiness.Collector,
          owner: self(),
          incarnation_id: room.incarnation_id,
          attempt_id: "connected-media",
-         resources: graph,
+         resources: prepared_room.resources,
          deadline_ms: System.monotonic_time(:millisecond) + 5_000}
       )
 
@@ -155,6 +173,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
                audio_input?: true,
                room_output?: true
              )
+
+    assert {:ok, repeated_room} =
+             Vxpipe.CallEngine.Readiness.Preparation.run(room_authority, candidate)
+
+    assert repeated_room.resources == prepared_room.resources
   end
 
   test "a receive-only connection can be ready without a negotiated input track" do

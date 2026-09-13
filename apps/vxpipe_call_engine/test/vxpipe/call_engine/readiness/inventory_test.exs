@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
   alias Vxpipe.CallEngine.{CallDefinition, CallInvocation, DefinitionCompiler}
   alias Vxpipe.CallEngine.CallDefinition.CapabilitySelection
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Effective, Snapshot}
-  alias Vxpipe.CallEngine.Readiness.{Inventory, RoomInventory}
+  alias Vxpipe.CallEngine.Readiness.{Collector, Inventory, Preparation, Resource, RoomInventory}
   alias Vxpipe.CallEngine.ResolvedCallPlan.Capabilities
 
   setup do
@@ -325,8 +325,13 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
 
     recording = [
       enabled: Keyword.get(options, :recording?, false),
-      targets: [:full_mix],
-      writer: {TestRecordingWriter, observer: self()},
+      targets: Keyword.get(options, :recording_targets, [:full_mix]),
+      writer:
+        {TestRecordingWriter,
+         Keyword.merge(
+           [observer: self(), readiness: Keyword.get(options, :writer_readiness)],
+           Keyword.get(options, :writer_options, [])
+         )},
       maximum_pull_frames: 20
     ]
 
@@ -350,6 +355,266 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
       plan: plan,
       supervisor: supervisor
     }
+  end
+
+  test "prepares all selected connections and individual recording writers before collection",
+       context do
+    room = start_room(context.plan, recording?: true, recording_targets: [:individual_tracks])
+    connections = attach_entries(room)
+    candidate = current_candidate(room.policy)
+    assert {:ok, prepared} = Preparation.run(room.room, candidate)
+    assert MapSet.new(Map.keys(prepared.connections)) == MapSet.new(Map.keys(connections))
+    assert Enum.count(prepared.resources, &(&1.kind == :recording_writer)) == 2
+    assert Enum.count(prepared.resources, &(&1.kind == :media_connection)) == 2
+    assert Enum.any?(prepared.resources, &(&1.kind == :recording))
+    assert Enum.any?(prepared.resources, &(&1.kind == :live_inspection))
+
+    for {id, connection} <- connections do
+      assert prepared.connections[id].instance == connection
+
+      assert_receive {:test_recording_writer_opened, _, _,
+                      %{mode: {:individual_track, _, ^id, "input"}}}
+    end
+
+    refute_receive {:test_recording_chunk, _, _}
+    collector = collect(prepared)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert {:ok, repeated} = Preparation.run(room.room, candidate)
+    assert repeated.resources == prepared.resources
+    refute_receive {:test_recording_writer_opened, _, _, _}
+  end
+
+  test "a preparing room writer keeps the complete barrier closed and retains its generation",
+       context do
+    readiness = :atomics.new(1, [])
+    :ok = :atomics.put(readiness, 1, 2)
+    room = start_room(context.plan, recording?: true, writer_readiness: readiness)
+    _connections = attach_entries(room)
+    candidate = current_candidate(room.policy)
+    assert {:ok, prepared} = Preparation.run(room.room, candidate)
+    collector = collect(prepared)
+    assert %{status: :preparing} = Collector.snapshot(collector)
+    refute_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
+    :ok = :atomics.put(readiness, 1, 0)
+    assert :ok = Collector.refresh(collector)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert {:ok, repeated} = Preparation.run(room.room, candidate)
+    assert repeated.resources == prepared.resources
+  end
+
+  test "a missing participant or known failed room writer cannot return a usable resource set",
+       context do
+    readiness = :atomics.new(1, [])
+    room = start_room(context.plan, recording?: true, writer_readiness: readiness)
+    candidate = current_candidate(room.policy)
+
+    assert {:error, %{kind: :media_connection, reason: :missing}} =
+             Preparation.run(room.room, candidate)
+
+    _connections = attach_entries(room)
+    :ok = :atomics.put(readiness, 1, 1)
+
+    assert {:error, %{kind: :recording, scope: :room, reason: :failed}} =
+             Preparation.run(room.room, candidate)
+  end
+
+  test "expands all five present participants rather than only the entry caller and receiver",
+       context do
+    room = start_room(context.plan)
+
+    for key <- ["two", "three", "four"] do
+      participant = Map.fetch!(room.plan.participants, key)
+
+      assert {:ok, command} =
+               Vxpipe.CallEngine.Command.JoinParticipant.new(
+                 tenant_id: room.plan.tenant_id,
+                 actor_id: room.plan.actor_id,
+                 room_id: room.plan.room_id,
+                 participant_id: participant.participant_id,
+                 role: :human,
+                 deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+               )
+
+      assert {:ok, _participant} =
+               Vxpipe.CallEngine.RoomAuthority.join_participant(room.room, command)
+    end
+
+    keys = [room.plan.entry_caller, room.plan.entry_receiver, "two", "three", "four"]
+    connections = attach_entries(room, keys: keys)
+    assert {:ok, prepared} = Preparation.run(room.room, current_candidate(room.policy))
+    assert map_size(prepared.connections) == 5
+
+    assert MapSet.new(prepared.resources, & &1.instance)
+           |> MapSet.intersection(MapSet.new(Map.values(connections))) ==
+             MapSet.new(Map.values(connections))
+
+    collector = collect(prepared)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+  end
+
+  test "an uninstalled candidate cannot borrow ready evidence from the current room policy",
+       context do
+    room = start_room(context.plan)
+    _connections = attach_entries(room)
+    current = Authority.snapshot(room.policy)
+    present = MapSet.delete(current.present_participant_ids, context.ids["departing"])
+    assert {:ok, candidate} = Authority.preview_presence(room.policy, present)
+
+    assert {:error, %{scope: :room, reason: :policy_not_prepared}} =
+             Preparation.run(room.room, candidate)
+
+    assert Authority.snapshot(room.policy) == current
+  end
+
+  test "a policy change while a connection prepares invalidates the complete result", context do
+    room = start_room(context.plan)
+    _connections = attach_entries(room, block: room.plan.entry_caller)
+    candidate = current_candidate(room.policy)
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
+    request = Task.Supervisor.async_nolink(tasks, fn -> Preparation.run(room.room, candidate) end)
+    assert_receive {:connection_preparation_waiting, worker, _identity}, 1_000
+    assert {:ok, _policy} = Authority.admit(room.policy, context.ids["joining"])
+    send(worker, :continue)
+    assert {:error, reason} = Task.await(request)
+
+    assert reason == :stale_candidate or
+             match?(%{scope: :room, reason: :policy_not_prepared}, reason)
+  end
+
+  test "expiry cancels a blocked connection observation without killing its resource", context do
+    room = start_room(context.plan)
+    connections = attach_entries(room, block: room.plan.entry_caller)
+    candidate = current_candidate(room.policy)
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
+
+    request =
+      Task.Supervisor.async_nolink(tasks, fn -> Preparation.run(room.room, candidate, 1_000) end)
+
+    assert_receive {:connection_preparation_waiting, worker, _identity}, 1_000
+    monitor = Process.monitor(worker)
+    assert {:error, _reason} = Task.await(request, 2_000)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 1_000
+
+    assert :ok =
+             Vxpipe.CallEngine.TestConnectionReadinessAdapter.replace(
+               Map.fetch!(connections, room.plan.entry_caller)
+             )
+  end
+
+  test "captures supervised participant TTS even when it is outside the active room handle",
+       context do
+    alias Vxpipe.CallEngine.Provider.MorseCodeTTS
+    alias Vxpipe.CallEngine.{RoomAuthority, RoomCapabilitySupervisor}
+    room = start_room(context.plan)
+    assert {:ok, captured} = RoomInventory.capture(room.room, current_candidate(room.policy))
+    incarnation = captured.identity.incarnation_id
+    participant_id = context.ids["two"]
+    assert {:ok, provider} = MorseCodeTTS.new([])
+
+    assert {:ok, tts} =
+             RoomCapabilitySupervisor.start_text_to_speech(
+               incarnation,
+               room.room,
+               participant_id,
+               {MorseCodeTTS, provider},
+               {MorseCodeTTS.Transport, []},
+               2
+             )
+
+    assert {:ok, binding} = RoomAuthority.readiness_binding(room.room)
+    assert binding.participants[participant_id].text_to_speech == tts
+    assert {:ok, resource, :ready} = Vxpipe.CallEngine.Capability.TextToSpeech.readiness(tts)
+    assert {:ok, binding} = RoomAuthority.readiness_binding(room.room)
+    assert binding.participants[participant_id].text_to_speech == resource.instance
+  end
+
+  test "rejects a recording dependency belonging to a participant outside the required room",
+       context do
+    foreign =
+      Resource.new(
+        :recording_writer,
+        {:participant, "foreign"},
+        Vxpipe.CallEngine.TestRecordingWriter,
+        :foreign,
+        binding: {"foreign", nil}
+      )
+
+    room =
+      start_room(context.plan,
+        recording?: true,
+        writer_options: [readiness_reply: {:ok, foreign, :ready}]
+      )
+
+    _connections = attach_entries(room)
+
+    assert {:error, :invalid_resources} =
+             Preparation.run(room.room, current_candidate(room.policy))
+  end
+
+  defp current_candidate(authority) do
+    policy = Authority.snapshot(authority)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(authority, policy.present_participant_ids)
+
+    candidate
+  end
+
+  defp attach_entries(room, options \\ []) do
+    alias Vxpipe.CallEngine.Command.AttachConnection
+    alias Vxpipe.CallEngine.TestConnectionReadinessAdapter
+    snapshot = Vxpipe.CallEngine.RoomAuthority.snapshot(room.plan.tenant_id, room.plan.room_id)
+
+    keys = Keyword.get(options, :keys, [room.plan.entry_caller, room.plan.entry_receiver])
+
+    Map.new(keys, fn key ->
+      participant = Map.fetch!(room.plan.participants, key)
+
+      identity = %{
+        tenant_id: room.plan.tenant_id,
+        room_id: room.plan.room_id,
+        incarnation_id: snapshot.incarnation_id,
+        participant_id: participant.participant_id,
+        connection_id: key
+      }
+
+      connection =
+        start_supervised!(
+          {TestConnectionReadinessAdapter,
+           identity: identity,
+           observer: self(),
+           block?: key == Keyword.get(options, :block),
+           input_track: %{track_id: "input", codec: :opus, sample_rate: 48_000, channels: 1}},
+          id: {:connection, key}
+        )
+
+      assert {:ok, command} =
+               AttachConnection.new(
+                 Map.to_list(identity) ++
+                   [
+                     actor_id: room.plan.actor_id,
+                     deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+                   ]
+               )
+
+      assert {:ok, _attachment} = TestConnectionReadinessAdapter.attach(connection, command)
+      {key, connection}
+    end)
+  end
+
+  defp collect(prepared) do
+    assert Enum.all?(prepared.resources, &Resource.bound?/1)
+
+    assert {:ok, collector} =
+             Vxpipe.CallEngine.RoomCapabilitySupervisor.start_readiness(
+               prepared.inventory.identity.incarnation_id,
+               owner: self(),
+               attempt_id: "inventory-attempt",
+               resources: prepared.resources,
+               deadline_ms: System.monotonic_time(:millisecond) + 5_000
+             )
+
+    collector
   end
 
   defp connection(participant_id) do

@@ -91,6 +91,9 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
     DynamicSupervisor.start_child(via(incarnation_id), {TextToSpeech, options})
   end
 
+  def whereis_text_to_speech(incarnation_id, participant_id),
+    do: GenServer.whereis(text_to_speech_ref(incarnation_id, participant_id))
+
   def start_speech_to_text(
         incarnation_id,
         room_authority,

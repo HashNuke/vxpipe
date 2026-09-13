@@ -3,6 +3,9 @@ defmodule Vxpipe.CallEngine.TestSelectiveAgentRuntimeModelProvider do
 
   @behaviour Vxpipe.AgentRuntime.ModelProvider
 
+  @impl true
+  def readiness(%{model: model, owner: owner}) when is_binary(model) and is_pid(owner), do: :ready
+
   @spec new(keyword()) :: {:ok, map()} | {:error, :invalid_configuration}
   def new(options) do
     with {:ok, options} <- Keyword.validate(options, [:model, :owner]),

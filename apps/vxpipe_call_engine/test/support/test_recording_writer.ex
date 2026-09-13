@@ -24,7 +24,9 @@ defmodule Vxpipe.CallEngine.TestRecordingWriter do
     send(observer, {:test_recording_writer_opened, self(), source, stream})
 
     resource =
-      Resource.new(:recording_writer, :room, __MODULE__, stream, binding: stream.stream_id)
+      Resource.new(:recording_writer, :room, __MODULE__, stream,
+        binding: {stream.stream_id, Keyword.get(options, :readiness)}
+      )
 
     {:ok,
      %{
@@ -38,13 +40,23 @@ defmodule Vxpipe.CallEngine.TestRecordingWriter do
 
   @impl true
   def readiness(%{readiness_reply: :normal} = handle) do
-    status =
-      if handle.readiness && :atomics.get(handle.readiness, 1) == 1, do: :failed, else: :ready
-
-    {:ok, handle.resource, status}
+    {:ok, handle.resource, status(handle.readiness)}
   end
 
   def readiness(%{readiness_reply: reply}), do: reply
+
+  def readiness_binding(%Resource{binding: {_stream_id, readiness}} = resource),
+    do: {:ok, resource, status(readiness)}
+
+  defp status(nil), do: :ready
+
+  defp status(readiness) do
+    case :atomics.get(readiness, 1) do
+      1 -> :failed
+      2 -> :preparing
+      _ready -> :ready
+    end
+  end
 
   @impl true
   def offer(handle, chunk) do

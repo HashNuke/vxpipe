@@ -611,3 +611,18 @@ unchecked; no rendered or live-provider verification is claimed.
 All five root gates pass for this inventory checkpoint: formatting, warnings-as-errors compilation,
 strict Credo, 1,148 umbrella tests with zero failures and 15 integrations excluded, and unused
 dependency checks. The full milestone remains incomplete.
+
+Room preparation now expands the authoritative selection into connection graphs and selected
+participant/room resources under a bounded worker budget. It prepares individual human recording
+writers before audio, collects their local dependencies, rejects incomplete/foreign/conflicting
+sets and revalidates policy and room bindings afterward. TTS inventory reads every participant's
+supervised binding rather than only the active room handle. Fifty-two focused engine checks and
+five WebRTC checks pass, including both human graphs before audio and a model/TTS room that remains
+preparing until explicit TTS provider acknowledgement. Individual agent recording still requires
+the receiving output tap's readiness/track binding and fails explicitly when that track is needed.
+Candidate installation, private destination preparation, startup/transfer wait/cue/release and
+rendered/live-provider acceptance remain unfinished. Common readiness remains unchecked.
+
+All five root gates pass for preparation/collection: formatting, warnings-as-errors compilation,
+strict Credo, 1,157 umbrella tests with zero failures and 15 integrations excluded, and the
+unused-dependency check. These gates do not complete the remaining runtime acceptance items.

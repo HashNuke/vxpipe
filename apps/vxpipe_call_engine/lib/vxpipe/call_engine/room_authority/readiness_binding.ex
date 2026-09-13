@@ -1,7 +1,13 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.{AgentActivationSupervisor, CallVariables, RoomRecording}
+  alias Vxpipe.CallEngine.{
+    AgentActivationSupervisor,
+    CallVariables,
+    RoomCapabilitySupervisor,
+    RoomRecording
+  }
+
   alias Vxpipe.CallEngine.RoomAuthority.State
 
   @derive {Inspect, only: [:identity]}
@@ -83,25 +89,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
   defp inspection(_port), do: nil
 
   defp participant_bindings(plan, state) do
-    speech = [
-      state.text_to_speech_capability,
-      prepared_speech(state.pending_participant_transfer)
-    ]
-
-    speech = for %{participant_id: id, pid: pid} <- speech, into: %{}, do: {id, pid}
-
     Map.new(plan.participants, fn {_key, participant} ->
       model =
         if participant.activation_id != nil,
           do: AgentActivationSupervisor.whereis_child(participant.activation_id, :coordinator)
 
       {participant.participant_id,
-       %{model_inference: model, text_to_speech: Map.get(speech, participant.participant_id)}}
+       %{
+         model_inference: model,
+         text_to_speech:
+           RoomCapabilitySupervisor.whereis_text_to_speech(
+             state.snapshot.incarnation_id,
+             participant.participant_id
+           )
+       }}
     end)
   end
 
-  defp prepared_speech(%{preparation: %{text_to_speech: speech}}), do: speech
-  defp prepared_speech(_pending), do: nil
   defp attempt(%{attempt_id: id, deadline_ms: deadline}), do: %{id: id, deadline_ms: deadline}
   defp attempt(_pending), do: nil
 end

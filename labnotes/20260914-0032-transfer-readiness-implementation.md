@@ -652,3 +652,49 @@ unchecked; the milestone and index are still incomplete.
   startup/transfer lifecycle. Existing state still has one active TTS handle plus pending transfer
   preparation; any additional required actor correctly appears missing until its lifecycle owns it.
   No development-server restart, rendered-browser check or live-provider acceptance was performed.
+
+## Expand room requirements for collection
+
+- The prior goal turn committed the authoritative inventory and passed all gates, so it was
+  progress. Revalidated the clean worktree and continued with actual resource expansion.
+- Three new preparation checks failed at the missing API after correcting an attachment fixture's
+  required deadline. The supervised operation now expands every selected connection, queries
+  required room/participant adapters, prepares individual human recording writers and returns the
+  exact descriptor set for collection. Missing or failed requirements cannot yield a partial set.
+- Preparation uses at most eight concurrent observations, a bounded total budget, the captured
+  attempt deadline when present, and a 256-resource limit. Repeated preparation preserves actual
+  resource descriptors. A blocked connection observation is terminated on expiry while its owning
+  actor remains usable; a monitored worker proves cleanup without a sleep/liveness assertion.
+- Five-participant expansion and uninstalled-policy rejection pass. A race check initially expected
+  only final stale-candidate rejection, but a concurrent room-mixer observation correctly rejected
+  its changed interval first. The check now accepts either valid rejection boundary and still
+  requires that no prepared result be returned.
+- A real-room check exposed that the previous binding capture missed a supervised TTS actor outside
+  the room's active/pending handles. The capability supervisor already registered TTS per incarnation
+  and participant. Exposed its lookup and changed capture to use it; the same real TTS instance now
+  appears on repeated reads. This resolves the prior checkpoint's assumption about unavailable
+  non-active TTS handles without adding a second ownership registry or starting another actor.
+- Full two-human WebRTC preparation/collection passes before any audio and retains all 22
+  descriptors afterward. Extending the existing agent fixture first exposed a missing readiness
+  callback in its selective model test provider; it now reports only after its validated constructor
+  returns. The next failure correctly remained preparing for TTS because the fixture had not sent
+  Connected. It now asserts that exact blocker, delivers the acknowledgement, verifies readiness,
+  then continues its existing transfer/audio/transcription behavior.
+- A red foreign-dependency check demonstrated that a recording adapter's foreign participant scope
+  could enter the aggregate set. The aggregate now requires bound descriptors with valid scopes and
+  configuration signatures, in addition to exact primary-owner checks and candidate intervals.
+- Recording writer fixtures expose their own readiness binding so the collector can observe local
+  writer status independently of the composite recorder. A delayed writer holds the barrier closed
+  and becomes ready without changing resource generations; a failed writer stops preparation.
+- Inspection confirmed the remaining agent-recording gap: normalized agent audio uses the native
+  receiving connection's `agent-egress` track. Individual agent recordings fail explicitly with
+  `output_track_unavailable` until the exact output recording tap is exposed/validated. Full-mix and
+  prepared human input writers work; no guessed or omitted agent writer is accepted. The next
+  recording step must cover that actual tap through WebRTC and common phone output.
+- Focused results: 52 engine checks and five WebRTC checks pass. All five root gates pass:
+  formatting, warnings-as-errors compilation, strict Credo, 1,157 tests with zero failures and
+  15 integrations excluded, and unused dependencies. The initial formatting check required a
+  second owning-child formatting pass for a multiline call.
+- This remains partial common readiness. Candidate enforcer preparation, initial asynchronous setup,
+  private destination prewarming, audience holds/waits, cues, release acknowledgements, restoration
+  and rendered/provider acceptance remain necessary. No running server was restarted.
