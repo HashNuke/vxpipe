@@ -15,7 +15,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.Validation do
       frame.sample_rate != 48_000 -> {:error, :unsupported_audio}
       frame.channels != 1 -> {:error, :unsupported_audio}
       frame.byte_order != :little -> {:error, :unsupported_audio}
-      frame.audio_scope not in [:conversation, :private] -> {:error, :invalid_frame}
+      frame.audio_scope not in [:conversation, :private, :mixed] -> {:error, :invalid_frame}
       not is_pid(frame.reply_to) -> {:error, :invalid_frame}
       not is_binary(frame.payload) or byte_size(frame.payload) == 0 -> {:error, :invalid_frame}
       true -> :ok

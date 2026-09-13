@@ -78,8 +78,7 @@ defmodule Vxpipe.Gateway.WebRTC.TransferSideband do
              state.connection_id,
              attachment,
              state.session,
-             state.peer_connection,
-             state.output_track_id,
+             state.audio_egress,
              state.audio_jitter_latency_ms
            ) do
       state = %{

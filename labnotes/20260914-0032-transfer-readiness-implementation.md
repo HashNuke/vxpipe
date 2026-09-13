@@ -112,3 +112,29 @@ Runtime integration and rendered/provider acceptance remain pending.
 Native clear checkpoint root verification: formatting, warnings-as-errors compilation, strict
 Credo, 1,034 umbrella tests with zero failures (15 integration tests excluded), and unused
 dependency checks all passed. Shared output integration and provider playback marks remain pending.
+
+## Shared recipient output checkpoint
+
+- Added Gateway-owned arbitration before native encoding. Production WebRTC setup, human
+  promotion and both phone setup/promotion paths now hand room mixer frames to the same native
+  output used by direct/private playback. `SharedOutputPipeline` owns subscription binding and
+  completion translation; it has no encoder or pacing clock. The native output survives a room
+  binding replacement and private/room source changes.
+- Private output waits for the single admitted room frame. During private playback, room frames
+  are discarded rather than queued for later replay. A held output accepts only private frames
+  from its current generation; release requires drained output and the exact generation. These
+  boundaries are ready for engine lifecycle integration; no call/transfer phase uses hold yet.
+- Mixed frames have a distinct internal audio scope to avoid recording the already recorded room
+  mix again through the direct speech recording handoff. Private recording exclusion is retained.
+- Eight focused regressions cover one RTP timeline through room/private/room delivery, production
+  room routing, generation fencing, drain-before-release, binding replacement, binding during a
+  clear, preserving pending private playback across a room replacement, invalid frames and a dead
+  direct producer. Tests first reproduced missing arbitration and then the replacement/invalid
+  frame/producer-death races; all pass after the corresponding fixes.
+- Existing human WebRTC transfer and Telnyx/Twilio media-session tests pass through the new path.
+  Provider playback marks, wait/cue lifecycle integration, common readiness, and rendered/provider
+  acceptance remain pending. Native local completion is not claimed as remote phone playout.
+- Full-root verification initially hit the existing transcript-router fixture's 100 ms policy
+  timeout. Its five focused tests passed unchanged. The complete root recheck then passed all
+  five gates: formatting, warnings-as-errors compilation, strict Credo, 1,042 tests with zero
+  failures (15 excluded integrations), and unused-dependency checks.

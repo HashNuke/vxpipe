@@ -16,7 +16,7 @@ defmodule Vxpipe.CallEngine.Media.AudioOutputFrame do
     :payload,
     :reply_to
   ]
-  defstruct @enforce_keys ++ [audio_scope: :conversation]
+  defstruct @enforce_keys ++ [audio_scope: :conversation, output_generation: 0]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -31,7 +31,8 @@ defmodule Vxpipe.CallEngine.Media.AudioOutputFrame do
           channels: pos_integer(),
           byte_order: :little,
           payload: binary(),
-          audio_scope: :conversation | :private,
+          audio_scope: :conversation | :private | :mixed,
+          output_generation: non_neg_integer(),
           reply_to: pid()
         }
 end

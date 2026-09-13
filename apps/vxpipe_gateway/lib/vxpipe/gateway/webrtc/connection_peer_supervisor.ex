@@ -5,7 +5,13 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
 
   alias ExWebRTC.PeerConnection
   alias Vxpipe.CallEngine
-  alias Vxpipe.Gateway.Media.{RoomAudioEgress, RoomAudioIngress}
+
+  alias Vxpipe.Gateway.Media.{
+    OutputArbiter,
+    RoomAudioEgress,
+    RoomAudioIngress,
+    SharedOutputPipeline
+  }
 
   alias Vxpipe.Gateway.WebRTC.{
     AudioEgress,
@@ -52,7 +58,13 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
       maximum_packets: maximum_packets
     ]
 
-    DynamicSupervisor.start_child(via(connection_id), {AudioEgress, options})
+    with {:ok, native} <-
+           DynamicSupervisor.start_child(via(connection_id), {AudioEgress, options}) do
+      DynamicSupervisor.start_child(
+        via(connection_id),
+        {OutputArbiter, connection_id: connection_id, native_output: native, owner: self()}
+      )
+    end
   end
 
   def start_audio_pipeline(connection_id, options) do
@@ -159,8 +171,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
         connection_id,
         attachment,
         identity,
-        peer_connection,
-        track_id,
+        output_sink,
         options \\ []
       ) do
     engine = Keyword.get(options, :engine, CallEngine)
@@ -173,7 +184,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
         pipeline_options =
           options
           |> Keyword.get(:pipeline_options, [])
-          |> Keyword.merge(peer_connection: peer_connection, track_id: track_id)
+          |> Keyword.put(:output_sink, output_sink)
 
         egress_options =
           identity ++
@@ -182,7 +193,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
               attachment: attachment,
               owner: self(),
               engine: engine,
-              pipeline: Keyword.get(options, :pipeline, RoomAudioOutputPipeline),
+              pipeline: Keyword.get(options, :pipeline, SharedOutputPipeline),
               playback_clearer:
                 Keyword.get(options, :playback_clearer, Vxpipe.Gateway.Media.PlaybackClearer.Noop),
               pipeline_supervisor: Keyword.get(options, :pipeline_supervisor, __MODULE__),

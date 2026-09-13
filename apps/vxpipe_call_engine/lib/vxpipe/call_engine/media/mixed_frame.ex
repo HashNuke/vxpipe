@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.Media.MixedFrame do
     :channels,
     :payload
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [output_generation: 0]
 
   @type mode ::
           :mix_minus
@@ -36,6 +36,7 @@ defmodule Vxpipe.CallEngine.Media.MixedFrame do
           source_participant_ids: [String.t()],
           timestamp: non_neg_integer(),
           policy_revision: non_neg_integer(),
+          output_generation: non_neg_integer(),
           sample_rate: pos_integer(),
           channels: pos_integer(),
           payload: binary()

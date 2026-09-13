@@ -151,7 +151,6 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
         participant_id: "part-human"
       ],
       self(),
-      "track-output",
       engine: Vxpipe.Gateway.TestRoomAudioOutputEngine,
       pipeline: Vxpipe.Gateway.TestRoomAudioOutputPipeline,
       playback_clearer: Vxpipe.Gateway.TestPlaybackClearer,

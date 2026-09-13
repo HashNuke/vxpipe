@@ -243,6 +243,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
       connection_id: state.connection_id,
       engine: state.engine,
       identity: state.identity,
+      output_sink: state.audio_output,
       media_pipelines: state.media_pipelines,
       socket_owner: state.socket_owner,
       stream_id: state.stream_id

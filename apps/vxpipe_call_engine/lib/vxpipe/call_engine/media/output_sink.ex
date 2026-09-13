@@ -16,6 +16,14 @@ defmodule Vxpipe.CallEngine.Media.OutputSink do
   def clear(sink) when is_pid(sink), do: safe_call(sink, :vxpipe_audio_output_clear)
 
   @doc false
+  def hold(sink, generation) when is_pid(sink) and is_integer(generation) and generation > 0,
+    do: safe_call(sink, {:vxpipe_audio_output_hold, generation})
+
+  @doc false
+  def release(sink, generation) when is_pid(sink) and is_integer(generation) and generation >= 0,
+    do: safe_call(sink, {:vxpipe_audio_output_release, generation})
+
+  @doc false
   @spec bind_recording(pid(), EgressHandoff.t()) :: :ok | {:error, term()}
   def bind_recording(sink, %EgressHandoff{} = handoff) when is_pid(sink) do
     safe_call(sink, {:vxpipe_bind_recording_egress, handoff})

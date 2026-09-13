@@ -106,8 +106,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
                incarnation_id: session.incarnation_id,
                participant_id: session.participant_id
              ],
-             peer_connection,
-             output_track.id
+             audio_egress
            ) do
       {:ok,
        %{

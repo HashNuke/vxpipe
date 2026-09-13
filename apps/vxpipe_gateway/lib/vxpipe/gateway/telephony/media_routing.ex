@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
   @moduledoc false
 
   alias Vxpipe.CallEngine.ConnectionAttachment
-  alias Vxpipe.Gateway.Media.{RoomAudioEgress, RoomAudioIngress}
+  alias Vxpipe.Gateway.Media.{RoomAudioEgress, RoomAudioIngress, SharedOutputPipeline}
   alias Vxpipe.Gateway.Telephony.MediaPipelineSet
 
   @spec start(ConnectionAttachment.t(), keyword()) ::
@@ -13,7 +13,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
     connection_id = Keyword.fetch!(options, :connection_id)
     engine = Keyword.fetch!(options, :engine)
     identity = Keyword.fetch!(options, :identity)
-    socket_owner = Keyword.fetch!(options, :socket_owner)
+    output_sink = Keyword.fetch!(options, :output_sink)
     stream_id = Keyword.fetch!(options, :stream_id)
     %MediaPipelineSet{} = media_pipelines = Keyword.fetch!(options, :media_pipelines)
 
@@ -31,13 +31,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
            start_egress(
              child_supervisor,
              connection_id,
-             socket_owner,
-             stream_id,
+             output_sink,
              attachment,
              identity,
-             engine,
-             media_pipelines.room_egress,
-             media_pipelines.playback_clearer
+             engine
            ) do
       {:ok, %{room_audio_egress: egress, room_audio_ingress: ingress}}
     end
@@ -86,13 +83,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
   defp start_egress(
          child_supervisor,
          connection_id,
-         socket_owner,
-         stream_id,
+         output_sink,
          attachment,
          identity,
-         engine,
-         pipeline,
-         playback_clearer
+         engine
        ) do
     case engine.room_audio_output_configuration(attachment) do
       :disabled ->
@@ -106,10 +100,9 @@ defmodule Vxpipe.Gateway.Telephony.MediaRouting do
               attachment: attachment,
               owner: self(),
               engine: engine,
-              pipeline: pipeline,
-              playback_clearer: playback_clearer,
+              pipeline: SharedOutputPipeline,
               pipeline_supervisor: child_supervisor,
-              pipeline_options: [socket_owner: socket_owner, stream_id: stream_id]
+              pipeline_options: [output_sink: output_sink]
             ]
 
         with {:ok, egress} <-

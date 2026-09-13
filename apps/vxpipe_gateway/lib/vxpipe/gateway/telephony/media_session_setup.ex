@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.ConnectionAttachment
-  alias Vxpipe.Gateway.Media.AudioOutput
+  alias Vxpipe.Gateway.Media.{AudioOutput, OutputArbiter}
 
   alias Vxpipe.Gateway.Telephony.{
     MediaBinding,
@@ -40,7 +40,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
          {:ok, command} <- attach_command(actor_id, binding),
          {:ok, %ConnectionAttachment{} = attachment} <-
            engine.attach_connection(command, output),
-         {:ok, routing} <- MediaRouting.start(attachment, routing_options(options, identity)) do
+         {:ok, routing} <-
+           MediaRouting.start(attachment, routing_options(options, identity, output)) do
       {:ok,
        %{
          actor_id: actor_id,
@@ -84,7 +85,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
            child_supervisor.start_child(connection_id, {AudioOutput, output_options}),
          :ok <- AudioOutput.start_pipeline(output),
          :ok <- AudioOutput.await_ready(output) do
-      {:ok, output}
+      child_supervisor.start_child(
+        connection_id,
+        {OutputArbiter, connection_id: connection_id, native_output: output, owner: self()}
+      )
     end
   end
 
@@ -109,12 +113,13 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
     ]
   end
 
-  defp routing_options(options, identity) do
+  defp routing_options(options, identity, output) do
     [
       child_supervisor: Keyword.get(options, :child_supervisor, MediaChildrenSupervisor),
       connection_id: Keyword.fetch!(options, :connection_id),
       engine: Keyword.get(options, :engine, CallEngine),
       identity: identity,
+      output_sink: output,
       media_pipelines: Keyword.fetch!(options, :media_pipelines),
       socket_owner: Keyword.fetch!(options, :socket_owner),
       stream_id: Keyword.fetch!(options, :stream_id)

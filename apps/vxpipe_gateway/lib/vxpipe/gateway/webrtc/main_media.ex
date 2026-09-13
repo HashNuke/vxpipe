@@ -11,15 +11,13 @@ defmodule Vxpipe.Gateway.WebRTC.MainMedia do
           ConnectionAttachment.t(),
           Snapshot.t(),
           pid(),
-          ExWebRTC.MediaStreamTrack.id(),
           non_neg_integer()
         ) :: {:ok, pid(), pid()} | {:error, term()}
   def activate(
         connection_id,
         %ConnectionAttachment{} = attachment,
         %Snapshot{} = session,
-        peer_connection,
-        output_track_id,
+        output_sink,
         jitter_latency_ms
       ) do
     identity = [
@@ -41,8 +39,7 @@ defmodule Vxpipe.Gateway.WebRTC.MainMedia do
              connection_id,
              attachment,
              identity,
-             peer_connection,
-             output_track_id
+             output_sink
            ),
          :ok <- RoomAudioIngress.await_ready(ingress),
          :ok <- RoomAudioEgress.await_ready(egress) do

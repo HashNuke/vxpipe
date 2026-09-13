@@ -433,3 +433,11 @@ The native-output clear primitive now discards queued audio and drains the in-fl
 acknowledging. WebRTC retains its encoder/SSRC/RTP timeline; phone retains its encoding pipeline and
 sequence clock while clearing remote queued media. This enables phase changes without codec
 restarts, but does not itself integrate shared output or establish remote phone playback marks.
+
+Shared recipient arbitration is now integrated into production WebRTC and common phone output.
+Room frames and private/direct frames share the same encoder and output timeline. Room frames are
+discarded during private playback; replacing a room binding drains its old frame and preserves
+pending private playback. Generation-fenced output holds and drain-before-release are available
+for lifecycle integration. The eight focused regressions and existing web/phone attachment and
+human-transfer checks pass. Wait/cue phase orchestration and phone playback marks remain pending,
+so the private paced playback checkpoint and milestone acceptance remain unchecked.
