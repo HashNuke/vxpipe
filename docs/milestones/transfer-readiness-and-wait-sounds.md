@@ -514,3 +514,13 @@ saturation retain the bounded asynchronous gap contract. Thirty-one focused engi
 artifact checks pass. All five root gates pass with 1,096 tests, zero failures and 15 integrations
 excluded. Gateway media readiness, complete prospective inventory, initial waiting and coordinated
 transfer lifecycle integration remain pending; no browser/live-provider acceptance is claimed.
+
+Gateway room ingress, common native/phone output and room egress now expose current pipeline
+readiness. Unrelated policy and native output clear retain descriptors; replacement callbacks are
+fenced to the current pipeline. Room egress additionally requires its actual mixer subscription
+under the same output interval and exposes that dependency for monitoring. Twenty-seven focused
+checks cover these boundaries, including real mixer integration and loss. All five root gates pass
+with 1,100 tests, zero failures and 15 integrations excluded. Native WebRTC/private output bindings,
+negotiated connection and STT ingress evidence, complete inventory and lifecycle integration remain
+outstanding. These component queries do not establish complete participant-media readiness or
+rendered/live-provider acceptance; the common readiness checkpoint remains unchecked.

@@ -1,6 +1,9 @@
 defmodule Vxpipe.Gateway.TestRoomAudioOutputEngine do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
+  alias Vxpipe.CallEngine.Readiness.Resource
+
   def room_audio_output_configuration(%{store: store}) do
     Agent.get(store, fn state -> state.output_configuration end)
   end
@@ -12,12 +15,35 @@ defmodule Vxpipe.Gateway.TestRoomAudioOutputEngine do
     Agent.get_and_update(store, fn state ->
       case Map.get(state, :subscribe_result, :ok) do
         :ok ->
+          resource =
+            Resource.new(
+              :audio_subscription,
+              {:participant, Keyword.fetch!(options, :recipient_participant_id)},
+              __MODULE__,
+              options,
+              binding: subscription_id
+            )
+
           send(state.observer, {:test_room_audio_output_subscribed, subscription_id, subscriber})
-          {{:ok, %{store: store, id: subscription_id}}, Map.put(state, :subscriber, subscriber)}
+
+          state = Map.merge(state, %{subscriber: subscriber, readiness_resource: resource})
+          {{:ok, %{store: store, id: subscription_id}}, state}
 
         {:error, reason} = error ->
           {error, Map.put(state, :subscribe_error, reason)}
       end
+    end)
+  end
+
+  def room_audio_subscription_readiness(%{store: store}), do: readiness(store)
+
+  def readiness(store) do
+    Agent.get(store, fn state ->
+      resource = state.readiness_resource
+      {:participant, participant} = resource.scope
+      interval = Snapshot.interval(state.snapshot, :audio_output, participant)
+      status = if Map.get(state, :subscription_ready?, true), do: :ready, else: :preparing
+      {:ok, %{resource | policy_interval: interval}, status}
     end)
   end
 

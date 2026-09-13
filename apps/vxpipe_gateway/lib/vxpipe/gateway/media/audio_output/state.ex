@@ -1,11 +1,14 @@
 defmodule Vxpipe.Gateway.Media.AudioOutput.State do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Readiness.Resource
+
   @enforce_keys [
     :connection_id,
     :identity,
     :maximum_frames,
     :owner,
+    :readiness_resource,
     :pipeline,
     :pipeline_options,
     :playback_clearer,
@@ -54,6 +57,14 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
       },
       maximum_frames: Keyword.get(options, :maximum_frames, 500),
       owner: Keyword.fetch!(options, :owner),
+      readiness_resource:
+        Resource.new(
+          :audio_output,
+          {:participant, Keyword.fetch!(options, :participant_id)},
+          Vxpipe.Gateway.Media.AudioOutput,
+          options,
+          binding: Keyword.fetch!(options, :connection_id)
+        ),
       pipeline: Keyword.fetch!(options, :pipeline),
       pipeline_options: Keyword.get(options, :pipeline_options, []),
       playback_control: Keyword.get(options, :playback_control),

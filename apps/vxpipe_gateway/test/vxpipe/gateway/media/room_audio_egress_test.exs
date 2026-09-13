@@ -3,7 +3,41 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
 
   alias Vxpipe.CallEngine.Media.MixedFrame
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
+  alias Vxpipe.Gateway.Media.RoomAudioEgress
   alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
+
+  test "readiness requires both the output pipeline and its current mixer subscription" do
+    connection_id = unique_id("readiness-output")
+    start_supervised!({ConnectionPeerSupervisor, connection_id: connection_id})
+    attachment = attachment({:ok, %{mode: :mix_minus}}, snapshot(4), [])
+    assert {:ok, egress} = start_egress(connection_id, attachment)
+    assert_receive {:test_room_audio_output_pipeline_started, pipeline_id, _pipeline, ^egress}
+    assert {:ok, _pending, :preparing} = RoomAudioEgress.readiness(egress)
+    send(egress, {:vxpipe_room_audio_output_ready, pipeline_id})
+    assert {:ok, resource, :ready} = RoomAudioEgress.readiness(egress)
+    assert resource.scope == {:participant, "part-human"}
+    assert resource.kind == :room_audio_egress
+    assert resource.binding == connection_id
+    assert {:ok, [^resource, subscription]} = RoomAudioEgress.readiness_resources(egress)
+    assert subscription.kind == :audio_subscription
+
+    unrelated = put_in(snapshot(5).effective.transcript_routes, %{})
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(egress, unrelated, 1_000)
+    assert {:ok, ^resource, :ready} = RoomAudioEgress.readiness(egress)
+    Agent.update(attachment.store, &Map.put(&1, :subscription_ready?, false))
+    assert {:ok, ^resource, :preparing} = RoomAudioEgress.readiness(egress)
+    refute_receive {:test_room_audio_output_pipeline_stopped, _id, _pipeline}
+
+    for invalid <- [
+          %{subscription | kind: :recording_subscription},
+          %{subscription | scope: {:participant, "someone-else"}},
+          %{subscription | binding: "another-output"},
+          %{subscription | generation: nil}
+        ] do
+      Agent.update(attachment.store, &Map.put(&1, :readiness_resource, invalid))
+      assert {:ok, _resource, :failed} = RoomAudioEgress.readiness(egress)
+    end
+  end
 
   test "does not start a mixer egress for a direct-output attachment" do
     connection_id = unique_id("conn-direct")

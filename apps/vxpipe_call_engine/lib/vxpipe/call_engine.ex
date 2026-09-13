@@ -284,6 +284,10 @@ defmodule Vxpipe.CallEngine do
   def subscribe_room_audio(%ConnectionAttachment{}, options) when is_list(options),
     do: {:error, :disabled}
 
+  @doc false
+  def room_audio_subscription_readiness(%Subscription{} = subscription),
+    do: Subscription.readiness(subscription)
+
   @spec take_room_audio(Subscription.t(), pos_integer()) ::
           {:ok, [Vxpipe.CallEngine.Media.MixedFrame.t()]} | {:error, term()}
   def take_room_audio(%Subscription{} = subscription, maximum_frames)

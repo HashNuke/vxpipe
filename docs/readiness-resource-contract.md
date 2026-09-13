@@ -183,7 +183,35 @@ Those alternatives respectively change playback, hide missing bindings, lose pre
 or change the approved asynchronous storage contract. Checks cover exact subscription tokens,
 unchanged intervals/generations, preparation before samples, partial failure/retry, closed local
 handoffs, pending/saturated storage, and monitored writer loss with the recorder still running.
-Gateway media adapters and complete startup/transfer inventory and orchestration are still pending.
+Complete startup/transfer inventory and orchestration are still pending.
+
+## Gateway codec and room-route readiness
+
+Room audio ingress and common phone/native audio output expose the initialization acknowledgement
+of their current pipeline. The descriptor is scoped to the participant and connection, and its
+generation changes when that pipeline is replaced or removed. Stale pipeline callbacks cannot
+establish replacement readiness. Clearing native output preserves the codec and its descriptor;
+drain/clear completion is a separate phase requirement. Room ingress also requires its installed
+audio-input policy interval. Unrelated policy revisions retain its evidence.
+
+Room audio egress requires its current pipeline acknowledgement, installed audio-output interval
+and an exact ready mixer subscription under that same interval. Mixer queries run outside the
+egress receive loop. Missing contracts and malformed/foreign subscription reports fail closed.
+`RoomAudioEgress.readiness_resources/1` exposes the subscription separately so the collector monitors
+the actual mixer even when the egress process remains available. A changed output interval can
+prepare a replacement pipeline while retaining the same mixer subscription generation.
+
+This is component evidence, not complete participant-media readiness. In production the shared
+output pipeline acknowledges its room binding; its native encoder and negotiated live connection
+are separate requirements. WebRTC connection/track evidence, STT ingress, private output bindings
+and complete prospective inventory still need integration. No sample packet, utterance or codec
+restart is used as a readiness probe.
+
+Local design review rejected treating the pipeline acknowledgement as proof of a mixer queue or
+live transport, substituting a global policy revision for relevant intervals, and making the egress
+query the mixer synchronously inside its receive loop. Focused checks cover unchanged generations,
+replacement callbacks, malformed subscription reports, real mixer/egress interval mismatch and
+collector revocation after mixer loss. Runtime hold/release and audible acceptance remain pending.
 
 ## Rejected alternatives and verification
 

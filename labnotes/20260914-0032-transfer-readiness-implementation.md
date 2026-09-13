@@ -354,3 +354,28 @@ unchecked; the milestone and index are still incomplete.
   compilation, strict Credo, 1,096 umbrella tests with zero failures (15 integrations excluded), and
   unused-dependency checks. A transient build lock cleared without restarting a running process.
   The milestone records the implemented recording boundary and leaves lifecycle acceptance open.
+
+## Gateway pipelines and room-route readiness
+
+- Resumed the three pending readiness tests and confirmed the expected red result: 26 tests,
+  three failures on missing ingress/output/egress APIs. Added participant/connection-scoped
+  descriptors tied to the actual current pipeline initialization acknowledgement. Replacement or
+  removal changes the resource generation; unrelated policy and native output clear retain it.
+- Room ingress requires its installed input interval. Room egress combines its pipeline evidence
+  with the actual mixer subscription and requires matching output intervals. The query happens
+  outside the egress receive loop to avoid blocking policy acknowledgement on the mixer. Separate
+  subscription descriptors let the collector observe mixer loss while egress remains available.
+- Added real mixer/egress/collector integration and malformed/foreign subscription checks. The
+  first integration run exposed a fixture cleanup error: the mixer child ID includes its incarnation.
+  Correcting that ID allowed the intended mixer-loss assertion. All 27 focused checks now pass.
+- Updated the resource decision document with the local design review and limits. The shared
+  output acknowledgement proves its room binding, not native codec or negotiated transport readiness.
+  WebRTC connection/track evidence, STT ingress, private output bindings, full prospective inventory
+  and lifecycle orchestration remain outstanding. No browser/provider acceptance is claimed.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,100 umbrella
+  tests with zero failures (15 integrations excluded), and unused-dependency checks. No running
+  server was restarted. The milestone records the component evidence and keeps full acceptance open.
+- Next inspected integration points: WebRTC native output currently lacks participant identity,
+  and the arbiter is constructed with only its native PID. WebRTC learns input track codecs lazily
+  from the first RTP packet; readiness needs negotiated track evidence before microphone release.
+  Engine Media.Ingress owns the bounded STT handoff separately from room audio normalization.

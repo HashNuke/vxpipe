@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.State do
   @moduledoc false
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.Gateway.WebRTC.{AudioPipeline, ConnectionPeerSupervisor}
 
   @enforce_keys [
@@ -13,6 +14,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.State do
     :identity,
     :next_sequence_number,
     :owner,
+    :readiness_resource,
     :pipeline,
     :pipeline_generation,
     :pipeline_id,
@@ -36,6 +38,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.State do
           identity: map(),
           next_sequence_number: pos_integer(),
           owner: pid(),
+          readiness_resource: Resource.t(),
           pipeline: module(),
           pipeline_generation: non_neg_integer(),
           pipeline_id: String.t() | nil,
@@ -65,6 +68,14 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.State do
       configuration: Keyword.fetch!(options, :configuration),
       next_sequence_number: 1,
       owner: Keyword.fetch!(options, :owner),
+      readiness_resource:
+        Resource.new(
+          :room_audio_ingress,
+          {:participant, Keyword.fetch!(options, :participant_id)},
+          Vxpipe.Gateway.Media.RoomAudioIngress,
+          options,
+          binding: Keyword.fetch!(options, :connection_id)
+        ),
       pipeline: Keyword.get(options, :pipeline, AudioPipeline),
       pipeline_generation: 0,
       pipeline_id: nil,

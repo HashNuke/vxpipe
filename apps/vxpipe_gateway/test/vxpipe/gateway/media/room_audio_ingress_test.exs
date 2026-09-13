@@ -7,6 +7,42 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
   alias Vxpipe.Gateway.Media.{PCMFrame, RoomAudioIngress}
   alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
 
+  test "readiness pins the initialized normalizer and only its relevant policy interval" do
+    ingress = start_ingress(attachment(self(), nil), register?: false)
+    assert_receive {:test_room_audio_pipeline_started, first_id, _pipeline}
+    assert {:ok, _pending, :preparing} = RoomAudioIngress.readiness(ingress)
+    send(ingress, {:vxpipe_audio_pipeline_ready, first_id})
+    assert {:ok, _pending, :preparing} = RoomAudioIngress.readiness(ingress)
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, snapshot(4), 1_000)
+    assert {:ok, resource, :ready} = RoomAudioIngress.readiness(ingress)
+    assert resource.instance == ingress
+    assert resource.scope == {:participant, "part-human"}
+    assert resource.kind == :room_audio_ingress
+    assert resource.policy_interval == 4
+
+    unrelated = put_in(snapshot(5).effective.transcript_routes, %{})
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, unrelated, 1_000)
+    assert {:ok, ^resource, :ready} = RoomAudioIngress.readiness(ingress)
+    refute_receive {:test_room_audio_pipeline_started, _id, _pipeline}
+
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
+    changed = put_in(snapshot(6).effective.audio_routes, %{})
+
+    update =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, changed, 1_000)
+      end)
+
+    assert_receive {:test_room_audio_pipeline_started, next_id, _pipeline}
+    send(ingress, {:vxpipe_audio_pipeline_ready, first_id})
+    assert {:ok, replacement, :preparing} = RoomAudioIngress.readiness(ingress)
+    refute replacement.generation == resource.generation
+    assert replacement.configuration == resource.configuration
+    send(ingress, {:vxpipe_audio_pipeline_ready, next_id})
+    assert :ok = Task.await(update)
+    assert {:ok, ^replacement, :ready} = RoomAudioIngress.readiness(ingress)
+  end
+
   test "starts and registers the per-connection ingress through its owning supervisor" do
     connection_id = unique_id("conn-supervised")
     start_supervised!({ConnectionPeerSupervisor, connection_id: connection_id})

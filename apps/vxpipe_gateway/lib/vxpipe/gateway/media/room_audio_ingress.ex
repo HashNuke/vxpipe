@@ -3,6 +3,8 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.Gateway.Media.PCMFrame
 
@@ -36,9 +38,22 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   def await_ready(ingress), do: safe_call(ingress, :await_ready)
 
   @impl true
+  def readiness(server), do: safe_call(server, :readiness)
+
+  @impl true
   def init(options), do: {:ok, State.new(options)}
 
   @impl true
+  def handle_call(:readiness, _from, state) do
+    interval =
+      if state.policy,
+        do: Snapshot.interval(state.policy, :audio_input, state.identity.participant_id)
+
+    resource = %{state.readiness_resource | policy_interval: interval}
+    status = if state.pipeline_ready? and interval != nil, do: :ready, else: :preparing
+    {:reply, {:ok, resource, status}, state}
+  end
+
   def handle_call(:start_pipeline, _from, %{pipeline_pid: nil} = state) do
     case PipelineLifecycle.launch(state) do
       {:ok, state} -> {:reply, :ok, state}

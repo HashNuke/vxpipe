@@ -32,6 +32,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.PipelineLifecycle do
              pipeline_id: pipeline_id,
              pipeline_monitor: Process.monitor(pipeline_pid),
              pipeline_pid: pipeline_pid,
+             readiness_resource: %{state.readiness_resource | generation: make_ref()},
              pipeline_ready?: false
          }}
 
@@ -72,6 +73,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.PipelineLifecycle do
         pipeline_id: nil,
         pipeline_monitor: nil,
         pipeline_pid: nil,
+        readiness_resource: %{state.readiness_resource | generation: make_ref()},
         pipeline_ready?: false
     }
   end

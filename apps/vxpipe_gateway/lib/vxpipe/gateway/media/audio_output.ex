@@ -3,6 +3,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.Gateway.Media.AudioOutput.RemotePlayback
 
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
@@ -50,9 +52,17 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   end
 
   @impl true
+  def readiness(server), do: safe_call(server, :readiness)
+
+  @impl true
   def init(options), do: {:ok, State.new(options)}
 
   @impl true
+  def handle_call(:readiness, _from, state) do
+    status = if state.pipeline_ready?, do: :ready, else: :preparing
+    {:reply, {:ok, state.readiness_resource, status}, state}
+  end
+
   def handle_call(:start_pipeline, _from, %{pipeline_pid: nil} = state) do
     case PipelineLifecycle.launch(state) do
       {:ok, state} -> {:reply, :ok, state}

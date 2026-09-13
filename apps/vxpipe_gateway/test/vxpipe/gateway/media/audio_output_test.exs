@@ -5,6 +5,30 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
   alias Vxpipe.CallEngine.Recording.EgressHandoff
   alias Vxpipe.Gateway.Media.{AudioOutput, PlaybackFrame}
 
+  test "readiness waits for the actual codec generation and preserves it through clear" do
+    {output, connection_id} = start_output(maximum_frames: 4)
+    assert_receive {:test_audio_output_pipeline_started, first_id, _pipeline, ^output}
+    assert {:ok, pending, :preparing} = AudioOutput.readiness(output)
+    assert pending.scope == {:participant, "caller-test"}
+    assert pending.binding == connection_id
+    send(output, {:vxpipe_audio_output_pipeline_ready, first_id})
+    assert {:ok, resource, :ready} = AudioOutput.readiness(output)
+    assert {:ok, 0} = OutputSink.clear(output)
+    assert {:ok, ^resource, :ready} = AudioOutput.readiness(output)
+    refute_receive {:test_audio_output_pipeline_stopped, _id, _pipeline}
+
+    assert :ok = push(output, connection_id, :binary.copy(<<0>>, 1_920))
+    assert_receive {:test_audio_output_pipeline_push, ^first_id, _frame}
+    assert {:ok, 0} = interrupt(output)
+    assert_receive {:test_audio_output_pipeline_started, next_id, _pipeline, ^output}
+    send(output, {:vxpipe_audio_output_pipeline_ready, first_id})
+    assert {:ok, replacement, :preparing} = AudioOutput.readiness(output)
+    refute replacement.generation == resource.generation
+    assert replacement.configuration == resource.configuration
+    send(output, {:vxpipe_audio_output_pipeline_ready, next_id})
+    assert {:ok, ^replacement, :ready} = AudioOutput.readiness(output)
+  end
+
   test "frames streamed PCM and reports only transport-acknowledged playout" do
     {output, connection_id} = start_output(maximum_frames: 4, progress_interval_frames: 1)
     assert_receive {:test_audio_output_pipeline_started, pipeline_id, _pipeline, ^output}

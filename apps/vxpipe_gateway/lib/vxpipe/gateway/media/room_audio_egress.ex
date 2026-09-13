@@ -3,8 +3,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.Gateway.Media.RoomAudioEgress.{Delivery, PipelineLifecycle, State}
+  alias Vxpipe.Gateway.Media.RoomAudioEgress.{Delivery, PipelineLifecycle, Readiness, State}
 
   @call_timeout 5_000
 
@@ -25,9 +27,18 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   def await_ready(egress), do: safe_call(egress, :await_ready)
 
   @impl true
+  def readiness(egress), do: Readiness.readiness(egress)
+
+  def readiness_resources(egress), do: Readiness.resources(egress)
+
+  @impl true
   def init(options), do: {:ok, State.new(options)}
 
   @impl true
+  def handle_call(:readiness_binding, _from, state) do
+    {:reply, {:ok, Readiness.binding(state)}, state}
+  end
+
   def handle_call(:activate, _from, %{pipeline_pid: nil, subscription: nil} = state) do
     case PipelineLifecycle.launch(state) do
       {:ok, launched_state} ->
