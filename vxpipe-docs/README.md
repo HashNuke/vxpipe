@@ -17,8 +17,15 @@ This starts Astro alongside the application. See the
 Open `http://localhost:4321/docs/en/` for the docs or `http://localhost:4321/` for
 the landing page. Ctrl-C stops the stack, including Astro.
 
+For Tailscale access, run `bin/dev --tailscale` and open
+`https://<machine-fqdn>:4321/` or `https://<machine-fqdn>:4321/docs/en/`.
+Astro uses the same discovered Tailscale address and certificate as the Console;
+its port remains 4321 and live reload stays enabled.
+
 To run just the site, use `npm --prefix vxpipe-docs run dev` from the repository
 root.
+
+Run `npm --prefix vxpipe-docs test` to check the development configuration.
 
 ## Routes
 

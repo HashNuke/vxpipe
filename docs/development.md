@@ -50,8 +50,8 @@ bin/dev
 
 The Console is at `http://localhost:4000/`. The landing page is at
 `http://localhost:4321/` and English documentation is at
-`http://localhost:4321/docs/en/`. Astro reloads as you edit the site. The docs use
-local HTTP in both `bin/dev` modes and stop with the rest of the stack on Ctrl-C.
+`http://localhost:4321/docs/en/`. Astro reloads as you edit the site and stops with
+the rest of the stack on Ctrl-C. Use `--tailscale` for HTTPS access over Tailscale.
 
 Unlike `bin/dev`, the quick start's direct `mix run --no-halt` command does not
 load `.env`; export the provider keys in the launching shell as shown there.
@@ -119,13 +119,16 @@ bin/dev --tailscale
 ```
 
 This discovers the machine's FQDN and Tailscale IPv4 address and serves the Console
-at `https://<machine-fqdn>:4000/`. It asks the local Tailscale daemon for a
+at `https://<machine-fqdn>:4000/`, the Astro landing page at
+`https://<machine-fqdn>:4321/`, and docs at
+`https://<machine-fqdn>:4321/docs/en/`. It asks the local Tailscale daemon for a
 certificate for the discovered `.ts.net` hostname and gives its ignored runtime
-paths to Phoenix/Bandit. MagicDNS
+paths to Phoenix/Bandit and Astro. MagicDNS
 and HTTPS certificates must be enabled for the tailnet. The complete stack runs as
 the calling user; no root process, reverse proxy, `TS_PERMIT_CERT_UID`, or manually
-exported TLS variables are required. Phoenix binds only to the discovered Tailscale
-address. This does not use Tailscale Funnel or make the development stack public.
+exported TLS variables are required. Phoenix and Astro bind only to the discovered
+Tailscale address, retaining ports 4000 and 4321. Astro's live reload also uses
+port 4321. This does not use Tailscale Funnel or make the development stack public.
 
 With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
 `APP_HOST` in the shell or `.env` selects the hostname and bind address; that
