@@ -1,6 +1,6 @@
 # Call-definition implementation milestones
 
-Status: 24 milestone specifications: 21 complete and 3 incomplete. Milestone 17, Telnyx calls and
+Status: 25 milestone specifications: 21 complete and 4 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -12,9 +12,10 @@ tenant-safe operator inspection, and optional bounded billing enrichment. Milest
 call-details publications, is complete, including immutable late revisions and private operator
 retrieval. Milestone 22, context compaction and supported LLM fallback, is complete, including
 bounded private summaries, provider-native routing, truthful usage, and runnable HTTPS/WebRTC
-acceptance. The platform is now at its pre-delivery review hold. Milestones 23 and 24 remain
-unimplemented until the user has exercised the working platform and decided which fixes or
-changes should precede packaging and retention.
+acceptance. The platform is now at its pre-delivery review hold. Milestone 23 proposes transfer
+readiness and participant wait sounds in response to that review; it awaits user approval before
+runtime implementation. Milestones 24 and 25 remain unimplemented until the user has exercised the
+working platform and decided to proceed with packaging and retention.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
 2026-09-08. The 2026-09-10 [runtime decision](../reqllm-agent-runtime.md) inserts a separate
@@ -65,8 +66,9 @@ progress without claiming the entire milestone is complete.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-24. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Prepare every required capability, play independent private waits and an ordered connection cue, then release media and complete transfers; proposal awaiting user review.
+24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 ## Pre-delivery review hold
 
@@ -76,7 +78,7 @@ provider, transfer, media, recording, inspection, publication, and fallback path
 system. Record any discovered fixes or approved design changes in their owning milestone before
 release work begins.
 
-Do not start milestone 23 (Docker/container packaging) or milestone 24 (retention/deletion) until
+Do not start milestone 24 (Docker/container packaging) or milestone 25 (retention/deletion) until
 that review is complete and the user explicitly chooses to proceed. This is a sequencing hold,
 not a change to either milestone's approved scope or completion state. Retention/deletion remains
 the final milestone.
@@ -86,6 +88,11 @@ The 2026-09-13 pre-delivery review requests
 unchanged services during membership revisions. The live-mixing and human-transfer
 milestones track the speech and audio checkpoints; this does not change milestone
 ordering or lift the packaging/retention hold.
+
+The subsequent [transfer readiness and participant wait sounds proposal](transfer-readiness-and-wait-sounds.md)
+adds milestone 23 before delivery. Its schema, readiness barrier and playback lifecycle are pending
+user review; only the proposal and requested source-asset copies are prepared. This insertion keeps
+packaging and retention behind the same explicit review hold.
 
 ## Common implementation and verification gates
 
@@ -199,7 +206,8 @@ post-incident repair framework merely to complete this plan.
 Deferred items are not checklist prerequisites: same-call caller reconnection (R07),
 automatic tool retries/idempotency (R16), general MCP document inspection (R24),
 server-requested MCP interactions (R25), explicit cancellation, late external events,
-wait music, voicemail delivery, general redaction, and OAuth onboarding. See
+voicemail delivery, general redaction, and OAuth onboarding. Wait sounds now have a user-requested
+proposal above; implementation remains pending approval. See
 [the decision register](../call-definition-gap-review.md) and [issues](../issues/).
 The optional Morse-code providers are deterministic tone encoders/decoders, not speech ML
 models. No local VAD/speech models, graph engine, new client protocol, or Vxpipe
@@ -232,6 +240,7 @@ This is a coverage map, not another approval or implementation checklist.
 - **Versioned call-details publications**: G11; R42, R43.
 - **Whole-call retention and deletion**: G5; R19–R21.
 - **Context compaction and supported LLM fallback**: G13; R47, R48, R50.
+- **Transfer readiness and participant wait sounds**: user-requested pre-delivery refinement of G7/G8/G9; all required resources ready, independent local playback, URL/null/default configuration and cue-before-bridge completion.
 - **Embedded and JSON-configured container delivery**: Container/OTP boundary; complete approved scope.
 
 ## Specification review evidence
@@ -270,6 +279,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Versioned call-details publications](call-details-publications.md#specification-review) | Approved | milestone_review_a; Approved initial draft; clarified lifecycle/direction/route/plan digest in publication contents. |
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
+| [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Proposed; locally reviewed; awaiting user approval | Readiness across participant/room resources, unchanged-instance retention, independent private playback, URL/null/default semantics, destination-type defaults, acceptance/cue ordering, total deadline, bounded recovery, schema migration and prerequisite order reviewed. Only documentation and requested asset copies are prepared. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification
@@ -324,8 +334,12 @@ no runtime, provider, dependency-removal, or browser evidence is claimed. See th
 [runtime decision](../reqllm-agent-runtime.md) and
 [planning labnote](../../labnotes/20260910-0934-reqllm-agent-runtime.md).
 
-This checkpoint changes repository documentation only. No application integration,
-browser, live provider, official conformance or umbrella suite execution is claimed;
-those remain implementation gates.
+The 2026-09-13 pre-delivery follow-up adds the transfer readiness and wait-sound proposal,
+bringing the index to 25 while leaving 21 complete. It copies the two requested original WAVs
+into Call Engine's private resources and records call-level URL/null/default configuration,
+independent playback, full capability readiness and cue-before-media completion. Local design,
+document and asset checks are recorded in the [planning labnote](../../labnotes/20260913-2307-transfer-readiness-sounds.md).
+No application integration, browser, live provider, official conformance or umbrella suite
+execution is claimed for this planning checkpoint; those remain implementation gates.
 The compaction execution/model choice and explicitly identified provider/encoding
 particulars still require selection at implementation time.
