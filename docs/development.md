@@ -127,19 +127,16 @@ the calling user; no root process, reverse proxy, `TS_PERMIT_CERT_UID`, or manua
 exported TLS variables are required. Phoenix binds only to the discovered Tailscale
 address. This does not use Tailscale Funnel or make the development stack public.
 
-In the default HTTP mode, set `APP_HOST` to bind the Console endpoint to a specific
-hostname or interface:
+With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
+`APP_HOST` in the shell or `.env` selects the hostname and bind address; that
+address must be available on this machine. Use `--tailscale` to discover the
+Tailscale hostname and address automatically.
 
-```shell
-APP_HOST=localhost bin/dev
-```
-
-The repository-root `.env.example` documents the development credential and
-optional Goreman process overrides. A static `APP_HOST` can be placed in `.env`
-for HTTP mode; `--tailscale` derives it from Tailscale automatically. Goreman
-automatically loads `.env` from the repository root selected by `-basedir`,
-including when `bin/dev` is launched from another directory. Values reach its
-child processes without being exported into the parent shell.
+The repository-root `.env.example` documents development credentials and optional
+Goreman process overrides. Goreman automatically loads `.env` from the repository
+root selected by `-basedir`, including when `bin/dev` is launched from another
+directory. Values reach its child processes without being exported into the
+parent shell.
 
 ## Optional PostgreSQL storage
 
@@ -164,7 +161,7 @@ its child directory remains database-free.
 
 ## How the sample works
 
-Without `APP_HOST`, HTTP mode binds the Console endpoint to `0.0.0.0`. The React
+Without `APP_HOST`, HTTP mode binds the Console endpoint to `127.0.0.1`. The React
 page and mounted gateway are same-origin in both modes, so no frontend proxy or
 second asset port is involved.
 

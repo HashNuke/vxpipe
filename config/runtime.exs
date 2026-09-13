@@ -243,7 +243,7 @@ if config_env() == :dev do
         end
 
       app_host in [nil, ""] ->
-        {0, 0, 0, 0}
+        {127, 0, 0, 1}
 
       true ->
         case :inet.getaddr(String.to_charlist(app_host), :inet) do
