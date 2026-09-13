@@ -4,11 +4,10 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
   @behaviour WebSock
 
   alias Vxpipe.CallEngine.Telephony.Event
-  alias Vxpipe.Gateway.Telephony.Leg
   alias Vxpipe.Gateway.Telephony.MediaBinding
+  alias Vxpipe.Gateway.Telephony.PlaybackMarks
+  alias Vxpipe.Gateway.Telephony.SocketDispatch
   alias Vxpipe.Gateway.Telephony.Telnyx.MediaDecoder
-
-  @dispatch_timeout 5_000
 
   @impl true
   def init(%{binding: %MediaBinding{} = binding}) do
@@ -19,6 +18,8 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
        binding: binding,
        decoder_options: decoder_options(binding),
        leg_monitor: monitor,
+       playback_marks: %PlaybackMarks{},
+       dispatch: SocketDispatch.new(),
        stream_id: nil
      }}
   end
@@ -26,6 +27,9 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
   @impl true
   def handle_in({message, opcode: :text}, state) do
     case MediaDecoder.decode(state.decoder_options, message) do
+      {:ok, {:playback_mark, stream, name}} when stream == state.stream_id ->
+        {:ok, %{state | playback_marks: PlaybackMarks.acknowledge(state.playback_marks, name)}}
+
       {:ok, %Event{kind: :media_started, stream_id: stream_id} = event} ->
         dispatch(event, %{state | stream_id: stream_id})
 
@@ -43,6 +47,26 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
   def handle_in({_message, opcode: :binary}, state), do: invalid_message(state)
 
   @impl true
+  def handle_info(
+        {:vxpipe_playback_command, stream, action, receiver, request},
+        %{stream_id: stream} = state
+      )
+      when is_binary(stream) do
+    case PlaybackMarks.command(state.playback_marks, :telnyx, stream, action, receiver, request) do
+      {:ok, frames, marks} ->
+        {:push, frames, %{state | playback_marks: marks}}
+
+      {:error, reason} ->
+        send(receiver, {:vxpipe_playback_ack, request, {:error, reason}})
+        {:ok, state}
+    end
+  end
+
+  def handle_info({:vxpipe_playback_command, _stream, _action, receiver, request}, state) do
+    send(receiver, {:vxpipe_playback_ack, request, {:error, :wrong_stream}})
+    {:ok, state}
+  end
+
   def handle_info({:vxpipe_telnyx_socket_send, message}, state) when is_binary(message) do
     {:push, {:text, message}, state}
   end
@@ -52,13 +76,19 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaSocket do
     {:stop, :normal, {1000, "leg ended"}, state}
   end
 
-  def handle_info(_message, state), do: {:ok, state}
+  def handle_info(message, state) do
+    dispatch_result(SocketDispatch.response(state.dispatch, message), state)
+  end
 
   defp dispatch(event, state) do
-    case Leg.dispatch(state.binding.leg, event, @dispatch_timeout) do
-      :ok ->
+    dispatch_result(SocketDispatch.submit(state.dispatch, state.binding.leg, event), state)
+  end
+
+  defp dispatch_result(result, state) do
+    case result do
+      {:ok, dispatch} ->
         decoder_options = Keyword.put(state.decoder_options, :stream_id, state.stream_id)
-        {:ok, %{state | decoder_options: decoder_options}}
+        {:ok, %{state | decoder_options: decoder_options, dispatch: dispatch}}
 
       {:error, _reason} ->
         {:stop, :leg_unavailable, {1011, "leg unavailable"}, state}

@@ -40,6 +40,10 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     :exit, _reason -> {:error, :telephony_leg_unavailable}
   end
 
+  @doc false
+  def dispatch_async(leg, %Event{} = event) when is_pid(leg),
+    do: :gen_server.send_request(leg, {:event, event})
+
   @impl true
   def init(options) do
     state = %{

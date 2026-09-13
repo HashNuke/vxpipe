@@ -18,6 +18,8 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
     {:ok,
      %{
        block_output: Keyword.get(options, :block_output, false),
+       defer_drain: Keyword.get(options, :defer_drain, false),
+       pending_drain: nil,
        callback: nil,
        observer: Keyword.fetch!(options, :observer),
        pending_output: nil,
@@ -30,6 +32,19 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
   def handle_call({:vxpipe_bind_recording_egress, handoff}, _from, state) do
     send(state.observer, {:test_audio_recording_bound, self(), handoff})
     {:reply, :ok, %{state | recording_egress: handoff}}
+  end
+
+  def handle_call(:vxpipe_audio_output_drain, from, state) do
+    send(state.observer, {:test_audio_output_drain, self()})
+
+    if state.defer_drain,
+      do: {:noreply, %{state | pending_drain: from}},
+      else: {:reply, :ok, state}
+  end
+
+  def handle_call(:complete_drain, _from, state) do
+    GenServer.reply(state.pending_drain, :ok)
+    {:reply, :ok, %{state | pending_drain: nil}}
   end
 
   def handle_call({:vxpipe_audio_output, frame}, from, state) do

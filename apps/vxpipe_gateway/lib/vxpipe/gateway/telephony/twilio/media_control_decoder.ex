@@ -38,12 +38,15 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaControlDecoder do
 
   def dtmf(_options, _message), do: invalid()
 
-  @spec mark(keyword(), map()) :: :ignore | {:error, :invalid_twilio_media_message}
+  @spec mark(keyword(), map()) ::
+          {:ok, {:playback_mark, String.t(), String.t()}}
+          | {:error, :invalid_twilio_media_message}
   def mark(options, %{"mark" => mark} = message) when is_map(mark) do
-    with {:ok, _stream_id} <- expected_stream(options, message),
+    with {:ok, stream_id} <- expected_stream(options, message),
          {:ok, _sequence} <- MediaFields.integer(message, "sequenceNumber"),
-         {:ok, _name} <- MediaFields.string(mark, "name") do
-      :ignore
+         {:ok, name} <- MediaFields.string(mark, "name"),
+         true <- byte_size(name) <= 128 do
+      {:ok, {:playback_mark, stream_id, name}}
     else
       _invalid -> invalid()
     end

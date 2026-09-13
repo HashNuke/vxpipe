@@ -295,6 +295,23 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSessionTest do
 
   defp socket_loop(observer) do
     receive do
+      {:vxpipe_playback_command, @stream_sid, action, receiver, request} ->
+        alias Vxpipe.Gateway.Telephony.PlaybackMarks
+
+        {:ok, frames, marks} =
+          PlaybackMarks.command(%PlaybackMarks{}, :twilio, @stream_sid, action, receiver, request)
+
+        Enum.each(frames, fn {:text, message} ->
+          decoded = JSON.decode!(message)
+
+          case decoded["event"] do
+            "clear" -> send(observer, {:test_twilio_socket_clear, message})
+            "mark" -> PlaybackMarks.acknowledge(marks, decoded["mark"]["name"])
+          end
+        end)
+
+        socket_loop(observer)
+
       {:vxpipe_twilio_socket_send, message} ->
         send(observer, {:test_twilio_socket_send, message})
 

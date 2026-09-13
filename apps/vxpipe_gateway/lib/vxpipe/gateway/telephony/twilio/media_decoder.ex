@@ -12,7 +12,9 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaDecoder do
   @maximum_message_bytes 131_072
 
   @spec decode(keyword(), binary()) ::
-          {:ok, Event.t()} | :ignore | {:error, :invalid_twilio_media_message}
+          {:ok, Event.t() | {:playback_mark, String.t(), String.t()}}
+          | :ignore
+          | {:error, :invalid_twilio_media_message}
   def decode(options, message)
       when is_list(options) and is_binary(message) and
              byte_size(message) <= @maximum_message_bytes do

@@ -40,6 +40,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
        generation: 0,
        held?: false,
        clearing?: false,
+       draining?: false,
        requests: :gen_server.reqids_new()
      }}
   end
@@ -150,6 +151,18 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   def handle_call(:vxpipe_audio_output_clear, _from, state),
     do: {:reply, {:error, :clearing}, state}
 
+  def handle_call(
+        :vxpipe_audio_output_drain,
+        from,
+        %{current: nil, pending_direct: nil, clearing?: false, draining?: false} = state
+      ),
+      do:
+        {:noreply,
+         request(%{state | draining?: true}, :vxpipe_audio_output_drain, {:drain, from})}
+
+  def handle_call(:vxpipe_audio_output_drain, _from, state),
+    do: {:reply, {:error, :output_not_drained}, state}
+
   def handle_call({:vxpipe_audio_output_hold, generation}, from, state) do
     cond do
       state.clearing? ->
@@ -171,7 +184,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
       generation != state.generation ->
         {:reply, {:error, :stale_output_generation}, state}
 
-      state.current || state.pending_direct || state.clearing? ->
+      state.current || state.pending_direct || state.clearing? || state.draining? ->
         {:reply, {:error, :output_not_drained}, state}
 
       true ->
@@ -263,6 +276,11 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     {:noreply, state}
   end
 
+  defp response({:drain, from}, reply, state) do
+    GenServer.reply(from, reply)
+    {:noreply, %{state | draining?: false}}
+  end
+
   defp response({:direct_push, from, token, fresh?}, reply, state) do
     GenServer.reply(from, reply)
 
@@ -307,6 +325,9 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
 
   defp room_allowed(binding, caller, frame, state) do
     cond do
+      state.draining? ->
+        {:error, :draining}
+
       state.held? ->
         {:error, :held}
 
@@ -336,6 +357,9 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
 
   defp direct_allowed(frame, state) do
     cond do
+      state.draining? ->
+        {:error, :draining}
+
       frame.codec != :linear16 or frame.sample_rate != 48_000 or frame.channels != 1 or
           frame.byte_order != :little ->
         {:error, :unsupported_audio}

@@ -24,6 +24,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
   defstruct @fields ++
               [
                 loop: true,
+                output_generation: 0,
                 mode: :playing,
                 offset: 0,
                 next_offset: 0,
@@ -50,7 +51,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
 
   @impl true
   def init(options) do
-    state = struct!(__MODULE__, Keyword.take(options, @fields ++ [:loop]))
+    state = struct!(__MODULE__, Keyword.take(options, @fields ++ [:loop, :output_generation]))
 
     case state.asset do
       %Asset{
@@ -80,8 +81,17 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
   def handle_continue(:frame, state) do
     case Cursor.next(state.asset.payload, state.offset, state.loop) do
       :complete ->
-        notify(state, :completed)
-        {:stop, :normal, state}
+        pending =
+          Map.new(state.sinks, fn {_connection, sink} ->
+            id = :gen_server.send_request(sink, :vxpipe_audio_output_drain)
+            {sink, %{id: id, stage: :drain, completed?: false}}
+          end)
+
+        correlation = "#{state.episode_id}:#{state.connection_generation}:drain"
+        timer = Process.send_after(self(), {:frame_timeout, correlation}, 5_000)
+
+        {:noreply,
+         %{state | pending: pending, mode: :draining, correlation: correlation, timer: timer}}
 
       {payload, next_offset} ->
         correlation = "#{state.episode_id}:#{state.connection_generation}:#{state.sequence}"
@@ -157,6 +167,17 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       end)
 
     case response do
+      {sink, %{stage: :drain}, {:reply, :ok}} ->
+        state = %{state | pending: Map.delete(state.pending, sink)}
+
+        if map_size(state.pending) == 0 do
+          Process.cancel_timer(state.timer)
+          notify(state, if(state.mode == :stopping, do: :stopped, else: :completed))
+          {:stop, :normal, state}
+        else
+          {:noreply, state}
+        end
+
       {sink, %{stage: :push} = pending, {:reply, :ok}} ->
         id =
           :gen_server.send_request(sink, {:vxpipe_audio_output_finish, state.correlation, self()})
@@ -217,6 +238,7 @@ defmodule Vxpipe.CallEngine.WaitSounds.Player do
       byte_order: :little,
       payload: payload,
       audio_scope: :private,
+      output_generation: state.output_generation,
       reply_to: self()
     }
   end

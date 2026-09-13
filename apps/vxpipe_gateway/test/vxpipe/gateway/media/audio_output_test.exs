@@ -187,6 +187,81 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
     assert payload == :binary.copy(<<2, 0>>, 960)
   end
 
+  test "remote drain waits for the exact provider mark and a clear supersedes it" do
+    {output, connection} =
+      start_output(playback_control: %{socket_owner: self(), stream_id: "stream"})
+
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, _, ^output}
+    send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+    assert :ok = push(output, connection, :binary.copy(<<1, 0>>, 960))
+    assert :ok = finish(output)
+    send(output, {:vxpipe_audio_output_pipeline_sent, pipeline_id, 0})
+    assert_receive {:vxpipe_audio_playback, ^output, "turn-test", {:completed, 20}}
+    drain = :gen_server.send_request(output, :vxpipe_audio_output_drain)
+    assert_receive {:vxpipe_playback_command, "stream", :drain, ^output, mark}
+    assert :timeout = :gen_server.wait_response(drain, 0)
+    send(output, {:vxpipe_playback_ack, make_ref(), :ok})
+    _ = :sys.get_state(output)
+    assert :timeout = :gen_server.wait_response(drain, 0)
+    clear = :gen_server.send_request(output, :vxpipe_audio_output_clear)
+    assert_receive {:vxpipe_playback_command, "stream", :clear, ^output, cleared}
+    assert {:reply, {:error, :cleared}} = :gen_server.wait_response(drain, 1_000)
+    send(output, {:vxpipe_playback_ack, mark, :ok})
+    _ = :sys.get_state(output)
+    assert :timeout = :gen_server.wait_response(clear, 0)
+    send(output, {:vxpipe_playback_ack, cleared, :ok})
+    assert {:reply, {:ok, 0}} = :gen_server.wait_response(clear, 1_000)
+    drain = :gen_server.send_request(output, :vxpipe_audio_output_drain)
+    assert_receive {:vxpipe_playback_command, "stream", :drain, ^output, mark}
+    send(output, {:vxpipe_playback_ack, mark, :ok})
+    assert {:reply, :ok} = :gen_server.wait_response(drain, 1_000)
+    assert :ok = push(output, connection, :binary.copy(<<2, 0>>, 960))
+
+    assert_receive {:test_audio_output_pipeline_push, ^pipeline_id,
+                    %PlaybackFrame{timestamp: 960}}
+  end
+
+  test "a missing remote playback acknowledgement fails closed" do
+    {output, _connection} =
+      start_output(playback_control: %{socket_owner: self(), stream_id: "stream"})
+
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, _, ^output}
+    send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+    monitor = Process.monitor(output)
+    request = :gen_server.send_request(output, :vxpipe_audio_output_drain)
+    assert_receive {:vxpipe_playback_command, "stream", :drain, ^output, mark}
+    send(output, {:playback_ack_timeout, mark})
+    assert {:reply, {:error, :playback_unavailable}} = :gen_server.wait_response(request, 1_000)
+    assert_receive {:DOWN, ^monitor, :process, ^output, :audio_output_unavailable}
+  end
+
+  test "the arbiter keeps conversation closed until the remote drain is acknowledged" do
+    alias Vxpipe.CallEngine.Media.OutputSink
+    alias Vxpipe.Gateway.Media.OutputArbiter
+
+    {native, connection} =
+      start_output(playback_control: %{socket_owner: self(), stream_id: "stream"})
+
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, _, ^native}
+    send(native, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+
+    output =
+      start_supervised!(
+        {OutputArbiter, connection_id: connection, native_output: native, owner: self()}
+      )
+
+    drain = :gen_server.send_request(output, :vxpipe_audio_output_drain)
+    assert_receive {:vxpipe_playback_command, "stream", :drain, ^native, mark}
+    assert {:error, :output_not_drained} = OutputSink.release(output, 0)
+
+    assert {:error, :draining} =
+             OutputSink.push(output, frame(:binary.copy(<<1, 0>>, 960), connection))
+
+    send(native, {:vxpipe_playback_ack, mark, :ok})
+    assert {:reply, :ok} = :gen_server.wait_response(drain, 1_000)
+    assert :ok = OutputSink.release(output, 0)
+  end
+
   defp start_output(options) do
     connection_id = unique_id("connection")
 

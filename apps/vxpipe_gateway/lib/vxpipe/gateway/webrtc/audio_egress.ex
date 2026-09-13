@@ -102,6 +102,16 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     {:reply, {:error, :recording_already_bound}, state}
   end
 
+  def handle_call(
+        :vxpipe_audio_output_drain,
+        _from,
+        %{current: nil, pace_ref: nil, pending_clear: nil} = state
+      ),
+      do: {:reply, :ok, state}
+
+  def handle_call(:vxpipe_audio_output_drain, _from, state),
+    do: {:reply, {:error, :output_not_drained}, state}
+
   def handle_call(:vxpipe_audio_output_clear, from, %{pending_clear: nil} = state) do
     state = state |> reply_to_pending_calls() |> discard_queued()
 

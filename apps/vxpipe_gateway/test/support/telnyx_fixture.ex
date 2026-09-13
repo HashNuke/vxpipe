@@ -49,7 +49,8 @@ defmodule Vxpipe.Gateway.TelnyxFixture do
          ] <- sent_upgrades(upgraded),
          {:ok, socket} <- MediaSocket.init(%{binding: binding}),
          {:ok, socket} <-
-           MediaSocket.handle_in({body("media-start", replacements), opcode: :text}, socket) do
+           MediaSocket.handle_in({body("media-start", replacements), opcode: :text}, socket),
+         {:ok, socket} <- Vxpipe.Gateway.TestSocketDispatch.await(socket) do
       {:ok, binding, socket}
     else
       _invalid -> {:error, :media_harness_failed}

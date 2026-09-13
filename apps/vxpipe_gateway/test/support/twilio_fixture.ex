@@ -40,7 +40,8 @@ defmodule Vxpipe.Gateway.TwilioFixture do
              [timeout: 30_000, max_frame_size: 131_072, early_validate_upgrade: false]}}
          ] <- sent_upgrades(upgraded),
          {:ok, socket} <- MediaSocket.init(%{binding: binding, clock: clock}),
-         {:ok, socket} <- MediaSocket.handle_in(text(start(call_sid, stream_sid)), socket) do
+         {:ok, socket} <- MediaSocket.handle_in(text(start(call_sid, stream_sid)), socket),
+         {:ok, socket} <- Vxpipe.Gateway.TestSocketDispatch.await(socket) do
       {:ok, binding, socket}
     else
       _invalid -> {:error, :media_harness_failed}

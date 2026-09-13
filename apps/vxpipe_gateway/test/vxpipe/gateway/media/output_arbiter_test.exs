@@ -198,6 +198,17 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert :ok = OutputArbiter.push_room(output, binding, mixed(0))
   end
 
+  test "WebRTC drain requires the final paced frame to finish" do
+    {output, native} = start_output()
+    assert :ok = OutputSink.push(output, direct("cue"))
+    assert :ok = OutputSink.finish(output, "cue", self())
+    assert_receive {:pace, ^native, tick}
+    assert {:error, :output_not_drained} = OutputSink.drain(output)
+    send(native, tick)
+    assert_receive {:vxpipe_audio_playback, ^output, "cue", {:completed, 20}}
+    assert :ok = OutputSink.drain(output)
+  end
+
   defp start_output do
     observer = self()
 

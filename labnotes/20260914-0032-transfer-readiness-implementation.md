@@ -138,3 +138,58 @@ dependency checks all passed. Shared output integration and provider playback ma
   timeout. Its five focused tests passed unchanged. The complete root recheck then passed all
   five gates: formatting, warnings-as-errors compilation, strict Credo, 1,042 tests with zero
   failures (15 excluded integrations), and unused-dependency checks.
+
+## Phone playback marks and finite cue drain
+
+- Primary provider contracts checked: [Twilio WebSocket messages](https://www.twilio.com/docs/voice/media-streams/websocket-messages)
+  and [Telnyx media streaming](https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming).
+  Both return pending marks on clear as well as ordinary completion. Therefore clear cancels the
+  previous pending request before emitting a fresh marker after the clear command. Only that exact
+  new marker may acknowledge the clear. Duplicate/stale marks are ignored and foreign streams
+  fail socket validation. Marker names are opaque random values; payloads and participant data
+  are not embedded in them.
+- Gateway sockets retain at most one pending playback-control request. Playback feedback stays
+  at the Gateway media boundary; the engine telephony event adapter retains its existing event
+  contract and ignores transport marks after validation.
+- Added explicit final `OutputSink.drain/1`. Native phone output waits for the exact mapped
+  socket acknowledgement, rejects new writes meanwhile, and fails closed after a bounded missing
+  acknowledgement. Clear supersedes an outstanding drain without accepting its late callback.
+  WebRTC requires its last paced packet to finish. Arbiter release remains closed during drain.
+- Finite cue players now drain all sinks after the last locally completed frame before reporting
+  completion. Looping waits still pace one frame at a time without imposing one network round-trip
+  per 20 ms audio frame. Players carry the held output generation into their private frames.
+- Focused socket checks first failed on missing commands; native tests first failed on missing
+  drain support; arbiter tests first failed on missing forwarding; the cue test first failed on
+  the missing held generation. Forty Gateway output/socket/decoder checks and six engine player
+  checks pass. Full-root results follow separately. These are deterministic protocol checks;
+  audible provider and rendered browser acceptance remain pending.
+- The first root run exposed an old Twilio session fixture that discarded playback-control
+  commands. Updated that simulated socket to process clear/mark ordering and acknowledge the
+  generated marker; its real PCMU ingress/egress and interruption test now passes. The next root
+  run hit a separate 100 ms room-mixer policy fixture timeout; that fixture-only fix has its own
+  checkpoint labnote and commit.
+- Review found a potential synchronous cycle: a phone socket could wait for a call event whose
+  processing awaited a playback mark on that socket. Both provider sockets now submit call events
+  asynchronously, preserving the originating socket identity and event ordering. Outstanding
+  events are bounded to 128; saturated media is discarded, control saturation fails closed, and
+  each request retains the existing five-second deadline. Playback marks stay immediately
+  serviceable. Two regressions first reproduced blocked event dispatch, then passed with the
+  actual leg deliberately suspended while the socket processed a playback acknowledgement.
+
+### Next integration findings
+
+The playback-marks checkpoint passes all five root gates: formatting, warnings-as-errors
+compilation, strict Credo, 1,053 umbrella tests with zero failures (15 excluded integrations),
+and unused-dependency checks. Existing complete phone-transfer harnesses now explicitly await
+the asynchronous start-event acknowledgement before inspecting their media sessions.
+
+- Native phone output still relies on Membrane.Realtimer for local pacing. Its installed
+  implementation sends timestamps that are behind wall time immediately. Because the retained
+  output sequence excludes idle gaps, restarting a loop after idle can enqueue audio faster than
+  playback until the stream catches up. Before enabling lifecycle waits, add a native pacing
+  boundary that prevents this burst while retaining the codec/timeline. Provider final marks
+  prove drain but are not a substitute for bounded local pacing.
+- `Startup.start_entries/3` still performs entry activation and TTS/opening preparation in the
+  room startup path; `StartupReadiness` still keys completion to caller attachment/STT. The next
+  orchestration work must expose early caller output, prepare resources asynchronously and build
+  the complete candidate resource set before using the new holds, players and drain barrier.

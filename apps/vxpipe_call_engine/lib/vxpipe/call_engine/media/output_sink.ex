@@ -16,6 +16,9 @@ defmodule Vxpipe.CallEngine.Media.OutputSink do
   def clear(sink) when is_pid(sink), do: safe_call(sink, :vxpipe_audio_output_clear)
 
   @doc false
+  def drain(sink) when is_pid(sink), do: safe_call(sink, :vxpipe_audio_output_drain)
+
+  @doc false
   def hold(sink, generation) when is_pid(sink) and is_integer(generation) and generation > 0,
     do: safe_call(sink, {:vxpipe_audio_output_hold, generation})
 

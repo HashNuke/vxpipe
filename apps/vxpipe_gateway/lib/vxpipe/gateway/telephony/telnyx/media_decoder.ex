@@ -7,7 +7,9 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaDecoder do
   @maximum_message_bytes 131_072
 
   @spec decode(keyword(), binary()) ::
-          {:ok, Event.t()} | :ignore | {:error, :invalid_telnyx_media_message}
+          {:ok, Event.t() | {:playback_mark, String.t(), String.t()}}
+          | :ignore
+          | {:error, :invalid_telnyx_media_message}
   def decode(options, message)
       when is_list(options) and is_binary(message) and
              byte_size(message) <= @maximum_message_bytes do
@@ -119,6 +121,20 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.MediaDecoder do
       _invalid -> invalid()
     end
   end
+
+  defp decode_event(options, %{"event" => "mark", "mark" => mark} = message) when is_map(mark) do
+    with {:ok, stream_id} <- present_string(message, "stream_id"),
+         :ok <- required_expected(options, :stream_id, stream_id),
+         {:ok, _sequence} <- non_negative_integer(message, "sequence_number"),
+         {:ok, name} <- present_string(mark, "name"),
+         true <- byte_size(name) <= 128 do
+      {:ok, {:playback_mark, stream_id, name}}
+    else
+      _invalid -> invalid()
+    end
+  end
+
+  defp decode_event(_options, %{"event" => "mark"}), do: invalid()
 
   defp decode_event(options, %{"event" => "stop"} = message) do
     stop = Map.get(message, "stop")

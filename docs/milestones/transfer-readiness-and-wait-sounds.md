@@ -441,3 +441,17 @@ pending private playback. Generation-fenced output holds and drain-before-releas
 for lifecycle integration. The eight focused regressions and existing web/phone attachment and
 human-transfer checks pass. Wait/cue phase orchestration and phone playback marks remain pending,
 so the private paced playback checkpoint and milestone acceptance remain unchecked.
+
+Finite cue completion now includes explicit final drain on every sink. Phone output maps drain
+and clear to exact provider playback marks on the bound stream; clear cancels older marks before
+issuing its own acknowledgement marker. WebRTC drain requires completion of the final paced
+packet. Shared output rejects conversation/release while drain is pending and phone acknowledgement
+failure closes the output. Deterministic socket/native/arbiter/player checks cover these boundaries;
+this does not yet establish audible live-provider acceptance or integrate the transfer barrier.
+Phone socket call-event dispatch is now asynchronous and bounded so call processing cannot block
+the same socket's playback acknowledgements. Both provider checks pass with the leg dispatcher
+deliberately suspended while a mark is processed.
+
+All five root gates pass for the playback-marks checkpoint, including 1,053 umbrella tests with
+zero failures (15 integrations excluded). Local phone pacing after idle, initial waits, common
+readiness, coordinated transfer release, and rendered/live-provider acceptance remain incomplete.

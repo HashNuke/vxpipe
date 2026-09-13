@@ -53,7 +53,7 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
       :dropped ->
         discard(frame.timestamp, state)
 
-      {:error, reason} when reason in [:held, :clearing, :stale_output_generation] ->
+      {:error, reason} when reason in [:held, :clearing, :draining, :stale_output_generation] ->
         discard(frame.timestamp, state)
 
       {:error, reason} ->

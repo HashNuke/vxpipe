@@ -37,5 +37,10 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.Adapter do
   end
 
   @impl true
-  def decode_media_message(options, message), do: MediaDecoder.decode(options, message)
+  def decode_media_message(options, message) do
+    case MediaDecoder.decode(options, message) do
+      {:ok, {:playback_mark, _, _}} -> :ignore
+      result -> result
+    end
+  end
 end

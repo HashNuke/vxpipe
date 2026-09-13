@@ -82,7 +82,12 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.Adapter do
   def decode_webhook(_options, %Webhook{} = webhook), do: WebhookDecoder.decode(webhook)
 
   @impl true
-  def decode_media_message(options, message), do: MediaDecoder.decode(options, message)
+  def decode_media_message(options, message) do
+    case MediaDecoder.decode(options, message) do
+      {:ok, {:playback_mark, _, _}} -> :ignore
+      result -> result
+    end
+  end
 
   defp submission({:accepted, body}, nil) do
     with %{} = data <- Map.get(body, "data"),

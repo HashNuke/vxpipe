@@ -74,6 +74,88 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.MediaSocketTest do
     assert socket.stream_id == @stream_sid
   end
 
+  test "drain waits for its exact mark and clear cancels older marks", context do
+    assert {:ok, socket} = MediaSocket.handle_in(text(start_message()), context.socket)
+    first = make_ref()
+
+    assert {:push, [{:text, mark}], socket} =
+             MediaSocket.handle_info(
+               {:vxpipe_playback_command, @stream_sid, :drain, self(), first},
+               socket
+             )
+
+    name = JSON.decode!(mark)["mark"]["name"]
+    refute_receive {:vxpipe_playback_ack, ^first, _}
+
+    clear = make_ref()
+
+    assert {:push, [{:text, clear_json}, {:text, after_clear}], socket} =
+             MediaSocket.handle_info(
+               {:vxpipe_playback_command, @stream_sid, :clear, self(), clear},
+               socket
+             )
+
+    assert JSON.decode!(clear_json) == %{"event" => "clear", "streamSid" => @stream_sid}
+    assert_receive {:vxpipe_playback_ack, ^first, {:error, :cleared}}
+    assert {:ok, socket} = MediaSocket.handle_in(text(mark_message(name)), socket)
+    refute_receive {:vxpipe_playback_ack, ^clear, _}
+    name = JSON.decode!(after_clear)["mark"]["name"]
+    assert {:ok, socket} = MediaSocket.handle_in(text(mark_message(name)), socket)
+    assert_receive {:vxpipe_playback_ack, ^clear, :ok}
+    assert {:ok, _socket} = MediaSocket.handle_in(text(mark_message(name)), socket)
+    refute_receive {:vxpipe_playback_ack, _, _}
+  end
+
+  test "a foreign stream cannot acknowledge an outstanding drain", context do
+    assert {:ok, socket} = MediaSocket.handle_in(text(start_message()), context.socket)
+    request = make_ref()
+
+    assert {:push, [{:text, mark}], socket} =
+             MediaSocket.handle_info(
+               {:vxpipe_playback_command, @stream_sid, :drain, self(), request},
+               socket
+             )
+
+    name = JSON.decode!(mark)["mark"]["name"]
+    message = Map.put(mark_message(name), "streamSid", "MZffffffffffffffffffffffffffffffff")
+    assert {:stop, :invalid_media_message, _, _} = MediaSocket.handle_in(text(message), socket)
+    refute_receive {:vxpipe_playback_ack, ^request, _}
+  end
+
+  test "processes playback marks while the call event dispatcher is busy", context do
+    :ok = :sys.suspend(context.leg)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(context.leg)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+    assert {:ok, socket} = MediaSocket.handle_in(text(start_message()), context.socket)
+    request = make_ref()
+
+    assert {:push, [{:text, mark}], socket} =
+             MediaSocket.handle_info(
+               {:vxpipe_playback_command, @stream_sid, :drain, self(), request},
+               socket
+             )
+
+    name = JSON.decode!(mark)["mark"]["name"]
+    assert {:ok, _socket} = MediaSocket.handle_in(text(mark_message(name)), socket)
+    assert_receive {:vxpipe_playback_ack, ^request, :ok}
+    :ok = :sys.resume(context.leg)
+  end
+
+  defp mark_message(name),
+    do: %{
+      "event" => "mark",
+      "streamSid" => @stream_sid,
+      "sequenceNumber" => "4",
+      "mark" => %{"name" => name}
+    }
+
   defp text(message), do: {JSON.encode!(message), opcode: :text}
 
   defp start_message do

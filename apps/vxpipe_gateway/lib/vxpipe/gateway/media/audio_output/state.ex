@@ -15,6 +15,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
   defstruct @enforce_keys ++
               [
                 current: nil,
+                playback_control: nil,
+                remote_playback: nil,
                 pending_clear: nil,
                 delivered_sequence_next: 0,
                 in_flight: nil,
@@ -48,6 +50,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutput.State do
       owner: Keyword.fetch!(options, :owner),
       pipeline: Keyword.fetch!(options, :pipeline),
       pipeline_options: Keyword.get(options, :pipeline_options, []),
+      playback_control: Keyword.get(options, :playback_control),
       playback_clearer:
         Keyword.get(options, :playback_clearer, Vxpipe.Gateway.Media.PlaybackClearer.Noop),
       pipeline_supervisor: Keyword.fetch!(options, :pipeline_supervisor),

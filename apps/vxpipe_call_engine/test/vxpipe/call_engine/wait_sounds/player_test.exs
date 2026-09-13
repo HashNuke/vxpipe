@@ -97,6 +97,32 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     assert_receive {:DOWN, ^monitor, :process, ^player, :normal}
   end
 
+  test "finite cues await final drain on every output and carry the held generation" do
+    second =
+      start_supervised!({TestAudioOutputSink, observer: self(), defer_drain: true},
+        id: make_ref()
+      )
+
+    {player, first} =
+      start_player(asset(:binary.copy(<<1, 0>>, 960)), "cue-drain",
+        loop: false,
+        output_generation: 2,
+        extra_sink: second
+      )
+
+    assert_receive {:test_audio_output, ^first, frame}
+    assert Map.get(frame, :output_generation) == 2
+    assert_receive {:test_audio_output_finish, ^first, _}
+    assert_receive {:test_audio_output_finish, ^second, _}
+    complete(first)
+    complete(second)
+    assert_receive {:test_audio_output_drain, ^first}
+    assert_receive {:test_audio_output_drain, ^second}
+    refute_receive {:vxpipe_wait_playback, ^player, "cue-drain", :completed}
+    assert :ok = GenServer.call(second, :complete_drain)
+    assert_receive {:vxpipe_wait_playback, ^player, "cue-drain", :completed}
+  end
+
   defp start_player(asset, episode, options \\ []) do
     sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
 

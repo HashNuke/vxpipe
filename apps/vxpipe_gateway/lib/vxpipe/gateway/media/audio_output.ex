@@ -3,6 +3,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
 
   use GenServer
 
+  alias Vxpipe.Gateway.Media.AudioOutput.RemotePlayback
+
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
   alias Vxpipe.CallEngine.Recording.EgressHandoff
   alias Vxpipe.Gateway.Media.EgressAcceptance
@@ -81,11 +83,12 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   end
 
   def handle_call(:vxpipe_audio_output_clear, from, %{pending_clear: nil} = state) do
-    state = state |> reply_pending() |> discard_queued()
+    state = state |> RemotePlayback.cancel() |> reply_pending() |> discard_queued()
 
     if is_nil(state.in_flight) do
-      case complete_clear(state) do
+      case complete_clear(%{state | pending_clear: from}) do
         {:ok, played, state} -> {:reply, {:ok, played}, state}
+        {:pending, state} -> {:noreply, state}
         {:error, reason} -> {:reply, {:error, reason}, state}
       end
     else
@@ -97,9 +100,30 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
     do: {:reply, {:error, :clearing}, state}
 
   def handle_call(
+        :vxpipe_audio_output_drain,
+        from,
+        %{
+          current: nil,
+          in_flight: nil,
+          pending_clear: nil,
+          remote_playback: nil,
+          pipeline_ready?: true
+        } = state
+      ) do
+    if state.playback_control do
+      {:noreply, RemotePlayback.start(state, :drain, from, 0)}
+    else
+      {:reply, :ok, state}
+    end
+  end
+
+  def handle_call(:vxpipe_audio_output_drain, _from, state),
+    do: {:reply, {:error, :output_not_drained}, state}
+
+  def handle_call(
         {:vxpipe_audio_output, %AudioOutputFrame{} = frame},
         from,
-        %{pending_push: nil, pending_clear: nil} = state
+        %{pending_push: nil, pending_clear: nil, remote_playback: nil} = state
       ) do
     with :ok <- Validation.frame(frame, state),
          {:ok, state} <- Validation.establish_turn(frame, state) do
@@ -116,7 +140,8 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   def handle_call(
         {:vxpipe_audio_output_finish, turn, callback},
         from,
-        %{pending_finish: nil, pending_push: nil, pending_clear: nil} = state
+        %{pending_finish: nil, pending_push: nil, pending_clear: nil, remote_playback: nil} =
+          state
       ) do
     with :ok <- Validation.turn(turn, callback, state) do
       prepare_finish(from, state)
@@ -172,6 +197,9 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
         GenServer.reply(from, {:ok, played})
         {:noreply, state}
 
+      {:pending, state} ->
+        {:noreply, state}
+
       {:error, reason} ->
         GenServer.reply(from, {:error, reason})
         stop_unavailable(reason, state)
@@ -200,7 +228,33 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
     stop_unavailable(reason, PipelineLifecycle.clear_pipeline(state))
   end
 
+  def handle_info(
+        {:vxpipe_playback_ack, request, result},
+        %{remote_playback: %{request: request}} = state
+      ) do
+    finish_remote_playback(result, state)
+  end
+
+  def handle_info(
+        {:playback_ack_timeout, request},
+        %{remote_playback: %{request: request}} = state
+      ) do
+    finish_remote_playback({:error, :timeout}, state)
+  end
+
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp finish_remote_playback(result, state) do
+    action = state.remote_playback.action
+    state = RemotePlayback.complete(state, result)
+
+    if result == :ok do
+      state = if action == :clear, do: %{clear_turn(state) | pending_clear: nil}, else: state
+      {:noreply, state}
+    else
+      stop_unavailable(:playback_unavailable, state)
+    end
+  end
 
   defp accept_push(pcm, from, state) do
     case Buffering.accept(pcm, state) do
@@ -366,8 +420,12 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   defp complete_clear(state) do
     played = if state.current, do: state.current.played_frames * @frame_duration_ms, else: 0
 
-    with :ok <- state.playback_clearer.clear(state.pipeline_options) do
-      {:ok, played, %{clear_turn(state) | pending_clear: nil}}
+    if state.playback_control do
+      {:pending, RemotePlayback.start(state, :clear, state.pending_clear, played)}
+    else
+      with :ok <- state.playback_clearer.clear(state.pipeline_options) do
+        {:ok, played, %{clear_turn(state) | pending_clear: nil}}
+      end
     end
   end
 
