@@ -50,8 +50,8 @@ Reception prepares a human web destination. That person privately hears permitte
 
 1. Configure and migrate `VXPIPE_DATABASE_URL`, provide valid Gemini and Deepgram development
    keys, then start `bin/dev`.
-2. Open `/`, create a room, connect the Pipecat caller console, and ask to be transferred to human
-   support with a concise purpose.
+2. Open `/pipecat-console`, create a room, connect the Pipecat caller console, and ask to be
+   transferred to human support with a concise purpose.
 3. Open `/transfer` in a second browser/device and connect within the 30-second attempt deadline.
    Verify only the destination hears the private briefing and configured notice; neither web human
    can exchange main-room audio before acceptance.

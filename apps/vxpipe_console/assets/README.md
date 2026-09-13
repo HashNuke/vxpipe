@@ -6,7 +6,8 @@ behavior in the browser. The Console's Phoenix endpoint supervises Phoenix's esb
 wrapper as its development watcher and uses LiveReload for browser refreshes;
 `mix assets.deploy` writes the minified release bundle to the Console application's
 ignored `priv/static/assets` directory. Phoenix serves the UI and mounted gateway
-from one listener.
+from one listener. The caller playground is mounted at `/pipecat-console`; the root is a directory
+of the available Console interfaces.
 
 The esbuild profile has independent named entries for the React sample, the shared LiveView client,
 call-inspection styles, and diagnostics styles. Operator assets are served by the same Phoenix
@@ -58,7 +59,7 @@ spoken through the configured Deepgram path.
 1. Put valid `GEMINI_API_KEY` and `DEEPGRAM_API_KEY` values in the repository-root
    `.env` file.
 2. From the repository root, run `bin/dev`.
-3. Open `https://<this-machine's-tailscale-fqdn>:4000/`, choose **Create room**,
+3. Open `https://<this-machine's-tailscale-fqdn>:4000/pipecat-console`, choose **Create room**,
    and then choose **Connect** in the Pipecat console.
 4. Type or say: `Use the get_current_time tool and tell me the current UTC time.`
 5. In the console event log, verify an `llm-function-call-in-progress` event for
@@ -75,7 +76,7 @@ is a failed test.
 
 1. Configure and migrate `VXPIPE_DATABASE_URL`, provide valid Gemini and Deepgram
    development keys, and start `bin/dev`.
-2. Open `/` as the caller, choose **Create room**, then connect the Pipecat console.
+2. Open `/pipecat-console` as the caller, choose **Create room**, then connect the Pipecat console.
 3. Open `/transfer` in a second browser or device. Use headphones when both clients are on one
    machine so the two live microphones do not feed each other.
 4. In the caller console, type or say: `Please transfer me to human support. I need help with my

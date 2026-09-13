@@ -35,7 +35,8 @@ defmodule Vxpipe.Console.Router do
   scope "/" do
     pipe_through :browser
 
-    get "/", Vxpipe.Console.PageController, :index
+    get "/", Vxpipe.Console.HomeController, :index
+    get "/pipecat-console", Vxpipe.Console.PageController, :index
     get "/transfer", Vxpipe.Console.PageController, :index
     get "/operator/sign-in", Vxpipe.Console.OperatorSessionController, :new
     post "/operator/session", Vxpipe.Console.OperatorSessionController, :create

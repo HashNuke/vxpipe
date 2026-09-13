@@ -15,13 +15,16 @@ The React voice playground source lives under `assets/`. Phoenix's `esbuild` Hex
 integration owns development watching and release bundling; Phoenix LiveReload
 refreshes the browser after watched changes. There is no separate frontend HTTP
 server or Goreman application. `mix assets.build` writes the React `app.js` and `app.css`, shared
-LiveView `live.js`, and separate `call_inspection.css` and `diagnostics.css` outputs into the
-application's ignored `priv/static/assets` directory. Call inspection and diagnostics select their
-own socket paths through their HTML roots while sharing the same LiveView client module.
-The Console root serves the tracked SPA index and `Plug.Static` serves all revalidated
-`/assets/*` files. If either compiled sample bundle is absent, the root returns
-503 rather than a nonfunctional shell. The separate bounded diagnostics surface
-remains available at `/diagnostics`. This application does not own Ecto or call
+LiveView `live.js`, Console directory `home.css`, and separate `call_inspection.css` and
+`diagnostics.css` outputs into the application's ignored `priv/static/assets` directory. Call
+inspection and diagnostics select their own socket paths through their HTML roots while sharing
+the same LiveView client module.
+
+The Console root is a small directory of browser-facing interfaces. The tracked React SPA index is
+served at `/pipecat-console` for the caller sample and `/transfer` for its transfer destination.
+`Plug.Static` serves all revalidated `/assets/*` files. If either compiled sample bundle is absent,
+those SPA routes return 503 rather than a nonfunctional shell. The separate bounded diagnostics
+surface remains available at `/diagnostics`. This application does not own Ecto or call
 protocol implementations; as the repository executable host, it may compose and
 start their owning umbrella applications.
 

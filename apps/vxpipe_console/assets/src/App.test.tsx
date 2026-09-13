@@ -40,7 +40,7 @@ vi.mock("@pipecat-ai/voice-ui-kit", () => ({
 import App from "./App";
 
 beforeEach(() => {
-  window.history.replaceState({}, "", "/");
+  window.history.replaceState({}, "", "/pipecat-console");
 });
 
 afterEach(() => {
@@ -49,7 +49,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("starts on a dedicated room-creation page", () => {
+test("starts on the Pipecat Console room-creation page", () => {
   render(<App />);
 
   expect(screen.getByRole("button", { name: "Create room" })).toBeInTheDocument();
