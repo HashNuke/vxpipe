@@ -170,6 +170,18 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   @impl true
+  def handle_call(:vxpipe_connection_readiness, _from, state) do
+    binding =
+      Vxpipe.Gateway.Media.ConnectionReadiness.binding(
+        state,
+        __MODULE__,
+        Readiness.binding(state),
+        state.audio_egress
+      )
+
+    {:reply, {:ok, binding}, state}
+  end
+
   def handle_call(:media_readiness_binding, _from, state) do
     {:reply, {:ok, Readiness.binding(state)}, state}
   end

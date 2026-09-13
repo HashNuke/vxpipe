@@ -179,6 +179,59 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert_receive {:test_stt_transport_started, support_stt, _connection}, 2_000
 
+    assert {:ok, output, :ready} =
+             Vxpipe.Gateway.WebRTC.Connection.readiness(support_client.connection_id)
+
+    identity = %{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id,
+      participant_id: support.participant_id,
+      connection_id: support_client.connection_id
+    }
+
+    policy =
+      room.incarnation_id
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.whereis()
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.snapshot()
+
+    assert {:ok, graph} =
+             Vxpipe.CallEngine.Media.ConnectionReadiness.prepare(
+               output.instance,
+               identity,
+               policy,
+               audio_input?: true,
+               room_output?: true,
+               speech_to_text?: true
+             )
+
+    assert Enum.any?(graph, &(&1.kind == :speech_to_text_ingress))
+    assert Enum.any?(graph, &(&1.kind == :speech_to_text))
+
+    collector =
+      start_supervised!(
+        {Vxpipe.CallEngine.Readiness.Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: attempt_id,
+         resources: graph,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector,
+                    %{status: :preparing, blockers: blockers}},
+                   2_000
+
+    assert Enum.any?(blockers, &(&1.kind == :speech_to_text))
+    refute_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
+
+    TestSpeechToTextTransport.deliver(
+      support_stt,
+      ~s({"type":"Connected","request_id":"support-request","sequence_id":0})
+    )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+
     # RTP time advances during the private briefing even when this fixture is silent.
     # The unchanged caller normalizer retains its original clock alignment.
     elapsed_ms = System.monotonic_time(:millisecond) - caller_audio_started_at

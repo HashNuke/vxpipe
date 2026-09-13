@@ -582,3 +582,16 @@ rejection of stale/altered candidates. All five root gates pass with 1,127 tests
 15 integrations excluded. Complete resource enumeration, preparing affected enforcers behind closed
 gates, installing prepared bindings at commit and startup/transfer lifecycle integration remain
 unfinished. This preview is a planning boundary, not transfer authorization or a readiness barrier.
+
+Connection preparation now aggregates transport, private/native output, demanded decoder/STT
+handoffs and room-route dependencies outside connection callbacks through one bounded engine protocol.
+Its typed result includes the exact connection binding and prepared input track needed for recording.
+Receive-only connections cannot acquire input demand, unprepared policy intervals are rejected, and
+changed/foreign bindings or missing adapters fail closed. Cold pipeline adapters load before callback
+reflection. Thirty-nine focused engine checks and 31 gateway checks pass, including WebRTC and both
+phone media graphs before audio, unchanged resources after packet delivery and delayed STT connection
+acknowledgement followed by transcription. All five root gates pass with 1,135 tests, zero failures
+and 15 integrations excluded. Full prospective room inventory, candidate-resource preparation and
+startup/transfer wait/cue/release orchestration remain unfinished. The speech fixture uses the current
+post-promotion attachment; phone graph fixtures do not select STT, and rendered/live-provider
+acceptance is not claimed.

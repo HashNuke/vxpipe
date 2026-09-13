@@ -325,6 +325,42 @@ binding without resetting sequence/timestamp state or re-emitting formats. Real 
 checks cover all three transports through the common ingress and require no microphone sample.
 Prospective inventory and lifecycle integration remain unfinished.
 
+## Connection resource graphs
+
+Call Engine now has a transport-independent preparation query for an exact attached connection.
+The connection callback supplies its current binding only; a supervised bounded worker invokes the
+Gateway adapter and rechecks that binding afterward. The default total query limit is five seconds;
+lifecycle callers must cap it to their remaining attempt budget and run it outside RoomAuthority.
+Timeout cancels the query worker. Identity mismatches, missing adapters, foreign resource scopes,
+duplicate resource identities and changed connection bindings cannot produce a usable graph.
+
+`prepare_graph` returns a `PreparedConnection` with the exact identity, connection generation,
+native input-track metadata and resources from that same bounded observation. Input metadata
+is nil when input was not demanded; a demanded input cannot silently omit its track. This supplies
+the track identity needed for individual recording writers without a later unfenced transport lookup.
+`prepare` is the resource-list projection for callers that only need collection.
+
+WebRTC and phone sessions use the same graph adapter. Private/native output and transport evidence
+are always included; room input, room output and speech input are explicit demands. A demanded input
+uses the negotiated or authenticated track to prepare only its existing decoder and/or STT handoff.
+The graph includes their actual dependencies, including mixer subscription and revocable output
+route bindings. The adapter checks the requested scoped policy intervals before preparation and
+again before returning, so an installed current-policy graph cannot stand in for an unprepared
+candidate configuration. These queries do not change media gates or start new capability processes.
+
+Receive-only attachments cannot demand microphone paths. Private transfer attachments still cannot
+demand main-room input/output: attempt-bound destination preparation remains a separate unfinished
+authorization step. The lifecycle owner must derive all demands from the prospective plan/policy and
+collect every required connection plus participant and room resources; a graph is not that complete
+inventory and cannot itself authorize release.
+
+Deterministic WebRTC/Telnyx/Twilio checks collect complete demanded media graphs before audio and
+retain them across real packet delivery. The WebRTC transfer fixture additionally verifies that its
+selected STT stays preparing until the provider's explicit connection acknowledgement, then carries
+audio and transcripts. That check uses the existing post-promotion attachment; it does not claim the
+new coordinated transfer lifecycle is implemented. Phone graph fixtures here do not select STT, and
+none of these checks substitute for rendered or live-provider acceptance.
+
 ## Phone transport
 
 Phone sockets now expose a bounded readiness query based on their validated media-start state.

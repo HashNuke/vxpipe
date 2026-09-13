@@ -41,12 +41,62 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     receiver_client = connect(receiver_session.session_id)
 
-    assert {:ok, [output, input] = resources} =
+    assert {:ok, [output, input]} =
              Connection.readiness_resources(caller_client.connection_id, input?: true)
 
     assert output.kind == :media_connection
     assert input.kind == :media_input
     assert input.scope == {:participant, caller.participant_id}
+
+    assert {:ok, graph} =
+             prepare_media(
+               output.instance,
+               plan,
+               room,
+               caller.participant_id,
+               caller_client.connection_id,
+               audio_input?: true,
+               room_output?: true
+             )
+
+    assert MapSet.new(graph, & &1.kind) ==
+             MapSet.new([
+               :media_connection,
+               :media_input,
+               :private_output,
+               :audio_output,
+               :room_audio_ingress,
+               :audio_input,
+               :room_audio_egress,
+               :audio_subscription,
+               :room_output_binding
+             ])
+
+    assert {:ok, binding} = GenServer.call(output.instance, :vxpipe_connection_readiness)
+
+    current_policy =
+      room.incarnation_id
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.whereis()
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.snapshot()
+
+    assert {:ok, candidate_policy} =
+             Vxpipe.CallEngine.MediaPolicy.Snapshot.prepare(
+               %{
+                 current_policy
+                 | revision: current_policy.revision + 1,
+                   effective: %{current_policy.effective | record_audio: false}
+               },
+               current_policy
+             )
+
+    assert {:error, :policy_not_prepared} =
+             Vxpipe.CallEngine.Media.ConnectionReadiness.prepare(
+               output.instance,
+               binding.identity,
+               candidate_policy,
+               audio_input?: true,
+               room_output?: true
+             )
 
     collector =
       start_supervised!(
@@ -54,7 +104,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
          owner: self(),
          incarnation_id: room.incarnation_id,
          attempt_id: "connected-media",
-         resources: resources,
+         resources: graph,
          deadline_ms: System.monotonic_time(:millisecond) + 5_000}
       )
 
@@ -66,13 +116,26 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     assert track.sample_rate == 48_000
     assert is_binary(track.track_id)
 
+    assert {:ok, preparation} =
+             Vxpipe.CallEngine.Media.ConnectionReadiness.prepare_graph(
+               output.instance,
+               binding.identity,
+               current_policy,
+               audio_input?: true,
+               room_output?: true
+             )
+
+    assert preparation.resources == graph
+    assert preparation.input_track == track
+    assert preparation.identity == binding.identity
+
     :ok = send_audio(caller_client, 1, 960, 8_000)
     receiver_packet = await_audio(receiver_client, 5_000)
     assert decodable_pcm_size(receiver_packet) == 1_920
-    caller = caller_client.client
+    caller_peer = caller_client.client
     caller_output_track_id = caller_client.output_track_id
 
-    refute_receive {:ex_webrtc, ^caller, {:rtp, ^caller_output_track_id, _rid, %Packet{}}},
+    refute_receive {:ex_webrtc, ^caller_peer, {:rtp, ^caller_output_track_id, _rid, %Packet{}}},
                    500
 
     :ok = send_audio(receiver_client, 1, 960, -8_000)
@@ -81,6 +144,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     assert {:ok, ^output, :ready} = Connection.readiness(caller_client.connection_id)
     assert {:ok, ^input, :ready} = Connection.input_readiness(caller_client.connection_id)
     assert {:ok, ^track} = Connection.input_track(caller_client.connection_id)
+
+    assert {:ok, ^graph} =
+             prepare_media(
+               output.instance,
+               plan,
+               room,
+               caller.participant_id,
+               caller_client.connection_id,
+               audio_input?: true,
+               room_output?: true
+             )
   end
 
   test "a receive-only connection can be ready without a negotiated input track" do
@@ -94,7 +168,37 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     client =
       connect(issue_session(plan, room, monitor.participant_id).session_id, direction: :recvonly)
 
-    assert {:ok, [output] = resources} = Connection.readiness_resources(client.connection_id)
+    assert {:ok, [output]} = Connection.readiness_resources(client.connection_id)
+
+    assert {:ok, graph} =
+             prepare_media(
+               output.instance,
+               plan,
+               room,
+               monitor.participant_id,
+               client.connection_id,
+               room_output?: true
+             )
+
+    assert MapSet.new(graph, & &1.kind) ==
+             MapSet.new([
+               :media_connection,
+               :private_output,
+               :audio_output,
+               :room_audio_egress,
+               :audio_subscription,
+               :room_output_binding
+             ])
+
+    assert {:error, :input_not_admitted} =
+             prepare_media(
+               output.instance,
+               plan,
+               room,
+               monitor.participant_id,
+               client.connection_id,
+               audio_input?: true
+             )
 
     collector =
       start_supervised!(
@@ -102,7 +206,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
          owner: self(),
          incarnation_id: room.incarnation_id,
          attempt_id: "receive-only-media",
-         resources: resources,
+         resources: graph,
          deadline_ms: System.monotonic_time(:millisecond) + 5_000}
       )
 
@@ -182,6 +286,21 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     refute_audio(caller_client, 500)
     refute_audio(receiver_client, 500)
     assert :ok = Connection.add_ice_candidates(monitor_client.connection_id, [])
+  end
+
+  defp prepare_media(connection, plan, room, participant_id, connection_id, demand) do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+
+    identity = %{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id,
+      participant_id: participant_id,
+      connection_id: connection_id
+    }
+
+    policy = room.incarnation_id |> Authority.whereis() |> Authority.snapshot()
+    Vxpipe.CallEngine.Media.ConnectionReadiness.prepare(connection, identity, policy, demand)
   end
 
   defp compile_plan do

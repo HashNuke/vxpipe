@@ -70,18 +70,20 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress.Readiness do
   defp prepare_pipeline(%{pipeline_id: nil}, _track), do: {:error, :unavailable}
 
   defp prepare_pipeline(binding, track) do
-    if function_exported?(binding.pipeline, :prepare_track, 2),
-      do: binding.pipeline.prepare_track(binding.pipeline_id, track),
-      else: {:error, :unsupported_pipeline}
+    if Code.ensure_loaded?(binding.pipeline) and
+         function_exported?(binding.pipeline, :prepare_track, 2),
+       do: binding.pipeline.prepare_track(binding.pipeline_id, track),
+       else: {:error, :unsupported_pipeline}
   end
 
   defp pipeline_readiness(%{pipeline_id: nil}), do: {:ok, nil, :preparing}
 
   defp pipeline_readiness(binding) do
     # The stored PID supervises Membrane; the registered ID addresses its actual pipeline.
-    if function_exported?(binding.pipeline, :readiness, 1),
-      do: validate(binding.pipeline.readiness(binding.pipeline_id), binding),
-      else: {:ok, nil, :failed}
+    if Code.ensure_loaded?(binding.pipeline) and
+         function_exported?(binding.pipeline, :readiness, 1),
+       do: validate(binding.pipeline.readiness(binding.pipeline_id), binding),
+       else: {:ok, nil, :failed}
   end
 
   defp validate({:ok, %Resource{kind: :audio_input} = input, status}, binding)

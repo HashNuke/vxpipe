@@ -61,7 +61,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     assert private_output.scope == {:participant, caller.participant_id}
     assert {:ok, _room_output, :ready} = RoomAudioEgress.readiness(snapshot.room_audio_egress)
 
-    assert {:ok, [media_connection, input, transport] = resources} =
+    assert {:ok, [media_connection, input, transport]} =
              Vxpipe.Gateway.Telephony.MediaSession.readiness_resources(
                binding.client_state_leg_id,
                input?: true
@@ -70,13 +70,49 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     assert transport.instance == socket
     assert input.kind == :media_input
 
+    identity = %{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id,
+      participant_id: caller.participant_id,
+      connection_id: binding.client_state_leg_id
+    }
+
+    policy =
+      room.incarnation_id
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.whereis()
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.snapshot()
+
+    assert {:ok, graph} =
+             Vxpipe.CallEngine.Media.ConnectionReadiness.prepare(
+               media_connection.instance,
+               identity,
+               policy,
+               audio_input?: true,
+               room_output?: true
+             )
+
+    assert MapSet.new(graph, & &1.kind) ==
+             MapSet.new([
+               :media_connection,
+               :media_input,
+               :phone_transport,
+               :private_output,
+               :audio_output,
+               :room_audio_ingress,
+               :audio_input,
+               :room_audio_egress,
+               :audio_subscription,
+               :room_output_binding
+             ])
+
     collector =
       start_supervised!(
         {Vxpipe.CallEngine.Readiness.Collector,
          owner: self(),
          incarnation_id: room.incarnation_id,
          attempt_id: "phone-media",
-         resources: resources,
+         resources: graph,
          deadline_ms: System.monotonic_time(:millisecond) + 5_000}
       )
 
@@ -86,6 +122,19 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
              Vxpipe.Gateway.Telephony.MediaSession.input_track(binding.client_state_leg_id)
 
     assert media_track == %{track_id: "stream-1", codec: :opus, sample_rate: 16_000, channels: 1}
+
+    assert {:ok, preparation} =
+             Vxpipe.CallEngine.Media.ConnectionReadiness.prepare_graph(
+               media_connection.instance,
+               identity,
+               policy,
+               audio_input?: true,
+               room_output?: true
+             )
+
+    assert preparation.resources == graph
+    assert preparation.input_track == media_track
+    assert preparation.identity == identity
 
     assert :ok =
              AudioOutput.push(
@@ -119,6 +168,15 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
 
     assert {:ok, ^media_connection, :ready} =
              Vxpipe.Gateway.Telephony.MediaSession.readiness(binding.client_state_leg_id)
+
+    assert {:ok, ^graph} =
+             Vxpipe.CallEngine.Media.ConnectionReadiness.prepare(
+               media_connection.instance,
+               identity,
+               policy,
+               audio_input?: true,
+               room_output?: true
+             )
 
     send(socket, {:test_stream, "wrong-stream", self()})
     assert_receive :test_stream_changed

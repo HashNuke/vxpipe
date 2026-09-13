@@ -562,3 +562,54 @@ unchecked; the milestone and index are still incomplete.
   refactor: formatting, warnings-as-errors compilation, strict Credo, 1,127 umbrella tests with zero
   failures (15 integrations excluded), and unused-dependency checks. No browser or live-provider
   acceptance is claimed, and the common-readiness/lifecycle milestone requirements remain unchecked.
+
+## Bound connection resource graphs
+
+- Component transport queries did not enumerate the actual decoder, STT ingress, private/native
+  output or room routes. Added an engine-owned connection protocol: a bounded supervised worker
+  reads the exact attachment binding, invokes the Gateway adapter outside the connection callback,
+  validates resource scopes/keys and rechecks the unchanged connection. Preparation does not start
+  capabilities or open gates. Callers can cap the five-second query bound to the remaining deadline.
+- Six engine protocol checks first failed on the absent API, then passed. They cover exact identity,
+  retained evidence, malformed demand, unsupported adapters, foreign resources, binding replacement
+  during preparation and cancellation of a worker that never returns. An initial local `binding/1`
+  helper hit Kernel.binding/1's import conflict; it is now `read_binding/1`.
+- The common Gateway adapter explicitly selects room input/output and speech input, always includes
+  private/native output and transport dependencies, and prepares existing demanded input tracks.
+  It validates admitted directions and required policy intervals before and after preparation.
+  Receive-only demand cannot enable microphone processing. Full prospective resource enumeration
+  and attempt-bound private destination preparation remain unfinished.
+- WebRTC graph regressions failed without the connection callback and then passed. Phone fixtures
+  initially supplied their connection supervisor rather than the attached MediaSession actor. After
+  correcting that handle, withheld the new callback and confirmed both phone cases fail at the
+  missing protocol boundary; restoring it made their complete graphs pass before audio.
+- Broader WebRTC transfer coverage initially remained preparing because the STT fixture had never
+  supplied a Connected message. It now explicitly checks that blocker, delivers the provider
+  acknowledgement and verifies readiness followed by audio/transcripts. All eight gateway checks
+  pass, including native WebRTC/Telnyx/Twilio media; phone fixtures do not select STT here.
+- Added a prospective-policy mismatch check to the real WebRTC graph, which must preserve the
+  installed graph while rejecting an unprepared input interval. Focused/root verification follows.
+  Documented the ownership, bounded query and remaining full-inventory/lifecycle work; no browser
+  or live-provider acceptance is claimed.
+- The first complete pass succeeded with 37 focused engine checks, 31 gateway checks and all five
+  root gates (1,133 umbrella tests, zero failures, 15 excluded integrations). The initial root format
+  check flagged two multiline keyword-call layouts; formatting in their owning children resolved it.
+- Recording preparation inspection confirmed that individual writers need the exact prepared track
+  ID. Added `prepare_graph` and a typed `PreparedConnection` result to carry identity/generation,
+  optional input metadata and resources from one fenced observation; `prepare` remains its list
+  projection. Two focused contracts failed first: the graph API was absent and demanded input could
+  omit its track. The expanded 39 engine checks pass. WebRTC and both phone fixtures now check the
+  returned native track metadata against their actual negotiated/authenticated track; final gateway
+  and root gates follow after this addition.
+- That broader run exposed a cold-loading bug in common room-ingress readiness: reflection treated
+  a configured but not-yet-loaded pipeline adapter as unsupported. The existing focused ingress
+  contract reproduced the failure alone in a fresh test process (one test, one failure). Loading the
+  selected module before checking its readiness/preparation callbacks makes that isolated contract
+  pass; truly missing callbacks still fail closed. This fix belongs to the graph's required input
+  boundary. Final combined and root checks repeat for the track result and cold-loading correction.
+- Final verification passes: 39 focused engine tests, 31 gateway tests and all five root gates
+  (formatting, warnings-as-errors compilation, strict Credo, 1,135 umbrella tests with zero failures
+  and 15 integrations excluded, unused-dependency checks). This is the complete demanded graph for
+  one attached connection, with track metadata available to recording preparation. The full
+  prospective room inventory, actual candidate-resource installation and startup/transfer waiting,
+  cues and release orchestration remain unfinished. The running development server was not restarted.
