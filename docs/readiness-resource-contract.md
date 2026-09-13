@@ -286,9 +286,22 @@ Preparation arriving before the filter starts playing is held as one pending req
 emission begins only when Membrane permits it. The element boundary regression and twenty related
 WebRTC/phone/room-ingress checks pass (21 focused tests).
 
-The common room-ingress descriptor still describes its current pipeline/policy acknowledgement;
-its prospective inventory must additionally include this prepared decoder resource. That inventory,
-common input-preparation wiring and corresponding phone readiness remain unfinished.
+The common room ingress now prepares the track through the selected pipeline's registered ID and
+collects its actual decoder resource outside the ingress loop. The stored lifecycle PID belongs to
+the Membrane supervisor; it must not receive pipeline readiness calls. The helper rechecks the
+owning ingress binding after preparation/observation and requires a matching adapter, participant
+and connection descriptor. Missing adapters fail closed. Its composite descriptor includes the
+actual decoder generation and its installed audio-input policy interval, and its resource list
+exposes both ingress and decoder for monitoring. Graph readiness without decoder readiness remains
+preparing; unrelated transcript policy changes preserve both descriptors.
+
+Phone input uses the same PCM-sink acknowledgement. Its packet source emits the already configured
+format followed by a correlated event before any media. Telnyx retains Opus/16 kHz mono input and
+Twilio PCMU/8 kHz mono input; both produce the common 48 kHz mono room format. Their input track is
+bound from the authenticated stream at startup. Repeated preparation validates that exact existing
+binding without resetting sequence/timestamp state or re-emitting formats. Real pipeline/collector
+checks cover all three transports through the common ingress and require no microphone sample.
+Phone socket/transport evidence, prospective inventory and lifecycle integration remain unfinished.
 
 Engine STT ingress now supports explicit `prepare_track/2` using the normalized track ID, codec,
 sample rate and channel count. It queries the actual STT owner's identity and media format outside

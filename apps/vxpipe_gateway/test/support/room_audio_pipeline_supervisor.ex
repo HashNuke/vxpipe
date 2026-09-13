@@ -8,13 +8,27 @@ defmodule Vxpipe.Gateway.TestRoomAudioPipelineSupervisor do
     if Keyword.get(options, :test_fail_generation) == generation(pipeline_id) do
       {:error, :test_pipeline_unavailable}
     else
-      start_pipeline(observer, pipeline_id)
+      start_pipeline(observer, pipeline_id, options)
     end
   end
 
-  defp start_pipeline(observer, pipeline_id) do
+  defp start_pipeline(observer, pipeline_id, options) do
     {:ok, pipeline} =
-      Agent.start_link(fn -> observer end,
+      Agent.start_link(
+        fn ->
+          %{
+            observer: observer,
+            status: :preparing,
+            resource:
+              Vxpipe.CallEngine.Readiness.Resource.new(
+                :audio_input,
+                {:participant, Keyword.fetch!(options, :participant_id)},
+                Vxpipe.Gateway.TestRoomAudioPipeline,
+                options,
+                binding: Keyword.fetch!(options, :connection_id)
+              )
+          }
+        end,
         name:
           {:via, Registry,
            {Vxpipe.Gateway.WebRTC.Registry, {:test_room_audio_pipeline, pipeline_id}}}

@@ -488,3 +488,29 @@ unchecked; the milestone and index are still incomplete.
   strict Credo, 1,114 umbrella tests with zero failures (15 integrations excluded), and unused
   dependency checks. Milestone evidence records the prepared decoder boundary and its remaining
   integration requirements. No running server was restarted.
+
+## Common prepared input and phone formats
+
+- Phone packet sources now follow their startup format with a correlated preparation event.
+  Telnyx/Twilio readiness and the existing pipeline-ready notification wait for the PCM sink's
+  acknowledgement. Their authenticated stream and native format stay pinned; repeated preparation
+  is validation only. Two new checks first failed on missing APIs, then all six phone checks passed.
+- Common RoomAudioIngress now prepares/observes the selected pipeline outside its receive loop,
+  then rechecks its exact binding. Inspection showed that its stored PID belongs to the Membrane
+  supervisor, not the pipeline actor, so queries use the registered pipeline ID. The composite
+  descriptor includes the decoder generation; the inventory exposes both resources for monitoring.
+- A revised delayed-decoder test and four new common-ingress checks first produced five failures:
+  graph-playing was wrongly treated as ready, preparation APIs were absent, and missing adapters
+  were accepted. All 16 focused common/phone checks now pass. Actual WebRTC, Telnyx and Twilio
+  pipelines collect readiness without input packets, retain descriptors across unrelated policy,
+  and validate their different negotiated/authenticated formats.
+- Missing adapters fail explicitly. A replacement invalidates the actual decoder dependency;
+  old callbacks cannot restore readiness. Updated the resource contract with these decisions and
+  the remaining phone transport, prospective inventory and lifecycle requirements. Root gates follow.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,120 umbrella
+  tests with zero failures (15 integrations excluded), and unused-dependency checks. The milestone
+  records this common prepared-input boundary without claiming complete connection/lifecycle readiness.
+- Next inspected transport boundary: phone MediaSocket receives and validates media-start events and
+  dispatches them asynchronously to the exact leg. MediaSession currently has no readiness descriptor.
+  A socket query must attest the exact accepted stream/binding, rather than treating its PID or the
+  configured decoder as proof of a live transport; preserve the asynchronous socket dispatch contract.

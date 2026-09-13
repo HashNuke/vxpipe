@@ -30,6 +30,39 @@ defmodule Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipelineTest do
     assert byte_size(pcm) == 1_920
   end
 
+  test "collects the initialized phone input before any media without changing its pinned format" do
+    pipeline_id = start_pipeline()
+    track = %{track_id: "stream-1", codec: :opus, sample_rate: 16000, channels: 1}
+    assert :ok = AudioIngressPipeline.prepare_track(pipeline_id, track)
+    assert {:ok, resource, _status} = AudioIngressPipeline.readiness(pipeline_id)
+    assert resource.kind == :audio_input
+    assert resource.scope == {:participant, "part-human"}
+    assert resource.binding == "conn-demo"
+
+    collector =
+      start_supervised!(
+        {Vxpipe.CallEngine.Readiness.Collector,
+         owner: self(),
+         incarnation_id: "rinc-demo",
+         attempt_id: "phone-input",
+         resources: [resource],
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, @pipeline_timeout
+    assert {:ok, ^resource, :ready} = AudioIngressPipeline.readiness(pipeline_id)
+    assert :ok = AudioIngressPipeline.prepare_track(pipeline_id, track)
+
+    assert {:error, :wrong_track} =
+             AudioIngressPipeline.prepare_track(pipeline_id, %{track | track_id: "other"})
+
+    assert {:error, :unsupported_audio} =
+             AudioIngressPipeline.prepare_track(pipeline_id, %{track | sample_rate: 48_000})
+
+    assert {:ok, ^resource, :ready} = AudioIngressPipeline.readiness(pipeline_id)
+    refute_receive {:vxpipe_audio_pipeline, ^pipeline_id, %PCMFrame{}}
+  end
+
   test "rejects another identity, format, track, or stale provider chunk" do
     pipeline_id = start_pipeline()
     packet = encode(:binary.copy(<<1_000::little-signed-16>>, 320))

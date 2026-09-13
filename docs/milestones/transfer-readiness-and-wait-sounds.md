@@ -557,3 +557,11 @@ retain the existing track and buffered partial frames. Twenty-one focused checks
 gates pass with 1,114 tests, zero failures and 15 integrations excluded. Common room-ingress wiring,
 phone input evidence, prospective resource/policy preparation and startup/transfer orchestration
 remain incomplete. No rendered or live-provider acceptance is claimed.
+
+Common room ingress now prepares the selected decoder through its registered pipeline and requires
+its actual readiness in addition to the installed audio-input policy. It exposes both descriptors
+for collection/monitoring and rejects missing adapters. Phone inputs also wait for the PCM sink's
+ordered format acknowledgement while retaining their authenticated stream and native format.
+Sixteen focused checks include real WebRTC, Telnyx and Twilio pipelines. All five root gates pass
+with 1,120 tests, zero failures and 15 integrations excluded. Phone socket/transport readiness,
+prospective policy/resource preparation and startup/transfer orchestration remain unfinished.

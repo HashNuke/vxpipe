@@ -5,6 +5,15 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.AudioIngressPipeline.PacketSource do
 
   alias Membrane.{Buffer, Time}
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.Gateway.Media.InputPrepared
+
+  def_options(preparation_reference: [spec: reference()])
+
+  @impl true
+  def handle_init(_context, options) do
+    {[], %{preparation_reference: options.preparation_reference}}
+  end
+
   alias Vxpipe.Gateway.Telephony.Twilio.PCMU.Format
 
   def_output_pad(:output,
@@ -14,7 +23,12 @@ defmodule Vxpipe.Gateway.Telephony.Twilio.AudioIngressPipeline.PacketSource do
 
   @impl true
   def handle_playing(_context, state) do
-    {[stream_format: {:output, %Format{sample_rate: 8_000, channels: 1}}], state}
+    event = %InputPrepared{reference: state.preparation_reference}
+
+    {[
+       stream_format: {:output, %Format{sample_rate: 8_000, channels: 1}},
+       event: {:output, event}
+     ], state}
   end
 
   @impl true

@@ -9,11 +9,13 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
 
   test "readiness pins the initialized normalizer and only its relevant policy interval" do
     ingress = start_ingress(attachment(self(), nil), register?: false)
-    assert_receive {:test_room_audio_pipeline_started, first_id, _pipeline}
+    assert_receive {:test_room_audio_pipeline_started, first_id, first_pipeline}
     assert {:ok, _pending, :preparing} = RoomAudioIngress.readiness(ingress)
     send(ingress, {:vxpipe_audio_pipeline_ready, first_id})
     assert {:ok, _pending, :preparing} = RoomAudioIngress.readiness(ingress)
     assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, snapshot(4), 1_000)
+    assert {:ok, _pending, :preparing} = RoomAudioIngress.readiness(ingress)
+    Vxpipe.Gateway.TestRoomAudioPipeline.set_status(first_pipeline, :ready)
     assert {:ok, resource, :ready} = RoomAudioIngress.readiness(ingress)
     assert resource.instance == ingress
     assert resource.scope == {:participant, "part-human"}
@@ -33,14 +35,79 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
         Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, changed, 1_000)
       end)
 
-    assert_receive {:test_room_audio_pipeline_started, next_id, _pipeline}
+    assert_receive {:test_room_audio_pipeline_started, next_id, next_pipeline}
     send(ingress, {:vxpipe_audio_pipeline_ready, first_id})
     assert {:ok, replacement, :preparing} = RoomAudioIngress.readiness(ingress)
     refute replacement.generation == resource.generation
-    assert replacement.configuration == resource.configuration
+    refute replacement.configuration == resource.configuration
     send(ingress, {:vxpipe_audio_pipeline_ready, next_id})
     assert :ok = Task.await(update)
+    assert {:ok, ^replacement, :preparing} = RoomAudioIngress.readiness(ingress)
+    Vxpipe.Gateway.TestRoomAudioPipeline.set_status(next_pipeline, :ready)
     assert {:ok, ^replacement, :ready} = RoomAudioIngress.readiness(ingress)
+  end
+
+  for {transport, pipeline, codec, rate, channels} <- [
+        {:webrtc, Vxpipe.Gateway.WebRTC.AudioPipeline, :opus, 48_000, 2},
+        {:telnyx, Vxpipe.Gateway.Telephony.Telnyx.AudioIngressPipeline, :opus, 16_000, 1},
+        {:twilio, Vxpipe.Gateway.Telephony.Twilio.AudioIngressPipeline, :pcmu, 8_000, 1}
+      ] do
+    @pipeline pipeline
+    @track %{track_id: "prepared-track", codec: codec, sample_rate: rate, channels: channels}
+
+    test "prepares and collects the actual #{transport} decoder through the common ingress" do
+      connection_id = unique_id("prepared-ingress")
+      start_supervised!({ConnectionPeerSupervisor, connection_id: connection_id})
+
+      assert {:ok, ingress} =
+               ConnectionPeerSupervisor.start_room_audio_ingress(
+                 connection_id,
+                 attachment(self(), snapshot(0)),
+                 [
+                   tenant_id: "tenant-demo",
+                   room_id: "room-demo",
+                   incarnation_id: "rinc-demo",
+                   participant_id: "part-human"
+                 ],
+                 engine: Vxpipe.Gateway.TestRoomAudioEngine,
+                 pipeline: @pipeline,
+                 pipeline_options: [track_id: @track.track_id],
+                 jitter_latency_ms: 0
+               )
+
+      assert :ok = RoomAudioIngress.await_ready(ingress)
+      assert :ok = RoomAudioIngress.prepare_track(ingress, @track)
+      assert {:ok, [resource, input] = resources} = RoomAudioIngress.readiness_resources(ingress)
+      assert input.kind == :audio_input
+      assert input.binding == connection_id
+      assert input.adapter == @pipeline
+
+      collector =
+        start_supervised!(
+          {Vxpipe.CallEngine.Readiness.Collector,
+           owner: self(),
+           incarnation_id: "rinc-demo",
+           attempt_id: connection_id,
+           resources: resources,
+           deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+        )
+
+      assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+      assert {:ok, ^resource, :ready} = RoomAudioIngress.readiness(ingress)
+      assert :ok = RoomAudioIngress.prepare_track(ingress, @track)
+      unrelated = put_in(snapshot(1).effective.transcript_routes, %{})
+      assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, unrelated, 1_000)
+      assert {:ok, ^resources} = RoomAudioIngress.readiness_resources(ingress)
+      refute_receive {:test_room_audio, %NormalizedFrame{}}
+    end
+  end
+
+  test "fails readiness for an initialized pipeline without a readiness adapter" do
+    ingress = start_ingress(attachment(self(), snapshot(0)), pipeline: String)
+    assert_receive {:test_room_audio_pipeline_started, pipeline_id, _pipeline}
+    send(ingress, {:vxpipe_audio_pipeline_ready, pipeline_id})
+    assert {:ok, _resource, :failed} = RoomAudioIngress.readiness(ingress)
+    assert {:error, :unsupported_pipeline} = RoomAudioIngress.prepare_track(ingress, %{})
   end
 
   test "starts and registers the per-connection ingress through its owning supervisor" do
@@ -187,7 +254,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
        owner: self(),
        clock: fn -> 1_010 end,
        engine: Vxpipe.Gateway.TestRoomAudioEngine,
-       pipeline: Vxpipe.Gateway.TestRoomAudioPipeline,
+       pipeline: Keyword.get(options, :pipeline, Vxpipe.Gateway.TestRoomAudioPipeline),
        pipeline_supervisor: Vxpipe.Gateway.TestRoomAudioPipelineSupervisor,
        pipeline_options:
          Keyword.merge(
