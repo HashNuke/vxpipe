@@ -339,6 +339,15 @@ restrictive-transition, live-only STT, consumer-failure, and deterministic leave
 together demonstrate the manual verification scenarios without adding a monitor control to the
 sample Console.
 
+Pre-delivery provider-barrier correction (2026-09-13): STT still rotates provider sessions
+for every policy revision, but reconnecting the external provider no longer blocks the
+media-policy acknowledgement. Audio is denied while reconnecting; stale sessions cannot
+emit under the new revision, and another policy cancels pending connection work. This
+removes the real-provider timeout during human handoff while retaining the fail-closed
+behavior for actual enforcer/provider failure. The focused STT/transfer checks and all
+umbrella completion gates pass; evidence is recorded in the
+[human transfer investigation](../../labnotes/20260913-1906-human-transfer-failure.md).
+
 ## Specification review
 
 Reviewed independently by milestone_review_a on 2026-09-08 for approved contracts,

@@ -131,6 +131,17 @@ test rather than this regression run. Formatting, warnings-as-errors compilation
 unused dependency checking, and the correctly configured PostgreSQL-backed umbrella suite also
 pass.
 
+Pre-delivery acceptance correction (2026-09-13): real Deepgram reconnection during the
+human admission barrier exceeded its one-second budget and closed the caller's room.
+Provider session rotation now runs in a supervised connector after the capability has
+installed the new policy and stopped admitting old-session audio/signals. A newer policy
+cancels unfinished connection work; provider sessions remain pinned to one revision.
+The regression was observed red before implementation, and all 15 focused transfer/STT
+checks and the two-peer Gateway audio check pass. A real Gemini/Deepgram Chrome handoff
+now reaches `Main room active` and retains the caller connection after acceptance.
+The full umbrella completion checks pass (997 tests, 15 integration cases excluded).
+See the [failure investigation](../../labnotes/20260913-1906-human-transfer-failure.md).
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,

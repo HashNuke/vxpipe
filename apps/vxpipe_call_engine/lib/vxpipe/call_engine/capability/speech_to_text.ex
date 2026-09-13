@@ -88,6 +88,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_stt_connected, connector, transport},
+        %{connector: %{pid: connector}, transport: nil} = state
+      ) do
+    {:noreply, Usage.start_session(%{state | transport: transport})}
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, connector, _reason},
+        %{connector: %{pid: connector, monitor: monitor}} = state
+      ) do
+    stop_unavailable(:transport_closed, state)
+  end
+
   def handle_info({:vxpipe_stt_audio, ingress, reference, frame}, state)
       when is_pid(ingress) and is_reference(reference) do
     case State.send_audio(state, frame) do

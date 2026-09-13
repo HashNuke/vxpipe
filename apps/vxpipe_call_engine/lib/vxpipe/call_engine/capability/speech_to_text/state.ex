@@ -2,12 +2,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Capability.SpeechToText.TransportConnector
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
 
   @maximum_audio_bytes 131_072
 
   @enforce_keys [
     :connection,
+    :connector,
     :identity,
     :last_provider_sequence,
     :media_format,
@@ -25,6 +27,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   @type t :: %__MODULE__{
           connection: map(),
+          connector: map() | nil,
           identity: map(),
           last_provider_sequence: integer(),
           media_format: map(),
@@ -59,6 +62,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         {:ok,
          %__MODULE__{
            connection: connection,
+           connector: nil,
            identity: identity,
            last_provider_sequence: -1,
            media_format: provider_module.media_format(provider_config),
@@ -106,6 +110,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   @spec close(t()) :: t()
+  def close(%__MODULE__{connector: connector} = state) when is_map(connector) do
+    :ok = TransportConnector.stop(connector)
+    %{state | connector: nil, transport: nil}
+  end
+
   def close(%__MODULE__{transport: nil} = state), do: state
 
   def close(%__MODULE__{} = state) do
@@ -122,8 +131,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     state = close(state)
 
     if demanded?(state, snapshot) do
-      case start_transport(state.transport_module, state.connection, state.transport_options) do
-        {:ok, transport} -> {:ok, %{put_policy(state, snapshot) | transport: transport}}
+      case TransportConnector.start(
+             state.transport_module,
+             state.connection,
+             state.transport_options
+           ) do
+        {:ok, connector} -> {:ok, %{put_policy(state, snapshot) | connector: connector}}
         {:error, _reason} -> {:error, :transport_start_failed, state}
       end
     else

@@ -140,6 +140,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
              )
 
     assert_receive {:test_stt_transport_started, second_transport, _connection}
+    TestSpeechToTextTransport.deliver(second_transport, connected_message("second", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
     assert :ok = SpeechToText.push_audio(capability, audio_frame(identity))
     assert_receive {:test_stt_audio, ^second_transport, <<1, 2, 3>>}
 
@@ -148,6 +150,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
     assert_receive {:vxpipe_stt_signal, ^capability, _,
                     %Signal{provider_sequence: 1, policy_revision: 2}}
 
+    second_monitor = Process.monitor(second_transport)
+
     assert :ok =
              Enforcer.apply(
                capability,
@@ -155,9 +159,62 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
                500
              )
 
-    assert_receive {:test_stt_transport_closed, ^second_transport}
+    assert_receive {:DOWN, ^second_monitor, :process, ^second_transport, :shutdown}
     assert_receive {:test_stt_transport_started, third_transport, _connection}
     refute third_transport == second_transport
+  end
+
+  test "policy changes do not wait for provider reconnection and cancel superseded starts" do
+    observer = self()
+    attempts = start_supervised!({Agent, fn -> 0 end})
+
+    before_connect = fn ->
+      attempt = Agent.get_and_update(attempts, &{&1, &1 + 1})
+
+      if attempt > 0 do
+        send(observer, {:stt_reconnecting, self()})
+
+        receive do
+          :connect -> :ok
+        end
+      end
+    end
+
+    {capability, original_transport} =
+      start_capability(transport_options: [before_connect: before_connect])
+
+    assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
+    assert :ok = Enforcer.apply(capability, snapshot(1, ["part-human"], :unrestricted, true), 500)
+    assert_receive {:stt_reconnecting, first_connector}
+    first_monitor = Process.monitor(first_connector)
+    assert_receive {:test_stt_transport_closed, ^original_transport}
+
+    assert :ok = Enforcer.apply(capability, snapshot(2, ["part-human"], :unrestricted, true), 500)
+    assert_receive {:DOWN, ^first_monitor, :process, ^first_connector, :shutdown}
+    assert_receive {:stt_reconnecting, second_connector}
+
+    # Old provider callbacks cannot acquire the new interval's permissions.
+    send(
+      capability,
+      {:vxpipe_stt_transport, original_transport,
+       {:message, turn_message("EndOfTurn", 10, "old interval")}}
+    )
+
+    _ = :sys.get_state(capability)
+    refute_receive {:vxpipe_stt_signal, ^capability, _, _}
+
+    send(second_connector, :connect)
+    assert_receive {:test_stt_transport_started, replacement, _connection}
+    TestSpeechToTextTransport.deliver(replacement, connected_message("replacement", 0))
+
+    assert_receive {:vxpipe_stt_signal, ^capability, _,
+                    %Signal{kind: :connected, policy_revision: 2}}
+
+    second_monitor = Process.monitor(second_connector)
+    replacement_monitor = Process.monitor(replacement)
+    assert :ok = stop_supervised({SpeechToText, "conn-demo"})
+    assert_receive {:DOWN, ^second_monitor, :process, ^second_connector, _reason}
+    assert_receive {:DOWN, ^replacement_monitor, :process, ^replacement, _reason}
   end
 
   test "emits final-turn deltas and retains a failed provider session" do
@@ -291,7 +348,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
          participant_id: "part-human",
          connection_id: "conn-demo",
          provider: {Flux, provider},
-         transport: {TestSpeechToTextTransport, [observer: self()]},
+         transport:
+           {TestSpeechToTextTransport,
+            [observer: self()] ++ Keyword.get(options, :transport_options, [])},
          usage: Keyword.get(options, :usage)}
       )
 
