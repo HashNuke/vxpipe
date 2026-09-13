@@ -2,9 +2,9 @@
 
 **Build voice agents that can talk, take action, and bring in the right person.**
 
-Vxpipe is an Elixir framework for real-time voice applications. Connect agents to
-callers in the browser or over the phone, give them tools, and hand conversations
-between agents and people.
+Vxpipe is a platform for real-time voice applications, built with Elixir. Connect
+agents to callers in the browser or over the phone, give them tools, and hand
+conversations between agents and people.
 
 - **Keep the conversation moving.** Stream spoken replies, handle interruptions,
   and keep talking while tools work in the background.
@@ -15,15 +15,23 @@ between agents and people.
 - **Understand each call.** Inspect call timelines, transcripts, latency, and
   usage, with optional recordings and saved call history.
 
-## Try the voice demo
+Docker is the primary distribution target, with the image planned as
+`vxpipe/vxpipe`. You can also use Vxpipe's components as libraries in your own
+Elixir applications.
+
+## Try the voice demo from source
+
+Until the Docker image is available, you can run the demo from source.
 
 You'll need Elixir 1.19 / Erlang/OTP 28, Node.js 24, Rust, and
 [native build tools](docs/development.md#prerequisites), plus Gemini and Deepgram
 API keys. The local demo runs without PostgreSQL.
 
-From a checkout of this repository, install the dependencies:
+Clone the repository and install the dependencies:
 
 ```shell
+git clone https://github.com/HashNuke/vxpipe.git
+cd vxpipe
 mix deps.get
 mix assets.setup
 ```
@@ -50,3 +58,4 @@ which responds to typed input with preset text and Morse-code audio.
 - [Development guide](docs/development.md): setup, live reloading, HTTPS, and local fixtures.
 - [Sample walkthroughs](apps/vxpipe_console/assets/README.md): tool calls, human transfers, and diagnostics.
 - [Tenants and call definitions](docs/tenant-control-plane.md): configure your own calls and persistent storage.
+- Elixir libraries: [Call Engine](apps/vxpipe_call_engine/README.md) and [Gateway](apps/vxpipe_gateway/README.md).

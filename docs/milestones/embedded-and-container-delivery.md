@@ -7,7 +7,11 @@ See also the approved [gateway/console boundary](../gateway-console-boundary.md)
 
 ## Runnable outcome
 
-The same approved call flow runs embedded in an Elixir host and in a built Docker image using a mounted versioned JSON configuration. Operators can migrate/bootstrap, check readiness, join through configured ingress and shut down without silently losing or resurrecting work.
+Docker is the primary packaged distribution. The same approved call flow runs in
+the `vxpipe/vxpipe` image using a mounted versioned JSON configuration, and the
+components can also be consumed as libraries within an Elixir host application.
+Operators can migrate/bootstrap, check readiness, join through configured ingress
+and shut down without silently losing or resurrecting work.
 
 ## Implementation hold
 
@@ -18,6 +22,17 @@ user explicitly releases that hold.
 
 ## Specification
 
+- Use the organization namespace `vxpipe` for the image, with `vxpipe/vxpipe` as
+  the planned image repository. The GitHub source repository remains
+  `HashNuke/vxpipe`; image naming does not require a GitHub repository transfer.
+  Select and verify the concrete release tag and registry publishing setup during
+  packaging implementation; the planned name is not evidence of a published image.
+- Keep the root GitHub README focused on the product and a short Docker quick
+  start as the primary installation path. Include verified image/run commands and
+  the minimum configuration, secrets, and networking needed to reach a first call.
+  Link detailed operations and source-development setup separately. Also explain
+  that components can be used as libraries inside users' Elixir applications,
+  linking to working host/dependency examples without requiring the Docker image.
 - OTP namespaced application settings are canonical at application boundaries; reusable supervisors accept explicit options for embedded hosts. No runtime Mix.env branching or dependency config/<env>.exs assumptions. Read deployment environment only in config/runtime.exs and normalize once.
 - Provide an image/release runner accepting an explicit --config path for one versioned JSON file. Inline definitions and pinned resource references normalize through the same typed compiler/settings as embedded use. Closed registries only; reject unknown versions/unsupported enabled features rather than loading arbitrary modules/atoms.
 - Document API-key/provider/MCP secret provisioning through runtime environment/mounted secret references/private configuration boundaries. Public definitions/plans, errors, logs and image layers never contain credentials; no env-file contents committed. Distinguish provider credentials from gateway-issued hash-only API keys and one-time bootstrap output.
@@ -47,6 +62,10 @@ user explicitly releases that hold.
 - [ ] Add container build/run instructions with safe mounted config examples and no real
   secrets; verify licenses and required notices for the pinned direct and transitive
   dependencies before distributing the image.
+- [ ] Lead the root README with tested Docker instructions for `vxpipe/vxpipe`,
+  retain `HashNuke/vxpipe` as the source repository, and document Elixir library
+  consumption with a runnable host example. Keep the source-development quick
+  start in the development guide once the Docker quick start replaces it.
 - [ ] Smoke-test embedded inline engine and full durable container admission through the same definition fixture.
 - [ ] Smoke-test gateway-only host mounting and its optional standalone listener without
   Phoenix/console dependencies; verify the console-enabled release serves built React
@@ -55,6 +74,11 @@ user explicitly releases that hold.
 
 ## Acceptance and failure checks
 
+- [ ] Follow the root README on a clean Docker host through a first configured
+  call using the documented image/tag, config, secrets, and network settings.
+  Verify its linked Elixir library example runs in a consuming host without
+  Docker. README commands must match the built/released artifact and the source
+  repository must remain `HashNuke/vxpipe`.
 - [ ] Equivalent OTP and JSON inputs produce equivalent plans/policies without ambient Mix.env behavior in a consuming app.
 - [ ] Missing invalid config/secrets fail safely before unauthorized startup; image/build/logs contain no credentials and public strings cannot choose modules/atoms.
 - [ ] Embedded engine runs without Ecto/gateway/sample; full container does not claim durable admission when PG is unavailable.
@@ -108,3 +132,16 @@ the engine-only/gateway-only/console-hosted combinations, explicit supervision a
 listener ownership, dependency isolation and built-asset delivery. The existing observable
 call prerequisite supplies the shell; no milestone is added or reordered.
 This is specification evidence only; implementation and runtime verification remain unchecked.
+
+### Distribution and README review (2026-09-13)
+
+Local review of the user's packaging clarification establishes Docker as the
+primary distribution, `vxpipe/vxpipe` as the planned image name, and
+`HashNuke/vxpipe` as the unchanged source repository. Elixir library consumption
+remains a supported delivery path. The README keeps its product/quick-start role;
+packaging acceptance now explicitly covers the Docker instructions and linked
+library example. Release tags and runnable commands depend on the actual image
+and loader, so they remain implementation gates. This changes documentation and
+distribution priorities without changing prerequisites, implementation order,
+application boundaries, or the pre-delivery hold. No image has been built or
+published by this follow-up, and no implementation checkbox is completed.

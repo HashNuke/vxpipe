@@ -1,8 +1,14 @@
 # Developing Vxpipe
 
-For a first voice call, follow the [quick start](../README.md#try-the-voice-demo).
+For a first voice call, follow the [source quick start](../README.md#try-the-voice-demo-from-source).
 This guide covers the development stack, local fixtures, optional persistence,
 and how the sample works.
+
+Docker is the primary distribution target, with `vxpipe/vxpipe` as the planned
+image repository. The source remains at `HashNuke/vxpipe`. Once container packaging
+is available, the root README will lead with Docker instructions and this guide
+will retain the source-development workflow. Components also support use as
+libraries within Elixir host applications.
 
 ## Prerequisites
 
