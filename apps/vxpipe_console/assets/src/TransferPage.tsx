@@ -69,7 +69,12 @@ export default function TransferPage() {
       const admission = await requestSampleAdmission("/sample/transfers");
 
       if (!admission) {
-        throw new Error("The human-transfer sample is not enabled.");
+        setError(
+          "The transfer sample is disabled. Restart bin/dev, then create a new room in the caller console.",
+        );
+        setPhase("error");
+        record("Transfer sample setup required");
+        return;
       }
 
       const room = await claimSampleSession(admission);

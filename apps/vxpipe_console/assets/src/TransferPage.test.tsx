@@ -11,8 +11,25 @@ import TransferPage from "./TransferPage";
 
 afterEach(() => {
   cleanup();
+  openTransferConnection.mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+test("explains the required setup when the transfer sample is disabled", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<TransferPage />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Connect transfer desk" }));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("The transfer sample is disabled.");
+  expect(alert).toHaveTextContent("Restart bin/dev");
+  expect(alert).not.toHaveTextContent("VXPIPE_DATABASE_URL");
+  expect(alert).not.toHaveTextContent("Request a human transfer");
+  expect(openTransferConnection).not.toHaveBeenCalled();
+  expect(fetchMock).toHaveBeenCalledOnce();
 });
 
 test("connects the latest sample destination and activates only after explicit acceptance", async () => {
