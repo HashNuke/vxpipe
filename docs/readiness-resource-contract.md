@@ -130,6 +130,13 @@ caps preparation. Cancelled or expired observations terminate their workers with
 connection/capability actors. The returned descriptors still require operational collection; this
 operation does not install policy, open media gates, or report transfer completion.
 
+The supervised preparation streams link their query workers to the stream monitor. This gives
+the stream ownership of cancellation as well as normal completion and timeout cleanup. The earlier
+unlinked streams could leave a nested connection query running when an enclosing request died.
+Direct connection cancellation, room cancellation and room-budget expiry now monitor the actual
+blocked worker's termination while confirming that the connection remains usable. This changes
+query lifetime only; it does not link or restart the queried media actors.
+
 Missing connections/actors, failed required resources, inconsistent bindings, conflicting resource
 identities and foreign participant scopes cannot return a partial usable set. Preparation checks
 the candidate's relevant policy intervals, then revalidates the complete room inventory and policy

@@ -22,7 +22,7 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
     with {:ok, demand} <- demand(options),
          :ok <- validate_policy(policy, identity) do
       result =
-        Task.Supervisor.async_stream_nolink(
+        Task.Supervisor.async_stream(
           @task_supervisor,
           [connection],
           &prepare_connection(&1, identity, policy, demand),

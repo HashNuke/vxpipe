@@ -501,6 +501,24 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
              )
   end
 
+  test "cancelling room preparation removes its nested connection worker", context do
+    room = start_room(context.plan)
+    connections = attach_entries(room, block: room.plan.entry_caller)
+    candidate = current_candidate(room.policy)
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
+
+    request = Task.Supervisor.async_nolink(tasks, fn -> Preparation.run(room.room, candidate) end)
+    assert_receive {:connection_preparation_waiting, worker, _identity}, 1_000
+    monitor = Process.monitor(worker)
+    Task.shutdown(request, :brutal_kill)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 1_000
+
+    assert :ok =
+             Vxpipe.CallEngine.TestConnectionReadinessAdapter.replace(
+               Map.fetch!(connections, room.plan.entry_caller)
+             )
+  end
+
   test "captures supervised participant TTS even when it is outside the active room handle",
        context do
     alias Vxpipe.CallEngine.Provider.MorseCodeTTS

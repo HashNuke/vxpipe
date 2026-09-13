@@ -136,6 +136,22 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadinessTest do
              )
   end
 
+  test "cancelling the preparation owner removes its blocked worker", context do
+    connection = connection(context, block?: true)
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
+
+    request =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        ConnectionReadiness.prepare(connection, context.identity, context.policy, [], 5_000)
+      end)
+
+    assert_receive {:connection_preparation_waiting, worker, _identity}, 1_000
+    monitor = Process.monitor(worker)
+    Task.shutdown(request, :brutal_kill)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 1_000
+    assert :ok = TestConnectionReadinessAdapter.replace(connection)
+  end
+
   defp connection(context, options \\ []) do
     start_supervised!(
       {TestConnectionReadinessAdapter,

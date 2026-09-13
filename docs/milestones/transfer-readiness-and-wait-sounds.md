@@ -626,3 +626,10 @@ rendered/live-provider acceptance remain unfinished. Common readiness remains un
 All five root gates pass for preparation/collection: formatting, warnings-as-errors compilation,
 strict Credo, 1,157 umbrella tests with zero failures and 15 integrations excluded, and the
 unused-dependency check. These gates do not complete the remaining runtime acceptance items.
+
+A later broader run reproduced incomplete nested-worker cleanup when room preparation expired.
+Room and connection preparation now use supervised linked query streams, so request cancellation
+also terminates their blocked observations. Direct and nested cancellation checks monitor the
+actual worker and keep the queried media connection usable. The correction and recording-output
+checkpoint pass 69 engine checks, 26 Gateway checks and all five root gates in the combined
+worktree (1,166 tests, zero failures, 15 integrations excluded). Lifecycle acceptance remains open.

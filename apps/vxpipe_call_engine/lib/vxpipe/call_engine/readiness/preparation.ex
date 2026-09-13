@@ -13,7 +13,7 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
     deadline = System.monotonic_time(:millisecond) + timeout
 
     results =
-      Task.Supervisor.async_stream_nolink(
+      Task.Supervisor.async_stream(
         @task_supervisor,
         [room],
         &safe_prepare(&1, candidate, deadline),
