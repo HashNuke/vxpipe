@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.WebRTC.TransferSideband do
   @moduledoc false
 
   alias ExWebRTC.PeerConnection
+  alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.Gateway.Sideband.{Codec, TransferControl}
   alias Vxpipe.Gateway.WebRTC.MainMedia
@@ -68,25 +69,29 @@ defmodule Vxpipe.Gateway.WebRTC.TransferSideband do
           }
         } = state
       ) do
-    case MainMedia.activate(
-           state.connection_id,
-           attachment,
-           state.session,
-           state.peer_connection,
-           state.output_track_id,
-           state.audio_jitter_latency_ms
-         ) do
-      {:ok, room_audio_ingress, room_audio_egress} ->
-        state = %{
-          state
-          | attachment: attachment,
-            room_audio_egress: room_audio_egress,
-            room_audio_ingress: room_audio_ingress
-        }
+    command = %{state.attach_command | deadline: DateTime.add(DateTime.utc_now(), 5, :second)}
 
-        send_active(attempt_id, state)
-        {:ok, state}
+    with {:ok, media_ingress} <- CallEngine.activate_speech_to_text(command),
+         attachment = %{attachment | media_ingress: media_ingress},
+         {:ok, room_audio_ingress, room_audio_egress} <-
+           MainMedia.activate(
+             state.connection_id,
+             attachment,
+             state.session,
+             state.peer_connection,
+             state.output_track_id,
+             state.audio_jitter_latency_ms
+           ) do
+      state = %{
+        state
+        | attachment: attachment,
+          room_audio_egress: room_audio_egress,
+          room_audio_ingress: room_audio_ingress
+      }
 
+      send_active(attempt_id, state)
+      {:ok, state}
+    else
       {:error, _reason} ->
         {:stop, state}
     end

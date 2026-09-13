@@ -45,6 +45,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
        %{
          actor_id: actor_id,
          attachment: attachment,
+         attach_command: command,
          audio_output: output,
          child_supervisor: child_supervisor,
          engine: engine,

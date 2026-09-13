@@ -121,8 +121,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
 
   @spec human_destination(
           ResolvedCallPlan.t(),
-          ResolvedCallPlan.Participant.t()
+          ResolvedCallPlan.Participant.t(),
+          keyword()
         ) :: {:ok, HumanDestination.t()} | {:error, Error.t()}
+  def human_destination(plan, participant, options \\ [])
+
   def human_destination(
         %ResolvedCallPlan{} = plan,
         %ResolvedCallPlan.Participant{
@@ -132,11 +135,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
             mode: :receive,
             admission: :transfer
           }
-        } = participant
+        } = participant,
+        options
       ) do
-    with {:ok, command} <- participant_command(plan, participant) do
-      {:ok, %HumanDestination{participant: participant, command: command}}
-    end
+    build_human_destination(plan, participant, options)
   end
 
   def human_destination(
@@ -148,22 +150,34 @@ defmodule Vxpipe.CallEngine.PlanStartup do
             mode: :dial,
             admission: :transfer
           }
-        } = participant
+        } = participant,
+        options
       )
       when is_binary(service) do
-    with {:ok, command} <- participant_command(plan, participant) do
-      {:ok, %HumanDestination{participant: participant, command: command}}
-    end
+    build_human_destination(plan, participant, options)
   end
 
   def human_destination(
         %ResolvedCallPlan{},
-        %ResolvedCallPlan.Participant{} = participant
+        %ResolvedCallPlan.Participant{} = participant,
+        _options
       ) do
     unsupported(
       ["participants", participant.definition_key, "connection"],
       "must be a supported receive/transfer or dial/transfer human participant"
     )
+  end
+
+  defp build_human_destination(plan, participant, options) do
+    with {:ok, command} <- participant_command(plan, participant),
+         {:ok, speech_to_text} <- speech_to_text_runtime(plan, participant, nil, options) do
+      {:ok,
+       %HumanDestination{
+         participant: participant,
+         command: command,
+         speech_to_text: speech_to_text
+       }}
+    end
   end
 
   defp entry_participant(plan, field, definition_key, expected_kinds) do

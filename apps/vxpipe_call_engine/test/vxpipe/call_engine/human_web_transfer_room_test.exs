@@ -16,12 +16,13 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     TestAudioOutputSink,
     TestCollectingArchiveWriter,
     TestSelectiveAgentRuntimeModelProvider,
-    TestTextToSpeechTransport
+    TestTextToSpeechTransport,
+    TestSpeechToTextTransport
   }
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl, SendText}
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallFailed}
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -32,6 +33,19 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       |> Keyword.put(:implementation, :agent_runtime)
       |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
       |> Keyword.put(:model_provider_options, owner: self())
+
+    speech_to_text = [
+      enabled: true,
+      provider: Flux,
+      provider_options: [api_key: "runtime-test-secret"],
+      transport: {TestSpeechToTextTransport, observer: self()},
+      media_ingress: [
+        maximum_frames: 50,
+        maximum_bytes: 65_536,
+        maximum_age_ms: 1_000,
+        maximum_consecutive_overflows: 10
+      ]
+    ]
 
     text_to_speech = [
       enabled: true,
@@ -52,6 +66,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       original
       |> Keyword.put(:agent_runtime, agent_runtime)
       |> Keyword.put(:text_to_speech, text_to_speech)
+      |> Keyword.put(:speech_to_text, speech_to_text)
     )
 
     on_exit(fn ->
@@ -59,6 +74,63 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     end)
 
     :ok
+  end
+
+  test "activates a destination's configured STT only after acceptance and reuses it" do
+    plan = compile_plan(support_stt: true)
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, _source_tts, _}, 2_000
+    caller_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :stt_caller_sink)
+
+    support_sink =
+      start_supervised!({TestAudioOutputSink, observer: self()}, id: :stt_support_sink)
+
+    assert {:ok, _} = attach(plan, room, caller, "caller-connection", caller_sink)
+    begin_transfer(plan, room, caller, "transcribed-transfer")
+    assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+
+    assert {:ok, %ConnectionAttachment{media_ingress: nil, transfer_attempt_id: attempt_id}} =
+             attach(plan, room, support, "support-connection", support_sink)
+
+    command = attachment_command(plan, room, support, "support-connection")
+
+    assert {:error, %Vxpipe.CallEngine.Error{code: :speech_to_text_not_bindable}} =
+             CallEngine.activate_speech_to_text(command)
+
+    refute_receive {:test_stt_transport_started, _, _}
+
+    assert :ok =
+             CallEngine.participant_transfer_control(
+               transfer_control(plan, room, support, attempt_id, :accept)
+             )
+
+    assert :ok =
+             CallEngine.participant_transfer_control(
+               transfer_control(plan, room, support, attempt_id, :media_ready)
+             )
+
+    finish_private_briefing(briefing_tts, support_sink)
+
+    assert_receive {:vxpipe_transfer_main_media, ^attempt_id,
+                    %ConnectionAttachment{admission: :main}},
+                   2_000
+
+    command = attachment_command(plan, room, support, "support-connection")
+    assert {:ok, ingress} = CallEngine.activate_speech_to_text(command)
+    assert is_pid(ingress)
+    assert_receive {:test_stt_transport_started, _transport, _}, 2_000
+    assert {:ok, ^ingress} = CallEngine.activate_speech_to_text(command)
+    refute_receive {:test_stt_transport_started, _, _}
+
+    assert {:error, %Vxpipe.CallEngine.Error{code: :connection_not_attached}} =
+             CallEngine.activate_speech_to_text(%{command | actor_id: "wrong-actor"})
+
+    foreign = start_supervised!({Agent, fn -> :ready end})
+
+    assert {:error, %Vxpipe.CallEngine.Error{code: :connection_not_attached}} =
+             Agent.get(foreign, fn _ -> CallEngine.activate_speech_to_text(command) end)
   end
 
   test "an exact web destination hears its private briefing before promotion" do
@@ -469,6 +541,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     }
 
     support =
+      if Keyword.get(options, :support_stt, false),
+        do: Map.put(support, :capabilities, %{speech_to_text: "test-stt"}),
+        else: support
+
+    support =
       case Keyword.get(options, :support_while_present) do
         nil -> support
         policy -> Map.put(support, :while_present, policy)
@@ -529,6 +606,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                    kind: :model_inference,
                    provider: :req_llm,
                    options: %{model: "test:scripted"}
+                 },
+                 "test-stt" => %{
+                   kind: :speech_to_text,
+                   provider: Flux,
+                   options: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
                  },
                  "test-voice" => %{
                    kind: :text_to_speech,

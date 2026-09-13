@@ -105,6 +105,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  def speech_to_text_configuration(room_authority, %AttachConnection{} = command) do
+    GenServer.call(room_authority, {:speech_to_text_configuration, command}, @call_timeout)
+  end
+
   def bind_speech_to_text(
         room_authority,
         %AttachConnection{} = command,
@@ -220,6 +224,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         state
       ) do
     ParticipantTransfer.control(command, caller, state)
+  end
+
+  def handle_call({:speech_to_text_configuration, command}, {caller, _tag}, state) do
+    {:reply, ConnectionLifecycle.speech_to_text_configuration(command, caller, state), state}
   end
 
   def handle_call(

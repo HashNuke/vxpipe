@@ -105,6 +105,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     end
   end
 
+  @spec speech_to_text_configuration(struct(), pid(), State.t()) :: tuple()
+  def speech_to_text_configuration(command, caller, %State{} = state) do
+    connection = Map.get(state.connections, command.connection_id)
+
+    cond do
+      command.incarnation_id != state.snapshot.incarnation_id ->
+        {:error, room_incarnation_changed(state.snapshot.incarnation_id)}
+
+      connection == nil or connection.pid != caller or
+        connection.participant_id != command.participant_id or
+          connection.actor_id != command.actor_id ->
+        {:error, not_attached(command.connection_id)}
+
+      connection.admission != :main ->
+        {:error, speech_to_text_not_bindable(command.connection_id)}
+
+      connection.speech_to_text != nil ->
+        {:ready, connection.speech_to_text.ingress}
+
+      true ->
+        {:start, connection.role, selected_speech_to_text_runtime(command.participant_id, state)}
+    end
+  end
+
   @spec detach(struct(), pid(), pid(), State.t()) ::
           {:reply, :ok | {:error, Error.t()}, State.t()}
   def detach(command, caller, subscriber, %State{} = state) do

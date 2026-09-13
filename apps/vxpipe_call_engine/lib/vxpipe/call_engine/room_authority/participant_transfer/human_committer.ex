@@ -67,6 +67,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
         pending_agent_teardowns: pending_agent_teardowns,
         pending_connection_promotions: pending_connection_promotions,
         pending_participant_transfer: nil,
+        speech_to_text_runtime:
+          Map.put(
+            state.speech_to_text_runtime,
+            request.destination_participant_id,
+            preparation.destination.speech_to_text
+          ),
         text_capability: nil,
         text_capability_required?: false,
         text_to_speech_capability: nil,

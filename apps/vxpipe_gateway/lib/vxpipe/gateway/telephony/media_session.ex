@@ -154,17 +154,20 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
           }
         } = state
       ) do
-    case MediaRouting.start(attachment, routing_options(state)) do
-      {:ok, routing} ->
-        state = %{
-          state
-          | attachment: attachment,
-            room_audio_egress: routing.room_audio_egress,
-            room_audio_ingress: routing.room_audio_ingress
-        }
+    command = %{state.attach_command | deadline: DateTime.add(DateTime.utc_now(), 5, :second)}
 
-        {:noreply, state}
+    with {:ok, media_ingress} <- state.engine.activate_speech_to_text(command),
+         attachment = %{attachment | media_ingress: media_ingress},
+         {:ok, routing} <- MediaRouting.start(attachment, routing_options(state)) do
+      state = %{
+        state
+        | attachment: attachment,
+          room_audio_egress: routing.room_audio_egress,
+          room_audio_ingress: routing.room_audio_ingress
+      }
 
+      {:noreply, state}
+    else
       {:error, _reason} ->
         {:stop, :media_unavailable, state}
     end

@@ -18,6 +18,10 @@ Reception prepares a human web destination. That person privately hears permitte
 - Human readiness requires usable media and explicit acceptance. Client owns acceptance presentation; gateway receives an authenticated control message bound to destination participant, connection and current pending attempt. Specify and test a Vxpipe adapter extension/sideband control, not an invented RTVI-core event.
 - Source/model/caller cannot accept for destination. Duplicate/stale/late acceptance cannot commit twice or another attempt. Keep one total 30-second transfer deadline including private preparation; preserve source until commit/failure.
 - At commit apply destination while_present privacy restrictions before main bridge, then change control and terminate source agent subtree. active agent nil is valid; variables, allowed live transcripts, duration and authorized monitoring continue independently.
+- Resolve the human destination's configured STT during preparation and activate it only after
+  main admission. Provider startup runs outside room authority and the policy barrier. Activation
+  is restricted to the owning connection/actor and reuses an already bound recognizer. Permitted
+  transcripts retain source participant identity when delivered to another web connection.
 - Recoverable destination failure or timeout cleans only the pending destination; the source
   handles a typed outcome under the approved single recovery limit. If a media-policy enforcer
   cannot apply the commit barrier consistently, the destination is never bridged, the source is
@@ -39,6 +43,8 @@ Reception prepares a human web destination. That person privately hears permitte
 - [x] Consent/acceptance alone does not bypass policy application; a failed privacy barrier emits
   no main-media promotion or successful handoff and closes the room fail-closed.
 - [x] After commit source capabilities/workers end, two humans converse and variables survive; original start/duration clocks remain.
+- [x] Configured destination STT remains absent during private preparation, starts after promotion,
+  and delivers partial/final transcripts to the authorized caller without restarting existing STT.
 - [x] Busy/recoverably failing/dropped destination affects only the exact attempt and does not
   terminate a still-valid caller/source conversation.
 - [x] Pre-commit isolation blocks destination microphone publishing as well as main-room
@@ -56,7 +62,8 @@ Reception prepares a human web destination. That person privately hears permitte
    Verify only the destination hears the private briefing and configured notice; neither web human
    can exchange main-room audio before acceptance.
 4. Accept on the destination page. Verify it reports `Main room active`, the source agent exits,
-   and the two humans exchange audio in both directions. The detailed browser steps and expected
+   and the two humans exchange audio in both directions. Speak from the destination and verify
+   its transcription appears in the caller conversation. The detailed browser steps and expected
    data boundaries are in the [Console asset README](../../apps/vxpipe_console/assets/README.md#manual-human-transfer-test).
 5. Repeat with decline/no acceptance, stale acceptance, and privacy-apply failure using controlled
    fixtures.
@@ -156,9 +163,24 @@ revision-wide reset behavior described in the historical checkpoints above.
   revision 2 through revision 4; both peers exchange RTP after acceptance. See the
   [audio evidence](../../labnotes/20260913-2001-incremental-audio-policy.md).
 
+Pre-delivery human-transcription correction (2026-09-13): human promotion previously activated
+mixing but omitted the destination's configured STT. The engine now retains that runtime and the
+web/phone transport starts it after main admission through the existing supervised startup and
+policy binding path. Gateway now forwards room-authorized transcripts from other participants
+instead of filtering them to its own source connection. The focused checks cover private-lane
+exclusion, connection ownership, repeated activation, real two-peer RTP ingestion, and partial/final
+RTVI delivery with the destination participant ID. Rendered Chrome with live Gemini/Deepgram and
+a synthesized microphone stream displays support speech in the caller conversation while the
+destination remains active. All root gates pass; the full suite reports 1,007 tests, zero failures,
+and 15 integration exclusions with four concurrent test modules. See the
+[transcription evidence](../../labnotes/20260913-2019-human-transfer-transcription.md).
+
 ## Specification review
 
 Reviewed independently by milestone_review_b on 2026-09-08 for approved contracts,
 vertical outcome, acceptance/failure coverage, and index/dependency order.
 Added bidirectional private-lane isolation, transcript/snapshot restrictions and early-acceptance sequencing tests; re-review approved.
 The implementation and runtime evidence above complete the subsequently executed milestone.
+The 2026-09-13 transcription correction was reviewed against private-lane admission, capability
+ownership, policy-authorized routing, and independent human-only continuation; it adds no new
+milestone prerequisite or blanket capability restart.

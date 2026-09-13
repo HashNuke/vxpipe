@@ -16,10 +16,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     CallInvocation,
     DefinitionCompiler,
     TestSelectiveAgentRuntimeModelProvider,
-    TestTextToSpeechTransport
+    TestTextToSpeechTransport,
+    TestSpeechToTextTransport
   }
 
-  alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.SessionSupervisor
 
@@ -40,6 +41,19 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
       |> Keyword.put(:model_provider_options, owner: self())
 
+    speech_to_text = [
+      enabled: true,
+      provider: Flux,
+      provider_options: [api_key: "runtime-test-secret"],
+      transport: {TestSpeechToTextTransport, observer: self()},
+      media_ingress: [
+        maximum_frames: 50,
+        maximum_bytes: 65_536,
+        maximum_age_ms: 1_000,
+        maximum_consecutive_overflows: 10
+      ]
+    ]
+
     text_to_speech = [
       enabled: true,
       provider: FluxTextToSpeech,
@@ -59,6 +73,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       original
       |> Keyword.put(:agent_runtime, agent_runtime)
       |> Keyword.put(:text_to_speech, text_to_speech)
+      |> Keyword.put(:speech_to_text, speech_to_text)
     )
 
     on_exit(fn ->
@@ -130,6 +145,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              "data" => %{"message" => "The transfer control could not be accepted."}
            } = await_sideband(support_client, "error", 5_000)
 
+    refute_receive {:test_stt_transport_started, _, _}
     :ok = send_acceptance(support_client, "accept-support", attempt_id)
 
     assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
@@ -161,6 +177,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              "data" => %{"attempt_id" => ^attempt_id}
            } = await_sideband(support_client, "transfer.active", 5_000)
 
+    assert_receive {:test_stt_transport_started, support_stt, _connection}, 2_000
+
     # RTP time advances during the private briefing even when this fixture is silent.
     # The unchanged caller normalizer retains its original clock alignment.
     elapsed_ms = System.monotonic_time(:millisecond) - caller_audio_started_at
@@ -176,6 +194,46 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     )
 
     assert caller_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+    assert_receive {:test_stt_audio, ^support_stt, _audio}, 2_000
+
+    for {event, sequence} <- [{"StartOfTurn", 1}, {"EndOfTurn", 2}] do
+      TestSpeechToTextTransport.deliver(
+        support_stt,
+        JSON.encode!(%{
+          "type" => "TurnInfo",
+          "request_id" => "support-request",
+          "sequence_id" => sequence,
+          "event" => event,
+          "turn_index" => 0,
+          "audio_window_start" => 0.0,
+          "audio_window_end" => 1.0,
+          "transcript" => "Human support is here.",
+          "words" => [],
+          "end_of_turn_confidence" => 0.8,
+          "trigger" => "model"
+        })
+      )
+    end
+
+    support_id = support.participant_id
+
+    assert %{
+             "data" => %{
+               "text" => "Human support is here.",
+               "user_id" => ^support_id,
+               "final" => false
+             }
+           } =
+             await_sideband(caller_client, "user-transcription", 5_000)
+
+    assert %{
+             "data" => %{
+               "text" => "Human support is here.",
+               "user_id" => ^support_id,
+               "final" => true
+             }
+           } =
+             await_sideband(caller_client, "user-transcription", 5_000)
   end
 
   defp compile_plan do
@@ -210,6 +268,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    "human-support" => %{
                      type: "human",
                      description: "A human support specialist",
+                     capabilities: %{speech_to_text: "test-stt"},
                      connection: %{
                        service: "web",
                        mode: "receive",
@@ -244,6 +303,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    kind: :model_inference,
                    provider: :req_llm,
                    options: %{model: "test:scripted"}
+                 },
+                 "test-stt" => %{
+                   kind: :speech_to_text,
+                   provider: Flux,
+                   options: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
                  },
                  "test-voice" => %{
                    kind: :text_to_speech,

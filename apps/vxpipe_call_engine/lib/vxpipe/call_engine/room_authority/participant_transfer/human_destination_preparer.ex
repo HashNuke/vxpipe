@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanDestinationPr
       when is_integer(deadline_ms) do
     with %Vxpipe.CallEngine.TextToSpeechRuntime{} <- source_text_to_speech,
          {:ok, %HumanDestination{} = destination} <-
-           PlanStartup.human_destination(runtime.plan, participant),
+           PlanStartup.human_destination(runtime.plan, participant, runtime.startup_options),
          {:ok, outbound_leg} <-
            prepare_connection(runtime, participant, request.incarnation_id, deadline_ms) do
       prepare_text_to_speech(

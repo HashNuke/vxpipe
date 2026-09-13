@@ -147,6 +147,23 @@ defmodule Vxpipe.CallEngine do
     end
   end
 
+  @doc """
+  Starts configured STT for a main-room connection, preserving any existing instance.
+
+  Call from the process that owns the attached connection. Returns `nil` when that
+  participant has no configured STT.
+  """
+  @spec activate_speech_to_text(AttachConnection.t()) :: {:ok, pid() | nil} | {:error, Error.t()}
+  def activate_speech_to_text(%AttachConnection{} = command) do
+    if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
+      settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+      RoomSupervisor.activate_speech_to_text(command, Keyword.fetch!(settings, :speech_to_text))
+    else
+      {:error,
+       Error.new(:deadline_exceeded, "The speech-to-text activation deadline has elapsed.")}
+    end
+  end
+
   @spec participant_transfer_control(ParticipantTransferControl.t()) ::
           :ok | {:error, Error.t()}
   def participant_transfer_control(%ParticipantTransferControl{} = command) do

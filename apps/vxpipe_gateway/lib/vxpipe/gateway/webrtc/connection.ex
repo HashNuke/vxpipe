@@ -113,6 +113,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
        %{
          candidate_gathering_timeout_ms: Keyword.fetch!(options, :candidate_gathering_timeout_ms),
          attachment: attachment,
+         attach_command: attach_command,
          audio_egress: audio_egress,
          audio_tracks: %{},
          audio_jitter_latency_ms: Keyword.fetch!(options, :audio_jitter_latency_ms),
@@ -322,9 +323,11 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def handle_info(
-        {:vxpipe_event, %ParticipantTranscription{connection_id: connection_id} = event},
-        %{connection_id: connection_id} = state
-      ) do
+        {:vxpipe_event, %ParticipantTranscription{} = event},
+        %{attachment: %ConnectionAttachment{admission: :main}, session: session} = state
+      )
+      when event.tenant_id == session.tenant_id and event.room_id == session.room_id and
+             event.incarnation_id == session.incarnation_id do
     send_event(event, state)
     {:noreply, state}
   end

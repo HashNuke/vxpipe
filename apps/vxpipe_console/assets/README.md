@@ -89,7 +89,11 @@ is a failed test.
    acceptance, caller speech must not reach the destination and destination speech must not reach
    the caller.
 6. Choose **Accept transfer**. Verify the destination status becomes **Main room active**, the
-   source agent exits, and caller and destination can hear one another in both directions.
+   source agent exits, and caller and destination can hear one another in both directions. Speak
+   from the destination and verify its partial and completed transcriptions appear in the caller
+   console's conversation. The configured destination STT starts only after promotion; private
+   preparation speech must not appear there. The Pipecat template labels human speech `user`;
+   the underlying RTVI transcription retains the speaking participant's `user_id`.
 7. Disconnect the destination and verify the control ledger records the bounded state changes
    without displaying the private briefing, API key, Call Variables, or unrestricted history.
 
