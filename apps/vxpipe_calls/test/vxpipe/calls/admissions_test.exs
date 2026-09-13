@@ -11,7 +11,7 @@ defmodule Vxpipe.Calls.AdmissionsTest do
   @token_id "70572cb7-e280-4ae6-bd09-f1e49c6232c9"
   @token "vxj_test-only-prepared-call-token"
 
-  setup do
+  setup context do
     repository = start_supervised!(TestMemoryRepository)
 
     base_options = [
@@ -27,7 +27,16 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     assert {:ok, principal} =
              Administration.authenticate(tenant.key, issued_key.secret, :calls, base_options)
 
-    assert {:ok, draft} = Calls.save_definition(tenant.key, definition_input(), base_options)
+    input =
+      case Map.fetch(context, :wait_sounds) do
+        {:ok, sounds} ->
+          Map.merge(definition_input(), %{schema_version: "20260914.01", wait_sounds: sounds})
+
+        :error ->
+          definition_input()
+      end
+
+    assert {:ok, draft} = Calls.save_definition(tenant.key, input, base_options)
 
     assert {:ok, published} =
              Calls.publish_definition(tenant.key, draft.definition_id, 1, base_options)
@@ -79,6 +88,8 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     assert prepared_call.plan.call_variables.sections["order"].value == initial_variables["order"]
     assert is_binary(prepared_call.plan_digest)
     assert byte_size(prepared_call.plan_digest) == 32
+    assert map_size(prepared_call.plan.wait_sound_assets.assets) == 3
+    assert prepared_call.plan.wait_sound_assets.slots.transfer_joining != nil
 
     assert issued_token.secret == @token
     assert issued_token.call_id == @call_id
@@ -91,6 +102,20 @@ defmodule Vxpipe.Calls.AdmissionsTest do
 
     assert {:ok, stored} = Calls.fetch_call(context.tenant.key, @call_id, context.options)
     assert stored.initial_variables == initial_variables
+    assert TestMemoryRepository.admissions(context.repository) == []
+  end
+
+  @tag wait_sounds: %{transfer_joining: "http://127.0.0.1/private.wav"}
+  test "rejects an unsafe wait asset before persisting a call or issuing admission", context do
+    assert {:error,
+            %{
+              code: :wait_sound_unavailable,
+              details: %{"path" => ["wait_sounds", "transfer_joining"]}
+            }} =
+             Calls.prepare_call(context.principal, context.caller_route.key, %{}, context.options)
+
+    assert :error = Calls.fetch_call(context.tenant.key, @call_id, context.options)
+
     assert TestMemoryRepository.admissions(context.repository) == []
   end
 

@@ -10,12 +10,14 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     OpeningAudio,
     Participant,
     TransferPolicy,
-    ToolVisibility
+    ToolVisibility,
+    WaitSounds
   }
 
   alias Vxpipe.CallEngine.DefinitionValidation
 
-  @schema_version "20260913.01"
+  @schema_version "20260914.01"
+  @previous_schema_version "20260913.01"
   @fields [
     :schema_version,
     :name,
@@ -23,6 +25,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :entry_receiver,
     :defaults,
     :opening_audio,
+    :wait_sounds,
     :media_policy,
     :call_variables,
     :participants,
@@ -48,7 +51,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
     :tool_visibility,
     :max_duration_ms
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [wait_sounds: %WaitSounds{}]
 
   @type t :: %__MODULE__{
           resource_id: String.t(),
@@ -59,6 +62,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
           entry_receiver: String.t(),
           default_capabilities: Capabilities.t(),
           opening_audio: nil | OpeningAudio.t(),
+          wait_sounds: WaitSounds.t(),
           media_policy: MediaPolicy.t(),
           call_variables: CallVariables.t(),
           participants: %{String.t() => Participant.t()},
@@ -85,6 +89,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
          {:ok, schema_input} <-
            DefinitionValidation.fetch(input, :schema_version, code, message, []),
          :ok <- validate_schema(schema_input, code, message),
+         :ok <- validate_schema_fields(schema_input, input, code, message),
          {:ok, name} <- optional_name(input, code, message),
          {:ok, caller_input} <-
            DefinitionValidation.fetch(input, :entry_caller, code, message, []),
@@ -96,6 +101,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
            DefinitionValidation.identifier(receiver_input, code, message, ["entry_receiver"]),
          {:ok, defaults} <- defaults(Map.get(input, :defaults, %{}), code, message),
          {:ok, opening_audio} <- OpeningAudio.new(Map.get(input, :opening_audio)),
+         {:ok, wait_sounds} <- WaitSounds.from_optional(Map.fetch(input, :wait_sounds)),
          {:ok, media_policy} <-
            MediaPolicy.from_optional(Map.fetch(input, :media_policy), ["media_policy"]),
          {:ok, call_variables} <- CallVariables.new(Map.get(input, :call_variables, %{})),
@@ -119,12 +125,13 @@ defmodule Vxpipe.CallEngine.CallDefinition do
        %__MODULE__{
          resource_id: resource_id,
          revision: revision,
-         schema_version: @schema_version,
+         schema_version: schema_input,
          name: name,
          entry_caller: entry_caller,
          entry_receiver: entry_receiver,
          default_capabilities: defaults,
          opening_audio: opening_audio,
+         wait_sounds: wait_sounds,
          media_policy: media_policy,
          call_variables: call_variables,
          participants: participants,
@@ -151,6 +158,7 @@ defmodule Vxpipe.CallEngine.CallDefinition do
   end
 
   defp validate_schema(@schema_version, _code, _message), do: :ok
+  defp validate_schema(@previous_schema_version, _code, _message), do: :ok
 
   defp validate_schema(_value, code, message) do
     DefinitionValidation.invalid(
@@ -160,6 +168,17 @@ defmodule Vxpipe.CallEngine.CallDefinition do
       "must be a supported schema version"
     )
   end
+
+  defp validate_schema_fields(@previous_schema_version, %{wait_sounds: _value}, code, message) do
+    DefinitionValidation.invalid(
+      code,
+      message,
+      ["wait_sounds"],
+      "is not supported by this schema version"
+    )
+  end
+
+  defp validate_schema_fields(_version, _input, _code, _message), do: :ok
 
   defp optional_name(input, code, message) do
     DefinitionValidation.optional_string(

@@ -46,9 +46,27 @@ defmodule Vxpipe.CallEngine do
   @spec start_call(ResolvedCallPlan.t(), keyword()) ::
           {:ok, Vxpipe.CallEngine.Room.Snapshot.t()} | {:error, Error.t()}
   def start_call(%ResolvedCallPlan{} = plan, options \\ []) when is_list(options) do
-    with {:ok, runtime_options} <- runtime_options(plan, options) do
+    with {:ok, plan} <- prepare_call_audio(plan, options),
+         {:ok, runtime_options} <- runtime_options(plan, options) do
       RoomSupervisor.start_call(plan, runtime_options)
     end
+  end
+
+  @doc "Prepares and pins wait/cue audio before admission without starting a room."
+  @spec prepare_call_audio(ResolvedCallPlan.t(), keyword()) ::
+          {:ok, ResolvedCallPlan.t()} | {:error, Error.t()}
+  def prepare_call_audio(plan, options \\ [])
+
+  def prepare_call_audio(
+        %ResolvedCallPlan{wait_sound_assets: %Vxpipe.CallEngine.WaitSounds.PreparedAssets{}} =
+          plan,
+        _options
+      ),
+      do: {:ok, plan}
+
+  def prepare_call_audio(%ResolvedCallPlan{} = plan, options) do
+    plan = struct!(ResolvedCallPlan, Map.from_struct(plan))
+    Vxpipe.CallEngine.WaitSounds.Preparation.prepare(plan, options)
   end
 
   @spec create_room(CreateRoom.t()) ::

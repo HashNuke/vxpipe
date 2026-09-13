@@ -17,8 +17,10 @@ defmodule Vxpipe.CallEngine.OpeningAudio.WaveDecoder do
 
     with {:ok, chunks} <- riff_chunks(wave),
          {:ok, format, pcm} <- required_chunks(chunks),
-         :ok <- validate_format(format),
-         :ok <- validate_pcm(pcm, maximum_duration_ms) do
+         {:ok, channels} <- validate_format(format, Keyword.get(options, :channels, [1])),
+         :ok <- validate_pcm(pcm, channels, maximum_duration_ms) do
+      pcm = normalize(pcm, channels)
+
       {:ok,
        %Asset{
          codec: :linear16,
@@ -69,24 +71,36 @@ defmodule Vxpipe.CallEngine.OpeningAudio.WaveDecoder do
   defp required_chunks(_chunks), do: unsupported()
 
   defp validate_format(
-         <<1::little-16, @channels::little-16, @sample_rate::little-32, @byte_rate::little-32,
-           @block_align::little-16, @bits_per_sample::little-16, _extension::binary>>
-       ),
-       do: :ok
+         <<1::little-16, channels::little-16, @sample_rate::little-32, byte_rate::little-32,
+           block_align::little-16, @bits_per_sample::little-16, _extension::binary>>,
+         allowed
+       )
+       when channels in [1, 2] and byte_rate == @byte_rate * channels and
+              block_align == @block_align * channels do
+    if channels in allowed, do: {:ok, channels}, else: unsupported()
+  end
 
-  defp validate_format(_format), do: unsupported()
+  defp validate_format(_format, _allowed), do: unsupported()
 
-  defp validate_pcm(pcm, maximum_duration_ms)
+  defp validate_pcm(pcm, channels, maximum_duration_ms)
        when is_integer(maximum_duration_ms) and maximum_duration_ms > 0 and
-              byte_size(pcm) > 0 and rem(byte_size(pcm), @block_align) == 0 do
-    if byte_size(pcm) * 1_000 <= maximum_duration_ms * @byte_rate do
+              byte_size(pcm) > 0 and rem(byte_size(pcm), @block_align * channels) == 0 do
+    if byte_size(pcm) * 1_000 <= maximum_duration_ms * @byte_rate * channels do
       :ok
     else
       {:error, :audio_too_long}
     end
   end
 
-  defp validate_pcm(_pcm, _maximum_duration_ms), do: unsupported()
+  defp validate_pcm(_pcm, _channels, _maximum_duration_ms), do: unsupported()
+
+  defp normalize(pcm, 1), do: pcm
+
+  defp normalize(pcm, 2) do
+    for <<left::little-signed-16, right::little-signed-16 <- pcm>>, into: <<>> do
+      <<div(left + right, 2)::little-signed-16>>
+    end
+  end
 
   defp unsupported, do: {:error, :unsupported_audio_format}
 end

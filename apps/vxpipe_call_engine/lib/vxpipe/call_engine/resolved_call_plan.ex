@@ -31,7 +31,11 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
     :tool_visibility,
     :max_duration_ms
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [
+                wait_sounds: %Vxpipe.CallEngine.CallDefinition.WaitSounds{},
+                wait_sound_assets: nil
+              ]
 
   @type t :: %__MODULE__{
           definition_id: String.t(),
@@ -45,6 +49,8 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
           entry_caller: String.t(),
           entry_receiver: String.t(),
           opening_audio: nil | Vxpipe.CallEngine.ResolvedCallPlan.OpeningAudio.t(),
+          wait_sounds: Vxpipe.CallEngine.CallDefinition.WaitSounds.t(),
+          wait_sound_assets: Vxpipe.CallEngine.WaitSounds.PreparedAssets.t() | nil,
           media_policy: MediaPolicy.t(),
           participants: %{String.t() => Participant.t()},
           transfer_policy: TransferPolicy.t(),

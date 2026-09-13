@@ -140,7 +140,8 @@ config :vxpipe_gateway, Vxpipe.Gateway.Application,
           "order" => %{"id" => "order-demo-1001"}
         },
         definition: %{
-          schema_version: "20260913.01",
+          schema_version: "20260914.01",
+          wait_sounds: %{},
           name: "Development sample",
           entry_caller: "caller",
           entry_receiver: "reception",

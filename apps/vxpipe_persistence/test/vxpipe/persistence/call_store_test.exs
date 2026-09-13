@@ -143,6 +143,10 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert reloaded.plan == prepared.plan
     assert reloaded.plan.opening_audio.text_to_speech.profile == "opening-voice"
     assert reloaded.plan.opening_audio.text_to_speech.options == %{model: "notice-voice"}
+    assert reloaded.plan.wait_sounds.transfer_joining == :cafe_bossa
+    assert map_size(reloaded.plan.wait_sound_assets.assets) == 3
+    joining = reloaded.plan.wait_sound_assets.slots.transfer_joining
+    assert Map.fetch!(reloaded.plan.wait_sound_assets.assets, joining).duration_ms == 9_000
     assert reloaded.plan_digest == prepared.plan_digest
     assert Repo.aggregate(StoredCall, :count) == 1
     assert Repo.aggregate(StoredJoinToken, :count) == 1

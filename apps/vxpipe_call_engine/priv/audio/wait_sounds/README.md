@@ -1,30 +1,39 @@
 # Bundled wait-sound sources
 
-These original assets are copied unchanged from the repository's authoring `assets/` directory
-for the proposed [transfer readiness and wait-sound milestone](../../../../../docs/milestones/transfer-readiness-and-wait-sounds.md).
-Call Engine owns them so both web and phone adapters, as well as embedded hosts, can use them.
-Runtime selection and playback are still to be implemented.
+Call Engine packages these assets for web, phone and embedded participants. Call definitions
+select defaults by omission, silence with null / Elixir `nil`, or a custom HTTP(S) file URL.
+Authored configuration never selects these local filenames. See the
+[transfer readiness milestone](../../../../../docs/milestones/transfer-readiness-and-wait-sounds.md).
 
-| File | Format | Duration | SHA-256 |
+| File | Packaged format | Duration | SHA-256 |
 | --- | --- | --- | --- |
-| `cafe-bossa.wav` | Stereo, 48,000 Hz, signed PCM16 little-endian | 9 seconds | `c20f5348c47cd92d5d9ef6206a37ae9bcbad16f3767b4d92b392a0eb334f6aad` |
-| `phone-ring.wav` | Stereo, 48,000 Hz, signed PCM16 little-endian | 9 seconds | `3e7b1bc36207074e140393b1d769f1868e8b10979ed4b519a5ff72e2b1a82157` |
+| `cafe-bossa.wav` | Stereo, 48 kHz PCM16 little-endian | 9 seconds | `c905d5a0acbe01d2d992c08708b4d079b17e50a240e8d1220a1ddb659718efd1` |
+| `phone-ring.wav` | Stereo, 48 kHz PCM16 little-endian | 9 seconds | `828699704571814b61b5385a17f7b99091f65771b93fb21d75d562d74cb913a5` |
+| `connection-cue.wav` | Mono, 48 kHz PCM16 little-endian | 250 ms | `65ba012274aae1c8da4bb624518f01a1a1a1d7faa7753346b710b1f2071f0712` |
 
-Each file contains 432,000 stereo frames and is 1,728,044 bytes. The copies match their source
-files byte for byte. The [authoring instructions](../../../../../assets/README.md) describe the
-original synthesized arrangements, loop boundaries, levels and ringtone cadence. Preserve the
-intentional pauses in the ringtone and avoid fading at every repeat boundary.
+The two loops preserve all 432,000 stereo frames from the
+[authoring originals](../../../../../sounds/README.md). The original ChucK output declared the
+RIFF size as the complete 1,728,044-byte file size. The engine copies correct that four-byte field
+to 1,728,036 (file size minus eight); every other byte remains identical. Preserve intentional
+ringtone pauses and avoid fading at repeat boundaries.
 
-The existing `OpeningAudio.WaveDecoder` accepts mono, so these stereo sources cannot simply be
-passed to it unchanged. The milestone will normalize to canonical 48 kHz mono PCM16 once during
-asset preparation, cache the immutable result, and give each participant an independent player.
-No decoder broadening or runtime conversion is included in this asset-copy checkpoint.
+Preparation strictly validates mono/stereo 48 kHz PCM16 WAV files and averages stereo pairs once
+using signed integer division, with no gain increase or clipping. It caches the canonical mono
+result. Opening audio continues to require mono unless its caller explicitly selects stereo
+normalization. Invalid remote RIFF sizes are rejected; there is no permissive decoder fallback.
+Resolve built-ins with `Application.app_dir(:vxpipe_call_engine, "priv/audio/wait_sounds/...")`,
+independently of the working directory. The prepared manifest deduplicates normalized bytes and
+pins their digest and normalization profile; per-participant players will own separate cursors.
 
-Resolve these built-in defaults internally using
-`Application.app_dir(:vxpipe_call_engine, "priv/audio/wait_sounds/...")`; never depend on the
-repository working directory or expose local paths in call definitions. The proposed call-level
-`wait_sounds` accepts URLs (fetch and play), null / Elixir `nil` (silence), or omission (use these
-defaults). Authored configuration does not select local asset names. Café-bossa is the default for
-transfer audiences going to an AI and for incoming humans after acceptance; phone-ring is the
-default for audiences going to a human and the proposed initial caller setup default. A distinct,
-finite connection beep will be generated and validated during implementation.
+The finite connection cue is a 1 kHz sine, 12,000 samples, at a -6 dBFS peak, with 240-sample
+(5 ms) linear ramps at each end. Its samples are generated with this expression, for sample index
+`i` from 0 through 11,999, then written as signed PCM16 little-endian in a mono 48 kHz WAV:
+
+```python
+round(32767 * 10**(-6/20) * min(1, i/240, (11999-i)/240)
+      * math.sin(2*math.pi*1000*i/48000))
+```
+
+The cue remains present when every wait slot is nil. Preparation tests verify the cue duration
+and peak, built-in normalization and waveform preservation. Playback orchestration and rendered
+web/phone audibility verification remain milestone acceptance work.

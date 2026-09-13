@@ -81,6 +81,7 @@ defmodule Vxpipe.CallEngine.DefinitionCompiler do
          entry_caller: definition.entry_caller,
          entry_receiver: definition.entry_receiver,
          opening_audio: opening_audio,
+         wait_sounds: definition.wait_sounds,
          media_policy: media_policy,
          participants: participants,
          transfer_policy: definition.transfer_policy,

@@ -6,7 +6,8 @@ closes the room-recording path during opening playback.
 
 ## Decision
 
-Call-definition schema `20260913.01` supports one optional call-level `opening_audio` value.
+Call-definition schemas `20260913.01` and `20260914.01` support one optional call-level
+`opening_audio` value. The newer schema adds wait sounds without changing the opening contract.
 Fixed text requires its own TTS capability-profile reference:
 
 ```json
@@ -56,8 +57,8 @@ Opening completion does not revise privacy policy or restart warmed capabilities
 
 This replaces the previous schema's inherited initial-agent voice. Publish definitions using
 `20260913.01` and add `opening_audio.text_to_speech` to every text opening. There is no fallback
-to participant capabilities, call defaults, another agent, or an invented voice. Existing schema
-versions are not accepted as newly authored definitions. Reprepare unstarted calls from an updated
+to participant capabilities, call defaults, another agent, or an invented voice. Versions older than `20260913.01`
+are not accepted as newly authored definitions; `20260914.01` retains the explicit opening profile. Reprepare unstarted calls from an updated
 definition instead of silently supplying a voice to an old pinned plan. Historical definitions
 and completed-call plans remain immutable. Omitted openings and file URLs need no TTS reference.
 

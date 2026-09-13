@@ -13,8 +13,7 @@ call-details publications, is complete, including immutable late revisions and p
 retrieval. Milestone 22, context compaction and supported LLM fallback, is complete, including
 bounded private summaries, provider-native routing, truthful usage, and runnable HTTPS/WebRTC
 acceptance. The platform is now at its pre-delivery review hold. Milestone 23 proposes transfer
-readiness and participant wait sounds in response to that review; it awaits user approval before
-runtime implementation. Milestones 24 and 25 remain unimplemented until the user has exercised the
+readiness and participant wait sounds in response to that review; the user authorized its implementation on 2026-09-14. Milestones 24 and 25 remain unimplemented until the user has exercised the
 working platform and decided to proceed with packaging and retention.
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
@@ -66,7 +65,7 @@ progress without claiming the entire milestone is complete.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Prepare every required capability, play independent private waits and an ordered connection cue, then release media and complete transfers; proposal awaiting user review.
+23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Prepare every required capability, play independent private waits and an ordered connection cue, then release media and complete transfers; implementation authorized; acceptance pending.
 24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -90,8 +89,9 @@ milestones track the speech and audio checkpoints; this does not change mileston
 ordering or lift the packaging/retention hold.
 
 The subsequent [transfer readiness and participant wait sounds proposal](transfer-readiness-and-wait-sounds.md)
-adds milestone 23 before delivery. Its schema, readiness barrier and playback lifecycle are pending
-user review; only the proposal and requested source-asset copies are prepared. This insertion keeps
+adds milestone 23 before delivery. The user authorized implementation on 2026-09-14; its first
+definition/asset checkpoint passes all root gates (1,025 tests, zero failures), and readiness/
+playback acceptance remains pending. This insertion keeps
 packaging and retention behind the same explicit review hold.
 
 The opening-audio review also reproduced and corrected recording of caller audio during the

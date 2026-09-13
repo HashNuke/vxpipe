@@ -16,8 +16,8 @@ defmodule Vxpipe.CallEngine.OpeningAudio.AssetCache do
   end
 
   @spec key(String.t(), String.t()) :: binary()
-  def key(tenant_id, url) when is_binary(tenant_id) and is_binary(url) do
-    :crypto.hash(:sha256, [tenant_id, 0, url, 0, @profile])
+  def key(tenant_id, url, profile \\ @profile) when is_binary(tenant_id) and is_binary(url) do
+    :crypto.hash(:sha256, [tenant_id, 0, url, 0, profile])
   end
 
   @spec text_key(String.t(), String.t(), map()) :: binary()
@@ -28,7 +28,8 @@ defmodule Vxpipe.CallEngine.OpeningAudio.AssetCache do
   end
 
   @spec fetch(GenServer.server(), binary()) :: :miss | {:ok, Asset.t()}
-  def fetch(cache, key) when is_binary(key), do: GenServer.call(cache, {:fetch, key})
+  def fetch(cache, key, maximum_age_ms \\ :infinity) when is_binary(key),
+    do: GenServer.call(cache, {:fetch, key, maximum_age_ms})
 
   @spec put(GenServer.server(), binary(), Asset.t()) ::
           :ok | {:error, :asset_too_large}
@@ -57,12 +58,17 @@ defmodule Vxpipe.CallEngine.OpeningAudio.AssetCache do
   end
 
   @impl true
-  def handle_call({:fetch, key}, _from, state) do
+  def handle_call({:fetch, key, maximum_age_ms}, _from, state) do
     case Map.fetch(state.entries, key) do
       {:ok, entry} ->
-        sequence = state.sequence + 1
-        entries = Map.put(state.entries, key, %{entry | touched_at: sequence})
-        {:reply, {:ok, entry.asset}, %{state | entries: entries, sequence: sequence}}
+        if maximum_age_ms == :infinity or
+             System.monotonic_time(:millisecond) - entry.inserted_at < maximum_age_ms do
+          sequence = state.sequence + 1
+          entries = Map.put(state.entries, key, %{entry | touched_at: sequence})
+          {:reply, {:ok, entry.asset}, %{state | entries: entries, sequence: sequence}}
+        else
+          {:reply, :miss, remove_entry(state, key)}
+        end
 
       :error ->
         {:reply, :miss, state}
@@ -77,7 +83,13 @@ defmodule Vxpipe.CallEngine.OpeningAudio.AssetCache do
     else
       state = remove_entry(state, key)
       sequence = state.sequence + 1
-      entry = %{asset: asset, size: size, touched_at: sequence}
+
+      entry = %{
+        asset: asset,
+        size: size,
+        touched_at: sequence,
+        inserted_at: System.monotonic_time(:millisecond)
+      }
 
       state = %{
         state

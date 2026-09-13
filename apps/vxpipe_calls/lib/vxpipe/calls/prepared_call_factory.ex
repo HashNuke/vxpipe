@@ -14,7 +14,8 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
              revision: revision.revision
            ),
          {:ok, invocation} <- invocation(revision, initial_variables, transport, options),
-         {:ok, plan} <- CallPlanCompiler.compile(definition, invocation, options) do
+         {:ok, plan} <- CallPlanCompiler.compile(definition, invocation, options),
+         {:ok, plan} <- Vxpipe.CallEngine.prepare_call_audio(plan, options) do
       {:ok, prepared_call(plan, revision.routes, initial_variables, options)}
     end
   end

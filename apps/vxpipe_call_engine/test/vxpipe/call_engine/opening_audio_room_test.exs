@@ -801,7 +801,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
   defp configure_opening_audio(response) do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-    cache = start_supervised!({AssetCache, maximum_entries: 2, maximum_bytes: 256})
+    cache = start_supervised!({AssetCache, maximum_entries: 8, maximum_bytes: 4_194_304})
 
     opening_audio = [
       cache: cache,
@@ -850,7 +850,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     opening_audio_cache =
       start_supervised!(
-        {AssetCache, maximum_entries: 8, maximum_bytes: 1_024},
+        {AssetCache, maximum_entries: 8, maximum_bytes: 4_194_304},
         id: :speech_runtime_opening_audio_cache
       )
 

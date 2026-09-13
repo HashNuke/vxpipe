@@ -1,6 +1,7 @@
 # Transfer readiness and participant wait sounds
 
-Status: proposed for user review; runtime implementation has not started.
+Status: implementation in progress (2026-09-14); definition/asset checkpoint complete.
+Playback, readiness and coordinated transfer acceptance remain incomplete.
 Prerequisites: [Call lifecycle and opening audio](opening-audio-and-call-lifecycle.md),
 [Agent transfers](agent-transfers.md), [Live mixing and media policy](live-mixing-and-media-policy.md),
 [Human web transfers](human-web-transfers.md), [Common phone transfers](telnyx-calls.md),
@@ -36,7 +37,7 @@ phone, human destinations, agent destinations, and rooms with more than two part
   paced looping player. Private and room output also need one ordered recipient output path.
 - The supplied WAVs are stereo; the existing opening WAV decoder requires 48 kHz mono PCM16.
 
-## Proposed call-definition changes
+## Call-definition changes
 
 Add one call-level `wait_sounds` object. Each configured value is an absolute audio-file URL or
 null (`nil` in Elixir). Omission selects the built-in default for that scenario. Configuration is
@@ -45,24 +46,22 @@ or participant-level settings are needed for this proposal. Keep `transfers` as 
 allowlist and the shared attempt timeout in `transfer_policy`. Readiness is an engine invariant,
 not an optional `wait_until_ready` setting.
 
-| Slot | Listener and trigger | Proposed built-in default |
+| Slot | Listener and trigger | Built-in default |
 | --- | --- | --- |
-| `call_setup` | Entry caller, once its output connection can play audio, while initial room/capability setup is incomplete | `phone-ring` (proposed) |
+| `call_setup` | Entry caller, once its output connection can play audio, while initial room/capability setup is incomplete | `phone-ring` |
 | `transfer_to_agent` | Existing audience, including the caller, when the transfer destination is an AI agent | `cafe-bossa` |
 | `transfer_to_human` | Existing audience, including the caller, when the transfer destination is a human | `phone-ring` |
 | `transfer_joining` | Incoming human destination, immediately after accepted transfer control, until readiness permits the connection cue | `cafe-bossa` |
 
 The transfer defaults above reflect the user's follow-up: AI-to-AI uses café-bossa; AI-to-human
-uses phone-ring for the caller/audience and café-bossa for the receiving human. The initial caller
-setup ringtone remains a proposal because the request excludes café-bossa there without choosing
-an alternative. The audible connection beep is a separate mandatory handoff action, not a wait
+uses phone-ring for the caller/audience and café-bossa for the receiving human. The implementation authorization also accepts phone-ring for initial caller setup. The audible connection beep is a separate mandatory handoff action, not a wait
 sound; setting a wait slot to null does not disable readiness gates or the beep.
 
-Example proposed definition (not accepted by today's parser; the schema version is provisional):
+Definition syntax in schema `20260914.01` (playback orchestration is still being implemented):
 
 ```json
 {
-  "schema_version": "NEXT_SCHEMA_REVISION",
+  "schema_version": "20260914.01",
   "name": "Support with participant wait sounds",
   "entry_caller": "caller",
   "entry_receiver": "reception",
@@ -111,7 +110,7 @@ Omit `wait_sounds` entirely to use the defaults; URLs above are illustrative, no
 | A slot is omitted | Use only that slot's built-in default |
 | A slot is a valid supported HTTP(S) file URL | Fetch, validate, prepare and play that file for that scenario |
 | A slot is null / `nil` | Play no wait sound for that scenario; other slots still use their values/defaults |
-| `wait_sounds` itself is null / `nil` | Proposed shorthand: disable all four wait sounds |
+| `wait_sounds` itself is null / `nil` | Disable all four wait sounds |
 
 - Preserve missing versus explicitly null during parsing/serialization; use presence-aware
   resolution rather than treating both as the same absent value. Reject booleans, bare asset
@@ -297,7 +296,7 @@ held conversation. End when no valid conversation can be recovered. Never redial
 Each checkpoint includes its own failing contract check first, implementation, focused verification,
 documentation and labnotes; preserve a runnable umbrella between commits.
 
-- [ ] **Definition and asset resolution:** add typed call-level wait slots, presence-aware
+- [x] **Definition and asset resolution:** add typed call-level wait slots, presence-aware
   URL/null/default resolution, strict validation, bounded URL fetching, pinned plan/asset resolution,
   compatibility parsing and the development sample configuration.
   Normalize bundled stereo PCM16 to canonical 48 kHz mono once per cached asset; generate the
@@ -378,7 +377,7 @@ Console owns human-facing phases. Keep provider startup and media pacing outside
 - Increasing phase deadlines hides incomplete ordering and extends calls unpredictably; keep one
   bounded attempt clock and expose which required stage is still preparing.
 - This extends the current contracts; it does not mark historical implemented milestones incomplete.
-  New runtime and the revised acceptance window require user approval of this proposal. No new
+  The user authorized this runtime and the revised acceptance window on 2026-09-14. No new
   named-transfer graph, arbitrary dialing, provider-specific definition format or indefinite hold
   behavior is needed.
 
@@ -392,8 +391,29 @@ Console owns human-facing phases. Keep provider startup and media pacing outside
   cursors, pre-room output, opening/briefing ordering, early acceptance, policy races, output
   ordering, rollback, deadlines, schema migration and prerequisite order. Record this design
   review separately from runtime progress in the [planning labnote](../../labnotes/20260913-2307-transfer-readiness-sounds.md).
-- [ ] User approves the proposed schema/defaults, acceptance window and cue audience.
+- [x] User authorizes implementation of this milestone, including schema/defaults, acceptance window and cue audience (2026-09-14).
 - [ ] Runtime acceptance and common implementation gates pass.
 
-Planning checks cover documents and copied assets only. The proposed schema is not implemented,
-the beep has not yet been generated, and no new runtime/browser/provider acceptance is claimed.
+The original planning checks covered documents and copied assets only. Implementation evidence
+is recorded below; no new playback/browser/provider acceptance is claimed yet.
+
+## Implementation evidence
+
+The first checkpoint introduces the typed `wait_sounds` selection, schema `20260914.01`, explicit
+compatibility for `20260913.01`, bounded URL preparation and pinned normalized audio. A prepared
+manifest stores each distinct audio payload once, keyed by content digest, plus slot/cue references
+and the normalization profile. New call preparation reuses URL cache entries for up to 60 seconds;
+after that it fetches again. Active/prepared calls retain their own immutable bytes. The original
+bundled WAV RIFF-size metadata required correction; waveform bytes are unchanged. The built-in
+250 ms connection beep is generated, but runtime cue playback is not yet integrated.
+
+Compiler, asset, admission and PostgreSQL reconstruction regressions have passed. Complete gate
+results and subsequent checkpoints are tracked in the
+[implementation labnote](../../labnotes/20260914-0032-transfer-readiness-implementation.md).
+
+All five root gates pass for the definition/asset checkpoint: formatting, warnings-as-errors
+compilation, strict Credo, 1,025 umbrella tests with zero failures, and unused-dependency checks.
+Older serialized plans hydrate missing wait fields only at the explicit preparation boundary;
+the original saved bytes/schema/identities remain unchanged. Already prepared audio is reused
+without refetching. Playback, the common readiness barrier and the remaining acceptance items
+remain incomplete.
