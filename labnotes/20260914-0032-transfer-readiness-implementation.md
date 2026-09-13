@@ -406,3 +406,31 @@ unchecked; the milestone and index are still incomplete.
   tests with zero failures (15 integrations excluded), and unused-dependency checks. The milestone
   records the shared-output boundary and leaves negotiated transport, inventory and lifecycle
   acceptance unchecked. No running server was restarted or live provider acceptance claimed.
+
+## Negotiated WebRTC connection and input evidence
+
+- Added separate output/connection and input resource queries backed by actual ExWebRTC transport
+  state and negotiated transceivers. Queries run outside Connection's receive loop and recheck its
+  negotiation revision before accepting evidence. Output pins the configured sender track/codec;
+  input requires one receiving track with a supported Opus format. No media probe is generated.
+- The selected resource list requires explicit input demand, so receive-only listeners do not need
+  microphone negotiation. The input-track projection supplies the same string ID/format used by
+  received engine frames for later ingress and recording preparation. This does not bind those
+  handoffs yet. Session identity alone cannot choose the prospective room's input demand.
+- Red evidence: two real-peer checks failed on missing Connection readiness APIs; two projection
+  checks failed on the absent negotiated-audio module. A separate direction regression then showed
+  that changing only the opposite direction changed the signature. Signatures now use their relevant
+  direction, retaining the unchanged track/codec evidence.
+- One receive-only run exposed a fixture race: the client reported connected before the server's
+  transport had reached connected. The fixture now awaits the collector's actual server evidence,
+  instead of assuming the client event proves both sides. All seven focused checks pass, including
+  collection before any RTP, stable evidence after two-way audio, receive-only negotiation,
+  incompatible codecs and multiple active inputs. Root gates follow.
+- Local design review and remaining limits are in the resource contract. The next input boundary
+  is Engine Media.Ingress: it currently learns its track from the first accepted frame. Its eventual
+  preparation/readiness must also match SpeechToText's configured media format and policy interval,
+  while keeping held microphone frames discarded. Phone media and full lifecycle integration remain.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,107 umbrella
+  tests with zero failures (15 integrations excluded), and unused-dependency checks. The completed
+  gate process was polled and its final zero exit verified on continuation. No server was restarted.
+  Milestone evidence records this boundary without checking off common readiness or lifecycle work.

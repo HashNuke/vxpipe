@@ -31,8 +31,40 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     caller_session = issue_session(plan, room, caller.participant_id)
     receiver_session = issue_session(plan, room, receiver.participant_id)
 
-    caller_client = connect(caller_session.session_id)
+    caller_client =
+      connect(caller_session.session_id,
+        before_connect: fn connection ->
+          assert {:ok, _output, :preparing} = Connection.readiness(connection)
+          assert {:ok, _input, :preparing} = Connection.input_readiness(connection)
+        end
+      )
+
     receiver_client = connect(receiver_session.session_id)
+
+    assert {:ok, [output, input] = resources} =
+             Connection.readiness_resources(caller_client.connection_id, input?: true)
+
+    assert output.kind == :media_connection
+    assert input.kind == :media_input
+    assert input.scope == {:participant, caller.participant_id}
+
+    collector =
+      start_supervised!(
+        {Vxpipe.CallEngine.Readiness.Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "connected-media",
+         resources: resources,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert {:ok, ^output, :ready} = Connection.readiness(caller_client.connection_id)
+    assert {:ok, ^input, :ready} = Connection.input_readiness(caller_client.connection_id)
+    assert {:ok, track} = Connection.input_track(caller_client.connection_id)
+    assert track.codec == :opus
+    assert track.sample_rate == 48_000
+    assert is_binary(track.track_id)
 
     :ok = send_audio(caller_client, 1, 960, 8_000)
     receiver_packet = await_audio(receiver_client, 5_000)
@@ -46,6 +78,39 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     :ok = send_audio(receiver_client, 1, 960, -8_000)
     caller_packet = await_audio(caller_client, 5_000)
     assert decodable_pcm_size(caller_packet) == 1_920
+    assert {:ok, ^output, :ready} = Connection.readiness(caller_client.connection_id)
+    assert {:ok, ^input, :ready} = Connection.input_readiness(caller_client.connection_id)
+    assert {:ok, ^track} = Connection.input_track(caller_client.connection_id)
+  end
+
+  test "a receive-only connection can be ready without a negotiated input track" do
+    plan = compile_monitor_plan()
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+    monitor = Map.fetch!(plan.participants, "monitor")
+    assert {:ok, command} = join_command(plan, monitor.participant_id, :monitor)
+    assert {:ok, _participant} = CallEngine.join_participant(command)
+
+    client =
+      connect(issue_session(plan, room, monitor.participant_id).session_id, direction: :recvonly)
+
+    assert {:ok, [output] = resources} = Connection.readiness_resources(client.connection_id)
+
+    collector =
+      start_supervised!(
+        {Vxpipe.CallEngine.Readiness.Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "receive-only-media",
+         resources: resources,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert {:ok, ^output, :ready} = Connection.readiness(client.connection_id)
+    assert {:ok, input, :preparing} = Connection.input_readiness(client.connection_id)
+    assert input.scope == {:participant, monitor.participant_id}
+    assert {:error, :unavailable} = Connection.input_track(client.connection_id)
   end
 
   test "a restrictive participant commits new live routes before queued audio can cross" do
@@ -286,7 +351,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     session
   end
 
-  defp connect(session_id) do
+  defp connect(session_id, options \\ []) do
     client_id = unique_id("client")
     child_spec = Supervisor.child_spec({PeerConnection, []}, id: {PeerConnection, client_id})
     client = start_supervised!(child_spec)
@@ -295,7 +360,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
     input_track = MediaStreamTrack.new(:audio)
 
     assert {:ok, _transceiver} =
-             PeerConnection.add_transceiver(client, input_track, direction: :sendrecv)
+             PeerConnection.add_transceiver(client, input_track,
+               direction: Keyword.get(options, :direction, :sendrecv)
+             )
 
     assert {:ok, offer} = PeerConnection.create_offer(client)
     :ok = PeerConnection.set_local_description(client, offer)
@@ -319,6 +386,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
     assert %{"pc_id" => connection_id, "sdp" => answer_sdp, "type" => "answer"} =
              JSON.decode!(response.resp_body)
+
+    if callback = Keyword.get(options, :before_connect), do: callback.(connection_id)
 
     :ok =
       PeerConnection.set_remote_description(

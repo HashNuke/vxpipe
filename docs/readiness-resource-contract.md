@@ -236,6 +236,35 @@ Both deterministic phone adapter fixtures query their actual private/room output
 exchanging audio. Negotiated live transport and required input-track evidence remain separate
 requirements; these output checks do not claim complete connection or lifecycle readiness.
 
+## Negotiated WebRTC media
+
+Connection readiness now queries ExWebRTC's current transport state and negotiated transceivers
+outside the gateway connection loop. Output evidence requires a connected peer and the configured
+output track with a compatible selected Opus codec and sending direction. Input evidence separately
+requires one negotiated receiving track with a supported Opus format. No RTP packet, microphone
+sample or provider request establishes this evidence. Multiple active input tracks fail explicitly
+because the current ingress supports one pinned track per connection.
+
+`Connection.readiness_resources/2` includes input only when the caller requests `input?: true`.
+The prospective inventory must make that choice from participant capability/policy demand, including
+private destination preparation; current attachment permissions are not the prospective contract.
+A receive-only connection can therefore become ready without an input track. `input_track/1`
+provides the normalized track ID and format for subsequent ingress/recording preparation.
+
+Resource signatures pin the negotiated track, codec and relevant direction. Changing only the
+opposite direction preserves that resource's signature. A negotiation revision fences observations
+crossing a negotiation call without becoming part of the resource's lifetime/configuration itself.
+Ordinary RTP traffic and holds do not change these bindings. Collector monitoring and phase-boundary
+refresh remain required for loss after an observation.
+
+Local design review rejected deriving connectivity from the client-side connected event, accepting
+an allocated transceiver without a negotiated direction, learning readiness from the first packet,
+and requiring microphone negotiation for every listener. Real two-peer checks collect output/input
+readiness before audio exchange, retain descriptors afterward, and cover a receive-only peer.
+Codec/direction checks cover incompatible codecs, ambiguous inputs and independent directions.
+Phone transport evidence, actual ingress track binding and complete lifecycle inventory remain
+outstanding; negotiated input readiness does not itself prove the STT/normalizer handoffs are bound.
+
 ## Rejected alternatives and verification
 
 Checking PIDs would release while providers are still connecting. Resetting all ready state on

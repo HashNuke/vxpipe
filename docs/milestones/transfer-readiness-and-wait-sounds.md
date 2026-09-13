@@ -533,3 +533,11 @@ web/phone/media checks pass, including both phone adapter fixtures. All five roo
 1,103 tests, zero failures and 15 integrations excluded. Negotiated connection/input-track evidence,
 STT ingress, prospective inventory and lifecycle orchestration remain incomplete; output readiness
 does not substitute for those requirements or rendered/live-provider acceptance.
+
+WebRTC connection/input evidence now requires the server's connected transport and negotiated
+track/codec/direction before any RTP arrives. Receive-only listeners can omit input demand;
+unchanged directions retain their descriptors. Seven focused checks pass. All five root gates pass
+with 1,107 tests, zero failures and 15 integrations excluded. The negotiated input projection is
+available for preparing actual ingress handoffs, which remain unfinished along with phone transport
+evidence, prospective inventory and lifecycle orchestration. Common readiness and full milestone
+acceptance remain unchecked.

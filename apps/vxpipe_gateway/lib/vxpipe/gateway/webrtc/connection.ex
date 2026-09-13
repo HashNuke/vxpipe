@@ -3,12 +3,16 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias ExRTP.Packet
   alias ExWebRTC.{DataChannel, MediaStreamTrack, PeerConnection, SessionDescription}
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.Gateway.WebRTC.Connection.Readiness
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
@@ -61,6 +65,22 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   def add_ice_candidates(connection_id, candidates) when is_list(candidates) do
     call(connection_id, {:add_ice_candidates, candidates})
   end
+
+  @impl true
+  def readiness(connection), do: Readiness.readiness(connection, :output)
+
+  @impl true
+  def readiness_binding(%Resource{kind: :media_connection, instance: connection}),
+    do: readiness(connection)
+
+  def readiness_binding(%Resource{kind: :media_input, instance: connection}),
+    do: input_readiness(connection)
+
+  def readiness_binding(_invalid), do: {:error, :unavailable}
+
+  def input_readiness(connection), do: Readiness.readiness(connection, :input)
+  def input_track(connection), do: Readiness.input_track(connection)
+  def readiness_resources(connection, options \\ []), do: Readiness.resources(connection, options)
 
   @impl true
   def init(options) do
@@ -121,6 +141,16 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          audio_tracks: %{},
          audio_jitter_latency_ms: Keyword.fetch!(options, :audio_jitter_latency_ms),
          connection_id: connection_id,
+         media_readiness_resource:
+           Resource.new(
+             :media_connection,
+             {:participant, session.participant_id},
+             __MODULE__,
+             {session.tenant_id, session.room_id, session.incarnation_id, session.participant_id,
+              peer_connection, output_track.id},
+             binding: connection_id
+           ),
+         negotiation_revision: 0,
          output_track_id: output_track.id,
          peer_connection: peer_connection,
          peer_monitor: Process.monitor(peer_connection),
@@ -140,9 +170,13 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   @impl true
+  def handle_call(:media_readiness_binding, _from, state) do
+    {:reply, {:ok, Readiness.binding(state)}, state}
+  end
+
   def handle_call({:negotiate, offer}, _from, state) do
     reply = negotiate_peer(state.peer_connection, offer, state.candidate_gathering_timeout_ms)
-    {:reply, reply, state}
+    {:reply, reply, %{state | negotiation_revision: state.negotiation_revision + 1}}
   end
 
   def handle_call({:add_ice_candidates, candidates}, _from, state) do
