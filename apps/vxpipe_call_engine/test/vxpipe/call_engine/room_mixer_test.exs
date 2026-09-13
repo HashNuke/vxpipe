@@ -14,6 +14,42 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     incarnation_id: "incarnation-mixer"
   }
 
+  test "recording output readiness validates the issuer without consuming or advancing audio" do
+    mixer = start_mixer(recording_token: make_ref())
+    assert {:ok, handoff} = RoomMixer.open_recording_egress(mixer, "listener-connection")
+    assert {:error, :unavailable} = RoomMixer.recording_egress_readiness(mixer, handoff)
+    :ok = apply_policy(mixer, 0, ["alice", "bob"])
+
+    assert {:ok, binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
+    assert binding.identity == @identity
+    assert binding.connection_id == "listener-connection"
+    assert binding.track_id == "agent-egress"
+    assert binding.sample_rate == 8_000
+    assert binding.channels == 1
+    assert binding.policy_interval == 0
+    before = RoomMixer.stats(mixer)
+    assert {:ok, ^binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
+    assert RoomMixer.stats(mixer) == before
+
+    :ok = apply_policy(mixer, 1, ["alice", "bob"], transcript_routes: %{})
+    assert {:ok, ^binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
+    :ok = apply_policy(mixer, 2, ["alice", "bob"], record_audio: false)
+    assert {:error, :unavailable} = RoomMixer.recording_egress_readiness(mixer, handoff)
+  end
+
+  test "recording output readiness rejects a foreign handoff even with the same room identity" do
+    token = make_ref()
+    mixer = start_mixer(recording_token: token)
+
+    other =
+      start_supervised!({RoomMixer, mixer_options(recording_token: token)}, id: :other_mixer)
+
+    :ok = apply_policy(mixer, 0, ["alice", "bob"])
+    :ok = apply_policy(other, 0, ["alice", "bob"])
+    assert {:ok, handoff} = RoomMixer.open_recording_egress(other, "listener-connection")
+    assert {:error, :unavailable} = RoomMixer.recording_egress_readiness(mixer, handoff)
+  end
+
   test "readiness requires installed audio policy and retains the mixer across unrelated changes" do
     mixer = start_mixer()
     assert {:ok, pending, :preparing} = RoomMixer.readiness(mixer)
@@ -240,6 +276,8 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert {:ok, recording} = subscribe_recording(mixer, recording_token, :full_mix)
 
     assert {:ok, handoff} = RoomMixer.open_recording_egress(mixer, "connection-alice")
+    assert {:ok, binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
+    assert {:ok, ^binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
 
     assert :ok =
              EgressHandoff.offer(
@@ -248,6 +286,7 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
              )
 
     _ = :sys.get_state(mixer)
+    assert {:ok, ^binding, :ready} = RoomMixer.recording_egress_readiness(mixer, handoff)
     assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200]))
     assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
 

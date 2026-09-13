@@ -25,6 +25,13 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @doc false
+  def recording_binding(output) do
+    GenServer.call(output, :recording_binding, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   def child_spec(options) do
     %{
       id: {__MODULE__, Keyword.fetch!(options, :connection_id)},
@@ -81,6 +88,15 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
     status = if state.track_id != nil and is_pid(state.peer_connection), do: :ready, else: :failed
     {:reply, {:ok, state.readiness_resource, status}, state}
   end
+
+  def handle_call(:recording_binding, _from, %{recording_egress: nil} = state),
+    do: {:reply, {:error, :recording_not_bound}, state}
+
+  def handle_call(:recording_binding, _from, state),
+    do:
+      {:reply,
+       {:ok, state.readiness_resource, state.recording_egress,
+        %{sample_rate: 48_000, channels: 1, frame_samples: @rtp_timestamp_step}}, state}
 
   def handle_call(
         {:vxpipe_audio_output, %AudioOutputFrame{} = frame},

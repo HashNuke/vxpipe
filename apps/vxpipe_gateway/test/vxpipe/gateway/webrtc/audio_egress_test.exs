@@ -316,7 +316,13 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
       )
 
     handoff = recording_handoff("connection-test")
+    assert {:error, :recording_not_bound} = AudioEgress.recording_binding(egress)
     assert :ok = OutputSink.bind_recording(egress, handoff)
+
+    assert {:ok, resource, ^handoff, %{sample_rate: 48_000, channels: 1}} =
+             AudioEgress.recording_binding(egress)
+
+    assert {:ok, ^resource, :ready} = AudioEgress.readiness(egress)
 
     first = :binary.copy(<<1, 0>>, 960)
     queued = :binary.copy(<<2, 0>>, 2 * 960)

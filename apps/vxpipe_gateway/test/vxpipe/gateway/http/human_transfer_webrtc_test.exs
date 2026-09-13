@@ -85,7 +85,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
   test "a destination accepts privately before joining bidirectional room audio" do
     plan = compile_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               recording: [
+                 enabled: true,
+                 targets: [:individual_tracks],
+                 writer: {Vxpipe.CallEngine.TestRecordingWriter, observer: self()},
+                 maximum_pull_frames: 20
+               ]
+             )
+
     stop_room_on_exit(plan)
 
     caller = Map.fetch!(plan.participants, "caller")
@@ -115,6 +125,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert Enum.any?(prepared_room.resources, &(&1.kind == :model_inference))
     assert Enum.any?(prepared_room.resources, &(&1.kind == :text_to_speech))
+    assert Enum.any?(prepared_room.resources, &(&1.kind == :recording_output))
+    caller_id = caller.participant_id
+    agent_id = Map.fetch!(plan.participants, plan.entry_receiver).participant_id
+
+    assert_receive {:test_recording_writer_opened, _worker, _recorder,
+                    %{participant_id: ^caller_id}},
+                   1_000
+
+    assert_receive {:test_recording_writer_opened, _worker, _recorder,
+                    %{participant_id: ^agent_id, track_id: "agent-egress"}},
+                   1_000
 
     readiness =
       start_supervised!(

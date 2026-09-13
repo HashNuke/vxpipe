@@ -145,12 +145,35 @@ validation. Diagnostics identify capability kind/scope and a bounded reason, wit
 payloads. Unchanged instances retain their actual generations and descriptors through preparation.
 
 Recording preparation initializes selected individual human writers from exact prepared input
-track identities and collects recorder, subscription and writer resources. Full-mix writers use
-their existing initialized local handoff. A preparing local writer keeps collection closed; remote
-storage retains the existing asynchronous contract. Individual agent recording is still an explicit
-`output_track_unavailable` preparation failure: its source is the receiving native output's
-recording tap, not an agent microphone. That tap's exact binding and readiness must be exposed before
-claiming complete recording preparation. No agent track is guessed or silently omitted.
+tracks and agent writers from the receiving native output's mixer-issued recording tap. It collects
+recorder, subscription, writer and required output-tap resources. Full-mix writers use their existing
+initialized local handoff and include required agent output taps in collection. A preparing local
+writer or output codec keeps collection closed; remote storage retains the existing asynchronous
+contract. A required agent without a permitted, bound receiving output still fails explicitly with
+`output_track_unavailable`; preparation never guesses or silently omits a track.
+
+WebRTC and common phone output expose their current recording binding through a bounded local
+query. The engine observes dependencies outside the native output's callback: it validates the
+actual mixer issuer, room identity, receiving connection, PCM sample rate/channels/frame size and
+recording interval, then rechecks the native resource and handoff. The collector descriptor preserves the codec's
+generation while its configuration signature also pins the handoff. Different bindings invalidate
+readiness; queue/cursor values and unrelated transcript policy changes do not change the binding.
+No audio is offered, consumed or synthesized to establish readiness.
+
+Design review rejected forwarding recording observations through another output control queue,
+accepting an output PID without its issued tap, and deriving an agent track from an agent-owned
+microphone. Connection graphs already expose native output adapters, so the engine can query that
+boundary directly. Preparation covers each permitted receiving connection for each recorded agent;
+identical tap descriptors shared by multiple sources are deduplicated by the existing aggregate.
+Writer preparation does not fan out or duplicate audio; actual accepted egress remains the producer.
+
+The WebRTC agent-room check opens caller and agent writers before speech and includes them in its
+TTS-delayed barrier. The common phone output check prepares an agent writer before audio, remains
+blocked for native codec initialization, then becomes ready with the same generation. Mixer and
+collector checks reject foreign/stale bindings, fence replacement during observation, preserve
+bindings across normal audio/irrelevant policy changes, and verify the first recorded frame still
+uses its original timestamp. Incompatible mixer/native sample rates or frame sizes fail preparation.
+Private destination prewarming and lifecycle integration remain open.
 
 Local design review rejected returning whatever subset answered, accepting current-policy evidence
 for an uninstalled candidate, learning recording tracks from the first packet, and treating an

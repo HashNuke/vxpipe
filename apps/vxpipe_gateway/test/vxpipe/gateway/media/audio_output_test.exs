@@ -2,8 +2,104 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, NormalizedFrame, OutputSink}
+  alias Vxpipe.CallEngine.MediaPolicy.{Effective, Enforcer, Snapshot}
+  alias Vxpipe.CallEngine.Readiness.Collector
+  alias Vxpipe.CallEngine.Recording.EgressReadiness
   alias Vxpipe.CallEngine.Recording.EgressHandoff
+  alias Vxpipe.CallEngine.{RoomMixer, RoomRecording, TestRecordingWriter}
   alias Vxpipe.Gateway.Media.{AudioOutput, PlaybackFrame}
+
+  test "prepares the phone output recording writer before speech and waits for its codec" do
+    {output, connection_id} = start_output(maximum_frames: 4)
+    assert_receive {:test_audio_output_pipeline_started, pipeline_id, _pipeline, ^output}
+
+    identity = %{
+      tenant_id: "tenant-test",
+      room_id: "room-test",
+      incarnation_id: "incarnation-test"
+    }
+
+    token = make_ref()
+
+    mixer =
+      start_supervised!(
+        {RoomMixer,
+         Map.to_list(identity) ++
+           [
+             recording_token: token,
+             register: false,
+             sample_rate: 48_000,
+             channels: 1,
+             frame_samples: 960,
+             maximum_buffered_timestamps: 4,
+             maximum_sink_frames: 20
+           ]}
+      )
+
+    policy = %Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new(["caller-test", "agent-test"]),
+      effective: %Effective{
+        audio_routes: :unrestricted,
+        transcript_routes: :unrestricted,
+        record_audio: true,
+        save_transcripts: true
+      }
+    }
+
+    :ok = Enforcer.apply(mixer, policy, 1_000)
+    assert {:ok, handoff} = RoomMixer.open_recording_egress(mixer, connection_id)
+    :ok = OutputSink.bind_recording(output, handoff)
+    assert {:ok, native, :preparing} = AudioOutput.readiness(output)
+
+    connection =
+      Map.merge(identity, %{participant_id: "caller-test", connection_id: connection_id})
+
+    assert {:ok, binding} = EgressReadiness.prepare(native, connection, mixer, policy)
+    assert binding.status == :preparing
+
+    recording =
+      start_supervised!(
+        {RoomRecording,
+         Map.to_list(identity) ++
+           [
+             call_id: "call-test",
+             mixer: mixer,
+             recording_token: token,
+             targets: [{:individual_tracks, ["agent-test"]}],
+             writer: {TestRecordingWriter, observer: self()},
+             maximum_pull_frames: 20
+           ]}
+      )
+
+    mode = {:individual_track, "agent-test", connection_id, binding.track_id}
+    :ok = RoomRecording.prepare_tracks(recording, [mode], 0)
+    assert_receive {:test_recording_writer_opened, _worker, ^recording, %{mode: ^mode}}
+    assert {:ok, writers} = RoomRecording.readiness_resources(recording)
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: identity.incarnation_id,
+         attempt_id: "phone-recording",
+         resources: [binding.resource | writers],
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector,
+                    %{status: :preparing, blockers: [%{kind: :recording_output}]}},
+                   1_000
+
+    send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+    :ok = Collector.refresh(collector)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert {:ok, current, :ready} = EgressReadiness.readiness_binding(binding.resource)
+    assert current == binding.resource
+    assert {:ok, 0} = OutputSink.clear(output)
+    assert {:ok, ^native, :ready} = AudioOutput.readiness(output)
+    refute_receive {:test_recording_chunk, _id, _chunk}
+  end
 
   test "readiness waits for the actual codec generation and preserves it through clear" do
     {output, connection_id} = start_output(maximum_frames: 4)
@@ -124,7 +220,13 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
     send(output, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
 
     handoff = recording_handoff(connection_id)
+    assert {:error, :recording_not_bound} = AudioOutput.recording_binding(output)
     assert :ok = OutputSink.bind_recording(output, handoff)
+
+    assert {:ok, resource, ^handoff, %{sample_rate: 48_000, channels: 1}} =
+             AudioOutput.recording_binding(output)
+
+    assert {:ok, ^resource, :ready} = AudioOutput.readiness(output)
 
     accepted = :binary.copy(<<1, 0>>, 960)
     queued = :binary.copy(<<2, 0>>, 960)

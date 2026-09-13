@@ -698,3 +698,44 @@ unchecked; the milestone and index are still incomplete.
 - This remains partial common readiness. Candidate enforcer preparation, initial asynchronous setup,
   private destination prewarming, audience holds/waits, cues, release acknowledgements, restoration
   and rendered/provider acceptance remain necessary. No running server was restarted.
+
+## Prepare agent recording output paths
+
+- The preceding rename-only turn verified existing state and made no implementation progress.
+  Revalidated the clean tree and resumed the actual native recording-output gap.
+- Initial checks failed at missing native/mixer binding APIs and full room preparation returned
+  `output_track_unavailable` for the selected agent. Corrected the mixer fixture's helper name
+  before confirming the intended failures.
+- Native WebRTC and common phone outputs now expose their existing recording handoff and codec
+  descriptor. The engine validates the actual mixer-issued token/configuration, room identity,
+  receiving connection and installed recording interval outside the native callback. It rechecks
+  the native descriptor/handoff after dependency observation, preserving codec generations.
+- Required output taps enter the full-mix and individual recording resource graph. Individual
+  agent writers use the source agent ID plus the receiving connection and tap-reported track ID.
+  Selected human writers continue to use negotiated input tracks. Missing output paths remain an
+  explicit failure; no track is guessed, no audio cursor advances, and no codec is restarted.
+- WebRTC room preparation opens caller and agent writers before speech and includes them in its
+  existing delayed-TTS barrier. Common phone output prepares its agent writer while the codec is
+  still preparing, then collects ready with the same generation after codec acknowledgement.
+  The standalone mixer/phone fixtures initially lacked required format and call-identity settings;
+  supplied the same explicit options as production before checking the readiness behavior.
+- Binding checks cover missing/foreign connection and room evidence, another mixer with the same
+  room identity, stale policy, handoff replacement during observation and collector invalidation.
+  Existing accepted-egress coverage now queries readiness before/after audio and verifies that the
+  first recording timestamp remains unchanged. Unrelated transcript revisions retain the descriptor.
+- Broader checks reproduced an independent nested-worker cancellation leak. The focused fix and
+  its red/green evidence are recorded in `20260914-0641-readiness-worker-cancellation.md` and committed
+  separately. Request cancellation now owns blocked queries throughout the nested preparation path.
+- Final review exposed that an issued tap could still have a mixer sample rate or frame size that
+  rejects the native output's PCM. Separate sample-rate and frame-size checks reproduced both
+  failures. Native recording bindings now report their PCM format and preparation requires an
+  exact match with the mixer's declared format, including the number of samples per frame.
+- Final focused results: 71 engine checks and 26 Gateway checks pass. All five root gates pass:
+  formatting, warnings-as-errors compilation, strict Credo, 1,168 tests with zero failures and
+  15 integrations excluded, and unused dependencies. The root run emitted a logger-handler removal
+  during the Gateway fault-test output; the command and all test suites completed successfully.
+- Design review is recorded in `docs/readiness-resource-contract.md`. This closes the selected
+  agent recording-output preparation gap under installed policy. Candidate enforcer preparation,
+  attempt-bound private destination prewarming, asynchronous startup, audience waits/cues, final
+  release acknowledgements, restoration and rendered/provider acceptance remain necessary.
+  No development server was restarted and no live/provider or rendered-browser check was performed.

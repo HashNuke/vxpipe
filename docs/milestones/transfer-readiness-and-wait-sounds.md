@@ -618,8 +618,8 @@ writers before audio, collects their local dependencies, rejects incomplete/fore
 sets and revalidates policy and room bindings afterward. TTS inventory reads every participant's
 supervised binding rather than only the active room handle. Fifty-two focused engine checks and
 five WebRTC checks pass, including both human graphs before audio and a model/TTS room that remains
-preparing until explicit TTS provider acknowledgement. Individual agent recording still requires
-the receiving output tap's readiness/track binding and fails explicitly when that track is needed.
+preparing until explicit TTS provider acknowledgement. That checkpoint left individual agent
+recording dependent on exposing the receiving output tap's readiness/track binding.
 Candidate installation, private destination preparation, startup/transfer wait/cue/release and
 rendered/live-provider acceptance remain unfinished. Common readiness remains unchecked.
 
@@ -633,3 +633,19 @@ also terminates their blocked observations. Direct and nested cancellation check
 actual worker and keep the queried media connection usable. The correction and recording-output
 checkpoint pass 69 engine checks, 26 Gateway checks and all five root gates in the combined
 worktree (1,166 tests, zero failures, 15 integrations excluded). Lifecycle acceptance remains open.
+
+Recording preparation now includes native agent-output taps for both full-mix and individual
+recording demand. WebRTC and common phone outputs expose their exact mixer-issued handoffs; bounded
+engine observations validate issuer, room/connection identity, format and recording interval, then
+recheck the native binding. Individual agent writers use the receiving connection and its reported
+track ID. They are opened before speech, without advancing audio cursors or restarting codecs.
+Collection waits for the local writer and native codec and invalidates replaced/stale taps.
+
+The real WebRTC agent fixture prepares caller/agent writers before its delayed-TTS barrier.
+The common phone output fixture opens its agent writer before audio and remains preparing until
+codec acknowledgement, retaining the same generation afterward. Separate sample-rate and frame-size
+mismatch checks prevent a tap from claiming readiness for native PCM it cannot accept. Seventy-one
+engine checks, 26 Gateway checks and all five root gates pass (1,168 tests, zero failures,
+15 integrations excluded). Candidate-policy preparation, private destination
+prewarming, startup/transfer wait and cue orchestration, final release and rendered/provider
+acceptance remain unfinished; common readiness and the milestone index remain unchecked.

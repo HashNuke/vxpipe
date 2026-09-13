@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.Recording.EgressHandoff do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.{EgressAcceptedFrame, NormalizedFrame}
+  alias Vxpipe.CallEngine.Readiness.Resource
 
   @gate_index 1
   @pending_index 2
@@ -79,6 +80,33 @@ defmodule Vxpipe.CallEngine.Recording.EgressHandoff do
   @doc false
   @spec receiver(t()) :: pid()
   def receiver(%__MODULE__{} = handoff), do: handoff.receiver
+
+  @doc false
+  def issued_by?(%__MODULE__{} = handoff, receiver, issuer) do
+    handoff.receiver == receiver and handoff.token == issuer.token and
+      handoff.identity == issuer.identity and handoff.counters == issuer.counters and
+      handoff.capacity == issuer.capacity and handoff.gate == issuer.configuration.gate and
+      handoff.clock == issuer.configuration.clock and
+      handoff.clock_origin_ms == issuer.configuration.clock_origin_ms and
+      handoff.format == Map.take(issuer.configuration, [:channels, :frame_samples, :sample_rate])
+  end
+
+  @doc false
+  def recording_binding(%__MODULE__{} = handoff) do
+    %{
+      identity: handoff.identity,
+      connection_id: handoff.connection_id,
+      track_id: @track_id,
+      sample_rate: handoff.format.sample_rate,
+      channels: handoff.format.channels,
+      frame_samples: handoff.format.frame_samples,
+      configuration: Resource.signature(handoff)
+    }
+  end
+
+  @doc false
+  def available?(%__MODULE__{} = handoff),
+    do: :atomics.get(handoff.counters, @pending_index) < handoff.capacity
 
   @doc false
   @spec new_counters() :: reference()

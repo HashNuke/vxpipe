@@ -54,6 +54,9 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
   @impl true
   def readiness(server), do: safe_call(server, :readiness)
 
+  @doc false
+  def recording_binding(server), do: safe_call(server, :recording_binding)
+
   @impl true
   def init(options), do: {:ok, State.new(options)}
 
@@ -62,6 +65,15 @@ defmodule Vxpipe.Gateway.Media.AudioOutput do
     status = if state.pipeline_ready?, do: :ready, else: :preparing
     {:reply, {:ok, state.readiness_resource, status}, state}
   end
+
+  def handle_call(:recording_binding, _from, %{recording_egress: nil} = state),
+    do: {:reply, {:error, :recording_not_bound}, state}
+
+  def handle_call(:recording_binding, _from, state),
+    do:
+      {:reply,
+       {:ok, state.readiness_resource, state.recording_egress,
+        %{sample_rate: 48_000, channels: 1, frame_samples: 960}}, state}
 
   def handle_call(:start_pipeline, _from, %{pipeline_pid: nil} = state) do
     case PipelineLifecycle.launch(state) do
