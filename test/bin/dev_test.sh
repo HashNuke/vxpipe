@@ -125,7 +125,7 @@ make_executable tailscale \
   '    printf '\''%s\n'\'' '\''{"Self":{"DNSName":"console.example.ts.net.","TailscaleIPs":["100.64.0.12","fd7a:115c:a1e0::12"]}}'\''' \
   '    ;;' \
   '  cert)' \
-  '    printf '\''%s\n'\'' "$@" >"$VXPIPE_TEST_TAILSCALE_CERT_ARGS"' \
+  '    printf '\''%s\n'\'' "$@" >>"$VXPIPE_TEST_TAILSCALE_CERT_ARGS"' \
   '    ;;' \
   'esac'
 
@@ -137,6 +137,9 @@ assert_output_contains "$output" "Error: bin/dev --tailscale requires jq on PATH
 ln -s "$(command -v jq)" "$fake_bin/jq"
 ln -s "$(command -v mkdir)" "$fake_bin/mkdir"
 ln -s "$(command -v chmod)" "$fake_bin/chmod"
+ln -s "$(command -v mktemp)" "$fake_bin/mktemp"
+ln -s "$(command -v mv)" "$fake_bin/mv"
+ln -s "$(command -v rm)" "$fake_bin/rm"
 make_executable goreman \
   'printf "%s\n" "$@" >"$VXPIPE_TEST_GOREMAN_ARGS"' \
   'if [[ -n "${VXPIPE_TEST_TLS_ENV:-}" ]]; then' \
@@ -168,9 +171,8 @@ assert_file_lacks_line "$https_args" "caddy"
 assert_file_has_line "$tls_env" "phoenix"
 assert_file_has_line "$tailscale_cert_args" "cert"
 assert_file_has_line "$tailscale_cert_args" "--cert-file"
-assert_file_has_line "$tailscale_cert_args" "$repo_root/tmp/tls/console.example.ts.net.crt"
+assert_file_has_line "$tailscale_cert_args" "-"
 assert_file_has_line "$tailscale_cert_args" "--key-file"
-assert_file_has_line "$tailscale_cert_args" "$repo_root/tmp/tls/console.example.ts.net.key"
 assert_file_has_line "$tailscale_cert_args" "console.example.ts.net"
 
 make_executable watchman-make \

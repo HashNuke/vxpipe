@@ -50,7 +50,19 @@ if [[ "$dev_mode" == "tailscale" ]]; then
     exit 1
   fi
 
-  if ! tailscale_status="$(tailscale status --json)"; then
+  # The macOS app must run from its bundle, not through a PATH symlink.
+  tailscale_bin="$(command -v tailscale)"
+  while [[ -L "$tailscale_bin" ]]; do
+    tailscale_dir="$(cd "$(dirname "$tailscale_bin")" && pwd -P)"
+    tailscale_link="$(readlink "$tailscale_bin")"
+    case "$tailscale_link" in
+      /*) tailscale_bin="$tailscale_link" ;;
+      *) tailscale_bin="$tailscale_dir/$tailscale_link" ;;
+    esac
+  done
+  tailscale_bin="$(cd "$(dirname "$tailscale_bin")" && pwd -P)/${tailscale_bin##*/}"
+
+  if ! tailscale_status="$("$tailscale_bin" status --json)"; then
     echo "Error: unable to read Tailscale status." >&2
     exit 1
   fi
@@ -83,13 +95,20 @@ if [[ "$dev_mode" == "tailscale" ]]; then
   mkdir -p "$tls_runtime_dir"
   chmod 700 "$tls_runtime_dir"
 
-  if ! tailscale cert \
-    --cert-file "$VXPIPE_DEV_TLS_CERTFILE" \
-    --key-file "$VXPIPE_DEV_TLS_KEYFILE" \
-    "$tailscale_host"; then
+  # The macOS app's sandbox cannot write here; the shell owns these private files.
+  tls_staging_dir="$(mktemp -d "$tls_runtime_dir/.tailscale-cert.XXXXXX")"
+  trap 'rm -rf "$tls_staging_dir"' EXIT
+
+  if ! "$tailscale_bin" cert --cert-file - "$tailscale_host" >"$tls_staging_dir/cert" ||
+    ! "$tailscale_bin" cert --key-file - "$tailscale_host" >"$tls_staging_dir/key"; then
     echo "Error: unable to provision this machine's Tailscale certificate." >&2
     exit 1
   fi
+
+  mv "$tls_staging_dir/cert" "$VXPIPE_DEV_TLS_CERTFILE"
+  mv "$tls_staging_dir/key" "$VXPIPE_DEV_TLS_KEYFILE"
+  rm -rf "$tls_staging_dir"
+  trap - EXIT
 fi
 
 # Goreman loads .env automatically from the configured base directory.
