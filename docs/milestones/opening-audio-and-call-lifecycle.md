@@ -62,6 +62,15 @@ No wait music, voicemail speech, local VAD/models, mandatory notice/legal-compli
 
 ## Completion and evidence
 
+2026-09-13 recording correction: the later room-mixing path bypassed the original STT opening
+gate. A regression through the real room mixer and recording subscriber reproduced caller audio
+reaching both full-mix and individual-track recordings before actual playout completion. The
+mixer now starts closed for configured opening audio, opens only on acknowledged completion,
+and rejects late-decoded frames timestamped before that boundary. Recording egress uses the
+same boundary. This preserves ordinary policy intervals and warmed capabilities. The focused
+opening/mixer/recording suite passes with 26 tests; broader verification is recorded in the
+[checkpoint labnote](../../labnotes/20260913-2345-opening-tts-recording.md).
+
 - [x] Demonstrate the runnable outcome and every acceptance/failure check above.
 - [x] Complete the [common implementation gates](index.md#common-implementation-and-verification-gates).
 - [x] Update this milestone, the index checkbox, relevant architecture/user docs, and

@@ -94,6 +94,11 @@ adds milestone 23 before delivery. Its schema, readiness barrier and playback li
 user review; only the proposal and requested source-asset copies are prepared. This insertion keeps
 packaging and retention behind the same explicit review hold.
 
+The opening-audio review also reproduced and corrected recording of caller audio during the
+announcement in the later room-mixing path. The [opening milestone](opening-audio-and-call-lifecycle.md#completion-and-evidence)
+records the regression and completion-boundary fix; all root checks pass with 1,008 tests and
+zero failures. This correction does not implement the proposed wait sounds.
+
 ## Common implementation and verification gates
 
 Every milestone inherits these requirements; its own checklist adds the slice-specific gates.

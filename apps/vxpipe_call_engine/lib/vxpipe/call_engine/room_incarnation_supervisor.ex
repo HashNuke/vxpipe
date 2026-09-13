@@ -90,6 +90,7 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
           |> Keyword.merge(
             tenant_id: plan.tenant_id,
             room_id: plan.room_id,
+            awaiting_opening_audio: plan.opening_audio != nil,
             incarnation_id: Keyword.fetch!(options, :incarnation_id)
           )
 

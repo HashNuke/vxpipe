@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
   @moduledoc false
 
   alias Vxpipe.CallEngine.RoomMixer.{
+    OpeningGate,
     Playout,
     RecordingEgress,
     State,
@@ -31,6 +32,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Configuration do
          identity: identity,
          clock_origin_ms: clock_origin_ms,
          format: format,
+         opening_gate: OpeningGate.new(options, clock_origin_ms, format.sample_rate),
          recording_token: recording_token,
          recording_egress: recording_egress,
          playout: playout,

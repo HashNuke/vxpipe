@@ -641,6 +641,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
     state =
       if OpeningAudio.admission(opening_audio) == :open do
+        if state.room_mixer != nil do
+          :ok = RoomMixer.complete_opening(state.room_mixer)
+        end
+
         ConnectionLifecycle.open_inputs(state)
       else
         state

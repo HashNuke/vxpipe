@@ -3,11 +3,12 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
 
   alias Vxpipe.CallEngine.Media.NormalizedFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.CallEngine.RoomMixer.{State, SubscriptionCatalog, TimestampBuffer}
+  alias Vxpipe.CallEngine.RoomMixer.{OpeningGate, State, SubscriptionCatalog, TimestampBuffer}
 
   @spec put(State.t(), NormalizedFrame.t()) :: {:ok, State.t()} | {:error, term(), State.t()}
   def put(%State{} = state, %NormalizedFrame{} = frame) do
     with :ok <- validate_frame(frame, state),
+         true <- OpeningGate.admits?(state.opening_gate, frame.timestamp),
          :ok <- validate_sequence(frame, state),
          {:ok, buffer} <- TimestampBuffer.put(state.buffer, frame) do
       {:ok,
@@ -22,6 +23,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
              )
        }}
     else
+      false ->
+        {:ok, state}
+
       {:error, :buffer_full} ->
         {:error, :buffer_full, %{state | buffer_overflows: state.buffer_overflows + 1}}
 

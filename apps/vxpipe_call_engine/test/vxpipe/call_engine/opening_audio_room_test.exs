@@ -26,6 +26,66 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
   alias Vxpipe.AgentRuntime.ModelResponse
 
+  test "records neither live nor delayed caller audio from the opening interval" do
+    configure_speech_runtime()
+
+    configure_opening_audio(
+      {:ok, %Download{body: wave(<<1, 0, 2, 0>>), content_type: "audio/wav"}}
+    )
+
+    clock = :atomics.new(1, [])
+    configure_recording_clock(clock)
+
+    plan =
+      compile_plan(
+        opening_audio: %{type: "file_url", url: "https://assets.example.test/notice.wav"}
+      )
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    assert {:ok, room} =
+             CallEngine.start_call(plan,
+               recording: [
+                 enabled: true,
+                 targets: [:full_mix, :individual_tracks],
+                 writer: {Vxpipe.CallEngine.TestRecordingWriter, [observer: self()]},
+                 maximum_pull_frames: 8
+               ]
+             )
+
+    assert_receive {:test_recording_writer_opened, _caller, recording, %{stream_id: "full-mix"}}
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-opening-recording")
+    assert {:ok, attachment} = CallEngine.attach_connection(command, sink)
+    assert_receive {:test_audio_output_finish, ^sink, _request}
+    mixer = Vxpipe.CallEngine.RoomMixer.whereis(room.incarnation_id)
+
+    assert :ok = TestAudioOutputSink.playback_started(sink)
+    assert :ok = TestAudioOutputSink.playback_progress(sink, 20, 100)
+
+    assert :ok = CallEngine.push_room_audio(attachment, recording_frame(plan, room, caller, 0))
+    assert {:ok, %{delivered: 0}} = Vxpipe.CallEngine.RoomMixer.flush_through(mixer, 0)
+    assert %{accepted_chunks: 0} = Vxpipe.CallEngine.RoomRecording.stats(recording)
+
+    :atomics.put(clock, 1, 40)
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_eventually_open(plan)
+
+    # Decoding may finish after the opening gate changes; its original timestamp is still held.
+    assert :ok = CallEngine.push_room_audio(attachment, recording_frame(plan, room, caller, 960))
+    assert {:ok, %{delivered: 0}} = Vxpipe.CallEngine.RoomMixer.flush_through(mixer, 960)
+    assert %{accepted_chunks: 0} = Vxpipe.CallEngine.RoomRecording.stats(recording)
+
+    assert :ok = CallEngine.push_room_audio(attachment, recording_frame(plan, room, caller, 1920))
+    assert {:ok, %{delivered: 2}} = Vxpipe.CallEngine.RoomMixer.flush_through(mixer, 1920)
+    assert_receive {:test_recording_chunk, "full-mix", full_mix}
+    assert full_mix.offset_samples == 1920
+    assert_receive {:test_recording_chunk, individual_id, individual}
+    assert individual_id != "full-mix"
+    assert individual.offset_samples == 1920
+    assert %{accepted_chunks: 2} = Vxpipe.CallEngine.RoomRecording.stats(recording)
+  end
+
   test "admits no caller input until configured text finishes actual playout" do
     attach_opening_audio_telemetry()
     configure_speech_runtime()
@@ -714,6 +774,51 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     on_exit(fn ->
       Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
     end)
+  end
+
+  defp configure_recording_clock(clock) do
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    settings =
+      Keyword.update!(original, :room_mixer, fn settings ->
+        settings
+        |> Keyword.delete(:playout_delay_ms)
+        |> Keyword.put(:clock_origin_ms, 0)
+        |> Keyword.put(:clock, fn -> :atomics.get(clock, 1) end)
+      end)
+
+    Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, settings)
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+    end)
+  end
+
+  defp recording_frame(plan, room, caller, timestamp) do
+    policy =
+      room.incarnation_id
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.whereis()
+      |> Vxpipe.CallEngine.MediaPolicy.Authority.snapshot()
+
+    %Vxpipe.CallEngine.Media.NormalizedFrame{
+      tenant_id: plan.tenant_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id,
+      source_participant_id: caller.participant_id,
+      connection_id: "conn-opening-recording",
+      track_id: "track-opening-recording",
+      sequence_number: div(timestamp, 960),
+      timestamp: timestamp,
+      policy_revision:
+        Vxpipe.CallEngine.MediaPolicy.Snapshot.interval(
+          policy,
+          :audio_input,
+          caller.participant_id
+        ),
+      sample_rate: 48_000,
+      channels: 1,
+      payload: :binary.copy(<<1_000::little-signed-16>>, 960)
+    }
   end
 
   defp configure_agent_runtime_provider do

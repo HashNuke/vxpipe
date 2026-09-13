@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     Configuration,
     Fanout,
     FrameAdmission,
+    OpeningGate,
     Playout,
     Policy,
     RecordingEgress,
@@ -49,6 +50,10 @@ defmodule Vxpipe.CallEngine.RoomMixer do
 
   @spec push(GenServer.server(), NormalizedFrame.t()) :: :ok | {:error, term()}
   def push(server, %NormalizedFrame{} = frame), do: safe_call(server, {:push, frame})
+
+  @doc false
+  @spec complete_opening(GenServer.server()) :: :ok | {:error, :unavailable}
+  def complete_opening(server), do: safe_call(server, :complete_opening)
 
   @spec flush_through(GenServer.server(), non_neg_integer()) :: {:ok, map()} | {:error, term()}
   def flush_through(server, timestamp) when is_integer(timestamp) and timestamp >= 0 do
@@ -147,6 +152,10 @@ defmodule Vxpipe.CallEngine.RoomMixer do
     end
   end
 
+  def handle_call(:complete_opening, _from, state) do
+    {:reply, :ok, %{state | opening_gate: OpeningGate.open(state.opening_gate)}}
+  end
+
   def handle_call({:open_recording_egress, connection_id}, _from, state) do
     {:reply, RecordingEgress.open(state.recording_egress, self(), connection_id), state}
   end
@@ -206,15 +215,19 @@ defmodule Vxpipe.CallEngine.RoomMixer do
         state
       ) do
     recording_egress =
-      case RecordingEgress.put(
-             state.recording_egress,
-             handoff,
-             frame,
-             state.policy,
-             state.subscriptions
-           ) do
-        {:ok, recording_egress} -> recording_egress
-        {:error, _reason, recording_egress} -> recording_egress
+      if OpeningGate.admits?(state.opening_gate, frame.timestamp) do
+        case RecordingEgress.put(
+               state.recording_egress,
+               handoff,
+               frame,
+               state.policy,
+               state.subscriptions
+             ) do
+          {:ok, recording_egress} -> recording_egress
+          {:error, _reason, recording_egress} -> recording_egress
+        end
+      else
+        state.recording_egress
       end
 
     :ok = Vxpipe.CallEngine.Recording.EgressHandoff.release(handoff)
