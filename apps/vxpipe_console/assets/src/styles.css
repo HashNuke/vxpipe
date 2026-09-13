@@ -351,6 +351,7 @@ body {
 }
 
 .transfer-action:hover:not(:disabled) {
+  color: var(--transfer-ink);
   border-color: var(--transfer-paper);
   background: var(--transfer-paper);
 }
