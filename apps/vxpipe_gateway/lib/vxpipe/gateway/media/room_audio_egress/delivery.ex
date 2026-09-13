@@ -35,15 +35,15 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.Delivery do
 
   def drain(%State{} = state), do: {:ok, state}
 
-  defp push(%MixedFrame{policy_revision: revision}, %State{policy: %{revision: expected}} = state)
-       when revision != expected do
-    {:error, :stale_policy_revision, state}
-  end
-
   defp push(%MixedFrame{} = frame, %State{} = state) do
-    case safe_push(state.pipeline, state.pipeline_id, frame) do
-      :ok -> {:ok, %{state | in_flight: {state.pipeline_id, frame.timestamp}}}
-      {:error, reason} -> {:error, reason, state}
+    if frame.policy_revision ==
+         Snapshot.interval(state.policy, :audio_output, state.identity.participant_id) do
+      case safe_push(state.pipeline, state.pipeline_id, frame) do
+        :ok -> {:ok, %{state | in_flight: {state.pipeline_id, frame.timestamp}}}
+        {:error, reason} -> {:error, reason, state}
+      end
+    else
+      {:error, :stale_policy_revision, state}
     end
   end
 

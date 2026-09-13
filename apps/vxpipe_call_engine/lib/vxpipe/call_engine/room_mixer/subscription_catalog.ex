@@ -170,12 +170,33 @@ defmodule Vxpipe.CallEngine.RoomMixer.SubscriptionCatalog do
     end
   end
 
-  @spec clear(t()) :: {non_neg_integer(), t()}
-  def clear(%__MODULE__{} = catalog) do
+  @spec interval(entry(), Snapshot.t()) :: non_neg_integer()
+  def interval(%{purpose: :recording}, snapshot), do: Snapshot.interval(snapshot, :recording)
+
+  def interval(%{purpose: :participant, recipient_id: recipient}, snapshot),
+    do: Snapshot.interval(snapshot, :audio_output, recipient)
+
+  @spec install_policy(t(), Snapshot.t()) :: {non_neg_integer(), t()}
+  def install_policy(%__MODULE__{} = catalog, snapshot) do
     {entries, dropped} =
       Enum.map_reduce(catalog.entries, 0, fn {id, entry}, count ->
-        dropped = :queue.len(entry.queue)
-        {{id, %{entry | queue: :queue.new(), notified?: false}}, count + dropped}
+        revision = interval(entry, snapshot)
+
+        queue =
+          :queue.filter(
+            fn frame ->
+              frame.policy_revision == revision and
+                Enum.all?(
+                  frame.source_participant_ids,
+                  &MapSet.member?(snapshot.present_participant_ids, &1)
+                )
+            end,
+            entry.queue
+          )
+
+        dropped = :queue.len(entry.queue) - :queue.len(queue)
+        entry = %{entry | queue: queue, notified?: entry.notified? and not :queue.is_empty(queue)}
+        {{id, entry}, count + dropped}
       end)
 
     {dropped, %{catalog | entries: Map.new(entries)}}

@@ -149,8 +149,12 @@ revision-wide reset behavior described in the historical checkpoints above.
 
 - [x] Review permission scopes, stale-data rejection, admission ordering, and bounded
   provenance retention; preserve unchanged speech sessions and STT ingress queues.
-- [ ] Preserve unaffected audio pipelines, mixer queues, and recording intervals in
-  the following checkpoint.
+- [x] Preserve unaffected audio pipelines, mixer queues, and recording intervals.
+- [x] Verify the combined change with all root gates (1,006 tests, zero failures,
+  15 integration cases excluded) and a live Gemini/Deepgram handoff. The caller's
+  STT transport and ingress/egress pipeline identities remain unchanged from room
+  revision 2 through revision 4; both peers exchange RTP after acceptance. See the
+  [audio evidence](../../labnotes/20260913-2001-incremental-audio-policy.md).
 
 ## Specification review
 

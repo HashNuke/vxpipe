@@ -74,24 +74,18 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, from, state) do
-    case Snapshot.validate_transition(snapshot, state.policy) do
-      :ok when is_nil(state.policy) ->
+    case Snapshot.prepare(snapshot, state.policy) do
+      {:ok, snapshot} when is_nil(state.policy) ->
         {:reply, :ok, %{state | policy: snapshot}}
 
-      :ok ->
-        case PipelineLifecycle.replace(state) do
-          {:ok, state} ->
-            state = %{
-              state
-              | policy: snapshot,
-                ready_waiters: [from | state.ready_waiters],
-                reject_received_through_ms: state.clock.()
-            }
+      {:ok, snapshot} ->
+        participant = state.identity.participant_id
 
-            {:noreply, state}
-
-          {:error, reason, state} ->
-            {:reply, {:error, reason}, state}
+        if Snapshot.interval(snapshot, :audio_input, participant) ==
+             Snapshot.interval(state.policy, :audio_input, participant) do
+          {:reply, :ok, %{state | policy: snapshot}}
+        else
+          replace_pipeline(snapshot, from, state)
         end
 
       {:error, reason} ->
@@ -109,7 +103,8 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
         %{pipeline_id: pipeline_id, policy: %Snapshot{} = policy} = state
       ) do
     sequence_number = state.next_sequence_number
-    frame = FrameProjection.normalized(pcm_frame, sequence_number, policy.revision)
+    revision = Snapshot.interval(policy, :audio_input, state.identity.participant_id)
+    frame = FrameProjection.normalized(pcm_frame, sequence_number, revision)
     state = %{state | next_sequence_number: sequence_number + 1}
 
     case state.engine.push_room_audio(state.attachment, frame) do
@@ -155,6 +150,22 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngress do
   end
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp replace_pipeline(snapshot, from, state) do
+    case PipelineLifecycle.replace(state) do
+      {:ok, state} ->
+        {:noreply,
+         %{
+           state
+           | policy: snapshot,
+             ready_waiters: [from | state.ready_waiters],
+             reject_received_through_ms: state.clock.()
+         }}
+
+      {:error, reason, state} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
 
   defp safe_pipeline_push(pipeline, pipeline_id, frame) do
     pipeline.push(pipeline_id, frame)

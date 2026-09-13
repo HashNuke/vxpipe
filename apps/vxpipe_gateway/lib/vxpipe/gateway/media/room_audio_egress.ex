@@ -49,7 +49,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, from, state) do
-    with :ok <- Snapshot.validate_transition(snapshot, state.policy),
+    with {:ok, snapshot} <- Snapshot.prepare(snapshot, state.policy),
          {:ok, reply_mode, state} <- install_policy(snapshot, from, state),
          {:ok, state} <- Delivery.drain(state) do
       policy_reply(reply_mode, state)
@@ -129,6 +129,17 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   end
 
   defp install_policy(snapshot, from, state) do
+    participant = state.identity.participant_id
+
+    if Snapshot.interval(snapshot, :audio_output, participant) ==
+         Snapshot.interval(state.policy, :audio_output, participant) do
+      {:ok, :immediate, %{state | policy: snapshot}}
+    else
+      replace_pipeline(snapshot, from, state)
+    end
+  end
+
+  defp replace_pipeline(snapshot, from, state) do
     case PipelineLifecycle.replace(state) do
       {:ok, state} ->
         {:ok, :when_ready,

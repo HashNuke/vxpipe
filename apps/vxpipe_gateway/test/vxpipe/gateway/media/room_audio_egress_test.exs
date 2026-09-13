@@ -61,7 +61,31 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
     assert_receive {:test_room_audio_output_pipeline_push, ^pipeline_id, ^second}
   end
 
-  test "replaces and drains through a clean output pipeline for a new policy revision" do
+  test "preserves playback and queued audio across unrelated policy revisions" do
+    first = frame(0, 4)
+    second = frame(960, 4)
+    {egress, pipeline_id, subscription_id} = start_enabled_egress([first, second], 4)
+    send(egress, {:vxpipe_room_audio_output_ready, pipeline_id})
+    send(egress, {:vxpipe_room_audio_available, self(), subscription_id})
+    assert_receive {:test_room_audio_output_pipeline_push, ^pipeline_id, ^first}
+
+    joined = %{
+      snapshot(5)
+      | present_participant_ids: MapSet.new(["part-human", "part-other", "support"])
+    }
+
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(egress, joined, 500)
+    transcript_only = put_in(snapshot(6).effective.transcript_routes, %{})
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(egress, transcript_only, 500)
+    refute_receive {:test_room_audio_output_pipeline_stopped, _, _}
+    refute_receive {:test_remote_playback_cleared, _}
+
+    send(egress, {:vxpipe_room_audio_available, self(), subscription_id})
+    send(egress, {:vxpipe_room_audio_output_sent, pipeline_id, 0})
+    assert_receive {:test_room_audio_output_pipeline_push, ^pipeline_id, ^second}
+  end
+
+  test "replaces and drains through a clean output pipeline for changed audio permissions" do
     old_frame = frame(0, 4)
     new_frame = frame(960, 5)
     {egress, old_pipeline_id, subscription_id} = start_enabled_egress([old_frame, new_frame], 4)
@@ -70,8 +94,11 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
     send(egress, {:vxpipe_room_audio_available, self(), subscription_id})
     assert_receive {:test_room_audio_output_pipeline_push, ^old_pipeline_id, ^old_frame}
 
+    changed =
+      put_in(snapshot(5).effective.audio_routes, %{"part-other" => MapSet.new(["part-human"])})
+
     policy_update =
-      Task.async(fn -> GenServer.call(egress, {:vxpipe_apply_media_policy, snapshot(5)}) end)
+      Task.async(fn -> GenServer.call(egress, {:vxpipe_apply_media_policy, changed}) end)
 
     assert_receive {:test_room_audio_output_pipeline_stopped, ^old_pipeline_id, _pipeline}
     assert_receive {:test_remote_playback_cleared, pipeline_options}

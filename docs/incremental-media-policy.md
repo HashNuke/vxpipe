@@ -38,9 +38,11 @@ Implementation checkpoints:
 
 - [x] Compute scoped permission intervals while retaining the admission revision.
 - [x] Preserve unchanged speech sessions, ingress queues, and transcript provenance.
-- [ ] Apply the audio intervals to normalization, output, mixing, and recording.
+- [x] Apply the audio intervals to normalization, output, mixing, and recording.
 
-The audio contract above is implemented in the following checkpoint. The speech
-checkpoint leaves existing audio revision handling compatible. Verification is
-recorded in the [speech labnote](../labnotes/20260913-1940-incremental-media-policy.md)
-and the owning live-mixing and human-transfer milestones.
+Verification passes all umbrella completion gates: 1,006 tests, zero failures,
+15 integration cases excluded. A live Gemini/Deepgram two-browser handoff reaches
+`Main room active`; the caller retains the same STT transport and audio input/output
+pipelines through admission and source-agent departure. Both peers exchange RTP.
+See the [speech labnote](../labnotes/20260913-1940-incremental-media-policy.md) and
+[audio labnote](../labnotes/20260913-2001-incremental-audio-policy.md).

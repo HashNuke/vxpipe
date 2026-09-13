@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.NormalizedFrame
+  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.RoomMixer.{State, SubscriptionCatalog, TimestampBuffer}
 
   @spec put(State.t(), NormalizedFrame.t()) :: {:ok, State.t()} | {:error, term(), State.t()}
@@ -37,7 +38,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.FrameAdmission do
       is_nil(state.policy) ->
         {:error, :policy_unavailable}
 
-      frame.policy_revision != state.policy.revision ->
+      frame.policy_revision !=
+          Snapshot.interval(state.policy, :audio_input, frame.source_participant_id) ->
         {:error, :stale_policy_revision}
 
       not MapSet.member?(state.policy.present_participant_ids, frame.source_participant_id) ->

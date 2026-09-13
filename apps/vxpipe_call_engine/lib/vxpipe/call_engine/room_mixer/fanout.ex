@@ -160,7 +160,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.Fanout do
       mode: mode,
       source_participant_ids: frames |> Enum.map(& &1.source_participant_id) |> Enum.uniq(),
       timestamp: delivery.timestamp,
-      policy_revision: delivery.policy.revision,
+      policy_revision: SubscriptionCatalog.interval(delivery.entry, delivery.policy),
       sample_rate: delivery.format.sample_rate,
       channels: delivery.format.channels,
       payload: payload

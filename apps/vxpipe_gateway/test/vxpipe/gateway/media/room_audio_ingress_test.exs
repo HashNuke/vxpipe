@@ -43,6 +43,19 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
                     }}
   end
 
+  test "keeps its normalizer across membership and transcript-only revisions" do
+    ingress = start_ingress(attachment(self(), snapshot(4)))
+    assert_receive {:test_room_audio_pipeline_started, pipeline_id, _pipeline}
+    joined = %{snapshot(5) | present_participant_ids: MapSet.new(["part-human", "support"])}
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, joined, 500)
+    changed = %{snapshot(6) | effective: %{snapshot(6).effective | transcript_routes: %{}}}
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, changed, 500)
+    refute_receive {:test_room_audio_pipeline_started, _, _}
+
+    send(ingress, {:vxpipe_audio_pipeline, pipeline_id, pcm_frame(960, <<5::16, 6::16>>)})
+    assert_receive {:test_room_audio, %NormalizedFrame{policy_revision: 4}}
+  end
+
   test "tags normalized PCM with the committed policy and preserves sequence across a purge" do
     attachment = attachment(self(), snapshot(4))
     ingress = start_ingress(attachment)
@@ -64,7 +77,12 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
                     }}
 
     policy_update =
-      Task.async(fn -> GenServer.call(ingress, {:vxpipe_apply_media_policy, snapshot(5)}) end)
+      Task.async(fn ->
+        GenServer.call(
+          ingress,
+          {:vxpipe_apply_media_policy, put_in(snapshot(5).effective.audio_routes, %{})}
+        )
+      end)
 
     assert_receive {:test_room_audio_pipeline_started, second_pipeline_id, second_pipeline}
     refute second_pipeline_id == first_pipeline_id
@@ -109,7 +127,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioIngressTest do
     assert_receive {:test_room_audio_pipeline_started, _pipeline_id, _pipeline}
 
     assert {:error, :test_pipeline_unavailable} =
-             GenServer.call(ingress, {:vxpipe_apply_media_policy, snapshot(5)})
+             GenServer.call(
+               ingress,
+               {:vxpipe_apply_media_policy, put_in(snapshot(5).effective.audio_routes, %{})}
+             )
 
     assert {:error, :pipeline_unavailable} =
              RoomAudioIngress.push(ingress, audio_frame(1, 1_020))

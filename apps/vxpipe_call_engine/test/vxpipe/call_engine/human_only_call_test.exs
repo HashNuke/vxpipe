@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
 
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Media.{MixedFrame, NormalizedFrame}
-  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
 
   test "starts two human entries without an agent, mixes audio, and retains call lifecycle" do
     plan = compile_plan()
@@ -302,6 +302,8 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
   end
 
   defp normalized_frame(plan, room, source_participant_id, payload, connection_id \\ nil) do
+    policy = room.incarnation_id |> Authority.whereis() |> Authority.snapshot()
+
     %NormalizedFrame{
       tenant_id: plan.tenant_id,
       room_id: plan.room_id,
@@ -311,7 +313,7 @@ defmodule Vxpipe.CallEngine.HumanOnlyCallTest do
       track_id: "track-#{source_participant_id}",
       sequence_number: 1,
       timestamp: 0,
-      policy_revision: 2,
+      policy_revision: Snapshot.interval(policy, :audio_input, source_participant_id),
       sample_rate: 48_000,
       channels: 1,
       payload: payload

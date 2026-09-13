@@ -115,6 +115,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert participant_id == support.participant_id
 
+    caller_audio_started_at = System.monotonic_time(:millisecond)
     :ok = send_audio(caller_client, 1, 960, 8_000)
     refute_audio(support_client, 500)
 
@@ -160,7 +161,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              "data" => %{"attempt_id" => ^attempt_id}
            } = await_sideband(support_client, "transfer.active", 5_000)
 
-    :ok = send_audio(caller_client, 2, 1_920, 7_000)
+    # RTP time advances during the private briefing even when this fixture is silent.
+    # The unchanged caller normalizer retains its original clock alignment.
+    elapsed_ms = System.monotonic_time(:millisecond) - caller_audio_started_at
+    caller_timestamp = 960 + div(elapsed_ms, 20) * 960
+    :ok = send_audio(caller_client, 2, caller_timestamp, 7_000)
     assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
 
     Enum.each(

@@ -73,6 +73,21 @@ defmodule Vxpipe.CallEngine.RoomMixer.TimestampBuffer do
     {dropped, %{buffer | buckets: %{}}}
   end
 
+  @spec retain(t(), (NormalizedFrame.t() -> boolean())) :: {non_neg_integer(), t()}
+  def retain(%__MODULE__{} = buffer, permitted?) do
+    {buckets, dropped} =
+      Enum.reduce(buffer.buckets, {%{}, 0}, fn {timestamp, bucket}, {buckets, dropped} ->
+        retained = Map.filter(bucket, fn {_source, frame} -> permitted?.(frame) end)
+
+        buckets =
+          if map_size(retained) == 0, do: buckets, else: Map.put(buckets, timestamp, retained)
+
+        {buckets, dropped + map_size(bucket) - map_size(retained)}
+      end)
+
+    {dropped, %{buffer | buckets: buckets}}
+  end
+
   @spec source_key(NormalizedFrame.t()) :: source_key()
   def source_key(%NormalizedFrame{} = frame) do
     {frame.source_participant_id, frame.connection_id, frame.track_id}

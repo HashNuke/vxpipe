@@ -55,17 +55,17 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
     :ok = apply_policy(mixer, 1, false)
     denied_mix = [1_200, 1_400]
     flush_mix(mixer, 2, 2, 1, [500, 600], [700, 800])
-    assert_monitor(monitor, denied_mix, 1)
+    assert_monitor(monitor, denied_mix, 0)
     refute_receive {:test_object_store_write, _task, _reference, _chunk}
 
     :ok = apply_policy(mixer, 2, true)
     second_mix = [40, 60]
     flush_mix(mixer, 3, 4, 2, [10, 20], [30, 40])
-    assert_monitor(monitor, second_mix, 2)
+    assert_monitor(monitor, second_mix, 0)
 
     rejected_mix = [120, 140]
     flush_mix(mixer, 4, 6, 2, [50, 60], [70, 80])
-    assert_monitor(monitor, rejected_mix, 2)
+    assert_monitor(monitor, rejected_mix, 0)
 
     _state = :sys.get_state(recording)
 
@@ -80,7 +80,7 @@ defmodule Vxpipe.Artifacts.RecordingPipelineTest do
 
     final_mix = [50, 225]
     flush_mix(mixer, 5, 8, 2, [100, 200], [-50, 25])
-    assert_monitor(monitor, final_mix, 2)
+    assert_monitor(monitor, final_mix, 0)
 
     _state = :sys.get_state(recording)
 

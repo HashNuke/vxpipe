@@ -74,6 +74,27 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert_frame(Subscription.take(monitor, 1), "monitor", ["alice"], [4_000, -3_000], 0)
   end
 
+  test "preserves buffered and queued live and recording audio across unrelated revisions" do
+    token = make_ref()
+    mixer = start_mixer(recording_token: token)
+    :ok = apply_policy(mixer, 0, ["alice", "bob"])
+    assert {:ok, alice} = subscribe(mixer, "alice-output", "alice", :mix_minus)
+    assert {:ok, recording} = subscribe_recording(mixer, token, :full_mix)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200]))
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 0)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 2, 2, [300, 400]))
+
+    :ok = apply_policy(mixer, 1, ["alice", "bob", "support"])
+    :ok = apply_policy(mixer, 2, ["alice", "bob", "support"], transcript_routes: %{})
+    assert_frame(Subscription.take(alice, 1), "alice", ["bob"], [100, 200], 0)
+    assert_frame(Subscription.take(recording, 1), nil, ["bob"], [100, 200], 0)
+    assert {:ok, %{delivered: 2}} = RoomMixer.flush_through(mixer, 2)
+    assert_frame(Subscription.take(alice, 1), "alice", ["bob"], [300, 400], 0)
+    assert_frame(Subscription.take(recording, 1), nil, ["bob"], [300, 400], 0)
+    assert :ok = RoomMixer.push(mixer, frame("bob", 3, 4, [500, 600]))
+    assert %{policy_dropped_frames: 0} = RoomMixer.stats(mixer)
+  end
+
   test "applies a new policy revision before acknowledging it and never replays queued media" do
     mixer = start_mixer()
     :ok = apply_policy(mixer, 0, ["alice", "bob", "monitor"])
@@ -283,7 +304,7 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
     assert {:ok, alice} = subscribe(mixer, "alice-output", "alice", :mix_minus)
 
     :ok = apply_policy(mixer, 1, ["bob"])
-    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200], policy_revision: 1))
+    assert :ok = RoomMixer.push(mixer, frame("bob", 1, 0, [100, 200], policy_revision: 0))
     assert {:ok, %{delivered: 0, dropped: 0}} = RoomMixer.flush_through(mixer, 0)
     assert {:ok, []} = Subscription.take(alice, 4)
   end

@@ -85,12 +85,18 @@ defmodule Vxpipe.CallEngine.RoomMixer.RecordingEgress do
   def install_policy(nil, _snapshot), do: {0, nil}
 
   def install_policy(%__MODULE__{} = state, %Snapshot{} = snapshot) do
-    {dropped, buffer} = TimestampBuffer.clear(state.buffer)
+    revision = Snapshot.interval(snapshot, :recording)
+
+    {dropped, buffer} =
+      TimestampBuffer.retain(state.buffer, fn frame ->
+        frame.policy_revision == revision and
+          MapSet.member?(snapshot.present_participant_ids, frame.source_participant_id)
+      end)
 
     :ok =
       EgressHandoff.install_policy(
         state.counters,
-        snapshot.revision,
+        revision,
         snapshot.effective.record_audio
       )
 
@@ -168,7 +174,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.RecordingEgress do
       is_nil(policy) ->
         {:error, :policy_unavailable}
 
-      frame.policy_revision != policy.revision ->
+      frame.policy_revision != Snapshot.interval(policy, :recording) ->
         {:error, :stale_policy_revision}
 
       not policy.effective.record_audio ->
