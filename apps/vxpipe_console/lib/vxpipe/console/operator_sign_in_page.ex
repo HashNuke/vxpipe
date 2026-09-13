@@ -3,8 +3,6 @@ defmodule Vxpipe.Console.OperatorSignInPage do
 
   use Phoenix.Component
 
-  alias Vxpipe.Console.CallInspectionAssetController
-
   def render(assigns) do
     ~H"""
     <!doctype html>
@@ -13,7 +11,7 @@ defmodule Vxpipe.Console.OperatorSignInPage do
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="data:," />
-        <link rel="stylesheet" href={CallInspectionAssetController.stylesheet_path()} />
+        <link rel="stylesheet" href="/assets/call_inspection.css" />
         <title>Sign in · Vxpipe Calls</title>
       </head>
       <body class="operator-page">

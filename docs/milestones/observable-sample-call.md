@@ -426,6 +426,20 @@ successful media check. Final umbrella gates pass with call engine `137 tests, 0
 (1 excluded)`, gateway `46 tests, 0 failures (4 excluded)`, and Console `20 tests, 0 failures`;
 the frontend has `3 tests, 0 failures`, and the dependency lock has no unused entries.
 
+Implementation evidence, pre-delivery asset cleanup (2026-09-13): the diagnostics LiveView client
+no longer embeds complete Phoenix and LiveView browser libraries in an Elixir controller. Console's
+existing esbuild profile now produces one shared `live.js` module that reads the socket selected by
+the page root and carries the existing diagnostics hook. Diagnostics CSS is likewise compiled from
+`assets/css/diagnostics.css` rather than living inside the Elixir layout. Both outputs use the
+endpoint's existing `/assets/*` `Plug.Static` boundary; the custom diagnostics asset controller and
+route are removed. This supersedes checkpoint 8's content-hashed-controller delivery detail while
+preserving its locally packaged, non-hosted client guarantee.
+The frontend passes 10 tests and the production asset build; the Console suite passes 93 tests.
+Chromium confirms the diagnostics surface and live socket at 1440×1000 and 390×844 with no
+horizontal overflow, browser errors, or axe accessibility findings. Full umbrella verification
+passes 996 tests with 15 explicitly excluded integrations, formatting, warnings-as-errors
+compilation, unused-dependency checking, and strict Credo over 801 files.
+
 ## Specification review
 
 Local design review on 2026-09-08 checked the early prerequisite, observable browser

@@ -33,6 +33,48 @@
         "value": "geist mono",
         "createdAt": "2026-09-11T08:47:42.846Z",
         "reason": "DESIGN.md prescribes Geist Mono for labels and operational readouts; the transfer desk intentionally extends that existing system."
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.9375rem",
+        "createdAt": "2026-09-13T00:20:04.380Z",
+        "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.6875rem",
+        "createdAt": "2026-09-13T00:20:04.569Z",
+        "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "oklch(0.76 0.01 286)",
+        "createdAt": "2026-09-13T00:20:04.757Z",
+        "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "2.75rem",
+        "createdAt": "2026-09-13T00:20:04.959Z",
+        "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.8125rem",
+        "createdAt": "2026-09-13T00:20:05.180Z",
+        "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "1.375rem",
+        "createdAt": "2026-09-13T00:20:05.397Z",
+        "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "3.25rem",
+        "createdAt": "2026-09-13T00:20:05.608Z",
+        "reason": "Agent: unchanged value from the shipped Diagnostics surface, exposed by moving inline CSS into its asset file"
       }
     ]
   }
