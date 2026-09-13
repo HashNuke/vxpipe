@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-processes=(vxpipe reloader)
-dev_mode="https"
+processes=(vxpipe reloader docs)
+dev_mode="http"
 export VXPIPE_DEV_TLS="http"
 goreman_args=(
   -basedir "$repo_root"
@@ -28,23 +28,25 @@ if ! command -v watchman-make >/dev/null 2>&1; then
 fi
 
 case "${1:-}" in
-  --http)
-    dev_mode="http"
-    shift
-    ;;
-  --https)
+  --tailscale)
+    dev_mode="tailscale"
     shift
     ;;
 esac
 
-if [[ "$dev_mode" == "https" ]]; then
+if [[ $# -gt 0 ]]; then
+  echo "Usage: bin/dev [--tailscale]" >&2
+  exit 1
+fi
+
+if [[ "$dev_mode" == "tailscale" ]]; then
   if ! command -v tailscale >/dev/null 2>&1; then
-    echo "Error: bin/dev requires tailscale on PATH. Use --http to run without TLS." >&2
+    echo "Error: bin/dev --tailscale requires tailscale on PATH." >&2
     exit 1
   fi
 
   if ! command -v jq >/dev/null 2>&1; then
-    echo "Error: bin/dev requires jq on PATH. Use --http to run without TLS." >&2
+    echo "Error: bin/dev --tailscale requires jq on PATH." >&2
     exit 1
   fi
 
@@ -88,11 +90,6 @@ if [[ "$dev_mode" == "https" ]]; then
     echo "Error: unable to provision this machine's Tailscale certificate." >&2
     exit 1
   fi
-fi
-
-if [[ $# -gt 0 ]]; then
-  echo "Usage: bin/dev [--http | --https]" >&2
-  exit 1
 fi
 
 if [[ -f "$repo_root/.env" ]]; then

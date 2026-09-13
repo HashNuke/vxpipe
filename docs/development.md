@@ -15,7 +15,7 @@ Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
 
 For `bin/dev`, also install [Goreman](https://github.com/mattn/goreman) and
 [Watchman](https://facebook.github.io/watchman/) with its `watchman-make`
-Python client. Its default HTTPS mode also requires Tailscale and `jq`.
+Python client. Only `bin/dev --tailscale` also requires Tailscale and `jq`.
 
 Install the Watchman Python client as an isolated user-level tool:
 
@@ -30,6 +30,7 @@ Install the application and frontend dependencies from the repository root:
 ```shell
 mix deps.get
 mix assets.setup
+npm --prefix vxpipe-docs ci
 ```
 
 Development enables Gemini model inference plus the Deepgram Flux
@@ -41,11 +42,16 @@ DEEPGRAM_API_KEY=replace-with-a-development-key
 GEMINI_API_KEY=replace-with-a-development-key
 ```
 
-Then start the Vxpipe umbrella and Console frontend together:
+Then start the Vxpipe umbrella, Console frontend, and Astro docs together:
 
 ```shell
 bin/dev
 ```
+
+The Console is at `http://localhost:4000/`. The landing page is at
+`http://localhost:4321/` and English documentation is at
+`http://localhost:4321/docs/en/`. Astro reloads as you edit the site. The docs use
+local HTTP in both `bin/dev` modes and stop with the rest of the stack on Ctrl-C.
 
 Unlike `bin/dev`, the quick start's direct `mix run --no-halt` command does not
 load `.env`; export the provider keys in the launching shell as shown there.
@@ -92,12 +98,11 @@ application environment and does not read these environment variables directly.
 
 Goreman runs the call engine, gateway, and Console applications in one BEAM
 instance. The Console's Phoenix endpoint supervises its esbuild development watcher,
-serves the React assets, and mounts the reusable gateway. It is the only HTTP server.
-By default Phoenix listens with TLS on the machine's Tailscale address at
-`https://<machine-fqdn>:4000/`. The machine FQDN and Tailscale IPv4 address are
-discovered automatically; WebRTC media continues to use its negotiated ICE path. The root page
-lists the available Console interfaces. The Pipecat sample itself is available at
-`/pipecat-console`.
+serves the React assets, and mounts the reusable gateway on the same endpoint.
+By default Phoenix serves HTTP at `http://localhost:4000/`, with no Tailscale
+dependency. WebRTC media continues to use its negotiated ICE path. The root page
+lists the available Console interfaces. The Pipecat sample itself is available
+at `/pipecat-console`.
 
 Goreman also runs `watchman-make` in the foreground. Changes to umbrella source,
 Mix manifests, or runtime configuration ask Goreman to restart only the
@@ -107,23 +112,31 @@ restart the development server. The Console asset watcher consumes its Phoenix
 parent's lifecycle, so a reload does not leave a second frontend listener or
 orphaned development server.
 
-`bin/dev` asks the local Tailscale daemon for a certificate for the discovered
-`.ts.net` hostname and gives its ignored runtime paths to Phoenix/Bandit. MagicDNS
+To enable HTTPS on the machine's Tailscale address, run:
+
+```shell
+bin/dev --tailscale
+```
+
+This discovers the machine's FQDN and Tailscale IPv4 address and serves the Console
+at `https://<machine-fqdn>:4000/`. It asks the local Tailscale daemon for a
+certificate for the discovered `.ts.net` hostname and gives its ignored runtime
+paths to Phoenix/Bandit. MagicDNS
 and HTTPS certificates must be enabled for the tailnet. The complete stack runs as
 the calling user; no root process, reverse proxy, `TS_PERMIT_CERT_UID`, or manually
 exported TLS variables are required. Phoenix binds only to the discovered Tailscale
 address. This does not use Tailscale Funnel or make the development stack public.
 
-Use `--http` to omit TLS for local troubleshooting. In HTTP mode, set `APP_HOST`
-to bind the Console endpoint to a specific hostname or interface:
+In the default HTTP mode, set `APP_HOST` to bind the Console endpoint to a specific
+hostname or interface:
 
 ```shell
-APP_HOST=vxpipe.example.ts.net bin/dev --http
+APP_HOST=localhost bin/dev
 ```
 
 The repository-root `.env.example` documents the development credential and
 optional Goreman process overrides. A static `APP_HOST` can be placed in `.env`
-for HTTP mode; HTTPS mode derives it from Tailscale automatically. Goreman loads
+for HTTP mode; `--tailscale` derives it from Tailscale automatically. Goreman loads
 `.env` into its child processes without exporting values into the parent shell.
 
 ## Optional PostgreSQL storage

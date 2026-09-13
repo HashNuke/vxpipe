@@ -65,7 +65,7 @@ ln -s "$(command -v bash)" "$fake_bin/bash"
 ln -s "$(command -v dirname)" "$fake_bin/dirname"
 make_executable goreman 'exit 0'
 
-if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --http 2>&1)"; then
+if output="$(PATH="$fake_bin" "$repo_root/bin/dev" 2>&1)"; then
   fail "expected bin/dev to reject a missing watchman executable"
 fi
 
@@ -73,28 +73,51 @@ assert_output_contains "$output" "Error: bin/dev requires watchman on PATH."
 
 make_executable watchman 'exit 0'
 
-if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --http 2>&1)"; then
+if output="$(PATH="$fake_bin" "$repo_root/bin/dev" 2>&1)"; then
   fail "expected bin/dev to reject a missing watchman-make executable"
 fi
 
 assert_output_contains "$output" "Error: bin/dev requires watchman-make on PATH."
 
 make_executable watchman-make 'exit 0'
-make_executable goreman 'printf "%s\n" "$@" >"$VXPIPE_TEST_GOREMAN_ARGS"'
+make_executable goreman \
+  'printf "%s\n" "$@" >"$VXPIPE_TEST_GOREMAN_ARGS"' \
+  'printf "%s\n" "$VXPIPE_DEV_TLS" >"$VXPIPE_TEST_DEV_TLS"'
 
 goreman_args="$test_tmp/goreman-args"
+dev_tls="$test_tmp/dev-tls"
 PATH="$fake_bin" \
   VXPIPE_TEST_GOREMAN_ARGS="$goreman_args" \
-  "$repo_root/bin/dev" --http
+  VXPIPE_TEST_DEV_TLS="$dev_tls" \
+  "$repo_root/bin/dev"
 
+assert_file_has_line "$dev_tls" "http"
 assert_file_has_line "$goreman_args" "start"
 assert_file_has_line "$goreman_args" "vxpipe"
 assert_file_has_line "$goreman_args" "reloader"
+assert_file_has_line "$goreman_args" "docs"
 assert_file_lacks_line "$goreman_args" "assets"
 assert_file_lacks_line "$goreman_args" "caddy"
 
 assert_file_has_line "$repo_root/Procfile" "reloader: bin/watch-vxpipe"
+assert_file_has_line "$repo_root/Procfile" "docs: env ASTRO_DEV_BACKGROUND=0 npm --prefix vxpipe-docs run dev"
 assert_file_lacks_line "$repo_root/Procfile" "caddy: bin/run-caddy"
+
+if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --tailscale 2>&1)"; then
+  fail "expected --tailscale to reject a missing tailscale executable"
+fi
+assert_output_contains "$output" "Error: bin/dev --tailscale requires tailscale on PATH."
+
+for invalid_args in "--http" "--https" "--tailscale unexpected"; do
+  read -r -a invalid_argv <<<"$invalid_args"
+  if output="$(PATH="$fake_bin" \
+    VXPIPE_TEST_GOREMAN_ARGS="$goreman_args" \
+    VXPIPE_TEST_DEV_TLS="$dev_tls" \
+    "$repo_root/bin/dev" "${invalid_argv[@]}" 2>&1)"; then
+    fail "expected bin/dev to reject invalid arguments: $invalid_args"
+  fi
+  assert_output_contains "$output" "Usage: bin/dev [--tailscale]"
+done
 
 make_executable tailscale \
   'case "${1:-}" in' \
@@ -105,13 +128,19 @@ make_executable tailscale \
   '    printf '\''%s\n'\'' "$@" >"$VXPIPE_TEST_TAILSCALE_CERT_ARGS"' \
   '    ;;' \
   'esac'
+
+if output="$(PATH="$fake_bin" "$repo_root/bin/dev" --tailscale 2>&1)"; then
+  fail "expected --tailscale to reject a missing jq executable"
+fi
+assert_output_contains "$output" "Error: bin/dev --tailscale requires jq on PATH."
+
 ln -s "$(command -v jq)" "$fake_bin/jq"
 ln -s "$(command -v mkdir)" "$fake_bin/mkdir"
 ln -s "$(command -v chmod)" "$fake_bin/chmod"
 make_executable goreman \
   'printf "%s\n" "$@" >"$VXPIPE_TEST_GOREMAN_ARGS"' \
   'if [[ -n "${VXPIPE_TEST_TLS_ENV:-}" ]]; then' \
-  '  printf "%s\n" "$APP_HOST" "$VXPIPE_DEV_TLS_CERTFILE" "$VXPIPE_DEV_TLS_KEYFILE" "$VXPIPE_TAILSCALE_IP" >"$VXPIPE_TEST_TLS_ENV"' \
+  '  printf "%s\n" "$APP_HOST" "$VXPIPE_DEV_TLS_CERTFILE" "$VXPIPE_DEV_TLS_KEYFILE" "$VXPIPE_TAILSCALE_IP" "$VXPIPE_DEV_TLS" >"$VXPIPE_TEST_TLS_ENV"' \
   'fi'
 
 https_args="$test_tmp/https-args"
@@ -121,11 +150,12 @@ PATH="$fake_bin" \
   VXPIPE_TEST_GOREMAN_ARGS="$https_args" \
   VXPIPE_TEST_TAILSCALE_CERT_ARGS="$tailscale_cert_args" \
   VXPIPE_TEST_TLS_ENV="$tls_env" \
-  "$repo_root/bin/dev"
+  "$repo_root/bin/dev" --tailscale
 
 assert_file_has_line "$https_args" "start"
 assert_file_has_line "$https_args" "vxpipe"
 assert_file_has_line "$https_args" "reloader"
+assert_file_has_line "$https_args" "docs"
 assert_file_lacks_line "$https_args" "caddy"
 [[ "$(sed -n '1p' "$tls_env")" == "console.example.ts.net" ]] ||
   fail "expected bin/dev to derive APP_HOST from Tailscale"
@@ -135,6 +165,7 @@ assert_file_lacks_line "$https_args" "caddy"
   fail "expected bin/dev to configure Phoenix's TLS key path"
 [[ "$(sed -n '4p' "$tls_env")" == "100.64.0.12" ]] ||
   fail "expected bin/dev to bind Phoenix to the Tailscale IPv4 address"
+assert_file_has_line "$tls_env" "phoenix"
 assert_file_has_line "$tailscale_cert_args" "cert"
 assert_file_has_line "$tailscale_cert_args" "--cert-file"
 assert_file_has_line "$tailscale_cert_args" "$repo_root/tmp/tls/console.example.ts.net.crt"
@@ -171,4 +202,4 @@ PATH="$fake_bin" \
 [[ "$(<"$restart_args")" == $'run\nrestart\nvxpipe' ]] ||
   fail "expected restart helper to delegate to goreman run restart vxpipe"
 
-echo "bin/dev Watchman integration tests passed"
+echo "bin/dev process integration tests passed"

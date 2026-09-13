@@ -8,12 +8,17 @@ starter. Use Node.js 24 and npm.
 From the repository root:
 
 ```shell
-cd vxpipe-docs
-npm ci
-npm run dev
+npm --prefix vxpipe-docs ci
+bin/dev
 ```
 
-Open the local URL printed by Astro, normally `http://localhost:4321`.
+This starts Astro alongside the application. See the
+[development setup](../docs/development.md) for the stack's prerequisites.
+Open `http://localhost:4321/docs/en/` for the docs or `http://localhost:4321/` for
+the landing page. Ctrl-C stops the stack, including Astro.
+
+To run just the site, use `npm --prefix vxpipe-docs run dev` from the repository
+root.
 
 ## Routes
 
