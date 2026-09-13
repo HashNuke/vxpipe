@@ -524,3 +524,12 @@ with 1,100 tests, zero failures and 15 integrations excluded. Native WebRTC/priv
 negotiated connection and STT ingress evidence, complete inventory and lifecycle integration remain
 outstanding. These component queries do not establish complete participant-media readiness or
 rendered/live-provider acceptance; the common readiness checkpoint remains unchecked.
+
+Shared output now carries explicit recipient/native-adapter bindings and queries actual native
+encoder initialization. Private output retains its readiness generation through holds and room-route
+changes; pending clear/drain stays preparing. Room egress also checks the exact revocable arbiter
+route, so an old shared pipeline cannot satisfy readiness after rebinding. Fifty-one focused
+web/phone/media checks pass, including both phone adapter fixtures. All five root gates pass with
+1,103 tests, zero failures and 15 integrations excluded. Negotiated connection/input-track evidence,
+STT ingress, prospective inventory and lifecycle orchestration remain incomplete; output readiness
+does not substitute for those requirements or rendered/live-provider acceptance.

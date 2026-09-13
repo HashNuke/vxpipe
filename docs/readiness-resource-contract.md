@@ -201,17 +201,40 @@ egress receive loop. Missing contracts and malformed/foreign subscription report
 the actual mixer even when the egress process remains available. A changed output interval can
 prepare a replacement pipeline while retaining the same mixer subscription generation.
 
-This is component evidence, not complete participant-media readiness. In production the shared
-output pipeline acknowledges its room binding; its native encoder and negotiated live connection
-are separate requirements. WebRTC connection/track evidence, STT ingress, private output bindings
-and complete prospective inventory still need integration. No sample packet, utterance or codec
-restart is used as a readiness probe.
+This is component evidence, not complete participant-media readiness. WebRTC connection/track
+evidence, STT ingress and complete prospective inventory still need integration. No sample packet,
+utterance or codec restart is used as a readiness probe.
 
 Local design review rejected treating the pipeline acknowledgement as proof of a mixer queue or
 live transport, substituting a global policy revision for relevant intervals, and making the egress
 query the mixer synchronously inside its receive loop. Focused checks cover unchanged generations,
 replacement callbacks, malformed subscription reports, real mixer/egress interval mismatch and
 collector revocation after mixer loss. Runtime hold/release and audible acceptance remain pending.
+
+## Shared recipient output
+
+WebRTC native output exposes its initialized encoder, configured peer and output-track binding.
+WebRTC and phone arbiters receive explicit recipient identity and native adapter configuration.
+Private-output readiness queries that adapter outside the arbiter loop, validates the returned
+participant/connection/process binding, and rechecks the arbiter snapshot before accepting evidence.
+Unsupported adapters fail closed. Pending clear/drain reports preparing without changing resource
+generation; ordinary held or private-playing output retains its initialized evidence.
+
+The room route has a separate descriptor tied to the exact arbiter binding token. Rebinding room
+output does not change the private output or native encoder descriptors. A foreign recipient
+cannot acquire the route, and an old route token cannot establish readiness. The production shared
+pipeline queries this revocable route; room egress includes it alongside the mixer subscription
+when reporting readiness and exposing dependencies. Direct encoding pipelines retain their existing
+initialization acknowledgement contract without requiring an arbiter route.
+
+Local design review rejected reusing the first shared-pipeline acknowledgement indefinitely: its
+process can remain alive after another binding replaces its route. It also rejected treating a
+native PID as initialization evidence or coupling codec lifetime to hold/room-binding generations.
+Focused checks cover delayed phone initialization, remote drain acknowledgements, retained codec
+and RTP state, missing adapters, separate private/room bindings, native loss and stale shared routes.
+Both deterministic phone adapter fixtures query their actual private/room output readiness before
+exchanging audio. Negotiated live transport and required input-track evidence remain separate
+requirements; these output checks do not claim complete connection or lifecycle readiness.
 
 ## Rejected alternatives and verification
 

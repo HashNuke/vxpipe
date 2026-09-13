@@ -6,45 +6,86 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
   alias Vxpipe.Gateway.TestOpusEncoder
   alias Vxpipe.Gateway.WebRTC.AudioEgress
 
-  test "the production room path and direct path share native output delivery" do
-    alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
-    alias Vxpipe.Gateway.Media.RoomAudioEgress
-    alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
+  test "collects private output readiness while room binding and hold change independently" do
+    alias Vxpipe.CallEngine.Readiness.Collector
 
     {output, native} = start_output()
-    start_supervised!({ConnectionPeerSupervisor, connection_id: "connection"})
-    observer = self()
+    assert {:ok, native_resource, :ready} = AudioEgress.readiness(native)
+    assert {:ok, resource, :ready} = OutputArbiter.readiness(output)
+    assert resource.kind == :private_output
+    assert resource.scope == {:participant, "caller"}
+    assert resource.binding == "connection"
 
-    store =
+    assert {:ok, [^resource, ^native_resource] = resources} =
+             OutputArbiter.readiness_resources(output)
+
+    collector =
       start_supervised!(
-        {Agent,
-         fn ->
-           %{
-             observer: observer,
-             output_configuration: {:ok, %{mode: :mix_minus}},
-             frames: [mixed(0)],
-             snapshot: %Snapshot{
-               revision: 0,
-               present_participant_ids: MapSet.new(["caller", "agent"]),
-               effective: %Effective{
-                 audio_routes: :unrestricted,
-                 transcript_routes: :unrestricted,
-                 record_audio: true,
-                 save_transcripts: true
-               }
-             }
-           }
-         end}
+        {Collector,
+         owner: self(),
+         incarnation_id: "incarnation",
+         attempt_id: "output-readiness",
+         resources: resources,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
       )
 
-    assert {:ok, room} =
-             ConnectionPeerSupervisor.start_room_audio_egress(
-               "connection",
-               %{store: store},
-               Map.to_list(identity()),
-               output,
-               engine: Vxpipe.Gateway.TestRoomAudioOutputEngine
-             )
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert :ok = OutputSink.hold(output, 1)
+    assert {:ok, ^resource, :ready} = OutputArbiter.readiness(output)
+    assert :ok = OutputSink.release(output, 1)
+    assert {:ok, token} = OutputArbiter.bind_room(output, identity())
+    assert {:ok, room, :ready} = OutputArbiter.room_binding_readiness(output, token)
+    assert room.kind == :room_output_binding
+    assert room.generation == token
+    assert {:ok, ^room, :ready} = OutputArbiter.readiness_binding(room)
+    assert {:ok, ^resource, :ready} = OutputArbiter.readiness(output)
+
+    assert {:error, :wrong_recipient} =
+             OutputArbiter.bind_room(output, %{identity() | participant_id: "other"})
+
+    assert {:ok, ^room, :ready} = OutputArbiter.readiness_binding(room)
+    assert {:ok, _new_token} = OutputArbiter.bind_room(output, identity())
+    assert {:error, :unavailable} = OutputArbiter.readiness_binding(room)
+    assert {:ok, ^resource, :ready} = OutputArbiter.readiness(output)
+    assert {:ok, ^native_resource, :ready} = AudioEgress.readiness(native)
+    refute_receive {:rtp, _packet}
+
+    assert :ok = stop_supervised({AudioEgress, "connection"})
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :failed}}, 1_000
+    assert {:error, :unavailable} = OutputArbiter.readiness(output)
+  end
+
+  test "a native output without a readiness adapter cannot become ready" do
+    {output, _native} = start_output(__MODULE__)
+    assert {:ok, resource, :failed} = OutputArbiter.readiness(output)
+    assert resource.kind == :private_output
+    assert {:ok, [^resource]} = OutputArbiter.readiness_resources(output)
+    refute_receive {:rtp, _packet}
+  end
+
+  test "room readiness requires the current arbiter binding, independently of private output" do
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    {output, native} = start_output()
+    room = start_room_output(output, [])
+    assert :ok = RoomAudioEgress.await_ready(room)
+    assert {:ok, _room_resource, :ready} = RoomAudioEgress.readiness(room)
+    assert {:ok, resources} = RoomAudioEgress.readiness_resources(room)
+    assert Enum.any?(resources, &(&1.kind == :room_output_binding and &1.instance == output))
+    assert {:ok, private, :ready} = OutputArbiter.readiness(output)
+    assert {:ok, codec, :ready} = AudioEgress.readiness(native)
+
+    assert {:ok, _replacement} = OutputArbiter.bind_room(output, identity())
+    assert {:error, :unavailable} = RoomAudioEgress.readiness(room)
+    assert {:ok, ^private, :ready} = OutputArbiter.readiness(output)
+    assert {:ok, ^codec, :ready} = AudioEgress.readiness(native)
+  end
+
+  test "the production room path and direct path share native output delivery" do
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    {output, native} = start_output()
+    room = start_room_output(output, [mixed(0)])
 
     assert :ok = RoomAudioEgress.await_ready(room)
     assert :ok = OutputSink.push(output, direct("opening"))
@@ -209,12 +250,57 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert :ok = OutputSink.drain(output)
   end
 
-  defp start_output do
+  defp start_room_output(output, frames) do
+    alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
+    alias Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor
+
+    start_supervised!({ConnectionPeerSupervisor, connection_id: "connection"})
+    observer = self()
+
+    store =
+      start_supervised!(
+        {Agent,
+         fn ->
+           %{
+             observer: observer,
+             output_configuration: {:ok, %{mode: :mix_minus}},
+             frames: frames,
+             snapshot: %Snapshot{
+               revision: 0,
+               present_participant_ids: MapSet.new(["caller", "agent"]),
+               effective: %Effective{
+                 audio_routes: :unrestricted,
+                 transcript_routes: :unrestricted,
+                 record_audio: true,
+                 save_transcripts: true
+               }
+             }
+           }
+         end}
+      )
+
+    assert {:ok, room} =
+             ConnectionPeerSupervisor.start_room_audio_egress(
+               "connection",
+               %{store: store},
+               Map.to_list(identity()),
+               output,
+               engine: Vxpipe.Gateway.TestRoomAudioOutputEngine
+             )
+
+    room
+  end
+
+  defp start_output(native_adapter \\ AudioEgress) do
     observer = self()
 
     native =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant",
+         room_id: "room",
+         incarnation_id: "incarnation",
+         participant_id: "caller",
          connection_id: "connection",
          peer_connection: self(),
          track_id: "track",
@@ -231,7 +317,15 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
 
     output =
       start_supervised!(
-        {OutputArbiter, connection_id: "connection", native_output: native, owner: self()}
+        {OutputArbiter,
+         tenant_id: "tenant",
+         room_id: "room",
+         incarnation_id: "incarnation",
+         participant_id: "caller",
+         connection_id: "connection",
+         native_output: native,
+         native_adapter: native_adapter,
+         owner: self()}
       )
 
     {output, native}

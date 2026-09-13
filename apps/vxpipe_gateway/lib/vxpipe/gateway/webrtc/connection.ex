@@ -80,7 +80,11 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
              connection_id,
              peer_connection,
              output_track.id,
-             Keyword.fetch!(options, :maximum_audio_packets)
+             Keyword.fetch!(options, :maximum_audio_packets),
+             tenant_id: session.tenant_id,
+             room_id: session.room_id,
+             incarnation_id: session.incarnation_id,
+             participant_id: session.participant_id
            ),
          {:ok, %ConnectionAttachment{} = attachment} <-
            CallEngine.attach_connection(attach_command, audio_egress),

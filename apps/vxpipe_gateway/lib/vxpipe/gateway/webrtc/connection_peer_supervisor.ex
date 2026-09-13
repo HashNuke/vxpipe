@@ -50,19 +50,28 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor do
     DynamicSupervisor.start_child(via(connection_id), child_spec)
   end
 
-  def start_audio_egress(connection_id, peer_connection, track_id, maximum_packets) do
-    options = [
-      connection_id: connection_id,
-      peer_connection: peer_connection,
-      track_id: track_id,
-      maximum_packets: maximum_packets
-    ]
+  def start_audio_egress(connection_id, peer_connection, track_id, maximum_packets, identity) do
+    options =
+      identity ++
+        [
+          connection_id: connection_id,
+          peer_connection: peer_connection,
+          track_id: track_id,
+          maximum_packets: maximum_packets
+        ]
 
     with {:ok, native} <-
            DynamicSupervisor.start_child(via(connection_id), {AudioEgress, options}) do
       DynamicSupervisor.start_child(
         via(connection_id),
-        {OutputArbiter, connection_id: connection_id, native_output: native, owner: self()}
+        {OutputArbiter,
+         identity ++
+           [
+             connection_id: connection_id,
+             native_output: native,
+             native_adapter: AudioEgress,
+             owner: self()
+           ]}
       )
     end
   end

@@ -14,7 +14,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
   alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket, Submission}
   alias Vxpipe.Calls.{PreparedCall, TelephonyAdmissionClaim}
   alias Vxpipe.Gateway.CallAdmission
-  alias Vxpipe.Gateway.Media.AudioOutput
+  alias Vxpipe.Gateway.Media.{AudioOutput, OutputArbiter, RoomAudioEgress}
 
   alias Vxpipe.Gateway.Telephony.{
     IncomingLegActivationResult,
@@ -58,6 +58,9 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     assert is_pid(snapshot.audio_output)
     assert is_pid(snapshot.room_audio_ingress)
     assert is_pid(snapshot.room_audio_egress)
+    assert {:ok, private_output, :ready} = OutputArbiter.readiness(snapshot.audio_output)
+    assert private_output.scope == {:participant, caller.participant_id}
+    assert {:ok, _room_output, :ready} = RoomAudioEgress.readiness(snapshot.room_audio_egress)
 
     assert :ok =
              AudioOutput.push(

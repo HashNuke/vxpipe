@@ -23,6 +23,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -83,6 +87,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -138,6 +146,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -201,6 +213,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -230,6 +246,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -282,6 +302,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -327,6 +351,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -359,6 +387,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     egress =
       start_supervised!(
         {AudioEgress,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
          connection_id: "connection-test",
          peer_connection: self(),
          track_id: "track-output",
@@ -373,6 +405,10 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
          end}
       )
 
+    assert {:ok, resource, :ready} = AudioEgress.readiness(egress)
+    assert resource.instance == egress
+    assert resource.scope == {:participant, "caller-test"}
+    assert resource.binding == "connection-test"
     assert :ok = OutputSink.push(egress, frame(:binary.copy(<<1, 0>>, 3 * 960)))
     assert_receive {:test_rtp, %Packet{sequence_number: 0, timestamp: 0, ssrc: ssrc}}
     assert_receive {:pace, ^egress, message}
@@ -383,6 +419,7 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgressTest do
     send(egress, message)
     assert {:reply, {:ok, 20}} = :gen_server.wait_response(request, 1_000)
     assert :sys.get_state(egress).encoder == encoder
+    assert {:ok, ^resource, :ready} = AudioEgress.readiness(egress)
     assert :ok = OutputSink.push(egress, frame(:binary.copy(<<2, 0>>, 960)))
     assert_receive {:test_rtp, %Packet{sequence_number: 1, timestamp: 960, ssrc: ^ssrc}}
   end

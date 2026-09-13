@@ -379,3 +379,30 @@ unchecked; the milestone and index are still incomplete.
   and the arbiter is constructed with only its native PID. WebRTC learns input track codecs lazily
   from the first RTP packet; readiness needs negotiated track evidence before microphone release.
   Engine Media.Ingress owns the bounded STT handoff separately from room audio normalization.
+
+## Shared output readiness and revocable room bindings
+
+- Added explicit recipient identity and native adapter wiring for web/phone output. WebRTC native
+  readiness pins its initialized encoder and configured peer/track. The arbiter validates the actual
+  native descriptor outside its receive loop and rechecks its binding snapshot before reporting.
+  Missing adapters fail closed; pending clear/drain prepares without changing resource lifetime.
+- Initial focused tests failed on missing APIs after correcting a misplaced fixture assertion.
+  The new collection check proves private output retains its descriptor through hold/release and
+  room rebinding, while the exact old room token becomes unavailable. Codec initialization/readiness
+  does not encode a probe packet or advance the RTP timeline. Native loss revokes collection.
+- A second red check exposed missing arbiter-route evidence in the shared room path. Added the
+  shared pipeline's current binding query and included that descriptor in room egress evidence.
+  A live old pipeline cannot retain readiness after another caller replaces its route. Private
+  output and encoder readiness remain unchanged. Egress also rechecks its snapshot after queries.
+- Fifty-one focused web/phone/media checks pass, including both actual phone pipeline fixtures
+  querying private/room readiness and the existing two-peer WebRTC/human-transfer regressions.
+  Updated the resource contract with the local design review and remaining limits. Root gates follow.
+- Next inspected transport boundary: ExWebRTC exposes bounded public connection-state and
+  negotiated-transceiver queries. Query those outside Connection's receive loop; a ready configured
+  encoder alone cannot prove transport connectivity or an available input track. Session snapshots
+  contain identity but not candidate capability demand, so the prospective inventory must explicitly
+  select required input evidence, including receive-only and private preparation cases.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,103 umbrella
+  tests with zero failures (15 integrations excluded), and unused-dependency checks. The milestone
+  records the shared-output boundary and leaves negotiated transport, inventory and lifecycle
+  acceptance unchecked. No running server was restarted or live provider acceptance claimed.

@@ -88,7 +88,14 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionSetup do
          :ok <- AudioOutput.await_ready(output) do
       child_supervisor.start_child(
         connection_id,
-        {OutputArbiter, connection_id: connection_id, native_output: output, owner: self()}
+        {OutputArbiter,
+         identity ++
+           [
+             connection_id: connection_id,
+             native_output: output,
+             native_adapter: AudioOutput,
+             owner: self()
+           ]}
       )
     end
   end

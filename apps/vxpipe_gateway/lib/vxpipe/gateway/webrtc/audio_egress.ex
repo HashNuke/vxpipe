@@ -3,8 +3,11 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias ExRTP.Packet
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.Recording.EgressHandoff
   alias Vxpipe.Gateway.Media.EgressAcceptance
   alias Vxpipe.Gateway.WebRTC.{EncodedAudioFrame, OpusEncoder}
@@ -14,6 +17,13 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   @rtp_timestamp_step 960
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
+
+  @impl true
+  def readiness(output) do
+    GenServer.call(output, :readiness, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
 
   def child_spec(options) do
     %{
@@ -35,6 +45,14 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
            current: nil,
            encoder: encoder,
            encoder_module: encoder_module,
+           readiness_resource:
+             Resource.new(
+               :audio_output,
+               {:participant, Keyword.fetch!(options, :participant_id)},
+               __MODULE__,
+               options,
+               binding: Keyword.fetch!(options, :connection_id)
+             ),
            maximum_packets: Keyword.get(options, :maximum_packets, 500),
            pace_ref: nil,
            pending_finish: nil,
@@ -59,6 +77,11 @@ defmodule Vxpipe.Gateway.WebRTC.AudioEgress do
   end
 
   @impl true
+  def handle_call(:readiness, _from, state) do
+    status = if state.track_id != nil and is_pid(state.peer_connection), do: :ready, else: :failed
+    {:reply, {:ok, state.readiness_resource, status}, state}
+  end
+
   def handle_call(
         {:vxpipe_audio_output, %AudioOutputFrame{} = frame},
         from,

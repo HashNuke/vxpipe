@@ -10,6 +10,13 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
 
   def push(pipeline_id, frame), do: GenServer.call(via(pipeline_id), {:push, frame}, 5_000)
 
+  def readiness(pipeline) do
+    with {:ok, output, token} <- GenServer.call(pipeline, :output_binding, 1_000),
+         do: OutputArbiter.room_binding_readiness(output, token)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     output = Keyword.fetch!(options, :output_sink)
@@ -45,6 +52,10 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
   end
 
   @impl true
+  def handle_call(:output_binding, _from, state) do
+    {:reply, {:ok, state.output, state.binding}, state}
+  end
+
   def handle_call({:push, frame}, _from, state) do
     case OutputArbiter.push_room(state.output, state.binding, frame) do
       :ok ->

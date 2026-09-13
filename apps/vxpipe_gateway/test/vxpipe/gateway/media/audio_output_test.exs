@@ -267,15 +267,26 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
       start_output(playback_control: %{socket_owner: self(), stream_id: "stream"})
 
     assert_receive {:test_audio_output_pipeline_started, pipeline_id, _, ^native}
-    send(native, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
 
     output =
       start_supervised!(
-        {OutputArbiter, connection_id: connection, native_output: native, owner: self()}
+        {OutputArbiter,
+         tenant_id: "tenant-test",
+         room_id: "room-test",
+         incarnation_id: "incarnation-test",
+         participant_id: "caller-test",
+         connection_id: connection,
+         native_output: native,
+         native_adapter: AudioOutput,
+         owner: self()}
       )
 
+    assert {:ok, _resource, :preparing} = OutputArbiter.readiness(output)
+    send(native, {:vxpipe_audio_output_pipeline_ready, pipeline_id})
+    assert {:ok, resource, :ready} = OutputArbiter.readiness(output)
     drain = :gen_server.send_request(output, :vxpipe_audio_output_drain)
     assert_receive {:vxpipe_playback_command, "stream", :drain, ^native, mark}
+    assert {:ok, ^resource, :preparing} = OutputArbiter.readiness(output)
     assert {:error, :output_not_drained} = OutputSink.release(output, 0)
 
     assert {:error, :draining} =
@@ -284,6 +295,7 @@ defmodule Vxpipe.Gateway.Media.AudioOutputTest do
     send(native, {:vxpipe_playback_ack, mark, :ok})
     assert {:reply, :ok} = :gen_server.wait_response(drain, 1_000)
     assert :ok = OutputSink.release(output, 0)
+    assert {:ok, ^resource, :ready} = OutputArbiter.readiness(output)
   end
 
   test "paces resumed output after idle without a catch-up burst or accumulated encoder delay" do

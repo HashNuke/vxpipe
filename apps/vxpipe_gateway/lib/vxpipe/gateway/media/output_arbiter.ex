@@ -2,7 +2,11 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   @moduledoc false
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, MixedFrame}
+  alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.Gateway.Media.OutputArbiter.Readiness
 
   @timeout 5_000
 
@@ -22,6 +26,25 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     do: GenServer.call(output, {:room, binding, frame}, @timeout)
 
   @impl true
+  def readiness(output), do: Readiness.readiness(output)
+
+  @impl true
+  def readiness_binding(%Resource{kind: :private_output, instance: output}), do: readiness(output)
+
+  def readiness_binding(%Resource{
+        kind: :room_output_binding,
+        instance: output,
+        generation: token
+      }),
+      do: room_binding_readiness(output, token)
+
+  def readiness_binding(_invalid), do: {:error, :unavailable}
+
+  def room_binding_readiness(output, token), do: Readiness.readiness(output, {:room, token})
+
+  def readiness_resources(output), do: Readiness.resources(output)
+
+  @impl true
   def init(options) do
     native = Keyword.fetch!(options, :native_output)
     owner = Keyword.fetch!(options, :owner)
@@ -29,7 +52,20 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     {:ok,
      %{
        connection_id: Keyword.fetch!(options, :connection_id),
+       identity:
+         Map.new([:tenant_id, :room_id, :incarnation_id, :participant_id], fn key ->
+           {key, Keyword.fetch!(options, key)}
+         end),
        native: native,
+       native_adapter: Keyword.fetch!(options, :native_adapter),
+       readiness_resource:
+         Resource.new(
+           :private_output,
+           {:participant, Keyword.fetch!(options, :participant_id)},
+           __MODULE__,
+           options,
+           binding: Keyword.fetch!(options, :connection_id)
+         ),
        native_monitor: Process.monitor(native),
        owner: owner,
        owner_monitor: Process.monitor(owner),
@@ -46,6 +82,13 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   end
 
   @impl true
+  def handle_call({:readiness_binding, selection}, _from, state) do
+    {:reply, Readiness.binding(state, selection), state}
+  end
+
+  def handle_call({:bind_room, identity}, _from, state) when identity != state.identity,
+    do: {:reply, {:error, :wrong_recipient}, state}
+
   def handle_call({:bind_room, identity}, {caller, _} = from, %{pending_binding: nil} = state) do
     if state.binding, do: Process.demonitor(state.binding.monitor, [:flush])
 
