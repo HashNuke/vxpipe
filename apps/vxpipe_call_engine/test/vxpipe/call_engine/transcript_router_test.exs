@@ -159,7 +159,7 @@ defmodule Vxpipe.CallEngine.TranscriptRouterTest do
       effective: effective
     }
 
-    Enforcer.apply(router, snapshot, 100)
+    Enforcer.apply(router, snapshot, 1_000)
   end
 
   defp projection(revision, source, recipients, overrides \\ []) do

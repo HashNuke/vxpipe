@@ -292,7 +292,7 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
       }
     }
 
-    assert {:error, :invalid_policy} = Enforcer.apply(mixer, malformed, 100)
+    assert {:error, :invalid_policy} = Enforcer.apply(mixer, malformed, 1_000)
     :ok = apply_policy(mixer, 4, ["alice"])
     assert {:error, :stale_policy_revision} = apply_policy(mixer, 4, ["alice"])
     assert {:error, :unexpected_policy_revision} = apply_policy(mixer, 6, ["alice"])
@@ -385,7 +385,7 @@ defmodule Vxpipe.CallEngine.RoomMixerTest do
       effective: effective
     }
 
-    Enforcer.apply(mixer, snapshot, 100)
+    Enforcer.apply(mixer, snapshot, 1_000)
   end
 
   defp subscribe(mixer, id, recipient, mode, overrides \\ []) do
