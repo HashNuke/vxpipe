@@ -113,7 +113,7 @@ defmodule Vxpipe.CallEngine.RoomRecordingTest do
       }
     }
 
-    Enforcer.apply(mixer, snapshot, 100)
+    Enforcer.apply(mixer, snapshot, 1_000)
   end
 
   defp frame(source, sequence, timestamp, revision) do

@@ -20,7 +20,7 @@ defmodule Vxpipe.MCP.FaultClient do
         limits: [
           max_response_bytes: max_response_bytes,
           max_stream_buffer_bytes: max_stream_buffer_bytes,
-          request_timeout_ms: deadline_ms
+          request_timeout_ms: @default_deadline_ms
         ]
       )
 

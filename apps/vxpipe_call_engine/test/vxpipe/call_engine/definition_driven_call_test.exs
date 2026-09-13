@@ -977,6 +977,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
 
     room_monitor = Process.monitor(room_authority)
+    _ = :sys.get_state(room_authority)
     policy_authority = Authority.whereis(room.incarnation_id)
 
     Process.exit(policy_authority, :kill)
@@ -994,6 +995,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
 
     room_monitor = Process.monitor(room_authority)
+    _ = :sys.get_state(room_authority)
     room_mixer = RoomMixer.whereis(room.incarnation_id)
 
     Process.exit(room_mixer, :kill)
@@ -1011,6 +1013,7 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
 
     room_monitor = Process.monitor(room_authority)
+    _ = :sys.get_state(room_authority)
     transcript_router = TranscriptRouter.whereis(room.incarnation_id)
 
     assert %{policy_revision: 2} = TranscriptRouter.stats(transcript_router)
