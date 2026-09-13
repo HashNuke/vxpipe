@@ -5,6 +5,65 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
   alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.MCP.{Connections, CredentialLeases}
 
+  test "withholds readiness until scoped connection initialization finishes without invoking tools" do
+    client = client!([])
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(client, self(), "private",
+        client_config: [
+          test_client: client,
+          test_observer: self(),
+          test_gate_initialization: true,
+          private: "private-readiness-sentinel"
+        ]
+      )
+
+    supervisor =
+      start_supervised!({DynamicSupervisor, name: unique_name(), strategy: :one_for_one})
+
+    tasks = start_supervised!({Task.Supervisor, name: unique_name()})
+    name = unique_name()
+
+    starter =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        DynamicSupervisor.start_child(
+          supervisor,
+          {IntegrationOwner,
+           activation_id: "readiness-activation",
+           participant_id: "support-agent",
+           tools: %{"customer_lookup" => binding},
+           integrations: catalog,
+           name: name,
+           connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+           protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+        )
+      end)
+
+    assert_receive {:test_remote_mcp_initializing, owner}
+    observer = self()
+
+    query =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        result = IntegrationOwner.readiness(name)
+        send(observer, {:readiness_result, result})
+        result
+      end)
+
+    refute_receive {:readiness_result, _result}
+    send(owner, :test_remote_mcp_initialized)
+    assert {:ok, ^owner} = Task.await(starter)
+    assert {:ok, resource, :ready} = Task.await(query)
+    assert resource.instance == owner
+    assert resource.scope == {:participant, "support-agent"}
+    assert resource.binding == "readiness-activation"
+    assert resource.kind == :remote_tools
+    assert is_reference(resource.generation)
+    assert byte_size(resource.configuration) == 32
+    refute inspect(resource) =~ "private-readiness-sentinel"
+    assert {:ok, ^resource, :ready} = IntegrationOwner.readiness(owner)
+    assert invocations(client) == []
+  end
+
   test "opens the scoped generation and invokes the pinned remote operation" do
     client = client!([{:ok, %{"content" => [%{"type" => "text", "text" => "found"}]}}])
     private_value = "private-runtime-sentinel"
@@ -86,6 +145,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
       start_supervised!(
         {IntegrationOwner,
          activation_id: "activation-connection-loss",
+         participant_id: "support-agent",
          tools: %{"customer_lookup" => binding},
          integrations: catalog,
          connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
@@ -95,10 +155,12 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert_receive {:test_remote_mcp_opened, _key, _config}
     client_monitor = Process.monitor(client)
     owner_monitor = Process.monitor(owner)
+    assert {:ok, _resource, :ready} = IntegrationOwner.readiness(owner)
 
     assert :ok = stop_supervised(Agent)
     assert_receive {:DOWN, ^client_monitor, :process, ^client, _reason}, 1_000
     assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :connection_lost}, 1_000
+    assert {:error, :unavailable} = IntegrationOwner.readiness(owner)
   end
 
   test "ends a revoked credential lease with its binding owner" do
@@ -112,6 +174,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
       start_supervised!(
         {IntegrationOwner,
          activation_id: "activation-revoked-credential",
+         participant_id: "support-agent",
          tools: %{"customer_lookup" => binding},
          integrations: catalog,
          connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
@@ -120,11 +183,13 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
 
     assert_receive {:test_remote_mcp_opened, key, _config}
     assert CredentialLeases.active_count(key) == 1
+    assert {:ok, _resource, :ready} = IntegrationOwner.readiness(owner)
 
     owner_monitor = Process.monitor(owner)
     assert :ok = Connections.revoke(key)
     assert_receive {:DOWN, ^owner_monitor, :process, ^owner, :credential_revoked}, 1_000
     assert CredentialLeases.active_count(key) == 0
+    assert {:error, :unavailable} = IntegrationOwner.readiness(owner)
 
     assert {:error, {:credential_revoked, _child}} =
              start_supervised(
@@ -144,4 +209,6 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
   end
 
   defp invocations(client), do: Agent.get(client, & &1.invocations)
+
+  defp unique_name, do: {:global, {__MODULE__, make_ref()}}
 end

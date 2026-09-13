@@ -3,6 +3,9 @@ defmodule Vxpipe.CallEngine.TestAgentRuntimeModelProvider do
 
   @behaviour Vxpipe.AgentRuntime.ModelProvider
 
+  @impl true
+  def readiness(_model), do: :ready
+
   @spec new(keyword()) :: {:ok, map()} | {:error, :invalid_configuration}
   def new(options) do
     with {:ok, options} <- Keyword.validate(options, [:model, :owner]),

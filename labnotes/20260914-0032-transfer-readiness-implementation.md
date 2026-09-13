@@ -291,3 +291,31 @@ unchecked; the milestone and index are still incomplete.
   IntegrationOwner completes scoped binding/lease setup before returning. The agent session validates
   its configuration and context but has no initialization query yet. Add model/tool and recording/
   media adapters, then derive the full prospective inventory and connect startup/transfer phases.
+
+## Agent model, tool and MCP readiness
+
+- Added neutral initialization evidence to Agent Runtime without depending on Call Engine. It pins
+  installed configuration/context and a session generation, hides raw context/provider configuration,
+  reports busy sessions as preparing, and retains evidence after cancellation or ordinary history
+  updates. Providers opt into a local nonblocking readiness contract; missing contracts fail closed.
+  ReqLLM acknowledges its resolved stateless configuration without generation or network probes.
+- Coordinator readiness combines admission state with session, invocation registry, request
+  supervisor and selected MCP evidence. Dependency calls run outside the coordinator receive loop.
+  Tool queues expose their own resource; saturation closes readiness until completion consumption
+  without replacing the registry. Composite signatures pin dependency generations, and existing
+  one-for-all activation supervision propagates dependency loss to the monitored model resource.
+- MCP ownership now reports only after binding validation, scoped credential leases and connection
+  initialization. Production Connections.open already verifies ready protocol negotiation. A gated
+  initialization fixture proves the owner cannot acknowledge early; no tool invocation is used.
+  Existing client-loss/revocation checks also verify readiness disappears with the owner. Scope is
+  supplied explicitly by activation graphs; legacy unscoped direct callers receive no scoped evidence.
+- Red evidence: four model/session assertions failed on absent readiness APIs; the MCP lane failed
+  on unsupported participant scope/missing readiness; activation collection failed on the missing
+  coordinator API. Green: nine focused model/session/provider tests, eleven activation/MCP tests,
+  then fifty engine activation/coordinator/invocation/collector checks passed. Root gates follow.
+- Extended the resource decision document. This checkpoint does not connect RoomAuthority to the
+  collector or claim lifecycle acceptance. Recording/media adapters and the prospective inventory
+  remain prerequisites for initial waiting and coordinated transfer release.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,089 umbrella
+  tests with zero failures (15 integrations excluded), and unused-dependency checks. The milestone
+  records this partial readiness progress and retains its unchecked lifecycle/acceptance gates.

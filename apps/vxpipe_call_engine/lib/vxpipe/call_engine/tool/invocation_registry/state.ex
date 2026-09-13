@@ -14,7 +14,14 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
     :maximum_result_bytes,
     :usage
   ]
-  defstruct @enforce_keys ++ [records: %{}, order: [], consumed: MapSet.new(), consumed_order: []]
+  defstruct @enforce_keys ++
+              [
+                readiness_resource: nil,
+                records: %{},
+                order: [],
+                consumed: MapSet.new(),
+                consumed_order: []
+              ]
 
   @type t :: %__MODULE__{}
 

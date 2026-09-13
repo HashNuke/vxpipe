@@ -9,6 +9,10 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
   @spec new(keyword()) :: {:ok, Config.t()} | {:error, :invalid_configuration}
   defdelegate new(options), to: Config
 
+  @impl true
+  def readiness(%Config{}), do: :ready
+  def readiness(_uninitialized), do: :failed
+
   @spec streaming?(Config.t()) :: boolean()
   @impl true
   def streaming?(%Config{} = config), do: config.streaming

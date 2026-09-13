@@ -493,3 +493,13 @@ cannot beat deadline enforcement. Eleven collector checks, including actual STT/
 pass. The combined focused lane has 61 passing tests and all five root gates pass with 1,083 tests,
 zero failures and 15 excluded integrations. The collector is not yet connected to RoomAuthority;
 model/tool, recording/media adapters, complete inventory and lifecycle acceptance remain pending.
+
+Model and tool adapters now expose installed context/client evidence, available invocation queues
+and scoped MCP initialization. Coordinator queries combine those dependencies outside its receive
+loop; busy sessions and saturated tool queues report preparing while preserving their generations.
+No model request or dummy tool invocation is used to establish readiness. An actual activation graph
+is covered through collection, ordinary conversation and dependency loss; MCP fixtures also cover
+delayed initialization and credential revocation. Nine focused model/provider tests and fifty focused
+engine checks pass. All five root gates pass with 1,089 tests, zero failures and 15 integrations
+excluded. Recording/media adapters, the complete prospective inventory, initial caller waiting and
+coordinated transfer release remain incomplete; the common readiness checkpoint is still unchecked.

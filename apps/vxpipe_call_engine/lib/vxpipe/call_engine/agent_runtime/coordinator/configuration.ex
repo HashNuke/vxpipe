@@ -2,6 +2,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
   @moduledoc false
 
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{History, State, UsageRounds}
+  alias Vxpipe.CallEngine.AgentRuntime.Coordinator
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
   @default_maximum_completed_requests 32
@@ -10,7 +12,16 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
   def new(options) do
     with {:ok, options} <- validate_options(options),
          {:ok, values} <- validate_values(options) do
-      {:ok, build_state(values)}
+      resource =
+        Resource.new(
+          :model_inference,
+          {:participant, values.agent_participant_id},
+          Coordinator,
+          options,
+          binding: values.activation_id
+        )
+
+      {:ok, %{build_state(values) | readiness_resource: resource}}
     else
       _invalid -> {:error, :invalid_configuration}
     end
@@ -24,6 +35,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
       :session,
       :invocation_registry,
       :request_supervisor,
+      :remote_mcp_owner,
       :owner,
       :provider,
       :usage_provider,
@@ -66,6 +78,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
          session: session,
          invocation_registry: invocation_registry,
          request_supervisor: request_supervisor,
+         remote_mcp_owner: Keyword.get(options, :remote_mcp_owner),
          owner: owner,
          provider: Keyword.get(options, :provider, :other),
          usage_provider: usage_provider,
@@ -87,6 +100,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
       session: values.session,
       invocation_registry: values.invocation_registry,
       request_supervisor: values.request_supervisor,
+      remote_mcp_owner: values.remote_mcp_owner,
       owner: values.owner,
       provider: values.provider,
       usage_provider: values.usage_provider,

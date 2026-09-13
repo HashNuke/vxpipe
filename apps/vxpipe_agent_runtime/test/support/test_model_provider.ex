@@ -4,6 +4,9 @@ defmodule Vxpipe.AgentRuntime.TestModelProvider do
   alias Vxpipe.AgentRuntime.ModelResponse
 
   @impl true
+  def readiness(model), do: Map.get(model, :readiness, :ready)
+
+  @impl true
   def generate(model, request) do
     send(Map.fetch!(model, :test_owner), {:model_provider_process, self(), request})
 

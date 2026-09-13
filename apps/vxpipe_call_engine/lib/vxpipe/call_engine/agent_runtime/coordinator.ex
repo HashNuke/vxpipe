@@ -3,11 +3,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
   alias Vxpipe.AgentRuntime.{Event, Session}
 
   alias Vxpipe.CallEngine.AgentRuntime.{
     CompletionContinuation,
-    ConversationAdmission
+    ConversationAdmission,
+    Readiness
   }
 
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{
@@ -41,6 +44,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
       restart: :temporary
     }
   end
+
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  defdelegate readiness(coordinator), to: Readiness
 
   @spec respond(GenServer.server(), SendText.t()) ::
           :ok | {:error, :queue_full | :unavailable}
@@ -91,6 +97,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   end
 
   @impl true
+  def handle_call(:readiness_binding, _from, state) do
+    {:reply, Readiness.binding(state), state}
+  end
+
   def handle_call(
         {:respond, command},
         _from,

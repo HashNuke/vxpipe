@@ -32,6 +32,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
 
   test "retains one idempotent invocation through leased completion and explicit consumption" do
     {registry, _supervisor} = start_registry(maximum_invocations: 1)
+    assert {:ok, readiness, :ready} = InvocationRegistry.readiness(registry)
     context = context()
     blocking = host_binding(:blocking)
 
@@ -45,6 +46,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
              )
 
     assert_receive {:submitted_host_tool_started, execution, "first"}
+    assert {:ok, ^readiness, :preparing} = InvocationRegistry.readiness(registry)
 
     assert {:ok,
             [
@@ -139,6 +141,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
              )
 
     assert {:ok, []} = InvocationRegistry.snapshot(registry)
+    assert {:ok, ^readiness, :ready} = InvocationRegistry.readiness(registry)
 
     assert {:error, :rejected} =
              InvocationRegistry.submit(
@@ -322,6 +325,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
 
     registry_options = [
       activation_id: activation_id,
+      participant_id: "agent-test",
       invocation_supervisor: supervisor,
       completion_target: self(),
       maximum_invocations: maximum_invocations,

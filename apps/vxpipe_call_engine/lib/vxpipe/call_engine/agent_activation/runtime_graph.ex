@@ -89,6 +89,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     with %IntegrationCatalog{} = integrations <- Keyword.get(options, :mcp_integrations) do
       owner_options = [
         activation_id: activation_id,
+        participant_id: Keyword.fetch!(options, :agent_participant_id),
         tools: Keyword.fetch!(options, :tools),
         integrations: integrations,
         name: remote_mcp_owner
@@ -129,6 +130,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
        session: session,
        invocation_registry: invocation_registry,
        request_supervisor: request_supervisor,
+       remote_mcp_owner: remote_mcp_owner(activation_id, options),
        owner: Keyword.fetch!(options, :owner),
        provider: Keyword.get(options, :provider, :other),
        usage_provider: Keyword.fetch!(options, :usage_provider),
@@ -162,6 +164,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     Supervisor.child_spec(
       {InvocationRegistry,
        activation_id: activation_id,
+       participant_id: Keyword.fetch!(options, :agent_participant_id),
        invocation_supervisor: invocation_supervisor,
        completion_target: coordinator,
        lifecycle_target: Keyword.fetch!(options, :owner),

@@ -1,6 +1,6 @@
 # Resource readiness evidence
 
-Status: barrier, asynchronous collection, speech-provider adapters and core room-service adapters
+Status: barrier, asynchronous collection, speech/model/tool adapters and core room-service adapters
 implemented; the complete prospective inventory and lifecycle integration remain in progress.
 This is a decision for
 [transfer readiness and wait sounds](milestones/transfer-readiness-and-wait-sounds.md), not a
@@ -90,9 +90,41 @@ invalidates that evidence and changes the generation; callbacks from the old tra
 restore it. TTS retains its initialized generation across ordinary interruption.
 
 These queries prove the provider component's readiness. Codec/ingress binding, private output,
-room routing, selected model/tools and room services remain separate required resources. In
+room routing, selected model/tools and room services are separate required resources. In
 particular, a ready speech provider cannot substitute for an unprepared destination input/output
 route. Startup and transfer gating will consume the combined required set.
+
+## Model sessions, tools and MCP
+
+Agent Runtime exposes initialization evidence independently of Call Engine: the actual session,
+a generation and an opaque digest of its installed configuration/context. Ordinary conversation
+updates and cancellation preserve that evidence. A busy session reports preparing because it cannot
+accept its next request yet. Model providers declare a local, nonblocking `readiness/1` contract;
+missing, failed or unsupported contracts fail closed. The stateless ReqLLM adapter acknowledges its
+resolved configuration without generating a request. This does not promise that the next external
+request will succeed.
+
+The engine coordinator combines its admission state with the session, tool invocation registry,
+request supervisor and any selected remote MCP owner. Dependency queries run outside the coordinator
+receive loop. The common descriptor pins the installed dependency evidence as well as the activation;
+the activation's existing one-for-all supervision invalidates that generation on dependency loss.
+This composite model resource does not substitute for the separate room Variables, speech or media
+bindings. Tool invocation readiness also exposes its own participant/activation resource and requires
+the initialized bounded queue and owning supervisor. Saturation reports preparing without restarting
+the registry; consuming completions restores readiness with the same generation.
+
+MCP readiness follows pinned binding validation, credential lease acquisition and scoped connection
+initialization. The production `Connections.open` boundary already requires the approved protocol's
+ready status before returning. The owner reports only after that initialization finishes, without
+invoking a dummy tool. Its resource digest covers effective private configuration and pinned tool
+bindings without exposing either. Connection loss or credential revocation ends the owner and
+invalidates its evidence. Call-engine callers that omit participant identity cannot obtain a scoped
+resource; production activation graphs supply it explicitly.
+
+Focused checks cover installed context privacy, busy/cancelled session reuse, unsupported providers,
+delayed MCP initialization, client loss/revocation, bounded tool capacity, and collection over an
+actual activation graph. Recording/media adapters, complete prospective inventory, and lifecycle
+waiting/release remain outstanding.
 
 ## Room services and local handoffs
 

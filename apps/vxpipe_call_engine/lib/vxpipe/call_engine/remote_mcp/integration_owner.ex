@@ -8,6 +8,9 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
+  alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.CallEngine.RemoteMCP.{Executor, Integration, IntegrationCatalog, RuntimeBinding}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, CredentialLeases, ExMCPClient}
@@ -16,7 +19,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   @derive {Inspect, only: [:binding_count]}
   @enforce_keys [:bindings, :binding_count, :connection_monitors]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [readiness_resource: nil]
 
   @type t :: %__MODULE__{
           bindings: %{String.t() => RuntimeBinding.t()},
@@ -53,6 +56,13 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   def execute(_owner, _local_name, _arguments), do: {:error, :invalid_arguments}
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(owner) do
+    GenServer.call(owner, :readiness, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     with {:ok, options} <-
@@ -61,11 +71,15 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
              :connection_provider,
              :integrations,
              :name,
+             :participant_id,
              :protocol,
              :tools
            ]),
          activation_id when is_binary(activation_id) <- Keyword.get(options, :activation_id),
          true <- activation_id != "",
+         participant_id when is_nil(participant_id) or is_binary(participant_id) <-
+           Keyword.get(options, :participant_id),
+         true <- participant_id != "",
          %IntegrationCatalog{} = integrations <- Keyword.get(options, :integrations),
          tools when is_map(tools) <- Keyword.get(options, :tools),
          connection_provider when is_atom(connection_provider) <-
@@ -84,7 +98,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
        %__MODULE__{
          bindings: bindings,
          binding_count: map_size(bindings),
-         connection_monitors: connection_monitors
+         connection_monitors: connection_monitors,
+         readiness_resource: readiness_resource(participant_id, activation_id, tools, prepared)
        }}
     else
       {:error, :credential_revoked} -> {:stop, :credential_revoked}
@@ -93,6 +108,14 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
   end
 
   @impl true
+  def handle_call(:readiness, _from, %{readiness_resource: nil} = state) do
+    {:reply, {:error, :unavailable}, state}
+  end
+
+  def handle_call(:readiness, _from, state) do
+    {:reply, {:ok, state.readiness_resource, :ready}, state}
+  end
+
   def handle_call({:binding, local_name}, _from, %__MODULE__{} = state) do
     case Map.fetch(state.bindings, local_name) do
       {:ok, binding} -> {:reply, {:ok, binding}, state}
@@ -117,6 +140,18 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   defp binding(owner, local_name) do
     GenServer.call(owner, {:binding, local_name}, @binding_timeout_ms)
+  end
+
+  defp readiness_resource(nil, _activation_id, _tools, _prepared), do: nil
+
+  defp readiness_resource(participant_id, activation_id, tools, prepared) do
+    Resource.new(
+      :remote_tools,
+      {:participant, participant_id},
+      __MODULE__,
+      {activation_id, tools, prepared},
+      binding: activation_id
+    )
   end
 
   defp acquire_credential_leases(prepared) do

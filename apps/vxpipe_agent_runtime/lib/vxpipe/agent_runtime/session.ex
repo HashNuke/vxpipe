@@ -7,6 +7,7 @@ defmodule Vxpipe.AgentRuntime.Session do
     Conversation,
     Event,
     Message,
+    Readiness,
     Request,
     RequestRunner,
     Result,
@@ -16,6 +17,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   @derive {Inspect, only: [:status]}
   defstruct [
     :configuration,
+    :readiness,
     :conversation,
     :active_task,
     :active_token,
@@ -64,6 +66,14 @@ defmodule Vxpipe.AgentRuntime.Session do
   @spec status(server()) :: :idle | :busy
   def status(server), do: GenServer.call(server, :status)
 
+  @spec readiness(server()) ::
+          {:ok, Readiness.t(), Readiness.status()} | {:error, :unavailable}
+  def readiness(server) do
+    GenServer.call(server, :readiness, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @spec cancel(server(), timeout()) :: :ok | {:error, :idle}
   def cancel(server, timeout \\ 5_000), do: GenServer.call(server, :cancel, timeout)
 
@@ -99,6 +109,7 @@ defmodule Vxpipe.AgentRuntime.Session do
       {:ok,
        %__MODULE__{
          configuration: configuration,
+         readiness: Readiness.new(configuration),
          conversation:
            Conversation.new(configuration.instructions, configuration.initial_messages)
        }}
@@ -225,6 +236,11 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   def handle_call(:status, _caller, state), do: {:reply, state.status, state}
+
+  def handle_call(:readiness, _caller, state) do
+    status = Readiness.status(state.configuration, state.status)
+    {:reply, {:ok, state.readiness, status}, state}
+  end
 
   def handle_call({:durable?, correlation}, _caller, %{status: :idle} = state) do
     {:reply, {:ok, Conversation.durable?(state.conversation, correlation)}, state}

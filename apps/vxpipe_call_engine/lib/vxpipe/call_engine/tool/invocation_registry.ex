@@ -3,6 +3,10 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   use GenServer
 
+  @behaviour Vxpipe.CallEngine.Readiness.Adapter
+
+  alias Vxpipe.CallEngine.Readiness.Resource
+
   alias Vxpipe.CallEngine.Tool.{
     Context,
     InvocationBinding,
@@ -49,6 +53,18 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     safe_call(registry, :snapshot, timeout)
   end
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness(registry) do
+    with {:ok, resource, status, supervisor} <- safe_call(registry, :readiness),
+         %{active: _active} <- DynamicSupervisor.count_children(supervisor) do
+      {:ok, resource, status}
+    else
+      _unavailable -> {:error, :unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @spec lease_next(GenServer.server(), String.t()) ::
           {:ok, Vxpipe.CallEngine.Tool.CompletionLease.t()}
           | {:error, :empty | :unavailable}
@@ -87,6 +103,15 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   end
 
   @impl true
+  def handle_call(:readiness, _from, %{readiness_resource: nil} = state) do
+    {:reply, {:error, :unavailable}, state}
+  end
+
+  def handle_call(:readiness, _from, state) do
+    status = if State.full?(state), do: :preparing, else: :ready
+    {:reply, {:ok, state.readiness_resource, status, state.invocation_supervisor}, state}
+  end
+
   def handle_call(
         {:submit, %InvocationSubmission{} = submission, admission_deadline},
         _from,
@@ -335,6 +360,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     with {:ok, options} <-
            Keyword.validate(options, [
              :activation_id,
+             :participant_id,
              :name,
              :invocation_supervisor,
              :completion_target,
@@ -347,9 +373,11 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
            ]),
          activation_id when is_binary(activation_id) and activation_id != "" <-
            Keyword.get(options, :activation_id),
-         invocation_supervisor when not is_nil(invocation_supervisor) <-
-           Keyword.get(options, :invocation_supervisor),
-         true <- server_available?(invocation_supervisor),
+         participant_id when is_nil(participant_id) or is_binary(participant_id) <-
+           Keyword.get(options, :participant_id),
+         true <- participant_id != "",
+         {:ok, invocation_supervisor} <-
+           server_pid(Keyword.get(options, :invocation_supervisor)),
          {:ok, completion_target} <-
            server_pid(Keyword.get(options, :completion_target)),
          lifecycle_target when is_nil(lifecycle_target) or is_pid(lifecycle_target) <-
@@ -374,7 +402,9 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
          maximum_consumed_invocations: maximum_consumed,
          invocation_timeout_ms: invocation_timeout_ms,
          maximum_result_bytes: maximum_result_bytes,
-         usage: usage
+         usage: usage,
+         readiness_resource:
+           readiness_resource(participant_id, activation_id, {options, invocation_supervisor})
        }}
     else
       _invalid -> {:error, :invalid_configuration}
@@ -411,10 +441,12 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     send(state.completion_target, {:vxpipe_tool_completion_available, self(), invocation_id})
   end
 
-  defp server_available?(server) do
-    is_pid(GenServer.whereis(server))
-  rescue
-    _exception -> false
+  defp readiness_resource(nil, _activation_id, _configuration), do: nil
+
+  defp readiness_resource(participant_id, activation_id, configuration) do
+    Resource.new(:tool_invocations, {:participant, participant_id}, __MODULE__, configuration,
+      binding: activation_id
+    )
   end
 
   defp server_pid(server) do

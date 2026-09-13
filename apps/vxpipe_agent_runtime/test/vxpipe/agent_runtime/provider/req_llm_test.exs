@@ -15,6 +15,15 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
   alias Vxpipe.AgentRuntime.Provider.ReqLLM, as: Provider
   alias Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer
 
+  test "acknowledges validated stateless initialization without generation" do
+    assert {:ok, config} =
+             Provider.new(api_key: "readiness-test-secret", model: "google:gemini-3.5-flash-lite")
+
+    assert :ready = Provider.readiness(config)
+    assert :failed = Provider.readiness(nil)
+    assert :failed = Provider.readiness(%{model: "not-resolved"})
+  end
+
   test "resolves configuration without exposing or accepting credential overrides" do
     assert {:ok, config} =
              Provider.new(

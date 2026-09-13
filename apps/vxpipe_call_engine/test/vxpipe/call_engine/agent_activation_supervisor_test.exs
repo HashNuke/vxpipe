@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.AgentRuntime.{Coordinator, ToolDescriptors}
+  alias Vxpipe.CallEngine.Readiness.Collector
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.RemoteMCP.{Integration, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
@@ -91,6 +92,64 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
 
     assert_receive {:DOWN, ^activation_monitor, :process, ^activation, _reason}, 1_000
     assert_children_stopped(restarted_monitors)
+  end
+
+  test "collects initialized model and tool evidence and preserves it across conversation" do
+    activation_id = unique_activation_id()
+
+    activation =
+      start_supervised!({AgentActivationSupervisor, agent_runtime_options(activation_id)})
+
+    children = AgentActivationSupervisor.children(activation)
+    coordinator = Map.fetch!(children, :coordinator)
+    registry = Map.fetch!(children, :invocation_registry)
+
+    assert {:ok, model, :ready} = Coordinator.readiness(coordinator)
+    assert model.kind == :model_inference
+    assert model.scope == {:participant, "agent-test"}
+    assert model.binding == activation_id
+    assert model.instance == coordinator
+    assert {:ok, tools, :ready} = InvocationRegistry.readiness(registry)
+    assert tools.kind == :tool_invocations
+    assert tools.scope == model.scope
+    refute_receive {:test_agent_runtime_stream, _provider, _request}
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: "readiness-room",
+         attempt_id: "readiness-attempt",
+         resources: [model, tools],
+         poll_interval_ms: :manual,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert :ok = Coordinator.respond(coordinator, send_text("readiness-request"))
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    assert {:ok, ^model, :preparing} = Coordinator.readiness(coordinator)
+    assert :ok = Collector.refresh(collector)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}, 1_000
+
+    assert {:ok, response} = ModelResponse.new(text: "Initialized and reusable.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, ^coordinator, _command}
+    assert {:ok, ^model, :ready} = Coordinator.readiness(coordinator)
+    assert {:ok, ^tools, :ready} = InvocationRegistry.readiness(registry)
+    assert :ok = Collector.refresh(collector)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+
+    monitors = monitor_children(children)
+    Process.exit(Map.fetch!(children, :session), :kill)
+    assert_children_stopped(monitors)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :failed}}, 1_000
+
+    _ = :sys.get_state(activation)
+    replacement = AgentActivationSupervisor.children(activation)
+    assert {:ok, replaced, :ready} = Coordinator.readiness(Map.fetch!(replacement, :coordinator))
+    refute replaced.generation == model.generation
+    refute replaced.configuration == model.configuration
   end
 
   test "a failed readiness configuration leaves no registered activation children" do
@@ -205,6 +264,9 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     refute inspect(:sys.get_state(activation)) =~ "private-remote-sentinel"
 
     coordinator = Map.fetch!(children, :coordinator)
+    assert {:ok, readiness, :ready} = Coordinator.readiness(coordinator)
+    refute inspect(readiness) =~ "private-remote-sentinel"
+    assert Agent.get(client, & &1.invocations) == []
     assert :ok = Coordinator.respond(coordinator, send_text("remote-mcp-activation"))
     assert_receive {:test_agent_runtime_stream, provider, request}
 
