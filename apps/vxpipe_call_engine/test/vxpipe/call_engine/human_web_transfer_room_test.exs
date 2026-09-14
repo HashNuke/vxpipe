@@ -380,7 +380,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phase-owner-lost"}}
   end
 
-  for outcome <- [:drain, :deadline, :cue_loss, :readiness_loss] do
+  for outcome <- [:drain, :drain_during_recheck, :deadline, :cue_loss, :readiness_loss] do
     test "human transfer keeps its cue barrier closed until #{outcome}" do
       plan =
         compile_plan(
@@ -447,8 +447,28 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       assert PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id)) == policy
 
       case unquote(outcome) do
-        :drain ->
+        outcome when outcome in [:drain, :drain_during_recheck] ->
+          connection =
+            TestTransferConnection.run(
+              attachment_command(plan, room, caller, "caller-connection"),
+              fn -> self() end
+            )
+
+          if outcome == :drain_during_recheck do
+            assert :ok = GenServer.call(connection, :defer_readiness)
+            assert_receive {:test_transfer_readiness_waiting, ^connection}, 1_000
+          end
+
+          {player, _reply} = :sys.get_state(caller_sink).pending_drain
+          player_monitor = Process.monitor(player)
           assert :ok = GenServer.call(caller_sink, :complete_drain)
+          assert_receive {:DOWN, ^player_monitor, :process, ^player, :normal}, 1_000
+
+          if outcome == :drain_during_recheck do
+            refute_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "cue-transfer"}}, 100
+            assert :ok = GenServer.call(connection, :complete_readiness)
+          end
+
           assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 1_000
           assert_receive {:vxpipe_transfer_active, ^attempt}, 1_000
 

@@ -82,6 +82,8 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
      %{
        command: command,
        observer: Keyword.fetch!(options, :observer),
+       defer_readiness?: false,
+       pending_readiness: nil,
        binding: %{
          identity: identity,
          instance: self(),
@@ -114,8 +116,21 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   def handle_call(:vxpipe_connection_readiness, _from, state),
     do: {:reply, {:ok, state.binding}, state}
 
+  def handle_call(:readiness, from, %{defer_readiness?: true} = state) do
+    send(state.observer, {:test_transfer_readiness_waiting, self()})
+    {:noreply, %{state | pending_readiness: from}}
+  end
+
   def handle_call(:readiness, _from, state),
     do: {:reply, {:ok, state.binding.resource, :ready}, state}
+
+  def handle_call(:defer_readiness, _from, state),
+    do: {:reply, :ok, %{state | defer_readiness?: true}}
+
+  def handle_call(:complete_readiness, _from, state) do
+    GenServer.reply(state.pending_readiness, {:ok, state.binding.resource, :ready})
+    {:reply, :ok, %{state | defer_readiness?: false, pending_readiness: nil}}
+  end
 
   def handle_call({:vxpipe_prepare_transfer_media, attempt}, _from, state) do
     with {:ok, media} <- CallEngine.prepare_transfer_media(state.command, attempt) do

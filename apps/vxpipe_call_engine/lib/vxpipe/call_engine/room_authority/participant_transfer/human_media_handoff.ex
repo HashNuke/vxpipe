@@ -218,11 +218,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
           else: await_ready(collector, scope, players, progress)
 
       {:DOWN, _monitor, :process, player, _reason} ->
-        if player in players,
+        if player in players and not completed_player?(player),
           do: {:error, :playback_unavailable},
-          else: await_ready(collector, scope, players, progress)
+          else: await_ready(collector, scope, List.delete(players, player), progress)
     after
       remaining(scope) -> {:error, :deadline_elapsed}
+    end
+  end
+
+  defp completed_player?(player) do
+    # The player sends completion before exiting. A readiness recheck can selectively
+    # receive its DOWN first; leave the drain acknowledgement for await_players.
+    receive do
+      {:vxpipe_wait_playback, ^player, _episode, :completed} = completion ->
+        send(self(), completion)
+        true
+    after
+      0 -> false
     end
   end
 
