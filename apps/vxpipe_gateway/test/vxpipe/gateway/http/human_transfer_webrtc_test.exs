@@ -456,7 +456,101 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = RoomMixer.discard_policy(mixer, prepared_mixer.token)
     assert {:ok, ^speech, :ready} = SpeechToText.readiness(speech.instance)
     assert Authority.snapshot(authority) == policy
-    assert :ok = RoomAudioEgress.release(binding.room_output, 1)
+    verify_prepared_room(plan, room, speech, options)
+  end
+
+  defp verify_prepared_room(plan, room, speech, options) do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.{Collector, Preparation}
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    [{room_authority, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    assert {:ok, room_binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+    authority = Authority.whereis(room.incarnation_id)
+    current = Authority.snapshot(authority)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(authority, current.present_participant_ids)
+
+    outputs =
+      Enum.map(room_binding.connections, fn {_id, connection} ->
+        assert {:ok, binding} = GenServer.call(connection.pid, :vxpipe_connection_readiness)
+        assert :ok = RoomAudioEgress.hold(binding.room_output, 1)
+        binding.room_output
+      end)
+
+    assert length(outputs) == 2
+    assert {:ok, prepared} = Preparation.run_candidate(room_authority, candidate, options)
+    assert map_size(prepared.connections) == 2
+    assert speech in prepared.resources
+    assert Enum.any?(prepared.resources, &(&1.kind == :recording_writer))
+    assert Enum.any?(prepared.resources, &(&1.kind == :recording))
+    assert Enum.any?(prepared.resources, &(&1.kind == :transcript_router))
+    assert {:ok, ^speech, :ready} = CallEngine.Capability.SpeechToText.readiness(speech.instance)
+    refute_receive {:test_stt_transport_started, _replacement, _connection}
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "whole-room-retained",
+         resources: prepared.resources,
+         deadline_ms: Keyword.fetch!(options, :deadline_ms)},
+        id: :whole_room_retained
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+    assert :ok = Preparation.discard(prepared)
+    assert Authority.snapshot(authority) == current
+    assert {:ok, ^speech, :ready} = CallEngine.Capability.SpeechToText.readiness(speech.instance)
+
+    verify_recording_preparation_boundary(
+      room_authority,
+      room_binding,
+      authority,
+      current,
+      plan,
+      options
+    )
+
+    Enum.each(outputs, fn output -> assert :ok = RoomAudioEgress.release(output, 1) end)
+  end
+
+  defp verify_recording_preparation_boundary(
+         room_authority,
+         room_binding,
+         authority,
+         current,
+         plan,
+         options
+       ) do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.Preparation
+
+    recording = room_binding.room.recording
+    assert {:ok, before} = CallEngine.RoomRecording.readiness_resources(recording)
+    caller = Map.fetch!(plan.participants, "caller").participant_id
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.delete(current.present_participant_ids, caller)
+             )
+
+    assert {:error, %{kind: :recording, scope: :room, reason: :policy_not_prepared}} =
+             Preparation.run_candidate(room_authority, candidate, options)
+
+    assert {:ok, ^before} = CallEngine.RoomRecording.readiness_resources(recording)
+    assert Authority.snapshot(authority) == current
+
+    assert {:ok, retained} =
+             Authority.preview_presence(authority, current.present_participant_ids)
+
+    assert {:ok, retry} = Preparation.run_candidate(room_authority, retained, options)
+    assert :ok = Preparation.discard(retry)
   end
 
   defp compile_plan do

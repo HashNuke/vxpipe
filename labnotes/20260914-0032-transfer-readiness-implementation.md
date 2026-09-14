@@ -1,15 +1,14 @@
 # Transfer readiness implementation
 
-Implementation resumed following the goal continuation after the pause audit. The latest committed
-implementation is `9fc4b83`, documented in the
-[candidate connection checkpoint](#select-candidate-connection-resources). The
-[prospective room graph](#prepare-the-prospective-room-graph) is uncommitted work with focused checks
-only. The pause audit below records the earlier state and is retained for accountability.
+Implementation resumed following the goal continuation after the pause audit. The latest
+[prospective room checkpoint](#prospective-room-verification-checkpoint) composes the prepared
+connections with mixer, speech and transcript routing and passes all five root gates: 1,229 tests,
+zero failures and 15 integration exclusions. The earlier notes-only audit and its uncommitted-work
+snapshot are retained below for accountability.
 
-**The end-to-end milestone remains unfinished.** This notes update records the existing work;
-it adds no implementation or tests. The latest committed checkpoint passed all five root checks
-(1,224 tests, zero failures, 15 integration exclusions). Those results do not verify the current
-uncommitted room-preparation changes.
+**The end-to-end milestone remains unfinished.** Prospective recording preparation, private
+destination actors, startup/transfer orchestration, waits/cues and recovery still require integration
+and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
 
 ## Detour update after the pause audit
 
@@ -32,7 +31,7 @@ The additional groundwork since the audit addresses the room-output path:
   stages its shutdown instead. A new WebRTC fixture also needed to await server transport readiness
   rather than assume client connection completion proved it. See
   [candidate connection selection](#select-candidate-connection-resources).
-- The uncommitted whole-room runner assembles those connections with prepared mixer subscriptions
+- The whole-room runner assembles those connections with prepared mixer subscriptions
   and transcript routing. Recording still uses installed-policy preparation and cannot yet stage
   a changed recording policy safely. The current evidence and ownership gap are recorded in
   [the prospective room checkpoint](#prepare-the-prospective-room-graph).
@@ -1270,7 +1269,8 @@ unchecked; the milestone and index are still incomplete.
 
 ## Prepare the prospective room graph
 
-Status at this notes update: **uncommitted implementation; focused verification only**.
+Status recorded by notes commit `ec93f3b`: **uncommitted implementation; focused verification only**.
+The subsequent implementation and final gates are recorded in the verification checkpoint below.
 
 - The preceding turn committed candidate connection collection as `9fc4b83` with all root gates
   passing. This is progress. Rechecked the worktree and retained concurrent `vxpipe-docs/` changes.
@@ -1337,3 +1337,46 @@ Status at this notes update: **uncommitted implementation; focused verification 
   or development-server restart was performed for this documentation request.
 - Documentation verification passed: all 33 local links/anchors resolve, and `git diff --check`
   reports no whitespace errors in the changed labnote.
+
+### Prospective room verification checkpoint
+
+- Resumed implementation after the notes commit `ec93f3b`. The preceding turn made progress by
+  recording the evidence and outstanding ownership gap. The worktree remains authoritative;
+  concurrent `vxpipe-docs/` edits are preserved outside this checkpoint.
+- Added router boundary checks for current permissions through candidate refresh, original-deadline
+  retention, adopted resource identity, scoped discard/retry, owner loss and actual lease expiry.
+  Their initial fixture registered the router after admission and therefore lacked the historical
+  speech interval needed by current projection. Registering it before membership changes, as in
+  production, corrected the fixture; this was not a production regression. All four checks pass.
+- Extended the real whole-room departure check to discard and retry all preparations before
+  collection/adoption. The human-transfer fixture now also holds both connected humans, collects
+  their unchanged STT and recording writers through the whole-room runner, cancels preparation,
+  then resumes the existing audio/transcript conversation. Both WebRTC files pass: seven tests,
+  zero failures. Retained logs: `vxpipe-router-candidate-focused.log` and
+  `vxpipe-room-candidate-gateway.log`.
+- Recording membership changes still need independent preparation: even when its policy interval
+  stays unchanged, calling the current track preparer for a future set would change live required
+  tracks before commit. The new retained-recording check uses unchanged membership and policy; it
+  does not prove future recording readiness. This limitation is explicit in the durable resource
+  contract and milestone evidence. Full recording adoption remains the next missing room boundary.
+- Whole-room, router and connection implementation remain one coherent checkpoint. Final focused
+  and all five root gates follow; no browser/provider acceptance is claimed by these checks.
+- Recorded a real failure before final verification: removing a recorded caller prospectively
+  returned a successful room preparation and changed the live required track set before commit.
+  The extended WebRTC check failed at that unexpected success. Recording preparation now compares
+  authoritative current/future recorded sources and returns `policy_not_prepared` before mutating
+  writers when they differ. The check verifies exact writer resources survive and a subsequent
+  unchanged-room preparation succeeds, proving cleanup of the other pending resources as well.
+  Logs `vxpipe-room-recording-boundary-red.log` and `vxpipe-room-recording-boundary-green.log`
+  record the intended red failure and the seven passing WebRTC checks. This guard does not replace
+  the required future recording implementation; it prevents premature live changes in the new runner.
+- Broader focused engine checks passed: 42 tests, zero failures. The five root gates are running
+  with per-command exit codes retained under `vxpipe-prospective-room-root-` for recovery.
+- Final verification passes all five root gates: formatting, warnings-as-errors compilation,
+  strict Credo, 1,229 tests with zero failures and 15 integrations excluded, and unused dependencies.
+  All eight application suites completed; every result in the retained root result file is exit
+  zero. Verified all 48 local documentation links/anchors and `git diff --check`. No package change,
+  production timeout increase, browser session, provider call or server restart was required.
+- Commit the whole-room preparation, router leases, recording failure boundary and their focused
+  checks/documentation together. Preserve the separate `vxpipe-docs/` work. The milestone and index
+  remain open; the future recording ownership gap above is still unresolved.

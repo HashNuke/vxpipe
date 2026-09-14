@@ -21,6 +21,144 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
   @endpoint_options Endpoint.init(cors: [])
   @signal_voice 3_001
 
+  test "prepares the complete prospective room before opening changed participant routes" do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.{Collector, Preparation}
+    alias Vxpipe.Gateway.Media.{OutputArbiter, RoomAudioEgress}
+
+    plan = compile_restrictive_plan()
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+    specialist = Map.fetch!(plan.participants, "specialist").participant_id
+    assert {:ok, command} = join_command(plan, specialist)
+    assert {:ok, _participant} = CallEngine.join_participant(command)
+
+    clients =
+      Map.new(["caller", "receiver", "specialist"], fn key ->
+        participant = Map.fetch!(plan.participants, key).participant_id
+        {key, connect(issue_session(plan, room, participant).session_id)}
+      end)
+
+    transports =
+      Enum.map(clients, fn {_key, client} ->
+        assert {:ok, resource, _status} = Connection.readiness(client.connection_id)
+        resource
+      end)
+
+    initial =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "room-transports",
+         resources: transports,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000},
+        id: :room_transports
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^initial, %{status: :ready}}, 2_000
+
+    bindings =
+      Map.new(["caller", "receiver"], fn key ->
+        client = Map.fetch!(clients, key)
+        assert {:ok, resource, :ready} = Connection.readiness(client.connection_id)
+        assert {:ok, binding} = GenServer.call(resource.instance, :vxpipe_connection_readiness)
+        assert :ok = RoomAudioEgress.hold(binding.room_output, 1)
+        {key, binding}
+      end)
+
+    native =
+      Map.new(bindings, fn {key, binding} ->
+        assert {:ok, resources} = OutputArbiter.readiness_resources(binding.output)
+        {key, resources}
+      end)
+
+    authority = Authority.whereis(room.incarnation_id)
+    base = Authority.snapshot(authority)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.delete(base.present_participant_ids, specialist)
+             )
+
+    [{room_authority, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    options = [
+      owner: self(),
+      attempt_id: "whole-room-candidate",
+      generation: 1,
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000
+    ]
+
+    assert {:ok, prepared} = Preparation.run_candidate(room_authority, candidate, options)
+    assert map_size(prepared.connections) == 2
+    assert Enum.count(prepared.resources, &(&1.kind == :media_connection)) == 2
+    assert Enum.any?(prepared.resources, &(&1.kind == :transcript_router))
+    assert Enum.any?(prepared.resources, &(&1.kind == :room_mixer))
+    assert Enum.any?(prepared.resources, &(&1.kind == :call_variables))
+    refute Enum.any?(prepared.resources, &(&1.scope == {:participant, specialist}))
+    assert Authority.snapshot(authority) == base
+    prepared_router = Enum.find(prepared.resources, &(&1.kind == :transcript_router))
+    assert :ok = Preparation.discard(prepared)
+    assert {:error, :unavailable} = CallEngine.TranscriptRouter.readiness_binding(prepared_router)
+    assert Authority.snapshot(authority) == base
+    assert {:ok, prepared} = Preparation.run_candidate(room_authority, candidate, options)
+    router = CallEngine.TranscriptRouter.whereis(room.incarnation_id)
+    caller_id = Map.fetch!(plan.participants, "caller").participant_id
+    receiver_id = Map.fetch!(plan.participants, "receiver").participant_id
+    recipients = MapSet.new([receiver_id])
+
+    assert {:ok, before} =
+             CallEngine.TranscriptRouter.project_current(router, caller_id, recipients)
+
+    assert before.recipient_participant_ids == MapSet.new()
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "whole-room-candidate",
+         resources: prepared.resources,
+         deadline_ms: Keyword.fetch!(options, :deadline_ms)},
+        id: :whole_room
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+    assert {:ok, ^prepared} = Preparation.run_candidate(room_authority, candidate, options)
+    assert {:ok, installed} = Authority.leave(authority, specialist)
+    assert installed == candidate.snapshot
+
+    assert {:ok, after_commit} =
+             CallEngine.TranscriptRouter.project_current(router, caller_id, recipients)
+
+    assert after_commit.recipient_participant_ids == recipients
+
+    for resource <- prepared.resources do
+      result =
+        if function_exported?(resource.adapter, :readiness_binding, 1),
+          do: resource.adapter.readiness_binding(resource),
+          else: resource.adapter.readiness(resource.instance)
+
+      assert {:ok, ^resource, :ready} = result
+    end
+
+    assert :ok = Preparation.discard(prepared)
+
+    for {key, binding} <- bindings do
+      expected = Map.fetch!(native, key)
+      assert {:ok, ^expected} = OutputArbiter.readiness_resources(binding.output)
+      assert :ok = RoomAudioEgress.release(binding.room_output, 1)
+    end
+
+    :ok = send_audio(Map.fetch!(clients, "caller"), 1, 960, 8_000)
+
+    assert clients |> Map.fetch!("receiver") |> await_audio(5_000) |> decodable_pcm_size() ==
+             1_920
+  end
+
   test "collects and adopts a prospective connection graph without replacing unaffected output" do
     alias Vxpipe.CallEngine.Media.ConnectionReadiness
     alias Vxpipe.CallEngine.MediaPolicy.Authority

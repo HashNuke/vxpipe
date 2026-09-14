@@ -745,6 +745,50 @@ preparing until its explicit Connected acknowledgement, then cancels only pendin
 the original conversation. Existing WebRTC and both phone graph fixtures continue to pass. These
 are connection-boundary checks, not complete startup/transfer or live-provider acceptance.
 
+## Preparing the prospective room
+
+`Readiness.Preparation.run_candidate/3` composes the authoritative inventory with candidate
+connection preparation under one persistent owner, attempt, media generation and absolute deadline.
+It captures each connection's actual output consumer and requests the complete desired mixer
+subscription set once. It then prepares transcript routing and selected speech sessions, supplies
+their exact prepared bindings to every required connection, and observes the remaining room and
+participant resources. Existing affected input with no future demand still receives deferred
+shutdown preparation. Required disconnected humans or missing actors fail the operation.
+
+The result contains the complete collected descriptors and flat preparation handles. Explicit
+discard and failures after partial preparation unwind known handles in reverse order. This cancels
+pending work while retaining live resources and leaving media gates held. Persistent phase ownership
+and the original deadline bound preparation if an enclosing query is cancelled before it can return
+handles. The lifecycle owner must end that phase on cancellation. Final inventory/policy validation
+still occurs outside authority and media actor callbacks; no candidate permissions are installed by
+the runner. Repeated preparation under the same lease retains resources.
+
+Transcript routing has no provider to reconnect. Its pending policy binds the authoritative base
+and desired snapshot without changing live projection decisions. Commit adopts the prepared
+descriptor while preserving the router process, generation and configuration. Owner loss or expiry
+invalidates pending evidence and prevents that candidate's adoption; explicit discard allows a new
+lease. An unrelated revision requires a refreshed candidate under the same original deadline.
+
+Recording remains limited to the installed recording policy and track preparation. Its current
+writer interface has no scoped cancellation, and preparation updates the live required track set.
+It therefore still needs separate prospective track/writer ownership and adoption before this runner
+can support arbitrary recording membership changes. Until then, the preparer compares current and
+prospective recording sources and rejects a changed set with `policy_not_prepared` before touching
+live writers. Failure unwinds the other prepared resources and permits retry. The retained-recording
+fixture covers an unchanged resulting membership and policy. Private destination actors and lifecycle
+orchestration also remain unfinished. Do not treat this runner as complete transfer readiness.
+
+Design review rejected deriving subscriptions from a partial caller list, replacing transcript
+routing on policy changes, extending a lease on refresh, or presenting current recording descriptors
+as evidence for a different prospective recording configuration. Actual WebRTC checks cover a
+three-to-two participant transition, cancellation/retry, closed transcript routes until commit,
+unchanged native output and audio after release. The human-transfer fixture additionally collects
+both connected humans, existing STT and recording writers, cancels preparation and continues the
+original audio/transcript conversation. It also rejects a future recording source change, preserves
+the current writers and retries successfully. Router checks cover discard, refresh, expiry and
+owner loss.
+These checks do not establish the milestone's wait/cue, recovery or browser/provider acceptance.
+
 ## Phone transport
 
 Phone sockets now expose a bounded readiness query based on their validated media-start state.

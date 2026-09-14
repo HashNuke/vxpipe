@@ -35,8 +35,26 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
       attachment: state.attachment,
       output: output,
       room_input: state.room_audio_ingress,
-      room_output: state.room_audio_egress
+      room_output: state.room_audio_egress,
+      policy_subscription: policy_subscription(state)
     }
+  end
+
+  defp policy_subscription(state) do
+    mode = state.attachment.room_audio_output_mode
+    command = state.attach_command
+
+    if is_pid(state.room_audio_egress) and mode in [:full_mix, :mix_minus] do
+      [
+        id: command.connection_id <> ":room-output",
+        tenant_id: command.tenant_id,
+        room_id: command.room_id,
+        incarnation_id: command.incarnation_id,
+        recipient_participant_id: command.participant_id,
+        subscriber: state.room_audio_egress,
+        mode: mode
+      ]
+    end
   end
 
   @impl true

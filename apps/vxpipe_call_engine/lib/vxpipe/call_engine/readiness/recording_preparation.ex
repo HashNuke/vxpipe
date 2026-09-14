@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
   @moduledoc false
 
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
-  alias Vxpipe.CallEngine.Readiness.{RecordingOutputs, ResourceQuery}
+  alias Vxpipe.CallEngine.Readiness.{Inventory, RecordingOutputs, ResourceQuery}
   alias Vxpipe.CallEngine.RoomRecording
 
   def prepare(captured, connections) do
@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
     policy = captured.candidate.snapshot
 
     with {:ok, _resource} <- ResourceQuery.observe(:recording, :room, recording, policy),
+         :ok <- installed_recording_sources(captured),
          {:ok, agent_tracks, outputs} <- RecordingOutputs.prepare(captured, connections),
          {:ok, tracks} <- tracks(captured, connections, agent_tracks),
          :ok <-
@@ -27,6 +28,26 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
     else
       {:error, %{kind: _kind}} = failure -> failure
       _unavailable -> ResourceQuery.failure(:recording, :room, :preparation_failed)
+    end
+  end
+
+  defp installed_recording_sources(captured) do
+    binding = captured.binding
+    attempt_id = if binding.attempt, do: binding.attempt.id
+
+    with {:ok, installed} <-
+           Inventory.build(
+             binding.plan,
+             captured.candidate.base_snapshot,
+             binding.connections,
+             Keyword.put(binding.options, :attempt_id, attempt_id)
+           ),
+         true <-
+           installed.recording_participant_ids == captured.inventory.recording_participant_ids do
+      :ok
+    else
+      # The installed track preparer mutates live writers. Future sources require their own lease.
+      _unprepared -> ResourceQuery.failure(:recording, :room, :policy_not_prepared)
     end
   end
 

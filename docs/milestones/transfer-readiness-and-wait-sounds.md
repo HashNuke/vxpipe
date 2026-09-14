@@ -771,3 +771,23 @@ zero failures and 15 integrations excluded.
 The whole-room preparation runner and lifecycle must still invoke this path with their complete
 resource set, create private destination bindings and finish room-service/recording preparation.
 This checkpoint does not close common readiness, waiting, transfer or rendered/provider gates.
+
+Whole-room candidate preparation now derives the complete mixer subscription set from actual
+connection bindings, prepares transcript routing and selected speech sessions under the phase lease,
+and collects every required connection plus room and participant resources. Cancellation handles
+preserve live resources. Transcript preparation retains current permissions until adoption and keeps
+the router process through policy changes; expiry or owner loss prevents prepared adoption.
+
+Seven focused Gateway WebRTC checks pass, including prospective departure with cancellation/retry
+and actual audio after adoption. The human-transfer fixture collects both connected humans with
+unchanged STT and recording writers, cancels preparation and resumes audio/transcripts. Four focused
+router checks pass for refresh, discard, expiry and owner loss. All five root checks pass with
+1,229 tests, zero failures and 15 integrations excluded. Recording preparation for changed future
+track sets, private destination actors and persistent startup/transfer phase integration remain
+required; acceptance boxes remain open.
+
+A regression also exposed future source selection mutating the live recorder before commit even
+when its policy interval was unchanged. Such a source change now returns `policy_not_prepared`
+without touching current writers; other prepared resources are discarded and the original room can
+be prepared again. The WebRTC check proves this failure/retry boundary. Independent prospective
+recording ownership and adoption remain required to support that transition successfully.

@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
 
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
   alias Vxpipe.CallEngine.Readiness.Resource
-  alias Vxpipe.CallEngine.TranscriptRouter.{Decision, Projection}
+  alias Vxpipe.CallEngine.TranscriptRouter.{Decision, PolicyPreparation, Projection}
 
   @call_timeout 1_000
 
@@ -55,6 +55,17 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
   @impl Vxpipe.CallEngine.Readiness.Adapter
   def readiness(server), do: safe_call(server, :readiness)
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness_binding(%{instance: router, binding: {_id, :prepared_policy, token}}),
+    do: safe_call(router, {:prepared_policy_readiness, token})
+
+  def readiness_binding(%{instance: router}), do: readiness(router)
+
+  def prepare_policy(router, candidate, options),
+    do: PolicyPreparation.request(router, candidate, options)
+
+  def discard_policy(router, token), do: safe_call(router, {:discard_policy, token})
+
   @impl true
   def init(options) do
     with {:ok, identity} <- identity(options),
@@ -64,6 +75,7 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
          identity: identity,
          readiness_resource: Resource.new(:transcript_router, :room, __MODULE__, options),
          current: nil,
+         pending_policy: nil,
          maximum_retained_revisions: maximum_retained_revisions,
          snapshots: %{}
        }}
@@ -78,24 +90,38 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
   end
 
   def handle_call(:readiness, _from, state) do
-    resource = %{
-      state.readiness_resource
-      | policy_interval: state.current.intervals.speech_to_text
-    }
+    resource = PolicyPreparation.resource(state, state.current)
 
     {:reply, {:ok, resource, :ready}, state}
   end
 
+  def handle_call({:prepare_policy, candidate, options}, _from, state) do
+    case PolicyPreparation.begin(state, candidate, options) do
+      {:ok, prepared, state} -> {:reply, {:ok, prepared}, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:prepared_policy_readiness, token}, _from, state),
+    do: {:reply, PolicyPreparation.readiness(state, token), state}
+
+  def handle_call({:discard_policy, token}, _from, state) do
+    case PolicyPreparation.discard(state, token) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
   def handle_call({:vxpipe_apply_media_policy, snapshot}, _from, state) do
-    case Snapshot.prepare(snapshot, state.current) do
-      {:ok, snapshot} ->
-        snapshots =
-          state.snapshots
-          |> Map.put(snapshot.revision, snapshot)
-          |> retain_latest(state.maximum_retained_revisions, snapshot)
+    with {:ok, snapshot} <- Snapshot.prepare(snapshot, state.current),
+         {:ok, state} <- PolicyPreparation.install(state, snapshot) do
+      snapshots =
+        state.snapshots
+        |> Map.put(snapshot.revision, snapshot)
+        |> retain_latest(state.maximum_retained_revisions, snapshot)
 
-        {:reply, :ok, %{state | current: snapshot, snapshots: snapshots}}
-
+      {:reply, :ok, %{state | current: snapshot, snapshots: snapshots}}
+    else
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
@@ -133,6 +159,21 @@ defmodule Vxpipe.CallEngine.TranscriptRouter do
        retained_policy_revisions: map_size(state.snapshots)
      }, state}
   end
+
+  @impl true
+  def handle_info(
+        {:transcript_policy_expired, token},
+        %{pending_policy: %{token: token}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{pending_policy: %{monitor: monitor}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(_message, state), do: {:noreply, state}
 
   defp decide(_projection, %{current: nil}), do: {:error, :policy_unavailable}
 

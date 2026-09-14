@@ -1,24 +1,42 @@
 defmodule Vxpipe.CallEngine.Readiness.Preparation do
   @moduledoc "Expands authoritative room requirements into exact resources for readiness collection."
 
-  alias Vxpipe.CallEngine.Media.ConnectionReadiness
-  alias Vxpipe.CallEngine.Readiness.{RecordingPreparation, Resource, ResourceQuery, RoomInventory}
+  alias Vxpipe.CallEngine.Media.{ConnectionReadiness, PreparedConnection}
+
+  alias Vxpipe.CallEngine.Readiness.{
+    CandidatePreparation,
+    RecordingPreparation,
+    Resource,
+    ResourceQuery,
+    RoomInventory
+  }
 
   @task_supervisor Vxpipe.CallEngine.ReadinessTaskSupervisor
   @maximum_resources 256
   @enforce_keys [:inventory, :connections, :recording_tracks, :resources]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [preparations: []]
 
   def run(room, candidate, timeout \\ 5_000) when is_integer(timeout) and timeout > 0 do
     deadline = System.monotonic_time(:millisecond) + timeout
+    execute(room, candidate, deadline, nil)
+  end
 
+  def run_candidate(room, candidate, options) do
+    with :ok <- CandidatePreparation.validate_options(options),
+         do: execute(room, candidate, Keyword.fetch!(options, :deadline_ms), options)
+  end
+
+  def discard(%__MODULE__{preparations: preparations}),
+    do: PreparedConnection.discard_preparations(preparations)
+
+  defp execute(room, candidate, deadline, options) do
     results =
       Task.Supervisor.async_stream(
         @task_supervisor,
         [room],
-        &safe_prepare(&1, candidate, deadline),
+        &safe_prepare(&1, candidate, deadline, options),
         max_concurrency: 1,
-        timeout: timeout,
+        timeout: remaining(deadline),
         on_timeout: :kill_task
       )
       |> Enum.to_list()
@@ -31,13 +49,49 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
     :exit, _reason -> {:error, :unavailable}
   end
 
-  defp safe_prepare(room, candidate, deadline) do
+  defp safe_prepare(room, candidate, deadline, options) do
     with {:ok, captured} <- RoomInventory.capture(room, candidate, remaining(deadline)),
          deadline = attempt_deadline(captured, deadline),
-         :ok <- connected(captured),
-         {:ok, collected} <- collect(captured, deadline),
-         {resources, connections} = unpack(collected),
-         {:ok, tracks, recording} <- RecordingPreparation.prepare(captured, connections),
+         :ok <- connected(captured) do
+      prepare_captured(room, captured, deadline, options)
+    end
+  rescue
+    _exception -> {:error, :unavailable}
+  catch
+    :exit, :readiness_preparation_timeout -> {:error, :deadline_elapsed}
+    _kind, _reason -> {:error, :unavailable}
+  end
+
+  defp prepare_captured(room, captured, deadline, nil) do
+    with {:ok, collected} <- collect(captured, deadline) do
+      {resources, connections} = unpack(collected)
+      finish(room, captured, resources, connections, [], deadline)
+    end
+  end
+
+  defp prepare_captured(room, captured, deadline, options) do
+    with :ok <- CandidatePreparation.validate_attempt(captured, options),
+         {:ok, prepared} <- CandidatePreparation.prepare(captured, options) do
+      case finish(
+             room,
+             captured,
+             prepared.resources,
+             prepared.connections,
+             prepared.preparations,
+             deadline
+           ) do
+        {:ok, _result} = success ->
+          success
+
+        {:error, _reason} = error ->
+          _ = PreparedConnection.discard_preparations(prepared.preparations)
+          error
+      end
+    end
+  end
+
+  defp finish(room, captured, resources, connections, preparations, deadline) do
+    with {:ok, tracks, recording} <- RecordingPreparation.prepare(captured, connections),
          {:ok, resources} <- complete_resources(resources ++ recording, captured),
          :ok <- RoomInventory.validate(room, captured, remaining(deadline)) do
       _remaining = remaining(deadline)
@@ -47,7 +101,8 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
          inventory: captured,
          connections: connections,
          recording_tracks: tracks,
-         resources: resources
+         resources: resources,
+         preparations: preparations
        }}
     end
   rescue

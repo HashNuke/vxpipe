@@ -29,6 +29,16 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
 
   def discard_candidate(%PreparedConnection{} = graph), do: PreparedConnection.discard(graph)
 
+  @doc false
+  def capture(connection, identity) do
+    with {:ok, binding} <- read_binding(connection),
+         :ok <- validate_binding(binding, connection, identity),
+         :ok <- validate_adapter(binding.adapter, :candidate),
+         do: {:ok, binding}
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   def prepare(connection, identity, policy, options, timeout \\ 5_000) do
     with {:ok, prepared} <- prepare_graph(connection, identity, policy, options, timeout),
          do: {:ok, prepared.resources}
