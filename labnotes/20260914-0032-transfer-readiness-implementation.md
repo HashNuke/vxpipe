@@ -2550,3 +2550,46 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   acceptance remains open for remaining failure/policy/privacy and audible checks, with explicit
   gaps for forced-worker timing, separate briefing/acceptance/cue durations and recovery detail.
   The other four vertical delivery checkpoints remain unchanged and unfinished.
+
+## Verify conversation and privacy across human wait configurations
+
+- Continued from committed progress/status checkpoint `efa8311`. The prior goal turn made concrete
+  progress and left only the other agent's documentation-site work dirty. Keep this checkpoint on
+  the ordinary human WebRTC handoff rather than opening another preparation subsystem.
+- Review found that older bidirectional assertions accepted any decodable RTP packet. Queued wait
+  or cue audio could satisfy them, and the older case also manually prepared media after activation.
+  Strengthened the ordinary acceptance flow to decode distinct 500 Hz caller and 1,500 Hz support
+  audio after activation. Decode the mandatory 1 kHz cue on both outputs separately. These checks
+  use actual WebRTC peers, Opus and the room bridge; provider responses remain controlled fixtures.
+- The first run passed the cue and bidirectional audio checks but timed out on transcription.
+  Its provider fixture sent only EndOfTurn. Supply StartOfTurn followed by EndOfTurn as the existing
+  provider protocol expects; partial and final support transcripts then reach the caller. This was
+  a fixture correction, not a new runtime transcription fix (`vxpipe-transfer-conversation-tones`
+  and `vxpipe-transfer-conversation-tones-2` logs).
+- Expanded that same flow to four cases: omitted-slot defaults, a shared custom URL, a nil caller
+  wait with default joining wait, and whole-object nil. The custom fetch boundary returns a valid
+  PCM WAV containing a 250 Hz tone; each peer's decoded wait must contain it, and the fetch occurs
+  once for the call. This exercises URL selection, file preparation and playback, not a live remote
+  HTTP host. The four cases pass (`vxpipe-transfer-wait-matrix.log`).
+- Send support microphone audio while destination STT is still preparing. It must not reach the
+  held caller or STT, and must not replay after release. With individual-track recording enabled,
+  wait/cue/briefing/held microphone audio produces no recording chunks; actual conversation later
+  produces chunks for both humans. The tone check distinguishes conversation from queued private
+  output without inspecting another application's private media state.
+- These verification additions change no production code, UI, dependency or development-server
+  process. Full WebRTC and root verification follow; audible physical-device and live-provider
+  acceptance remain separate.
+- The complete WebRTC file passes all 14 checks. The first root run passes all 325 Gateway checks
+  but reproduces the engine's intermittent cue-drain failure. The dedicated
+  [cue-readiness race note](20260914-1807-cue-readiness-race.md) records its controlled reproduction
+  and small runtime fix. A successful cue's normal process exit was mistaken for playback loss
+  while a readiness reply was outstanding. Five focused cue cases now pass, and root gates are
+  rerunning against the original failing seed 56228.
+- Committed the cue/recheck fix separately as `1829ab7`, with its focused regression and dedicated
+  labnote. Final combined verification passes all five required root gates: 1,289 tests, zero
+  failures and 15 integration exclusions at concurrency four, seed 56228. Evidence is
+  `vxpipe-cue-conversation-final-results.json` and its five root logs; all 325 Gateway checks pass.
+- Updated the milestone's automated human wait/conversation evidence and index, retaining separate
+  open checks for rendered/audible two-device behavior, live URL retrieval, model-history isolation
+  and remaining failure/policy stages. The full human slice and subsequent AI, initial-call, phone
+  and changing-listener slices remain incomplete. No new UI or dependency work was introduced.

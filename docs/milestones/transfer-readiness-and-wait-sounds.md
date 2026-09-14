@@ -3,7 +3,7 @@
 Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
 readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
 Human-handoff integration now passes normal transfer, bounded recovery and cue-failure checks. All
-five root gates pass with 1,285 tests and zero failures (test concurrency four); full slice
+five root gates pass with 1,289 tests and zero failures (test concurrency four); full slice
 acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -43,7 +43,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The current human-handoff checkpoint
-passes all five root gates with 1,285 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
+passes all five root gates with 1,289 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
 ## Call-definition changes
@@ -368,9 +368,13 @@ Implementation tasks:
 
 Acceptance and commit tasks:
 
-- [ ] Exercise defaults, a valid fetched URL, per-slot nil and whole-object nil through the normal
-  sample path; nil still requires readiness and the mandatory cue. Verify cue-before-room output
-  and no wait tail or private audio in transcription, model history or recordings.
+- [x] Exercise defaults, a fetched URL, per-slot nil and whole-object nil through ordinary WebRTC
+  transfer acceptance. Decode distinct wait/cue/conversation signals on the peers, retain readiness
+  gating with nil waits, and receive partial/final support transcripts in the caller. Private audio
+  and held support microphone input produce no STT input or individual-track recording chunks;
+  post-release conversation produces both. The custom fetch is controlled at the fetcher boundary.
+- [ ] Complete the same cases through the rendered caller/desk sample with audible two-device
+  evidence, including live URL retrieval, ordered wait-tail clearing and model-history isolation.
 - [x] Hold human transfer completion until mandatory cue drain, including with nil wait sounds.
   Cue-player loss and prepared destination STT loss during drain recover the retained source;
   an output that also cannot finish the recovery cue closes the call within the existing budgets.
@@ -654,6 +658,10 @@ The cue worker now monitors its joining-wait and cue players and rechecks collec
 100 ms while waiting for cue drain. Prepared STT transport failure can leave its capability process
 alive; rechecking catches the failed resource without waiting for a PID exit or the attempt deadline.
 The same check applies during recovery. The original attempt and recovery budgets remain unchanged.
+If a cue finishes during a readiness recheck, its queued completion acknowledgement survives the
+player's normal exit. The recheck no longer mistakes that completed player for playback loss; a
+player exit without completion still fails the handoff.
+This completion/recheck race is fixed in `1829ab7`.
 
 Before accepted handoff preparation, private speech is reconciled against the latest prospective
 policy even when an earlier private binding exists. Removing transcription demand stops only that
@@ -661,12 +669,22 @@ capability/ingress pair, removes its monitors and updates the attachments of the
 input/output actors. This is verified with an existing participant's policy contribution changing
 after private allocation; unrelated connection admission during a pending transfer remains unfinished.
 
+The ordinary WebRTC acceptance flow now verifies default waits, a shared custom URL, a nil caller
+wait and whole-object nil. Both peers decode the mandatory cue and distinct subsequent conversation
+tones; queued private audio cannot satisfy the conversation checks. Held support microphone input
+does not reach the caller or STT and does not replay after release. Private playback produces no
+individual-track recording chunks; live conversation subsequently produces chunks for both humans,
+and partial/final support transcripts reach the caller. The custom file is fetched once through a
+controlled fetcher and decoded on both peers. Physical-device audio, browser sample interaction and
+live remote URL retrieval remain separate acceptance evidence.
+
 Known remaining work in the first slice:
 
 - Complete readiness-loss, partial-release and expiry coverage across the remaining stages.
 - Reconcile policy changes during collection/adoption and finish failure, stage-timing and queue
   diagnostics beyond the implemented preparation status and returned-worker durations.
-- Verify default/custom/nil playback and private-audio isolation through the full sample path.
+- Complete default/custom/nil playback and private-audio/model-history isolation through the
+  rendered sample path, building on the passing native WebRTC cases.
 - Complete audible two-device and recovery verification. Rendered UI checks use simulated browser
   admission/media events and do not establish physical-device or live-provider audio behavior.
 - Changing membership/connections and multiple listeners retain their later dedicated checkpoint.
@@ -676,9 +694,10 @@ Known remaining work in the first slice:
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
-| Human handoff and recovery | Eleven WebRTC transfer checks pass with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, policy changes remove undemanded private STT, and destination/phase/player loss restores a fresh caller conversation through retained media. |
-| Current human-handoff checkpoint | All five root gates pass; 1,285 tests, zero failures, 15 exclusions; test concurrency four | Existing regressions, early audience waiting, normal handoff, policy-disabled STT, progress reporting and destination/phase/player recovery pass. Remaining slice acceptance stays open. |
-| Cue barrier and failure recovery | Four focused engine cases pass; included in the root suite | With nil waits, completion requires cue drain. Cue-player or prepared STT failure during drain recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
+| Human handoff and recovery | Fourteen WebRTC transfer checks pass with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, policy changes remove undemanded private STT, and destination/phase/player loss restores a fresh caller conversation through retained media. |
+| Current human-handoff checkpoint | All five root gates pass; 1,289 tests, zero failures, 15 exclusions; seed 56228 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, cue/recheck ordering, progress and bounded recovery pass. Remaining slice acceptance stays open. |
+| Cue barrier and failure recovery | Five focused engine cases pass | With nil waits, completion requires cue drain, including completion during a deferred readiness recheck. Cue-player or prepared STT failure during drain recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
+| Wait configurations and conversational audio | Four ordinary WebRTC handoffs pass for default/custom/per-slot-nil/whole-nil waits | Peer-decoded tones distinguish custom waiting, mandatory cues and bidirectional conversation. Held microphone/private playback produces no STT input or recording chunks; subsequent conversation is recorded and support transcripts reach the caller. The custom fetch and providers are controlled fixtures. |
 | Earlier targeted engine and phone checks | 20 engine checks (15 human-transfer and five tool-registry); 17 Gateway checks (nine WebRTC, six outbound phone and two incoming harnesses) passed before the latest additions | Owning connections, post-briefing acceptance and actual incoming STT audio are exercised with simulated providers; these checks remain in the passing root suite. |
 | Preparation progress and diagnostics | Real WebRTC check observes STT blockers, cue and releasing before activation; telemetry/reporter checks pass | Progress contains only attempt ID, closed phase/blocker categories and elapsed time. The existing reporter aggregates returned worker durations without call identity or provider payloads. |
 | Console and rendered browser | TypeScript and three focused UI checks pass; desktop/mobile Chrome inspection uses simulated admission/media events | Acceptance, capability/cue/release status, late-update rejection, five-entry ledger and readable controls are verified at 390 px and 1440 px. Physical two-device audio and live phone provider checks remain open. |
