@@ -850,3 +850,16 @@ connection and persistent phase owner. All five root gates pass with 1,258 tests
 15 integration exclusions. An earlier recorder flush failure did not reproduce in isolation or
 the complete same-seed rerun; the labnote retains that evidence without claiming a cause or fix.
 Lifecycle and acceptance remain open.
+
+Private speech allocation can now be bound to the phase owner, attempt and original deadline from
+construction, covering the gap before provider preparation begins. Owner loss or expiry closes the
+pending transport and both temporary actors. Prepared-session adoption releases that temporary
+ownership while retaining the session and closed microphone gate. A different scope, unprepared
+admission or no-demand allocation cannot be promoted through this boundary. Unrelated membership
+refresh preserves the prepared provider generation through existing policy reconciliation.
+
+The [allocation lifetime contract](../readiness-resource-contract.md#private-speech-allocation-lifetime)
+records the existing supervision reused and the remaining authorized connection/coordinator wiring.
+Fifty-three focused checks and all five root gates pass, including 1,263 tests with zero failures
+and 15 integration exclusions. No fixture or production timeout change was required. This is
+component evidence and does not complete startup, transfer waits/cues, release or recovery acceptance.

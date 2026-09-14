@@ -1,14 +1,14 @@
 # Transfer readiness implementation
 
-The current [private speech checkpoint](#adopt-private-speech-through-the-policy-barrier) prepares
-one provider session without a preliminary connection, retains it through final policy adoption,
-and keeps microphone input closed until release. Private pair cancellation preserves the source;
-unchanged membership avoids reapplying policy. All five root gates pass on the final code: 1,258
-tests, zero failures and 15 integration exclusions. One earlier recorder flush failure did not
-reproduce in isolation or in the complete same-seed rerun; its cause remains unconfirmed below.
+The current [allocation lifetime checkpoint](#bind-private-allocation-to-its-phase) binds private
+speech to the original phase owner, attempt and deadline before provider preparation starts. Owner
+loss or expiry closes the pair; adoption retains the prepared session after the phase ends and
+keeps input closed until release. All 53 focused checks and five root gates pass: 1,263 tests,
+zero failures and 15 integration exclusions. This checkpoint required no fixture or timeout change.
 
-This extends the complete-membership commit in `69b5ad6`, native tap preparation in `666ca37` and
-writer/track adoption in `4b14530`. The earlier [investigation](#private-stt-initialization-and-cancellation-ownership)
+This extends private speech adoption in `a8106d4`, the complete-membership commit in `69b5ad6`,
+native tap preparation in `666ca37` and writer/track adoption in `4b14530`.
+The earlier [investigation](#private-stt-initialization-and-cancellation-ownership)
 and pause audit retain their historical failures/worktree snapshots, not current status.
 
 **The end-to-end milestone remains unfinished.** Private destination actors, startup/transfer
@@ -59,6 +59,11 @@ The additional groundwork since the audit addresses room output, recording and p
   and proves explicit cancellation preserves source audio. It also corrects repeated enforcement
   of an unchanged membership candidate. Authorized connection binding and persistent phase cleanup
   are still required; this is not yet the integrated transfer lifecycle.
+- The [allocation lifetime checkpoint](#bind-private-allocation-to-its-phase) closes the interval
+  before provider preparation starts and prevents unprepared/no-demand adoption. It reuses the
+  temporary actor lifecycle and existing ingress monitor. An unrelated membership refresh already
+  retained the private provider through existing policy reconciliation; the added check confirms
+  that behavior without changing it. Authorized connection/coordinator wiring remains unfinished.
 
 No dependency versions or production deadlines changed in these committed checkpoints. These are
 component results: complete resource selection, startup/transfer orchestration, waits/cues,
@@ -1733,3 +1738,55 @@ Documentation verification for this update: all 38 local labnote links/anchors r
   phase owner, then use the complete readiness/cue/release sequence before publishing success.
   No browser session, live provider call or development-server restart was performed; milestone
   acceptance and the index entry remain open.
+
+## Bind private allocation to its phase
+
+- The preceding goal turn made progress with `a8106d4`, verified by all five gates. Revalidated
+  that only the concurrent visual-task files were dirty. The next connection binding needs to
+  cover the interval between allocating a private pair and starting provider preparation: existing
+  provider leases begin too late and close only pending sessions, not the allocated actors.
+- Reused the STT actor's temporary child lifecycle and ingress's existing capability monitor.
+  An internal allocation lease can stop both actors without adding a supervisor, owner process or
+  registry. The lease pins the original phase owner, attempt and deadline from construction;
+  successful prepared-session adoption removes it, leaving the live policy enforcers responsible
+  for ordinary failure handling. Connection authorization must still supply this trusted scope.
+- Two focused checks reproduced owner loss before provider preparation and deadline expiry leaving
+  the pair alive (`vxpipe-private-allocation-red.log`: 17 tests, two failures). A third reproduced
+  accepting a different preparation attempt before a pending provider existed
+  (`vxpipe-private-allocation-scope-red.log`: 18 tests, three failures).
+- The new allocation lease closes pending work explicitly on owner loss/expiry, and validates
+  preparation owner, attempt and deadline before provider startup. Admission requires an actual
+  prepared session; the same provider resource survives adoption and later phase-owner shutdown,
+  while microphone ingress remains closed. The initial green run passes 18 checks in
+  `vxpipe-private-allocation-green.log`.
+- Review then reproduced an empty, no-demand preparation being admitted as a new live enforcer
+  (`vxpipe-private-allocation-demand-red.log`: 19 tests, one failure). A private allocation must
+  have a prepared replacement session before adoption; no-demand actors remain private and must
+  be discarded by selection/phase cleanup. This prevents an unused actor's allocation deadline
+  from later becoming a critical room failure. Final focused verification follows.
+- The expanded focused run passes 52 checks (`vxpipe-private-allocation-focused.log`). Added one
+  further private-membership refresh check: it passes immediately without a policy-reconciliation
+  change. Existing scoped signatures already retain the session and retarget its future interval;
+  the check proves compatibility with the new allocation lease, not a newly fixed reconnect defect.
+  Its initial log name is `vxpipe-private-allocation-refresh-red.log`, but the actual result is
+  20 tests, zero failures. The durable contract records the lifetime decision and remaining
+  connection/coordinator integration. Final combined checks and root gates follow.
+- Final combined coverage passes 53 checks (`vxpipe-private-allocation-final-focused.log`). Root
+  verification under `vxpipe-private-allocation-root-` has passed formatting, compilation and strict
+  Credo; the umbrella suite is still finishing. Per-command results and code hashes are retained.
+- Concrete coordinator resume point: the existing `RoomTransferSupervisor` already owns the
+  destination preparation task, but that task returns after configuration, leaving `Pending.task.pid`
+  unsuitable as the later phase owner. Reusing that supervised task as a persistent phase, sending
+  a typed prepared notification instead of returning, would keep one owner through readiness,
+  cues and release. Its existing monitor and original deadline must remain until completion;
+  current settle/commit paths release them too early. This is a proposed integration step, not an
+  implemented coordinator. It avoids an additional owner process or lookup registry, and enables
+  RoomAuthority to authorize private binding against the exact pending phase PID.
+- Final root verification passes all five commands: formatting, warnings-as-errors compilation,
+  strict Credo, 1,263 tests with zero failures and 15 integration exclusions, and unused dependencies.
+  All eight application suites completed; every retained command result is exit zero. No fixture
+  correction, package change or production timeout increase was needed for this checkpoint.
+  All 58 local documentation links/anchors and `git diff --check` pass. Commit the allocation
+  lifetime, focused checks and contract together,
+  preserving the concurrent artwork and visual-task labnote. No browser/provider session or server
+  restart was performed; full lifecycle integration and milestone/index acceptance remain open.

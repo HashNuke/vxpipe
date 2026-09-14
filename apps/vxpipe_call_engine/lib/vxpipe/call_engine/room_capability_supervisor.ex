@@ -119,7 +119,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
           provider: provider,
           transport: transport,
           usage: usage
-        ] ++ Keyword.take(initialization_options, [:initial_policy])
+        ] ++ Keyword.take(initialization_options, [:initial_policy, :preparation])
 
     case DynamicSupervisor.start_child(
            via(incarnation_id),

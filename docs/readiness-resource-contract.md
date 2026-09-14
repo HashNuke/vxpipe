@@ -134,7 +134,35 @@ Checks cover delayed new-enforcer acknowledgement, deduplication, rejected adopt
 after commit and failed application. The supervised private speech pair also covers discarded
 preparation, pair cleanup, source resource/audio retention, retry and exact provider adoption with
 input still closed. This does not yet implement the authorized private connection binding or the
-persistent phase owner that must clean up allocated actors on worker loss.
+persistent transfer coordinator.
+
+### Private speech allocation lifetime
+
+A private speech pair can receive an internal `preparation` option alongside `initial_policy`.
+It pins the original phase `owner`, `attempt_id` and absolute `deadline_ms` before any provider
+preparation starts. The base policy must exclude the participant. Invalid/expired scope is rejected
+before a provider transport starts. Subsequent preparation must use that exact scope; a different
+owner, attempt or extended deadline cannot reuse the allocation.
+
+The temporary STT actor owns this allocation lease. On owner loss or expiry, it explicitly discards
+pending provider work and stops. The ingress follows its existing capability monitor and also stops;
+neither actor restarts. This covers failure between allocation and the first provider request as
+well as failure during preparation. It uses existing actor supervision rather than adding a pair
+supervisor, persistent lease process or central allocation registry. Ordinary live speech actors
+keep their existing pending-session-only cancellation behavior.
+
+Private admission requires a prepared replacement session matching the installed candidate. A
+no-demand preparation cannot be promoted as a live speech enforcer; selection must discard it.
+Successful session adoption releases the allocation lease and the existing provider-preparation
+lease, retains the actual session, and leaves ingress closed until explicit release. Ending the
+old phase therefore does not stop adopted speech. A refreshed candidate can retain the same private
+provider generation while updating its future interval through existing policy reconciliation.
+
+This lifetime option is an internal ownership contract, not connection authorization. The lifecycle
+still needs to authenticate the private connection and provide its persistent phase owner. Checks
+cover owner loss before provider startup, real deadline expiry with an unacknowledged provider,
+scope changes, admission without a prepared/required session, retention after phase completion,
+and unchanged provider generation across unrelated membership refresh.
 
 ## Prospective requirements and room bindings
 

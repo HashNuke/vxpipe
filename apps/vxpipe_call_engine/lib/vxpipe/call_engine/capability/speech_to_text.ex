@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
-  alias Vxpipe.CallEngine.Capability.SpeechToText.{PolicyPreparation, Usage}
+  alias Vxpipe.CallEngine.Capability.SpeechToText.{PolicyPreparation, PrivateAllocation, Usage}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -88,8 +88,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
         Telemetry.provider_failure(:stt, provider_module, :transport_closed)
         {:stop, :transport_start_failed}
 
-      {:error, :invalid_initial_policy} ->
-        {:stop, :invalid_initial_policy}
+      {:error, reason} when reason in [:invalid_initial_policy, :invalid_preparation] ->
+        {:stop, reason}
     end
   end
 
@@ -97,8 +97,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def handle_call(:readiness, _from, state), do: {:reply, State.readiness(state), state}
 
   def handle_call({:prepare_policy, candidate, options}, _from, state) do
-    case PolicyPreparation.begin(state, candidate, options) do
-      {:ok, prepared, state} -> {:reply, {:ok, prepared}, state}
+    with :ok <- PrivateAllocation.validate_preparation(state.private_allocation, options),
+         {:ok, prepared, state} <- PolicyPreparation.begin(state, candidate, options) do
+      {:reply, {:ok, prepared}, state}
+    else
       {:error, _reason} = error -> {:reply, error, state}
     end
   end
@@ -127,9 +129,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
-    case PolicyPreparation.install(state, snapshot) do
-      {:ok, state} ->
-        {:reply, :ok, state}
+    with :ok <-
+           PrivateAllocation.validate_policy(
+             state.private_allocation,
+             snapshot,
+             state.pending_policy,
+             state.identity.participant_id
+           ),
+         {:ok, updated} <- PolicyPreparation.install(state, snapshot) do
+      {:reply, :ok, adopt_private_allocation(state, updated)}
+    else
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
 
       {:error, :transport_start_failed, state} ->
         Telemetry.provider_failure(:stt, state.provider_module, :transport_closed)
@@ -150,6 +161,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   @impl true
+  def handle_info(
+        {:DOWN, monitor, :process, _owner, _reason},
+        %{private_allocation: %{monitor: monitor}} = state
+      ),
+      do: stop_private_allocation(state)
+
+  def handle_info(
+        {:private_speech_expired, token},
+        %{private_allocation: %{token: token}} = state
+      ),
+      do: stop_private_allocation(state)
+
   def handle_info(
         {:vxpipe_stt_connected, connector, transport},
         %{pending_policy: %{state: %{connector: %{pid: connector}}}} = state
@@ -250,6 +273,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @impl true
   def terminate(_reason, state) do
+    :ok = PrivateAllocation.release(state.private_allocation)
     :ok = PolicyPreparation.close(state)
     _ = State.close(state)
     :ok
@@ -286,6 +310,32 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     maybe_report_provider_failure(reason, state.provider_module)
     send(state.owner, {:vxpipe_stt_unavailable, self(), state.identity, reason})
     {:stop, reason, state}
+  end
+
+  defp adopt_private_allocation(%{private_allocation: nil}, updated), do: updated
+
+  defp adopt_private_allocation(%{pending_policy: %{token: token}} = state, updated)
+       when updated.adopted_policy_token == token do
+    :ok = PrivateAllocation.release(state.private_allocation)
+    %{updated | private_allocation: nil}
+  end
+
+  defp adopt_private_allocation(_state, updated), do: updated
+
+  defp stop_private_allocation(state) do
+    state =
+      case state.pending_policy do
+        nil ->
+          state
+
+        %{token: token} ->
+          {:ok, state} = PolicyPreparation.discard(state, token)
+          state
+      end
+
+    :ok = PrivateAllocation.release(state.private_allocation)
+    state = state |> Usage.finish_session(:cancelled) |> State.close()
+    {:stop, :shutdown, %{state | private_allocation: nil}}
   end
 
   defp maybe_report_provider_failure(reason, provider)

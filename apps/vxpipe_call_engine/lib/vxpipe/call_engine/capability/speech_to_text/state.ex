@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.AudioFrame
-  alias Vxpipe.CallEngine.Capability.SpeechToText.TransportConnector
+  alias Vxpipe.CallEngine.Capability.SpeechToText.{PrivateAllocation, TransportConnector}
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
   alias Vxpipe.CallEngine.Readiness.{Provider, Resource}
 
@@ -29,6 +29,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
                 readiness_generation: nil,
                 readiness_status: :preparing,
                 pending_policy: nil,
+                private_allocation: nil,
                 adopted_policy_token: nil
               ]
 
@@ -41,6 +42,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
           owner: pid(),
           policy: Snapshot.t() | nil,
           policy_revision: non_neg_integer() | nil,
+          private_allocation: PrivateAllocation.t() | nil,
           provider_module: module(),
           readiness_generation: reference(),
           readiness_status: :preparing | :ready | :failed,
@@ -54,6 +56,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @spec new(keyword()) ::
           {:ok, t()}
           | {:error, :invalid_initial_policy}
+          | {:error, :invalid_preparation}
           | {:error, :transport_start_failed, module()}
   def new(options) do
     identity = %{
@@ -70,6 +73,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     connection = provider_module.connection_options(provider_config)
 
     with {:ok, demanded?} <- initial_demand(options, identity.participant_id),
+         {:ok, allocation} <- PrivateAllocation.new(options, identity.participant_id),
          {:ok, transport} <-
            start_transport(demanded?, transport_module, connection, transport_options) do
       {:ok,
@@ -82,6 +86,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
          owner: owner,
          policy: nil,
          policy_revision: nil,
+         private_allocation: allocation,
          provider_module: provider_module,
          readiness_generation: make_ref(),
          readiness_status: Provider.initial_status(provider_module),
@@ -92,7 +97,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
          usage_context: Keyword.get(options, :usage)
        }}
     else
-      {:error, :invalid_initial_policy} = error ->
+      {:error, reason} = error when reason in [:invalid_initial_policy, :invalid_preparation] ->
         error
 
       {:error, _reason} ->

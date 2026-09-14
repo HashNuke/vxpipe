@@ -413,7 +413,9 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
   test "a privately initialized speech pair prepares one provider session and keeps input closed through adoption" do
     context = preparation_room()
     assert {:ok, original_source, :ready} = SpeechToText.readiness(context.capability)
-    private = prepare_private_speech(context)
+    owner = start_supervised!({Agent, fn -> :phase end}, id: :adopted_private_phase)
+    options = Keyword.put(preparation_options(), :owner, owner)
+    private = prepare_private_speech(context, options)
 
     %{capability: capability, ingress: ingress, resource: resource, transport: transport} =
       private
@@ -444,6 +446,7 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
              )
 
     assert adopted == private.candidate.snapshot
+    stop_supervised!(:adopted_private_phase)
     assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
     assert :ok = Ingress.push(ingress, private_frame(context, private, 2))
     refute_receive {:test_stt_audio, ^transport, _}
@@ -477,7 +480,171 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert Authority.snapshot(context.authority) == private.candidate.base_snapshot
   end
 
-  defp prepare_private_speech(context) do
+  test "private allocation owner loss stops the pair before provider preparation" do
+    context = preparation_room()
+    assert {:ok, original, :ready} = SpeechToText.readiness(context.capability)
+    owner = start_supervised!({Agent, fn -> :phase end}, id: :private_phase)
+    options = Keyword.put(preparation_options(), :owner, owner)
+    private = start_private_speech(context, options)
+    capability = private.capability
+    ingress = private.ingress
+    capability_monitor = Process.monitor(capability)
+    ingress_monitor = Process.monitor(ingress)
+    stop_supervised!(:private_phase)
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :shutdown}, 1_000
+    assert_receive {:DOWN, ^ingress_monitor, :process, ^ingress, :capability_unavailable}, 1_000
+    assert Authority.snapshot(context.authority) == private.base
+    assert {:ok, ^original, :ready} = SpeechToText.readiness(context.capability)
+    refute_receive {:test_stt_transport_started, _, _}
+  end
+
+  test "private allocation deadline closes the pair and its unacknowledged provider" do
+    context = preparation_room()
+
+    options =
+      Keyword.put(
+        preparation_options(),
+        :deadline_ms,
+        System.monotonic_time(:millisecond) + 2_000
+      )
+
+    private = prepare_private_speech(context, options)
+    capability = private.capability
+    ingress = private.ingress
+    transport = private.transport
+    monitors = Enum.map([capability, ingress, transport], &{&1, Process.monitor(&1)})
+
+    for {process, monitor} <- monitors do
+      assert_receive {:DOWN, ^monitor, :process, ^process, _reason}, 3_000
+    end
+
+    assert Authority.snapshot(context.authority) == private.candidate.base_snapshot
+    assert {:ok, _source, :ready} = SpeechToText.readiness(context.capability)
+  end
+
+  test "private allocation requires its original phase and prepared session before admission" do
+    context = preparation_room()
+    options = preparation_options()
+    private = start_private_speech(context, options)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               context.authority,
+               MapSet.put(private.base.present_participant_ids, private.observer.participant_id)
+             )
+
+    assert {:error, :invalid_preparation} =
+             SpeechToText.prepare_policy(
+               private.capability,
+               candidate,
+               Keyword.put(options, :attempt_id, "another-phase")
+             )
+
+    assert {:error, :invalid_preparation} =
+             SpeechToText.prepare_policy(
+               private.capability,
+               candidate,
+               Keyword.update!(options, :deadline_ms, &(&1 + 1_000))
+             )
+
+    assert {:error, :policy_not_prepared} =
+             Enforcer.apply(private.capability, candidate.snapshot, 1_000)
+
+    refute_receive {:test_stt_transport_started, _, _}
+    stop_private_speech(context, private)
+    assert Authority.snapshot(context.authority) == private.base
+  end
+
+  test "a private allocation without future speech demand cannot become a live enforcer" do
+    context = preparation_room(restriction: %{save_transcripts: false, transcript_routes: %{}})
+    options = preparation_options()
+    private = start_private_speech(context, options)
+    restrictor = Map.fetch!(context.plan.participants, "restrictor")
+
+    present =
+      private.base.present_participant_ids
+      |> MapSet.put(private.observer.participant_id)
+      |> MapSet.put(restrictor.participant_id)
+
+    assert {:ok, candidate} = Authority.preview_presence(context.authority, present)
+
+    assert {:ok, %{resources: []}} =
+             SpeechToText.prepare_policy(private.capability, candidate, options)
+
+    assert {:error, :policy_not_prepared} =
+             Enforcer.apply(private.capability, candidate.snapshot, 1_000)
+
+    refute_receive {:test_stt_transport_started, _, _}
+    stop_private_speech(context, private)
+    assert Authority.snapshot(context.authority) == private.base
+  end
+
+  test "unrelated membership refresh retains the privately prepared provider session" do
+    context = preparation_room(restriction: %{record_audio: false})
+    private = prepare_private_speech(context, preparation_options())
+    transport = private.transport
+    transport_monitor = Process.monitor(transport)
+    TestSpeechToTextTransport.deliver(transport, connected_message())
+    collector = collect([private.resource], context.room.incarnation_id)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    restrictor = Map.fetch!(context.plan.participants, "restrictor")
+    assert {:ok, base} = Authority.admit(context.authority, restrictor.participant_id)
+    assert :ok = Enforcer.apply(private.ingress, base, 1_000)
+    assert :ok = Enforcer.apply(private.capability, base, 1_000)
+    refute_receive {:DOWN, ^transport_monitor, :process, ^transport, _reason}
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               context.authority,
+               MapSet.put(base.present_participant_ids, private.observer.participant_id)
+             )
+
+    assert {:ok, prepared} =
+             SpeechToText.prepare_policy(private.capability, candidate, private.options)
+
+    assert prepared.token == private.prepared.token
+    assert [resource] = prepared.resources
+    assert resource.generation == private.resource.generation
+    assert resource.policy_interval != private.resource.policy_interval
+    assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
+    refute_receive {:test_stt_transport_started, _, _}
+
+    assert {:ok, adopted} =
+             Authority.commit_candidate(
+               context.authority,
+               candidate,
+               Keyword.fetch!(private.options, :deadline_ms),
+               [private.capability, private.ingress]
+             )
+
+    assert adopted == candidate.snapshot
+    assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
+  end
+
+  defp prepare_private_speech(context, scoped_options \\ nil) do
+    private = start_private_speech(context, scoped_options)
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               context.authority,
+               MapSet.put(private.base.present_participant_ids, private.observer.participant_id)
+             )
+
+    options = scoped_options || preparation_options()
+    assert {:ok, prepared} = SpeechToText.prepare_policy(private.capability, candidate, options)
+    assert [resource] = prepared.resources
+    assert_receive {:test_stt_transport_started, transport, _connection}, 1_000
+
+    Map.merge(private, %{
+      candidate: candidate,
+      prepared: prepared,
+      resource: resource,
+      transport: transport,
+      options: options
+    })
+  end
+
+  defp start_private_speech(context, options) do
     observer = Map.fetch!(context.plan.participants, "observer")
     base = Authority.snapshot(context.authority)
     connection_id = unique_id("private-speech")
@@ -521,36 +688,24 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
                {TestSpeechToTextTransport, [observer: self()]},
                ingress_options,
                nil,
-               initial_policy: base
+               private_initialization(base, options)
              )
 
     assert :ok = Enforcer.apply(ingress, base, 1_000)
     assert :ok = Enforcer.apply(capability, base, 1_000)
     refute_receive {:test_stt_transport_started, _, _}
 
-    assert {:ok, candidate} =
-             Authority.preview_presence(
-               context.authority,
-               MapSet.put(base.present_participant_ids, observer.participant_id)
-             )
-
-    options = preparation_options()
-    assert {:ok, prepared} = SpeechToText.prepare_policy(capability, candidate, options)
-    assert [resource] = prepared.resources
-    assert_receive {:test_stt_transport_started, transport, _connection}, 1_000
-
     %{
       capability: capability,
       ingress: ingress,
-      candidate: candidate,
-      prepared: prepared,
-      resource: resource,
-      transport: transport,
-      options: options,
+      base: base,
       observer: observer,
       connection_id: connection_id
     }
   end
+
+  defp private_initialization(base, nil), do: [initial_policy: base]
+  defp private_initialization(base, options), do: [initial_policy: base, preparation: options]
 
   defp stop_private_speech(context, private) do
     capability = private.capability
