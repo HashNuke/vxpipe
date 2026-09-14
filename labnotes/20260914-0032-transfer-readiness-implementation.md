@@ -1,6 +1,12 @@
 # Transfer readiness implementation
 
-The current [Gateway preparation checkpoint](#integrate-private-gateway-preparation) allocates
+The latest [handoff investigation](#coordinate-the-live-human-handoff) reproduces the remaining
+integration defect through normal WebRTC acceptance: the destination is already admitted to main
+media when its STT provider starts connecting. That focused check currently fails; no runtime fix
+has been made for it. The test remains uncommitted. The passing results below belong to `c4fea8c`,
+not to the current worktree or completed end-to-end acceptance.
+
+The last verified [Gateway preparation checkpoint](#integrate-private-gateway-preparation) allocates
 dormant private media on actual WebRTC and phone connections. Complete prospective WebRTC room
 collection waits for destination STT while retaining caller pipelines and source capabilities.
 Preparation without STT cannot bypass adoption; private actor loss cancels the attempt, and
@@ -2062,3 +2068,36 @@ links/anchors and whitespace. No new tests were written or run for this document
   during commit, while Gateway promotion still calls ordinary media startup. Those paths must use
   the prepared actors and retain source resources until the required completion point. The
   current successful preparation/discard checks do not establish successful adoption or release.
+
+## Coordinate the live human handoff
+
+- The previous turn committed `c4fea8c` with all five gates and 1,274 passing tests. That was
+  progress on private Gateway preparation; the automatic handoff still used ordinary promotion.
+  Revalidated the worktree and preserved the separate visual documentation changes.
+- Added an actual WebRTC transfer check using normal acceptance, with wait slots explicitly nil.
+  It requires destination STT to start while admission and room policy remain private, retains
+  the source transport until handoff finishes, and requires the same prepared actors after main
+  admission. The initial run fails at the intended boundary: destination admission is already
+  `:main` when its STT transport starts (`vxpipe-human-ready-handoff-red.log`: one test, one
+  failure). The existing component checks do not prove this automatic lifecycle ordering.
+- Source inspection confirms the integration points: `HumanHandoff.progress/2` still selects the
+  immediate committer; that committer discards source TTS, schedules source removal, and only then
+  signals Gateway ordinary media startup. The persistent phase, complete candidate runner and
+  dormant Gateway actors now exist, but those pieces must replace this sequence. This section
+  records ongoing work, not a completed or fully verified checkpoint.
+
+### Why the prepared components have not completed the handoff
+
+| Integration finding | Consequence and remaining work |
+| --- | --- |
+| The private preparation API exists, but normal acceptance does not invoke it. | Wire the actual transfer phase to prepare and collect destination media before admission. The failing WebRTC check exercises this missing connection between components. |
+| `HumanCommitter` uses ordinary participant admission, discards source TTS and queues promotion after source teardown. WebRTC and phone promotion then start ordinary media. | Adopt the exact prepared membership and existing media actors while held; retain source resources until the handoff reaches its completion boundary. A passing preparation/discard check does not prove adoption. |
+| `Completion.finish/3` synchronously asks the persistent phase to finish before publishing success. | A phase that synchronously asks authority to complete would introduce a call cycle. The orchestration must leave the phase responsive to authority while coordinating preparation and completion. This is a design constraint identified by inspection, not an implemented fix. |
+| Acceptance currently latches before briefing completes; completion has no coordinated cue/release acknowledgements. | Enforce the approved acceptance window and compose readiness, listener cues, held adoption and acknowledged release under the original deadline. Startup waits and bounded recovery remain additional unfinished milestone work. |
+
+This notes update adds no runtime changes, dependencies, lockfile changes or deadline increases.
+It preserves the existing failing test and the separate visual documentation work. No tests were
+added or run for this documentation update, and no development server or provider session was
+restarted. Verification compares the account with the current source, the retained one-test
+failure, the five successful `c4fea8c` gate results and the milestone's unchecked acceptance tasks.
+All 46 local Markdown links/anchors and the documentation whitespace check pass.
