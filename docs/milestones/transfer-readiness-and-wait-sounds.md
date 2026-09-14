@@ -38,7 +38,7 @@ private preparation. The missing work is completing and verifying their use in o
 | --- | --- | --- |
 | Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and player loss recover spoken caller conversation through retained media; readiness is rechecked during cues and stale candidates trigger preparation and fresh cues. | Complete remaining failure stages, policy adoption, safe diagnostics and sample/audible acceptance. |
 | Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
-| AI transfer | Shared hold/readiness/cue/release now gates agent destinations and their first message. Failed destination TTS recovers spoken source conversation; fresh activations work on re-entry. The live caller sample transfers to billing and continues on the same peer. | Complete caller preparation/failure detail, independently delayed model/tool cases and the remaining configuration/privacy acceptance. |
+| AI transfer | Shared hold/readiness/cue/release now gates agent destinations and their first message. Failed destination TTS recovers spoken source conversation; fresh activations work on re-entry. The live caller sample transfers to billing and continues on the same peer. | Complete independently delayed model/tool cases and the remaining configuration/privacy acceptance. |
 | Initial call | Opening playback exists; early caller waiting and full initial readiness orchestration are unfinished. | Provide caller output before expensive setup, compose waiting with opening playback, then release conversation once. |
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
@@ -421,8 +421,12 @@ Implementation tasks:
   every retained resource's end-to-end evidence remain open.
 - [x] Apply first-message behavior once after release/completion. Discard failed destination
   preparation and recover or end under the same failure contract as human transfers.
-- [ ] Expose the destination and actual preparing/failure phase through the existing sample and
-  diagnostics so the transition is reproducible from an ordinary caller session.
+- [x] Expose the destination and actual preparing/failure phase through RTVI and the existing
+  sample event ledger so the transition is reproducible from an ordinary caller session.
+  The caller receives `vxpipe.transfer` v1 in the existing RTVI `server-message` envelope:
+  attempt ID, destination key, closed phase/blocker categories and elapsed milliseconds. Its
+  existing SDK handles the server-message extension without a new UI component. Preparation,
+  cue/release, completion and recovery are verified through native peers.
 
 Acceptance and commit tasks:
 
@@ -779,6 +783,21 @@ Known remaining work in the first slice:
 
 The [agent handoff labnote](../../labnotes/20260914-2008-agent-handoff-readiness.md) records the
 red/green boundary, integration corrections, removed lifecycle code and exact verification logs.
+
+### Caller progress and testing direction
+
+- Initial preparation, actual readiness blockers, cue/release and terminal recovery/completion
+  now reach the original caller connection. Human and AI handoffs use the same projection. The
+  destination's existing acceptance channel remains compatible; no core RTVI message type changes.
+- The native WebRTC transfer cases require delayed-voice preparation and completion status, and
+  all existing recovery variants require recovered status. No caller UI changes are included.
+- Following the user's testing direction, reproduce transport, readiness and audio failures with
+  native ExWebRTC peers and deterministic Morse providers. Keep browser inspection limited to UI
+  behavior and browser-specific interoperability; repeated UI-driven provider debugging is not an
+  acceptance prerequisite. Physical audibility remains distinct from decoded protocol evidence.
+
+The [caller progress labnote](../../labnotes/20260914-2041-caller-transfer-progress.md) records
+the focused red/green evidence and the removed UI detour.
 
 ### Verification ledger
 

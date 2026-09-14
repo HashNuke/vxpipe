@@ -115,8 +115,11 @@ AI destinations now reuse the same hold/readiness/cue/adopt/release sequence. De
 their greeting, failed destination TTS recovers spoken source conversation, and re-entry binds the
 fresh activation. Required source restoration uses the existing 750 ms budget; the superseded
 separate agent restoration path was removed. The live rendered caller transfers to billing,
-receives waiting audio/cue/greeting and continues on the same peer. Independent tool delays,
-caller preparation/failure detail and complete configuration/privacy acceptance remain open.
+receives waiting audio/cue/greeting and continues on the same peer. Caller preparation, blockers,
+completion and recovery now use the existing RTVI server-message extension and sample event ledger.
+No caller UI changes are required. Native peers own further transport
+and audio diagnosis, with browser checks limited to presentation/interoperability. Independent
+tool delays and complete configuration/privacy acceptance remain open.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.
 

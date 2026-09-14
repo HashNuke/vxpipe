@@ -112,6 +112,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_tts_transport_started, destination_tts, _}, 2_000
+    progress = await_transfer_progress(client, "preparing", ["text_to_speech"])
+    assert progress["destination"] == "billing"
+
+    assert Enum.sort(Map.keys(progress)) == [
+             "attempt_id",
+             "blockers",
+             "destination",
+             "elapsed_ms",
+             "phase"
+           ]
+
     refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 150
     refute_receive {:test_tts_control, ^destination_tts, _}, 50
     assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
@@ -126,6 +137,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       ~s({"type":"Connected","request_id":"destination-ready"})
     )
 
+    assert %{"attempt_id" => attempt} = await_transfer_progress(client, "completed")
+    assert attempt == progress["attempt_id"]
     assert :ok = await_tone(client, 1_000, 3_000)
     assert_receive {:test_tts_control, ^destination_tts, speak}, 3_000
     assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Billing is ready."}
@@ -680,6 +693,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       unless agent_destination?, do: assert_receive(:destination_admission_released, 2_000)
       await_recovered(authority, System.monotonic_time(:millisecond) + 2_000)
+      assert %{"phase" => "recovered"} = await_transfer_progress(caller_client, "recovered")
       assert :ok = await_tone(caller_client, 1_000, 2_000)
       refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
       {:ok, after_recovery} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
@@ -1893,6 +1907,35 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   defp await_sideband(connection, type, timeout_ms, phase \\ nil) do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
     do_await_sideband(connection, type, deadline, phase)
+  end
+
+  defp await_transfer_progress(connection, phase, blockers \\ nil) do
+    await_transfer_progress(
+      connection,
+      phase,
+      blockers,
+      System.monotonic_time(:millisecond) + 2_000
+    )
+  end
+
+  defp await_transfer_progress(connection, phase, blockers, deadline) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+    message = await_sideband(connection, "server-message", remaining)
+
+    case message do
+      %{
+        "data" => %{
+          "t" => "vxpipe.transfer",
+          "v" => 1,
+          "d" => %{"phase" => ^phase, "blockers" => actual} = data
+        }
+      }
+      when is_nil(blockers) or actual == blockers ->
+        data
+
+      _other ->
+        await_transfer_progress(connection, phase, blockers, deadline)
+    end
   end
 
   defp send_acceptance(connection, id, attempt_id) do

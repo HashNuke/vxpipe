@@ -18,7 +18,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     HumanHandoff,
     HumanPreparation,
     Pending,
-    Preparation
+    Preparation,
+    Progress
   }
 
   @spec begin(Request.t(), GenServer.from(), State.t()) ::
@@ -86,6 +87,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         held =
           MapSet.new(state.connections, fn {_id, connection} -> connection.participant_id end)
 
+        Progress.publish(pending, :preparing, [], state)
         {:noreply, %{state | pending_participant_transfer: pending, held_participant_ids: held}}
 
       {:error, :unavailable} ->
@@ -127,12 +129,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
           state
       ) do
-    Enum.each(state.connections, fn {_id, connection} ->
-      if connection.transfer_attempt_id == pending.attempt_id do
-        send(connection.pid, {:vxpipe_transfer_progress, pending.attempt_id, progress})
-      end
-    end)
-
+    Progress.publish(pending, progress.phase, progress.blockers, state)
     {:noreply, state}
   end
 

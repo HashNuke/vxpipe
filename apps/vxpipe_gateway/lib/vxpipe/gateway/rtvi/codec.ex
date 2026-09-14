@@ -204,6 +204,21 @@ defmodule Vxpipe.Gateway.RTVI.Codec do
      })}
   end
 
+  def encode_transfer_progress(attempt_id, progress) do
+    data =
+      progress
+      |> Map.take([:destination, :phase, :blockers, :elapsed_ms])
+      |> Map.put(:attempt_id, attempt_id)
+
+    {:ok,
+     JSON.encode!(%{
+       id: attempt_id,
+       label: @label,
+       type: "server-message",
+       data: %{t: "vxpipe.transfer", v: 1, d: data}
+     })}
+  end
+
   @spec encode_spoken_progress(
           TextOutput.t(),
           String.t(),

@@ -4,19 +4,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Completion do
   alias Vxpipe.CallEngine.Event.ToolCallCompleted
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, FirstMessage, State}
-  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{History, Pending, Phase}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{History, Pending, Phase, Progress}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   @spec finish(Pending.t(), map(), State.t()) :: State.t()
   def finish(%Pending{} = pending, result, %State{} = state) do
     case Phase.finish(pending) do
       :ok ->
+        Progress.publish(pending, :completed, [], state)
         state = History.completed(state, pending.request)
         state = publish(pending.request, result, state)
         GenServer.reply(pending.from, {:ok, result})
         start_first_message(state, pending.request.caller_participant_id)
 
       {:error, _reason} ->
+        Progress.publish(pending, :failed, [], state)
         GenServer.reply(pending.from, {:error, :unavailable})
         exit(:shutdown)
     end

@@ -17,6 +17,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     Pending,
     Phase,
     Preparation,
+    Progress,
     PrivateSpeech
   }
 
@@ -322,6 +323,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           state = record_output_generation(state, recovered)
           state = restore_text_to_speech(state, recovered.text_to_speech)
           state = History.failed(state, pending.request, cause, :completed)
+          Progress.publish(pending, :recovered, [], state)
           GenServer.reply(pending.from, {:error, :unavailable})
 
           {:noreply,
@@ -356,6 +358,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
             retry_preparation(pending, ready, state)
 
           _commit_failed ->
+            Progress.publish(pending, :failed, [], state)
             GenServer.reply(pending.from, {:error, :unavailable})
             {:stop, :handoff_commit_failed, state}
         end
@@ -373,6 +376,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
         {:noreply, state}
 
       {_, %{stage: :releasing}, _failure} ->
+        Progress.publish(pending, :failed, [], state)
         GenServer.reply(pending.from, {:error, :unavailable})
         {:stop, :handoff_release_failed, state}
 
@@ -483,12 +487,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
       start_recovery(pending, cause, state)
     else
       state = History.failed(state, pending.request, cause, :not_required)
+      Progress.publish(pending, :recovered, [], state)
       GenServer.reply(pending.from, {:error, :unavailable})
       %{state | pending_participant_transfer: nil}
     end
   end
 
   defp start_recovery(pending, cause, state) do
+    Progress.publish(pending, :recovering, [], state)
+
     source_text_to_speech =
       if state.text_to_speech_capability == nil, do: state.text_to_speech_runtime
 
@@ -519,6 +526,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   defp recovery_failed(pending, state) do
     Phase.cancel(pending)
+    Progress.publish(pending, :failed, [], state)
     GenServer.reply(pending.from, {:error, :unavailable})
 
     outcome =

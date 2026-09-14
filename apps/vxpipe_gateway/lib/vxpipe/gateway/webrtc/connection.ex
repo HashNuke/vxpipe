@@ -439,6 +439,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
 
   def handle_info({:vxpipe_transfer_progress, attempt_id, progress}, state) do
     TransferSideband.send_progress(attempt_id, progress, state)
+    send_encoded(RTVICodec.encode_transfer_progress(attempt_id, progress), state)
     {:noreply, state}
   end
 
