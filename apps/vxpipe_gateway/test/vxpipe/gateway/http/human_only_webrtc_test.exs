@@ -21,6 +21,187 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
   @endpoint_options Endpoint.init(cors: [])
   @signal_voice 3_001
 
+  test "collects and adopts a prospective connection graph without replacing unaffected output" do
+    alias Vxpipe.CallEngine.Media.ConnectionReadiness
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.Collector
+    alias Vxpipe.CallEngine.RoomMixer
+    alias Vxpipe.Gateway.Media.{OutputArbiter, RoomAudioEgress, RoomAudioIngress}
+
+    plan = compile_restrictive_plan()
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+    caller = Map.fetch!(plan.participants, "caller")
+    receiver = Map.fetch!(plan.participants, "receiver")
+    specialist = Map.fetch!(plan.participants, "specialist")
+    client = connect(issue_session(plan, room, caller.participant_id).session_id)
+    receiver_client = connect(issue_session(plan, room, receiver.participant_id).session_id)
+
+    assert {:ok, receiver_transport, _status} =
+             Connection.readiness(receiver_client.connection_id)
+
+    assert {:ok, transport, _status} = Connection.readiness(client.connection_id)
+
+    transports =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "web-transports",
+         resources: [transport, receiver_transport],
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000},
+        id: :transport_collector
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^transports, %{status: :ready}}, 2_000
+
+    assert {:ok, receiver_binding} =
+             GenServer.call(receiver_transport.instance, :vxpipe_connection_readiness)
+
+    assert {:ok, binding} = GenServer.call(transport.instance, :vxpipe_connection_readiness)
+    authority = Authority.whereis(room.incarnation_id)
+    base = Authority.snapshot(authority)
+    demand = [audio_input?: true, room_output?: true]
+
+    assert {:ok, initial} =
+             ConnectionReadiness.prepare_graph(transport.instance, binding.identity, base, demand)
+
+    initial_collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "initial-web",
+         resources: initial.resources,
+         deadline_ms: System.monotonic_time(:millisecond) + 5_000},
+        id: :initial_collector
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^initial_collector, %{status: :ready}}, 2_000
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(base.present_participant_ids, specialist.participant_id)
+             )
+
+    assert :ok = RoomAudioEgress.hold(binding.room_output, 1)
+    assert {:ok, live_input, :ready} = RoomAudioIngress.readiness(binding.room_input)
+    assert {:ok, native} = OutputArbiter.readiness_resources(binding.output)
+
+    options = [
+      owner: self(),
+      attempt_id: "candidate-web",
+      generation: 1,
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000
+    ]
+
+    subscription_options =
+      Map.to_list(binding.identity) ++
+        [
+          id: client.connection_id <> ":room-output",
+          recipient_participant_id: caller.participant_id,
+          subscriber: binding.room_output,
+          mode: :mix_minus
+        ]
+
+    assert {:ok, mixer} =
+             RoomMixer.prepare_policy(
+               RoomMixer.whereis(room.incarnation_id),
+               candidate,
+               Keyword.put(options, :subscriptions, [subscription_options])
+             )
+
+    subscription = Map.fetch!(mixer.subscriptions, client.connection_id <> ":room-output")
+    options = Keyword.put(options, :subscription, subscription)
+
+    assert :ok = RoomAudioEgress.hold(receiver_binding.room_output, 1)
+
+    assert {:ok, removed_input} =
+             ConnectionReadiness.prepare_candidate(
+               receiver_transport.instance,
+               receiver_binding.identity,
+               candidate,
+               [],
+               Keyword.delete(options, :subscription)
+             )
+
+    assert removed_input.input_track == nil
+    refute Enum.any?(removed_input.resources, &(&1.kind in [:room_audio_ingress, :audio_input]))
+
+    assert {:ok, graph} =
+             ConnectionReadiness.prepare_candidate(
+               transport.instance,
+               binding.identity,
+               candidate,
+               demand,
+               options
+             )
+
+    assert Authority.snapshot(authority) == base
+    assert {:ok, ^live_input, :ready} = RoomAudioIngress.readiness(binding.room_input)
+    assert {:ok, ^native} = OutputArbiter.readiness_resources(binding.output)
+
+    assert {:ok, ^graph} =
+             ConnectionReadiness.prepare_candidate(
+               transport.instance,
+               binding.identity,
+               candidate,
+               demand,
+               options
+             )
+
+    decoder = Enum.find(graph.resources, &(&1.kind == :audio_input))
+    monitor = Process.monitor(decoder.instance)
+    assert :ok = ConnectionReadiness.discard_candidate(graph)
+    assert_receive {:DOWN, ^monitor, :process, _decoder, _reason}, 1_000
+    assert {:ok, ^live_input, :ready} = RoomAudioIngress.readiness(binding.room_input)
+    assert {:ok, ^native} = OutputArbiter.readiness_resources(binding.output)
+
+    assert {:ok, graph} =
+             ConnectionReadiness.prepare_candidate(
+               transport.instance,
+               binding.identity,
+               candidate,
+               demand,
+               options
+             )
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "candidate-web",
+         resources: graph.resources,
+         deadline_ms: Keyword.fetch!(options, :deadline_ms)}
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
+    assert {:ok, command} = join_command(plan, specialist.participant_id)
+    assert {:ok, _participant} = CallEngine.join_participant(command)
+    assert Authority.snapshot(authority) == candidate.snapshot
+
+    assert {:ok, [_input_actor]} =
+             RoomAudioIngress.readiness_resources(receiver_binding.room_input)
+
+    for resource <- graph.resources do
+      result =
+        if function_exported?(resource.adapter, :readiness_binding, 1),
+          do: resource.adapter.readiness_binding(resource),
+          else: resource.adapter.readiness(resource.instance)
+
+      assert {:ok, ^resource, :ready} = result
+    end
+
+    assert {:ok, ^native} = OutputArbiter.readiness_resources(binding.output)
+    assert :ok = ConnectionReadiness.discard_candidate(graph)
+    assert :ok = RoomAudioEgress.release(binding.room_output, 1)
+    specialist_client = connect(issue_session(plan, room, specialist.participant_id).session_id)
+    :ok = send_audio(client, 1, 960, 8_000)
+    assert specialist_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+  end
+
   test "two admitted humans exchange live mix-minus audio over WebRTC" do
     plan = compile_plan()
     assert {:ok, room} = CallEngine.start_call(plan)

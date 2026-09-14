@@ -1,7 +1,7 @@
 # Transfer readiness implementation
 
 Implementation resumed following the goal continuation after the pause audit. See the latest
-[room egress policy preparation checkpoint](#prepare-room-egress-for-policy-adoption); the pause audit below
+[candidate connection checkpoint](#select-candidate-connection-resources); the pause audit below
 records the earlier state and is retained for accountability.
 
 ## Detour update after the pause audit
@@ -1197,3 +1197,58 @@ unchecked; the milestone and index are still incomplete.
   remain outside both checkpoints. No new implementation was added for this notes update, and no
   browser, provider call or development-server restart was performed. The full milestone remains
   open; these checks do not establish the requested end-to-end transfer behavior.
+
+## Select candidate connection resources
+
+- The previous turn committed prepared egress as `97119f8` and the diagnostics fixture as
+  `0eaa94d`. This is progress. Rechecked the worktree; only concurrent `vxpipe-docs/` edits remain.
+- The connection graph still collects only installed-policy resources. It cannot select prepared
+  speech/input/output bindings, so the complete resource collector rejects a prospective policy.
+  Add a candidate collection path under the persistent phase owner and existing absolute deadline,
+  selecting exact prepared mixer/speech dependencies. Validate candidate and connection bindings
+  before and after the bounded external work; collection must not grant prospective permissions.
+- Start with the actual WebRTC connection, authority, mixer and native media path. The regression
+  will prepare an affected graph while keeping current media installed, collect it, and adopt the
+  same resources through the authoritative policy barrier.
+- The red WebRTC run failed at the absent `ConnectionReadiness.prepare_candidate/5` boundary.
+  The completed query now selects prospective decoder, speech input and room-output resources,
+  preserves the phase lease, and checks the actual authority and connection before returning.
+  Returned input/output handles support scoped discard, including partial preparation cleanup.
+- The WebRTC adoption check passes using actual negotiated input, native output and the public
+  participant join path. It proves discard/retry, retained codec descriptors, collected bindings
+  surviving adoption, and subsequent audio delivery to the new participant. A separate extension
+  of the existing human-transfer fixture selects an affected pending STT session, waits for its
+  explicit Connected message, discards it and resumes the original audio/transcript conversation.
+- Fixture corrections: prepared the initial decoder before asserting it ready; used public
+  participant join rather than policy-only admission before opening a new participant connection;
+  replaced an assumed STT close callback with monitoring actual connector-owned transport exit.
+  These fixture failures are not claimed as production regressions. No package or production
+  timeout changes were needed. The intended red log is `vxpipe-candidate-graph-red.log`.
+- Focused checks pass 32 engine tests and nine Gateway WebRTC/Telnyx/Twilio tests. Strict Credo
+  also passes. Final root verification follows a deadline review that removes the one-millisecond
+  fallback after an absolute preparation deadline has already elapsed.
+- This connects prepared resources into the per-connection query, not the complete room phase.
+  `Readiness.Preparation.run/3` still uses current-policy graph collection; the persistent lifecycle
+  owner must prepare the complete mixer/STT set, create private destination bindings, select this
+  query and finish room-service/recording candidate preparation. Startup/transfer waits, cues,
+  microphone/model gates, restoration and rendered/provider acceptance remain open.
+- The first root run passed all five gates with 1,224 tests. Final review then found that a false
+  prospective input demand skipped preparation entirely, allowing the legacy policy callback to
+  replace a decoder that should stop. Extending the real WebRTC check reproduced the unwanted
+  decoder after commit. Candidate collection now stages the existing input's deferred shutdown,
+  requires no track/readiness for the removed decoder, and includes its handle for cancellation.
+  The regression passes; final gates repeat for this additional runtime fix. No broader lifecycle
+  completion is inferred from it. Retained red/green logs use `vxpipe-candidate-graph-removal-`.
+- The repeated full run caught a new fixture race: client connection completion preceded the
+  server's readiness event. The new receiver assertion observed `preparing`. The fixture now
+  collects both exact server transport resources and waits for their ready acknowledgement before
+  capturing candidate bindings. No sleep or production timeout increase is used. This correction
+  stays with the connection checkpoint, rather than becoming an unrelated fixture commit.
+- Final root verification passes all five gates: formatting, warnings-as-errors compilation,
+  strict Credo, 1,224 tests with zero failures and 15 integration exclusions, and unused
+  dependencies. All eight application suites completed and the runner exited zero. Retained
+  logs and the explicit per-check result file use `vxpipe-candidate-graph-verified-root-`.
+  The final WebRTC file also passes all five focused checks after the server-readiness correction.
+- Verified the changed documentation's local links/anchors and `git diff --check`. No rendered
+  browser inspection, live provider call or development-server restart was performed. Keep the
+  milestone/index open and preserve concurrent `vxpipe-docs/` work outside this commit.

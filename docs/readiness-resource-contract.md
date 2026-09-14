@@ -250,8 +250,8 @@ consume queued audio, or forward audio to the pending session. A currently denie
 ready for its future policy while continuing to discard microphone input. Unrelated membership
 revisions preserve the provider and buffer generations; after candidate refresh, the input binding
 uses the refreshed provider interval. The provider owns cancellation and expiry, so this input
-binding creates no second lease or deadline. Gateway connection-graph selection and coordinated
-startup/transfer invocation remain pending.
+binding creates no second lease or deadline. The candidate connection query below selects this
+binding; coordinated startup/transfer invocation remains pending.
 
 ### Preparing the room input decoder
 
@@ -283,8 +283,8 @@ configuration or policy. Deterministic checks cover the real WebRTC, Telnyx Opus
 normalizers under this protocol. They do not prove live-provider calls or complete transfer release.
 
 Design review rejected replacing during commit, accepting process startup alone as decoder readiness,
-and treating a policy-denied route as transport failure. Output/mixer/recording candidate preparation,
-full connection-graph selection and startup/transfer coordination remain required.
+and treating a policy-denied route as transport failure. Candidate connection graphs select these
+resources; complete room-service/recording preparation and startup/transfer coordination remain required.
 
 ### Preparing mixer policy and subscriptions
 
@@ -323,8 +323,8 @@ mixer, and resetting all listener subscriptions. It also rejected using one room
 token as the lifetime of every adopted handle: that invalidates unchanged routes on a later transfer.
 Twenty-eight focused checks cover the real mixer and policy authority, pre-commit isolation, buffered
 audio, policy denial, queue/handle retention, candidate refresh, foreign candidates, cancellation and
-stale cleanup. Room-egress preparation still needs to consume these handles, and full room recording,
-transcript routing, prepared graph selection and startup/transfer orchestration remain separate work.
+stale cleanup. Candidate connection graphs bind room egress to these handles. Full room recording,
+transcript routing, whole-room graph selection and startup/transfer orchestration remain separate work.
 
 ## Collection and deadlines
 
@@ -701,6 +701,49 @@ selected STT stays preparing until the provider's explicit connection acknowledg
 audio and transcripts. That check uses the existing post-promotion attachment; it does not claim the
 new coordinated transfer lifecycle is implemented. Phone graph fixtures here do not select STT, and
 none of these checks substitute for rendered or live-provider acceptance.
+
+### Selecting prepared candidate connections
+
+`Media.ConnectionReadiness.prepare_candidate/5` takes the connection, exact identity, authoritative
+candidate, demanded paths and preparation options. Options retain the phase's persistent `owner`,
+`attempt_id`, absolute `deadline_ms` and held output `generation`. The phase also supplies the exact
+mixer-prepared `subscription` for room output and selected prepared `speech_to_text` resource for
+speech input. Those dependencies retain their owning mixer's/provider's lease; the query worker
+does not become their owner or extend their deadline.
+
+The bounded external worker validates the candidate against the incarnation's real authority,
+captures the connection binding, then invokes the candidate callback. Gateway confirms output is
+held, prepares the demanded decoder, selects the exact speech/input binding, and prepares the
+room egress against that mixer handle. It checks every resulting scoped interval. Call Engine
+revalidates connection identity/generation and the authoritative candidate before returning the
+graph. A legacy adapter without the candidate callback reports unsupported; installed-policy
+collection cannot silently substitute for prepared resources.
+
+If the prospective policy removes an existing input's demand, collection records its deferred
+shutdown without requiring an input track or decoder readiness. The live decoder stays installed
+until commit, then stops without creating a replacement. Its removal is absent from the required
+resource set but remains in the graph's cancellation handles until adoption.
+
+The returned `PreparedConnection` includes exact input/output preparation handles.
+`discard_candidate/1` cancels those preparations in reverse order, retaining live resources and
+ignoring already-adopted/stale handles. Failure during collection discards completed input/output
+preparations. The phase still owns cancellation of its separately prepared mixer and STT leases.
+Discard does not release media gates. Ordinary installed-policy graphs have no preparation handles.
+
+Private attachment matching remains narrow: its attempt must match the phase, and its participant
+must still be absent from installed membership. This does not create its missing media or STT
+actors. The lifecycle must establish those dormant bindings before querying them; private destination
+setup and full-room resource selection remain unfinished. Current privacy stays installed throughout
+collection, and collected readiness by itself cannot authorize microphone/model admission or release.
+
+Design review rejected rebuilding a retained native output, using current STT evidence for a
+replacement session, and assigning preparation ownership to a short-lived collection worker.
+Actual WebRTC checks prepare/discard/retry/adopt a changed decoder, retain native output, verify
+the same collected descriptors after the policy barrier, and deliver audio to the new participant.
+The speech fixture collects the replacement session while preserving the live session, stays
+preparing until its explicit Connected acknowledgement, then cancels only pending work and resumes
+the original conversation. Existing WebRTC and both phone graph fixtures continue to pass. These
+are connection-boundary checks, not complete startup/transfer or live-provider acceptance.
 
 ## Phone transport
 

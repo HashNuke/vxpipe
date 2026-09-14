@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Media.PreparedConnection
-  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Candidate, Snapshot}
   alias Vxpipe.CallEngine.Readiness.Resource
 
   @task_supervisor Vxpipe.CallEngine.ReadinessTaskSupervisor
@@ -10,6 +10,24 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
 
   @callback prepare_binding(map(), Snapshot.t(), map()) ::
               {:ok, [Resource.t()], PreparedConnection.input_track() | nil} | {:error, atom()}
+
+  @callback prepare_candidate(map(), Candidate.t(), map(), keyword()) ::
+              {:ok, [Resource.t()], PreparedConnection.input_track() | nil, [map()]}
+              | {:error, atom()}
+  @optional_callbacks prepare_candidate: 4
+
+  def prepare_candidate(connection, identity, %Candidate{} = candidate, options, preparation)
+      when is_pid(connection) do
+    with {:ok, demand} <- demand(options),
+         :ok <- validate_preparation(preparation),
+         :ok <- validate_candidate(candidate, identity, preparation) do
+      run(connection, identity, candidate, demand, remaining(preparation), preparation)
+    end
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  def discard_candidate(%PreparedConnection{} = graph), do: PreparedConnection.discard(graph)
 
   def prepare(connection, identity, policy, options, timeout \\ 5_000) do
     with {:ok, prepared} <- prepare_graph(connection, identity, policy, options, timeout),
@@ -21,51 +39,81 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
       when is_pid(connection) and is_integer(timeout) and timeout > 0 do
     with {:ok, demand} <- demand(options),
          :ok <- validate_policy(policy, identity) do
-      result =
-        Task.Supervisor.async_stream(
-          @task_supervisor,
-          [connection],
-          &prepare_connection(&1, identity, policy, demand),
-          max_concurrency: 1,
-          timeout: timeout,
-          on_timeout: :kill_task
-        )
-        |> Enum.to_list()
-
-      case result do
-        [{:ok, result}] -> result
-        _unavailable -> {:error, :unavailable}
-      end
+      run(connection, identity, policy, demand, timeout, nil)
     end
   catch
     :exit, _reason -> {:error, :unavailable}
   end
 
-  defp prepare_connection(connection, identity, policy, demand) do
+  defp run(connection, identity, policy, demand, timeout, preparation) do
+    result =
+      Task.Supervisor.async_stream(
+        @task_supervisor,
+        [connection],
+        &prepare_connection(&1, identity, policy, demand, preparation),
+        max_concurrency: 1,
+        timeout: timeout,
+        on_timeout: :kill_task
+      )
+      |> Enum.to_list()
+
+    case result do
+      [{:ok, result}] -> result
+      _unavailable -> {:error, :unavailable}
+    end
+  end
+
+  defp prepare_connection(connection, identity, policy, demand, preparation) do
     with {:ok, binding} <- read_binding(connection),
          :ok <- validate_binding(binding, connection, identity),
-         :ok <- validate_adapter(binding.adapter),
-         {:ok, resources, input_track} <- binding.adapter.prepare_binding(binding, policy, demand),
-         :ok <- validate_input_track(input_track, demand),
-         :ok <- validate_resources(resources, connection, identity),
-         {:ok, current} <- read_binding(connection) do
-      if current == binding do
-        {:ok,
-         %PreparedConnection{
-           identity: identity,
-           instance: connection,
-           generation: binding.generation,
-           input_track: input_track,
-           resources: resources
-         }}
-      else
-        {:error, :connection_changed}
+         :ok <- validate_adapter(binding.adapter, preparation),
+         {:ok, resources, input_track, preparations} <-
+           prepare_binding(binding, policy, demand, preparation) do
+      graph = %PreparedConnection{
+        identity: identity,
+        instance: connection,
+        generation: binding.generation,
+        input_track: input_track,
+        resources: resources,
+        preparations: preparations
+      }
+
+      case validate_result(graph, binding, policy, demand, preparation) do
+        :ok ->
+          {:ok, graph}
+
+        {:error, _reason} = error ->
+          _ = PreparedConnection.discard(graph)
+          error
       end
     end
   rescue
     _exception -> {:error, :unavailable}
   catch
     _kind, _reason -> {:error, :unavailable}
+  end
+
+  defp prepare_binding(binding, policy, demand, nil) do
+    with {:ok, resources, track} <- binding.adapter.prepare_binding(binding, policy, demand),
+         do: {:ok, resources, track, []}
+  end
+
+  defp prepare_binding(binding, candidate, demand, preparation),
+    do: binding.adapter.prepare_candidate(binding, candidate, demand, preparation)
+
+  defp validate_result(graph, binding, policy, demand, preparation) do
+    with :ok <- validate_input_track(graph.input_track, demand),
+         :ok <- validate_resources(graph.resources, graph.instance, graph.identity),
+         {:ok, current} <- read_binding(graph.instance),
+         true <- current == binding,
+         :ok <- validate_candidate(policy, graph.identity, preparation) do
+      :ok
+    else
+      false -> {:error, :connection_changed}
+      {:error, _reason} = error -> error
+    end
+  catch
+    :exit, _reason -> {:error, :unavailable}
   end
 
   defp read_binding(connection),
@@ -80,9 +128,11 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
 
   defp validate_binding(_binding, _connection, _identity), do: {:error, :wrong_connection}
 
-  defp validate_adapter(adapter) do
+  defp validate_adapter(adapter, preparation) do
+    {callback, arity} = if preparation, do: {:prepare_candidate, 4}, else: {:prepare_binding, 3}
+
     if is_atom(adapter) and Code.ensure_loaded?(adapter) and
-         function_exported?(adapter, :prepare_binding, 3),
+         function_exported?(adapter, callback, arity),
        do: :ok,
        else: {:error, :unsupported_adapter}
   end
@@ -127,6 +177,39 @@ defmodule Vxpipe.CallEngine.Media.ConnectionReadiness do
   end
 
   defp validate_policy(_policy, _identity), do: {:error, :invalid_policy}
+
+  defp validate_candidate(_snapshot, _identity, nil), do: :ok
+
+  defp validate_candidate(candidate, identity, preparation) do
+    with true <- Authority.whereis(identity.incarnation_id) == candidate.authority,
+         :ok <- validate_policy(candidate.snapshot, identity),
+         :ok <-
+           Authority.validate_candidate(candidate.authority, candidate, remaining(preparation)) do
+      :ok
+    else
+      false -> {:error, :invalid_candidate}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp validate_preparation(options) do
+    if Keyword.keyword?(options) and is_pid(Keyword.get(options, :owner)) and
+         is_binary(Keyword.get(options, :attempt_id)) and
+         byte_size(Keyword.fetch!(options, :attempt_id)) in 1..128 and
+         is_integer(Keyword.get(options, :generation)) and
+         Keyword.fetch!(options, :generation) > 0 and
+         is_integer(Keyword.get(options, :deadline_ms)) and
+         Keyword.fetch!(options, :deadline_ms) > System.monotonic_time(:millisecond),
+       do: :ok,
+       else: {:error, :invalid_preparation}
+  end
+
+  defp remaining(options) do
+    case Keyword.fetch!(options, :deadline_ms) - System.monotonic_time(:millisecond) do
+      remaining when remaining > 0 -> remaining
+      _expired -> exit(:deadline_elapsed)
+    end
+  end
 
   defp demand(options) do
     if Keyword.keyword?(options) and

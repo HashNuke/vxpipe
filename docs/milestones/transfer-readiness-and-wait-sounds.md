@@ -754,3 +754,20 @@ Full connection-graph selection, remaining room-service/recording candidate
 preparation, direct speech generations, microphone/model gates and startup/transfer orchestration
 remain unfinished, along with rendered/provider acceptance. No implementation or acceptance gate is
 closed by this component checkpoint.
+
+Connection preparation now has a candidate-aware path selecting the exact prepared speech session,
+decoder, mixer subscription and shared output under the phase's persistent owner and original
+deadline. Its input/output preparation handles support discard and retry without replacing live
+resources. Actual WebRTC checks adopt the collected decoder/output graph through the policy barrier
+and deliver audio afterward; the speech graph remains preparing until its replacement provider's
+Connected acknowledgement and can cancel back to the retained conversation. Focused checks pass
+32 engine and nine WebRTC/Telnyx/Twilio tests.
+
+Candidate collection also prepares deferred shutdown when policy removes an existing input's
+demand; the decoder stops at commit without starting a replacement. The final WebRTC fixture waits
+for actual server transport readiness. All five final root checks pass, including 1,224 tests with
+zero failures and 15 integrations excluded.
+
+The whole-room preparation runner and lifecycle must still invoke this path with their complete
+resource set, create private destination bindings and finish room-service/recording preparation.
+This checkpoint does not close common readiness, waiting, transfer or rendered/provider gates.

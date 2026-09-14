@@ -297,6 +297,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
 
+    verify_prepared_speech_graph(output.instance, identity, graph, policy, plan, room)
+
     # RTP time advances during the private briefing even when this fixture is silent.
     # The unchanged caller normalizer retains its original clock alignment.
     elapsed_ms = System.monotonic_time(:millisecond) - caller_audio_started_at
@@ -354,6 +356,109 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              await_sideband(caller_client, "user-transcription", 5_000)
   end
 
+  defp verify_prepared_speech_graph(connection, identity, current, policy, plan, room) do
+    alias Vxpipe.CallEngine.Capability.SpeechToText
+    alias Vxpipe.CallEngine.Media.ConnectionReadiness
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+    alias Vxpipe.CallEngine.Readiness.Collector
+    alias Vxpipe.CallEngine.RoomMixer
+    alias Vxpipe.Gateway.Media.RoomAudioEgress
+
+    assert {:ok, binding} = GenServer.call(connection, :vxpipe_connection_readiness)
+    authority = Authority.whereis(room.incarnation_id)
+    observer = Map.fetch!(plan.participants, "observer").participant_id
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               authority,
+               MapSet.put(policy.present_participant_ids, observer)
+             )
+
+    assert :ok = RoomAudioEgress.hold(binding.room_output, 1)
+
+    options = [
+      owner: self(),
+      attempt_id: "candidate-speech",
+      generation: 1,
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000
+    ]
+
+    speech = Enum.find(current, &(&1.kind == :speech_to_text))
+
+    assert {:ok, prepared_speech} =
+             SpeechToText.prepare_policy(speech.instance, candidate, options)
+
+    assert prepared_speech.change == :replace
+    assert [provider] = prepared_speech.resources
+    assert_receive {:test_stt_transport_started, replacement, _connection}, 1_000
+
+    subscription =
+      Map.to_list(identity) ++
+        [
+          id: identity.connection_id <> ":room-output",
+          recipient_participant_id: identity.participant_id,
+          subscriber: binding.room_output,
+          mode: :mix_minus
+        ]
+
+    mixer = RoomMixer.whereis(room.incarnation_id)
+
+    assert {:ok, prepared_mixer} =
+             RoomMixer.prepare_policy(
+               mixer,
+               candidate,
+               Keyword.put(options, :subscriptions, [subscription])
+             )
+
+    handle = Map.fetch!(prepared_mixer.subscriptions, identity.connection_id <> ":room-output")
+
+    options =
+      options |> Keyword.put(:subscription, handle) |> Keyword.put(:speech_to_text, provider)
+
+    assert {:ok, graph} =
+             ConnectionReadiness.prepare_candidate(
+               connection,
+               identity,
+               candidate,
+               [audio_input?: true, room_output?: true, speech_to_text?: true],
+               options
+             )
+
+    assert provider in graph.resources
+    refute speech in graph.resources
+    assert {:ok, ^speech, :ready} = SpeechToText.readiness(speech.instance)
+    assert Authority.snapshot(authority) == policy
+
+    collector =
+      start_supervised!(
+        {Collector,
+         owner: self(),
+         incarnation_id: room.incarnation_id,
+         attempt_id: "candidate-speech",
+         resources: graph.resources,
+         deadline_ms: Keyword.fetch!(options, :deadline_ms)},
+        id: :candidate_speech
+      )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}, 1_000
+    refute_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
+
+    TestSpeechToTextTransport.deliver(
+      replacement,
+      ~s({"type":"Connected","request_id":"replacement-request","sequence_id":0})
+    )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert :ok = ConnectionReadiness.discard_candidate(graph)
+    monitor = Process.monitor(replacement)
+    assert :ok = SpeechToText.discard_policy(speech.instance, prepared_speech.token)
+    assert_receive {:DOWN, ^monitor, :process, ^replacement, _reason}, 1_000
+    assert :ok = RoomMixer.discard_policy(mixer, prepared_mixer.token)
+    assert {:ok, ^speech, :ready} = SpeechToText.readiness(speech.instance)
+    assert Authority.snapshot(authority) == policy
+    assert :ok = RoomAudioEgress.release(binding.room_output, 1)
+  end
+
   defp compile_plan do
     resource_id = unique_id("human-transfer-definition")
 
@@ -393,6 +498,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                        admission: "transfer"
                      },
                      transfer_notice: "This call is recorded."
+                   },
+                   "observer" => %{
+                     type: "human",
+                     connection: %{service: "web", mode: "receive", admission: "start_call"},
+                     capabilities: %{},
+                     while_present: %{save_transcripts: false}
                    }
                  },
                  limits: %{max_duration_ms: 60_000}

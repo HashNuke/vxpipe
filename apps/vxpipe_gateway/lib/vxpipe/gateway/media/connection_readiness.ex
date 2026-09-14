@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
 
   @behaviour Vxpipe.CallEngine.Media.ConnectionReadiness
 
-  alias Vxpipe.CallEngine.Media.Ingress
+  alias Vxpipe.CallEngine.Media.{Ingress, PreparedConnection}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot, SpeechToTextDemand}
   alias Vxpipe.CallEngine.Readiness.Resource
   alias Vxpipe.Gateway.Media.{OutputArbiter, RoomAudioEgress, RoomAudioIngress}
@@ -52,6 +52,117 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
     end
   end
 
+  @impl true
+  def prepare_candidate(binding, candidate, demand, options) do
+    with :ok <- validate_candidate_admission(binding, candidate, demand, options),
+         :ok <- OutputArbiter.confirm_hold(binding.output, Keyword.fetch!(options, :generation)),
+         {:ok, track} <- input_track(binding, demand),
+         {:ok, base} <- base_resources(binding, demand),
+         {:ok, resources, preparations} <-
+           candidate_parts(binding, candidate, demand, track, options) do
+      case validate_intervals(resources, candidate.snapshot, binding.identity.participant_id) do
+        :ok ->
+          {:ok, base ++ resources, track, preparations}
+
+        {:error, _reason} = error ->
+          _ = PreparedConnection.discard_preparations(preparations)
+          error
+      end
+    end
+  end
+
+  defp candidate_parts(binding, candidate, demand, track, options) do
+    [:room_input, :speech_input, :room_output]
+    |> Enum.reduce_while({:ok, [], []}, fn part, {:ok, resources, preparations} ->
+      case prepare_part(part, binding, candidate, demand, track, options) do
+        {:ok, selected, prepared} ->
+          {:cont, {:ok, resources ++ selected, preparations ++ prepared}}
+
+        {:error, _reason} = error ->
+          _ = PreparedConnection.discard_preparations(preparations)
+          {:halt, error}
+      end
+    end)
+  end
+
+  defp prepare_part(:room_input, binding, candidate, %{audio_input?: false}, _track, options) do
+    if is_pid(binding.room_input) and
+         not RoomAudioIngress.PolicyPreparation.required?(
+           candidate.snapshot,
+           binding.identity.participant_id
+         ),
+       do: prepare_room_input(binding.room_input, candidate, nil, options),
+       else: {:ok, [], []}
+  end
+
+  defp prepare_part(:room_input, %{room_input: input}, candidate, _demand, track, options)
+       when is_pid(input), do: prepare_room_input(input, candidate, track, options)
+
+  defp prepare_part(
+         :speech_input,
+         _binding,
+         _candidate,
+         %{speech_to_text?: false},
+         _track,
+         _options
+       ),
+       do: {:ok, [], []}
+
+  defp prepare_part(:speech_input, binding, _candidate, _demand, track, options) do
+    input = binding.attachment.media_ingress
+
+    with %Resource{kind: :speech_to_text} = provider <- Keyword.get(options, :speech_to_text),
+         :ok <- Ingress.prepare_track(input, track, provider),
+         {:ok, resources} <- Ingress.readiness_resources(input, provider) do
+      {:ok, resources, []}
+    else
+      {:error, _reason} = error -> error
+      _missing -> {:error, :missing_prepared_speech}
+    end
+  end
+
+  defp prepare_part(:room_output, _binding, _candidate, %{room_output?: false}, _track, _options),
+    do: {:ok, [], []}
+
+  defp prepare_part(:room_output, %{room_output: output}, candidate, _demand, _track, options)
+       when is_pid(output) do
+    case Keyword.get(options, :subscription) do
+      %Vxpipe.CallEngine.RoomMixer.Subscription{} = subscription ->
+        with {:ok, prepared} <-
+               RoomAudioEgress.prepare_policy(output, candidate, subscription, options),
+             do: prepared_part(RoomAudioEgress, output, prepared)
+
+      _missing ->
+        {:error, :missing_prepared_subscription}
+    end
+  end
+
+  defp prepare_part(_part, _binding, _candidate, _demand, _track, _options),
+    do: {:error, :missing_required_media}
+
+  defp prepared_part(adapter, instance, prepared),
+    do:
+      {:ok, prepared.resources, [%{adapter: adapter, instance: instance, token: prepared.token}]}
+
+  defp prepare_room_input(input, candidate, track, options) do
+    with {:ok, prepared} <- RoomAudioIngress.prepare_policy(input, candidate, track, options),
+         do: prepared_part(RoomAudioIngress, input, prepared)
+  end
+
+  defp validate_candidate_admission(binding, candidate, demand, options) do
+    if binding.attachment.admission == :transfer_preparation do
+      if binding.attachment.transfer_attempt_id == Keyword.fetch!(options, :attempt_id) and
+           not MapSet.member?(
+             candidate.base_snapshot.present_participant_ids,
+             binding.identity.participant_id
+           ),
+         do: validate_policy_demand(binding, candidate.snapshot, demand),
+         else: {:error, :preparation_not_admitted}
+    else
+      validate_demand(binding, candidate.snapshot, demand)
+    end
+  end
+
   defp input_track(binding, demand) do
     if demand.audio_input? or demand.speech_to_text?,
       do: binding.transport.input_track(binding.instance),
@@ -70,18 +181,23 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
   defp prepare_track(adapter, input, track, true), do: adapter.prepare_track(input, track)
 
   defp collect(binding, demand) do
-    with {:ok, transport} <-
-           binding.transport.readiness_resources(binding.instance,
-             input?: demand.audio_input? or demand.speech_to_text?
-           ),
-         {:ok, output} <- resources(OutputArbiter, binding.output, true),
+    with {:ok, base} <- base_resources(binding, demand),
          {:ok, room_input} <- resources(RoomAudioIngress, binding.room_input, demand.audio_input?),
          {:ok, room_output} <-
            resources(RoomAudioEgress, binding.room_output, demand.room_output?),
          {:ok, speech_input} <-
            resources(Ingress, binding.attachment.media_ingress, demand.speech_to_text?) do
-      {:ok, transport ++ output ++ room_input ++ room_output ++ speech_input}
+      {:ok, base ++ room_input ++ room_output ++ speech_input}
     end
+  end
+
+  defp base_resources(binding, demand) do
+    with {:ok, transport} <-
+           binding.transport.readiness_resources(binding.instance,
+             input?: demand.audio_input? or demand.speech_to_text?
+           ),
+         {:ok, output} <- resources(OutputArbiter, binding.output, true),
+         do: {:ok, transport ++ output}
   end
 
   defp resources(_adapter, _instance, false), do: {:ok, []}
@@ -108,7 +224,6 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
 
   defp validate_demand(binding, policy, demand) do
     attachment = binding.attachment
-    participant = binding.identity.participant_id
 
     cond do
       (demand.audio_input? or demand.speech_to_text?) and
@@ -118,6 +233,15 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
       demand.room_output? and attachment.room_audio_output_mode == :disabled ->
         {:error, :output_not_admitted}
 
+      true ->
+        validate_policy_demand(binding, policy, demand)
+    end
+  end
+
+  defp validate_policy_demand(binding, policy, demand) do
+    participant = binding.identity.participant_id
+
+    cond do
       demand.audio_input? and not audio_input_permitted?(policy, participant) ->
         {:error, :input_not_permitted}
 
