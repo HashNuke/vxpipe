@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,401 tests, zero failures and 16 exclusions, with test concurrency four (seed 235296). Eight ordinary WebRTC
+1,405 tests, zero failures and 16 exclusions, with test concurrency four (seed 235296). Eight ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
@@ -122,8 +122,8 @@ No caller UI changes are required. Native peers own further transport
 and audio diagnosis, with browser checks limited to presentation/interoperability. Independent
 tool delays and complete configuration/privacy acceptance remain open.
 The native human-handoff case now uses real Morse speech providers, converts WebRTC Opus to
-16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 388 checks include
-54 default native startup/transfer cases, with a separate opt-in public-URL integration case. Independent
+16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 392 checks include
+58 default native startup/transfer cases, with a separate opt-in public-URL integration case. Independent
 model initialization and TTS readiness delays now retain caller waiting and gates; failed model preparation recovers spoken source conversation.
 Earlier intermittent phase-loss recovery failure remains an acceptance
 concern despite passing bounded repeats and the final root run. A mixed repeat also exposed an
@@ -169,6 +169,10 @@ briefing/acceptance/cue timings now cover actual lifecycle boundaries. Confirmed
 unexpected worker exits are observed by surviving owners; sampled player slot pressure and output
 rejections reach bounded, sanitized Console aggregates. Human-handoff diagnostics are complete;
 20 checkpoint tasks remain (human 3, AI 3, phone 6, changing/multiple listeners 6, final audit 2).
+Native early failure checks now prove recovery after briefing disconnect/voice failure and actual
+attempt expiry during briefing or acceptance. Each releases the private admission once, stops the
+old phase, avoids activation and restores cue, spoken response and another caller turn on retained
+media. No production change was needed. The separate intermittent recovery failure remains open.
 The initial caller-waiting slice is accepted. Four delivery checkpoints
 and full milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.

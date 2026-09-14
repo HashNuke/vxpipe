@@ -1514,7 +1514,18 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
-  for loss <- [:destination, :phase, :wait_player, :agent_destination, :agent_model] do
+  for loss <- [
+        :destination,
+        :briefing_destination,
+        :briefing_voice,
+        :briefing_timeout,
+        :acceptance_timeout,
+        :phase,
+        :wait_player,
+        :agent_destination,
+        :agent_model
+      ] do
+    @tag recovery_loss: loss
     test "recovers the held caller after #{loss} loss without replacing source media" do
       agent_destination? = unquote(loss) in [:agent_destination, :agent_model]
 
@@ -1525,6 +1536,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         compile_plan(
           agent_destination: agent_destination?,
           wait_sounds: wait_sounds,
+          transfer_timeout_ms:
+            if(unquote(loss) in [:briefing_timeout, :acceptance_timeout], do: 5_000, else: 30_000),
           transfer_notice: "Private desk notice: verify the account before discussing details.",
           billing_model:
             if(unquote(loss) == :agent_model,
@@ -1602,7 +1615,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           assert %{"type" => "transfer.preparation"} =
                    await_sideband(client, "transfer.preparation", 2_000)
 
-          if unquote(loss) == :destination do
+          if unquote(loss) in [:destination, :acceptance_timeout] do
             assert_receive {:test_tts_control, ^destination_preparer, speak}, 2_000
             assert String.contains?(JSON.decode!(speak)["text"], "Private desk notice:")
             assert_receive {:test_tts_control, ^destination_preparer, _flush}, 2_000
@@ -1631,6 +1644,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
       pending = :sys.get_state(authority).pending_participant_transfer
+      phase_monitor = Process.monitor(pending.task.pid)
 
       case unquote(loss) do
         :agent_model ->
@@ -1639,11 +1653,18 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :agent_destination ->
           TestTextToSpeechTransport.disconnect(destination_preparer, :test_destination_failed)
 
-        :destination ->
+        loss when loss in [:destination, :briefing_destination] ->
           GenServer.stop(
             Map.fetch!(binding.connections, support_client.connection_id).pid,
             :normal
           )
+
+        :briefing_voice ->
+          TestTextToSpeechTransport.disconnect(destination_preparer, :test_briefing_failed)
+
+        loss when loss in [:briefing_timeout, :acceptance_timeout] ->
+          # Let the configured total attempt timer expire at the actual lifecycle boundary.
+          assert pending.briefing == if(loss == :briefing_timeout, do: :playing, else: :completed)
 
         :phase ->
           Process.exit(pending.task.pid, :kill)
@@ -1656,9 +1677,30 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           Process.exit(player, :kill)
       end
 
-      unless agent_destination?, do: assert_receive(:destination_admission_released, 2_000)
+      release_timeout =
+        if unquote(loss) in [:briefing_timeout, :acceptance_timeout], do: 6_000, else: 2_000
+
+      unless agent_destination?,
+        do: assert_receive(:destination_admission_released, release_timeout)
+
+      assert_receive {:DOWN, ^phase_monitor, :process, _, _}, 2_000
       await_recovered(authority, System.monotonic_time(:millisecond) + 2_000)
-      assert %{"phase" => "recovered"} = await_transfer_progress(caller_client, "recovered")
+
+      assert %{"phase" => "recovered", "reason" => reason} =
+               await_transfer_progress(caller_client, "recovered")
+
+      case unquote(loss) do
+        loss when loss in [:briefing_timeout, :acceptance_timeout] -> assert reason == "timeout"
+        :briefing_destination -> assert reason == "destination_disconnected"
+        :briefing_voice -> assert reason == "text_to_speech_unavailable"
+        _existing_loss -> :ok
+      end
+
+      unless agent_destination? do
+        refute_native_activation(support_client, System.monotonic_time(:millisecond) + 50)
+        refute_receive :destination_admission_released, 0
+      end
+
       assert :ok = await_tone(caller_client, 1_000, 2_000)
       refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
       {:ok, after_recovery} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
@@ -2820,6 +2862,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  defaults: %{capabilities: %{}},
                  wait_sounds: Keyword.get(options, :wait_sounds, %{}),
                  opening_audio: Keyword.get(options, :opening_audio),
+                 transfer_policy: %{
+                   attempt_timeout_ms: Keyword.get(options, :transfer_timeout_ms, 30_000)
+                 },
                  participants: %{
                    "caller" => %{
                      type: "human",

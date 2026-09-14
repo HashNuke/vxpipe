@@ -55,6 +55,21 @@ assistant, human audio reaches the remaining recognizer and recordings, and auth
 text reaches the other listener without taking over its local spoken-turn queue. Synthesized replies
 use the requesting caller's output; the other listener's audio assertion uses the mixed human route.
 
+For early human-transfer failure and recovery:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'recovers the held caller after (briefing_destination|briefing_voice|briefing_timeout|acceptance_timeout)'
+```
+
+These cases disconnect the private destination during briefing, fail its voice provider, or let
+the configured five-second total attempt timer expire during briefing or acceptance. Each requires
+one private-admission release, old-phase termination, no destination activation, the correct
+bounded failure reason and recovery on the retained caller/media actors. The native caller receives
+its recovery cue and spoken assistant response, then submits another turn. The existing
+`destination` loss case also completes another transfer after recovery. Passing these cases does
+not establish the cause of the separately recorded intermittent recovery failure.
+
 For the local speech-provider round trip:
 
 ```shell

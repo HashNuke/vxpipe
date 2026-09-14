@@ -368,7 +368,12 @@ Implementation tasks:
   now produce terminal failure without recovery or redial. An already handled recovery cancellation
   defeats a queued successful worker result. Native caller/desk cases receive failure through RTVI
   and close without activation; engine archive facts retain the bounded failure cause.
-  Intermittent recovery and remaining failure stages stay open.
+  Native checks also cover disconnect and voice failure during briefing, plus real total-attempt
+  expiry during briefing and acceptance. Each releases the admission once, stops the old phase,
+  avoids activation and recovers the same caller/media actors with cue, spoken response and
+  another turn. The separately observed intermittent recovery failure remains unexplained;
+  complete failure-cleanup acceptance stays open. See the
+  [early recovery labnote](../../labnotes/20260915-0441-human-recovery-boundaries.md).
 - [x] Resolve existing engine connection-fixture failures and the configured phone
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
 - [ ] Remove prepared private resources that the resulting policy does not demand.
@@ -1122,6 +1127,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Early human recovery boundaries | Four focused native cases pass; all five root gates pass with 1,405 tests, zero failures and 16 exclusions, seed 235296 at concurrency four. | Briefing disconnect/voice failure and actual total-attempt expiry during briefing/acceptance release the private admission once, stop the phase and recover cue plus spoken caller conversation on retained media without destination activation. No production change was required. The separate intermittent recovery failure remains unexplained; 20 checkpoint tasks remain. |
 | Human transfer lifecycle diagnostics | Red-green engine, output-arbiter and reporter checks pass, including acceptance, timeout and worker loss. All five root gates pass: 1,401 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Briefing, acceptance and finite cue durations follow actual control/playback boundaries. Surviving owners count confirmed cancellation and unexpected worker exits. Console aggregates sampled player slot pressure and rejected/discarded arbiter submissions, stripping private data before mailbox admission. Combined with reason delivery, the human diagnostics item is complete; 20 checkpoint tasks remain. |
 | Transfer failure reasons | Native recovered-call reason delivery, terminal release timeout/STT-loss cases and 19 Gateway codec checks pass. All five root gates pass: 1,398 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | The connected desk receives a bounded reason before cleanup; the recovered caller receives the same reason. Terminal release failures report timeout or known speech loss. Unknown/internal details are not exposed. Lifecycle timings, forced-worker and queue diagnostics remain open; 21 checkpoint tasks remain. |
 | Whole-room resource loss and recorded recovery | Red recording/mixer reservation and native transcript failures; 25 focused engine checks, native recorded recovery and all five root gates pass: 1,396 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Nine three-peer cases cover independent destination STT, remaining-human STT and recording loss during preparation, adoption and partial release. No fatal loss reports activation/completion. Pre-adoption destination loss restores healthy resources, ordered cues, conversational audio, transcripts and recording. Independent delay/loss acceptance is complete; 21 checkpoint tasks remain. |
