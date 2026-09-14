@@ -928,7 +928,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :during_unrelated_change,
         :after_adoption,
         :after_unrelated_adoption,
-        :after_speech_adoption
+        :after_speech_adoption,
+        :release_policy_change,
+        :release_unrelated_change
       ] do
     @tag preparation: preparation
     test "human handoff reconciles speech demand with #{preparation} preparation", %{
@@ -941,15 +943,29 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           support_policy: if(preparation == :none, do: restriction, else: %{}),
           observer_policy:
             case preparation do
-              mode when mode in [:during_unrelated_change, :after_unrelated_adoption] -> %{}
-              :after_speech_adoption -> %{save_transcripts: false}
-              _restricted -> restriction
+              mode
+              when mode in [
+                     :during_unrelated_change,
+                     :after_unrelated_adoption,
+                     :release_unrelated_change
+                   ] ->
+                %{}
+
+              :after_speech_adoption ->
+                %{save_transcripts: false}
+
+              _restricted ->
+                restriction
             end
         )
 
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
       assert {:ok, room} = CallEngine.start_call(plan)
+
+      assert {:ok, room_monitor} =
+               CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+
       stop_room_on_exit(plan)
       assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
@@ -1054,7 +1070,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              :during_unrelated_change,
              :after_adoption,
              :after_unrelated_adoption,
-             :after_speech_adoption
+             :after_speech_adoption,
+             :release_policy_change,
+             :release_unrelated_change
            ] do
           assert_receive {:test_stt_transport_started, transport, _}, 2_000
 
@@ -1066,22 +1084,34 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           before = capture_private_media(plan, support_client, attempt)
           {policy_authority, observer} = policy_change
 
-          if preparation in [:after_adoption, :after_unrelated_adoption, :after_speech_adoption] do
+          if preparation in [
+               :after_adoption,
+               :after_unrelated_adoption,
+               :after_speech_adoption,
+               :release_policy_change,
+               :release_unrelated_change
+             ] do
             {media, _monitors, _connections} = before
-            token = pause_native_adoption(media.instance)
+
+            action =
+              if preparation in [:release_policy_change, :release_unrelated_change],
+                do: :release,
+                else: :adopt
+
+            token = pause_native_gate(media.instance, action)
 
             TestSpeechToTextTransport.deliver(
               transport,
               ~s({"type":"Connected","request_id":"ready-before-adoption","sequence_id":0})
             )
 
-            assert_receive {:native_adoption_waiting, ^token}, 2_000
+            assert_receive {:native_gate_waiting, ^token}, 2_000
 
             try do
               assert {:ok, _policy} =
                        CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
             after
-              send(media.instance, {:continue_native_adoption, token})
+              send(media.instance, {:continue_native_gate, token})
             end
 
             if preparation == :after_speech_adoption do
@@ -1117,60 +1147,79 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           prior_media
         end
 
-      assert %{"data" => %{"attempt_id" => ^attempt}} =
-               await_sideband(support_client, "transfer.active", 2_000)
+      if preparation in [:release_policy_change, :release_unrelated_change] do
+        assert_receive {:DOWN, ^room_monitor, :process, _room, :handoff_release_failed}, 2_000
+        {_media, _monitors, connections} = prior_media
 
-      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
-      assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
-      joining = Map.fetch!(binding.connections, support_client.connection_id).pid
-      assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
-      assert media.attachment.admission == :main
+        for {_id, connection} <- connections do
+          monitor = Process.monitor(connection.instance)
+          assert_receive {:DOWN, ^monitor, :process, _, _reason}, 2_000
+        end
 
-      if preparation not in [
-           :during_unrelated_change,
-           :after_adoption,
-           :after_unrelated_adoption,
-           :after_speech_adoption
-         ],
-         do: assert(media.attachment.media_ingress == nil)
+        refute_native_activation(support_client, System.monotonic_time(:millisecond) + 100)
+        refute_receive {:test_tts_transport_started, _recovery_or_redial, _}, 50
+      else
+        assert %{"data" => %{"attempt_id" => ^attempt}} =
+                 await_sideband(support_client, "transfer.active", 2_000)
 
-      assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
-      refute_receive {:test_stt_transport_started, _transport, _}, 100
+        [{authority, _}] =
+          Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
-      if prior_media do
-        {before, monitors, connections} = prior_media
-        assert media.instance == before.instance
-        assert media.output == before.output
-        assert media.room_input == before.room_input
-        assert media.room_output == before.room_output
+        assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
+        joining = Map.fetch!(binding.connections, support_client.connection_id).pid
+        assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
+        assert media.attachment.admission == :main
 
-        for {actor, monitor} <- monitors do
-          if preparation in [
-               :during_unrelated_change,
-               :after_adoption,
-               :after_unrelated_adoption,
-               :after_speech_adoption
-             ] do
-            assert media.attachment.media_ingress == before.attachment.media_ingress
-            refute_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 100
-          else
-            assert_receive {:DOWN, ^monitor, :process, ^actor, :shutdown}, 1_000
+        if preparation not in [
+             :during_unrelated_change,
+             :after_adoption,
+             :after_unrelated_adoption,
+             :after_speech_adoption,
+             :release_policy_change,
+             :release_unrelated_change
+           ],
+           do: assert(media.attachment.media_ingress == nil)
+
+        assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
+        refute_receive {:test_stt_transport_started, _transport, _}, 100
+
+        if prior_media do
+          {before, monitors, connections} = prior_media
+          assert media.instance == before.instance
+          assert media.output == before.output
+          assert media.room_input == before.room_input
+          assert media.room_output == before.room_output
+
+          for {actor, monitor} <- monitors do
+            if preparation in [
+                 :during_unrelated_change,
+                 :after_adoption,
+                 :after_unrelated_adoption,
+                 :after_speech_adoption,
+                 :release_policy_change,
+                 :release_unrelated_change
+               ] do
+              assert media.attachment.media_ingress == before.attachment.media_ingress
+              refute_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 100
+            else
+              assert_receive {:DOWN, ^monitor, :process, ^actor, :shutdown}, 1_000
+            end
           end
-        end
 
-        for {id, original} <- connections do
-          connection = Map.fetch!(binding.connections, id).pid
-          assert {:ok, current} = GenServer.call(connection, :vxpipe_connection_readiness)
-          assert current.instance == original.instance
-          assert current.output == original.output
-          assert current.room_input == original.room_input
-          assert current.room_output == original.room_output
-        end
+          for {id, original} <- connections do
+            connection = Map.fetch!(binding.connections, id).pid
+            assert {:ok, current} = GenServer.call(connection, :vxpipe_connection_readiness)
+            assert current.instance == original.instance
+            assert current.output == original.output
+            assert current.room_input == original.room_input
+            assert current.room_output == original.room_output
+          end
 
-        send_tone(caller_client, 500, 1)
-        await_tone(support_client, 500, 2_000)
-        send_tone(support_client, 1_500, 1)
-        await_tone(caller_client, 1_500, 2_000)
+          send_tone(caller_client, 500, 1)
+          await_tone(support_client, 500, 2_000)
+          send_tone(support_client, 1_500, 1)
+          await_tone(caller_client, 1_500, 2_000)
+        end
       end
     end
   end
@@ -2213,7 +2262,20 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       else: await_destination_blocker(connection, kind, deadline)
   end
 
-  defp pause_native_adoption(connection) do
+  defp refute_native_activation(connection, deadline) do
+    client = connection.client
+    channel = connection.channel_ref
+
+    receive do
+      {:ex_webrtc, ^client, {:data, ^channel, payload}} ->
+        refute JSON.decode!(payload)["type"] == "transfer.active"
+        refute_native_activation(connection, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) -> :ok
+    end
+  end
+
+  defp pause_native_gate(connection, action) do
     token = make_ref()
     owner = self()
 
@@ -2223,11 +2285,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                {token,
                 fn state, event, _process ->
                   case event do
-                    {:in, {:"$gen_call", _from, {:vxpipe_handoff_gate, :adopt, _scope}}} ->
-                      send(owner, {:native_adoption_waiting, token})
+                    {:in, {:"$gen_call", _from, {:vxpipe_handoff_gate, ^action, _scope}}} ->
+                      send(owner, {:native_gate_waiting, token})
 
                       receive do
-                        {:continue_native_adoption, ^token} -> :done
+                        {:continue_native_gate, ^token} -> :done
                       after
                         1_000 -> :done
                       end

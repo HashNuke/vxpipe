@@ -84,3 +84,11 @@ Failures once connection release begins still close the room because admission m
 Three focused engine cases and three native WebRTC cases cover removed speech demand, unrelated
 policy and changed but still-required speech. The native peers resume bidirectional audio while
 retaining their media actors. See the [release-policy labnote](../labnotes/20260915-0137-handoff-release-policy.md).
+
+
+Release acknowledgements are followed by an exact readiness probe and a second policy/binding
+validation. If policy or an expected resource generation changes while a release is outstanding,
+the room closes without reporting transfer success; it cannot retry an uncertain partial release.
+The coordinator also validates the saved room binding and policy candidate before publishing
+completion, covering a change after the worker returns. Provider probes stay outside the room
+authority. See the [release-fencing labnote](../labnotes/20260915-0203-handoff-release-fencing.md).

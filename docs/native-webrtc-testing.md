@@ -48,6 +48,16 @@ of a still-required recognizer. Unaffected media actors remain installed; only t
 transport is replaced, and its readiness gates completion. Both peers exchange audio after the
 handoff. Exact fresh-cue drain and unchanged deadline checks also run in the owning engine suite.
 
+For policy changes during an outstanding media-release acknowledgement:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'release_.*change preparation'
+```
+
+These two cases close the room and its media connections without transfer activation when release
+can no longer be validated. They complement the successful retries before release shown above.
+
 For initial caller waiting during independent model and voice startup delays:
 
 ```shell

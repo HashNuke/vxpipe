@@ -7,7 +7,7 @@ Human and AI handoffs now pass normal transfer and bounded recovery checks; huma
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
 of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,368 tests, zero failures and 15 integration exclusions (seed 235296; concurrency four).
+1,374 tests, zero failures and 15 integration exclusions (seed 235296; concurrency four).
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -361,6 +361,10 @@ Implementation tasks:
 - [ ] Finish rejection, expiry, disconnect and preparation/cue failure cleanup. Recover the source
   within the existing restoration budget, with readiness and cue before release; close when
   recovery is impossible or partial release leaves uncertain media admission. Never redial.
+  Release acknowledgements now revalidate policy/bindings and exact resource generations. Engine
+  cases close on changed policy/generation, explicit release error and policy change before final
+  coordinator completion. Native cases close both peers after policy changes during release,
+  without activation, recovery or redial. Intermittent recovery and remaining failure stages stay open.
 - [x] Resolve existing engine connection-fixture failures and the configured phone
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
 - [ ] Remove prepared private resources that the resulting policy does not demand.
@@ -952,6 +956,13 @@ an already-consumed ready notification. Failures after gate release starts retai
 fail-closed behavior. Full changing-listener and failure-stage acceptance remain open.
 See the [release-policy labnote](../../labnotes/20260915-0137-handoff-release-policy.md).
 
+After release acknowledgements, the worker verifies the exact resources again and validates policy
+and room bindings on both sides of that probe. The coordinator validates its current room binding
+and saved policy candidate before publishing success. Any failure at these boundaries closes the
+room; it cannot resume the before-release retry once media admission may be partial. Four engine
+cases and two native failure cases cover these boundaries. See the
+[release-fencing labnote](../../labnotes/20260915-0203-handoff-release-fencing.md).
+
 ### Initial caller startup integration
 
 - Static plan, selected-provider configuration and pinned MCP validation still precede room
@@ -999,6 +1010,7 @@ See the [release-policy labnote](../../labnotes/20260915-0137-handoff-release-po
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Release acknowledgement and completion fences | 65 focused engine checks and nine native policy cases pass. Final five root gates pass: 1,374 tests, zero failures, 15 exclusions; seed 235296 at concurrency four. Gateway includes 371 checks and 39 native startup/transfer cases. | Four engine cases prevent success after policy/generation changes during acknowledgements, explicit release error and policy revision before final coordinator completion. Two native cases close the room and peers without activation after policy changes during release. Existing intermittent recovery and wider failure-stage acceptance remain open. |
 | Policy changes after adoption | Three engine cases, three native policy cases and all 37 native startup/transfer cases pass. Final five root gates pass: 1,368 tests, zero failures, 15 exclusions; seed 235296 at concurrency four. | Reconcile removed or changed STT demand before release, retain unrelated room/media actors, wait for affected replacement readiness and drain another cue under the original deadline. An earlier root run's destination-loss recovery failure was not reproduced in 16 isolated runs, the full native file or the final root run; its cause and complete recovery acceptance remain open. |
 | Initial caller-waiting acceptance | 50 focused engine tests, ten native configuration/audio cases and 18 phone harness checks pass. All five root gates pass: 1,362 tests, zero failures, 15 exclusions; seed 307676 at concurrency four. Gateway includes 366 tests and 34 native startup/transfer cases. | Initial participant/room readiness, default/URL/nil behavior, opening/wait/greeting order, held-input/recording isolation and exactly-once greeting pass. Late readiness starts a skipped wait. Phone failure/expiry before or after media attachment ends the exact leg; live carrier audibility remains in phone-transfer acceptance. |
 | Initial startup diagnostics | 48 focused engine lifecycle/opening/telemetry tests, nine reporter tests, 23 coordinator tests and the new native STT/TTS case pass; all five root gates, 1,337 tests, zero failures, 15 exclusions; seed 346041 at concurrency four. The root run includes 343 Gateway tests and 27 native startup/transfer cases. | Model, STT, TTS, opening, missing media and late release readiness report closed blocker categories. Existing lifecycle transitions report one total duration/outcome; the existing reporter sanitizes before queue admission. Full configuration/resource and deterministic phone acceptance remain open. See the [diagnostics labnote](../../labnotes/20260915-0022-startup-readiness-diagnostics.md). |

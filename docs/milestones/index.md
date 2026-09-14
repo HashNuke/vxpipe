@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,368 tests, zero failures and 15 exclusions, with test concurrency four (seed 235296). Four ordinary WebRTC
+1,374 tests, zero failures and 15 exclusions, with test concurrency four (seed 235296). Four ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
@@ -122,8 +122,8 @@ No caller UI changes are required. Native peers own further transport
 and audio diagnosis, with browser checks limited to presentation/interoperability. Independent
 tool delays and complete configuration/privacy acceptance remain open.
 The native human-handoff case now uses real Morse speech providers, converts WebRTC Opus to
-16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 369 checks include
-37 native startup/transfer cases. Independent model initialization and TTS readiness delays now retain
+16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 371 checks include
+39 native startup/transfer cases. Independent model initialization and TTS readiness delays now retain
 caller waiting and gates; failed model preparation recovers spoken source conversation.
 Earlier intermittent phase-loss recovery failure remains an acceptance
 concern despite passing bounded repeats and the final root run. A mixed repeat also exposed an
@@ -145,7 +145,9 @@ including a delayed recording writer, plus 18 deterministic phone harness checks
 starts a previously skipped wait; failed/expired incoming phone startup ends the exact provider leg
 even before media attachment. Policy changes after handoff adoption now reconcile the current
 resources and replay cues before any release. Native cases retain media actors and replace only
-STT affected by changed transcript permissions. The initial caller-waiting slice is accepted. Four delivery checkpoints
+STT affected by changed transcript permissions. Policy or exact-resource changes during release
+acknowledgements now close the room without false completion; the coordinator validates its final
+binding/policy before publishing success. The initial caller-waiting slice is accepted. Four delivery checkpoints
 and full milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.
 

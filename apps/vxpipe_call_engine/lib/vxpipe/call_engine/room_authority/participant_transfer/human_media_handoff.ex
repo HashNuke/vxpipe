@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
 
   alias Vxpipe.CallEngine.Media.{OutputSink, PreparedConnection}
   alias Vxpipe.CallEngine.MediaPolicy.Authority
-  alias Vxpipe.CallEngine.Readiness.{Collector, Inventory, Preparation, RoomInventory}
+  alias Vxpipe.CallEngine.Readiness.{Collector, Inventory, Preparation, Probe, RoomInventory}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle
   alias Vxpipe.CallEngine.{RoomAuthority, RoomCapabilitySupervisor, Telemetry}
   alias Vxpipe.CallEngine.WaitSounds.Player
@@ -127,12 +127,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
              demand = Map.fetch!(ready.graph.inventory.inventory.connections, id).demand
              binding.adapter.release(binding, ready.scope, demand)
            end),
-         {:ok, current} <- RoomAuthority.readiness_binding(phase.authority),
-         true <- current.attempt.id == ready.scope.attempt_id do
+         :ok <- validate_inventory({phase.authority, ready.release_inventory}, ready.scope),
+         :ok <- Probe.verify(ready.graph.resources, remaining(ready.scope)),
+         :ok <- validate_inventory({phase.authority, ready.release_inventory}, ready.scope) do
       {:ok, ready}
-    else
-      false -> {:error, :handoff_changed}
-      error -> error
     end
   end
 
@@ -152,7 +150,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
            :ok <- Collector.refresh(collector),
            :ok <- await_ready(collector, ready.scope, [], nil, {phase.authority, inventory}),
            :ok <- validate_inventory({phase.authority, inventory}, ready.scope) do
-        {:ok, ready}
+        {:ok, Map.put(ready, :release_inventory, inventory)}
       else
         false -> {:error, :stale_candidate}
         error -> error

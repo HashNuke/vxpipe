@@ -591,9 +591,9 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
             end
           else
             if outcome in [:commit_policy_change, :commit_binding_change] do
-              pause = pause_prepared_handoff(scope.worker.pid)
+              pause = pause_handoff_result(scope.worker.pid)
               assert :ok = GenServer.call(caller_sink, :complete_drain)
-              assert_receive {:handoff_prepared, ^pause}, 1_000
+              assert_receive {:handoff_result_ready, ^pause}, 1_000
 
               assert {:ok, _changed} =
                        PolicyAuthority.admit(
@@ -675,6 +675,119 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
           assert MapSet.size(:sys.get_state(authority).held_participant_ids) == 0
           assert PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id)) == policy
       end
+    end
+  end
+
+  for invalidation <- [
+        :policy,
+        :connection_generation,
+        :release_error,
+        :completion_policy
+      ] do
+    @tag capture_log: true, invalidation: invalidation
+    test "closes a partially released handoff after #{invalidation}", %{
+      invalidation: invalidation
+    } do
+      plan = compile_plan(wait_sounds: nil, transfer_timeout_ms: 2_000)
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+      authority = room_authority(plan)
+      monitor = Process.monitor(authority)
+      assert_receive {:test_tts_transport_started, source, _}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        source,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :released_caller)
+
+      support_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :released_support)
+
+      assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", caller_sink)
+
+      observer =
+        if invalidation in [:policy, :completion_policy], do: connect_policy_observer(plan, room)
+
+      begin_transfer(plan, room, caller, "partial-release-transfer")
+      assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+
+      assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt}} =
+               attach_ready(plan, room, support, "support-connection", support_sink)
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :media_ready)
+               )
+
+      finish_private_briefing(briefing, support_sink)
+      assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt}, 2_000
+      assert :ok = GenServer.call(caller_sink, {:defer_release, true})
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :accept)
+               )
+
+      assert_receive {:test_audio_output_released, ^caller_sink}, 1_000
+      assert :sys.get_state(caller_sink).output_generation == 0
+
+      refute_receive {:vxpipe_event,
+                      %ToolCallCompleted{tool_call_id: "partial-release-transfer"}},
+                     50
+
+      result =
+        case invalidation do
+          :policy ->
+            assert {:ok, _changed} =
+                     PolicyAuthority.admit(
+                       PolicyAuthority.whereis(room.incarnation_id),
+                       observer
+                     )
+
+            :ok
+
+          :connection_generation ->
+            connection =
+              TestTransferConnection.run(
+                attachment_command(plan, room, caller, "caller-connection"),
+                fn -> self() end
+              )
+
+            assert :ok = GenServer.call(connection, :renew_readiness)
+            :ok
+
+          :completion_policy ->
+            pending = :sys.get_state(authority).pending_participant_transfer
+            assert {:ok, phase} = Phase.scope(pending.task.pid)
+            token = pause_handoff_result(phase.worker.pid, :release)
+            assert :ok = GenServer.call(caller_sink, {:complete_release, :ok})
+            assert_receive {:handoff_result_ready, ^token}, 1_000
+
+            assert {:ok, _changed} =
+                     PolicyAuthority.admit(PolicyAuthority.whereis(room.incarnation_id), observer)
+
+            send(phase.worker.pid, {:continue_handoff, token})
+            :acknowledged
+
+          :release_error ->
+            {:error, :output_unavailable}
+        end
+
+      if result != :acknowledged,
+        do: assert(:ok == GenServer.call(caller_sink, {:complete_release, result}))
+
+      assert_receive {:DOWN, ^monitor, :process, ^authority, :handoff_release_failed}, 1_000
+
+      refute_receive {:vxpipe_event,
+                      %ToolCallCompleted{tool_call_id: "partial-release-transfer"}},
+                     50
+
+      refute_receive {:vxpipe_transfer_active, ^attempt}, 50
+      refute_receive {:test_tts_transport_started, _recovery_or_redial, _}, 50
     end
   end
 
@@ -1413,7 +1526,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                    50
   end
 
-  defp pause_prepared_handoff(worker) do
+  defp pause_handoff_result(worker, stage \\ :prepare) do
     token = make_ref()
     event = [:vxpipe, :call_engine, :transfer, :phase, :stop]
 
@@ -1422,8 +1535,8 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                token,
                event,
                fn _event, _measurements, metadata, owner ->
-                 if self() == worker and metadata.phase == :prepare and metadata.outcome == :ok do
-                   send(owner, {:handoff_prepared, token})
+                 if self() == worker and metadata.phase == stage and metadata.outcome == :ok do
+                   send(owner, {:handoff_result_ready, token})
 
                    receive do
                      {:continue_handoff, ^token} -> :ok

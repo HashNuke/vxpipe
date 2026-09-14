@@ -20,6 +20,8 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
        block_output: Keyword.get(options, :block_output, false),
        defer_drain: Keyword.get(options, :defer_drain, false),
        pending_drain: nil,
+       defer_release: false,
+       pending_release: nil,
        callback: nil,
        observer: Keyword.fetch!(options, :observer),
        pending_output: nil,
@@ -36,10 +38,26 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def handle_call(
         {:vxpipe_audio_output_release, generation},
-        _from,
+        from,
         %{output_generation: generation} = state
-      ),
-      do: {:reply, :ok, %{state | output_generation: 0}}
+      ) do
+    state = %{state | output_generation: 0}
+
+    if state.defer_release do
+      send(state.observer, {:test_audio_output_released, self()})
+      {:noreply, %{state | pending_release: from}}
+    else
+      {:reply, :ok, state}
+    end
+  end
+
+  def handle_call({:defer_release, deferred?}, _from, state) when is_boolean(deferred?),
+    do: {:reply, :ok, %{state | defer_release: deferred?}}
+
+  def handle_call({:complete_release, result}, _from, state) do
+    GenServer.reply(state.pending_release, result)
+    {:reply, :ok, %{state | pending_release: nil, defer_release: false}}
+  end
 
   def handle_call(:vxpipe_audio_output_clear, _from, state),
     do: {:reply, {:ok, 0}, %{state | callback: nil}}

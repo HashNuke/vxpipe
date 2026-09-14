@@ -364,21 +364,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
         end
 
       {:release, %{stage: :releasing}, {:ok, ready}} ->
-        demonitor_outbound_leg(pending.preparation)
-        state = record_output_generation(state, ready)
+        with :ok <- validate_release(ready, state) do
+          demonitor_outbound_leg(pending.preparation)
+          state = record_output_generation(state, ready)
 
-        state =
-          case pending.preparation do
-            %Preparation{} -> Committer.finish_ready(pending, state)
-            %HumanPreparation{} -> HumanCommitter.finish_ready(pending, ready, state)
-          end
+          state =
+            case pending.preparation do
+              %Preparation{} -> Committer.finish_ready(pending, state)
+              %HumanPreparation{} -> HumanCommitter.finish_ready(pending, ready, state)
+            end
 
-        {:noreply, state}
+          {:noreply, state}
+        else
+          _changed -> release_failed(pending, state)
+        end
 
       {_, %{stage: :releasing}, _failure} ->
-        Progress.publish(pending, :failed, [], state)
-        GenServer.reply(pending.from, {:error, :unavailable})
-        {:stop, :handoff_release_failed, state}
+        release_failed(pending, state)
 
       {_, _, {:error, _reason}} ->
         {:noreply, fail(pending, :destination_media_unavailable, state)}
@@ -389,6 +391,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   def handoff_result(_reference, _stage, _result, state), do: {:noreply, state}
+
+  defp validate_release(ready, state) do
+    with {:ok, current} <- Vxpipe.CallEngine.RoomAuthority.ReadinessBinding.capture(state),
+         true <- current == ready.release_inventory.binding do
+      Vxpipe.CallEngine.MediaPolicy.Authority.validate_candidate(
+        state.media_policy_authority,
+        ready.release_inventory.candidate
+      )
+    else
+      _changed -> {:error, :handoff_changed}
+    end
+  catch
+    :exit, _reason -> {:error, :handoff_unavailable}
+  end
+
+  defp release_failed(pending, state) do
+    Progress.publish(pending, :failed, [], state)
+    GenServer.reply(pending.from, {:error, :unavailable})
+    {:stop, :handoff_release_failed, state}
+  end
 
   defp record_output_generation(state, released) do
     connections =
