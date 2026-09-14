@@ -2232,3 +2232,135 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   no runtime file, dependency or running development server was changed during the restructuring.
   Runtime edits already present in the worktree are left for the first runnable implementation
   checkpoint and retain their explicitly recorded failures.
+
+
+## Enforce post-briefing acceptance and restore passing transfer regressions
+
+- The preceding status-only response made no implementation progress. Resumed the first human
+  handoff slice and preserved concurrent documentation-site visual changes. The milestone split
+  and curated delivery plan remain committed as `7cd92c0`; this section records ongoing runtime
+  work, not a completed human-web checkpoint.
+- Diagnosed the incoming phone `unsupported_audio` failures: both fixture plans used Opus/48 kHz
+  for STT, but the Telnyx input is Opus/16 kHz and Twilio input is PCMU/8 kHz. The old checks injected
+  transcripts without proving audio delivery. Corrected provider-specific profiles and required
+  actual socket input to reach the simulated STT transport. The red run had one failure after the
+  Telnyx profile correction: Twilio speech input still lacked supported conversion.
+- Twilio speech delivery now decodes PCMU to linear16 using the existing codec, retaining frame
+  identity, clocks and sequencing. Connection preparation describes that same speech format while
+  room audio retains its native PCMU input. No additional pipeline, process, dependency or timeout
+  increase was introduced. `vxpipe-phone-speech-format-green.log`: two tests, zero failures.
+- Human acceptance now requires completed private briefing playback. The authoritative engine
+  sends `transfer.acceptance_ready` through web sideband; phone sessions expose the same window.
+  An early phone digit is ignored without consuming acceptance, allowing a fresh press after the
+  briefing. Web controls remain scoped to the owning connection and exact attempt. The original
+  attempt deadline is unchanged. The focused WebRTC red check failed because early acceptance
+  previously latched; its green run passes. Both incoming phone acceptance checks also pass.
+- The Console keeps Accept transfer visible but disabled during briefing, enables it on the
+  matching readiness notification, and shows Preparing your connection after acceptance. Decoder
+  and UI checks went from two failures to three passing checks; TypeScript validation passes.
+- Rendered Chrome inspection used the actual served transfer page with browser-local simulated
+  admission/media events, at 1440 px and 390 px. Disabled acceptance sent no control; enabled
+  acceptance sent one, and the mobile page had no horizontal overflow. Screenshots cover briefing,
+  ready, preparing and active states. This is UI evidence, not audible or physical-device proof.
+  A follow-up settled-state capture was invalid: its simulated preparation event raced the new
+  connection, leaving the connecting animation active. Closed the owned browser session and
+  recorded the unsuccessful follow-up rather than treating it as another pass. Button transition
+  readability still needs a valid final confirmation.
+- Updated existing full-handoff engine fixtures to use a supervised embedded connection that owns
+  authenticated commands and implements preparation/adoption. It uses actual engine private STT,
+  ingress preparation and provider acknowledgements; native codec/media behavior remains exercised
+  by Gateway. Manual allocation/foreign-caller tests retain their deliberate original boundary.
+  Simulated private output now acknowledges paced playback, so waits and mandatory cues can finish.
+- Several fixture corrections were necessary after that change: send_text also belongs to the
+  connection owner; the STT Connected envelope requires sequence_id; and tests must await the
+  engine's briefing-complete acknowledgement before acceptance. The privacy-barrier regression now
+  injects a failing policy enforcer at adoption. Corrupting the mixer before preparation instead
+  fails the earlier preparation boundary and no longer tests an adoption failure.
+- Engine human web/phone: 15 tests, zero failures (`vxpipe-human-engine-protocol-green.log`).
+  Outbound Telnyx/Twilio: six tests, zero failures (`vxpipe-outbound-owned.log`). The six real
+  WebRTC checks also pass with simulated providers. These fix the previously recorded nine
+  umbrella failures; they do not prove early audience waiting or source recovery.
+- All five umbrella gates pass at this snapshot: format, warnings-as-errors compile, strict Credo,
+  test and unused dependency checks. The root test run contains 1,275 tests, zero failures and
+  15 integration exclusions (`vxpipe-human-acceptance-root-results.json` and corresponding logs).
+  Console: three focused checks pass and TypeScript passes. No development server was restarted.
+- First-slice work remains: hold/start audience waits at authorization, bounded source recovery,
+  cleanup of unneeded private speech, safe phase diagnostics, and complete rendered/audible
+  acceptance. Integration remains uncommitted until its usable checkpoint is complete. Do not
+  apply this passing snapshot to later runtime edits without the required verification.
+
+## Early audience waiting and bounded caller recovery
+
+- The preceding accounting response was a status check, not implementation progress. Resumed the
+  human-web checkpoint using the existing phase and media adapters. The user subsequently clarified
+  that coherent verified changes should continue to be committed before the entire milestone is
+  finished. Keep UI edits limited to the existing transfer controls/status and preserve the other
+  agent's `vxpipe-docs` work.
+- Human transfer authorization now closes engine input/model admission and holds connected audience
+  media before destination preparation. The phase owns audience wait players, preserving their
+  cursor and generation through briefing and acceptance. The real WebRTC default-wait check failed
+  before this change because no caller audio arrived before the destination connected; it now
+  receives decodable wait audio and rejects the correlated held text request.
+- Failed destination preparation or destination/phase loss preserves the held caller connection.
+  RoomAuthority owns recovery under the existing 750 ms restoration budget. Recovery validates the
+  retained source graph, clears output, drains the mandatory cue and releases existing media before
+  publishing the failed transfer result. Connection, input, output and source TTS instances remain
+  unchanged. The original transfer deadline is retained separately; no retry or automatic redial
+  and no production timeout increase was added.
+- Recovery exposed asynchronous output clearing after the old wait owner stopped. Retry only that
+  transient clearing response within the same restoration deadline. A subsequent failure exposed
+  a dependency cycle: model readiness required idle while that model awaited the transfer result.
+  Operational readiness now retains initialized model/tool evidence during occupied requests;
+  request admission still rejects overlap and tool submission still enforces bounded capacity.
+  The decision and rejected idle requirement are recorded in `docs/readiness-resource-contract.md`.
+- Session readiness red: three checks, one expected failure; green: three checks, zero failures.
+  Tool readiness red: the existing bounded-capacity check failed on its busy-readiness assertion;
+  the updated engine run includes all five invocation-registry checks and both human transfer
+  suites: 20 checks, zero failures (`vxpipe-early-human-engine-owned.log`).
+- The first recovery checks released the caller but failed their final conversation assertion:
+  the scripted provider still awaited its acknowledgement/completion response. Completed those
+  ordinary exchanges and required a visible recovery response before submitting the fresh caller
+  turn. Both destination and phase loss now pass (`vxpipe-human-recovery-conversation.log`). This
+  correction changes the provider fixture, not production model admission or completion semantics.
+- Early holds also exposed engine fixtures whose caller was the ExUnit process and could not
+  implement media preparation. Those callers now use the existing supervised embedded connection;
+  deliberate raw private-destination authorization fixtures remain at their original boundary.
+  Recovery fixtures explicitly acknowledge initial source TTS readiness. Privacy-only checks select
+  nil waits so absence of leaked briefing/room audio is not confused with legitimate caller waiting;
+  normal-handoff and recovery checks retain defaults.
+- An added wait-player-loss scenario failed because the phase did not observe the crashed player.
+  Audience players are now monitored and failed playback aborts the attempt into source recovery;
+  deliberate stopped/completed notifications settle monitors before normal process termination.
+  Full Gateway and umbrella verification of these latest changes is still pending at this entry.
+- No dependencies, lockfiles, development server processes or documentation-site files were changed.
+
+### Recovery verification and narrow Console correction
+
+- Focused Gateway run: 17 checks, zero failures (`vxpipe-early-human-gateway-owned.log`), including
+  nine WebRTC cases, six outbound phone cases and two incoming phone harnesses. Wait-player crash
+  now restores a usable caller conversation alongside destination/phase loss.
+- The first root run found an old activation-collector assertion that still expected busy to mean
+  preparing. Updated it to the operational-readiness contract; retained its generation/dependency
+  loss checks. Activation and speech suites pass: 18 checks (`vxpipe-recovery-readiness-recheck.log`).
+- Two default-concurrency root runs also exposed short fixture windows under concurrent host load:
+  a 500 ms speech-policy acknowledgement, initial Telnyx decoder preparation, a 200 ms recording
+  writer lease and a bounded billing lookup whose worker did not start before expiry. The isolated
+  speech/activation and 13 ingress-policy checks pass. No production timeout was increased. The
+  final full recheck uses four concurrent cases to reduce host contention.
+- The WebRTC media-loss fixture discarded its prepared speech before injecting the target actor
+  loss. That discard could already initiate recovery and close the destination, making the later
+  monitor observe the wrong lifecycle point. Keep the graph phase-owned until the intended loss;
+  cleanup is then exercised by the actual transfer phase and monitored private actors.
+- Rendered Chrome reproduced the unreadable button during simultaneous foreground/background
+  interpolation. Restricted the existing button transition to its border color. No component,
+  layout, control or configuration field was added. Rebuilt Console assets with the existing
+  esbuild profile and inspected the actual served stylesheet.
+- Final rendered checks at 390 px and 1440 px show readable briefing/ready/preparing/active states.
+  Disabled acceptance sends zero controls; enabled acceptance sends exactly one. Ten animation-frame
+  samples after acceptance retain the same readable foreground/background, with no mobile overflow.
+  Captures are `vxpipe-transfer-{briefing,ready,preparing}-final.png` and
+  `vxpipe-transfer-active-{mobile,desktop}-final.png`. Browser-local admission/media fixtures were
+  used; no audible/live-provider proof is claimed. Closed the owned Chrome session.
+- Console TypeScript passes; the two focused files contain three passing checks. Asset build passes.
+  Complete milestone acceptance remains open for remaining failure/privacy/diagnostic and audible
+  checks, followed by the AI, initial-call, phone and changing-listener delivery slices.

@@ -550,20 +550,29 @@ route. Startup and transfer gating will consume the combined required set.
 
 Agent Runtime exposes initialization evidence independently of Call Engine: the actual session,
 a generation and an opaque digest of its installed configuration/context. Ordinary conversation
-updates and cancellation preserve that evidence. A busy session reports preparing because it cannot
-accept its next request yet. Model providers declare a local, nonblocking `readiness/1` contract;
+updates and cancellation preserve that evidence. A busy session retains operational readiness;
+its request admission still rejects overlapping work. Model providers declare a local, nonblocking `readiness/1` contract;
 missing, failed or unsupported contracts fail closed. The stateless ReqLLM adapter acknowledges its
 resolved configuration without generating a request. This does not promise that the next external
 request will succeed.
 
-The engine coordinator combines its admission state with the session, tool invocation registry,
+The engine coordinator combines initialization evidence from the session, tool invocation registry,
 request supervisor and any selected remote MCP owner. Dependency queries run outside the coordinator
 receive loop. The common descriptor pins the installed dependency evidence as well as the activation;
 the activation's existing one-for-all supervision invalidates that generation on dependency loss.
 This composite model resource does not substitute for the separate room Variables, speech or media
 bindings. Tool invocation readiness also exposes its own participant/activation resource and requires
-the initialized bounded queue and owning supervisor. Saturation reports preparing without restarting
-the registry; consuming completions restores readiness with the same generation.
+the initialized bounded queue and owning supervisor. Saturation does not invalidate initialization
+or restart the registry; submission continues to enforce the existing capacity limit.
+
+Operational readiness excludes transient request occupancy. Waiting for an idle model or an empty
+tool slot during source recovery creates a cycle: the source is waiting for the transfer result,
+which may only be published after recovery releases its media. Recovery therefore checks that the
+retained runtime and bindings remain initialized, then delivers the failed transfer result through
+the ordinary completion path. It does not admit concurrent model requests or bypass tool capacity.
+The real WebRTC recovery checks exercise destination and phase loss, retained media, the model's
+failure response and a subsequent caller turn. Session and invocation checks retain rejection of
+overlapping requests and excess tool submissions.
 
 MCP readiness follows pinned binding validation, credential lease acquisition and scoped connection
 initialization. The production `Connections.open` boundary already requires the approved protocol's

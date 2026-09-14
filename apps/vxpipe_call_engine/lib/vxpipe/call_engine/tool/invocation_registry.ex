@@ -108,8 +108,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   end
 
   def handle_call(:readiness, _from, state) do
-    status = if State.full?(state), do: :preparing, else: :ready
-    {:reply, {:ok, state.readiness_resource, status, state.invocation_supervisor}, state}
+    {:reply, {:ok, state.readiness_resource, :ready, state.invocation_supervisor}, state}
   end
 
   def handle_call(

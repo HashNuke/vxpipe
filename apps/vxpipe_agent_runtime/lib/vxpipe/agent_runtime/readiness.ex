@@ -19,18 +19,17 @@ defmodule Vxpipe.AgentRuntime.Readiness do
     %__MODULE__{
       instance: self(),
       generation: make_ref(),
-      configuration: :crypto.hash(:sha256, :erlang.term_to_binary(configuration, [:deterministic]))
+      configuration:
+        :crypto.hash(:sha256, :erlang.term_to_binary(configuration, [:deterministic]))
     }
   end
 
   @doc false
   @spec status(SessionConfiguration.t(), :idle | :busy) :: status()
-  def status(%SessionConfiguration{model_provider: provider, model: model}, session_status) do
-    case provider_status(provider, model) do
-      :ready when session_status == :idle -> :ready
-      :ready -> :preparing
-      other -> other
-    end
+  def status(%SessionConfiguration{model_provider: provider, model: model}, session_status)
+      when session_status in [:idle, :busy] do
+    # Occupancy is enforced by request admission; it does not invalidate initialization.
+    provider_status(provider, model)
   end
 
   defp provider_status(provider, model) do

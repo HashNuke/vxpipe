@@ -32,9 +32,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Readiness do
   end
 
   def binding(%State{} = state) do
-    status =
-      if is_nil(state.current) and :queue.is_empty(state.pending), do: :ready, else: :preparing
-
     dependencies = %{
       session: state.session,
       tools: state.invocation_registry,
@@ -42,7 +39,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Readiness do
       requests: state.request_supervisor
     }
 
-    {:ok, state.readiness_resource, status, dependencies}
+    {:ok, state.readiness_resource, :ready, dependencies}
   end
 
   defp supervisor_readiness(server) do

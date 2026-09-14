@@ -46,7 +46,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
              )
 
     assert_receive {:submitted_host_tool_started, execution, "first"}
-    assert {:ok, ^readiness, :preparing} = InvocationRegistry.readiness(registry)
+    assert {:ok, ^readiness, :ready} = InvocationRegistry.readiness(registry)
 
     assert {:ok,
             [

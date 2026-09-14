@@ -128,9 +128,9 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
     assert :ok = Coordinator.respond(coordinator, send_text("readiness-request"))
     assert_receive {:test_agent_runtime_stream, provider, _request}
-    assert {:ok, ^model, :preparing} = Coordinator.readiness(coordinator)
+    assert {:ok, ^model, :ready} = Coordinator.readiness(coordinator)
     assert :ok = Collector.refresh(collector)
-    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}, 1_000
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
 
     assert {:ok, response} = ModelResponse.new(text: "Initialized and reusable.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})

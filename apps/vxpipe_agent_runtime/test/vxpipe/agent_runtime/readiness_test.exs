@@ -22,16 +22,20 @@ defmodule Vxpipe.AgentRuntime.ReadinessTest do
     refute changed_evidence.generation == evidence.generation
   end
 
-  test "a busy session cannot accept the next request but retains initialization after cancellation" do
+  test "a busy session retains initialization while request admission still rejects overlap" do
     session = start_session(:busy, model: %{mode: :block, test_owner: self()})
     assert {:ok, evidence, :ready} = Session.readiness(session)
 
     supervisor = start_supervised!({Task.Supervisor, name: unique_name()})
-    caller = Task.Supervisor.async_nolink(supervisor, fn -> Session.request(session, "Hello", %{}) end)
+
+    caller =
+      Task.Supervisor.async_nolink(supervisor, fn -> Session.request(session, "Hello", %{}) end)
+
     assert_receive {:model_provider_process, provider, _request}
     monitor = Process.monitor(provider)
 
-    assert {:ok, ^evidence, :preparing} = Session.readiness(session)
+    assert {:ok, ^evidence, :ready} = Session.readiness(session)
+    assert {:error, :busy} = Session.request(session, "Overlapping request", %{})
     assert :ok = Session.cancel(session)
     assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}
     assert {:ok, %{status: :cancelled}} = Task.await(caller)
