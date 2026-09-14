@@ -93,14 +93,15 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,304 tests, zero failures and 15 exclusions, with test concurrency four. Four ordinary WebRTC
+1,306 tests, zero failures and 15 exclusions, with test concurrency four. Four ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
 revisions, with working caller/support audio afterward. Stale candidates during cue playback
 trigger preparation and fresh cues under the original deadline. Changed bindings and stale-policy
 rejections at the final commit check also retry before any policy application, retaining the prepared
-participant and the same deadline. Preparation blockers and
+participant and the same deadline. Stale initial graphs now retain partial preparation leases across
+retry, preserving unaffected STT while removing a speech pair whose demand disappears. Preparation blockers and
 cue/release progress now reach the existing transfer desk; returned worker durations reach the
 existing diagnostics reporter. Rendered desktop/mobile Chrome checks now confirm live default-wait
 handoff audio and support transcripts. Recovery also preserves spoken assistant responses by carrying

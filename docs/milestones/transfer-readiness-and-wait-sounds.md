@@ -361,8 +361,10 @@ Implementation tasks:
   collector, preparation owner, media generation and deadline. A stale candidate during cue playback
   now drains privately, re-prepares and plays a fresh cue before release. Changed bindings or a
   stale-candidate rejection at the coordinator's final commit check also retry under the same phase
-  and deadline. Initial preparation changes, changes after policy application, changed still-required
-  resources and the complete changing audience remain open.
+  and deadline. Stale initial graphs now retain partial preparation leases while recapturing the
+  candidate: removal of demand stops only the speech pair, and an unrelated revision retains the
+  same prepared STT transport, room services, worker and audience wait scope. Changes after policy
+  application, other changed still-required resources and the complete changing audience remain open.
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -387,6 +389,10 @@ Acceptance and commit tasks:
 - [x] Hold human transfer completion until mandatory cue drain, including with nil wait sounds.
   Cue-player loss and prepared destination STT loss during drain recover the retained source;
   an output that also cannot finish the recovery cue closes the call within the existing budgets.
+- [x] Pause initial graph preparation and revise relevant/unrelated policy. Refresh the candidate
+  without replacing the prepared STT transport or room services when unaffected; stop the private
+  speech pair when demand disappears. Keep the same worker, audience wait scope and deadline,
+  then complete the cue and activation.
 - [ ] Delay required destination, remaining-participant and room capabilities independently, then
   inject loss across the remaining preparation/adoption/release stages. Observe no premature success and
   unchanged healthy instances; verify held text/audio cannot interrupt or replay after release.
@@ -649,6 +655,16 @@ The AI acceptance checklist now records independent model/TTS verification separ
 remaining tool/configuration/privacy work. This uses existing provider fixtures and does not
 introduce a new runtime contract or change checkpoint prerequisites.
 
+### Initial preparation retry review
+
+The existing incremental-retention requirement also applies before the first complete graph exists.
+Keep partial leases available to the same handoff owner while it refreshes a stale candidate; each
+resource still validates its actual policy diff. Reusing the existing leases avoids restarting an
+unaffected provider. The general preparation caller retains immediate cleanup on failure. New owner
+processes, broader failure retries and longer deadlines were rejected; the existing owner/deadline
+protocol is sufficient. This closes an initial graph gap without changing milestone order or scope.
+See [incremental media policy](../incremental-media-policy.md) for the decision and implications.
+
 ## Implementation evidence
 
 This is a current, grouped account as of the 2026-09-14 documentation checkpoint. Commit references
@@ -766,9 +782,9 @@ Known remaining work in the first slice:
 - Reproduce and explain the intermittent rendered briefing failure observed before a later retry
   completed. Admission release and a subsequent accepted transfer now pass.
 - Complete readiness-loss, partial-release and expiry coverage across the remaining stages.
-- Reconcile changes during initial graph preparation, changes after policy application and changes
-  to still-required resources; complete changing-listener lifetimes. Pending collection, cue playback
-  and stale rejection at the final commit check now retry before policy application.
+- Complete changes after policy application, other still-required resources and changing-listener
+  lifetimes. Stale initial graph preparation now retries without discarding unchanged partial
+  resources; pending collection, cue playback and final stale rejection also retry before application.
 - Finish failure, stage-timing and queue diagnostics beyond the implemented preparation status and
   returned-worker durations.
 - Complete default/custom/nil playback and private-audio/model-history isolation through the
@@ -854,6 +870,26 @@ The [native readiness labnote](../../labnotes/20260914-2148-native-readiness-che
 acceptance and gate results; the [recovery investigation](../../labnotes/20260914-2139-transfer-recovery-race.md)
 records the bounded unsuccessful reproduction and separate audio failure.
 
+### Initial preparation policy integration
+
+- Stale graph construction now retries under the same phase instead of failing the accepted
+  handoff. The preparation API returns partial leases to the retrying owner, which retains reusable
+  resources and discards leftovers. The ordinary preparation API still cleans up failed work.
+- Two focused regressions fail before the fix and pass afterward. An unrelated change retains
+  the exact prepared STT transport and room services; removed demand stops the speech pair.
+  Both retain the worker, audience scope and deadline, then complete cue drain and activation.
+- All 57 focused human/agent/inventory checks pass. All five root gates pass with 1,306 tests,
+  zero failures and 15 exclusions, seed 894531 at concurrency four. Gateway's 336 checks include
+  the existing 20 native transfer cases. No UI inspection is required for this backend change.
+- This closes the tested initial graph policy window. The separately observed intermittent
+  phase-loss recovery and Morse audio failures, post-application changes and full changing-listener
+  acceptance remain open.
+
+The [preparation policy labnote](../../labnotes/20260914-2155-handoff-preparation-policy.md)
+records the failing regression, unsuccessful retry-after-cleanup approach, retained-lease fix and
+verification. The ownership contract is documented under
+[prospective room preparation](../readiness-resource-contract.md#preparing-the-prospective-room).
+
 ### Verification ledger
 
 | Evidence boundary | Result | What it establishes |
@@ -861,6 +897,7 @@ records the bounded unsuccessful reproduction and separate audio failure.
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
 | Human handoff and recovery | Sixteen WebRTC transfer checks pass within the 332-check Gateway suite with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, pending readiness reconciles removed STT demand and retains an unaffected STT transport, and destination/phase/player loss restores a fresh caller conversation through retained media. |
 | Human-handoff checkpoint, `fe022a6` | All five root gates pass; 1,300 tests, zero failures, 15 exclusions; seed 226627 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and spoken recovery pass. Destination reservations release on connection loss/expiry; the rendered retry completes in the same call. Full slice acceptance stays open. |
+| Initial preparation policy integration | 57 focused checks; all five root gates pass; 1,306 tests, zero failures, 15 exclusions; seed 894531 at concurrency four | Relevant/unrelated policy changes during initial graph construction retain the worker/deadline and unaffected STT/room services; removed speech demand is cleaned up, then cue/activation complete. General failure and changing-listener acceptance remain open. |
 | Native model readiness acceptance | All five root gates pass; 1,304 tests, zero failures, 15 exclusions; seed 547223 at concurrency four. Full native file: 20 cases, zero failures. | Independent model and voice delays preserve waiting and held text. Failed model preparation restores spoken source conversation without replacing source media. Earlier intermittent recovery/audio concerns remain open. |
 | Speech and protocol checkpoint, `bc42ef5` | All five root gates pass; 1,303 tests, zero failures, 15 exclusions; seed 355428 at concurrency four. Gateway has 335 checks, including 19 native transfer cases. | Caller readiness/completion/recovery uses RTVI; real Morse providers cover speech and human handoff, including 16 kHz STT conversion and retained caller decoder. Earlier intermittent phase-loss failure remains an acceptance concern. |
 | AI-handoff integration, `ebdf61a` | All five root gates pass; 1,302 tests, zero failures, 15 exclusions; seed 890393 at concurrency four. The 34 focused agent/inventory checks and 18 WebRTC transfer cases pass. | Delayed agent TTS gates cue/greeting; failed destination TTS recovers spoken source conversation on retained media. Source restoration is bounded and provider-ready; re-entry uses a fresh activation. The rendered live default billing transfer retains the caller peer and answers a follow-up. Full AI and milestone acceptance remain open. |

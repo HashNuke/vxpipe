@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Readiness.CandidatePreparation do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
-  alias Vxpipe.CallEngine.Media.{ConnectionReadiness, PreparedConnection}
+  alias Vxpipe.CallEngine.Media.ConnectionReadiness
   alias Vxpipe.CallEngine.Readiness.ResourceQuery
   alias Vxpipe.CallEngine.{RoomMixer, TranscriptRouter}
 
@@ -32,8 +32,7 @@ defmodule Vxpipe.CallEngine.Readiness.CandidatePreparation do
           {:cont, {:ok, state}}
 
         {:error, reason, state} ->
-          _ = PreparedConnection.discard_preparations(state.preparations)
-          {:halt, {:error, reason}}
+          {:halt, {:error, reason, state.preparations}}
       end
     end)
   end

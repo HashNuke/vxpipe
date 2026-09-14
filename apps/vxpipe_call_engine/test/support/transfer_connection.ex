@@ -49,6 +49,7 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
 
   @impl true
   def prepare_candidate(binding, candidate, demand, options) do
+    {:ok, _resource, :ready} = readiness(binding.instance)
     {:ok, base, track} = prepare_binding(binding, candidate.snapshot, demand)
 
     if demand.speech_to_text? do

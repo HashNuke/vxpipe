@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Media.OutputSink
+  alias Vxpipe.CallEngine.Media.{OutputSink, PreparedConnection}
   alias Vxpipe.CallEngine.MediaPolicy.Authority
   alias Vxpipe.CallEngine.Readiness.{Collector, Inventory, Preparation, RoomInventory}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle
@@ -104,20 +104,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     scope = audience.scope
 
     with {:ok, participant} <- prepare_participant(preparation, phase.incarnation_id),
-         {:ok, media} <- prepare_media(phase, request, scope),
-         joining = Map.drop(media.connections, Map.keys(audience.connections)),
-         :ok <- hold(joining, scope),
-         {:ok, joining_waits} <- play(joining, media.binding, scope, request, :wait),
-         {:ok, graph} <-
-           Preparation.run_candidate(phase.authority, media.candidate, Map.to_list(scope)),
-         {:ok, collector} <- collect(graph.resources, media.binding, scope),
-         prepared =
-           Map.merge(media, %{
-             scope: scope,
-             graph: graph,
-             participant: participant,
-             waits: audience.waits ++ joining_waits
-           }),
+         {:ok, prepared} <-
+           prepare_graph(Map.put(audience, :participant, participant), phase, request),
+         {:ok, collector} <- collect(prepared.graph.resources, prepared.binding, scope),
          {:ok, ready} <- prepare_release(prepared, collector, phase, request) do
       report_progress(phase, :releasing, [])
       {:ok, Map.delete(ready, :waits)}
@@ -257,19 +246,54 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
   end
 
   defp refresh_preparation(prepared, collector, phase, request) do
+    with {:ok, prepared} <- prepare_graph(prepared, phase, request),
+         {:ok, _diff} <-
+           Collector.reconcile(collector, prepared.scope.attempt_id, prepared.graph.resources),
+         do: {:ok, prepared}
+  end
+
+  defp prepare_graph(prepared, phase, request, retained \\ []) do
+    result =
+      if remaining(prepared.scope) == 0,
+        do: {:error, :deadline_elapsed},
+        else: prepare_current_graph(prepared, phase, request, retained)
+
+    if match?({:error, _reason}, result),
+      do: PreparedConnection.discard_preparations(retained)
+
+    result
+  end
+
+  defp prepare_current_graph(prepared, phase, request, retained) do
     scope = prepared.scope
 
     with {:ok, media} <- prepare_media(phase, request, scope),
          added = Map.drop(media.connections, Map.keys(prepared.connections)),
          :ok <- hold(added, scope),
-         {:ok, waits} <- play(added, media.binding, scope, request, :wait),
-         {:ok, graph} <-
-           Preparation.run_candidate(phase.authority, media.candidate, Map.to_list(scope)),
-         {:ok, _diff} <- Collector.reconcile(collector, scope.attempt_id, graph.resources) do
-      {:ok,
-       prepared |> Map.merge(media) |> Map.merge(%{graph: graph, waits: prepared.waits ++ waits})}
+         {:ok, waits} <- play(added, media.binding, scope, request, :wait) do
+      prepared = prepared |> Map.merge(media) |> Map.put(:waits, prepared.waits ++ waits)
+
+      case Preparation.prepare_candidate(phase.authority, media.candidate, Map.to_list(scope)) do
+        {:ok, graph} ->
+          _ = PreparedConnection.discard_preparations(retained -- graph.preparations)
+          {:ok, Map.put(prepared, :graph, graph)}
+
+        {:error, reason, partial} ->
+          retained = Enum.uniq(retained ++ partial)
+
+          if preparation_changed?(reason) do
+            prepare_graph(prepared, phase, request, retained)
+          else
+            _ = PreparedConnection.discard_preparations(retained)
+            {:error, reason}
+          end
+      end
     end
   end
+
+  defp preparation_changed?(reason) when reason in [:stale_candidate, :room_changed], do: true
+  defp preparation_changed?(%{reason: reason}), do: preparation_changed?(reason)
+  defp preparation_changed?(_reason), do: false
 
   defp hold(connections, scope),
     do: each(connections, fn {_id, connection} -> connection.adapter.hold(connection, scope) end)

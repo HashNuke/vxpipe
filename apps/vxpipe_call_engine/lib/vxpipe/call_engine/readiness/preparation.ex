@@ -18,16 +18,39 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
 
   def run(room, candidate, timeout \\ 5_000) when is_integer(timeout) and timeout > 0 do
     deadline = System.monotonic_time(:millisecond) + timeout
-    execute(room, candidate, deadline, nil)
+    room |> execute(candidate, deadline, nil) |> discard_failed()
   end
 
   def run_candidate(room, candidate, options) do
-    with :ok <- CandidatePreparation.validate_options(options),
-         do: execute(room, candidate, Keyword.fetch!(options, :deadline_ms), options)
+    room |> prepare_candidate(candidate, options) |> discard_failed()
+  end
+
+  @doc """
+  Prepares a candidate while returning partial leases on failure for an owning retry loop.
+
+  The caller must reuse or discard every returned lease under the same owner and deadline.
+  Use `run_candidate/3` when failed preparation should be discarded immediately.
+  """
+  def prepare_candidate(room, candidate, options) do
+    result =
+      with :ok <- CandidatePreparation.validate_options(options),
+           do: execute(room, candidate, Keyword.fetch!(options, :deadline_ms), options)
+
+    case result do
+      {:error, reason} -> {:error, reason, []}
+      other -> other
+    end
   end
 
   def discard(%__MODULE__{preparations: preparations}),
     do: PreparedConnection.discard_preparations(preparations)
+
+  defp discard_failed({:error, reason, preparations}) do
+    _ = PreparedConnection.discard_preparations(preparations)
+    {:error, reason}
+  end
+
+  defp discard_failed(result), do: result
 
   defp execute(room, candidate, deadline, options) do
     results =
@@ -72,44 +95,40 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
   defp prepare_captured(room, captured, deadline, options) do
     with :ok <- CandidatePreparation.validate_attempt(captured, options),
          {:ok, prepared} <- CandidatePreparation.prepare(captured, options) do
-      case finish(
-             room,
-             captured,
-             prepared.resources,
-             prepared.connections,
-             prepared.preparations,
-             deadline,
-             options
-           ) do
-        {:ok, _result} = success ->
-          success
-
-        {:error, _reason} = error ->
-          _ = PreparedConnection.discard_preparations(prepared.preparations)
-          error
-      end
+      finish(
+        room,
+        captured,
+        prepared.resources,
+        prepared.connections,
+        prepared.preparations,
+        deadline,
+        options
+      )
     end
   end
 
   defp finish(room, captured, resources, connections, preparations, deadline, options \\ nil) do
     with {:ok, tracks, recording, recording_preparations} <-
            prepare_recording(captured, connections, resources, options) do
+      preparations = preparations ++ recording_preparations
+
       case complete(
              room,
              captured,
              resources ++ recording,
              connections,
              tracks,
-             preparations ++ recording_preparations,
+             preparations,
              deadline
            ) do
         {:ok, _prepared} = success ->
           success
 
-        error ->
-          _ = PreparedConnection.discard_preparations(recording_preparations)
-          error
+        {:error, reason} ->
+          {:error, reason, preparations}
       end
+    else
+      {:error, reason} -> {:error, reason, preparations}
     end
   end
 

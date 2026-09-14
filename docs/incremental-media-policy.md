@@ -54,3 +54,20 @@ start another connection. An unchanged live or pending session survives unrelate
 Refreshing a stale candidate updates its pending policy binding without repeating provider startup.
 See [the preparation contract](readiness-resource-contract.md#preparing-an-affected-speech-policy).
 Other enforcers and startup/transfer coordination remain incomplete in that milestone.
+
+An initial handoff graph can become stale while its resources are being prepared. The transfer
+coordinator now recaptures the candidate under the original worker, owner and deadline. It retains
+partial preparation leases across that retry, lets each resource reconcile its actual policy diff,
+and discards leases omitted from the successful replacement graph. Removed private STT demand
+stops its pair; an unrelated revision retains the prepared provider transport and room services.
+
+Discarding the whole partial graph before retry was rejected: it closed the healthy prepared STT
+transport and required another provider connection acknowledgement. Retrying arbitrary failures or
+extending the deadline would also violate the handoff contract. Only stale-candidate/changed-room
+results trigger this path. Callers using `Preparation.run_candidate/3` keep immediate failure cleanup;
+the handoff owner uses `prepare_candidate/3` and owns its returned partial leases. Existing owner
+monitors and deadlines still bound cancellation and cleanup.
+
+The focused initial-preparation regressions verify retained transport, worker, audience wait scope,
+room resources and deadline, plus successful cue/activation for both relevant and unrelated policy
+changes. See the [implementation labnote](../labnotes/20260914-2155-handoff-preparation-policy.md).

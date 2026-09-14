@@ -598,6 +598,118 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     end
   end
 
+  for change <- [:removes_speech, :unrelated] do
+    @tag capture_log: true
+    test "reconciles #{change} policy change during initial handoff preparation" do
+      plan =
+        compile_plan(
+          support_stt: true,
+          transfer_timeout_ms: 2_000,
+          observer_policy:
+            if(unquote(change) == :removes_speech,
+              do: %{transcript_routes: %{}, save_transcripts: false},
+              else: %{}
+            )
+        )
+
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = CallEngine.start_call(plan)
+      authority = room_authority(plan)
+      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+      source_monitor = Process.monitor(source_tts)
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self(), defer_drain: true},
+          id: :preparing_caller
+        )
+
+      support_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :preparing_support)
+
+      assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", caller_sink)
+      observer = connect_policy_observer(plan, room)
+
+      caller_connection =
+        TestTransferConnection.run(
+          attachment_command(plan, room, caller, "caller-connection"),
+          fn -> self() end
+        )
+
+      assert :ok = GenServer.call(caller_connection, :defer_readiness)
+      begin_transfer(plan, room, caller, "initial-preparation-transfer")
+      assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+
+      assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt}} =
+               attach_ready(plan, room, support, "support-connection", support_sink)
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :media_ready)
+               )
+
+      finish_private_briefing(briefing, support_sink)
+      assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt}, 2_000
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :accept)
+               )
+
+      assert_receive {:test_stt_transport_started, speech_transport, _}, 1_000
+      speech_monitor = Process.monitor(speech_transport)
+
+      TestSpeechToTextTransport.deliver(
+        speech_transport,
+        ~s({"type":"Connected","request_id":"initial-ready","sequence_id":0})
+      )
+
+      assert_receive {:test_transfer_readiness_waiting, ^caller_connection}, 1_000
+      pending = :sys.get_state(authority).pending_participant_transfer
+      assert {:ok, scope} = Phase.scope(pending.task.pid)
+      assert {:ok, before} = CallEngine.RoomAuthority.readiness_binding(authority)
+
+      assert {:ok, _policy} =
+               PolicyAuthority.admit(PolicyAuthority.whereis(room.incarnation_id), observer)
+
+      assert :ok = GenServer.call(caller_connection, :complete_readiness)
+
+      refute_receive {:vxpipe_event,
+                      %ToolCallFailed{tool_call_id: "initial-preparation-transfer"}},
+                     100
+
+      assert_receive {:test_audio_output_drain, ^caller_sink}, 1_000
+      assert {:ok, current_scope} = Phase.scope(pending.task.pid)
+      assert current_scope.deadline_ms == scope.deadline_ms
+      assert current_scope.worker.pid == scope.worker.pid
+      assert current_scope.audience == scope.audience
+      assert {:ok, after_preparation} = CallEngine.RoomAuthority.readiness_binding(authority)
+      assert after_preparation.room == before.room
+      assert after_preparation.participants == before.participants
+
+      if unquote(change) == :removes_speech do
+        assert_receive {:DOWN, ^speech_monitor, :process, ^speech_transport, _}, 1_000
+      else
+        refute_receive {:DOWN, ^speech_monitor, :process, ^speech_transport, _}, 50
+      end
+
+      refute_receive {:test_stt_transport_started, _replacement, _}, 50
+      refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 50
+      assert :ok = GenServer.call(caller_sink, :complete_drain)
+
+      assert_receive {:vxpipe_event,
+                      %ToolCallCompleted{tool_call_id: "initial-preparation-transfer"}},
+                     1_000
+
+      assert_receive {:vxpipe_transfer_active, ^attempt}, 1_000
+    end
+  end
+
   test "activates a destination's configured STT only after acceptance and reuses it" do
     plan = compile_plan(support_stt: true)
     caller = Map.fetch!(plan.participants, "caller")

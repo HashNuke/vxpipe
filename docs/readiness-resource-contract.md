@@ -994,6 +994,14 @@ handles. The lifecycle owner must end that phase on cancellation. Final inventor
 still occurs outside authority and media actor callbacks; no candidate permissions are installed by
 the runner. Repeated preparation under the same lease retains resources.
 
+A handoff that refreshes stale candidates uses `Readiness.Preparation.prepare_candidate/3`.
+On failure it receives `{:error, reason, partial_leases}` and owns those handles. It preserves them
+while retrying a stale candidate under the same phase/deadline, then discards handles absent from
+the successful graph. This allows unchanged pending speech sessions to survive graph retries;
+removed demand still shuts down its private pair. Other failures discard the partial leases and
+enter ordinary handoff failure handling. `run_candidate/3` retains immediate cleanup and its
+existing two-element error result for callers that do not retry.
+
 Transcript routing has no provider to reconnect. Its pending policy binds the authoritative base
 and desired snapshot without changing live projection decisions. Commit adopts the prepared
 descriptor while preserving the router process, generation and configuration. Owner loss or expiry
