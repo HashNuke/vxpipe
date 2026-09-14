@@ -1,14 +1,16 @@
 # Transfer readiness implementation
 
 Implementation resumed following the goal continuation after the pause audit. The latest
-[recording checkpoint](#prepare-recording-ownership-and-policy) adds prospective writer ownership,
-track selection and policy adoption and passes all five root gates: 1,243 tests,
+[recording checkpoint](#prepare-recording-ownership-and-policy), committed as `4b14530`, adds
+prospective writer ownership, track selection and policy adoption and passes all five root gates: 1,243 tests,
 zero failures and 15 integration exclusions. The earlier notes-only audit and its uncommitted-work
 snapshot are retained below for accountability.
 
 **The end-to-end milestone remains unfinished.** Native agent recording taps across changed recording
 intervals, private destination actors, startup/transfer orchestration, waits/cues and recovery still require integration
 and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
+The [latest investigation notes](#recording-tap-investigation-and-handoff-resume-point) identify
+the remaining recording boundary and the concrete handoff integration point.
 
 ## Detour update after the pause audit
 
@@ -1445,3 +1447,48 @@ The subsequent implementation and final gates are recorded in the verification c
 - Keep the implementation, focused checks and documentation together and preserve concurrent
   `vxpipe-docs/` changes, including the user's separate `ae699c5` logo commit. The milestone/index
   remain open; native agent tap intervals and startup/transfer lifecycle acceptance are still required.
+
+## Recording tap investigation and handoff resume point
+
+This is the requested labnote update after `4b14530`. The findings below come from source inspection;
+no additional runtime change or regression test was made for this update.
+
+- **Why recording needed separate groundwork:** future membership can change required recording
+  tracks even when recording permission stays the same. Preparing those tracks through the old
+  path changed live recorder selections before commit. `4b14530` stages missing writers under the
+  phase owner and deadline, then adopts them while preserving existing writers and sequence numbers.
+  The preceding checkpoint records the ownership, monitor-ordering and descriptor-retention fixes
+  and their actual red/green evidence.
+- **Remaining native tap boundary:** `RecordingOutputs.prepare/2` passes the candidate snapshot to
+  `Recording.EgressReadiness.prepare/4`, but that adapter observes the mixer's installed recording
+  interval. `RoomMixer.RecordingEgress.readiness/3` also requires recording to be currently enabled.
+  A required agent tap therefore cannot report prospective readiness when that interval changes.
+  Recorder writer preparation alone does not resolve this mismatch.
+- **Design considered, still unimplemented:** the mixer changes the recording permission gate
+  without reallocating the native tap or codec. Separating physical tap evidence from the prepared
+  mixer policy resource could preserve that allocation while keeping recording closed until commit.
+  This would still need exact native binding, identity, format, capacity and candidate lease checks.
+  A separate per-tap preparation registry would duplicate ownership and require reconciliation;
+  merely substituting the future interval into current evidence would not prove readiness. Neither
+  approach has been implemented or verified by this inspection.
+- **Concrete handoff integration gap:** `HumanHandoff.apply_control/2` currently accepts an early
+  acceptance request; progression waits for briefing completion. Once both conditions hold,
+  `progress/2` cancels the attempt timer and calls `HumanCommitter.commit/3`. That committer starts
+  the destination participant, promotes its admission, queues connection promotion, and publishes
+  completion before the queued media promotion has been acknowledged. The new whole-room readiness
+  runner is not wired into this sequence. These are source findings, not a fresh reproduction of
+  the reported phone/console failure.
+- **Resume at the runnable transfer boundary:** finish candidate tap evidence where required, then
+  connect private destination media and the persistent phase owner to this handoff. Keep the
+  original deadline through readiness, listener waits/cues, policy adoption and release. Completion
+  must follow the required release acknowledgements. Startup, AI transfers, restoration and the
+  sample/browser plus phone acceptance gates remain explicit unfinished work in the milestone.
+  Further component checks must not be reported as completion of the user-facing transfer flow.
+
+Verification for this notes update re-read the committed implementation and the retained
+`vxpipe-recording-policy-verified-root-results.json` results: all five commands exited zero.
+The eight application summaries total 1,243 tests, zero failures and 15 integration exclusions.
+Those are evidence for `4b14530`, not newly run checks or live transfer acceptance. No dependency
+upgrade, production deadline change, browser session, provider call or server restart was performed.
+Concurrent `vxpipe-docs/` changes remain outside this documentation checkpoint.
+Documentation verification: all 34 local labnote links/anchors resolve, and `git diff --check` passes.
