@@ -875,3 +875,18 @@ this integration and the remaining private binding, full readiness, cue and rele
 focused agent/human web/phone checks and all five root gates pass: 1,265 tests, zero failures and
 15 integration exclusions. The milestone and index remain unchecked because the full lifecycle
 and manual acceptance are still unfinished.
+
+An internal authority operation now allocates speech for the exact private transfer connection,
+using its resolved profile and the actual phase's owner/attempt/deadline. It keeps input closed,
+starts no preliminary provider and stays outside critical policy registration. Repeated requests
+retain the pair; foreign and late requests are rejected. An allocated pair cannot take the old
+immediate commit path, and private speech failure cleans the pending attempt while retaining the
+source. Startup/opening input release excludes private bindings, and cancellation removes all
+private connections belonging to the exact attempt.
+
+The [private binding contract](../readiness-resource-contract.md#authorized-private-speech-binding)
+records the authorization and ownership decisions. All 46 focused transfer/speech checks and all
+five root gates pass: 1,269 tests, zero failures and 15 integration exclusions.
+Gateway dormant media setup, coordinator invocation, complete candidate
+adoption and wait/cue/release acceptance remain unfinished. The internal operation is not yet used
+by the sample handoff.

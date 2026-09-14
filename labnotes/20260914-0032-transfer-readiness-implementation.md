@@ -1,13 +1,14 @@
 # Transfer readiness implementation
 
-The current [transfer phase checkpoint](#retain-the-actual-transfer-phase) keeps the actual
-supervised preparation task alive through handoff with its original owner, attempt and deadline.
-Human owner loss cleans the private destination. Both commit paths require the phase's final
-acknowledgement before success or greeting; loss during policy adoption closes the room. All 22
-focused agent/human web/phone checks and five root gates pass: 1,265 tests, zero failures and
-15 integration exclusions.
+The current [private speech binding checkpoint](#bind-private-speech-to-the-authorized-connection)
+allocates dormant speech for the exact authorized private connection under its real transfer phase.
+Input stays closed; an allocated pair cannot bypass prepared media adoption, and its failure cleans
+the pending attempt while retaining the source. All 46 focused transfer and speech checks and
+five root gates pass: 1,269 tests, zero failures and 15 integration exclusions. Gateway/full
+coordinator activation remains unfinished.
 
-This extends private allocation ownership in `c005511`, speech adoption in `a8106d4`,
+This extends persistent transfer ownership in `4801597`, private allocation in `c005511`,
+speech adoption in `a8106d4`,
 the complete-membership commit in `69b5ad6`,
 native tap preparation in `666ca37` and writer/track adoption in `4b14530`.
 The earlier [investigation](#private-stt-initialization-and-cancellation-ownership)
@@ -1879,3 +1880,63 @@ browser/provider session or server restart was performed for this documentation-
   full candidate room graph, and compose holds/waits/cues/adoption/release before invoking the
   completion boundary. Keeping the task alive does not itself perform these steps. Early acceptance,
   startup waiting, restoration and rendered/provider acceptance remain unfinished.
+
+## Bind private speech to the authorized connection
+
+- The previous goal turn made progress with `4801597`: a persistent transfer task, real-room
+  failure checks and all five gates. Revalidated that only the concurrent visual-task files were
+  dirty before beginning this checkpoint.
+- The ordinary speech binding immediately registers critical enforcers and opens ingress. The
+  private lane needs a separate internal authority operation: validate the exact live transfer and
+  owning connection, allocate from the destination's resolved profile with no provider connection,
+  apply the installed base policy locally, and retain closed ingress under the original phase lease.
+  Allocating these dormant actors locally avoids passing caller-supplied actor PIDs into an
+  authorization boundary; network provider preparation remains outside authority.
+- Two real-room checks fail because the private allocation API is missing
+  (`vxpipe-private-speech-binding-red.log`: ten tests, two failures). The initial implementation
+  passes those ten checks in `vxpipe-private-speech-binding-green.log`, including idempotent exact
+  binding, foreign identity/connection/attempt rejection and phase cancellation. This does not yet
+  wire Gateway or the complete coordinator to use the internal operation.
+- Extending the binding check through acceptance/briefing targets the existing committer's unsafe
+  interaction with an allocated private pair: allocation must not be treated as readiness or permit
+  ordinary promotion to bypass prepared adoption. The check also starts the actual pending provider
+  under the same phase and requires private capability loss to fail the attempt while preserving
+  the source. The red run published `ToolCallCompleted` for that unadopted private pair
+  (`vxpipe-private-speech-commit-guard-red.log`: ten tests, one failure). An allocated private pair
+  now keeps the attempt pending for the prepared-media path; direct commit cannot stand in for
+  readiness/adoption. Private speech failures use the human attempt's cleanup instead of the
+  ordinary main-connection unavailable path. Ten checks pass in
+  `vxpipe-private-speech-commit-guard-green.log`.
+- Expanded checks cover both actor termination and the capability's unavailable event, absence of
+  a destination STT profile despite enabled application STT, ordinary activation rejection and late
+  calls after cancellation. The 46 combined transfer and speech room checks initially pass in
+  `vxpipe-private-speech-binding-focused.log`.
+- Review exposed a second gate: `ConnectionLifecycle.open_inputs/1`, used by startup/opening
+  completion, opened the new private ingress. The two failure variants reproduce this in
+  `vxpipe-private-speech-open-inputs-red.log` (12 tests, two failures). That operation now opens
+  only main-admitted connections. Private allocation neither grants microphone access nor changes
+  the ordinary source input. Final focused/root verification follows. No package or production
+  timeout was changed; Gateway/full coordinator activation and successful prepared handoff remain
+  unfinished.
+- Final ownership review reproduced cleanup leaving a second private connection attached to the
+  same transfer (`vxpipe-private-speech-connections-red.log`: 12 tests, one failure). Cancellation
+  now removes every private connection with that exact attempt ID, preserving main connections.
+  This is observed cleanup behavior, not evidence for the cause of the earlier live-browser failure.
+- All 46 focused agent, human web/phone and speech-policy room checks pass against the final code
+  in `vxpipe-private-speech-binding-verified-focused.log`. Root gates run sequentially under
+  `vxpipe-private-speech-binding-root-`, retaining per-command results and source hashes. No browser,
+  provider session or development-server restart was performed.
+- Concrete Gateway resume point: WebRTC `ConnectionPeerSupervisor.start_room_audio_ingress/4` and
+  `start_room_audio_egress/5` ask ordinary engine configuration and register new actors immediately.
+  Private attachments currently receive disabled modes and therefore have no room media actors.
+  The next coordinator path must create dormant actors outside critical registration, bind this
+  private ingress, and expose the prepared output subscription for candidate collection. It cannot
+  reuse ordinary main-media activation, which assumes admission has already happened.
+- Final root verification passes all five commands: formatting, warnings-as-errors compilation,
+  strict Credo, the full suite and unused dependencies. All eight application suites completed:
+  1,269 tests, zero failures and 15 integration exclusions. Every retained result is exit zero;
+  all seven changed/new code and test files match their hashes from the start of verification.
+  All 61 local documentation links/anchors and `git diff --check` pass. No dependency, fixture
+  timeout or production deadline was changed. Commit the internal private binding, gates, failure
+  cleanup and evidence together while preserving the concurrent visual work. Full milestone and
+  index acceptance remain open.

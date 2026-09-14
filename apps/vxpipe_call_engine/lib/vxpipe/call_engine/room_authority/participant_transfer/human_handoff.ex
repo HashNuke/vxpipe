@@ -15,7 +15,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     HumanCommitter,
     HumanPreparation,
     Pending,
-    Phase
+    Phase,
+    PrivateSpeech
   }
 
   @spec prepared(Pending.t(), HumanPreparation.t(), State.t()) :: {:noreply, State.t()}
@@ -155,6 +156,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   def unavailable(_capability, %State{}), do: :unhandled
 
+  def speech_to_text_unavailable(
+        capability,
+        identity,
+        %State{pending_participant_transfer: %Pending{} = pending} = state
+      ) do
+    if PrivateSpeech.matches?(pending, capability, identity, state),
+      do: {:handled, {:noreply, fail(pending, :destination_speech_to_text_unavailable, state)}},
+      else: :unhandled
+  end
+
+  def speech_to_text_unavailable(_capability, _identity, %State{}), do: :unhandled
+
   @spec capability_down(reference(), State.t()) :: :unhandled | {:handled, State.t()}
   def capability_down(
         monitor,
@@ -170,6 +183,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
       prep.outbound_leg_monitor == monitor ->
         {:handled, fail(pending, :destination_connection_unavailable, state)}
+
+      PrivateSpeech.monitor?(pending, monitor, state) ->
+        {:handled, fail(pending, :destination_speech_to_text_unavailable, state)}
 
       true ->
         :unhandled
@@ -234,23 +250,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp progress(%Pending{accepted?: true, briefing: :completed} = pending, state) do
-    if Authorizer.authorize(pending.request, state) == :ok do
-      demonitor_outbound_leg(pending.preparation)
+    cond do
+      Authorizer.authorize(pending.request, state) != :ok ->
+        {:ok, fail(pending, :source_authority_changed, state)}
 
-      case HumanCommitter.commit(pending, pending.preparation, state) do
-        {:ok, result, state} ->
-          {:ok, Completion.finish(pending, result, state)}
+      PrivateSpeech.bound?(pending, state) ->
+        {:ok, %{state | pending_participant_transfer: pending}}
 
-        {:error, :destination_unavailable, state} ->
-          {:ok, fail(pending, :destination_commit_unavailable, state)}
-      end
-    else
-      {:ok, fail(pending, :source_authority_changed, state)}
+      true ->
+        commit(pending, state)
     end
   end
 
   defp progress(%Pending{} = pending, state) do
     {:ok, %{state | pending_participant_transfer: pending}}
+  end
+
+  defp commit(pending, state) do
+    demonitor_outbound_leg(pending.preparation)
+
+    case HumanCommitter.commit(pending, pending.preparation, state) do
+      {:ok, result, state} ->
+        {:ok, Completion.finish(pending, result, state)}
+
+      {:error, :destination_unavailable, state} ->
+        {:ok, fail(pending, :destination_commit_unavailable, state)}
+    end
   end
 
   defp authorize_control(command, caller, pending, state) do

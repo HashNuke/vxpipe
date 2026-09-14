@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
     :destination_connection_unavailable,
     :destination_participant_unavailable,
     :destination_plan_unavailable,
+    :destination_speech_to_text_unavailable,
     :destination_text_to_speech_unavailable,
     :preparation_process_down,
     :preparation_supervisor_unavailable,
@@ -24,6 +25,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.History do
           | :destination_connection_unavailable
           | :destination_participant_unavailable
           | :destination_plan_unavailable
+          | :destination_speech_to_text_unavailable
           | :destination_text_to_speech_unavailable
           | :preparation_process_down
           | :preparation_supervisor_unavailable

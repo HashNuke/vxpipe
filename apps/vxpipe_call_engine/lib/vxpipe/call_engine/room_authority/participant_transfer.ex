@@ -193,6 +193,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     HumanHandoff.unavailable(capability, state)
   end
 
+  def speech_to_text_unavailable(capability, identity, %State{} = state) do
+    HumanHandoff.speech_to_text_unavailable(capability, identity, state)
+  end
+
   @spec worker_failed(reference(), History.failure_cause(), State.t()) ::
           {:noreply, State.t()}
   def worker_failed(

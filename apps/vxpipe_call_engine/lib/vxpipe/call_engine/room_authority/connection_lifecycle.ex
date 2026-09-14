@@ -83,17 +83,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   @spec discard_transfer(String.t(), atom(), State.t()) :: State.t()
   def discard_transfer(attempt_id, reason, %State{} = state)
       when is_binary(attempt_id) and is_atom(reason) do
-    case Enum.find(state.connections, fn {_connection_id, connection} ->
-           connection.admission == :transfer_preparation and
-             connection.transfer_attempt_id == attempt_id
-         end) do
-      {connection_id, connection} ->
+    Enum.reduce(state.connections, state, fn {connection_id, connection}, state ->
+      if connection.admission == :transfer_preparation and
+           connection.transfer_attempt_id == attempt_id do
         send(connection.pid, {:vxpipe_connection_unavailable, reason})
         remove_by_id(connection_id, state, reason: reason)
-
-      nil ->
+      else
         state
-    end
+      end
+    end)
   end
 
   @spec bind_speech_to_text(struct(), pid(), pid(), pid(), pid(), State.t()) ::
@@ -102,6 +100,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     case authorize_speech_to_text_binding(command, caller, subscriber, state) do
       :ok -> bind_with_media_policy(command, capability, ingress, state)
       {:error, error} -> {:reply, {:error, error}, state}
+    end
+  end
+
+  def bind_private_speech_to_text(command, capability, ingress, %State{} = state) do
+    case Map.get(state.connections, command.connection_id) do
+      %{admission: :transfer_preparation, speech_to_text: nil} ->
+        bind(command, capability, ingress, state)
+
+      _not_private ->
+        {:reply, {:error, speech_to_text_not_bindable(command.connection_id)}, state}
     end
   end
 
@@ -428,7 +436,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         speech_to_text_monitors: speech_to_text_monitors
     }
 
-    if OpeningAudio.admission(state.opening_audio) == :open do
+    if connection.admission == :main and OpeningAudio.admission(state.opening_audio) == :open do
       :ok = Ingress.open(ingress)
     end
 
@@ -597,7 +605,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     )
   end
 
-  defp open_connection_input(%{speech_to_text: %{ingress: ingress}}) do
+  defp open_connection_input(%{admission: :main, speech_to_text: %{ingress: ingress}}) do
     _ = Ingress.open(ingress)
     :ok
   end

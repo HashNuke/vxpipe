@@ -189,6 +189,35 @@ cover owner loss before provider startup, real deadline expiry with an unacknowl
 scope changes, admission without a prepared/required session, retention after phase completion,
 and unchanged provider generation across unrelated membership refresh.
 
+### Authorized private speech binding
+
+`RoomAuthority.prepare_transfer_speech_to_text/3` is an internal allocation operation for an
+already attached private destination. It requires the actual connection process, matching actor,
+tenant, room, incarnation, destination, connection and attempt, a live phase and unexpired command
+and attempt deadlines. Source transfer authority is revalidated. Callers cannot choose a profile,
+phase owner or actor PID: allocation uses the resolved destination and the real pending task.
+
+The operation creates a dormant capability/ingress pair under the existing capability supervisor,
+with locally applied base policy, closed input and the original private allocation lease. It does
+not connect a provider or register critical enforcers. A repeated valid request returns the same
+pair; an unconfigured destination returns `nil` even when application STT is enabled. The actual
+connection binding makes this pair visible to authoritative readiness inventory. Provider warming
+and candidate preparation remain outside room authority under the persistent phase.
+
+The ordinary activation and startup/opening input-release paths cannot open this private binding.
+Allocated private speech blocks the old immediate human commit path: allocation is not readiness,
+and the complete prepared media sequence must own adoption. Capability/ingress loss or a capability
+unavailable event fails only the exact private attempt and cleans all its private connections and
+pending resources; the source stays available. Destination actor PIDs are created inside the authorized
+operation rather than accepted through a second, caller-supplied binding handshake.
+
+Gateway and the complete coordinator do not yet invoke this internal operation. The next integration
+must create the destination's dormant media actors, collect the complete candidate, adopt the pair
+through the final enforcer barrier and explicitly release input. The ordinary committer is not a
+fallback for an allocated private pair; without that integration the attempt remains pending until
+failure or its original deadline. This checkpoint does not establish successful private adoption
+through the sample transfer flow.
+
 ## Prospective requirements and room bindings
 
 `Readiness.Inventory.build/4` derives required paths from the pinned plan, the prospective policy

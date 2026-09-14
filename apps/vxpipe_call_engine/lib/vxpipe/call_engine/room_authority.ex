@@ -115,6 +115,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     GenServer.call(room_authority, {:speech_to_text_configuration, command}, @call_timeout)
   end
 
+  def prepare_transfer_speech_to_text(room_authority, %AttachConnection{} = command, attempt_id) do
+    GenServer.call(
+      room_authority,
+      {:prepare_transfer_speech_to_text, command, attempt_id},
+      @call_timeout
+    )
+  end
+
   def bind_speech_to_text(
         room_authority,
         %AttachConnection{} = command,
@@ -239,6 +247,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_call({:speech_to_text_configuration, command}, {caller, _tag}, state) do
     {:reply, ConnectionLifecycle.speech_to_text_configuration(command, caller, state), state}
+  end
+
+  def handle_call({:prepare_transfer_speech_to_text, command, attempt_id}, {caller, _tag}, state) do
+    ParticipantTransfer.PrivateSpeech.allocate(command, caller, attempt_id, state)
   end
 
   def handle_call(
@@ -505,8 +517,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info({:vxpipe_stt_unavailable, capability, identity, _reason}, state) do
-    state = ConnectionLifecycle.speech_to_text_unavailable(capability, identity, state)
-    {:noreply, CallerIdle.reconcile(state)}
+    case ParticipantTransfer.speech_to_text_unavailable(capability, identity, state) do
+      {:handled, reply} ->
+        reply
+
+      :unhandled ->
+        state = ConnectionLifecycle.speech_to_text_unavailable(capability, identity, state)
+        {:noreply, CallerIdle.reconcile(state)}
+    end
   end
 
   def handle_info(

@@ -25,6 +25,9 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
+  alias Vxpipe.CallEngine.Capability.SpeechToText
+  alias Vxpipe.CallEngine.MediaPolicy.Authority, as: PolicyAuthority
+
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
@@ -77,6 +80,212 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     :ok
   end
 
+  for failure <- [:kill, :unavailable] do
+    @private_speech_failure failure
+    @tag capture_log: true
+    test "private speech stays closed and #{@private_speech_failure} fails only the transfer" do
+      plan = compile_plan(support_stt: true)
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      reception = Map.fetch!(plan.participants, "reception")
+      assert {:ok, room} = CallEngine.start_call(plan)
+      assert_receive {:test_tts_transport_started, _source_tts, _}, 2_000
+
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :private_caller)
+
+      support_sink =
+        start_supervised!({TestAudioOutputSink, observer: self()}, id: :private_support)
+
+      assert {:ok, _} = attach(plan, room, caller, "caller-connection", caller_sink)
+      source = AgentActivationSupervisor.whereis_child(reception.activation_id, :session)
+      begin_transfer(plan, room, caller, "private-speech-cancelled")
+      assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+
+      assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt_id}} =
+               attach(plan, room, support, "support-connection", support_sink)
+
+      authority = room_authority(plan)
+      pending = :sys.get_state(authority).pending_participant_transfer
+      command = attachment_command(plan, room, support, "support-connection")
+
+      assert {:ok, %{capability: capability, ingress: ingress} = binding} =
+               Vxpipe.CallEngine.RoomAuthority.prepare_transfer_speech_to_text(
+                 authority,
+                 command,
+                 attempt_id
+               )
+
+      assert {:ok, ^binding} =
+               Vxpipe.CallEngine.RoomAuthority.prepare_transfer_speech_to_text(
+                 authority,
+                 command,
+                 attempt_id
+               )
+
+      assert {:error, %Vxpipe.CallEngine.Error{code: :speech_to_text_not_bindable}} =
+               CallEngine.activate_speech_to_text(command)
+
+      capability_monitor = Process.monitor(capability)
+      ingress_monitor = Process.monitor(ingress)
+      speech = :sys.get_state(capability)
+      assert speech.private_allocation.owner == pending.task.pid
+      assert speech.private_allocation.attempt_id == attempt_id
+      assert speech.private_allocation.deadline_ms == pending.deadline_ms
+      assert speech.transport == nil
+      assert :sys.get_state(ingress).opening_input_admission == :closed
+
+      _ =
+        Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle.open_inputs(:sys.get_state(authority))
+
+      assert :sys.get_state(ingress).opening_input_admission == :closed
+      refute MapSet.member?(speech.policy.present_participant_ids, support.participant_id)
+      refute_receive {:test_stt_transport_started, _, _}
+
+      assert :ok =
+               CallEngine.participant_transfer_control(
+                 transfer_control(plan, room, support, attempt_id, :accept)
+               )
+
+      assert :ok =
+               CallEngine.participant_transfer_control(
+                 transfer_control(plan, room, support, attempt_id, :media_ready)
+               )
+
+      finish_private_briefing(briefing_tts, support_sink)
+      refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "private-speech-cancelled"}}
+      assert {:ok, _scope} = Phase.scope(pending.task.pid)
+      assert :sys.get_state(ingress).opening_input_admission == :closed
+
+      policy_authority = PolicyAuthority.whereis(room.incarnation_id)
+
+      present =
+        speech.policy.present_participant_ids
+        |> MapSet.delete(reception.participant_id)
+        |> MapSet.put(support.participant_id)
+
+      assert {:ok, candidate} = PolicyAuthority.preview_presence(policy_authority, present)
+
+      assert {:ok, _prepared} =
+               SpeechToText.prepare_policy(capability, candidate,
+                 owner: pending.task.pid,
+                 attempt_id: attempt_id,
+                 deadline_ms: pending.deadline_ms
+               )
+
+      assert_receive {:test_stt_transport_started, transport, _}, 2_000
+      transport_monitor = Process.monitor(transport)
+      assert PolicyAuthority.snapshot(policy_authority) == speech.policy
+      assert :sys.get_state(ingress).opening_input_admission == :closed
+
+      case @private_speech_failure do
+        :kill -> Process.exit(capability, :kill)
+        :unavailable -> SpeechToText.fail(capability, :media_overloaded)
+      end
+
+      assert_receive {:DOWN, ^capability_monitor, :process, ^capability, _reason}, 2_000
+      assert_receive {:DOWN, ^ingress_monitor, :process, ^ingress, _reason}, 2_000
+      assert_receive {:DOWN, ^transport_monitor, :process, ^transport, _reason}, 2_000
+
+      assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "private-speech-cancelled"}},
+                     2_000
+
+      assert_receive {:vxpipe_connection_unavailable, :transfer_failed}, 2_000
+      assert AgentActivationSupervisor.whereis_child(reception.activation_id, :session) == source
+      assert :sys.get_state(authority).pending_participant_transfer == nil
+
+      assert {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_rejected}} =
+               Vxpipe.CallEngine.RoomAuthority.prepare_transfer_speech_to_text(
+                 authority,
+                 command,
+                 attempt_id
+               )
+    end
+  end
+
+  test "private speech allocation respects an unconfigured destination" do
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, _source_tts, _}, 2_000
+    caller_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :no_stt_caller)
+    support_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :no_stt_support)
+    assert {:ok, _} = attach(plan, room, caller, "caller-connection", caller_sink)
+    begin_transfer(plan, room, caller, "no-private-stt")
+    assert_receive {:test_tts_transport_started, _briefing_tts, _}, 2_000
+
+    assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt_id}} =
+             attach(plan, room, support, "support-connection", support_sink)
+
+    authority = room_authority(plan)
+    command = attachment_command(plan, room, support, "support-connection")
+
+    assert {:ok, nil} =
+             Vxpipe.CallEngine.RoomAuthority.prepare_transfer_speech_to_text(
+               authority,
+               command,
+               attempt_id
+             )
+
+    refute_receive {:test_stt_transport_started, _, _}
+
+    assert Map.fetch!(:sys.get_state(authority).connections, command.connection_id).speech_to_text ==
+             nil
+  end
+
+  test "private speech allocation rejects foreign connections, identities and attempts" do
+    plan = compile_plan(support_stt: true)
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, _source_tts, _}, 2_000
+    caller_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :auth_caller)
+    support_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :auth_support)
+    assert {:ok, _} = attach(plan, room, caller, "caller-connection", caller_sink)
+    begin_transfer(plan, room, caller, "private-speech-authorization")
+    assert_receive {:test_tts_transport_started, _briefing_tts, _}, 2_000
+
+    assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt_id}} =
+             attach(plan, room, support, "support-connection", support_sink)
+
+    authority = room_authority(plan)
+    command = attachment_command(plan, room, support, "support-connection")
+
+    for {candidate, attempt} <- [
+          {%{command | actor_id: "foreign-actor"}, attempt_id},
+          {%{command | tenant_id: "foreign-tenant"}, attempt_id},
+          {%{command | room_id: "foreign-room"}, attempt_id},
+          {%{command | incarnation_id: "foreign-incarnation"}, attempt_id},
+          {%{command | participant_id: caller.participant_id}, attempt_id},
+          {%{command | connection_id: "caller-connection"}, attempt_id},
+          {%{command | deadline: DateTime.add(DateTime.utc_now(), -1, :second)}, attempt_id},
+          {command, "foreign-attempt"}
+        ] do
+      assert {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_rejected}} =
+               Vxpipe.CallEngine.RoomAuthority.prepare_transfer_speech_to_text(
+                 authority,
+                 candidate,
+                 attempt
+               )
+    end
+
+    foreign = start_supervised!({Agent, fn -> nil end})
+
+    assert {:error, %Vxpipe.CallEngine.Error{code: :participant_transfer_rejected}} =
+             Agent.get(foreign, fn _ ->
+               Vxpipe.CallEngine.RoomAuthority.prepare_transfer_speech_to_text(
+                 authority,
+                 command,
+                 attempt_id
+               )
+             end)
+
+    state = :sys.get_state(authority)
+    assert Map.fetch!(state.connections, command.connection_id).speech_to_text == nil
+    refute_receive {:test_stt_transport_started, _, _}
+  end
+
   test "the prepared phase retains its scope and owner loss discards the private destination" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, "caller")
@@ -96,6 +305,9 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt_id}} =
              attach(plan, room, support, "support-connection", support_sink)
 
+    assert {:ok, %ConnectionAttachment{transfer_attempt_id: ^attempt_id}} =
+             attach(plan, room, support, "second-support-connection", support_sink)
+
     authority = room_authority(plan)
     pending = :sys.get_state(authority).pending_participant_transfer
     phase = pending.task.pid
@@ -114,9 +326,12 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert_receive {:DOWN, ^phase_monitor, :process, ^phase, :killed}, 2_000
     assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "phase-owner-lost"}}, 2_000
     assert_receive {:vxpipe_connection_unavailable, :transfer_failed}, 2_000
+    assert_receive {:vxpipe_connection_unavailable, :transfer_failed}, 2_000
     assert_receive {:DOWN, ^briefing_monitor, :process, ^briefing_tts, _reason}, 2_000
     assert AgentActivationSupervisor.whereis_child(reception.activation_id, :session) == source
-    assert :sys.get_state(authority).pending_participant_transfer == nil
+    state = :sys.get_state(authority)
+    assert state.pending_participant_transfer == nil
+    assert Map.keys(state.connections) == ["caller-connection"]
     refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _}
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phase-owner-lost"}}
   end
