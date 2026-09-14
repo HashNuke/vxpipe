@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter.Readiness do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.Gateway.Media.OutputArbiter.PreparedRoom
 
   def readiness(output, selection \\ :private) do
     with {:ok, resource, status, _native} <- observe(output, selection),
@@ -23,13 +24,27 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter.Readiness do
      }}
   end
 
-  def binding(%{binding: %{token: token} = room} = state, {:room, token}) do
+  def binding(%{binding: %{token: token} = room} = state, {:room, token}),
+    do: room_binding(state, room)
+
+  def binding(
+        %{prepared_room: %{binding: %{token: token} = room} = pending} = state,
+        {:room, token}
+      ) do
+    if PreparedRoom.valid?(state, pending),
+      do: room_binding(state, room),
+      else: {:error, :unavailable}
+  end
+
+  def binding(_state, _stale), do: {:error, :unavailable}
+
+  defp room_binding(state, room) do
     {:ok, private} = binding(state, :private)
 
     resource = %{
       private.resource
       | kind: :room_output_binding,
-        generation: token,
+        generation: room.token,
         configuration:
           Resource.signature({private.resource.configuration, room.caller, room.identity})
     }
@@ -37,8 +52,6 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter.Readiness do
     status = if state.pending_binding, do: :preparing, else: private.status
     {:ok, %{private | resource: resource, status: status}}
   end
-
-  def binding(_state, _stale), do: {:error, :unavailable}
 
   # Keep dependent calls out of the arbiter's receive loop and recheck its binding afterward.
   defp observe(output, selection) do

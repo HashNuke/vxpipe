@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
 
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, MixedFrame}
   alias Vxpipe.CallEngine.Readiness.Resource
-  alias Vxpipe.Gateway.Media.OutputArbiter.Readiness
+  alias Vxpipe.Gateway.Media.OutputArbiter.{PreparedRoom, Readiness}
 
   @timeout 5_000
 
@@ -21,6 +21,26 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
   end
 
   def bind_room(output, identity), do: GenServer.call(output, {:bind_room, identity}, @timeout)
+
+  def prepare_room(output, identity, options),
+    do: GenServer.call(output, {:prepare_room, identity, options}, @timeout)
+
+  def discard_room(output, token), do: GenServer.call(output, {:discard_room, token}, @timeout)
+
+  def commit_room(output, %Resource{} = expected, generation) do
+    case room_binding_readiness(output, expected.generation) do
+      {:ok, ^expected, :ready} ->
+        GenServer.call(output, {:commit_room, expected.generation, generation}, @timeout)
+
+      {:ok, ^expected, _status} ->
+        {:error, :output_not_ready}
+
+      _changed ->
+        {:error, :stale_preparation}
+    end
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
 
   def push_room(output, binding, frame),
     do: GenServer.call(output, {:room, binding, frame}, @timeout)
@@ -72,6 +92,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
        current: nil,
        pending_direct: nil,
        pending_binding: nil,
+       prepared_room: nil,
        binding: nil,
        generation: 0,
        held?: false,
@@ -86,8 +107,33 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     {:reply, Readiness.binding(state, selection), state}
   end
 
+  def handle_call({:prepare_room, identity, options}, {caller, _}, state) do
+    case PreparedRoom.begin(state, caller, identity, options) do
+      {:ok, token, state} -> {:reply, {:ok, token}, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:discard_room, token}, {caller, _}, state) do
+    case PreparedRoom.discard(state, caller, token) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:commit_room, token, generation}, {caller, _}, state) do
+    case PreparedRoom.commit(state, caller, token, generation) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
   def handle_call({:bind_room, identity}, _from, state) when identity != state.identity,
     do: {:reply, {:error, :wrong_recipient}, state}
+
+  def handle_call({:bind_room, _identity}, _from, %{prepared_room: prepared} = state)
+      when not is_nil(prepared),
+      do: {:reply, {:error, :preparation_conflict}, state}
 
   def handle_call({:bind_room, identity}, {caller, _} = from, %{pending_binding: nil} = state) do
     if state.binding, do: Process.demonitor(state.binding.monitor, [:flush])
@@ -218,6 +264,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
         {:reply, {:error, :stale_output_generation}, state}
 
       true ->
+        state = PreparedRoom.cancel(state)
         {:noreply, clear(%{state | held?: true, generation: generation}, {:hold, from})}
     end
   end
@@ -226,6 +273,9 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     cond do
       generation != state.generation ->
         {:reply, {:error, :stale_output_generation}, state}
+
+      state.prepared_room != nil ->
+        {:reply, {:error, :preparation_pending}, state}
 
       state.current || state.pending_direct || state.clearing? || state.draining? ->
         {:reply, {:error, :output_not_drained}, state}
@@ -239,6 +289,19 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     do: {:noreply, request(state, message, {:reply, from})}
 
   @impl true
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{prepared_room: %{owner_monitor: owner, binding: %{monitor: producer}}} = state
+      )
+      when monitor == owner or monitor == producer,
+      do: {:noreply, PreparedRoom.cancel(state)}
+
+  def handle_info(
+        {:prepared_room_expired, token},
+        %{prepared_room: %{binding: %{token: token}}} = state
+      ),
+      do: {:noreply, PreparedRoom.cancel(state)}
+
   def handle_info(
         {:vxpipe_audio_playback, native, token, event},
         %{native: native, current: %{token: token}} = state
@@ -273,6 +336,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
       do: unavailable(state)
 
   def handle_info({:DOWN, monitor, :process, _, _}, %{binding: %{monitor: monitor}} = state) do
+    state = PreparedRoom.cancel(state)
     state = %{state | binding: nil}
 
     if state.current && state.current.kind == :room && !state.clearing?,

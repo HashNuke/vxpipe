@@ -695,3 +695,17 @@ owner loss, retention, demand and the actual WebRTC/Telnyx/Twilio normalizers. A
 pass: 1,192 tests, zero failures and 15 integrations excluded. Output/mixer/recording candidate
 preparation, selecting the prepared graph, startup/transfer waits and cues, fenced release,
 restoration, safe phase observations and rendered/provider acceptance remain unfinished.
+
+Shared room output now supports preparation while retaining the live route and native encoder.
+The pending route is bound to the phase owner, attempt, existing absolute deadline and held-output
+generation. The ordinary room-output owner adopts its exact ready descriptor only after private
+output drains. Release cannot bypass pending preparation. Discard, expiry, owner loss and a newer
+hold generation cancel only pending output, preserving the source route for restoration; adoption
+releases phase ownership without stopping the new route. Native encoding and RTP identity continue
+across the private cue and first room frame.
+
+Nineteen focused arbiter checks and all five root gates pass: formatting, warnings-as-errors
+compilation, strict Credo, 1,199 tests with zero failures and 15 integrations excluded, and unused
+dependencies. Mixer/room-egress candidate installation, full prepared graph selection and
+startup/transfer orchestration still need to use these bindings. No rendered or live-provider
+acceptance is claimed, and the common-readiness milestone and index remain unchecked.

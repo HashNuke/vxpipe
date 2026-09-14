@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
 
   alias Vxpipe.CallEngine.Media.{AudioOutputFrame, MixedFrame, OutputSink}
   alias Vxpipe.Gateway.Media.OutputArbiter
+  alias Vxpipe.Gateway.Media.SharedOutputPipeline
   alias Vxpipe.Gateway.TestOpusEncoder
   alias Vxpipe.Gateway.WebRTC.AudioEgress
 
@@ -61,6 +62,200 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert resource.kind == :private_output
     assert {:ok, [^resource]} = OutputArbiter.readiness_resources(output)
     refute_receive {:rtp, _packet}
+  end
+
+  test "prepares a room route without revoking the live route or restarting the output" do
+    {output, native} = start_output()
+    assert {:ok, original} = OutputArbiter.bind_room(output, identity())
+    assert {:ok, live, :ready} = OutputArbiter.room_binding_readiness(output, original)
+    assert {:ok, codec, :ready} = AudioEgress.readiness(native)
+    assert :ok = OutputSink.hold(output, 1)
+    options = preparation_options()
+    assert {:ok, token} = OutputArbiter.prepare_room(output, identity(), options)
+    assert {:ok, ^token} = OutputArbiter.prepare_room(output, identity(), options)
+    assert {:ok, ^live, :ready} = OutputArbiter.readiness_binding(live)
+    assert {:ok, prepared, :ready} = OutputArbiter.room_binding_readiness(output, token)
+    assert {:ok, ^codec, :ready} = AudioEgress.readiness(native)
+    assert {:error, :preparation_pending} = OutputSink.release(output, 1)
+    cue = %{direct("cue") | output_generation: 1}
+    assert :ok = OutputSink.push(output, cue)
+    assert :ok = OutputSink.finish(output, "cue", self())
+    assert_receive {:rtp, %{sequence_number: 0, timestamp: 0, ssrc: ssrc}}
+    assert_receive {:pace, ^native, tick}
+    assert {:error, :output_not_drained} = OutputArbiter.commit_room(output, prepared, 1)
+
+    assert {:error, :held} =
+             OutputArbiter.push_room(output, token, %{mixed(0) | output_generation: 1})
+
+    send(native, tick)
+    assert_receive {:vxpipe_audio_playback, ^output, "cue", {:completed, 20}}
+    assert :ok = OutputArbiter.commit_room(output, prepared, 1)
+    assert {:ok, ^prepared, :ready} = OutputArbiter.readiness_binding(prepared)
+    assert {:error, :unavailable} = OutputArbiter.readiness_binding(live)
+    assert {:ok, ^codec, :ready} = AudioEgress.readiness(native)
+    assert :ok = OutputSink.release(output, 1)
+    frame = %{mixed(960) | output_generation: 1}
+    assert {:error, :stale_room_binding} = OutputArbiter.push_room(output, original, frame)
+    assert :ok = OutputArbiter.push_room(output, token, frame)
+    assert_receive {:rtp, %{sequence_number: 1, timestamp: 960, ssrc: ^ssrc}}
+  end
+
+  test "discarding a prepared route leaves the live room output available" do
+    {output, _native} = start_output()
+    assert {:ok, original} = OutputArbiter.bind_room(output, identity())
+    assert {:ok, live, :ready} = OutputArbiter.room_binding_readiness(output, original)
+    assert :ok = OutputSink.hold(output, 1)
+    assert {:ok, token} = OutputArbiter.prepare_room(output, identity(), preparation_options())
+    assert :ok = OutputArbiter.discard_room(output, token)
+    assert {:error, :unavailable} = OutputArbiter.room_binding_readiness(output, token)
+    assert {:ok, ^live, :ready} = OutputArbiter.readiness_binding(live)
+    assert :ok = OutputSink.release(output, 1)
+    assert :ok = OutputArbiter.push_room(output, original, %{mixed(0) | output_generation: 1})
+    assert_receive {:rtp, _packet}
+  end
+
+  test "the shared pipeline adopts its prepared route and releases phase ownership" do
+    {output, native} = start_output()
+
+    start_supervised!(
+      {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+    )
+
+    original = start_shared_pipeline(output, "live-room")
+    assert_receive {:vxpipe_room_audio_output_ready, "live-room"}
+    assert {:ok, live, :ready} = SharedOutputPipeline.readiness(original)
+    assert :ok = OutputSink.hold(output, 1)
+    owner = start_supervised!({Agent, fn -> :phase end}, id: :phase_owner)
+    options = Keyword.put(preparation_options(), :owner, owner)
+    prepared = start_shared_pipeline(output, "prepared-room", preparation: options)
+    assert_receive {:vxpipe_room_audio_output_ready, "prepared-room"}
+    assert {:ok, ^live, :ready} = SharedOutputPipeline.readiness(original)
+    assert {:ok, route, :ready} = SharedOutputPipeline.readiness(prepared)
+    assert :ok = SharedOutputPipeline.activate(prepared, route, 1)
+    assert :ok = SharedOutputPipeline.activate(prepared, route, 1)
+    stop_supervised!(:phase_owner)
+    assert {:ok, ^route, :ready} = SharedOutputPipeline.readiness(prepared)
+    assert {:error, :unavailable} = SharedOutputPipeline.readiness(original)
+    assert :ok = OutputSink.release(output, 1)
+    assert :ok = SharedOutputPipeline.push("prepared-room", %{mixed(0) | output_generation: 1})
+    assert_receive {:rtp, %{sequence_number: 0, timestamp: 0}}
+    assert_receive {:pace, ^native, tick}
+    send(native, tick)
+    assert_receive {:vxpipe_room_audio_output_sent, "prepared-room", 0}
+  end
+
+  test "losing a preparation owner stops only its pending shared pipeline" do
+    {output, _native} = start_output()
+
+    start_supervised!(
+      {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+    )
+
+    original = start_shared_pipeline(output, "live-room")
+    assert_receive {:vxpipe_room_audio_output_ready, "live-room"}
+    assert {:ok, live, :ready} = SharedOutputPipeline.readiness(original)
+    assert :ok = OutputSink.hold(output, 1)
+    owner = start_supervised!({Agent, fn -> :phase end}, id: :phase_owner)
+    options = Keyword.put(preparation_options(), :owner, owner)
+    pending = start_shared_pipeline(output, "prepared-room", preparation: options)
+    assert_receive {:vxpipe_room_audio_output_ready, "prepared-room"}
+    monitor = Process.monitor(pending)
+    stop_supervised!(:phase_owner)
+    assert_receive {:DOWN, ^monitor, :process, ^pending, :normal}, 1_000
+    assert {:ok, ^live, :ready} = SharedOutputPipeline.readiness(original)
+    assert :ok = OutputSink.release(output, 1)
+    assert :ok = SharedOutputPipeline.push("live-room", %{mixed(0) | output_generation: 1})
+    assert_receive {:rtp, _packet}
+  end
+
+  test "expiry cancels only the prepared pipeline and stale cleanup cannot cancel its successor" do
+    {output, _native} = start_output()
+
+    start_supervised!(
+      {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+    )
+
+    original = start_shared_pipeline(output, "live-room")
+    assert_receive {:vxpipe_room_audio_output_ready, "live-room"}
+    assert {:ok, live, :ready} = SharedOutputPipeline.readiness(original)
+    assert :ok = OutputSink.hold(output, 1)
+
+    options =
+      Keyword.put(preparation_options(), :deadline_ms, System.monotonic_time(:millisecond) + 250)
+
+    pending = start_shared_pipeline(output, "expiring-room", preparation: options)
+    monitor = Process.monitor(pending)
+    assert_receive {:vxpipe_room_audio_output_ready, "expiring-room"}
+    assert {:ok, expired, :ready} = SharedOutputPipeline.readiness(pending)
+    assert_receive {:DOWN, ^monitor, :process, ^pending, :normal}, 1_000
+    assert {:error, :unavailable} = OutputArbiter.readiness_binding(expired)
+    assert {:ok, ^live, :ready} = SharedOutputPipeline.readiness(original)
+
+    replacement = start_shared_pipeline(output, "next-room", preparation: preparation_options())
+    assert_receive {:vxpipe_room_audio_output_ready, "next-room"}
+    assert {:ok, ready, :ready} = SharedOutputPipeline.readiness(replacement)
+    send(output, {:prepared_room_expired, expired.generation})
+    assert {:error, :stale_preparation} = OutputArbiter.discard_room(output, expired.generation)
+    assert {:error, :stale_preparation} = OutputArbiter.commit_room(output, expired, 1)
+    assert {:ok, ^ready, :ready} = SharedOutputPipeline.readiness(replacement)
+    assert :ok = SharedOutputPipeline.activate(replacement, ready, 1)
+    assert :ok = OutputSink.release(output, 1)
+  end
+
+  test "a new held generation cancels preparation while retaining the source for restoration" do
+    {output, _native} = start_output()
+
+    start_supervised!(
+      {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+    )
+
+    original = start_shared_pipeline(output, "live-room")
+    assert_receive {:vxpipe_room_audio_output_ready, "live-room"}
+    assert {:ok, live, :ready} = SharedOutputPipeline.readiness(original)
+    assert :ok = OutputSink.hold(output, 1)
+    pending = start_shared_pipeline(output, "pending-room", preparation: preparation_options())
+    monitor = Process.monitor(pending)
+    assert_receive {:vxpipe_room_audio_output_ready, "pending-room"}
+    assert {:ok, prepared, :ready} = SharedOutputPipeline.readiness(pending)
+    assert :ok = OutputSink.hold(output, 2)
+    assert_receive {:DOWN, ^monitor, :process, ^pending, :normal}, 1_000
+    assert {:error, :stale_preparation} = OutputArbiter.commit_room(output, prepared, 1)
+    assert {:error, :stale_output_generation} = OutputSink.release(output, 1)
+    assert {:ok, ^live, :ready} = SharedOutputPipeline.readiness(original)
+    assert :ok = OutputSink.release(output, 2)
+    assert :ok = SharedOutputPipeline.push("live-room", %{mixed(0) | output_generation: 2})
+    assert_receive {:rtp, _packet}
+  end
+
+  test "preparation cannot extend the deadline or commit different collected evidence" do
+    {output, _native} = start_output()
+    assert {:ok, original} = OutputArbiter.bind_room(output, identity())
+    assert {:ok, live, :ready} = OutputArbiter.room_binding_readiness(output, original)
+    options = preparation_options()
+
+    assert {:error, :output_not_held} =
+             OutputArbiter.prepare_room(output, identity(), Keyword.put(options, :generation, 0))
+
+    assert :ok = OutputSink.hold(output, 1)
+    assert {:ok, token} = OutputArbiter.prepare_room(output, identity(), options)
+    assert {:ok, prepared, :ready} = OutputArbiter.room_binding_readiness(output, token)
+
+    assert {:error, :preparation_conflict} =
+             OutputArbiter.prepare_room(
+               output,
+               identity(),
+               Keyword.update!(options, :deadline_ms, &(&1 + 1_000))
+             )
+
+    assert {:error, :preparation_conflict} = OutputArbiter.bind_room(output, identity())
+
+    assert {:error, :stale_preparation} =
+             OutputArbiter.commit_room(output, %{prepared | configuration: "changed"}, 1)
+
+    assert {:ok, ^live, :ready} = OutputArbiter.readiness_binding(live)
+    assert {:ok, ^prepared, :ready} = OutputArbiter.readiness_binding(prepared)
+    assert :ok = OutputArbiter.discard_room(output, token)
+    assert :ok = OutputSink.release(output, 1)
   end
 
   test "room readiness requires the current arbiter binding, independently of private output" do
@@ -289,6 +484,34 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
              )
 
     room
+  end
+
+  defp preparation_options do
+    [
+      owner: self(),
+      attempt_id: "room-route-preparation",
+      generation: 1,
+      deadline_ms: System.monotonic_time(:millisecond) + 5_000
+    ]
+  end
+
+  defp start_shared_pipeline(output, id, options \\ []) do
+    options =
+      Map.to_list(identity()) ++
+        [
+          pipeline_id: id,
+          owner: self(),
+          output_sink: output,
+          pipeline_module: SharedOutputPipeline
+        ] ++ options
+
+    assert {:ok, pipeline} =
+             Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor.start_room_audio_output_pipeline(
+               "connection",
+               options
+             )
+
+    pipeline
   end
 
   defp start_output(native_adapter \\ AudioEgress) do

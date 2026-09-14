@@ -854,3 +854,29 @@ unchecked; the milestone and index are still incomplete.
   remaining milestone includes candidate output/mixer/recording preparation, complete graph selection,
   persistent lifecycle ownership, startup/transfer waits and cues, final release, restoration,
   telemetry and rendered/provider acceptance. The milestone and index remain unchecked.
+
+## Prepare shared output routes
+
+- The preceding goal turn committed prepared room-input decoders as `43aafa2`. Inspection starts
+  from a clean worktree. Shared output pipeline construction currently binds its route immediately,
+  revoking the live route before a prospective policy can be collected.
+- Add a prepared room route that retains the active route and the native encoder/RTP timeline.
+  Bind the preparation to the existing persistent owner, attempt, deadline and held-output generation.
+  Commit must acknowledge the exact collected resource and require private playback to have drained.
+  The first red checks cover held preparation, cue-before-commit ordering, adoption and scoped discard.
+- Direct arbiter checks passed after the preparation protocol was added. The shared-pipeline red
+  checks then reproduced loss of the live route during construction (16 checks, two failures).
+  Construction now reserves a pending route, and explicit owner activation adopts its exact ready
+  descriptor after private playback drains. All 19 focused checks pass, including deadline expiry,
+  stale cleanup, generation changes, owner loss, unchanged native output and RTP continuity.
+- The preceding rename-only turn made no implementation progress. Reinspection confirmed the pending
+  output work and its completed 16-check run; work resumed from those files without restarting a
+  live job. Expiry and restoration checks now verify the source route remains usable.
+- Design review preserves the native encoder and current room binding during preparation. A new
+  held generation invalidates pending work; commit releases only the phase lease, so later phase
+  shutdown cannot stop an adopted route. Deadline extension and mismatched collected evidence fail.
+  Full mixer/room-egress candidate integration and lifecycle orchestration remain unfinished.
+- Final umbrella checks pass: formatting, warnings-as-errors compilation, strict Credo,
+  1,199 tests with zero failures and 15 integrations excluded, and unused dependencies. The
+  readiness contract and milestone record this output checkpoint without closing lifecycle gates.
+  No application restart, browser inspection or provider call was performed for this backend change.

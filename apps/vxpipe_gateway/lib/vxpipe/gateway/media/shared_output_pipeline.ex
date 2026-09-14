@@ -10,6 +10,9 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
 
   def push(pipeline_id, frame), do: GenServer.call(via(pipeline_id), {:push, frame}, 5_000)
 
+  def activate(pipeline, resource, generation),
+    do: GenServer.call(pipeline, {:activate, resource, generation}, 5_000)
+
   def readiness(pipeline) do
     with {:ok, output, token} <- GenServer.call(pipeline, :output_binding, 1_000),
          do: OutputArbiter.room_binding_readiness(output, token)
@@ -35,13 +38,15 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
        output_monitor: Process.monitor(output),
        owner_monitor: Process.monitor(owner),
        binding: nil,
+       preparation: Keyword.get(options, :preparation),
+       activated_generation: nil,
        identity: identity
      }, {:continue, :bind}}
   end
 
   @impl true
   def handle_continue(:bind, state) do
-    case OutputArbiter.bind_room(state.output, state.identity) do
+    case bind(state) do
       {:ok, binding} ->
         send(state.owner, {:vxpipe_room_audio_output_ready, state.pipeline_id})
         {:noreply, %{state | binding: binding}}
@@ -51,10 +56,30 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
     end
   end
 
+  defp bind(%{preparation: nil} = state),
+    do: OutputArbiter.bind_room(state.output, state.identity)
+
+  defp bind(state),
+    do: OutputArbiter.prepare_room(state.output, state.identity, state.preparation)
+
   @impl true
   def handle_call(:output_binding, _from, state) do
     {:reply, {:ok, state.output, state.binding}, state}
   end
+
+  def handle_call({:activate, resource, generation}, {owner, _}, %{owner: owner} = state) do
+    if state.preparation != nil or state.activated_generation == generation do
+      case OutputArbiter.commit_room(state.output, resource, generation) do
+        :ok -> {:reply, :ok, %{state | preparation: nil, activated_generation: generation}}
+        {:error, _reason} = error -> {:reply, error, state}
+      end
+    else
+      {:reply, {:error, :not_prepared}, state}
+    end
+  end
+
+  def handle_call({:activate, _resource, _generation}, _from, state),
+    do: {:reply, {:error, :not_owner}, state}
 
   def handle_call({:push, frame}, _from, state) do
     case OutputArbiter.push_room(state.output, state.binding, frame) do
@@ -73,6 +98,13 @@ defmodule Vxpipe.Gateway.Media.SharedOutputPipeline do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_room_binding_cancelled, output, binding},
+        %{output: output, binding: binding, preparation: preparation} = state
+      )
+      when not is_nil(preparation),
+      do: {:stop, :normal, state}
+
   def handle_info(
         {:vxpipe_room_output, output, binding, timestamp},
         %{output: output, binding: binding} = state

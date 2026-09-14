@@ -467,6 +467,33 @@ Both deterministic phone adapter fixtures query their actual private/room output
 exchanging audio. Negotiated live transport and required input-track evidence remain separate
 requirements; these output checks do not claim complete connection or lifecycle readiness.
 
+### Preparing a shared room route
+
+After the output hold is acknowledged, `OutputArbiter.prepare_room/3` reserves a replacement
+room binding under the existing phase owner, attempt, absolute deadline and output generation.
+The live binding remains available for restoration. Preparation neither replaces the native
+encoder nor interrupts private wait/cue playback. Its descriptor reports the actual native
+output adapter's readiness; a running pipeline alone cannot satisfy collection.
+
+`SharedOutputPipeline` accepts this preparation when started by the per-connection supervisor.
+Its owner activates it with the exact collected resource and held generation. Activation checks
+native readiness outside the arbiter loop, then commits the binding only while the lease and
+base route remain current and private output has drained. Release is rejected while preparation
+is pending. The adopted descriptor remains queryable, and subsequent room packets use the same
+encoder, RTP sequence, timestamp clock and SSRC as the preceding private cue.
+
+Cancellation, expiry, phase-owner loss and a newer hold generation stop only the prepared route.
+After adoption, phase ownership is released and the ordinary room-output owner controls lifetime.
+Repeated preparation cannot extend its deadline; stale discard/expiry/activation cannot remove a
+newer binding. The previous source route remains usable after discarded preparation and an
+explicit release of the current generation.
+
+Design review rejected immediate rebinding during construction because it destroys the source
+route before readiness, and rejected another native encoder because it breaks ordered cue/media
+delivery. Nineteen focused arbiter checks cover preparation, exact evidence, cue ordering,
+adoption, cancellation and retained output identity. Mixer subscriptions and room-egress candidate
+installation still need to use this protocol; these checks do not prove transfer orchestration.
+
 ## Negotiated WebRTC media
 
 Connection readiness now queries ExWebRTC's current transport state and negotiated transceivers
