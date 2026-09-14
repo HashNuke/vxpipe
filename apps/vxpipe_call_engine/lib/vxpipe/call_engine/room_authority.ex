@@ -300,6 +300,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   @impl true
+  def handle_info({:vxpipe_transfer_progress, reference, progress}, state),
+    do: ParticipantTransfer.progress(reference, progress, state)
+
   def handle_info({:vxpipe_transfer_handoff_result, reference, stage, result}, state),
     do: ParticipantTransfer.HumanHandoff.handoff_result(reference, stage, result, state)
 

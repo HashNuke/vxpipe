@@ -146,6 +146,21 @@ test("negotiates the sideband peer, projects controls, and releases browser medi
 
   expect(onControl).toHaveBeenCalledWith({ type: "acceptance_ready", attemptId: "xfer_demo" });
 
+  dataChannel.onmessage?.(new MessageEvent("message", {data: JSON.stringify({
+    type: "transfer.progress", data: {attempt_id: "xfer_demo", phase: "preparing", blockers: ["speech_to_text"], elapsed_ms: 250},
+  })}));
+  expect(onControl).toHaveBeenLastCalledWith({type: "progress", attemptId: "xfer_demo", phase: "preparing", blockers: ["speech_to_text"], elapsedMs: 250});
+
+  const controlCount = onControl.mock.calls.length;
+  for (const data of [
+    {attempt_id: "xfer_demo", phase: "provider-secret", blockers: [], elapsed_ms: 1},
+    {attempt_id: "xfer_demo", phase: "preparing", blockers: ["https://private.example/audio?token=secret"], elapsed_ms: 1},
+    {attempt_id: "xfer_demo", phase: "preparing", blockers: [], elapsed_ms: -1},
+  ]) {
+    dataChannel.onmessage?.(new MessageEvent("message", {data: JSON.stringify({type: "transfer.progress", data})}));
+  }
+  expect(onControl).toHaveBeenCalledTimes(controlCount);
+
   connection.accept("xfer_demo");
   expect(JSON.parse(send.mock.calls[0][0])).toMatchObject({
     type: "transfer.accept",

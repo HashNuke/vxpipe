@@ -5,17 +5,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
   alias Vxpipe.CallEngine.MediaPolicy.Authority
   alias Vxpipe.CallEngine.Readiness.{Collector, Preparation, RoomInventory}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle
-  alias Vxpipe.CallEngine.{RoomAuthority, RoomCapabilitySupervisor}
+  alias Vxpipe.CallEngine.{RoomAuthority, RoomCapabilitySupervisor, Telemetry}
   alias Vxpipe.CallEngine.WaitSounds.Player
 
   @cue_readiness_interval_ms 100
 
   def run(stage, scope, payload) do
-    execute(stage, scope, payload)
-  rescue
-    _exception -> {:error, :handoff_unavailable}
-  catch
-    :exit, _reason -> {:error, :handoff_unavailable}
+    started_at = Telemetry.started_at()
+
+    result =
+      try do
+        execute(stage, scope, payload)
+      rescue
+        _exception -> {:error, :handoff_unavailable}
+      catch
+        :exit, _reason -> {:error, :handoff_unavailable}
+      end
+
+    outcome =
+      case result do
+        {:ok, _value} -> :ok
+        {:error, :deadline_elapsed} -> :timeout
+        _failure -> :failed
+      end
+
+    Telemetry.transfer_phase_stop(started_at, stage, outcome)
+    result
   end
 
   defp execute(:audience, phase, request) do
@@ -56,7 +71,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
            end),
          {:ok, graph} <- Preparation.run(phase.authority, candidate, remaining(scope)),
          {:ok, collector} <- collect(graph.resources, binding, scope),
-         :ok <- await_ready(collector, scope),
+         :ok <- await_ready(collector, scope, [], {phase, :recovering, nil}),
          :ok <- clear(connections),
          {:ok, cues} <- play(connections, binding, scope, request, :cue),
          :ok <- await_players(cues, :completed, scope, collector),
@@ -102,14 +117,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
          {:ok, joining_waits} <- play(joining, binding, scope, request, :wait),
          {:ok, graph} <- Preparation.run_candidate(phase.authority, candidate, Map.to_list(scope)),
          {:ok, collector} <- collect(graph.resources, binding, scope),
-         :ok <- await_ready(collector, scope, joining_waits),
+         :ok <- await_ready(collector, scope, joining_waits, {phase, :preparing, nil}),
          :ok <- stop_waits(audience.waits ++ joining_waits, scope),
          :ok <- clear(connections),
+         :ok <- report_progress(phase, :cue, []),
          {:ok, cues} <- play(connections, binding, scope, request, :cue),
          :ok <- await_players(cues, :completed, scope, collector),
          :ok <- Collector.refresh(collector),
          :ok <- await_ready(collector, scope),
          :ok <- RoomInventory.validate(phase.authority, graph.inventory, remaining(scope)) do
+      report_progress(phase, :releasing, [])
+
       {:ok,
        %{
          scope: scope,
@@ -182,7 +200,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     )
   end
 
-  defp await_ready(collector, scope, players \\ []) do
+  defp await_ready(collector, scope, players \\ [], progress \\ nil) do
     receive do
       {:vxpipe_readiness_changed, ^collector, %{status: :ready}} ->
         :ok
@@ -190,22 +208,74 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
       {:vxpipe_readiness_changed, ^collector, %{status: :failed, failure: failure}} ->
         {:error, failure || :readiness_failed}
 
-      {:vxpipe_readiness_changed, ^collector, _preparing} ->
-        await_ready(collector, scope, players)
+      {:vxpipe_readiness_changed, ^collector, %{blockers: blockers}} ->
+        progress = report_readiness(progress, blockers)
+        await_ready(collector, scope, players, progress)
 
       {:vxpipe_wait_playback, player, _episode, {:failed, reason}} ->
         if player in players,
           do: {:error, reason},
-          else: await_ready(collector, scope, players)
+          else: await_ready(collector, scope, players, progress)
 
       {:DOWN, _monitor, :process, player, _reason} ->
         if player in players,
           do: {:error, :playback_unavailable},
-          else: await_ready(collector, scope, players)
+          else: await_ready(collector, scope, players, progress)
     after
       remaining(scope) -> {:error, :deadline_elapsed}
     end
   end
+
+  defp report_readiness(nil, _blockers), do: nil
+
+  defp report_readiness({phase, status, previous}, blockers) do
+    kinds = blockers |> Enum.map(&blocker_kind(&1.kind)) |> Enum.uniq() |> Enum.sort()
+    if kinds != previous, do: report_progress(phase, status, kinds)
+    {phase, status, kinds}
+  end
+
+  defp report_progress(phase, status, blockers) do
+    send(
+      phase.owner,
+      {:vxpipe_transfer_progress, self(),
+       %{
+         phase: status,
+         blockers: blockers,
+         elapsed_ms: max(System.monotonic_time(:millisecond) - phase.started_at_ms, 0)
+       }}
+    )
+
+    :ok
+  end
+
+  defp blocker_kind(kind) when kind in [:speech_to_text, :text_to_speech, :model_inference],
+    do: kind
+
+  defp blocker_kind(:speech_to_text_ingress), do: :speech_to_text
+  defp blocker_kind(kind) when kind in [:tool_invocations, :remote_tools], do: :tools
+
+  defp blocker_kind(kind)
+       when kind in [:recording_writer, :recording_output, :recording, :archive],
+       do: :recording
+
+  defp blocker_kind(kind)
+       when kind in [:room_mixer, :transcript_router, :call_variables, :live_inspection],
+       do: :room_services
+
+  defp blocker_kind(kind)
+       when kind in [
+              :audio_input,
+              :audio_output,
+              :audio_subscription,
+              :media_connection,
+              :media_input,
+              :phone_transport,
+              :private_output,
+              :room_output_binding
+            ],
+       do: :media
+
+  defp blocker_kind(_kind), do: :other
 
   defp play(connections, binding, scope, request, mode, owner \\ self()) do
     assets = binding.plan.wait_sound_assets

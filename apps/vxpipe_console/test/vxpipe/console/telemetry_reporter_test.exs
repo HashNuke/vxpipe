@@ -12,6 +12,7 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
   @mcp_connection_stop [:vxpipe, :mcp, :connection, :stop]
   @mcp_request_stop [:vxpipe, :mcp, :request, :stop]
   @opening_audio_stop [:vxpipe, :call_engine, :opening_audio, :stop]
+  @transfer_phase_stop [:vxpipe, :call_engine, :transfer, :phase, :stop]
   @tts_first_audio [:vxpipe, :call_engine, :tts, :first_audio]
   @provider_failure [:vxpipe, :call_engine, :provider, :failure]
   @runtime_sample [:vxpipe, :call_engine, :runtime, :sample]
@@ -74,9 +75,15 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
       %{outcome: :queued, call_id: sentinel}
     )
 
+    :telemetry.execute(
+      @transfer_phase_stop,
+      %{count: 1, duration: duration_ms(250), provider_payload: sentinel},
+      %{phase: :prepare, outcome: :ok, attempt_id: sentinel}
+    )
+
     snapshot = TelemetryReporter.snapshot(reporter)
 
-    assert snapshot.received_events == 9
+    assert snapshot.received_events == 10
     assert snapshot.dropped_events == 0
     assert is_integer(snapshot.last_event_age_ms) and snapshot.last_event_age_ms >= 0
 
@@ -91,6 +98,7 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
     assert snapshot.background_tools.stops[:unknown] == duration_stats(2_000)
     assert snapshot.background_tools.handoffs == %{queued: 1}
     assert snapshot.background_tools.mailbox_pressure == %{depth: 1, limit: 4}
+    assert snapshot.transfers.phases[{:prepare, :ok}] == duration_stats(250_000)
 
     assert %{active_rooms: 2, memory_bytes: 123_456, run_queue: 1, age_ms: age_ms} =
              snapshot.runtime

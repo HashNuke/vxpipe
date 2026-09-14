@@ -35,7 +35,10 @@ test("explains the required setup when the transfer sample is disabled", async (
 test("connects the latest sample destination and activates only after explicit acceptance", async () => {
   const accept = vi.fn();
   const close = vi.fn();
-  openTransferConnection.mockResolvedValue({ accept, close });
+  openTransferConnection.mockImplementation(async (_session, callbacks) => {
+    callbacks.onControl({type: "preparation", attemptId: "xfer_demo", participantId: "part_support"});
+    return { accept, close };
+  });
 
   const fetchMock = vi
     .fn()
@@ -104,14 +107,6 @@ test("connects the latest sample destination and activates only after explicit a
 
   const callbacks = openTransferConnection.mock.calls[0][1];
 
-  act(() => {
-    callbacks.onControl({
-      type: "preparation",
-      attemptId: "xfer_demo",
-      participantId: "part_support",
-    });
-  });
-
   const acceptButton = screen.getByRole("button", { name: "Accept transfer" });
   expect(acceptButton).toBeDisabled();
   fireEvent.click(acceptButton);
@@ -126,7 +121,33 @@ test("connects the latest sample destination and activates only after explicit a
   expect(accept).toHaveBeenCalledWith("xfer_demo");
 
   act(() => {
+    callbacks.onControl({type: "progress", attemptId: "xfer_stale", phase: "preparing", blockers: ["speech_to_text"], elapsedMs: 250});
+  });
+  expect(screen.getByRole("status")).toHaveTextContent("Preparing your connection");
+
+  act(() => {
+    callbacks.onControl({type: "progress", attemptId: "xfer_demo", phase: "preparing", blockers: ["speech_to_text"], elapsedMs: 250});
+  });
+  expect(screen.getByRole("status")).toHaveTextContent("Preparing transcription");
+  expect(screen.getByRole("list")).toHaveTextContent("Preparing transcription · 0.3 s");
+
+  act(() => {
+    for (const elapsedMs of [300, 400, 500, 600, 700, 800]) {
+      callbacks.onControl({type: "progress", attemptId: "xfer_demo", phase: "preparing", blockers: ["media"], elapsedMs});
+    }
+  });
+  act(() => {
+    callbacks.onControl({type: "progress", attemptId: "xfer_demo", phase: "cue", blockers: [], elapsedMs: 900});
+  });
+  expect(screen.getAllByRole("listitem")).toHaveLength(5);
+  expect(screen.getByRole("status")).toHaveTextContent("Playing connection cue");
+
+  act(() => {
     callbacks.onControl({ type: "active", attemptId: "xfer_demo" });
+  });
+
+  act(() => {
+    callbacks.onControl({type: "progress", attemptId: "xfer_demo", phase: "cue", blockers: [], elapsedMs: 400});
   });
 
   expect(screen.getByRole("status")).toHaveTextContent("Main room active");

@@ -5,6 +5,7 @@ import {
   openTransferConnection,
   type TransferConnection,
   type TransferControl,
+  type TransferProgress,
 } from "./transferConnection";
 
 type Phase = "idle" | "connecting" | "briefing" | "ready" | "accepting" | "active" | "closed" | "error";
@@ -25,20 +26,41 @@ const phaseCopy: Record<Phase, string> = {
   error: "Connection unavailable",
 };
 
+const blockerCopy: Record<TransferProgress["blockers"][number], string> = {
+  speech_to_text: "transcription", text_to_speech: "voice", model_inference: "the assistant",
+  tools: "tools", media: "audio", recording: "recording", room_services: "call services",
+  other: "your connection",
+};
+
+function progressCopy(progress: TransferProgress): string {
+  switch (progress.phase) {
+    case "cue": return "Playing connection cue";
+    case "releasing": return "Connecting to the caller";
+    case "recovering": return "Restoring the caller’s connection";
+    case "preparing": {
+      const labels = [...new Set(progress.blockers.map((kind) => blockerCopy[kind]))];
+      return labels.length ? `Preparing ${labels.join(", ")}` : phaseCopy.accepting;
+    }
+  }
+}
+
 export default function TransferPage() {
   const connection = useRef<TransferConnection | undefined>(undefined);
   const activeAttempt = useRef<string | undefined>(undefined);
+  const accepting = useRef(false);
   const eventSequence = useRef(0);
   const [phase, setPhase] = useState<Phase>("idle");
   const [attemptId, setAttemptId] = useState<string>();
   const [error, setError] = useState<string>();
   const [events, setEvents] = useState<EventEntry[]>([]);
+  const [progress, setProgress] = useState<TransferProgress>();
 
   useEffect(() => () => connection.current?.close(), []);
 
   function record(label: string) {
     eventSequence.current += 1;
-    setEvents((current) => [...current.slice(-4), { id: eventSequence.current, label }]);
+    const entry = { id: eventSequence.current, label };
+    setEvents((current) => [...current.slice(-4), entry]);
   }
 
   function handleControl(control: TransferControl) {
@@ -56,10 +78,17 @@ export default function TransferPage() {
         break;
       case "active":
         if (control.attemptId !== activeAttempt.current) return;
+        accepting.current = false;
         setPhase("active");
         record("Main room media activated");
         break;
+      case "progress":
+        if (control.attemptId !== activeAttempt.current || !accepting.current) return;
+        setProgress(control);
+        record(`${progressCopy(control)} · ${(control.elapsedMs / 1000).toFixed(1)} s`);
+        break;
       case "error":
+        accepting.current = false;
         setError(control.message);
         setPhase("error");
         record("Transfer control rejected");
@@ -71,6 +100,8 @@ export default function TransferPage() {
     connection.current?.close();
     connection.current = undefined;
     activeAttempt.current = undefined;
+    accepting.current = false;
+    setProgress(undefined);
     setAttemptId(undefined);
     setPhase("connecting");
     setError(undefined);
@@ -93,6 +124,7 @@ export default function TransferPage() {
       connection.current = await openTransferConnection(room.session, {
         onControl: handleControl,
         onClosed: () => {
+          accepting.current = false;
           setPhase("closed");
           record("Destination connection closed");
         },
@@ -114,6 +146,7 @@ export default function TransferPage() {
 
     try {
       connection.current.accept(attemptId);
+      accepting.current = true;
       setPhase("accepting");
       record("Destination accepted transfer");
     } catch (reason) {
@@ -125,6 +158,7 @@ export default function TransferPage() {
   }
 
   function disconnect() {
+    accepting.current = false;
     connection.current?.close();
     connection.current = undefined;
     activeAttempt.current = undefined;
@@ -143,7 +177,9 @@ export default function TransferPage() {
           <span aria-hidden="true" />
           <div>
             <p>Destination state</p>
-            <strong role="status" aria-live="polite">{phaseCopy[phase]}</strong>
+            <strong role="status" aria-live="polite">
+              {phase === "accepting" && progress ? progressCopy(progress) : phaseCopy[phase]}
+            </strong>
           </div>
         </section>
 

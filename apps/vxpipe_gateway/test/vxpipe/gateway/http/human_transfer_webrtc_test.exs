@@ -172,6 +172,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = send_acceptance(support_client, "accept-ready-support", attempt_id)
 
     assert_receive {:test_stt_transport_started, joining_stt, _}, 2_000
+    %{"data" => progress} = await_sideband(support_client, "transfer.progress", 2_000)
+    assert progress["attempt_id"] == attempt_id
+    assert progress["phase"] == "preparing"
+    assert "speech_to_text" in progress["blockers"]
+    assert is_integer(progress["elapsed_ms"]) and progress["elapsed_ms"] >= 0
+    assert Enum.sort(Map.keys(progress)) == ["attempt_id", "blockers", "elapsed_ms", "phase"]
     {:ok, private} = GenServer.call(connection, :vxpipe_connection_readiness)
     assert private.attachment.admission == :transfer_preparation
     assert Authority.snapshot(binding.policy_authority) == policy
@@ -189,6 +195,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       joining_stt,
       ~s({"type":"Connected","request_id":"ready-human-stt","sequence_id":0})
     )
+
+    for phase <- ["cue", "releasing"] do
+      assert %{"data" => %{"attempt_id" => ^attempt_id, "blockers" => []}} =
+               await_sideband(support_client, "transfer.progress", 5_000, phase)
+    end
 
     assert %{"data" => %{"attempt_id" => ^attempt_id}} =
              await_sideband(support_client, "transfer.active", 5_000)
@@ -1480,9 +1491,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     )
   end
 
-  defp await_sideband(connection, type, timeout_ms) do
+  defp await_sideband(connection, type, timeout_ms, phase \\ nil) do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
-    do_await_sideband(connection, type, deadline)
+    do_await_sideband(connection, type, deadline, phase)
   end
 
   defp send_acceptance(connection, id, attempt_id) do
@@ -1497,7 +1508,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     )
   end
 
-  defp do_await_sideband(connection, type, deadline) do
+  defp do_await_sideband(connection, type, deadline, phase) do
     remaining = max(deadline - System.monotonic_time(:millisecond), 0)
     client = connection.client
     channel_ref = connection.channel_ref
@@ -1506,13 +1517,13 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       {:ex_webrtc, ^client, {:data, ^channel_ref, payload}} ->
         message = JSON.decode!(payload)
 
-        if message["type"] == type do
+        if message["type"] == type and (is_nil(phase) or message["data"]["phase"] == phase) do
           message
         else
-          do_await_sideband(connection, type, deadline)
+          do_await_sideband(connection, type, deadline, phase)
         end
     after
-      remaining -> flunk("timed out waiting for #{type}")
+      remaining -> flunk("timed out waiting for #{type} #{phase}")
     end
   end
 

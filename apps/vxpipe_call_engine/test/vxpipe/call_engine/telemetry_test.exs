@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
   @background_tool_stop_event [:vxpipe, :call_engine, :background_tool, :stop]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
   @opening_audio_stop_event [:vxpipe, :call_engine, :opening_audio, :stop]
+  @transfer_phase_stop_event [:vxpipe, :call_engine, :transfer, :phase, :stop]
   @runtime_sample_event [:vxpipe, :call_engine, :runtime, :sample]
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
 
@@ -18,6 +19,7 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
              [:vxpipe, :call_engine, :model, :request, :stop],
              [:vxpipe, :call_engine, :tts, :first_audio],
              @opening_audio_stop_event,
+             @transfer_phase_stop_event,
              [:vxpipe, :call_engine, :provider, :failure],
              @background_tool_admission_event,
              @background_tool_stop_event,
@@ -41,6 +43,26 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
     assert :ok = Telemetry.runtime_sample(measurements)
 
     assert_receive {:embedded_telemetry, @runtime_sample_event, ^measurements, %{}}
+  end
+
+  test "reports transfer phase timing without failure payloads or room identity" do
+    handler_id = {__MODULE__, self(), make_ref()}
+
+    assert :ok =
+             :telemetry.attach(
+               handler_id,
+               @transfer_phase_stop_event,
+               &__MODULE__.handle_event/4,
+               self()
+             )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    assert :ok = Telemetry.transfer_phase_stop(Telemetry.started_at(), :prepare, :failed)
+    assert_receive {:embedded_telemetry, @transfer_phase_stop_event, measurements, metadata}
+    assert %{count: 1, duration: duration} = measurements
+    assert is_integer(duration) and duration >= 0
+    assert metadata == %{phase: :prepare, outcome: :failed}
   end
 
   test "reports bounded background-tool lifecycle and pressure without identities" do

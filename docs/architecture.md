@@ -1883,6 +1883,26 @@ internal authorization detail. This is not an RTVI message family and does not a
 an unmodified RTVI 2.x client. Future adapters may expose the same protocol-neutral engine command
 through another authenticated mechanism.
 
+While the destination is preparing, `transfer.progress` carries `attempt_id`, `phase`,
+`blockers` and `elapsed_ms`. Normal phases are `preparing`, `cue` and `releasing`; the recovery
+worker can report `recovering` while an eligible destination connection still exists. Blockers
+are deduplicated categories: `speech_to_text`, `text_to_speech`, `model_inference`, `tools`,
+`media`, `recording`, `room_services` or `other`. Resource identities, configurations, provider
+failure payloads and asset URLs are omitted. Reports are forwarded only from the current worker
+through the current transfer task to its private destination connections. Releasing is announced
+after cues and inventory validation, before promotion removes the private admission; it does not
+claim completed activation. The desk ignores progress after `transfer.active` or connection closure.
+Elapsed milliseconds start when that transfer phase owner starts, including briefing/acceptance
+waiting; recovery has its own owner and clock. Updates are sent when blocker categories change,
+rather than as periodic timer messages. The existing desk ledger displays this elapsed value.
+
+The engine also emits `[:vxpipe, :call_engine, :transfer, :phase, :stop]` for returned human-handoff
+worker stages (`audience`, `prepare`, `release`, `recover`). Measurements contain count and native
+monotonic duration; metadata contains only phase and outcome (`ok`, `failed`, `timeout`). Console's
+existing telemetry reporter aggregates these in `snapshot.transfers.phases`. A forcibly terminated
+worker does not produce a returned-stage timing; separate briefing, acceptance and cue timings and
+complete terminal-failure observations remain milestone work.
+
 Initial optional message families are:
 
 - `vxpipe.capabilities`: negotiated protocol, transport, and engine features;

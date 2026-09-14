@@ -141,6 +141,20 @@ defmodule Vxpipe.Gateway.WebRTC.TransferSideband do
     send_data(message, state)
   end
 
+  def send_progress(
+        attempt_id,
+        progress,
+        %{
+          attachment: %ConnectionAttachment{transfer_attempt_id: attempt_id},
+          transfer_preparation_sent?: true
+        } = state
+      ) do
+    {:ok, message} = Codec.encode_progress(attempt_id, progress)
+    send_data(message, state)
+  end
+
+  def send_progress(_attempt_id, _progress, _state), do: :ok
+
   defp send_acceptance_ready(attempt_id, state) do
     {:ok, message} = Codec.encode_acceptance_ready(attempt_id)
     send_data(message, state)

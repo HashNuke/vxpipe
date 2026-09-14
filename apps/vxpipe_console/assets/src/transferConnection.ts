@@ -2,10 +2,23 @@ import type { GatewaySession } from "./sampleAdmission";
 
 const DEFAULT_OFFER_URL = "/api/rtvi/offer";
 
+const progressPhases = ["preparing", "cue", "releasing", "recovering"] as const;
+const blockerKinds = ["speech_to_text", "text_to_speech", "model_inference", "tools",
+  "media", "recording", "room_services", "other"] as const;
+
+export type TransferProgress = {
+  type: "progress";
+  attemptId: string;
+  phase: typeof progressPhases[number];
+  blockers: Array<typeof blockerKinds[number]>;
+  elapsedMs: number;
+};
+
 export type TransferControl =
   | { type: "preparation"; attemptId: string; participantId: string }
   | { type: "acceptance_ready"; attemptId: string }
   | { type: "active"; attemptId: string }
+  | TransferProgress
   | { type: "error"; message: string };
 
 export type TransferConnection = {
@@ -215,6 +228,19 @@ function decodeControl(value: unknown): TransferControl | undefined {
     if (message.type === "error" && "message" in data && typeof data.message === "string") {
       return { type: "error", message: data.message };
     }
+
+    if (message.type === "transfer.progress" &&
+      "attempt_id" in data && identifier(data.attempt_id) &&
+      "phase" in data && member(progressPhases, data.phase) &&
+      "blockers" in data && Array.isArray(data.blockers) &&
+      data.blockers.length <= blockerKinds.length &&
+      data.blockers.every((kind): kind is typeof blockerKinds[number] => member(blockerKinds, kind)) &&
+      "elapsed_ms" in data && typeof data.elapsed_ms === "number" &&
+      Number.isSafeInteger(data.elapsed_ms) && data.elapsed_ms >= 0
+    ) {
+      return { type: "progress", attemptId: data.attempt_id, phase: data.phase,
+        blockers: data.blockers, elapsedMs: data.elapsed_ms };
+    }
   } catch {
     return undefined;
   }
@@ -245,4 +271,8 @@ function acceptanceId(): string {
 
 function identifier(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
+}
+
+function member<T extends string>(values: readonly T[], value: unknown): value is T {
+  return typeof value === "string" && values.some((allowed) => allowed === value);
 }

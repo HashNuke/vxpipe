@@ -2506,3 +2506,47 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   speech removal before accepted handoff preparation. Later policy changes during collection,
   cues or adoption and admission of new audience connections still need their existing lifecycle
   work. No UI, dependency, lockfile, sound configuration or development-server change was made.
+
+## Report human transfer preparation in the existing desk
+
+- The preceding user-requested accounting was read-only. Resumed the active milestone from five
+  pending test files, keeping the other agent's documentation-site changes untouched. This is a
+  narrow continuation of the human handoff slice, not a claim that its full acceptance is complete.
+- The WebRTC check first timed out waiting for `transfer.progress`; the Console checks still showed
+  generic preparation and discarded the new message. Engine timing was absent and the diagnostics
+  reporter ignored its event. Red evidence: `vxpipe-transfer-{progress,ui,telemetry,reporter}-red.log`.
+- Forward readiness changes from the current handoff worker through the exact phase reference to
+  that attempt's private destination. Project only deduplicated, closed capability categories and
+  elapsed milliseconds. Reuse the existing status, five-entry ledger and telemetry reporter; no
+  new process, UI component, dependency or sound setting is introduced.
+- Extended the real WebRTC check through cue and release progress. It exposed release notifications
+  arriving after room promotion had removed the private attempt binding. Announce that stage after
+  successful cue/inventory validation and before promotion. The red run timed out specifically on
+  releasing (`vxpipe-transfer-release-progress-red.log`); the complete 11-case WebRTC suite passes.
+- One initial engine run missed the existing cue-drain completion window. The unchanged scenario
+  passes with all 20 selected engine checks at concurrency four; no production timeout was changed.
+  The returned-stage event counts only workers that return, including caught failures. It does not
+  establish forced-worker, acceptance-wait or separately measured cue timing coverage.
+- Browser inspection uses the actual served Console with browser-local admission/media fixtures,
+  not a live audible call. Desktop and mobile show the capability status; all categories together
+  wrap within 390 px. Batched updates exposed duplicate ledger keys from reading a mutable counter
+  inside React's state updater. Capture each entry's ID before enqueueing the update.
+- The initial ledger test delivered preparation after connection setup and did not reproduce the
+  browser ordering. Deliver it during negotiation, before the connection promise resolves: the
+  five-entry assertion then sees seven rows (`vxpipe-transfer-ledger-red-2.log`). Capturing the
+  entry fixes the regression. TypeScript, all three focused Console checks and asset build pass.
+- Final rendered checks at 1440×900 and 390×844 show readable single/all-blocker preparation, cue,
+  release and active states. Stale-attempt and post-active progress do not replace current status;
+  the ledger stays at five entries and acceptance sends exactly one control. All 20 final browser
+  commands pass (`vxpipe-progress-browser-final.json`); screenshots are
+  `vxpipe-progress-{desktop,all-blockers-mobile,active-mobile}-final.png`. Closed the owned browser.
+  An earlier browser batch sent readiness before its fixture channel existed; waiting for the
+  visible briefing state fixed the harness ordering. No running development server was restarted.
+- All five required root gates pass with 1,285 tests, zero failures and 15 integration exclusions
+  (`vxpipe-progress-checkpoint-results.json` and its five root logs). The selected engine lane has
+  20 passing checks and the WebRTC lane has 11. These gates cover the final Elixir implementation;
+  the subsequent ledger-only correction has its own passing UI checks, typecheck, build and render.
+- Updated the existing protocol documentation, milestone evidence and index. Complete human-slice
+  acceptance remains open for remaining failure/policy/privacy and audible checks, with explicit
+  gaps for forced-worker timing, separate briefing/acceptance/cue durations and recovery detail.
+  The other four vertical delivery checkpoints remain unchanged and unfinished.

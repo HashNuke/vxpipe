@@ -17,6 +17,7 @@ defmodule Vxpipe.Console.TelemetryReporter do
     [:vxpipe, :call_engine, :model, :first_token],
     [:vxpipe, :call_engine, :model, :request, :stop],
     [:vxpipe, :call_engine, :tts, :first_audio],
+    [:vxpipe, :call_engine, :transfer, :phase, :stop],
     [:vxpipe, :call_engine, :provider, :failure],
     [:vxpipe, :call_engine, :background_tool, :admission],
     [:vxpipe, :call_engine, :background_tool, :stop],
@@ -45,6 +46,8 @@ defmodule Vxpipe.Console.TelemetryReporter do
   ]
   @background_stop_outcomes [:ok, :failed, :unknown, :terminated]
   @background_handoff_outcomes [:queued, :duplicate, :overflow, :consumed]
+  @transfer_phases [:audience, :prepare, :release, :recover]
+  @transfer_outcomes [:ok, :failed, :timeout]
 
   @type option ::
           {:handler_id, term()}
@@ -133,7 +136,8 @@ defmodule Vxpipe.Console.TelemetryReporter do
        received_events: 0,
        runtime: nil,
        runtime_sampled_at: nil,
-       tts_first_audio: %{}
+       tts_first_audio: %{},
+       transfer_phases: %{}
      }}
   end
 
@@ -159,7 +163,8 @@ defmodule Vxpipe.Console.TelemetryReporter do
       provider_failures: state.provider_failures,
       received_events: state.received_events,
       runtime: runtime_snapshot(state.runtime, state.runtime_sampled_at),
-      tts: %{first_audio: state.tts_first_audio}
+      tts: %{first_audio: state.tts_first_audio},
+      transfers: %{phases: state.transfer_phases}
     }
 
     {:reply, snapshot, state}
@@ -328,6 +333,18 @@ defmodule Vxpipe.Console.TelemetryReporter do
     }
   end
 
+  defp project(
+         [:vxpipe, :call_engine, :transfer, :phase, :stop],
+         %{count: 1, duration: duration},
+         metadata,
+         state
+       )
+       when is_integer(duration) and duration >= 0 do
+    phase = normalize(metadata, :phase, @transfer_phases, :unknown)
+    outcome = normalize(metadata, :outcome, @transfer_outcomes, :failed)
+    update_in(state.transfer_phases, &update_duration(&1, {phase, outcome}, duration))
+  end
+
   defp project(event, measurements, metadata, state) do
     case OpeningAudioProjection.project(event, measurements, metadata, state.opening_audio) do
       {:ok, opening_audio} -> %{state | opening_audio: opening_audio}
@@ -443,6 +460,14 @@ defmodule Vxpipe.Console.TelemetryReporter do
          _metadata
        ) do
     {sanitize_runtime(measurements), %{}}
+  end
+
+  defp sanitize_event([:vxpipe, :call_engine, :transfer, :phase, :stop], measurements, metadata) do
+    {sanitize_counted_duration(measurements),
+     %{
+       phase: normalize(metadata, :phase, @transfer_phases, :unknown),
+       outcome: normalize(metadata, :outcome, @transfer_outcomes, :failed)
+     }}
   end
 
   defp sanitize_event(event, measurements, metadata) do

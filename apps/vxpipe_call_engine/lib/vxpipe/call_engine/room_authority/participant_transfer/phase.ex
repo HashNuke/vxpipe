@@ -16,7 +16,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
 
   def run(scope, prepare) when is_function(prepare, 0) do
     monitor = Process.monitor(scope.authority)
-    scope = Map.merge(scope, %{owner: self(), player_monitors: %{}})
+
+    scope =
+      Map.merge(scope, %{
+        owner: self(),
+        player_monitors: %{},
+        started_at_ms: System.monotonic_time(:millisecond)
+      })
 
     try do
       receive do
@@ -102,6 +108,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase do
       {:error, :deadline_elapsed}
     else
       receive do
+        {:vxpipe_transfer_progress, worker, progress} ->
+          if match?(%Task{pid: ^worker}, Map.get(scope, :worker)) do
+            send(scope.authority, {:vxpipe_transfer_progress, scope.reference, progress})
+          end
+
+          await_completion(scope, monitor)
+
         {:vxpipe_transfer_handoff, authority, stage, payload}
         when authority == scope.authority ->
           if Map.get(scope, :worker) do

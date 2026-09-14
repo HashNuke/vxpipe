@@ -429,6 +429,11 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     {:noreply, state}
   end
 
+  def handle_info({:vxpipe_transfer_progress, attempt_id, progress}, state) do
+    TransferSideband.send_progress(attempt_id, progress, state)
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_transfer_active, attempt_id}, state) do
     TransferSideband.send_active(attempt_id, state)
     {:noreply, state}

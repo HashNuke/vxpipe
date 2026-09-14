@@ -129,6 +129,23 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     HumanHandoff.control(command, caller, state)
   end
 
+  def progress(
+        reference,
+        progress,
+        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
+          state
+      ) do
+    Enum.each(state.connections, fn {_id, connection} ->
+      if connection.transfer_attempt_id == pending.attempt_id do
+        send(connection.pid, {:vxpipe_transfer_progress, pending.attempt_id, progress})
+      end
+    end)
+
+    {:noreply, state}
+  end
+
+  def progress(_reference, _progress, state), do: {:noreply, state}
+
   @spec prepared(reference(), Preparation.t(), State.t()) :: {:noreply, State.t()}
   def prepared(
         reference,
