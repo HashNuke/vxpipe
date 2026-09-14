@@ -1148,6 +1148,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     source_supervisor = participant_supervisor(plan, reception.participant_id)
     source_monitor = Process.monitor(source_supervisor)
+    source_tts_monitor = Process.monitor(source_tts)
 
     assert :ok =
              Vxpipe.CallEngine.TestTransferConnection.send_text(
@@ -1199,6 +1200,13 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                transfer_control(plan, room, support, attempt_id, :media_ready)
              )
 
+    authority = room_authority(plan)
+    pending = :sys.get_state(authority).pending_participant_transfer
+    briefing = pending.preparation.text_to_speech
+    briefing_monitor = Process.monitor(briefing.pid)
+    transport_monitor = Process.monitor(briefing_tts)
+    briefing_request = pending.briefing_request
+
     assert_receive {:test_tts_control, ^briefing_tts, speak}, 2_000
 
     assert JSON.decode!(speak) == %{
@@ -1240,9 +1248,21 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "human-support-transfer"}},
                    50
 
+    refute_receive {:DOWN, ^briefing_monitor, :process, _, _}, 50
     assert :ok = TestAudioOutputSink.playback_started(support_sink)
     assert :ok = TestAudioOutputSink.playback_completed(support_sink)
     assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 2_000
+    assert_receive {:DOWN, ^briefing_monitor, :process, _, _}, 1_000
+    assert_receive {:DOWN, ^transport_monitor, :process, ^briefing_tts, _}, 1_000
+    refute_receive {:DOWN, ^source_tts_monitor, :process, ^source_tts, _}, 50
+
+    # Delayed notifications from retired private speech cannot cancel the live attempt.
+    send(authority, {:vxpipe_tts_playback, briefing.pid, briefing_request, :completed})
+    send(authority, {:vxpipe_tts_unavailable, briefing.pid, :transport_closed})
+    send(authority, {:DOWN, briefing.monitor, :process, briefing.pid, :shutdown})
+    _ = :sys.get_state(authority)
+    refute_receive {:vxpipe_transfer_acceptance_ready, ^attempt_id}, 50
+    refute_receive {:vxpipe_transfer_progress, ^attempt_id, %{phase: :recovering}}, 50
 
     assert :ok =
              TestTransferConnection.control(

@@ -155,7 +155,9 @@ Nine native handoffs independently hold for destination/remaining-human STT and 
 then deliver ordered cues and conversation to three peers. Cancellation now defeats queued recovery
 success; failures during release publish failed status and history instead of attempting source
 restoration. Required destination STT remains tracked after adoption through release. Engine and
-native caller/desk checks cover these orderings. The milestone has 22 remaining checkpoint tasks.
+native caller/desk checks cover these orderings. Completed private briefing TTS now stops before
+acceptance, while source TTS remains available for recovery; delayed retired-capability events are
+ignored. The milestone has 22 remaining checkpoint tasks.
 The initial caller-waiting slice is accepted. Four delivery checkpoints
 and full milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.

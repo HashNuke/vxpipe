@@ -384,8 +384,10 @@ Implementation tasks:
   same prepared STT transport, room services, worker and audience wait scope. Policy revisions after
   adoption now reconcile against the installed policy before any release and drain a fresh cue.
   Engine and native cases cover removed speech demand, unrelated policy and changed still-required
-  STT, retaining unaffected room/media actors and the original deadline. Retiring completed private
-  briefing TTS, other capability kinds and the complete changing audience remain open.
+  STT, retaining unaffected room/media actors and the original deadline. Completed private briefing
+  TTS now stops after acknowledged playback, before acceptance; its delayed notifications cannot
+  cancel the transfer. Source TTS stays available for recovery. Other capability kinds and the
+  complete changing audience remain open.
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -901,8 +903,26 @@ Nine focused engine cases pass, covering outstanding release invalidation, requi
 phase loss during policy adoption, failure history and an actual recovery worker success queued
 behind cancellation. Two native caller/desk cases observe failed RTVI progress and teardown for
 release cancellation and required STT loss, without activation or recovery. The new release-loss
-tests use required STT; retirement of completed briefing TTS remains in private-resource cleanup. The previously intermittent recovery failure is not claimed fixed by this checkpoint.
+tests use required STT. The subsequent briefing-cleanup checkpoint below retires completed TTS.
+The previously intermittent recovery failure is not claimed fixed by this checkpoint.
 See the [failure-cleanup labnote](../../labnotes/20260915-0249-human-handoff-failure-cleanup.md).
+
+### Private briefing retirement
+
+The destination's private briefing TTS and transport now stop after acknowledged playback and
+before acceptance readiness. The completed request and capability handle are removed from pending
+state. Delayed playback, unavailability and monitor notifications from that retired capability
+cannot fail the attempt or reopen acceptance. The existing source TTS remains available for recovery;
+required destination STT retains its ordinary preparation/adoption/release ownership.
+
+The existing engine acceptance test reproduced the previously retained capability, then passed with
+cleanup while preserving pre-completion playback and private usage attribution. All 34 engine human
+handoff cases and three focused native custom/silent/recovery cases pass. Native ordinary acceptance
+also checks briefing transport termination before acceptance. All five root gates pass with
+1,386 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four), including
+the existing phone and Morse paths. This uses existing lifecycle owners and changes no UI,
+configuration or deadline. See the
+[briefing-retirement labnote](../../labnotes/20260915-0313-retire-private-briefing.md).
 
 ### AI handoff integration
 
@@ -1068,6 +1088,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Private briefing retirement | The updated engine acceptance test first failed at missing cleanup, then all 34 engine human handoff cases, three focused native cases and all five root gates pass: 1,386 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Briefing TTS survives until playback acknowledgement, then retires before acceptance. Source TTS and required destination STT remain independent. Retired notifications cannot cancel or duplicate acceptance; native custom/silent handoff and post-briefing caller recovery pass. Broader private-resource acceptance remains open; 22 checkpoint tasks remain. |
 | Handoff cancellation and release failures | Nine focused engine cases, two native caller/desk cases and all five root gates pass: 1,386 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. Gateway includes 377 tests and 45 default native startup/transfer cases. | Cancellation defeats a queued recovery success; deadline, phase loss and required adopted STT loss during release produce terminal failure without recovery or activation. The existing archive receives bounded failure causes. Completed briefing-resource retirement and the earlier intermittent recovery failure remain open; 22 checkpoint tasks remain. |
 | Whole-room native human handoff | Two engine regression cases and nine native handoff cases pass, including public HTTPS retrieval. All five root gates pass: 1,380 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. Gateway includes 375 tests and 43 default native startup/transfer cases. | Additional planned humans initialize selected STT on attachment; unsupported selected providers reject that attachment without replacing original resources. Destination STT, remaining-human STT and room recording each hold as the final blocker with custom/nil waits. Three peers receive ordered cues/conversation, held input is discarded, and unaffected speech/media/room bindings remain. The controlled native acceptance item is complete; 22 checkpoint tasks remain. |
 | Human handoff audio acceptance | Ten focused native cases, including the public-HTTPS WAV variant, pass. All five root gates pass: 1,374 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Production URL retrieval and peer-decoded configured waiting work; queued wait/cue/conversation ordering and post-briefing recovery model-history isolation pass. The public-URL case is opt-in and excluded from the default suite. Human audio acceptance is complete; intermittent recovery and the other 23 checkpoint tasks remain open. |

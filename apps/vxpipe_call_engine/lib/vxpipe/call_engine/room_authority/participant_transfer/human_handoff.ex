@@ -142,8 +142,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
       state =
         case status do
           :completed when pending.briefing != :completed ->
+            pending = HumanBriefing.complete(pending, state)
             notify_acceptance_ready(pending, state)
-            {:ok, state} = progress(%{pending | briefing: :completed}, state)
+            {:ok, state} = progress(pending, state)
             state
 
           _started_or_progress ->
@@ -167,7 +168,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
         } =
           state
       ) do
-    if prep.text_to_speech.pid == capability do
+    if prep.text_to_speech != nil and prep.text_to_speech.pid == capability do
       {:handled, {:noreply, fail(pending, :destination_text_to_speech_unavailable, state)}}
     else
       :unhandled
@@ -198,7 +199,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           state
       ) do
     cond do
-      prep.text_to_speech.monitor == monitor ->
+      prep.text_to_speech != nil and prep.text_to_speech.monitor == monitor ->
         {:handled, fail(pending, :destination_text_to_speech_unavailable, state)}
 
       prep.outbound_leg_monitor == monitor ->

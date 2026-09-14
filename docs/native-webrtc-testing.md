@@ -35,6 +35,8 @@ blocker in custom/nil configurations. All three peers decode the cue before conv
 held microphones are discarded, subsequent audio reaches STT/recordings, and the remaining
 participant retains its existing speech and media bindings. Additional planned humans resolve
 their selected STT on attachment through the same supervised runtime path as initial callers.
+The private briefing transport must stop after playback acknowledgement and before acceptance;
+subsequent waiting, cues, required STT and conversation continue independently of that retired TTS.
 
 For the local speech-provider round trip:
 

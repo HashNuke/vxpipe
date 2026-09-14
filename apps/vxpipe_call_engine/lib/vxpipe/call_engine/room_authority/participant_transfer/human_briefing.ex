@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanBriefing do
   alias Vxpipe.CallEngine.Capability.TextToSpeech
   alias Vxpipe.CallEngine.{Id, TextToSpeechRequest}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{HumanPreparation, Pending}
-  alias Vxpipe.CallEngine.RoomAuthority.State
+  alias Vxpipe.CallEngine.RoomAuthority.{Startup, State}
 
   @spec start(Pending.t(), HumanPreparation.t(), map(), State.t()) ::
           {:ok, TextToSpeechRequest.t()} | {:error, :unavailable}
@@ -42,7 +42,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanBriefing do
         capability,
         %TextToSpeechRequest{} = request
       ) do
-    preparation.text_to_speech.pid == capability and expected == request
+    preparation.text_to_speech != nil and
+      preparation.text_to_speech.pid == capability and expected == request
+  end
+
+  @spec complete(Pending.t(), State.t()) :: Pending.t()
+  def complete(%Pending{} = pending, %State{} = state) do
+    _ = Startup.discard_text_to_speech(pending.preparation.text_to_speech, state)
+    preparation = %{pending.preparation | text_to_speech: nil}
+    %{pending | preparation: preparation, briefing: :completed, briefing_request: nil}
   end
 
   defp text(pending, preparation) do

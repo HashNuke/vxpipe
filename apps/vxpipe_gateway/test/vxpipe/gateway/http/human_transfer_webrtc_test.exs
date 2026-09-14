@@ -791,6 +791,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       send(source_provider, {:test_agent_runtime_response, {:ok, response}})
       assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
 
+      briefing_monitor = Process.monitor(briefing_tts)
+
       # Every existing listener waits from authorization, before the destination connects.
       for audience_client <- [caller_client, observer_client] do
         case mode do
@@ -852,6 +854,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       assert %{"data" => %{"attempt_id" => ^attempt_id}} =
                await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+
+      assert_receive {:DOWN, ^briefing_monitor, :process, ^briefing_tts, _reason}, 1_000
 
       assert :ok = send_acceptance(support_client, "accept-ready-support", attempt_id)
 

@@ -12,6 +12,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanPreparation d
           destination: HumanDestination.t(),
           outbound_leg: nil | OutboundLegHandle.t(),
           outbound_leg_monitor: nil | reference(),
-          text_to_speech: map()
+          text_to_speech: nil | map()
         }
 end
