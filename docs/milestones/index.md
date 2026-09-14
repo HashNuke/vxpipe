@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,283 tests, zero failures and 15 exclusions, with test concurrency four. The milestone's
+1,284 tests, zero failures and 15 exclusions, with test concurrency four. The milestone's
 [current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence) distinguishes this
 implementation from remaining failure/privacy/diagnostic and audible acceptance.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay

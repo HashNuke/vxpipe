@@ -3,7 +3,7 @@
 Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
 readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
 Human-handoff integration now passes normal transfer, bounded recovery and cue-failure checks. All
-five root gates pass with 1,283 tests and zero failures (test concurrency four); full slice
+five root gates pass with 1,284 tests and zero failures (test concurrency four); full slice
 acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -43,7 +43,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The current human-handoff checkpoint
-passes all five root gates with 1,283 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
+passes all five root gates with 1,284 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
 ## Call-definition changes
@@ -353,9 +353,10 @@ Implementation tasks:
 - [x] Resolve existing engine connection-fixture failures and the configured phone
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
 - [ ] Remove prepared private resources that the resulting policy does not demand.
-  Initial private STT allocation now checks the prospective policy; a selected provider with no
-  permitted transcription demand stays stopped and the WebRTC handoff completes. Reconciliation
-  when demand changes after a private binding was already prepared remains open.
+  Initial and repeated private STT allocation now check the prospective policy. If demand disappears
+  before acceptance, the private speech pair is removed while Gateway retains its connection and
+  room-media actors; the WebRTC handoff completes. Changes during collection/adoption and complete
+  reconciliation of the changing audience remain open.
 - [ ] Connect Console phases and safe diagnostics to the actual engine state: briefing, accepting,
   preparing, connected and failure/recovery. Show the blocking capability kind and phase timing
   without exposing provider payloads. Keep the acceptance button readable through transitions.
@@ -649,10 +650,16 @@ The cue worker now monitors its joining-wait and cue players and rechecks collec
 alive; rechecking catches the failed resource without waiting for a PID exit or the attempt deadline.
 The same check applies during recovery. The original attempt and recovery budgets remain unchanged.
 
+Before accepted handoff preparation, private speech is reconciled against the latest prospective
+policy even when an earlier private binding exists. Removing transcription demand stops only that
+capability/ingress pair, removes its monitors and updates the attachments of the retained Gateway
+input/output actors. This is verified with an existing participant's policy contribution changing
+after private allocation; unrelated connection admission during a pending transfer remains unfinished.
+
 Known remaining work in the first slice:
 
 - Complete readiness-loss, partial-release and expiry coverage across the remaining stages.
-- Reconcile already-prepared private speech when policy changes and finish safe blocker/timing diagnostics.
+- Reconcile policy changes during collection/adoption and finish safe blocker/timing diagnostics.
 - Verify default/custom/nil playback and private-audio isolation through the full sample path.
 - Complete audible two-device and recovery verification. Rendered UI checks use simulated browser
   admission/media events and do not establish physical-device or live-provider audio behavior.
@@ -663,8 +670,8 @@ Known remaining work in the first slice:
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
-| Human handoff and recovery | Ten WebRTC transfer checks pass with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, undemanded STT stays stopped, and destination/phase/player loss restores a fresh caller conversation through retained media. |
-| Current human-handoff checkpoint | All five root gates pass; 1,283 tests, zero failures, 15 exclusions; test concurrency four | Existing regressions, early audience waiting, normal handoff, policy-disabled STT and destination/phase/player recovery pass. Remaining slice acceptance stays open. |
+| Human handoff and recovery | Eleven WebRTC transfer checks pass with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, policy changes remove undemanded private STT, and destination/phase/player loss restores a fresh caller conversation through retained media. |
+| Current human-handoff checkpoint | All five root gates pass; 1,284 tests, zero failures, 15 exclusions; test concurrency four | Existing regressions, early audience waiting, normal handoff, policy-disabled STT and destination/phase/player recovery pass. Remaining slice acceptance stays open. |
 | Cue barrier and failure recovery | Four focused engine cases pass; included in the root suite | With nil waits, completion requires cue drain. Cue-player or prepared STT failure during drain recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
 | Earlier targeted engine and phone checks | 20 engine checks (15 human-transfer and five tool-registry); 17 Gateway checks (nine WebRTC, six outbound phone and two incoming harnesses) passed before the latest additions | Owning connections, post-briefing acceptance and actual incoming STT audio are exercised with simulated providers; these checks remain in the passing root suite. |
 | Console and rendered browser | TypeScript and three focused UI checks pass; desktop/mobile Chrome inspection uses simulated admission/media events | Acceptance enablement/control dispatch and button readability across state changes are verified at 390 px and 1440 px. Physical two-device audio and live phone provider checks remain open. |

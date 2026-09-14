@@ -113,6 +113,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     end
   end
 
+  def clear_private_speech_to_text(connection_id, %State{} = state) do
+    case Map.get(state.connections, connection_id) do
+      %{admission: :transfer_preparation} -> clear_speech_to_text(connection_id, false, state)
+      _not_private -> state
+    end
+  end
+
   @spec speech_to_text_configuration(struct(), pid(), State.t()) :: tuple()
   def speech_to_text_configuration(command, caller, %State{} = state) do
     connection = Map.get(state.connections, command.connection_id)

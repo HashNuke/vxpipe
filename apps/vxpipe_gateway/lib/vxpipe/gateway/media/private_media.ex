@@ -90,12 +90,58 @@ defmodule Vxpipe.Gateway.Media.PrivateMedia do
     private = state.private_media
 
     with true <-
-           Map.take(private, [:owner, :attempt_id, :deadline_ms, :speech_to_text]) ==
-             Map.take(context, [:owner, :attempt_id, :deadline_ms, :speech_to_text]),
-         :ok <- refresh(private, context) do
-      {:ok, receipt(private), %{state | private_media: %{private | policy: context.policy}}}
+           Map.take(private, [:owner, :attempt_id, :deadline_ms]) ==
+             Map.take(context, [:owner, :attempt_id, :deadline_ms]),
+         {:ok, state} <- reconcile_speech(state, context),
+         :ok <- refresh(state.private_media, context) do
+      private = %{state.private_media | policy: context.policy}
+      {:ok, receipt(private), %{state | private_media: private}}
     else
       _changed -> {:stop, :private_media_changed}
+    end
+  end
+
+  defp reconcile_speech(%{private_media: %{speech_to_text: speech}} = state, %{
+         speech_to_text: speech
+       }),
+       do: {:ok, state}
+
+  defp reconcile_speech(state, context) do
+    private = state.private_media
+    removed = speech_enforcers(private.speech_to_text)
+
+    monitors =
+      Map.filter(private.monitors, fn {monitor, actor} ->
+        if actor in removed do
+          Process.demonitor(monitor, [:flush])
+          false
+        else
+          true
+        end
+      end)
+
+    speech = context.speech_to_text
+    added = speech_enforcers(speech)
+    monitors = Enum.reduce(added, monitors, &Map.put(&2, Process.monitor(&1), &1))
+    attachment = %{state.attachment | media_ingress: if(speech, do: speech.ingress)}
+
+    with :ok <- adopt_attachment(state.room_audio_ingress, attachment, context),
+         :ok <- adopt_attachment(state.room_audio_egress, attachment, context) do
+      private = %{
+        private
+        | speech_to_text: speech,
+          enforcers: added ++ [state.room_audio_ingress, state.room_audio_egress],
+          monitors: monitors
+      }
+
+      {:ok, %{state | private_media: private, attachment: attachment}}
+    end
+  end
+
+  defp adopt_attachment(actor, attachment, context) do
+    case remaining(context) do
+      0 -> {:error, :deadline_elapsed}
+      timeout -> GenServer.call(actor, {:adopt_attachment, attachment}, timeout)
     end
   end
 
@@ -122,12 +168,14 @@ defmodule Vxpipe.Gateway.Media.PrivateMedia do
   end
 
   defp apply_base(actor, context) do
-    remaining = min(context.deadline_ms - System.monotonic_time(:millisecond), 1_000)
-
-    if remaining > 0,
-      do: Enforcer.apply(actor, context.policy, remaining),
-      else: {:error, :deadline_elapsed}
+    case remaining(context) do
+      0 -> {:error, :deadline_elapsed}
+      timeout -> Enforcer.apply(actor, context.policy, timeout)
+    end
   end
+
+  defp remaining(context),
+    do: max(min(context.deadline_ms - System.monotonic_time(:millisecond), 1_000), 0)
 
   defp speech_enforcers(nil), do: []
   defp speech_enforcers(speech), do: [speech.capability, speech.ingress]

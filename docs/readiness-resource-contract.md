@@ -915,10 +915,15 @@ preparations. The phase still owns cancellation of its separately prepared mixer
 Discard does not release media gates. Ordinary installed-policy graphs have no preparation handles.
 
 Private attachment matching remains narrow: its attempt must match the phase, and its participant
-must still be absent from installed membership. This does not create its missing media or STT
-actors. The lifecycle must establish those dormant bindings before querying them; private destination
-setup and full-room resource selection remain unfinished. Current privacy stays installed throughout
-collection, and collected readiness by itself cannot authorize microphone/model admission or release.
+must still be absent from installed membership. Human handoff establishes dormant media and demanded
+STT bindings through the owning connection before collecting the prospective room resources.
+Repeated private preparation retains the same owner, attempt and deadline, but reevaluates speech
+demand. If demand disappears before acceptance, the engine removes the private speech capability
+and ingress; Gateway removes their monitors and updates attachments on its retained media actors.
+An unchanged speech binding retains its instances and monitors. The returned receipt describes
+the current enforcers and must be collected again after such a change. Current privacy stays
+installed throughout collection, and readiness by itself cannot authorize microphone/model
+admission or release. Reconciliation during later handoff stages remains a lifecycle requirement.
 
 Design review rejected rebuilding a retained native output, using current STT evidence for a
 replacement session, and assigning preparation ownership to a short-lived collection worker.

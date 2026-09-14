@@ -2468,3 +2468,41 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   diagnostics and audible/sample acceptance. AI, initial-call, phone parity and changing-listener
   delivery remain separate unfinished slices. No running development server was restarted, and the
   other agent's `vxpipe-docs` work and visual labnotes were preserved.
+
+## Reconcile private speech before human acceptance
+
+- Continued from committed checkpoints `b047624` and `5a8f520`; the preceding goal turn made
+  implementation progress and left only the other agent's visual documentation work uncommitted.
+- Extend the real WebRTC no-transcription handoff with an early private-media allocation followed
+  by a connected participant whose policy disables transcript routing and saving. Require the
+  accepted handoff to retain the connection and room-media actors while stopping only private STT
+  and its ingress. The existing omitted-demand case stays in the same bounded scenario pair.
+- The initial fixture attempted to connect that participant before room admission and received
+  HTTP 503. Corrected it to use the public `JoinParticipant` command before negotiating media;
+  that fixture failure is not evidence for the intended runtime regression.
+- The next attempt exposed the existing human-handoff attachment rule: it rejects unrelated
+  connections while a human destination is pending. That belongs to the changing-listener slice.
+  The policy-reconciliation scenario now connects the extra participant before transfer and uses
+  the existing policy authority to change its contribution after private allocation. It does not
+  claim that mid-transfer connection admission has been implemented.
+- With that setup, the regression fails waiting for `transfer.active` because private speech is
+  reused without reevaluating demand (`vxpipe-private-speech-policy-change-red-3.log`: two cases,
+  one failure). Reevaluate the prospective policy on each authorized allocation request and clear
+  the private capability/ingress pair when no longer demanded. Gateway drops their stale monitors
+  and updates attachments on the existing input/output actors before refreshing their base policy.
+- Both no-demand scenarios now pass (`vxpipe-private-speech-policy-change-green.log`). The changing
+  case observes both speech actors stop and retains the exact connection, output arbiter and room
+  input/output actors. Attachment refreshes recompute the remaining phase budget for each call.
+  Existing unchanged private bindings retain their actors and monitors. Full verification follows.
+- The full WebRTC suite again missed the existing private-input-loss shutdown assertion. Its three
+  focused loss cases pass. Changed that assertion to receive the termination reason before checking
+  it, preserving the required result while exposing a wrong reason directly if the race recurs.
+  The root verification uses the failing run's seed `801862`, with the existing concurrency of four.
+- All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, all tests
+  and unused dependencies. The run contains 1,284 tests, zero failures and 15 integration exclusions
+  (`vxpipe-private-speech-reconcile-root-results.json` and its five logs). All 322 Gateway checks,
+  including the 11 WebRTC handoff cases, pass with seed `801862` and `--max-cases 4`.
+- Updated the readiness contract, milestone progress and index. This checkpoint establishes private
+  speech removal before accepted handoff preparation. Later policy changes during collection,
+  cues or adoption and admission of new audience connections still need their existing lifecycle
+  work. No UI, dependency, lockfile, sound configuration or development-server change was made.

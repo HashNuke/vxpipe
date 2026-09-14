@@ -38,11 +38,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
   end
 
   def allocate(command, caller, attempt_id, %State{} = state) do
-    with {:ok, pending, connection} <- authorize(command, caller, attempt_id, state) do
-      case connection.speech_to_text do
-        nil -> start(command, pending, state)
-        speech -> {:reply, {:ok, Map.take(speech, [:capability, :ingress])}, state}
-      end
+    with {:ok, pending, _connection} <- authorize(command, caller, attempt_id, state) do
+      start(command, pending, state)
     else
       :error -> {:reply, {:error, rejected()}, state}
     end
@@ -72,7 +69,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
 
   defp start(command, pending, state) do
     case pending.preparation.destination.speech_to_text do
-      nil -> {:reply, {:ok, nil}, state}
+      nil -> clear(command, state)
       %SpeechToTextRuntime{} = runtime -> start_selected(command, pending, runtime, state)
     end
   end
@@ -92,13 +89,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
              max(remaining_ms(pending), 1)
            ) do
       if SpeechToTextDemand.required?(candidate.snapshot, command.participant_id),
-        do: allocate_pair(command, pending, runtime, state, base),
-        else: {:reply, {:ok, nil}, state}
+        do: ensure_pair(command, pending, runtime, state, base),
+        else: clear(command, state)
     else
       _unavailable -> {:reply, {:error, unavailable()}, state}
     end
   catch
     :exit, _reason -> {:reply, {:error, unavailable()}, state}
+  end
+
+  defp clear(command, state) do
+    state = ConnectionLifecycle.clear_private_speech_to_text(command.connection_id, state)
+    {:reply, {:ok, nil}, state}
+  end
+
+  defp ensure_pair(command, pending, runtime, state, base) do
+    case binding(pending, state) do
+      nil -> allocate_pair(command, pending, runtime, state, base)
+      speech -> {:reply, {:ok, Map.take(speech, [:capability, :ingress])}, state}
+    end
   end
 
   defp allocate_pair(command, pending, runtime, state, base) do

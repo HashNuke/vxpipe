@@ -206,77 +206,154 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert {:ok, _binding, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(connection)
   end
 
-  test "human handoff leaves selected but undemanded speech stopped" do
-    plan = compile_plan(support_policy: %{transcript_routes: %{}, save_transcripts: false})
-    caller = Map.fetch!(plan.participants, "caller")
-    support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan)
-    stop_room_on_exit(plan)
-    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+  for preparation <- [:none, :before_policy_change] do
+    test "human handoff leaves undemanded speech stopped after #{preparation} preparation" do
+      restriction = %{transcript_routes: %{}, save_transcripts: false}
 
-    TestTextToSpeechTransport.deliver_control(
-      source_tts,
-      ~s({"type":"Connected","request_id":"source-ready"})
-    )
+      plan =
+        compile_plan(
+          support_policy: if(unquote(preparation) == :none, do: restriction, else: %{}),
+          observer_policy: restriction
+        )
 
-    caller_client =
-      plan
-      |> issue_session(room, caller.participant_id)
-      |> then(&connect(&1.session_id, "chat"))
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = CallEngine.start_call(plan)
+      stop_room_on_exit(plan)
+      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
-    assert :ok = send_rtvi_text(caller_client)
-    assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
 
-    assert {:ok, call} =
-             ToolCall.new(
-               id: "no-transcription-transfer",
-               name: "transfer",
-               arguments: %{"destination" => "human-support", "reason" => "Connect support."}
-             )
+      caller_client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat"))
 
-    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
-    send(provider, {:test_agent_runtime_response, {:ok, response}})
-    assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+      policy_change =
+        if unquote(preparation) == :before_policy_change do
+          observer = Map.fetch!(plan.participants, "observer")
 
-    support_client =
-      plan
-      |> issue_session(room, support.participant_id)
-      |> then(&connect(&1.session_id, "vxpipe"))
+          assert {:ok, join} =
+                   CallEngine.Command.JoinParticipant.new(
+                     tenant_id: plan.tenant_id,
+                     actor_id: plan.actor_id,
+                     room_id: plan.room_id,
+                     participant_id: observer.participant_id,
+                     role: :human,
+                     deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+                   )
 
-    %{"data" => %{"attempt_id" => attempt}} =
-      await_sideband(support_client, "transfer.preparation", 2_000)
+          assert {:ok, _participant} = CallEngine.join_participant(join)
 
-    assert_receive {:test_tts_control, ^briefing, _speak}, 2_000
-    assert_receive {:test_tts_control, ^briefing, _flush}, 2_000
+          _observer_client =
+            plan
+            |> issue_session(room, observer.participant_id)
+            |> then(&connect(&1.session_id, "chat"))
 
-    TestTextToSpeechTransport.deliver_control(
-      briefing,
-      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"no-stt-briefing"})
-    )
+          policy_authority = CallEngine.MediaPolicy.Authority.whereis(room.incarnation_id)
 
-    TestTextToSpeechTransport.deliver_audio(briefing, :binary.copy(<<1, 0>>, 960))
+          assert {:ok, _policy} =
+                   CallEngine.MediaPolicy.Authority.leave(
+                     policy_authority,
+                     observer.participant_id
+                   )
 
-    TestTextToSpeechTransport.deliver_control(
-      briefing,
-      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"no-stt-briefing"})
-    )
+          {policy_authority, observer.participant_id}
+        end
 
-    assert %{"data" => %{"attempt_id" => ^attempt}} =
-             await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+      assert :ok = send_rtvi_text(caller_client)
+      assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
 
-    assert :ok = send_acceptance(support_client, "accept-without-transcription", attempt)
+      assert {:ok, call} =
+               ToolCall.new(
+                 id: "no-transcription-transfer",
+                 name: "transfer",
+                 arguments: %{"destination" => "human-support", "reason" => "Connect support."}
+               )
 
-    assert %{"data" => %{"attempt_id" => ^attempt}} =
-             await_sideband(support_client, "transfer.active", 2_000)
+      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+      send(provider, {:test_agent_runtime_response, {:ok, response}})
+      assert_receive {:test_tts_transport_started, briefing, _}, 2_000
 
-    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
-    assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
-    joining = Map.fetch!(binding.connections, support_client.connection_id).pid
-    assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
-    assert media.attachment.admission == :main
-    assert media.attachment.media_ingress == nil
-    assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
-    refute_receive {:test_stt_transport_started, _transport, _}, 100
+      support_client =
+        plan
+        |> issue_session(room, support.participant_id)
+        |> then(&connect(&1.session_id, "vxpipe"))
+
+      %{"data" => %{"attempt_id" => attempt}} =
+        await_sideband(support_client, "transfer.preparation", 2_000)
+
+      prior_media =
+        if unquote(preparation) == :before_policy_change do
+          alias Vxpipe.Gateway.WebRTC.Connection
+
+          assert {:ok, private} =
+                   Connection.prepare_transfer_media(support_client.connection_id, attempt)
+
+          [{authority, _}] =
+            Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+          assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
+          joining = Map.fetch!(binding.connections, support_client.connection_id).pid
+          assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
+          speech = Enum.reject(private.enforcers, &(&1 in [media.room_input, media.room_output]))
+          assert length(speech) == 2
+          monitors = Enum.map(speech, &{&1, Process.monitor(&1)})
+          {policy_authority, observer} = policy_change
+
+          assert {:ok, _policy} =
+                   CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+
+          {media, monitors}
+        end
+
+      assert_receive {:test_tts_control, ^briefing, _speak}, 2_000
+      assert_receive {:test_tts_control, ^briefing, _flush}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        briefing,
+        ~s({"type":"SpeechStarted","request_id":"req","speech_id":"no-stt-briefing"})
+      )
+
+      TestTextToSpeechTransport.deliver_audio(briefing, :binary.copy(<<1, 0>>, 960))
+
+      TestTextToSpeechTransport.deliver_control(
+        briefing,
+        ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"no-stt-briefing"})
+      )
+
+      assert %{"data" => %{"attempt_id" => ^attempt}} =
+               await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+
+      assert :ok = send_acceptance(support_client, "accept-without-transcription", attempt)
+
+      assert %{"data" => %{"attempt_id" => ^attempt}} =
+               await_sideband(support_client, "transfer.active", 2_000)
+
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
+      joining = Map.fetch!(binding.connections, support_client.connection_id).pid
+      assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
+      assert media.attachment.admission == :main
+      assert media.attachment.media_ingress == nil
+      assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
+      refute_receive {:test_stt_transport_started, _transport, _}, 100
+
+      if prior_media do
+        {before, monitors} = prior_media
+        assert media.instance == before.instance
+        assert media.output == before.output
+        assert media.room_input == before.room_input
+        assert media.room_output == before.room_output
+
+        for {actor, monitor} <- monitors do
+          assert_receive {:DOWN, ^monitor, :process, ^actor, :shutdown}, 1_000
+        end
+      end
+    end
   end
 
   for loss <- [:destination, :phase, :wait_player] do
@@ -507,7 +584,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         end
 
       Process.exit(target, :kill)
-      assert_receive {:DOWN, ^connection_monitor, :process, ^connection, :shutdown}, 2_000
+      assert_receive {:DOWN, ^connection_monitor, :process, ^connection, reason}, 2_000
+      assert reason == :shutdown
 
       for {actor, monitor} <- monitors do
         assert_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 2_000
@@ -1220,7 +1298,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                      type: "human",
                      connection: %{service: "web", mode: "receive", admission: "start_call"},
                      capabilities: %{},
-                     while_present: %{save_transcripts: false}
+                     while_present:
+                       Keyword.get(options, :observer_policy, %{save_transcripts: false})
                    },
                    "recording-restriction" => %{
                      type: "human",
