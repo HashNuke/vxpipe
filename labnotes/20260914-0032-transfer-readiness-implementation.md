@@ -16,6 +16,8 @@ orchestration, waits/cues and recovery still require integration
 and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
 The [handoff investigation](#recording-tap-investigation-and-handoff-resume-point) identifies the
 existing completion sequence that still needs to use the prepared resources.
+The latest [phase-owner integration findings](#phase-owner-integration-findings) record the
+remaining ownership and completion-order gaps from source inspection after `c005511`.
 
 ## Detour update after the pause audit
 
@@ -1790,3 +1792,41 @@ Documentation verification for this update: all 38 local labnote links/anchors r
   lifetime, focused checks and contract together,
   preserving the concurrent artwork and visual-task labnote. No browser/provider session or server
   restart was performed; full lifecycle integration and milestone/index acceptance remain open.
+
+## Phase-owner integration findings
+
+This documentation follow-up records source inspection after `c005511`. No runtime changes or
+new tests were made. The existing detour audit and checkpoint sections remain the evidence for
+completed work; the integration steps below are still proposals.
+
+- `RoomTransferSupervisor.prepare/8` runs `DestinationPreparer.prepare/7` as a task that returns
+  after destination configuration. `Pending.task.pid` therefore cannot own subsequent readiness,
+  cues and release. This matters because the private speech allocation now closes when its phase
+  owner exits. Wiring allocation directly to the current short-lived task would cancel it too soon.
+- `ParticipantTransfer.prepared/3` removes the preparation monitor. The agent path also cancels
+  the deadline timer immediately; the human path keeps the timer until acceptance and briefing
+  finish, then cancels it before commit. A persistent phase must retain ownership and the original
+  absolute deadline through the remaining handoff, without giving each stage a fresh timeout.
+- Reusing the existing supervised task with a typed preparation notification remains the proposed
+  approach. That notification would mean configuration finished, not that all capabilities are
+  ready. The task would stay alive through final adoption and release, avoiding a separate owner
+  process or registry. Private connection binding would still require authorization against the
+  exact pending phase, attempt and connection.
+- Keeping that task alive also changes failure routing. The current matching task-DOWN branch uses
+  generic destination cleanup/restoration. A prepared human destination needs `HumanHandoff` cleanup
+  for its private connection, briefing speech and possible outbound leg. Every terminal path must
+  settle the retained task and timer; simply extending task lifetime would leave this incomplete.
+- Both committers currently publish completion internally. The human committer queues connection
+  promotion, and the agent committer starts the first message. Neither waits for the planned
+  all-listener cue and release acknowledgements. The coordinator must retain ownership through
+  adoption and publish success only after that sequence; owner loss or expiry after partial commit
+  must not be reported as a successful transfer.
+- Early human acceptance is still latched before briefing completes. Enforcing the approved
+  acceptance window, integrating startup/transfer waits and recovery, and completing browser/audio
+  acceptance remain outstanding. These findings do not establish the cause of any new live-call
+  failure or demonstrate that the end-to-end milestone works.
+
+Verification for this follow-up: cross-checked the supervisor, preparation settlement, worker-DOWN,
+human cleanup and both commit paths against the current source; checked local Markdown links and
+anchors and `git diff --check`. The 1,263-test result above belongs to `c005511`; no runtime suite,
+browser/provider session or server restart was performed for this documentation-only update.
