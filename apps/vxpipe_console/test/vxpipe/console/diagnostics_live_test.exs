@@ -325,15 +325,15 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   test "opening diagnostics does not create rooms, participants, or call-path observations" do
     {_child_id, reporter} = start_reporter({__MODULE__, make_ref()}, 4)
     configure_reporter(reporter)
-    registry_entries_before = Registry.count(Vxpipe.CallEngine.RoomRegistry)
+    registry_entries_before = registry_entries()
     room_children_before = room_children()
 
     assert TelemetryReporter.snapshot(reporter).received_events == 0
     {:ok, view, _html} = live(build_conn(), "/diagnostics")
     assert has_element?(view, "#diagnostics-board")
 
-    assert Registry.count(Vxpipe.CallEngine.RoomRegistry) == registry_entries_before
-    assert room_children() == room_children_before
+    assert MapSet.subset?(registry_entries(), registry_entries_before)
+    assert MapSet.subset?(room_children(), room_children_before)
 
     assert %{
              received_events: 0,
@@ -425,10 +425,16 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     |> Enum.count(fn handler -> handler.id == handler_id end)
   end
 
+  defp registry_entries do
+    Vxpipe.CallEngine.RoomRegistry
+    |> Registry.select([{{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}])
+    |> MapSet.new()
+  end
+
   defp room_children do
     Vxpipe.CallEngine.RoomSupervisor
     |> DynamicSupervisor.which_children()
     |> Enum.map(fn {_id, pid, _type, _modules} -> pid end)
-    |> Enum.sort()
+    |> MapSet.new()
   end
 end
