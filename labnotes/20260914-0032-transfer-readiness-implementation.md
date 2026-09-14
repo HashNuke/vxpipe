@@ -2437,3 +2437,34 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   umbrella suite: 1,283 tests, zero failures, 15 integration exclusions, with `--max-cases 4`.
   Evidence is `vxpipe-human-cue-commit-results.json` and its five logs. This run includes the cue
   changes that follow as a separate commit; no UI files or dependencies changed in this checkpoint.
+
+## Keep the human cue barrier closed through failure
+
+- Added four ordinary human-transfer scenarios with nil wait sounds and deferred caller cue drain:
+  successful drain, attempt expiry with unusable recovery output, cue-player loss and prepared STT
+  transport loss. They require no successful tool result or policy commit before the cue finishes.
+  Recoverable failures retain the source TTS and policy, clear the pending attempt and release holds.
+- The first three-case run failed on cue-player loss (`vxpipe-human-cue-barrier-red.log`). The
+  handoff worker now monitors the players it owns and handles their failures while collecting
+  readiness or waiting for playback completion. The existing phase owns audience-player monitors.
+  All three initial cases then passed (`vxpipe-human-cue-barrier-green.log`).
+- The fourth case exposed a different gap: a failed prepared STT transport leaves its capability
+  process alive. Readiness collection stops probing ready resources, and the cue wait ignored
+  readiness notifications. Listening for collector failure alone still failed the scenario.
+  During cue drain, refresh the existing collector every 100 ms under the unchanged deadline and
+  handle resource/player failure. Apply the same bounded recheck to the source's recovery cue.
+  Four cases now pass (`vxpipe-human-cue-recheck-green.log`); no collector-wide lifecycle change,
+  new process type, dependency, production timeout increase or UI change was needed.
+- One earlier full WebRTC run missed private output-loss shutdown within its fixture window.
+  The three owning media-loss cases passed on recheck, and all 321 Gateway tests passed in both
+  subsequent complete root runs. No speculative production change was made for that observation.
+- The final complete root run passes all five required gates: format, compile with warnings as
+  errors, strict Credo, tests and unused dependencies. It has 1,283 tests, zero failures and
+  15 integration exclusions at concurrency four (`vxpipe-human-cue-commit-results.json`). The
+  separate policy-demand change is committed as `b047624`; this checkpoint contains the cue worker,
+  its four cases and the minimal deferred-drain fixture control.
+- Updated the milestone's demonstrated cue acceptance and current verification, and synchronized
+  the index. The complete human slice remains open for other failure stages, policy reconciliation,
+  diagnostics and audible/sample acceptance. AI, initial-call, phone parity and changing-listener
+  delivery remain separate unfinished slices. No running development server was restarted, and the
+  other agent's `vxpipe-docs` work and visual labnotes were preserved.

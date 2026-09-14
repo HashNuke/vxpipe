@@ -65,7 +65,7 @@ progress without claiming the entire milestone is complete.
 20. [x] [Usage, cost observations, and billing enrichment](usage-and-billing-observations.md) — Inspect honest call/participant/turn usage even when prices are unavailable.
 21. [x] [Versioned call-details publications](call-details-publications.md) — Publish immutable timestamp-named details and honest completion state after calls end.
 22. [x] [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md) — Continue long conversations within model limits without changing tool or privacy authority.
-23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Deliver human web handoff, AI handoff, initial waiting, phone parity and changing-listener slices with complete readiness, private waits/cues and acknowledged release; groundwork committed, human integration in progress, acceptance pending.
+23. [ ] [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md) — Deliver human web handoff, AI handoff, initial waiting, phone parity and changing-listener slices with complete readiness, private waits/cues and acknowledged release; human handoff and bounded recovery committed, complete slice acceptance pending.
 24. [ ] [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 25. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -92,8 +92,8 @@ The subsequent [transfer readiness and participant wait sounds milestone](transf
 adds milestone 23 before delivery. The user authorized implementation on 2026-09-14 and requested
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
-prepared media release and bounded caller recovery. All five root gates pass: 1,278 tests, zero
-failures and 15 exclusions, with test concurrency four. The milestone's
+prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
+1,283 tests, zero failures and 15 exclusions, with test concurrency four. The milestone's
 [current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence) distinguishes this
 implementation from remaining failure/privacy/diagnostic and audible acceptance.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay
@@ -295,7 +295,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Versioned call-details publications](call-details-publications.md#specification-review) | Approved | milestone_review_a; Approved initial draft; clarified lifecycle/direction/route/plan digest in publication contents. |
 | [Whole-call retention and deletion](call-retention.md#specification-review) | Approved | milestone_review_b; Added tenant/call object deletion isolation and inherited vs explicit policy-change checks; re-review approved. |
 | [Context compaction and supported LLM fallback](context-compaction-and-native-fallback.md#specification-review) | Approved | milestone_review_c; Added failed/stale compaction preservation, merged-input budget rechecks, limited summarizer authority and unsupported fallback validation; re-review approved. |
-| [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Five runnable checkpoints now include tasks, recovery, diagnostics and verification. Committed groundwork and uncommitted human integration are documented separately; runtime acceptance remains open. |
+| [Transfer readiness and participant wait sounds](transfer-readiness-and-wait-sounds.md#planning-evidence-and-design-review) | Implementation authorized; vertical delivery plan locally reviewed | Approved contracts retained. Five runnable checkpoints include tasks, recovery, diagnostics and verification. Human handoff, bounded recovery and cue-failure handling are committed; complete slice acceptance remains open. |
 | [Embedded and JSON-configured container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, and the 2026-09-13 Docker-first README/image naming and Elixir library requirements without changing order. |
 
 ## Planning verification

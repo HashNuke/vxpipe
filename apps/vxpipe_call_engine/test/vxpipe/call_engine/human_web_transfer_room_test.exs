@@ -380,6 +380,97 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phase-owner-lost"}}
   end
 
+  for outcome <- [:drain, :deadline, :cue_loss, :readiness_loss] do
+    test "human transfer keeps its cue barrier closed until #{outcome}" do
+      plan =
+        compile_plan(
+          wait_sounds: nil,
+          transfer_timeout_ms: 2_000,
+          support_stt: unquote(outcome) == :readiness_loss
+        )
+
+      caller = Map.fetch!(plan.participants, "caller")
+      support = Map.fetch!(plan.participants, "human-support")
+      assert {:ok, room} = CallEngine.start_call(plan)
+      authority = room_authority(plan)
+      room_monitor = Process.monitor(authority)
+      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+      source_monitor = Process.monitor(source_tts)
+
+      TestTextToSpeechTransport.deliver_control(
+        source_tts,
+        ~s({"type":"Connected","request_id":"source-ready"})
+      )
+
+      caller_sink =
+        start_supervised!({TestAudioOutputSink, observer: self(), defer_drain: true},
+          id: :cue_caller
+        )
+
+      support_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :cue_support)
+      assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", caller_sink)
+      begin_transfer(plan, room, caller, "cue-transfer")
+      assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+
+      assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt}} =
+               attach_ready(plan, room, support, "support-connection", support_sink)
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :media_ready)
+               )
+
+      finish_private_briefing(briefing, support_sink)
+      assert_receive {:vxpipe_transfer_acceptance_ready, ^attempt}, 2_000
+      policy = PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id))
+
+      assert :ok =
+               TestTransferConnection.control(
+                 transfer_control(plan, room, support, attempt, :accept)
+               )
+
+      speech_transport =
+        if unquote(outcome) == :readiness_loss do
+          assert_receive {:test_stt_transport_started, transport, _}, 1_000
+
+          TestSpeechToTextTransport.deliver(
+            transport,
+            ~s({"type":"Connected","request_id":"cue-ready","sequence_id":0})
+          )
+
+          transport
+        end
+
+      assert_receive {:test_audio_output_drain, ^caller_sink}, 1_000
+      refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 50
+      refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 50
+      assert PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id)) == policy
+
+      case unquote(outcome) do
+        :drain ->
+          assert :ok = GenServer.call(caller_sink, :complete_drain)
+          assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 1_000
+          assert_receive {:vxpipe_transfer_active, ^attempt}, 1_000
+
+        :deadline ->
+          assert_receive {:DOWN, ^room_monitor, :process, ^authority, :handoff_recovery_failed},
+                         3_000
+
+          refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cue-transfer"}}, 50
+
+        outcome when outcome in [:cue_loss, :readiness_loss] ->
+          {player, _reply} = :sys.get_state(caller_sink).pending_drain
+          assert :ok = GenServer.call(caller_sink, {:defer_drain, false})
+          Process.exit(if(outcome == :cue_loss, do: player, else: speech_transport), :kill)
+          assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "cue-transfer"}}, 1_000
+          refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 50
+          assert :sys.get_state(authority).pending_participant_transfer == nil
+          assert MapSet.size(:sys.get_state(authority).held_participant_ids) == 0
+          assert PolicyAuthority.snapshot(PolicyAuthority.whereis(room.incarnation_id)) == policy
+      end
+    end
+  end
+
   test "activates a destination's configured STT only after acceptance and reuses it" do
     plan = compile_plan(support_stt: true)
     caller = Map.fetch!(plan.participants, "caller")
