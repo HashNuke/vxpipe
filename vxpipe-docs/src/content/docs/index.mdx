@@ -29,6 +29,7 @@ import Fireworks from '@lobehub/icons/es/Fireworks/components/Color.js';
 import Grok from '@lobehub/icons/es/Grok/components/Mono.js';
 import Mistral from '@lobehub/icons/es/Mistral/components/Color.js';
 import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono.js';
+import OpenRouter from '@lobehub/icons/es/OpenRouter/components/Color.js';
 import AssemblyAILogo from '../../assets/logos/assembly-ai.svg';
 import CartesiaLogo from '../../assets/logos/cartesia.svg';
 import DeepgramLogo from '../../assets/logos/deepgram.svg';
@@ -95,61 +96,65 @@ Run VxPipe locally with Docker.
     <h2 id="ai-providers">Supported AI Providers</h2>
     <div className="provider-logos">
       <span className="provider-logo">
-        <OpenAI size={32} aria-hidden="true" focusable="false" />
-        <span>OpenAI</span>
+        <AssemblyAILogo class="provider-wordmark" role="img" aria-label="AssemblyAI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <CartesiaLogo class="provider-wordmark" role="img" aria-label="Cartesia" focusable="false" />
       </span>
       <span className="provider-logo">
         <Claude size={32} aria-hidden="true" focusable="false" />
         <span>Claude</span>
-      </span>
-      <span className="provider-logo">
-        <AiStudio size={32} aria-hidden="true" focusable="false" />
-        <span>Google AI Studio</span>
-      </span>
-      <span className="provider-logo">
-        <Mistral size={32} aria-hidden="true" focusable="false" />
-        <span>Mistral</span>
-      </span>
-      <span className="provider-logo">
-        <Grok size={32} aria-hidden="true" focusable="false" />
-        <span>Grok</span>
-      </span>
-      <span className="provider-logo">
-        <Fireworks size={32} aria-hidden="true" focusable="false" />
-        <span>Fireworks AI</span>
-      </span>
-      <span className="provider-logo">
-        <ElevenLabs size={32} aria-hidden="true" focusable="false" />
-        <span>ElevenLabs</span>
       </span>
       <span className="provider-logo provider-logo--deepgram">
         <DeepgramLogo width="32" height="32" aria-hidden="true" focusable="false" />
         <span>Deepgram</span>
       </span>
       <span className="provider-logo">
-        <RimeAILogo class="provider-wordmark provider-wordmark--compact provider-wordmark--rime" role="img" aria-label="Rime AI" focusable="false" />
+        <ElevenLabs size={32} aria-hidden="true" focusable="false" />
+        <span>ElevenLabs</span>
       </span>
       <span className="provider-logo">
-        <SarvamLogo class="provider-wordmark provider-wordmark--sarvam" role="img" aria-label="Sarvam" focusable="false" />
-      </span>
-      <span className="provider-logo">
-        <AssemblyAILogo class="provider-wordmark" role="img" aria-label="AssemblyAI" focusable="false" />
-      </span>
-      <span className="provider-logo">
-        <InworldAILogo class="provider-wordmark" role="img" aria-label="Inworld AI" focusable="false" />
-      </span>
-      <span className="provider-logo">
-        <ResembleAILogo class="provider-wordmark" role="img" aria-label="Resemble AI" focusable="false" />
+        <Fireworks size={32} aria-hidden="true" focusable="false" />
+        <span>Fireworks AI</span>
       </span>
       <span className="provider-logo">
         <FishAudioLogo class="provider-icon" aria-hidden="true" focusable="false" />
         <span>Fish Audio</span>
       </span>
       <span className="provider-logo">
+        <AiStudio size={32} aria-hidden="true" focusable="false" />
+        <span>Google AI Studio</span>
+      </span>
+      <span className="provider-logo">
+        <Grok size={32} aria-hidden="true" focusable="false" />
+        <span>Grok</span>
+      </span>
+      <span className="provider-logo">
+        <InworldAILogo class="provider-wordmark" role="img" aria-label="Inworld AI" focusable="false" />
+      </span>
+      <span className="provider-logo">
         <MinimaxLogo class="provider-wordmark" role="img" aria-label="MiniMax" focusable="false" />
       </span>
       <span className="provider-logo">
-        <CartesiaLogo class="provider-wordmark" role="img" aria-label="Cartesia" focusable="false" />
+        <Mistral size={32} aria-hidden="true" focusable="false" />
+        <span>Mistral</span>
+      </span>
+      <span className="provider-logo">
+        <OpenAI size={32} aria-hidden="true" focusable="false" />
+        <span>OpenAI</span>
+      </span>
+      <span className="provider-logo">
+        <OpenRouter size={32} aria-hidden="true" focusable="false" />
+        <span>OpenRouter</span>
+      </span>
+      <span className="provider-logo">
+        <ResembleAILogo class="provider-wordmark" role="img" aria-label="Resemble AI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <RimeAILogo class="provider-wordmark provider-wordmark--compact provider-wordmark--rime" role="img" aria-label="Rime AI" focusable="false" />
+      </span>
+      <span className="provider-logo">
+        <SarvamLogo class="provider-wordmark provider-wordmark--sarvam" role="img" aria-label="Sarvam" focusable="false" />
       </span>
       <span className="provider-logo">
         <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
@@ -159,12 +164,12 @@ Run VxPipe locally with Docker.
   <section className="provider-group" aria-labelledby="telephony-providers">
     <h2 id="telephony-providers">Supported Telephony Providers</h2>
     <div className="provider-logos">
+      <span className="provider-logo">
+        <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
+      </span>
       <span className="provider-logo provider-logo--twilio">
         <TwilioLogo width="32" height="32" aria-hidden="true" focusable="false" />
         <span>Twilio</span>
-      </span>
-      <span className="provider-logo">
-        <TelnyxLogo width="96" height="30" role="img" aria-label="Telnyx" focusable="false" />
       </span>
     </div>
   </section>
