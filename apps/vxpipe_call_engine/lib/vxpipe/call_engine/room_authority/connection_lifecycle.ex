@@ -361,7 +361,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
     do: :application
 
   defp selected_speech_to_text_runtime(participant_id, state) do
-    Map.get(state.speech_to_text_runtime, participant_id)
+    case Map.fetch(state.speech_to_text_runtime, participant_id) do
+      {:ok, runtime} -> runtime
+      :error -> planned_connection_runtime(participant_id, state.participant_transfer_runtime)
+    end
+  end
+
+  defp planned_connection_runtime(_participant_id, nil), do: nil
+
+  defp planned_connection_runtime(participant_id, runtime) do
+    plan = runtime.plan
+
+    case Enum.find(Map.values(plan.participants), &(&1.participant_id == participant_id)) do
+      %{kind: :human} = participant ->
+        # Entry speech remains owned by initial preparation. Other admitted humans resolve
+        # their selected provider outside RoomAuthority, when their connection attaches.
+        if participant.definition_key not in [plan.entry_caller, plan.entry_receiver] and
+             participant.capabilities.speech_to_text != nil,
+           do: {:planned, runtime, participant}
+
+      _other ->
+        nil
+    end
   end
 
   defp authorize_speech_to_text_binding(command, caller, subscriber, state) do

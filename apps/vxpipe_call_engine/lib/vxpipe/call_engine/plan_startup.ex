@@ -416,6 +416,15 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     AgentActivationOptions.new(plan, receiver, options)
   end
 
+  @doc false
+  def connection_speech_to_text(
+        %ResolvedCallPlan{} = plan,
+        %ResolvedCallPlan.Participant{kind: :human} = participant,
+        options
+      ) do
+    speech_to_text_runtime(plan, participant, nil, options)
+  end
+
   defp speech_to_text_runtime(plan, participant, opening_audio, options) do
     case resolve_provider(participant.capabilities.speech_to_text, options, :speech_to_text) do
       {:ok, nil} ->

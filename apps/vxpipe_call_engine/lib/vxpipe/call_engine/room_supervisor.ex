@@ -275,6 +275,28 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   end
 
   defp start_connection_speech_to_text(
+         room_authority,
+         command,
+         :human,
+         {:planned, runtime, participant},
+         application_options
+       ) do
+    case PlanStartup.connection_speech_to_text(runtime.plan, participant, runtime.startup_options) do
+      {:ok, selected} ->
+        start_connection_speech_to_text(
+          room_authority,
+          command,
+          :human,
+          selected,
+          application_options
+        )
+
+      {:error, _reason} ->
+        attachment_speech_to_text_failed(room_authority, command)
+    end
+  end
+
+  defp start_connection_speech_to_text(
          _room_authority,
          _command,
          _role,

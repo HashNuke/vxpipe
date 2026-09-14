@@ -1362,6 +1362,84 @@ defmodule Vxpipe.CallEngine.DefinitionDrivenCallTest do
     assert stt_url =~ "model=flux-general-multi"
   end
 
+  for profile <- ["plan-stt", "morse-stt"] do
+    test "resolves #{profile} only when an additional planned human attaches" do
+      configure_agent_runtime_provider(self())
+      configure_speech_runtime()
+
+      plan =
+        compile_plan(unique_id("room-late-human"),
+          speech?: true,
+          definition_transform: fn input ->
+            listener = %{
+              Map.fetch!(input.participants, "caller")
+              | capabilities: %{speech_to_text: unquote(profile)}
+            }
+
+            put_in(input, [:participants, "listener"], listener)
+          end
+        )
+
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      listener = Map.fetch!(plan.participants, "listener")
+      assert {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+      assert_receive {:test_tts_transport_started, _voice, _}
+      sink = start_supervised!({TestAudioOutputSink, observer: self()})
+      attach_caller(plan, room, caller, "original-caller", sink)
+      assert_receive {:test_stt_transport_started, caller_stt, _}
+      refute_receive {:test_stt_transport_started, _, _}
+
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      assert {:ok, before} = RoomAuthority.readiness_binding(authority)
+
+      assert {:ok, join} =
+               JoinParticipant.new(
+                 tenant_id: plan.tenant_id,
+                 actor_id: plan.actor_id,
+                 room_id: plan.room_id,
+                 participant_id: listener.participant_id,
+                 role: :human,
+                 deadline: future_deadline()
+               )
+
+      assert {:ok, _participant} = CallEngine.join_participant(join)
+      refute_receive {:test_stt_transport_started, _, _}
+
+      assert {:ok, attach} =
+               AttachConnection.new(
+                 tenant_id: plan.tenant_id,
+                 actor_id: plan.actor_id,
+                 room_id: plan.room_id,
+                 incarnation_id: room.incarnation_id,
+                 participant_id: listener.participant_id,
+                 connection_id: "late-listener",
+                 deadline: future_deadline()
+               )
+
+      result = CallEngine.TestTransferConnection.attach(attach, nil)
+
+      if unquote(profile) == "plan-stt" do
+        assert {:ok, %ConnectionAttachment{media_ingress: ingress}} = result
+        assert is_pid(ingress)
+        assert_receive {:test_stt_transport_started, listener_stt, %{url: url}}
+        assert listener_stt != caller_stt
+        assert url =~ "model=flux-general-multi"
+      else
+        assert {:error, %Error{code: :speech_to_text_unavailable}} = result
+      end
+
+      assert {:ok, after_attachment} = RoomAuthority.readiness_binding(authority)
+      assert after_attachment.room == before.room
+      assert after_attachment.participants == before.participants
+
+      assert Map.fetch!(after_attachment.connections, "original-caller") ==
+               Map.fetch!(before.connections, "original-caller")
+
+      refute_receive {:test_stt_transport_started, _, _}
+      refute_receive {:test_tts_transport_started, _, _}
+    end
+  end
+
   test "resolves explicitly registered alternate speech providers without changing defaults" do
     plan = compile_plan(unique_id("room-morse-runtime"), speech?: true, speech_profile: :morse)
     caller = Map.fetch!(plan.participants, plan.entry_caller)

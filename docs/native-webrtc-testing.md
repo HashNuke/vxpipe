@@ -29,6 +29,13 @@ remains deterministic. Both peers receive the wait, cue and conversation in orde
 case plays the private notice and checks actual subsequent model requests for retained caller
 content without private notice text, blocked caller input or the configured wait URL.
 
+The ordinary handoffs include a third planned human with its own selected recognizer. Destination
+STT, that remaining recognizer and the room recording writer each become the final readiness
+blocker in custom/nil configurations. All three peers decode the cue before conversational tones;
+held microphones are discarded, subsequent audio reaches STT/recordings, and the remaining
+participant retains its existing speech and media bindings. Additional planned humans resolve
+their selected STT on attachment through the same supervised runtime path as initial callers.
+
 For the local speech-provider round trip:
 
 ```shell
