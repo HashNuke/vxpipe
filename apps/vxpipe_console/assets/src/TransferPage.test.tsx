@@ -112,6 +112,16 @@ test("connects the latest sample destination and activates only after explicit a
     });
   });
 
+  const acceptButton = screen.getByRole("button", { name: "Accept transfer" });
+  expect(acceptButton).toBeDisabled();
+  fireEvent.click(acceptButton);
+  expect(accept).not.toHaveBeenCalled();
+
+  act(() => {
+    callbacks.onControl({ type: "acceptance_ready", attemptId: "xfer_demo" });
+  });
+
+  expect(screen.getByRole("button", { name: "Accept transfer" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Accept transfer" }));
   expect(accept).toHaveBeenCalledWith("xfer_demo");
 

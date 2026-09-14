@@ -613,6 +613,10 @@ retains the chronological red/green results, failed approaches and intermediate 
 | Candidate recording tracks/taps and exact membership adoption | `4b14530`, `666ca37`, `69b5ad6` | Local recording paths prepare under future policy without changing current permissions; an exact collected membership commits in one revision under the original deadline. Remote persistence remains asynchronous. |
 | Attempt-owned private speech and actual Gateway preparation | `a8106d4`, `c005511`, `4801597`, `5ab8c17`, `c4fea8c` | Private actors are bound to the authorized connection and persistent phase. WebRTC preparation waits for destination STT while retaining caller/source resources. Phone component checks select no STT, while later worktree checks exercise configured incoming phone STT. |
 
+The normal human flow and bounded recovery are committed as `1546ab2`; operational readiness
+during active model/tool requests is committed as `01a2469`. These are implementation progress
+within the first delivery checkpoint, whose complete acceptance remains open.
+
 The durable [readiness resource contract](../readiness-resource-contract.md) records ownership,
 identity, preparation/adoption and cleanup rules. The
 [incremental policy contract](../incremental-media-policy.md) remains authoritative: readiness or

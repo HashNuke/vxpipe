@@ -7,7 +7,7 @@ import {
   type TransferControl,
 } from "./transferConnection";
 
-type Phase = "idle" | "connecting" | "briefing" | "accepting" | "active" | "closed" | "error";
+type Phase = "idle" | "connecting" | "briefing" | "ready" | "accepting" | "active" | "closed" | "error";
 
 type EventEntry = {
   id: number;
@@ -17,8 +17,9 @@ type EventEntry = {
 const phaseCopy: Record<Phase, string> = {
   idle: "Desk offline",
   connecting: "Establishing private line",
-  briefing: "Private briefing line open",
-  accepting: "Acceptance sent",
+  briefing: "Listen to the private briefing",
+  ready: "Ready to accept transfer",
+  accepting: "Preparing your connection",
   active: "Main room active",
   closed: "Connection closed",
   error: "Connection unavailable",
@@ -26,6 +27,7 @@ const phaseCopy: Record<Phase, string> = {
 
 export default function TransferPage() {
   const connection = useRef<TransferConnection | undefined>(undefined);
+  const activeAttempt = useRef<string | undefined>(undefined);
   const eventSequence = useRef(0);
   const [phase, setPhase] = useState<Phase>("idle");
   const [attemptId, setAttemptId] = useState<string>();
@@ -42,11 +44,18 @@ export default function TransferPage() {
   function handleControl(control: TransferControl) {
     switch (control.type) {
       case "preparation":
+        activeAttempt.current = control.attemptId;
         setAttemptId(control.attemptId);
         setPhase("briefing");
         record("Private briefing opened");
         break;
+      case "acceptance_ready":
+        if (control.attemptId !== activeAttempt.current) return;
+        setPhase((current) => current === "briefing" ? "ready" : current);
+        record("Briefing complete; acceptance available");
+        break;
       case "active":
+        if (control.attemptId !== activeAttempt.current) return;
         setPhase("active");
         record("Main room media activated");
         break;
@@ -61,6 +70,8 @@ export default function TransferPage() {
   async function connect() {
     connection.current?.close();
     connection.current = undefined;
+    activeAttempt.current = undefined;
+    setAttemptId(undefined);
     setPhase("connecting");
     setError(undefined);
     record("Requesting destination admission");
@@ -97,7 +108,7 @@ export default function TransferPage() {
   }
 
   function accept() {
-    if (!attemptId || !connection.current) {
+    if (phase !== "ready" || !attemptId || !connection.current) {
       return;
     }
 
@@ -116,6 +127,7 @@ export default function TransferPage() {
   function disconnect() {
     connection.current?.close();
     connection.current = undefined;
+    activeAttempt.current = undefined;
     setPhase("closed");
   }
 
@@ -145,8 +157,13 @@ export default function TransferPage() {
               </p>
             </div>
 
-            {phase === "briefing" ? (
-              <button className="transfer-action" type="button" onClick={accept}>
+            {phase === "briefing" || phase === "ready" ? (
+              <button
+                className="transfer-action"
+                type="button"
+                onClick={accept}
+                disabled={phase !== "ready"}
+              >
                 Accept transfer
               </button>
             ) : phase === "active" || phase === "accepting" ? (

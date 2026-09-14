@@ -2395,3 +2395,14 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
 - Milestone implementation tasks now mark the implemented early hold, acceptance, ordinary handoff
   and corrected phone/embedded boundaries. Root/owning checks are marked verified. Complete human
   slice acceptance, the other four slices, milestone 23 and the packaging/retention hold remain open.
+
+### Narrow transfer-page checkpoint
+
+- The backend handoff and recovery checkpoint is committed as `1546ab2`, following operational
+  readiness commit `01a2469`. The Console change only adds the server's acceptance-ready phase to
+  the existing control, shows preparing after acceptance, ignores unrelated attempt notifications,
+  and removes foreground/background interpolation that briefly obscured the button label.
+- Verification is the existing three Console checks, TypeScript check, asset build and rendered
+  desktop/mobile inspection recorded above. No dependency, new UI component or layout change is
+  part of this checkpoint. Root verification remains the passing 1,278-test run; no Elixir behavior
+  changed after that run. The documentation site and its other agent's labnotes remain untouched.

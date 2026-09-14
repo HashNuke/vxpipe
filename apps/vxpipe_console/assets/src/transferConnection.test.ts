@@ -134,6 +134,18 @@ test("negotiates the sideband peer, projects controls, and releases browser medi
     participantId: "part_support",
   });
 
+  dataChannel.onmessage?.(
+    new MessageEvent("message", {
+      data: JSON.stringify({
+        id: "xfer_demo",
+        type: "transfer.acceptance_ready",
+        data: { attempt_id: "xfer_demo" },
+      }),
+    }),
+  );
+
+  expect(onControl).toHaveBeenCalledWith({ type: "acceptance_ready", attemptId: "xfer_demo" });
+
   connection.accept("xfer_demo");
   expect(JSON.parse(send.mock.calls[0][0])).toMatchObject({
     type: "transfer.accept",

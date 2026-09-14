@@ -260,6 +260,7 @@ body {
 }
 
 .transfer-status--briefing > span,
+.transfer-status--ready > span,
 .transfer-status--accepting > span,
 .transfer-status--active > span {
   background: var(--transfer-signal);
@@ -344,10 +345,7 @@ body {
   font-weight: 600;
   line-height: 1.4286;
   cursor: pointer;
-  transition:
-    background-color 150ms ease-out,
-    border-color 150ms ease-out,
-    color 150ms ease-out;
+  transition: border-color 150ms ease-out;
 }
 
 .transfer-action:hover:not(:disabled) {

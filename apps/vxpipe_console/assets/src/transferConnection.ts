@@ -4,6 +4,7 @@ const DEFAULT_OFFER_URL = "/api/rtvi/offer";
 
 export type TransferControl =
   | { type: "preparation"; attemptId: string; participantId: string }
+  | { type: "acceptance_ready"; attemptId: string }
   | { type: "active"; attemptId: string }
   | { type: "error"; message: string };
 
@@ -205,6 +206,10 @@ function decodeControl(value: unknown): TransferControl | undefined {
 
     if (message.type === "transfer.active" && "attempt_id" in data && identifier(data.attempt_id)) {
       return { type: "active", attemptId: data.attempt_id };
+    }
+
+    if (message.type === "transfer.acceptance_ready" && "attempt_id" in data && identifier(data.attempt_id)) {
+      return { type: "acceptance_ready", attemptId: data.attempt_id };
     }
 
     if (message.type === "error" && "message" in data && typeof data.message === "string") {
