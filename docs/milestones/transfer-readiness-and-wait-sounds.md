@@ -833,3 +833,20 @@ adoption of the prepared recording graph through this operation. All five root g
 1,251 tests, zero failures and 15 integration exclusions.
 Participant/control changes, private destination preparation and the full held-media lifecycle still
 need to call this operation; the milestone acceptance boxes remain open.
+
+Newly prepared speech actors can now start under the base policy without opening a preliminary
+provider session, prepare their required candidate session and ingress, and join the final policy
+barrier as new enforcers. They remain outside ordinary critical registration until commit, so
+discarding the private pair preserves the source. Adoption retains the prepared provider generation
+and leaves microphone ingress closed until explicit release. The internal initialization option
+does not change call-definition configuration or authorize private connection access.
+
+Forty-eight focused checks pass, including new-enforcer acknowledgement and failure, rejected
+adoption without registration, private pair cancellation/retry, unchanged source audio and exact
+session adoption. An unchanged membership candidate preserves existing enforcers without replaying
+the installed revision. The [resource contract](../readiness-resource-contract.md#adopting-newly-prepared-enforcers)
+records ownership and the remaining requirement to bind allocated actors to the authorized
+connection and persistent phase owner. All five root gates pass with 1,258 tests, zero failures and
+15 integration exclusions. An earlier recorder flush failure did not reproduce in isolation or
+the complete same-seed rerun; the labnote retains that evidence without claiming a cause or fix.
+Lifecycle and acceptance remain open.

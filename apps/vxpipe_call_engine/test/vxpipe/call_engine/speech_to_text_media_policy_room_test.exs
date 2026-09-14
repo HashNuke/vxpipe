@@ -410,6 +410,168 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert_receive {:DOWN, ^monitor, :process, ^connector, _reason}, 1_000
   end
 
+  test "a privately initialized speech pair prepares one provider session and keeps input closed through adoption" do
+    context = preparation_room()
+    assert {:ok, original_source, :ready} = SpeechToText.readiness(context.capability)
+    private = prepare_private_speech(context)
+
+    %{capability: capability, ingress: ingress, resource: resource, transport: transport} =
+      private
+
+    frame = private_frame(context, private, 1)
+    track = Map.take(frame, [:track_id, :codec, :sample_rate, :channels])
+    assert :ok = Ingress.prepare_track(ingress, track, resource)
+    assert {:ok, resources} = Ingress.readiness_resources(ingress, resource)
+    collector = collect(resources, context.room.incarnation_id)
+    TestSpeechToTextTransport.deliver(transport, connected_message())
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    assert :ok = Ingress.push(ingress, private_frame(context, private, 1))
+    refute_receive {:test_stt_audio, ^transport, _}
+    assert Authority.snapshot(context.authority) == private.candidate.base_snapshot
+    prepared = private.prepared
+
+    assert {:ok, ^prepared} =
+             SpeechToText.prepare_policy(capability, private.candidate, private.options)
+
+    refute_receive {:test_stt_transport_started, _, _}
+
+    assert {:ok, adopted} =
+             Authority.commit_candidate(
+               context.authority,
+               private.candidate,
+               Keyword.fetch!(private.options, :deadline_ms),
+               [capability, ingress]
+             )
+
+    assert adopted == private.candidate.snapshot
+    assert {:ok, ^resource, :ready} = SpeechToText.readiness_binding(resource)
+    assert :ok = Ingress.push(ingress, private_frame(context, private, 2))
+    refute_receive {:test_stt_audio, ^transport, _}
+    assert :ok = Ingress.open(ingress)
+    assert :ok = Ingress.push(ingress, private_frame(context, private, 3))
+    assert_receive {:test_stt_audio, ^transport, <<1>>}
+    refute_receive {:test_stt_transport_started, _, _}
+    assert {:ok, ^original_source, :ready} = SpeechToText.readiness(context.capability)
+  end
+
+  test "discarding a private speech pair preserves the source and permits another preparation" do
+    context = preparation_room()
+    assert {:ok, original_source, :ready} = SpeechToText.readiness(context.capability)
+    private = prepare_private_speech(context)
+    transport = private.transport
+    TestSpeechToTextTransport.deliver(transport, connected_message())
+    collector = collect([private.resource], context.room.incarnation_id)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 1_000
+    transport_monitor = Process.monitor(transport)
+    assert :ok = SpeechToText.discard_policy(private.capability, private.prepared.token)
+    assert_receive {:DOWN, ^transport_monitor, :process, ^transport, _reason}, 1_000
+    stop_private_speech(context, private)
+    assert Authority.snapshot(context.authority) == private.candidate.base_snapshot
+    assert {:ok, ^original_source, :ready} = SpeechToText.readiness(context.capability)
+    source_transport = context.transport
+    assert :ok = CallEngine.push_audio(context.attachment, preparation_frame(context, 1))
+    assert_receive {:test_stt_audio, ^source_transport, <<1>>}
+    retry = prepare_private_speech(context)
+    assert retry.transport != transport
+    stop_private_speech(context, retry)
+    assert Authority.snapshot(context.authority) == private.candidate.base_snapshot
+  end
+
+  defp prepare_private_speech(context) do
+    observer = Map.fetch!(context.plan.participants, "observer")
+    base = Authority.snapshot(context.authority)
+    connection_id = unique_id("private-speech")
+
+    [{room_authority, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {context.plan.tenant_id, context.plan.room_id})
+
+    assert {:ok, command} =
+             AttachConnection.new(
+               tenant_id: context.plan.tenant_id,
+               actor_id: context.plan.actor_id,
+               room_id: context.plan.room_id,
+               incarnation_id: context.room.incarnation_id,
+               participant_id: observer.participant_id,
+               connection_id: connection_id,
+               deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+             )
+
+    assert {:ok, provider} =
+             Flux.new(
+               api_key: "private-speech-fixture",
+               model: "flux-general-en",
+               encoding: :opus,
+               sample_rate: 48_000
+             )
+
+    ingress_options = [
+      input_admission: :closed,
+      maximum_age_ms: 1_000,
+      maximum_bytes: 65_536,
+      maximum_frames: 20,
+      maximum_consecutive_overflows: 3
+    ]
+
+    assert {:ok, capability, ingress} =
+             CallEngine.RoomCapabilitySupervisor.start_speech_to_text(
+               context.room.incarnation_id,
+               room_authority,
+               command,
+               {Flux, provider},
+               {TestSpeechToTextTransport, [observer: self()]},
+               ingress_options,
+               nil,
+               initial_policy: base
+             )
+
+    assert :ok = Enforcer.apply(ingress, base, 1_000)
+    assert :ok = Enforcer.apply(capability, base, 1_000)
+    refute_receive {:test_stt_transport_started, _, _}
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(
+               context.authority,
+               MapSet.put(base.present_participant_ids, observer.participant_id)
+             )
+
+    options = preparation_options()
+    assert {:ok, prepared} = SpeechToText.prepare_policy(capability, candidate, options)
+    assert [resource] = prepared.resources
+    assert_receive {:test_stt_transport_started, transport, _connection}, 1_000
+
+    %{
+      capability: capability,
+      ingress: ingress,
+      candidate: candidate,
+      prepared: prepared,
+      resource: resource,
+      transport: transport,
+      options: options,
+      observer: observer,
+      connection_id: connection_id
+    }
+  end
+
+  defp stop_private_speech(context, private) do
+    capability = private.capability
+    ingress = private.ingress
+    capability_monitor = Process.monitor(capability)
+    ingress_monitor = Process.monitor(ingress)
+
+    assert :ok =
+             CallEngine.RoomCapabilitySupervisor.stop_speech_to_text(
+               context.room.incarnation_id,
+               capability,
+               ingress
+             )
+
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :shutdown}, 1_000
+    assert_receive {:DOWN, ^ingress_monitor, :process, ^ingress, :shutdown}, 1_000
+  end
+
+  defp private_frame(context, private, sequence),
+    do: audio_frame(context.plan, context.room, private.observer, private.connection_id, sequence)
+
   defp preparation_room(options \\ []) do
     configure_speech_to_text(Keyword.get(options, :transport_options, []))
 

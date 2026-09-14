@@ -14,6 +14,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
 
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
 
+  test "initial policy without speech demand avoids a preliminary provider connection" do
+    initial = snapshot(0, [], :unrestricted, true)
+    capability = start_capability_process(initial_policy: initial)
+    assert :ok = Enforcer.apply(capability, initial, 1_000)
+    refute_receive {:test_stt_transport_started, _transport, _connection}
+    assert {:ok, _resource, :preparing} = SpeechToText.readiness(capability)
+
+    assert :ok =
+             Enforcer.apply(capability, snapshot(1, ["part-human"], :unrestricted, true), 1_000)
+
+    assert_receive {:test_stt_transport_started, transport, _connection}, 1_000
+    assert {:ok, resource, :preparing} = SpeechToText.readiness(capability)
+    TestSpeechToTextTransport.deliver(transport, connected_message("initial-demand", 0))
+    assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+    assert {:ok, ^resource, :ready} = SpeechToText.readiness(capability)
+    refute_receive {:test_stt_transport_started, _, _}
+    refute_receive {:test_stt_transport_closed, ^transport}
+  end
+
   test "readiness requires the provider acknowledgement and preserves unchanged session evidence" do
     {capability, transport} = start_capability()
     assert :ok = Enforcer.apply(capability, snapshot(0, ["part-human"], :unrestricted, true), 500)
@@ -408,6 +427,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
   end
 
   defp start_capability(options \\ []) do
+    capability = start_capability_process(options)
+    assert_receive {:test_stt_transport_started, transport, _connection}
+    {capability, transport}
+  end
+
+  defp start_capability_process(options) do
     assert {:ok, provider} =
              Flux.new(
                api_key: "runtime-secret",
@@ -416,9 +441,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
                sample_rate: 48_000
              )
 
-    capability =
-      start_supervised!(
-        {SpeechToText,
+    start_supervised!(
+      {SpeechToText,
+       [
          owner: self(),
          tenant_id: "tenant-demo",
          room_id: "room-demo",
@@ -429,11 +454,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextTest do
          transport:
            {TestSpeechToTextTransport,
             [observer: self()] ++ Keyword.get(options, :transport_options, [])},
-         usage: Keyword.get(options, :usage)}
-      )
-
-    assert_receive {:test_stt_transport_started, transport, _connection}
-    {capability, transport}
+         usage: Keyword.get(options, :usage)
+       ] ++ Keyword.take(options, [:initial_policy])}
+    )
   end
 
   defp audio_frame(identity, overrides \\ []) do

@@ -101,7 +101,8 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
         provider,
         transport,
         media_ingress_options,
-        usage \\ nil
+        usage \\ nil,
+        initialization_options \\ []
       ) do
     identity = [
       tenant_id: command.tenant_id,
@@ -118,7 +119,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
           provider: provider,
           transport: transport,
           usage: usage
-        ]
+        ] ++ Keyword.take(initialization_options, [:initial_policy])
 
     case DynamicSupervisor.start_child(
            via(incarnation_id),

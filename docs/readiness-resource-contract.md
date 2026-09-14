@@ -98,6 +98,44 @@ Verification covers a five-participant replacement with one exact snapshot and d
 expired/forged/foreign/stale requests, and fail-closed exhaustion of a shorter phase budget. The prepared
 WebRTC recording graph also adopts through this API and remains ready before output release.
 
+### Adopting newly prepared enforcers
+
+`commit_candidate/4` also accepts the exact new enforcer PIDs selected by the internal lifecycle
+owner. It applies the candidate once to the union of existing and new actors, waits for their
+acknowledgements, and retains critical monitors for the adopted actors. Duplicate PIDs do not
+receive duplicate applications. Invalid actors, invalid candidates and already expired requests
+are rejected before registration or application. Once application begins, failure retains the
+existing fail-closed authority behavior.
+
+An unchanged candidate with no new actors succeeds without reapplying the installed revision.
+New actor adoption requires an actual membership transition: an unchanged candidate with new
+actors returns `unchanged_candidate` before application. Private transfer destinations are absent
+from the base membership, so their adoption supplies that transition. Ordinary initial registration
+continues to install current policy through its existing API; no synthetic policy revision or
+relaxation of enforcers' stale-revision checks is introduced.
+
+A newly staged actor must not use ordinary `register_enforcer/3` during private preparation:
+that would make its cancellation a critical room failure. Its owner instead installs the base
+policy locally and prepares the candidate under closed delivery gates. The owner remains
+responsible for authorization, actual actor identity, phase/deadline ownership, cancellation and
+complete inventory selection; this optional internal list grants none of those permissions.
+No second pending-enforcer registry is needed in the policy authority. Existing live enforcers
+remain registered throughout preparation and retain their ordinary failure contract.
+
+Private STT initialization accepts an internal `initial_policy` snapshot through
+`RoomCapabilitySupervisor.start_speech_to_text/8`. When that policy requires no speech session,
+the capability starts without a transport. Enforcement still installs the actual current policy;
+later demand starts the existing connector. Preparing the candidate uses the existing scoped
+session, provider acknowledgement and ingress-track readiness. Adopting the pair through the
+candidate barrier keeps that exact session, and an ingress initialized closed stays closed until
+explicit release. Ordinary constructor callers retain their existing behavior.
+
+Checks cover delayed new-enforcer acknowledgement, deduplication, rejected adoption, critical loss
+after commit and failed application. The supervised private speech pair also covers discarded
+preparation, pair cleanup, source resource/audio retention, retry and exact provider adoption with
+input still closed. This does not yet implement the authorized private connection binding or the
+persistent phase owner that must clean up allocated actors on worker loss.
+
 ## Prospective requirements and room bindings
 
 `Readiness.Inventory.build/4` derives required paths from the pinned plan, the prospective policy

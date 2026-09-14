@@ -87,6 +87,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       {:error, :transport_start_failed, provider_module} ->
         Telemetry.provider_failure(:stt, provider_module, :transport_closed)
         {:stop, :transport_start_failed}
+
+      {:error, :invalid_initial_policy} ->
+        {:stop, :invalid_initial_policy}
     end
   end
 

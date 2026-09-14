@@ -208,6 +208,109 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     refute_receive {:media_policy_applied, ^enforcer, _snapshot}
   end
 
+  test "candidate commit adopts private enforcers once and waits before making them critical" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    current = Authority.snapshot(server)
+    existing = start_enforcer()
+    joining = start_enforcer(mode: :manual)
+    assert {:ok, ^current} = Authority.register_enforcer(server, existing)
+    assert_receive {:media_policy_applied, ^existing, ^current}
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+    expected = candidate.snapshot
+    deadline = System.monotonic_time(:millisecond) + 5_000
+
+    task =
+      Task.async(fn ->
+        Authority.commit_candidate(server, candidate, deadline, [joining, existing, joining])
+      end)
+
+    assert_receive {:media_policy_applied, ^joining, ^expected}
+    assert Task.yield(task, 0) == nil
+    TestMediaPolicyEnforcer.acknowledge(joining, :ok)
+    assert {:ok, ^expected} = Task.await(task)
+    assert_receive {:media_policy_applied, ^existing, ^expected}
+    refute_receive {:media_policy_applied, _, _}
+    assert {:error, :already_registered} = Authority.register_enforcer(server, joining)
+
+    monitor = Process.monitor(server)
+    Process.exit(joining, :kill)
+
+    assert_receive {:DOWN, ^monitor, :process, ^server,
+                    {:media_policy_enforcer_unavailable, ^joining, :killed}},
+                   1_000
+  end
+
+  test "rejected candidate adoption never registers or changes a private enforcer" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    current = Authority.snapshot(server)
+    joining = start_enforcer()
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+    deadline = System.monotonic_time(:millisecond) + 5_000
+
+    assert {:error, :invalid_enforcers} =
+             Authority.commit_candidate(server, candidate, deadline, [joining, nil])
+
+    assert {:error, :invalid_enforcers} =
+             Authority.commit_candidate(server, candidate, deadline, %{joining: joining})
+
+    assert {:error, :deadline_elapsed} =
+             Authority.commit_candidate(server, candidate, deadline - 5_001, [joining])
+
+    assert {:error, :invalid_candidate} =
+             Authority.commit_candidate(server, nil, deadline, [joining])
+
+    assert Authority.snapshot(server) == current
+    refute_receive {:media_policy_applied, ^joining, _}
+    monitor = Process.monitor(joining)
+    Process.exit(joining, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^joining, :killed}
+    assert Authority.snapshot(server) == current
+  end
+
+  test "a private enforcer refusing the candidate fails the commit closed" do
+    server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
+    joining = start_enforcer(mode: {:error, :policy_not_ready})
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
+    monitor = Process.monitor(server)
+
+    assert {:error, :enforcement_failed} =
+             Authority.commit_candidate(
+               server,
+               candidate,
+               System.monotonic_time(:millisecond) + 5_000,
+               [joining]
+             )
+
+    assert_receive {:DOWN, ^monitor, :process, ^server, :media_policy_enforcement_failed}
+  end
+
+  test "unchanged candidate preserves installed enforcers and rejects new adoption before application" do
+    server = start_authority(plan(%{"caller" => MediaPolicy.inherit()}))
+    assert {:ok, current} = Authority.admit(server, "caller")
+    existing = start_enforcer()
+    joining = start_enforcer()
+    assert {:ok, ^current} = Authority.register_enforcer(server, existing)
+    assert_receive {:media_policy_applied, ^existing, ^current}
+    assert {:ok, candidate} = Authority.preview_presence(server, current.present_participant_ids)
+    deadline = System.monotonic_time(:millisecond) + 5_000
+
+    assert {:ok, ^current} = Authority.commit_candidate(server, candidate, deadline)
+    refute_receive {:media_policy_applied, _, _}
+
+    assert {:ok, ^current} =
+             Authority.commit_candidate(server, candidate, deadline, [existing, existing])
+
+    assert {:error, :unchanged_candidate} =
+             Authority.commit_candidate(server, candidate, deadline, [joining])
+
+    assert {:error, :deadline_elapsed} =
+             Authority.commit_candidate(server, candidate, deadline - 5_001)
+
+    refute_receive {:media_policy_applied, _, _}
+    assert Authority.snapshot(server) == current
+    assert {:ok, ^current} = Authority.register_enforcer(server, joining)
+  end
+
   test "candidate commit fails closed when acknowledgement exceeds the remaining attempt budget" do
     server =
       start_authority(plan(%{"caller" => MediaPolicy.inherit()}), enforcement_timeout_ms: 5_000)

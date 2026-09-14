@@ -51,7 +51,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
           usage_context: nil | keyword()
         }
 
-  @spec new(keyword()) :: {:ok, t()} | {:error, :transport_start_failed, module()}
+  @spec new(keyword()) ::
+          {:ok, t()}
+          | {:error, :invalid_initial_policy}
+          | {:error, :transport_start_failed, module()}
   def new(options) do
     identity = %{
       tenant_id: Keyword.fetch!(options, :tenant_id),
@@ -66,27 +69,31 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     {transport_module, transport_options} = Keyword.fetch!(options, :transport)
     connection = provider_module.connection_options(provider_config)
 
-    case start_transport(transport_module, connection, transport_options) do
-      {:ok, transport} ->
-        {:ok,
-         %__MODULE__{
-           connection: connection,
-           connector: nil,
-           identity: identity,
-           last_provider_sequence: -1,
-           media_format: provider_module.media_format(provider_config),
-           owner: owner,
-           policy: nil,
-           policy_revision: nil,
-           provider_module: provider_module,
-           readiness_generation: make_ref(),
-           readiness_status: Provider.initial_status(provider_module),
-           transport: transport,
-           transport_module: transport_module,
-           transport_options: transport_options,
-           usage: nil,
-           usage_context: Keyword.get(options, :usage)
-         }}
+    with {:ok, demanded?} <- initial_demand(options, identity.participant_id),
+         {:ok, transport} <-
+           start_transport(demanded?, transport_module, connection, transport_options) do
+      {:ok,
+       %__MODULE__{
+         connection: connection,
+         connector: nil,
+         identity: identity,
+         last_provider_sequence: -1,
+         media_format: provider_module.media_format(provider_config),
+         owner: owner,
+         policy: nil,
+         policy_revision: nil,
+         provider_module: provider_module,
+         readiness_generation: make_ref(),
+         readiness_status: Provider.initial_status(provider_module),
+         transport: transport,
+         transport_module: transport_module,
+         transport_options: transport_options,
+         usage: nil,
+         usage_context: Keyword.get(options, :usage)
+       }}
+    else
+      {:error, :invalid_initial_policy} = error ->
+        error
 
       {:error, _reason} ->
         {:error, :transport_start_failed, provider_module}
@@ -202,8 +209,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   defp apply_policy(%__MODULE__{policy: nil} = state, snapshot) do
-    state = if demanded?(state, snapshot), do: state, else: close(state)
-    {:ok, put_policy(state, snapshot)}
+    if demanded?(state, snapshot) and is_nil(state.transport) do
+      replace_session(state, snapshot)
+    else
+      state = if demanded?(state, snapshot), do: state, else: close(state)
+      {:ok, put_policy(state, snapshot)}
+    end
   end
 
   defp apply_policy(%__MODULE__{} = state, snapshot) do
@@ -259,7 +270,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       byte_size(frame.payload) <= @maximum_audio_bytes
   end
 
-  defp start_transport(module, connection, transport_options) do
+  defp initial_demand(options, participant_id) do
+    case Keyword.fetch(options, :initial_policy) do
+      :error ->
+        {:ok, true}
+
+      {:ok, snapshot} ->
+        if Snapshot.valid?(snapshot),
+          do: {:ok, SpeechToTextDemand.required?(snapshot, participant_id)},
+          else: {:error, :invalid_initial_policy}
+    end
+  end
+
+  defp start_transport(false, _module, _connection, _transport_options), do: {:ok, nil}
+
+  defp start_transport(true, module, connection, transport_options) do
     module.start_link(
       owner: self(),
       connection: connection,

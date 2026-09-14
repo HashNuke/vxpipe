@@ -46,16 +46,23 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     do: GenServer.call(server, {:validate_candidate, candidate}, timeout)
 
   @doc "Installs the exact prospective membership within the original absolute phase deadline."
-  @spec commit_candidate(GenServer.server(), Candidate.t(), integer()) ::
+  @spec commit_candidate(GenServer.server(), Candidate.t(), integer(), [pid()]) ::
           {:ok, Snapshot.t()}
           | {:error,
              :invalid_deadline
              | :deadline_elapsed
              | :invalid_candidate
+             | :invalid_enforcers
              | :stale_candidate
+             | :unchanged_candidate
              | :enforcement_failed}
-  def commit_candidate(server, candidate, deadline_ms),
-    do: GenServer.call(server, {:commit_candidate, candidate, deadline_ms}, @call_timeout)
+  def commit_candidate(server, candidate, deadline_ms, new_enforcers \\ []),
+    do:
+      GenServer.call(
+        server,
+        {:commit_candidate, candidate, deadline_ms, new_enforcers},
+        @call_timeout
+      )
 
   @spec register_enforcer(GenServer.server(), pid(), timeout()) ::
           {:ok, Snapshot.t()} | {:error, :already_registered | :enforcement_failed}
@@ -117,13 +124,15 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     {:reply, Candidate.validate(candidate, self(), state), state}
   end
 
-  def handle_call({:commit_candidate, _candidate, deadline}, _from, state)
+  def handle_call({:commit_candidate, _candidate, deadline, _enforcers}, _from, state)
       when not is_integer(deadline),
       do: {:reply, {:error, :invalid_deadline}, state}
 
-  def handle_call({:commit_candidate, candidate, deadline}, _from, state) do
-    case Candidate.validate(candidate, self(), state) do
-      :ok -> install_candidate(candidate.snapshot, deadline, state)
+  def handle_call({:commit_candidate, candidate, deadline, enforcers}, _from, state) do
+    with :ok <- Candidate.validate(candidate, self(), state),
+         :ok <- validate_enforcers(enforcers) do
+      install_candidate(candidate.snapshot, deadline, enforcers, state)
+    else
       {:error, _reason} = error -> {:reply, error, state}
     end
   end
@@ -175,26 +184,56 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Authority do
     end
   end
 
-  defp install_candidate(snapshot, deadline, state) do
+  defp install_candidate(snapshot, deadline, new_enforcers, state) do
     remaining = deadline - System.monotonic_time(:millisecond)
 
-    if remaining > 0 do
-      timeout = min(remaining, state.enforcement_timeout_ms)
-      result = Barrier.apply(state.enforcers, snapshot, timeout)
+    cond do
+      remaining <= 0 ->
+        {:reply, {:error, :deadline_elapsed}, state}
 
-      if result == :ok and System.monotonic_time(:millisecond) < deadline do
-        contributions =
-          Map.take(state.participant_policies, MapSet.to_list(snapshot.present_participant_ids))
+      snapshot == state.snapshot ->
+        retain_candidate(new_enforcers, state)
 
-        {:reply, {:ok, snapshot}, %{state | contributions: contributions, snapshot: snapshot}}
-      else
-        # Some enforcers may have adopted already. An expired/failed commit cannot be recovered here.
-        {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
-      end
-    else
-      {:reply, {:error, :deadline_elapsed}, state}
+      true ->
+        enforce_candidate(snapshot, deadline, remaining, new_enforcers, state)
     end
   end
+
+  defp retain_candidate(enforcers, state) do
+    if Enum.all?(enforcers, &Map.has_key?(state.enforcers, &1)),
+      do: {:reply, {:ok, state.snapshot}, state},
+      else: {:reply, {:error, :unchanged_candidate}, state}
+  end
+
+  defp enforce_candidate(snapshot, deadline, remaining, new_enforcers, state) do
+    timeout = min(remaining, state.enforcement_timeout_ms)
+
+    enforcers =
+      Enum.reduce(new_enforcers, state.enforcers, fn enforcer, registered ->
+        Map.put_new_lazy(registered, enforcer, fn -> Process.monitor(enforcer) end)
+      end)
+
+    result = Barrier.apply(enforcers, snapshot, timeout)
+
+    if result == :ok and System.monotonic_time(:millisecond) < deadline do
+      contributions =
+        Map.take(state.participant_policies, MapSet.to_list(snapshot.present_participant_ids))
+
+      {:reply, {:ok, snapshot},
+       %{state | contributions: contributions, snapshot: snapshot, enforcers: enforcers}}
+    else
+      # Some enforcers may have adopted already. An expired/failed commit cannot be recovered here.
+      {:stop, :media_policy_enforcement_failed, {:error, :enforcement_failed}, state}
+    end
+  end
+
+  defp validate_enforcers(enforcers) when is_list(enforcers) do
+    if Enum.all?(enforcers, &(is_pid(&1) and &1 != self())),
+      do: :ok,
+      else: {:error, :invalid_enforcers}
+  end
+
+  defp validate_enforcers(_enforcers), do: {:error, :invalid_enforcers}
 
   defp commit(contributions, state) do
     present = contributions |> Map.keys() |> MapSet.new()

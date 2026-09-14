@@ -1,16 +1,15 @@
 # Transfer readiness implementation
 
-The latest committed implementation is `69b5ad6`. Its
-[candidate commit checkpoint](#commit-the-exact-prospective-membership) installs the complete
-prepared membership through one policy barrier within the original phase deadline. Its five root
-gates passed: 1,251 tests, zero failures and 15 integration exclusions. It builds on native recording
-tap preparation committed as `666ca37` and writer/track adoption in `4b14530`.
+The current [private speech checkpoint](#adopt-private-speech-through-the-policy-barrier) prepares
+one provider session without a preliminary connection, retains it through final policy adoption,
+and keeps microphone input closed until release. Private pair cancellation preserves the source;
+unchanged membership avoids reapplying policy. All five root gates pass on the final code: 1,258
+tests, zero failures and 15 integration exclusions. One earlier recorder flush failure did not
+reproduce in isolation or in the complete same-seed rerun; its cause remains unconfirmed below.
 
-**The current worktree is not fully verified.** Private STT initialization has uncommitted changes:
-the constructor checks pass, but the room-level check fails at the missing supervisor API. The
-[latest investigation](#private-stt-initialization-and-cancellation-ownership) records that evidence
-and an ownership problem that must be addressed before connecting this to the transfer lifecycle.
-The earlier pause audit and its worktree snapshot below are historical, not current status.
+This extends the complete-membership commit in `69b5ad6`, native tap preparation in `666ca37` and
+writer/track adoption in `4b14530`. The earlier [investigation](#private-stt-initialization-and-cancellation-ownership)
+and pause audit retain their historical failures/worktree snapshots, not current status.
 
 **The end-to-end milestone remains unfinished.** Private destination actors, startup/transfer
 orchestration, waits/cues and recovery still require integration
@@ -55,11 +54,11 @@ The additional groundwork since the audit addresses room output, recording and p
   Separate destination admission and source departure would produce policy revisions different
   from the snapshot prepared for transfer. The new operation commits that exact snapshot within
   the original deadline. The human handoff still needs to call it and coordinate control state.
-- The next private STT boundary is still uncommitted. Its constructor now avoids connecting a
-  provider before current policy requires speech. Room-supervisor integration remains red, and
-  source inspection found that registering private actors as critical enforcers would make their
-  cancellation stop the policy authority. The detailed resume note below distinguishes this
-  finding from implemented fixes.
+- The [private STT checkpoint](#adopt-private-speech-through-the-policy-barrier) now avoids the
+  preliminary provider connection, keeps the pair outside critical registration until commit,
+  and proves explicit cancellation preserves source audio. It also corrects repeated enforcement
+  of an unchanged membership candidate. Authorized connection binding and persistent phase cleanup
+  are still required; this is not yet the integrated transfer lifecycle.
 
 No dependency versions or production deadlines changed in these committed checkpoints. These are
 component results: complete resource selection, startup/transfer orchestration, waits/cues,
@@ -1664,3 +1663,73 @@ component checks must not be presented as resolution of the reported phone/conso
 
 Documentation verification for this update: all 38 local labnote links/anchors resolve, and
 `git diff --check` passes.
+
+## Adopt private speech through the policy barrier
+
+- The preceding goal turn made progress by committing the requested notes as `fb0fd11`.
+  Revalidated the four uncommitted STT files before resuming. The constructor and room-supervisor
+  work below complete the preparation/adoption boundary; connection authorization and persistent
+  phase ownership still need lifecycle integration.
+- Three new authority checks first failed at the missing `commit_candidate/4` operation
+  (`vxpipe-private-enforcer-red.log`: 20 tests, three failures). The optional new-enforcer list
+  joins the final barrier, deduplicates existing/new actors and stores critical monitors after
+  acknowledgement. Invalid/expired requests do not register actors; failed application closes the
+  authority. All 20 checks then passed in `vxpipe-private-enforcer-green.log`.
+- The room supervisor now forwards the internal initial-policy option. Corrected the draft pair
+  test to apply its base policy locally rather than register private actors as critical before
+  commit. Candidate preparation starts one provider session, waits for its acknowledgement, binds
+  the prepared input, and adopts through the combined barrier with microphone input still closed.
+  The source's exact readiness resource is retained, and fresh frames verify the admission gate.
+- Added explicit discard, supervised pair cleanup, retained source audio and another preparation.
+  Its first run incorrectly expected the fake transport's graceful-close notification; asynchronous
+  prepared connectors terminate their linked transport. The check now monitors actual termination,
+  consistent with the existing prepared-session cancellation checks. This was a fixture expectation
+  error, not a production cancellation defect. That intermediate run had 27 tests and one failure
+  in `vxpipe-private-speech-pair-green.log`.
+- The durable resource contract records the ownership decision: reuse the phase owner and final
+  policy barrier instead of adding a pending-enforcer registry. This component API does not itself
+  authorize a private connection or clean up the whole allocated pair on preparation-worker loss.
+  Those responsibilities remain explicit requirements for the persistent lifecycle owner. No
+  package version or production timeout was changed. Final focused and root verification follow.
+- All 47 focused authority, speech capability and room-policy checks pass in
+  `vxpipe-private-speech-focused.log`. Formatted the exact changed Elixir files and started all five
+  root gates under `vxpipe-private-speech-root-`, retaining per-command result codes for recovery.
+  Preserve concurrent `vxpipe-docs/artwork/` and its separate visual-task labnote.
+- The first full root run passed all five gates with 1,257 tests and 15 integration exclusions.
+  Final source review found that a candidate with unchanged membership would send the installed
+  revision to enforcers again; real enforcers reject that stale revision. A new check reproduced
+  the unnecessary application (`vxpipe-private-speech-unchanged-red.log`: 21 tests, one failure).
+  An unchanged candidate now preserves registered actors without reapplication. Supplying new
+  actors with that unchanged candidate is rejected before mutation: private transfer destinations
+  require an actual membership transition, while ordinary initial registration retains its API.
+  This avoids inventing a revision or weakening stale-policy rejection. Repeat root gates for
+  this final runtime correction; the earlier full run is not evidence for the changed worktree.
+- Final focused verification passes 48 checks (`vxpipe-private-speech-final-focused.log`).
+  The final root run uses `vxpipe-private-speech-final-root-`; formatting, compilation and strict
+  Credo have passed, and the full suite is running. No further runtime changes were made after
+  starting that run.
+- That root test command finished with one failure in the existing recorder preparation case:
+  `RoomMixer.flush_through/2` returned `unavailable` on the first source frame, before policy
+  adoption. All new speech/authority checks passed. The default flush call is bounded at one
+  second, but its generic error does not distinguish scheduling timeout from process loss; do not
+  claim a cause from this output alone. Run the recorder file in isolation before deciding whether
+  any correction is warranted. Preserve this failed root evidence and do not increase production
+  deadlines to make the test pass.
+- The unchanged recorder file passes all eight checks in isolation
+  (`vxpipe-private-speech-recording-isolated.log`). Re-run the complete umbrella suite with the
+  failed run's seed, `262903`, followed by the unused-dependency check, under
+  `vxpipe-private-speech-verified-root-`. Formatting, compilation and strict Credo already passed
+  against the same unchanged code in the preceding root run. No fixture or runtime change is
+  justified by the isolated result alone; the flush failure's cause remains unconfirmed.
+- Final verification passes all five root gates on the unchanged code. Formatting, compilation
+  and strict Credo are exit zero in `vxpipe-private-speech-final-root-results.json`; the same-seed
+  full-suite rerun and unused-dependency check are exit zero in
+  `vxpipe-private-speech-verified-root-results.json`. All eight application suites completed:
+  1,258 tests, zero failures and 15 integration exclusions. The recorder failure did not recur;
+  no fixture, dependency or production timeout was changed to obtain that result.
+- All 56 local documentation links/anchors and `git diff --check` pass. Commit this coherent speech
+  initialization/adoption boundary with its checks and docs, preserving the concurrent visual work.
+  The next integration must bind private actors to the authorized transfer connection and persistent
+  phase owner, then use the complete readiness/cue/release sequence before publishing success.
+  No browser session, live provider call or development-server restart was performed; milestone
+  acceptance and the index entry remain open.
