@@ -437,7 +437,14 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       )
 
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
-    assert {:ok, snapshot} = Authority.leave(authority, restricted)
+
+    assert {:ok, snapshot} =
+             Authority.commit_candidate(
+               authority,
+               candidate,
+               Keyword.fetch!(options, :deadline_ms)
+             )
+
     assert snapshot == candidate.snapshot
 
     assert :ok = Collector.refresh(collector)

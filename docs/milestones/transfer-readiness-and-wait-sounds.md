@@ -823,3 +823,13 @@ root gates pass: 1,248 tests, zero failures and 15 integration exclusions. An ex
 fixture's acknowledgement deadline was corrected in a separate test-only checkpoint; production
 deadlines remain unchanged. Private destination actors, startup/transfer orchestration, waits/cues,
 restoration and browser/provider acceptance remain unfinished.
+
+The policy authority now commits an exact validated candidate membership in one revision, bounded
+by the original absolute phase deadline. This supports replacing source with destination without an
+intermediate policy that would differ from the collected resources. Expired/stale/forged requests
+cannot apply policy; failure after enforcer application begins retains the existing fail-closed
+authority behavior. Seventeen focused authority checks and eight WebRTC checks pass, including
+adoption of the prepared recording graph through this operation. All five root gates pass with
+1,251 tests, zero failures and 15 integration exclusions.
+Participant/control changes, private destination preparation and the full held-media lifecycle still
+need to call this operation; the milestone acceptance boxes remain open.

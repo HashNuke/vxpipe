@@ -146,6 +146,86 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
     refute_receive {:media_policy_applied, ^enforcer, _candidate}
   end
 
+  test "commits the complete prepared membership in one revision and awaits policy acknowledgement" do
+    audience = ["one", "two", "three", "four"]
+    policies = Map.new(audience ++ ["departing", "joining"], &{&1, MediaPolicy.inherit()})
+    server = start_authority(plan(policies))
+
+    for participant <- audience ++ ["departing"] do
+      assert {:ok, _} = Authority.admit(server, participant)
+    end
+
+    current = Authority.snapshot(server)
+    enforcer = start_enforcer()
+    assert {:ok, ^current} = Authority.register_enforcer(server, enforcer)
+    assert_receive {:media_policy_applied, ^enforcer, ^current}
+    :sys.replace_state(enforcer, &Map.put(&1, :mode, :manual))
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(server, MapSet.new(audience ++ ["joining"]))
+
+    expected = candidate.snapshot
+    deadline = System.monotonic_time(:millisecond) + 5_000
+    task = Task.async(fn -> Authority.commit_candidate(server, candidate, deadline) end)
+    assert_receive {:media_policy_applied, ^enforcer, ^expected}
+    assert Task.yield(task, 0) == nil
+    TestMediaPolicyEnforcer.acknowledge(enforcer, :ok)
+    assert {:ok, ^expected} = Task.await(task)
+    assert expected.revision == current.revision + 1
+    assert Authority.snapshot(server) == expected
+    refute_receive {:media_policy_applied, ^enforcer, _intermediate}
+    assert {:error, :not_present} = Authority.leave(server, "departing")
+    assert {:error, :already_present} = Authority.admit(server, "joining")
+  end
+
+  test "candidate commit rejects expired, forged, foreign and stale evidence without applying policy" do
+    definition = plan(%{"caller" => MediaPolicy.inherit(), "joining" => MediaPolicy.inherit()})
+    server = start_authority(definition)
+    foreign = start_authority(definition)
+    assert {:ok, current} = Authority.admit(server, "caller")
+    enforcer = start_enforcer()
+    assert {:ok, ^current} = Authority.register_enforcer(server, enforcer)
+    assert_receive {:media_policy_applied, ^enforcer, ^current}
+
+    assert {:ok, candidate} =
+             Authority.preview_presence(server, MapSet.new(["caller", "joining"]))
+
+    deadline = System.monotonic_time(:millisecond) + 5_000
+    changed = %{candidate.snapshot.effective | record_audio: false}
+    forged = %{candidate | snapshot: %{candidate.snapshot | effective: changed}}
+
+    assert {:error, :deadline_elapsed} =
+             Authority.commit_candidate(server, candidate, deadline - 5_001)
+
+    assert {:error, :invalid_deadline} = Authority.commit_candidate(server, candidate, nil)
+    assert {:error, :invalid_candidate} = Authority.commit_candidate(server, forged, deadline)
+    assert {:error, :invalid_candidate} = Authority.commit_candidate(foreign, candidate, deadline)
+    assert Authority.snapshot(server) == current
+    refute_receive {:media_policy_applied, ^enforcer, _snapshot}
+    assert {:ok, installed} = Authority.admit(server, "joining")
+    assert_receive {:media_policy_applied, ^enforcer, ^installed}
+    assert {:error, :stale_candidate} = Authority.commit_candidate(server, candidate, deadline)
+    refute_receive {:media_policy_applied, ^enforcer, _snapshot}
+  end
+
+  test "candidate commit fails closed when acknowledgement exceeds the remaining attempt budget" do
+    server =
+      start_authority(plan(%{"caller" => MediaPolicy.inherit()}), enforcement_timeout_ms: 5_000)
+
+    enforcer = start_enforcer()
+    current = Authority.snapshot(server)
+    assert {:ok, ^current} = Authority.register_enforcer(server, enforcer)
+    assert_receive {:media_policy_applied, ^enforcer, ^current}
+    :sys.replace_state(enforcer, &Map.put(&1, :mode, :manual))
+    assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["caller"]))
+    monitor = Process.monitor(server)
+    deadline = System.monotonic_time(:millisecond) + 1_000
+    task = Task.async(fn -> Authority.commit_candidate(server, candidate, deadline) end)
+    assert_receive {:media_policy_applied, ^enforcer, _snapshot}, 1_000
+    assert {:error, :enforcement_failed} = Task.await(task, 2_000)
+    assert_receive {:DOWN, ^monitor, :process, ^server, :media_policy_enforcement_failed}
+  end
+
   test "candidate validation fences the authority, live policy and recomputed result" do
     definition = plan(%{"caller" => MediaPolicy.inherit(), "joining" => MediaPolicy.inherit()})
     server = start_authority(definition)

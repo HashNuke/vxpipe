@@ -74,8 +74,29 @@ attempt/deadline and validate the complete resource inventory.
 Rejected alternatives are temporarily admitting the destination to discover its policy, or computing
 only the destination's restrictions. The first exposes premature permissions and invokes runtime
 changes; the second misses restrictions from other remaining participants and the host ceiling.
-Preparing affected enforcer resources behind closed gates and installing those prepared bindings at
-commit remain unfinished. A valid policy preview alone is not readiness or permission to release media.
+Affected enforcers now support preparing and adopting their selected resources behind closed gates.
+The lifecycle integration remains unfinished. A valid policy preview alone is not readiness or
+permission to release media.
+
+`MediaPolicy.Authority.commit_candidate/3` installs the complete validated target membership in one
+policy revision. It takes the original absolute phase deadline, revalidates the candidate inside
+the authority, and sends that exact snapshot through the existing enforcer acknowledgement barrier.
+The barrier gets the smaller of its configured enforcement budget and the phase's remaining time;
+the authority also checks the phase deadline before publishing a successful result. Expiry before
+application rejects the request without changing policy. Failure or expiry after application starts
+stops the authority under its existing fail-closed contract, since some enforcers may already have
+installed the snapshot. Contributions and the installed snapshot change together after acknowledgement.
+
+This avoids an intermediate destination-admitted/source-present policy invalidating resources prepared
+for the final source-departed membership. It does not bypass per-resource adoption checks or confer
+transfer authorization. The lifecycle must keep media held, validate readiness and the attempt,
+coordinate participant/control state, and await release before reporting success. Ordinary admission
+and departure keep their existing APIs. Source retirement must be coordinated with the committed
+membership rather than applying an additional source-departure policy revision afterward.
+
+Verification covers a five-participant replacement with one exact snapshot and delayed acknowledgement,
+expired/forged/foreign/stale requests, and fail-closed exhaustion of a shorter phase budget. The prepared
+WebRTC recording graph also adopts through this API and remains ready before output release.
 
 ## Prospective requirements and room bindings
 

@@ -1,11 +1,11 @@
 # Transfer readiness implementation
 
 Implementation resumed following the goal continuation after the pause audit. The latest
-[candidate tap checkpoint](#prepare-native-recording-taps-for-a-candidate-policy) completes native
-recording tap selection across changed recording intervals. All five root gates pass: 1,248 tests,
-zero failures and 15 integration exclusions. It builds on prospective writer ownership and track
-adoption committed as `4b14530`. The earlier notes-only audit and its uncommitted-work snapshot are
-retained below for accountability.
+[candidate commit checkpoint](#commit-the-exact-prospective-membership) installs the complete
+prepared membership through one policy barrier within the original phase deadline. All five root
+gates pass: 1,251 tests, zero failures and 15 integration exclusions. It builds on native recording
+tap preparation committed as `666ca37` and writer/track adoption in `4b14530`. The earlier notes-only
+audit and its uncommitted-work snapshot are retained below for accountability.
 
 **The end-to-end milestone remains unfinished.** Private destination actors, startup/transfer
 orchestration, waits/cues and recovery still require integration
@@ -1546,3 +1546,44 @@ Documentation verification: all 34 local labnote links/anchors resolve, and `git
   live provider call or development-server restart was performed. The user's concurrent Starlight
   migration is committed as `175b331`; remaining `vxpipe-docs/` edits are preserved. This completes
   the native tap dependency, while milestone/index acceptance and lifecycle integration remain open.
+
+## Commit the exact prospective membership
+
+- The preceding goal turn made progress: native recording tap preparation was committed as
+  `666ca37` with all root gates passing; the independent fixture correction is `ec5d408`.
+  Revalidated the worktree before continuing into destination preparation.
+- Source inspection confirms private connections have no main room ingress/egress actors, and STT
+  configuration/binding currently requires main admission. Their future initialization needs a
+  narrowly authorized attempt binding. `ParticipantLifecycle.prepare/3` already exists for staging
+  a participant subtree and should be reused; a second participant owner is unnecessary.
+- A related commit dependency must be resolved for that preparation to survive: `HumanCommitter`
+  currently admits the destination, then source retirement later applies departure. Those separate
+  policy revisions differ from the complete post-transfer candidate used for readiness. Install
+  that exact final snapshot through one barrier, while the eventual lifecycle keeps media held.
+  This checkpoint adds the policy operation; it does not yet change the human handoff sequence.
+- Three focused checks first failed at the missing `Authority.commit_candidate/3` API
+  (`vxpipe-candidate-commit-red.log`). The new operation revalidates the candidate inside its owner,
+  uses the original absolute phase deadline to bound enforcer acknowledgement, and publishes the
+  exact complete membership only after success. An expired request changes nothing; failed/late
+  acknowledgement stops the authority because partial policy installation cannot be assumed safe.
+- All 17 authority checks pass (`vxpipe-candidate-commit-green.log`). The deadline check uses a
+  one-second phase budget with a five-second fixture enforcement budget and a bounded two-second
+  caller wait, so using the enforcement budget instead of the original phase budget would fail.
+  Existing production deadlines are unchanged. No additional test-only timing workaround was needed.
+- The real WebRTC candidate-recording check now adopts through this API and refreshes the entire
+  collected graph before releasing output. Both focused WebRTC files pass eight tests
+  (`vxpipe-candidate-commit-gateway.log`). This verifies prepared resource adoption, not yet private
+  destination admission or final transfer completion. Root gates follow.
+- Resume detail from the private STT path: `SpeechToText.State.new/1` starts a transport immediately.
+  Registering a new destination capability against a base policy where it is absent would then stop
+  that transport before candidate preparation starts another. Private initialization therefore needs
+  to avoid that preliminary connection, while retaining the existing prepared-session path. Ordinary
+  STT binding also opens ingress when opening audio is complete, so its private counterpart must keep
+  ingress closed. No STT constructor, private binding or Gateway media allocation was changed here.
+- Final root verification passes all five gates: formatting, warnings-as-errors compilation,
+  strict Credo, 1,251 tests with zero failures and 15 integration exclusions, and unused dependencies.
+  All eight application suites completed; every entry in `vxpipe-candidate-commit-root-results.json`
+  is exit zero. All 51 local documentation links/anchors and `git diff --check` pass. No new fixture
+  fix, package change, production timeout increase, browser/provider session or server restart was
+  required. Keep milestone/index acceptance open and commit the policy operation, focused checks
+  and documentation together.
