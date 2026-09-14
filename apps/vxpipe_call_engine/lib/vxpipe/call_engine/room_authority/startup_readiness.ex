@@ -379,7 +379,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     end)
   end
 
-  defp update_wait(id, %{status: :ready} = wait, state) do
+  defp update_wait(id, %{status: status} = wait, state) when status in [:ready, :stopped] do
     if (state.startup.resources_ready? and state.opening_audio.phase == :open) or
          state.opening_audio.phase in [:ready, :playing] do
       {:ok, put_wait(state, id, %{wait | status: :stopped})}

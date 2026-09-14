@@ -40,13 +40,30 @@ For initial caller waiting during independent model and voice startup delays:
 
 ```shell
 mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
-  --name-pattern 'initial'
+  --only initial_wait
 ```
 
-Room creation returns while model construction is blocked. The native caller verifies private
-setup waiting and held text, then releases model preparation while withholding voice readiness.
-Its fixed greeting follows readiness. This case does not yet prove independent opening-audio
-preparation or cursor resume.
+Room creation returns while model construction is blocked. Ten cases cover default, URL-selected,
+per-slot nil and whole-object nil waiting, with and without file/text openings. Selected STT/TTS
+readiness and a local recording writer are delayed independently. Held microphone audio reaches
+neither STT nor recordings; conversation reaches both after readiness. File/text notices take
+priority over waiting, then waiting resumes while model setup remains blocked. The fixed greeting
+follows release once, including repeated client-ready, and opening text stays out of model history.
+The URL fetcher is controlled; these checks exercise selected bytes and native playout, not live
+CDN retrieval. Exact PCM cursor continuity and late readiness after skipped waiting are checked
+at the owning engine output boundary.
+
+For deterministic incoming phone startup and the existing phone-transfer regressions:
+
+```shell
+mix test test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
+  test/vxpipe/gateway/telephony/twilio_call_harness_test.exs
+```
+
+The signed provider ingress, negotiated phone codecs, selected STT, normal and silent startup,
+original readiness/duration clocks, failure before/after media attachment and provider hangup
+submission are exercised locally. Provider adapters and playback-mark acknowledgements are
+controlled; live carrier audibility remains a separate acceptance boundary.
 
 ## Protocol boundary
 

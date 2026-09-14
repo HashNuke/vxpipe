@@ -282,55 +282,107 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   def handle_startup_diagnostic(event, measurements, metadata, receiver),
     do: send(receiver, {:native_startup, event, measurements, metadata})
 
-  test "a new caller hears setup waiting while model and voice initialization are delayed" do
-    plan =
-      compile_plan(
-        reception_model: "test:blocked",
-        reception_first_message: %{mode: "fixed", text: "Reception is ready."}
+  for mode <- [:defaults, :custom_url, :silent_caller, :silent_all] do
+    @tag initial_wait: true, startup_wait_mode: mode
+    test "initial #{mode} waiting gates model, voice, STT and room recording before one greeting",
+         context do
+      mode = context.startup_wait_mode
+      {sounds, options} = startup_wait_configuration(mode)
+      writer_readiness = :atomics.new(1, [])
+      :ok = :atomics.put(writer_readiness, 1, 2)
+
+      plan =
+        compile_plan(
+          reception_model: "test:blocked",
+          caller_speech_to_text?: true,
+          wait_sounds: sounds,
+          reception_first_message: %{mode: "fixed", text: "Reception is ready."}
+        )
+
+      options =
+        Keyword.put(options, :recording,
+          enabled: true,
+          targets: [:full_mix, :individual_tracks],
+          writer: {CallEngine.TestRecordingWriter, observer: self(), readiness: writer_readiness},
+          maximum_pull_frames: 20
+        )
+
+      assert {:ok, room} = CallEngine.start_call(plan, options)
+      stop_room_on_exit(plan)
+      assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
+      caller = Map.fetch!(plan.participants, "caller")
+
+      client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat", false))
+
+      assert :ok = send_client_ready(client)
+      assert_startup_wait(client, mode)
+      assert :ok = send_rtvi_text(client, "held-during-call-setup")
+
+      assert %{"id" => "held-during-call-setup"} =
+               await_sideband(client, "error-response", 2_000)
+
+      send(model_preparer, :release_test_agent_runtime_model)
+      assert_receive {:test_tts_transport_started, voice, _}, 2_000
+      assert_receive {:test_stt_transport_started, speech, _}, 2_000
+
+      TestSpeechToTextTransport.deliver(
+        speech,
+        ~s({"type":"Connected","request_id":"initial-speech-ready","sequence_id":0})
       )
 
-    owner = self()
+      assert_startup_wait(client, mode)
+      refute_receive {:test_tts_control, ^voice, _speak}, 100
 
-    start_supervised!(
-      {Task, fn -> send(owner, {:setup_call_started, CallEngine.start_call(plan)}) end},
-      id: :start_waiting_call
-    )
+      TestTextToSpeechTransport.deliver_control(
+        voice,
+        ~s({"type":"Connected","request_id":"initial-voice-ready"})
+      )
 
-    assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
-    assert_receive {:setup_call_started, {:ok, room}}, 500
-    stop_room_on_exit(plan)
-    caller = Map.fetch!(plan.participants, "caller")
+      # Selected participant providers are now ready; the local room writer still is not.
+      assert_startup_wait(client, mode)
+      send_tone(client, 500, 1)
+      assert :ok = send_rtvi_text(client, "held-for-recording")
+      assert %{"id" => "held-for-recording"} = await_sideband(client, "error-response", 2_000)
+      refute_receive {:test_tts_control, ^voice, _}, 100
+      refute_receive {:test_stt_audio, ^speech, _}, 100
+      refute_receive {:test_recording_chunk, _, _}, 100
 
-    client =
-      plan
-      |> issue_session(room, caller.participant_id)
-      |> then(&connect(&1.session_id, "chat", false))
+      :ok = :atomics.put(writer_readiness, 1, 0)
+      assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+      assert_receive {:test_tts_control, ^voice, speak}, 2_000
+      assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Reception is ready."}
+      assert_receive {:test_tts_control, ^voice, _flush}, 2_000
 
-    assert :ok = send_client_ready(client)
-    refute_receive {:ex_webrtc, _, {:data, _, _}}, 100
-    assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
-    assert :ok = send_rtvi_text(client, "held-during-call-setup")
+      assert %{"data" => %{"text" => "Reception is ready."}} =
+               await_sideband(client, "bot-output", 2_000)
 
-    assert %{"id" => "held-during-call-setup"} =
-             await_sideband(client, "error-response", 2_000)
+      refute_receive {:test_stt_audio, ^speech, _held_audio}, 100
+      refute_receive {:test_recording_chunk, _, _private_audio}, 100
+      refute_receive {:test_stt_transport_started, _, _}, 100
+      refute_receive {:test_tts_transport_started, _, _}, 100
 
-    send(model_preparer, :release_test_agent_runtime_model)
-    assert_receive {:test_tts_transport_started, voice, _}, 2_000
-    assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
-    refute_receive {:test_tts_control, ^voice, _speak}, 100
+      deliver_voice_tone(voice, "initial-greeting", 1_500)
+      assert :ok = await_tone(client, 1_500, 2_000)
 
-    TestTextToSpeechTransport.deliver_control(
-      voice,
-      ~s({"type":"Connected","request_id":"initial-voice-ready"})
-    )
+      assert %{"type" => "bot-stopped-speaking"} =
+               await_sideband(client, "bot-stopped-speaking", 2_000)
 
-    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
-    assert_receive {:test_tts_control, ^voice, speak}, 2_000
-    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Reception is ready."}
-    assert_receive {:test_tts_control, ^voice, _flush}, 2_000
+      refute_tone(client, 250, 100)
+      assert :ok = send_client_ready(client)
+      assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+      refute_receive {:test_tts_control, ^voice, _duplicate_greeting}, 100
+      send_tone(client, 700, 11)
+      assert_receive {:test_stt_audio, ^speech, _conversation}, 2_000
+      assert_receive {:test_recording_chunk, _, _conversation}, 2_000
 
-    assert %{"data" => %{"text" => "Reception is ready."}} =
-             await_sideband(client, "bot-output", 2_000)
+      if mode == :custom_url do
+        assert_receive {:test_opening_audio_fetch, "https://media.example.com/handoff.wav", _}
+        refute_receive {:test_opening_audio_fetch, _, _}
+      end
+    end
   end
 
   for failure <- [:readiness, :max_duration, :model] do
@@ -383,138 +435,152 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
-  test "opening file plays independently of model setup and waiting resumes after it" do
-    {sounds, options} = wait_configuration(:custom_url)
-    owner = self()
-    opening_url = "https://media.example.com/initial-notice.wav"
+  for mode <- [:custom_url, :defaults, :silent_caller] do
+    @tag initial_wait: true, startup_wait_mode: mode
+    test "opening file plays independently of model setup and waiting resumes after it with #{mode} waits",
+         context do
+      mode = context.startup_wait_mode
+      {sounds, options} = startup_wait_configuration(mode)
+      owner = self()
+      opening_url = "https://media.example.com/initial-notice.wav"
 
-    plan =
-      compile_plan(
-        reception_model: "test:blocked",
-        opening_audio: %{type: "file_url", url: opening_url},
-        wait_sounds: %{call_setup: sounds.transfer_to_human}
+      plan =
+        compile_plan(
+          reception_model: "test:blocked",
+          reception_first_message: %{mode: "fixed", text: "Reception is ready."},
+          opening_audio: %{type: "file_url", url: opening_url},
+          wait_sounds: sounds
+        )
+
+      settings = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
+
+      opening_settings = [
+        fetcher:
+          {CallEngine.TestOpeningAudioFetcher,
+           [
+             observer: owner,
+             response: fn ->
+               send(owner, {:opening_fetch_waiting, self()})
+
+               receive do
+                 :release_opening_file ->
+                   {:ok,
+                    %CallEngine.OpeningAudio.Download{
+                      body: tone_wave(1_400),
+                      content_type: "audio/wav"
+                    }}
+               end
+             end
+           ]}
+      ]
+
+      Application.put_env(
+        :vxpipe_call_engine,
+        CallEngine.Application,
+        Keyword.put(settings, :opening_audio, opening_settings)
       )
 
-    settings = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
+      assert {:ok, room} = CallEngine.start_call(plan, options)
+      stop_room_on_exit(plan)
+      assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
+      caller = Map.fetch!(plan.participants, "caller")
 
-    opening_settings = [
-      fetcher:
-        {CallEngine.TestOpeningAudioFetcher,
-         [
-           observer: owner,
-           response: fn ->
-             send(owner, {:opening_fetch_waiting, self()})
+      client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat", false))
 
-             receive do
-               :release_opening_file ->
-                 {:ok,
-                  %CallEngine.OpeningAudio.Download{
-                    body: tone_wave(1_400),
-                    content_type: "audio/wav"
-                  }}
-             end
-           end
-         ]}
-    ]
+      assert :ok = send_client_ready(client)
+      assert_receive {:opening_fetch_waiting, fetcher}, 2_000
+      assert_startup_wait(client, mode)
+      refute_receive {:test_tts_transport_started, _, _}, 100
+      send(fetcher, :release_opening_file)
+      assert :ok = await_tone(client, 1_400, 2_000)
+      refute_tone(client, 1_000, 350)
+      assert_startup_wait(client, mode)
+      assert :ok = send_rtvi_text(client, "held-after-opening")
 
-    Application.put_env(
-      :vxpipe_call_engine,
-      CallEngine.Application,
-      Keyword.put(settings, :opening_audio, opening_settings)
-    )
+      assert %{"id" => "held-after-opening"} =
+               await_sideband(client, "error-response", 2_000)
 
-    assert {:ok, room} = CallEngine.start_call(plan, options)
-    stop_room_on_exit(plan)
-    assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
-    caller = Map.fetch!(plan.participants, "caller")
+      send(model_preparer, :release_test_agent_runtime_model)
+      assert_receive {:test_tts_transport_started, voice, _}, 2_000
 
-    client =
-      plan
-      |> issue_session(room, caller.participant_id)
-      |> then(&connect(&1.session_id, "chat", false))
+      TestTextToSpeechTransport.deliver_control(
+        voice,
+        ~s({"type":"Connected","request_id":"voice-ready-after-opening"})
+      )
 
-    assert :ok = send_client_ready(client)
-    assert_receive {:opening_fetch_waiting, fetcher}, 2_000
-    assert :ok = await_tone(client, 250, 2_000)
-    refute_receive {:test_tts_transport_started, _, _}, 100
-    send(fetcher, :release_opening_file)
-    assert :ok = await_tone(client, 1_400, 2_000)
-    assert :ok = await_tone(client, 250, 2_000)
-    assert :ok = send_rtvi_text(client, "held-after-opening")
-
-    assert %{"id" => "held-after-opening"} =
-             await_sideband(client, "error-response", 2_000)
-
-    send(model_preparer, :release_test_agent_runtime_model)
-    assert_receive {:test_tts_transport_started, voice, _}, 2_000
-
-    TestTextToSpeechTransport.deliver_control(
-      voice,
-      ~s({"type":"Connected","request_id":"voice-ready-after-opening"})
-    )
-
-    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+      assert_initial_opening_greeting(client, voice)
+    end
   end
 
-  test "opening speech prepares independently and waiting continues until its first audio" do
-    {sounds, options} = wait_configuration(:custom_url)
+  for mode <- [:custom_url, :defaults, :silent_caller] do
+    @tag initial_wait: true, startup_wait_mode: mode
+    test "opening speech prepares independently and waiting continues until its first audio with #{mode} waits",
+         context do
+      mode = context.startup_wait_mode
+      {sounds, options} = startup_wait_configuration(mode)
 
-    plan =
-      compile_plan(
-        reception_model: "test:blocked",
-        opening_audio: %{type: "text", text: "Opening notice.", text_to_speech: "test-voice"},
-        wait_sounds: %{call_setup: sounds.transfer_to_human}
+      plan =
+        compile_plan(
+          reception_model: "test:blocked",
+          reception_first_message: %{mode: "fixed", text: "Reception is ready."},
+          opening_audio: %{type: "text", text: "Opening notice.", text_to_speech: "test-voice"},
+          wait_sounds: sounds
+        )
+
+      assert {:ok, room} = CallEngine.start_call(plan, options)
+      stop_room_on_exit(plan)
+      assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
+      assert_receive {:test_tts_transport_started, opening_voice, _}, 2_000
+      opening_monitor = Process.monitor(opening_voice)
+
+      TestTextToSpeechTransport.deliver_control(
+        opening_voice,
+        ~s({"type":"Connected","request_id":"opening-voice-ready"})
       )
 
-    assert {:ok, room} = CallEngine.start_call(plan, options)
-    stop_room_on_exit(plan)
-    assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
-    assert_receive {:test_tts_transport_started, opening_voice, _}, 2_000
-    opening_monitor = Process.monitor(opening_voice)
+      caller = Map.fetch!(plan.participants, "caller")
 
-    TestTextToSpeechTransport.deliver_control(
-      opening_voice,
-      ~s({"type":"Connected","request_id":"opening-voice-ready"})
-    )
+      client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat", false))
 
-    caller = Map.fetch!(plan.participants, "caller")
+      assert :ok = send_client_ready(client)
+      assert_receive {:test_tts_control, ^opening_voice, speak}, 2_000
+      assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Opening notice."}
+      assert_receive {:test_tts_control, ^opening_voice, _flush}, 2_000
+      assert_startup_wait(client, mode)
 
-    client =
-      plan
-      |> issue_session(room, caller.participant_id)
-      |> then(&connect(&1.session_id, "chat", false))
+      TestTextToSpeechTransport.deliver_control(
+        opening_voice,
+        ~s({"type":"SpeechStarted","speech_id":"opening-notice"})
+      )
 
-    assert :ok = send_client_ready(client)
-    assert_receive {:test_tts_control, ^opening_voice, speak}, 2_000
-    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Opening notice."}
-    assert_receive {:test_tts_control, ^opening_voice, _flush}, 2_000
-    assert :ok = await_tone(client, 250, 2_000)
+      <<_header::binary-size(44), pcm::binary>> = tone_wave(1_400)
+      TestTextToSpeechTransport.deliver_audio(opening_voice, pcm)
 
-    TestTextToSpeechTransport.deliver_control(
-      opening_voice,
-      ~s({"type":"SpeechStarted","speech_id":"opening-notice"})
-    )
+      TestTextToSpeechTransport.deliver_control(
+        opening_voice,
+        ~s({"type":"SpeechMetadata","speech_id":"opening-notice"})
+      )
 
-    <<_header::binary-size(44), pcm::binary>> = tone_wave(1_400)
-    TestTextToSpeechTransport.deliver_audio(opening_voice, pcm)
+      assert :ok = await_tone(client, 1_400, 2_000)
+      refute_tone(client, 1_000, 350)
+      assert_startup_wait(client, mode)
+      assert_receive {:DOWN, ^opening_monitor, :process, ^opening_voice, _}, 2_000
+      send(model_preparer, :release_test_agent_runtime_model)
+      assert_receive {:test_tts_transport_started, voice, _}, 2_000
 
-    TestTextToSpeechTransport.deliver_control(
-      opening_voice,
-      ~s({"type":"SpeechMetadata","speech_id":"opening-notice"})
-    )
+      TestTextToSpeechTransport.deliver_control(
+        voice,
+        ~s({"type":"Connected","request_id":"voice-ready-after-opening"})
+      )
 
-    assert :ok = await_tone(client, 1_400, 2_000)
-    assert :ok = await_tone(client, 250, 2_000)
-    assert_receive {:DOWN, ^opening_monitor, :process, ^opening_voice, _}, 2_000
-    send(model_preparer, :release_test_agent_runtime_model)
-    assert_receive {:test_tts_transport_started, voice, _}, 2_000
-
-    TestTextToSpeechTransport.deliver_control(
-      voice,
-      ~s({"type":"Connected","request_id":"voice-ready-after-opening"})
-    )
-
-    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+      assert_initial_opening_greeting(client, voice)
+    end
   end
 
   test "AI handoff waits independently for model and voice readiness before cues and greeting" do
@@ -2092,6 +2158,64 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     speech = Enum.reject(private.enforcers, &(&1 in [media.room_input, media.room_output]))
     assert length(speech) == 2
     {media, Enum.map(speech, &{&1, Process.monitor(&1)}), connections}
+  end
+
+  defp assert_initial_opening_greeting(client, voice) do
+    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+    assert_receive {:test_tts_control, ^voice, speak}, 2_000
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Reception is ready."}
+    assert_receive {:test_tts_control, ^voice, _flush}, 2_000
+
+    assert %{"data" => %{"text" => "Reception is ready."}} =
+             await_sideband(client, "bot-output", 2_000)
+
+    deliver_voice_tone(voice, "greeting-after-opening", 1_500)
+    assert :ok = await_tone(client, 1_500, 2_000)
+
+    assert %{"type" => "bot-stopped-speaking"} =
+             await_sideband(client, "bot-stopped-speaking", 2_000)
+
+    refute_tone(client, 250, 100)
+    assert :ok = send_client_ready(client)
+    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+    refute_receive {:test_tts_control, ^voice, _duplicate_greeting}, 100
+    assert :ok = send_rtvi_text(client, "first-post-startup-turn")
+    assert_receive {:test_agent_runtime_stream, _provider, request}, 2_000
+    contents = Enum.map(request.messages, & &1.content)
+    assert "Reception is ready." in contents
+    refute "Opening notice." in contents
+    refute Enum.any?(contents, &String.contains?(&1, "initial-notice.wav"))
+  end
+
+  defp startup_wait_configuration(:custom_url) do
+    {sounds, options} = wait_configuration(:custom_url)
+    {%{call_setup: sounds.transfer_to_human}, options}
+  end
+
+  defp startup_wait_configuration(:silent_caller), do: {%{call_setup: nil}, []}
+  defp startup_wait_configuration(mode), do: wait_configuration(mode)
+
+  defp assert_startup_wait(client, mode) do
+    case mode do
+      mode when mode in [:silent_caller, :silent_all] -> refute_audio(client, 150)
+      :custom_url -> assert :ok = await_tone(client, 250, 2_000)
+      :defaults -> assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+    end
+  end
+
+  defp deliver_voice_tone(voice, id, frequency) do
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{type: "SpeechStarted", speech_id: id})
+    )
+
+    <<_header::binary-size(44), pcm::binary>> = tone_wave(frequency)
+    TestTextToSpeechTransport.deliver_audio(voice, pcm)
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{type: "SpeechMetadata", speech_id: id})
+    )
   end
 
   defp wait_configuration(:defaults), do: {%{}, []}

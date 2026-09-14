@@ -45,9 +45,26 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
 
   @impl true
   def prepare_binding(binding, _policy, demand) do
+    await_output_preparation(binding, demand)
     track = if demand.audio_input? or demand.speech_to_text?, do: input_track()
     {:ok, [binding.resource], track}
   end
+
+  defp await_output_preparation(
+         %{output_preparation_observer: observer},
+         %{audio_input?: false, room_output?: false, speech_to_text?: false}
+       )
+       when is_pid(observer) do
+    send(observer, {:test_transfer_output_preparing, self()})
+
+    receive do
+      :complete_output_preparation -> :ok
+    after
+      5_000 -> exit(:output_preparation_timeout)
+    end
+  end
+
+  defp await_output_preparation(_binding, _demand), do: :ok
 
   @impl true
   def prepare_candidate(binding, candidate, demand, options) do
@@ -97,6 +114,7 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
          generation: make_ref(),
          attachment: nil,
          output: Keyword.fetch!(options, :output),
+         output_preparation_observer: Keyword.get(options, :output_preparation_observer),
          policy_subscription: [
            id: command.connection_id <> ":room-output",
            tenant_id: command.tenant_id,

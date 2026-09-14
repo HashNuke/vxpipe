@@ -52,6 +52,9 @@ playout and acknowledged wait pause/clear; the earlier observation is not valid 
 The exact resource generations/configurations, current room binding and policy candidate must still
 match. Pending or changed resources resume waiting and refresh preparation under the original
 startup deadline, retaining unaffected capabilities. Only a fresh ready result releases conversation.
+If startup initially skipped its wait player because the resource graph was already ready, a later
+pending release check starts the selected setup wait at zero. Explicit nil remains silent; an
+already paused player resumes its existing cursor.
 Normal text and media input remain closed until the output sink reports actual playout completion;
 preparation, synthesis completion, enqueueing, or provider readiness do not open the gate. Input received while the gate is closed is discarded rather
 than buffered or replayed. A preparation or playback failure ends the room explicitly and

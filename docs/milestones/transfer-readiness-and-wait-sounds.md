@@ -1,13 +1,14 @@
 # Transfer readiness and participant wait sounds
 
 Status: implementation in progress (2026-09-15). Definition/assets, private playback and substantial
-readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
+readiness preparation are committed. The initial caller-waiting slice has passed its native and
+deterministic phone acceptance; the other four delivery slices remain open.
 Human and AI handoffs now pass normal transfer and bounded recovery checks; human cue-failure
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
 of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,337 tests, zero failures and 15 integration exclusions (seed 346041; concurrency four).
-Full slice acceptance remains open.
+1,362 tests, zero failures and 15 integration exclusions (seed 307676; concurrency four).
+Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
 Prerequisites: [Call lifecycle and opening audio](opening-audio-and-call-lifecycle.md),
@@ -42,7 +43,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and player loss recover spoken caller conversation through retained media; readiness is rechecked during cues and stale candidates trigger preparation and fresh cues. | Complete remaining failure stages, policy adoption, safe diagnostics and sample/audible acceptance. |
 | Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
 | AI transfer | Shared hold/readiness/cue/release now gates agent destinations and their first message. Failed destination TTS recovers spoken source conversation; fresh activations work on re-entry. The live caller sample transfers to billing and continues on the same peer. | Complete independently delayed model/tool cases and the remaining configuration/privacy acceptance. |
-| Initial call | Caller media and private setup waiting can run while model construction is blocked. Conversation, recording and RTVI bot-ready wait for the initial resource graph and opening completion. File/text openings prepare independently, pause waiting only at playable readiness and resume its cursor. Release rechecks the exact resource graph and current policy. | Complete remaining configuration and deterministic phone acceptance. |
+| Initial call | Native default/URL/nil startup, independent file/text openings, delayed participant/room resources and one greeting pass. Late readiness starts a skipped wait or resumes its existing cursor. Deterministic Telnyx/Twilio failures end the exact provider leg before or after media attachment. | Slice accepted; retain these checks while completing transfer slices. |
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The preceding policy-preparation
@@ -314,7 +315,7 @@ slice demands it. There is no separate infrastructure-completion phase.
 | --- | --- | --- | --- |
 | [Human web handoff](#checkpoint-human-web-handoff) | Desktop caller transfers to the mobile transfer desk, hears waits/cues, then exchanges audio and transcripts; failure restores or ends the call correctly. | Existing committed preparation/playback | Normal flow and recovery implemented; full acceptance open |
 | [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Normal flow and bounded recovery integrated; full acceptance open |
-| [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Early caller media, independent file/text openings and wait resume integrated; full acceptance remains open |
+| [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Accepted: native configuration/audio and deterministic phone lifecycle checks pass |
 | [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Local incoming/outbound handoff checks pass; full acceptance open |
 | [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Component coverage only |
 
@@ -328,11 +329,11 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after the startup-diagnostics checkpoint: **26 tasks** in this section—human web
-handoff 7, AI handoff 3, initial caller waiting 2, phone handoff parity 6, changing/multiple listeners
-6, and final audit 2. The 14 open acceptance/summary boxes elsewhere restate these requirements;
+Remaining work after initial caller-waiting acceptance: **24 tasks** in this section—human web
+handoff 7, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6, and final audit 2.
+The 13 open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
-percentage. All five delivery slices still have acceptance work remaining.
+percentage. Four delivery slices still have acceptance work remaining.
 
 ### Checkpoint: human web handoff
 
@@ -468,8 +469,8 @@ Implementation tasks:
 - [x] Establish the minimal caller identity and usable web/phone output before expensive resource
   initialization. Start the caller's independent wait and initialize required resources
   asynchronously using the existing readiness contracts and owning supervisors.
-  Early web media now passes independent model-construction/TTS delays; deterministic phone
-  fixtures pass the common startup path. Controlled delayed phone acceptance remains open.
+  Early web media passes independent model-construction/TTS delays. Deterministic Telnyx/Twilio
+  callers also receive waiting before model construction finishes and while STT remains unready.
 - [x] Give file and text opening playback priority: pause waiting, clear its tail, finish opening,
   then resume the same cursor only if setup still needs time. Preserve the opening's own TTS
   profile, pre-recording isolation and existing supported initial receiver types.
@@ -500,16 +501,27 @@ Implementation tasks:
   aggregates setup outcomes and blockers. See the
   [diagnostics labnote](../../labnotes/20260915-0022-startup-readiness-diagnostics.md) and the
   [startup cleanup labnote](../../labnotes/20260914-2340-startup-failure-cleanup.md).
-  Deterministic phone failure/clock acceptance remains in the acceptance task below.
+  Deterministic phone failure/clock acceptance now passes as recorded below.
 
 Acceptance and commit tasks:
 
-- [ ] Demonstrate delayed room and participant setup with and without file/text openings, using
+- [x] Demonstrate delayed room and participant setup with and without file/text openings, using
   defaults, a URL and nil. Verify cursor resume, no overlapping audio, no recording/transcription
   of private audio, no early microphone admission and exactly-once first-message behavior.
-- [ ] Verify startup failure/clock behavior in web and deterministic phone paths. Confirm
+  Ten native cases cover default/URL/per-slot nil/whole-object nil startup, file/text opening
+  priority, held input, a delayed room recording writer, retained STT/TTS, later conversation and
+  one fixed greeting even after repeated client-ready. Opening text is absent from model history.
+  Engine checks cover exact cursor continuity and private full-mix/individual recording exclusion.
+  A final readiness loss now starts waiting even if the initial fast path skipped creating a player.
+  The URL fetcher is controlled; live URL retrieval remains in the human-handoff acceptance task.
+- [x] Verify startup failure/clock behavior in web and deterministic phone paths. Confirm
   opening/wait ordering from native caller audio. Inspect Chrome only for UI changes. Pass
   focused and all five root gates, document the runnable result and commit the slice.
+  Eighteen Telnyx/Twilio harness checks cover their existing transfer flows plus initial success,
+  delayed STT, model failure, readiness/max-duration expiry and silent disconnect. Failures before
+  and after media attachment submit one exact provider hangup and retire the local leg/socket.
+  All five root gates pass. See [initial acceptance](../../labnotes/20260915-0101-initial-wait-acceptance.md)
+  and the required [incoming-leg fix](../../labnotes/20260915-0121-incoming-leg-lifetime.md).
 
 ### Checkpoint: phone handoff parity
 
@@ -610,7 +622,7 @@ this delivery plan.
 - [ ] Delay cue completion: no room audio or success. Verify final cue frame precedes first room
   frame on every released sink, including under backpressure, and no wait tail follows the cue.
   Failure/readiness loss during the cue prevents release and exercises bounded recovery.
-- [ ] Initial slow room setup produces caller wait audio; opening playback takes priority; wait
+- [x] Initial slow room setup produces caller wait audio; opening playback takes priority; wait
   resumes only if still necessary; first greeting occurs once after all startup gates finish.
 - [ ] Deadline at every phase, duplicate/early acceptance, stale readiness, disconnect, asset/player
   failure, policy rejection and partial release leave no false completion, leaked media or orphan
@@ -958,8 +970,12 @@ verification. The ownership contract is documented under
   categories, elapsed setup duration and one terminal outcome. Native caller STT/TTS acknowledgements
   retain waiting and the RTVI gate until ready; model, missing media, opening and final-release cases
   exercise the same observation contract. Private data is removed before reporter queue admission.
-- The initial-call slice remains partial: complete independent resource/configuration acceptance
-  and deterministic phone clocks/failures still require evidence.
+- Initial-call acceptance now passes the native default/URL/nil matrix and deterministic phone
+  clocks/failures. A skipped initial wait now starts on later readiness loss. Incoming phone legs
+  monitor the exact room incarnation and end through their pinned service when the room terminates,
+  including before media attachment. Full human/AI/phone-transfer and changing-listener acceptance
+  remain open. The [acceptance labnote](../../labnotes/20260915-0101-initial-wait-acceptance.md)
+  distinguishes controlled URL/provider evidence from remaining live-provider checks.
   The [first startup labnote](../../labnotes/20260914-2210-initial-call-waiting.md) retains the
   earlier startup implementation evidence.
 
@@ -967,6 +983,7 @@ verification. The ownership contract is documented under
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Initial caller-waiting acceptance | 50 focused engine tests, ten native configuration/audio cases and 18 phone harness checks pass. All five root gates pass: 1,362 tests, zero failures, 15 exclusions; seed 307676 at concurrency four. Gateway includes 366 tests and 34 native startup/transfer cases. | Initial participant/room readiness, default/URL/nil behavior, opening/wait/greeting order, held-input/recording isolation and exactly-once greeting pass. Late readiness starts a skipped wait. Phone failure/expiry before or after media attachment ends the exact leg; live carrier audibility remains in phone-transfer acceptance. |
 | Initial startup diagnostics | 48 focused engine lifecycle/opening/telemetry tests, nine reporter tests, 23 coordinator tests and the new native STT/TTS case pass; all five root gates, 1,337 tests, zero failures, 15 exclusions; seed 346041 at concurrency four. The root run includes 343 Gateway tests and 27 native startup/transfer cases. | Model, STT, TTS, opening, missing media and late release readiness report closed blocker categories. Existing lifecycle transitions report one total duration/outcome; the existing reporter sanitizes before queue admission. Full configuration/resource and deterministic phone acceptance remain open. See the [diagnostics labnote](../../labnotes/20260915-0022-startup-readiness-diagnostics.md). |
 | Initial release freshness | 35 focused engine lifecycle/opening tests and 29 native WebRTC/RTVI checks pass; all five root gates, 1,326 tests, zero failures, 15 exclusions; seed 333264 at concurrency four | Readiness loss, changed generation and revised policy during an opening cannot prematurely admit conversation. The same wait cursor resumes, healthy instances remain installed and release occurs once. Full setup diagnostics and configuration/phone acceptance remain open. |
 | Initial caller startup | Native negotiation regression red/green; 21 native startup/transfer cases and 17 targeted phone/human-audio checks pass; all five root gates, 1,308 tests, zero failures, 15 exclusions; seed 571236 at concurrency four | Early caller waiting survives independent model/TTS delays. Complete initial readiness gates conversation, recording and RTVI bot-ready; changed negotiated bindings are recaptured. Independent opening preparation and full slice acceptance remain open. |

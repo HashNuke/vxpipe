@@ -29,6 +29,68 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
   alias Vxpipe.AgentRuntime.ModelResponse
 
+  test "starts waiting when release loses readiness after setup initially needed no wait" do
+    configure_speech_runtime()
+    plan = compile_plan(opening_audio: nil, wait_sounds: %{})
+    assert {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "conn-late-startup-wait")
+
+    connection =
+      start_supervised!(
+        {TestTransferConnection,
+         command: command, output: sink, observer: self(), output_preparation_observer: self()}
+      )
+
+    assert {:ok, _} = GenServer.call(connection, :attach)
+    assert_receive {:test_transfer_output_preparing, output_preparer}, 1_000
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    await_initial_resource_observation(authority, System.monotonic_time(:millisecond) + 1_000)
+    refute_receive {:test_audio_output, ^sink, _}, 100
+
+    # Delay the next complete-resource observation, after the output-only probe
+    # acknowledges its already usable route. The first release now has to retry.
+    :ok = :sys.suspend(authority)
+
+    try do
+      send(output_preparer, :complete_output_preparation)
+      await_output_probe_result(authority, System.monotonic_time(:millisecond) + 1_000)
+      assert :ok = GenServer.call(connection, :defer_readiness)
+    after
+      :ok = :sys.resume(authority)
+    end
+
+    assert_receive {:test_transfer_readiness_waiting, ^connection}, 1_000
+    assert_receive {:test_audio_output, ^sink, waiting}, 1_000
+    assert waiting.audio_scope == :private
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+    refute_receive {:test_call_ready, _}, 100
+    assert :ok = GenServer.call(connection, :complete_readiness)
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    await_initial_resource_observation(authority, System.monotonic_time(:millisecond) + 1_000)
+    _ = :sys.get_state(waiting.reply_to)
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_eventually_open(plan)
+    refute_receive {:test_call_ready, _}
+    refute_receive {:test_audio_output, ^sink, _}
+  end
+
+  defp await_output_probe_result(authority, deadline) do
+    {:messages, messages} = Process.info(authority, :messages)
+
+    if Enum.any?(messages, &match?({_reference, {:startup_output, _id, :ok}}, &1)) do
+      :ok
+    else
+      assert System.monotonic_time(:millisecond) < deadline, "output preparation did not finish"
+
+      receive do
+      after
+        5 -> await_output_probe_result(authority, deadline)
+      end
+    end
+  end
+
   test "reports TTS and opening blockers until actual setup readiness" do
     attach_opening_audio_telemetry()
     configure_speech_runtime(tts_ready?: false)
@@ -52,7 +114,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "diagnostic-opening")
     assert {:ok, _} = TestTransferConnection.attach(command, sink)
-    assert_receive {:test_stt_transport_started, stt, _}, 1_000
+    assert_receive {:test_stt_transport_started, _stt, _}, 1_000
     assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
 
     assert_receive {:opening_audio_telemetry, @startup_progress, _,
