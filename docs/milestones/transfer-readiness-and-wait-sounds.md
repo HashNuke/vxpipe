@@ -3,7 +3,7 @@
 Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
 readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
 Human-handoff integration now passes normal transfer, bounded recovery and cue-failure checks. All
-five root gates pass with 1,289 tests and zero failures (test concurrency four); full slice
+five root gates pass with 1,291 tests and zero failures (test concurrency four); full slice
 acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -43,7 +43,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The current human-handoff checkpoint
-passes all five root gates with 1,289 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
+passes all five root gates with 1,291 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
 ## Call-definition changes
@@ -354,9 +354,11 @@ Implementation tasks:
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
 - [ ] Remove prepared private resources that the resulting policy does not demand.
   Initial and repeated private STT allocation now check the prospective policy. If demand disappears
-  before acceptance, the private speech pair is removed while Gateway retains its connection and
-  room-media actors; the WebRTC handoff completes. Changes during collection/adoption and complete
-  reconciliation of the changing audience remain open.
+  before acceptance or while readiness collection is pending, the private speech pair is removed
+  while Gateway retains its connection and room-media actors; the WebRTC handoff completes. An
+  unrelated membership revision retains the original STT transport. Reconciliation reuses the same
+  collector, preparation owner, media generation and deadline. Changes during initial preparation,
+  cues/adoption, changed still-required resources and the complete changing audience remain open.
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -667,7 +669,11 @@ Before accepted handoff preparation, private speech is reconciled against the la
 policy even when an earlier private binding exists. Removing transcription demand stops only that
 capability/ingress pair, removes its monitors and updates the attachments of the retained Gateway
 input/output actors. This is verified with an existing participant's policy contribution changing
-after private allocation; unrelated connection admission during a pending transfer remains unfinished.
+after private allocation and while accepted handoff readiness is pending. The latter also verifies
+that an unrelated membership revision retains the original STT transport and that caller/support
+conversation works afterward. The worker reuses existing candidate preparation and collector
+reconciliation under the original deadline; queued reports cannot substitute for the current
+required resource set. Unrelated connection admission during a pending transfer remains unfinished.
 
 The ordinary WebRTC acceptance flow now verifies default waits, a shared custom URL, a nil caller
 wait and whole-object nil. Both peers decode the mandatory cue and distinct subsequent conversation
@@ -681,8 +687,11 @@ live remote URL retrieval remain separate acceptance evidence.
 Known remaining work in the first slice:
 
 - Complete readiness-loss, partial-release and expiry coverage across the remaining stages.
-- Reconcile policy changes during collection/adoption and finish failure, stage-timing and queue
-  diagnostics beyond the implemented preparation status and returned-worker durations.
+- Reconcile changes during initial graph preparation, cues/adoption and changes to still-required
+  resources; complete changing-listener lifetimes. Pending collection now handles removal of STT
+  demand and unrelated membership revisions.
+- Finish failure, stage-timing and queue diagnostics beyond the implemented preparation status and
+  returned-worker durations.
 - Complete default/custom/nil playback and private-audio/model-history isolation through the
   rendered sample path, building on the passing native WebRTC cases.
 - Complete audible two-device and recovery verification. Rendered UI checks use simulated browser
@@ -694,8 +703,8 @@ Known remaining work in the first slice:
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
-| Human handoff and recovery | Fourteen WebRTC transfer checks pass with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, policy changes remove undemanded private STT, and destination/phase/player loss restores a fresh caller conversation through retained media. |
-| Current human-handoff checkpoint | All five root gates pass; 1,289 tests, zero failures, 15 exclusions; seed 56228 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, cue/recheck ordering, progress and bounded recovery pass. Remaining slice acceptance stays open. |
+| Human handoff and recovery | Sixteen WebRTC transfer checks pass within the 327-check Gateway suite with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, pending readiness reconciles removed STT demand and retains an unaffected STT transport, and destination/phase/player loss restores a fresh caller conversation through retained media. |
+| Current human-handoff checkpoint | All five root gates pass; 1,291 tests, zero failures, 15 exclusions; seed 319929 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue/recheck ordering, progress and bounded recovery pass. Remaining slice acceptance stays open. |
 | Cue barrier and failure recovery | Five focused engine cases pass | With nil waits, completion requires cue drain, including completion during a deferred readiness recheck. Cue-player or prepared STT failure during drain recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
 | Wait configurations and conversational audio | Four ordinary WebRTC handoffs pass for default/custom/per-slot-nil/whole-nil waits | Peer-decoded tones distinguish custom waiting, mandatory cues and bidirectional conversation. Held microphone/private playback produces no STT input or recording chunks; subsequent conversation is recorded and support transcripts reach the caller. The custom fetch and providers are controlled fixtures. |
 | Earlier targeted engine and phone checks | 20 engine checks (15 human-transfer and five tool-registry); 17 Gateway checks (nine WebRTC, six outbound phone and two incoming harnesses) passed before the latest additions | Owning connections, post-briefing acceptance and actual incoming STT audio are exercised with simulated providers; these checks remain in the passing root suite. |

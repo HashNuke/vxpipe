@@ -923,7 +923,22 @@ and ingress; Gateway removes their monitors and updates attachments on its retai
 An unchanged speech binding retains its instances and monitors. The returned receipt describes
 the current enforcers and must be collected again after such a change. Current privacy stays
 installed throughout collection, and readiness by itself cannot authorize microphone/model
-admission or release. Reconciliation during later handoff stages remains a lifecycle requirement.
+admission or release.
+
+While human handoff readiness is pending, the worker validates its captured candidate on readiness
+notifications and at bounded 100 ms intervals. A stale policy causes the worker to recheck private
+media and prepare the current candidate under the same owner, attempt, generation and deadline. Existing
+preparation APIs retain unchanged resources; `Collector.reconcile/3` retains their readiness and
+replaces only changed descriptors. Existing wait players continue; newly included, already connected
+listeners receive their own hold and wait. The handoff uses the refreshed receipts and complete
+resource set for its eventual commit. Queued notifications are treated as signals to read the
+collector's current state, because they may describe a resource set that reconciliation removed.
+
+Ordinary WebRTC handoffs verify removal of undemanded private STT while collection is pending and
+retention of the original STT transport across an unrelated membership revision. Both retain the
+existing connections and media actors and exchange caller/support audio after release. Policy
+changes during initial graph construction, cue playback or adoption, changed still-required
+resources and complete changing-listener lifecycle behavior remain separate acceptance work.
 
 Design review rejected rebuilding a retained native output, using current STT evidence for a
 replacement session, and assigning preparation ownership to a short-lived collection worker.

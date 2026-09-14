@@ -2,44 +2,20 @@
 
 Current delivery tasks and curated status now live in the
 [milestone checkpoints](../docs/milestones/transfer-readiness-and-wait-sounds.md#implementation-checkpoints).
-The [latest phone diagnosis and delivery review](#phone-diagnosis-and-vertical-delivery-review)
-records the remaining unsupported-audio failure and the documentation-first restructuring.
-Earlier sections below are chronological evidence, not parallel current task lists.
+The entries below record implementation, verification and detours chronologically.
+Earlier sections are historical evidence, not parallel current task lists.
 
-The current [automatic human handoff work](#wire-normal-acceptance-through-prepared-media) connects
-normal acceptance to private preparation, whole-room collection, local cues, exact policy adoption
-and acknowledged release. All six WebRTC transfer checks pass, including delayed destination STT,
-actor reuse and a surviving room after source teardown. This work remains uncommitted: embedded
-fixture migration, phone integration, complete recovery and earlier audience holds are unfinished. The
-1,274-test umbrella result below belongs to `c4fea8c`, not to this worktree or full acceptance.
+Current committed evidence is in the milestone and the latest checkpoint sections at the end of
+this file. Human handoff now integrates waits, readiness, cues, prepared policy adoption, media
+release and bounded recovery. The pending-policy checkpoint below passes all five root gates:
+1,291 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
+call integration, complete phone/changing-listener behavior, remaining failure stages and audible acceptance remain
+open. The new [pending-policy checkpoint](#reconcile-policy-while-human-readiness-is-pending) below
+records this turn's implementation and verification separately.
 
-The last verified [Gateway preparation checkpoint](#integrate-private-gateway-preparation) allocates
-dormant private media on actual WebRTC and phone connections. Complete prospective WebRTC room
-collection waits for destination STT while retaining caller pipelines and source capabilities.
-Preparation without STT cannot bypass adoption; private actor loss cancels the attempt, and
-unrelated policy refresh leaves an undemanded decoder stopped. All 46 engine and 46 Gateway
-focused checks pass, followed by all five root gates: 1,274 tests, zero failures and 15 integration
-exclusions. Automatic lifecycle invocation and successful prepared handoff remain unfinished.
-
-The earlier [Gateway notes snapshot](#gateway-preparation-detour-and-current-boundary) retains the
-initial three-test result and then-unverified work. The implementation evidence below supersedes
-that snapshot without claiming end-to-end transfer acceptance.
-
-This extends authorized private speech binding in `5ab8c17`, persistent transfer ownership in
-`4801597`, private allocation in `c005511`,
-speech adoption in `a8106d4`,
-the complete-membership commit in `69b5ad6`,
-native tap preparation in `666ca37` and writer/track adoption in `4b14530`.
-The earlier [investigation](#private-stt-initialization-and-cancellation-ownership)
-and pause audit retain their historical failures/worktree snapshots, not current status.
-
-**The end-to-end milestone remains unfinished.** Prepared destination adoption, startup/transfer
-orchestration, waits/cues and recovery still require integration
-and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
-The [handoff investigation](#recording-tap-investigation-and-handoff-resume-point) identifies the
-existing completion sequence that still needs to use the prepared resources.
-The [phase-owner integration findings](#phase-owner-integration-findings) retain the source audit
-before this checkpoint; the implementation evidence below records the changes since that audit.
+Earlier entries are chronological snapshots. Their references to uncommitted work or missing
+integration describe their own checkpoint, not the current worktree. No earlier passing run should
+be applied to later changes.
 
 ## Detour update after the pause audit
 
@@ -2593,3 +2569,53 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   open checks for rendered/audible two-device behavior, live URL retrieval, model-history isolation
   and remaining failure/policy stages. The full human slice and subsequent AI, initial-call, phone
   and changing-listener slices remain incomplete. No new UI or dependency work was introduced.
+
+## Reconcile policy while human readiness is pending
+
+- The preceding user-requested accounting was read-only (no implementation progress). Revalidated
+  the worktree and resumed the human vertical slice; only the other agent's documentation-site
+  and visual labnote work was dirty before this checkpoint.
+- Extended the ordinary WebRTC acceptance scenario to remove transcription demand after the
+  destination transport starts and the desk reports an STT readiness blocker. The original handoff
+  never becomes active: `vxpipe-human-policy-wait-red-2.log`, three cases, one failure. The first
+  command used the `for` line and selected the preceding four cases; that passing run was not red
+  evidence. Corrected the selection to the generated test's line.
+- Reuse `Preparation.run_candidate/3` and `Collector.reconcile/3` from the human worker. Validate the
+  captured policy while waiting, recompute required media only when it becomes stale, and keep the
+  owner, attempt, media generation, collector and original absolute deadline. Existing wait players
+  continue; newly included connected listeners are held and receive their own wait. No generic
+  coordination framework, dependency, UI component or server restart is involved.
+- The first integration attempt exposed queued pre-reconciliation readiness notifications during
+  cue playback, causing all three cases to fail with readiness loss. Treat notifications as signals
+  to query current collector state in readiness/cue waits. Old ready/preparing/failed reports can no
+  longer decide admission against a newer resource set. The original three scenarios then pass in
+  `vxpipe-human-policy-wait-green-2.log`.
+- Added retention evidence for an unrelated membership revision. The first fixture mistakenly
+  changed `save_transcripts`, which is explicitly part of the STT policy signature and therefore
+  invalidates that session. Acknowledging its old transport could not complete the handoff. This was
+  not evidence that an unrelated policy restarts STT. The corrected contribution inherits existing
+  media permissions; it changes membership while keeping existing participant permissions intact.
+  The intermediate full-file run `vxpipe-human-policy-wait-gateway.log` failed only in this
+  misclassified STT case. Also corrected the fixture transport method from `deliver_control/2`
+  to its actual `deliver/2`.
+- All four demand/retention scenarios pass in `vxpipe-human-policy-retain-green.log`. They verify
+  exact connection, shared output and room input/output actor retention, stopping the removed speech
+  pair, no replacement STT for an unrelated revision, and actual bidirectional caller/support audio
+  after release. Refactored the duplicated media capture after the initial case passed. Changed the
+  existing wait-mode matrix to pass mode through ExUnit context to remove constant-branch warnings.
+- Policy changes during initial graph construction, cues/adoption, changed still-required resources
+  and complete changing-listener lifetimes remain acceptance work. The full human slice and all
+  later delivery slices remain open. Focused engine and final root verification follow.
+- Focused engine verification passes 31 checks across human web/phone handoff and readiness
+  collection (`vxpipe-human-policy-wait-engine.log`). The four Gateway demand/retention cases pass
+  separately; the full umbrella run then verifies all 327 Gateway checks, including all 16 WebRTC
+  handoff scenarios. Earlier unsuccessful full-file runs are retained above, not counted as passes.
+- Final root gates all pass: format, warnings-as-errors compile, strict Credo, tests and unused
+  dependencies. There are 1,291 tests, zero failures and 15 integration exclusions with concurrency
+  four, seed 319929 (`vxpipe-human-policy-wait-root-results.json` and its five logs). No production
+  code changed after that run; subsequent edits update the milestone, index and these notes.
+- Implementation review: existing preparation operations already reconcile their resources under
+  one lease. Discarding the entire previous graph would revoke retained prepared handles; replacing
+  the collector or wait players would lose reusable readiness or playback positions. Reuse those
+  existing operations and ownership. Keep later phase/membership requirements open rather than
+  claiming this pending-readiness evidence covers them. No UI/browser behavior changed.
