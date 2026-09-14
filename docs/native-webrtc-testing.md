@@ -13,6 +13,22 @@ cd apps/vxpipe_gateway
 mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs
 ```
 
+For human wait configurations, cue/conversation ordering and private model-history isolation,
+including a real public HTTPS WAV download:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --include integration --name-pattern 'human handoff gates|recovers the held caller'
+```
+
+The `live_url` case uses [HTTPbun's mix endpoint](https://httpbun.com/) to serve a generated
+250 Hz, 48 kHz PCM16 WAV. It requires public internet access and uses the production fetcher,
+public-address policy, TLS, MIME/size checks and an empty cache. It sends only a synthetic tone
+in the URL. This case is excluded from the default suite; the controlled custom-URL variant
+remains deterministic. Both peers receive the wait, cue and conversation in order. The recovery
+case plays the private notice and checks actual subsequent model requests for retained caller
+content without private notice text, blocked caller input or the configured wait URL.
+
 For the local speech-provider round trip:
 
 ```shell
@@ -22,7 +38,8 @@ mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs --only morse
 The peers exchange ICE/DTLS/SRTP/SCTP traffic. HTTP signalling invokes the real Plug endpoint
 in process; it does not verify deployment TLS or a reverse proxy. The fixture owns room/session
 setup and supervised peers, so an existing development server and external speech credentials
-are unnecessary. These checks also run in the ordinary umbrella suite.
+are unnecessary. These checks also run in the ordinary umbrella suite, except the explicitly
+tagged public-URL integration variant above.
 
 For independent model/voice preparation and failed-model recovery:
 

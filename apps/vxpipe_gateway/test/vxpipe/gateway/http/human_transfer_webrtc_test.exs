@@ -683,7 +683,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    2_000
   end
 
-  for wait_mode <- [:defaults, :custom_url, :silent_caller, :silent_all] do
+  for wait_mode <- [:defaults, :custom_url, :live_url, :silent_caller, :silent_all] do
+    if wait_mode == :live_url do
+      @tag :integration
+    end
+
     @tag wait_mode: wait_mode
     test "human handoff gates and then relays conversation with #{wait_mode} waits", %{
       wait_mode: mode
@@ -747,7 +751,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       # The caller waits from transfer authorization, before a destination even connects.
       case mode do
         mode when mode in [:silent_caller, :silent_all] -> refute_audio(caller_client, 150)
-        :custom_url -> await_tone(caller_client, 250, 2_000)
+        mode when mode in [:custom_url, :live_url] -> await_tone(caller_client, 250, 2_000)
         :defaults -> assert caller_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
       end
 
@@ -811,7 +815,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :silent_all ->
           refute_audio(support_client, 150)
 
-        :custom_url ->
+        mode when mode in [:custom_url, :live_url] ->
           await_tone(support_client, 250, 2_000)
 
         _default_joining ->
@@ -860,19 +864,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert final.attempt == nil
       assert {:ok, _binding, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(connection)
 
-      # Decode the mandatory cue on both outputs, including queued pre-activation RTP.
-      await_tone(caller_client, 1_000, 5_000)
-      await_tone(support_client, 1_000, 5_000)
       refute_receive {:test_stt_audio, ^joining_stt, _held_or_private_audio}, 100
       refute_receive {:test_recording_chunk, _stream, _private_audio}, 100
       refute_receive {:test_opening_audio_fetch, _url, _limits}
 
-      # Distinct tones prove conversational media traverses the bridge. A queued wait/cue
-      # packet cannot satisfy either assertion, unlike checking only for decodable RTP.
+      # Inspect the queued cue and subsequent conversation together: no wait may follow
+      # the cue, and no cue may follow the first conversation frame on either peer.
+      wait_frequency = if mode in [:custom_url, :live_url], do: 250
       send_tone(caller_client, 500, 1)
-      await_tone(support_client, 500, 5_000)
+      assert_handoff_audio_order(support_client, 500, wait_frequency)
       send_tone(support_client, 1_500, 11)
-      await_tone(caller_client, 1_500, 5_000)
+      assert_handoff_audio_order(caller_client, 1_500, wait_frequency)
       assert_receive {:test_stt_audio, ^joining_stt, _conversation_audio}, 2_000
       caller_id = caller.participant_id
       support_id = support.participant_id
@@ -1228,9 +1230,14 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     test "recovers the held caller after #{loss} loss without replacing source media" do
       agent_destination? = unquote(loss) in [:agent_destination, :agent_model]
 
+      {wait_sounds, wait_options} =
+        wait_configuration(if unquote(loss) == :destination, do: :custom_url, else: :defaults)
+
       plan =
         compile_plan(
           agent_destination: agent_destination?,
+          wait_sounds: wait_sounds,
+          transfer_notice: "Private desk notice: verify the account before discussing details.",
           billing_model:
             if(unquote(loss) == :agent_model,
               do: "test:blocked-unavailable",
@@ -1240,7 +1247,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
-      assert {:ok, room} = CallEngine.start_call(plan)
+      assert {:ok, room} = CallEngine.start_call(plan, wait_options)
       stop_room_on_exit(plan)
       assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
@@ -1307,6 +1314,30 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           assert %{"type" => "transfer.preparation"} =
                    await_sideband(client, "transfer.preparation", 2_000)
 
+          if unquote(loss) == :destination do
+            assert_receive {:test_tts_control, ^destination_preparer, speak}, 2_000
+            assert String.contains?(JSON.decode!(speak)["text"], "Private desk notice:")
+            assert_receive {:test_tts_control, ^destination_preparer, _flush}, 2_000
+            deliver_voice_tone(destination_preparer, "private-recovery-briefing", 750)
+            assert :ok = await_tone(client, 750, 2_000)
+
+            assert %{"type" => "transfer.acceptance_ready"} =
+                     await_sideband(client, "transfer.acceptance_ready", 2_000)
+
+            assert :ok =
+                     send_rtvi_text(
+                       caller_client,
+                       "held-private-turn",
+                       false,
+                       "Held input marker."
+                     )
+
+            assert %{"id" => "held-private-turn"} =
+                     await_sideband(caller_client, "error-response", 2_000)
+
+            refute_tone(caller_client, 750, 100)
+          end
+
           client
         end
 
@@ -1350,7 +1381,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       refute_receive {:test_tts_transport_started, _replacement, _}, 50
 
       # Finish the scripted response to the failed tool before starting another caller turn.
-      assert_receive {:test_agent_runtime_stream, recovery_provider, _}, 2_000
+      assert_receive {:test_agent_runtime_stream, recovery_provider, recovery_request}, 2_000
+      assert_private_transfer_history(recovery_request)
       assert {:ok, recovery_response} = ModelResponse.new(text: "I am still here.")
       send(recovery_provider, {:test_agent_runtime_response, {:ok, recovery_response}})
 
@@ -1388,8 +1420,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       assert :ok = send_rtvi_text(caller_client, "after-recovery")
 
       assert_receive {:test_agent_runtime_stream, retry_provider,
-                      %{correlation: %{correlation_id: "after-recovery"}}},
+                      %{correlation: %{correlation_id: "after-recovery"}} = retry_request},
                      2_000
+
+      assert_private_transfer_history(retry_request)
 
       if unquote(loss) == :destination do
         assert {:ok, retry_call} =
@@ -2387,6 +2421,21 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   defp wait_configuration(:silent_caller), do: {%{transfer_to_human: nil}, []}
   defp wait_configuration(:silent_all), do: {nil, []}
 
+  defp wait_configuration(:live_url) do
+    cache =
+      start_supervised!(
+        {CallEngine.OpeningAudio.AssetCache, maximum_entries: 8, maximum_bytes: 8_388_608}
+      )
+
+    # The public HTTP fixture returns a synthetic 4 ms loop as an actual WAV download.
+    # Keep the production fetcher, DNS/address policy, TLS and decoder in this lane.
+    body = tone_wave(250, 192) |> Base.encode64() |> URI.encode_www_form()
+    url = "https://httpbun.com/mix/h=content-type:audio%2Fwav/b64=" <> body
+
+    {%{transfer_to_human: url, transfer_joining: url},
+     [wait_sound_settings: [cache: cache, fetcher: {CallEngine.OpeningAudio.ReqFetcher, []}]]}
+  end
+
   defp wait_configuration(:custom_url) do
     cache =
       start_supervised!(
@@ -2411,9 +2460,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
      ]}
   end
 
-  defp tone_wave(frequency) do
+  defp tone_wave(frequency, sample_count \\ 9_600) do
     pcm =
-      for sample <- 0..9_599, into: <<>> do
+      for sample <- 0..(sample_count - 1), into: <<>> do
         amplitude = round(12_000 * :math.sin(2 * :math.pi() * frequency * sample / 48_000))
         <<amplitude::little-signed-16>>
       end
@@ -2699,7 +2748,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     connection
   end
 
-  defp send_rtvi_text(connection, id \\ unique_id("turn"), audio_response \\ false) do
+  defp send_rtvi_text(
+         connection,
+         id \\ unique_id("turn"),
+         audio_response \\ false,
+         content \\ "Please connect me to human support."
+       ) do
     PeerConnection.send_data(
       connection.client,
       connection.channel_ref,
@@ -2708,7 +2762,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         "label" => "rtvi-ai",
         "type" => "send-text",
         "data" => %{
-          "content" => "Please connect me to human support.",
+          "content" => content,
           "options" => %{"run_immediately" => true, "audio_response" => audio_response}
         }
       })
@@ -2961,6 +3015,65 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   defp await_tone(connection, frequency, timeout_ms) do
     decoder = Map.get_lazy(connection, :morse_opus, fn -> Decoder.Native.create(48_000, 1) end)
     receive_tone(connection, decoder, frequency, System.monotonic_time(:millisecond) + timeout_ms)
+  end
+
+  defp assert_private_transfer_history(request) do
+    contents = Enum.map(request.messages, & &1.content)
+    assert "Please connect me to human support." in contents
+
+    for private <- ["Private desk notice:", "Held input marker.", "handoff.wav"] do
+      refute Enum.any?(contents, &String.contains?(&1, private)),
+             "private transfer content entered model history"
+    end
+  end
+
+  defp assert_handoff_audio_order(connection, conversation_frequency, wait_frequency) do
+    receive_handoff_audio(
+      connection,
+      Decoder.Native.create(48_000, 1),
+      {conversation_frequency, wait_frequency},
+      :waiting,
+      System.monotonic_time(:millisecond) + 5_000
+    )
+  end
+
+  defp receive_handoff_audio(connection, decoder, frequencies, phase, deadline) do
+    client = connection.client
+    track = connection.output_track_id
+    {conversation_frequency, wait_frequency} = frequencies
+
+    receive do
+      {:ex_webrtc, ^client, {:rtp, ^track, _rid, %Packet{} = packet}} ->
+        pcm = Decoder.Native.decode_packet(decoder, packet.payload)
+
+        next_phase =
+          cond do
+            tone?(pcm, 1_000) ->
+              refute phase == :conversation, "cue audio followed conversation"
+              :cue
+
+            tone?(pcm, conversation_frequency) ->
+              refute phase == :waiting, "conversation arrived before the connection cue"
+              :conversation
+
+            wait_frequency != nil and tone?(pcm, wait_frequency) ->
+              assert phase == :waiting, "wait audio followed the connection cue"
+              phase
+
+            true ->
+              phase
+          end
+
+        deadline =
+          if next_phase == :conversation and phase != :conversation,
+            do: System.monotonic_time(:millisecond) + 250,
+            else: deadline
+
+        receive_handoff_audio(connection, decoder, frequencies, next_phase, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        assert phase == :conversation, "missing ordered cue and conversation audio"
+    end
   end
 
   defp receive_tone(connection, decoder, frequency, deadline) do

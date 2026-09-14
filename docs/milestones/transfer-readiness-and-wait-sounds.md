@@ -7,7 +7,7 @@ Human and AI handoffs now pass normal transfer and bounded recovery checks; huma
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
 of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,374 tests, zero failures and 15 integration exclusions (seed 235296; concurrency four).
+1,374 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four).
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -329,8 +329,8 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after initial caller-waiting acceptance: **24 tasks** in this section—human web
-handoff 7, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6, and final audit 2.
+Remaining work after human-handoff audio acceptance: **23 tasks** in this section—human web
+handoff 6, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6, and final audit 2.
 The 13 open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
 percentage. Four delivery slices still have acceptance work remaining.
@@ -400,9 +400,12 @@ Acceptance and commit tasks:
   gating with nil waits, and receive partial/final support transcripts in the caller. Private audio
   and held support microphone input produce no STT input or individual-track recording chunks;
   post-release conversation produces both. The custom fetch is controlled at the fetcher boundary.
-- [ ] Complete live URL retrieval, ordered wait-tail clearing and model-history isolation through
-  native caller/destination peers. Rendered inspection is only required for actual UI changes or
-  browser-specific behavior; distinguish received audio from physical speaker verification.
+- [x] Complete live URL retrieval, ordered wait-tail clearing and model-history isolation through
+  native caller/destination peers. The opt-in integration case fetches a synthetic WAV over public
+  HTTPS using the production fetcher and an empty cache. Both peers receive the configured wait,
+  then cue and conversation with no detected wait/cue tail after the transition. Recovery model
+  requests retain caller content and exclude the played private notice, held input and wait URL.
+  This proves received audio, not physical speaker audibility; no UI changes are involved.
 - [x] Hold human transfer completion until mandatory cue drain, including with nil wait sounds.
   Cue-player loss and prepared destination STT loss during drain recover the retained source;
   an output that also cannot finish the recovery cue closes the call within the existing budgets.
@@ -520,7 +523,7 @@ Acceptance and commit tasks:
   one fixed greeting even after repeated client-ready. Opening text is absent from model history.
   Engine checks cover exact cursor continuity and private full-mix/individual recording exclusion.
   A final readiness loss now starts waiting even if the initial fast path skipped creating a player.
-  The URL fetcher is controlled; live URL retrieval remains in the human-handoff acceptance task.
+  The startup URL fetcher is controlled; live retrieval is verified by the human-handoff integration case.
 - [x] Verify startup failure/clock behavior in web and deterministic phone paths. Confirm
   opening/wait ordering from native caller audio. Inspect Chrome only for UI changes. Pass
   focused and all five root gates, document the runnable result and commit the slice.
@@ -798,8 +801,15 @@ tones; queued private audio cannot satisfy the conversation checks. Held support
 does not reach the caller or STT and does not replay after release. Private playback produces no
 individual-track recording chunks; live conversation subsequently produces chunks for both humans,
 and partial/final support transcripts reach the caller. The custom file is fetched once through a
-controlled fetcher and decoded on both peers. Physical-device audio, browser sample interaction and
-live remote URL retrieval remain separate acceptance evidence.
+controlled fetcher and decoded on both peers. A separate opt-in integration variant now retrieves
+a synthetic WAV from public HTTPS through the production ReqFetcher, with its normal DNS/address
+policy, TLS, byte/MIME validation and empty-cache preparation. Each peer decodes the fetched
+250 Hz loop. A continuous decoder timeline checks cue-before-conversation and rejects wait tones
+after the cue or cue tones after conversation. The destination-loss case plays the private briefing,
+rejects a marked held caller input, recovers, and inspects actual model requests for retained caller
+content without the private notice, held marker or wait URL. These ten focused native handoff/recovery
+cases pass. Physical speaker audibility remains separate evidence. See the
+[audio acceptance labnote](../../labnotes/20260915-0218-handoff-audio-acceptance.md).
 
 Rendered Chrome now exercises the real sample with live model and Deepgram services, without
 admission or provider mocks. Two accepted default-wait handoffs retained the desktop caller. In the
@@ -840,8 +850,8 @@ Known remaining work in the first slice:
   resources; pending collection, cue playback and final stale rejection also retry before application.
 - Finish failure, stage-timing and queue diagnostics beyond the implemented preparation status and
   returned-worker durations.
-- Complete default/custom/nil playback and private-audio/model-history isolation through the
-  rendered sample path, building on the passing native WebRTC cases.
+- Complete independent readiness delays for all demanded resource scopes through native peers.
+  Default/custom/nil playout and private model-history acceptance now pass without sample UI changes.
 - Complete physical two-device and live phone recovery verification. Rendered Chrome now uses live
   model/Deepgram services with synthesized microphone speech; this does not establish physical audibility.
 - Changing membership/connections and multiple listeners retain their later dedicated checkpoint.
@@ -1010,6 +1020,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Human handoff audio acceptance | Ten focused native cases, including the public-HTTPS WAV variant, pass. All five root gates pass: 1,374 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Production URL retrieval and peer-decoded configured waiting work; queued wait/cue/conversation ordering and post-briefing recovery model-history isolation pass. The public-URL case is opt-in and excluded from the default suite. Human audio acceptance is complete; intermittent recovery and the other 23 checkpoint tasks remain open. |
 | Release acknowledgement and completion fences | 65 focused engine checks and nine native policy cases pass. Final five root gates pass: 1,374 tests, zero failures, 15 exclusions; seed 235296 at concurrency four. Gateway includes 371 checks and 39 native startup/transfer cases. | Four engine cases prevent success after policy/generation changes during acknowledgements, explicit release error and policy revision before final coordinator completion. Two native cases close the room and peers without activation after policy changes during release. Existing intermittent recovery and wider failure-stage acceptance remain open. |
 | Policy changes after adoption | Three engine cases, three native policy cases and all 37 native startup/transfer cases pass. Final five root gates pass: 1,368 tests, zero failures, 15 exclusions; seed 235296 at concurrency four. | Reconcile removed or changed STT demand before release, retain unrelated room/media actors, wait for affected replacement readiness and drain another cue under the original deadline. An earlier root run's destination-loss recovery failure was not reproduced in 16 isolated runs, the full native file or the final root run; its cause and complete recovery acceptance remain open. |
 | Initial caller-waiting acceptance | 50 focused engine tests, ten native configuration/audio cases and 18 phone harness checks pass. All five root gates pass: 1,362 tests, zero failures, 15 exclusions; seed 307676 at concurrency four. Gateway includes 366 tests and 34 native startup/transfer cases. | Initial participant/room readiness, default/URL/nil behavior, opening/wait/greeting order, held-input/recording isolation and exactly-once greeting pass. Late readiness starts a skipped wait. Phone failure/expiry before or after media attachment ends the exact leg; live carrier audibility remains in phone-transfer acceptance. |
