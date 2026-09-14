@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupProbe do
 
   alias Vxpipe.CallEngine.Media.ConnectionReadiness
   alias Vxpipe.CallEngine.MediaPolicy.Authority
-  alias Vxpipe.CallEngine.Readiness.{Preparation, RoomInventory}
+  alias Vxpipe.CallEngine.Readiness.{Preparation, Probe, RoomInventory}
   alias Vxpipe.CallEngine.RoomCapabilitySupervisor
 
   def output(connection, identity, policy_authority, deadline) do
@@ -33,9 +33,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupProbe do
            {:ok, graph} <- Preparation.run(room, candidate, remaining(deadline)),
            :ok <- collect(graph.resources, incarnation, deadline),
            :ok <- RoomInventory.validate(room, graph.inventory, remaining(deadline)) do
-        :ok
+        {:ok, graph}
       end
     end)
+  end
+
+  def verify(room, graph, deadline) do
+    result =
+      safe_run(fn ->
+        with :ok <- RoomInventory.validate(room, graph.inventory, remaining(deadline)),
+             :ok <- Probe.verify(graph.resources, min(100, remaining(deadline))),
+             :ok <- RoomInventory.validate(room, graph.inventory, remaining(deadline)) do
+          :ok
+        end
+      end)
+
+    if remaining(deadline) > 0, do: result, else: {:error, :deadline_elapsed}
   end
 
   defp collect(resources, incarnation, deadline) do
@@ -76,6 +89,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupProbe do
     case safe_run(operation) do
       :ok ->
         :ok
+
+      {:ok, _graph} = ready ->
+        ready
 
       {:error, reason} when reason in [:readiness_failed, :deadline_elapsed] ->
         {:error, reason}

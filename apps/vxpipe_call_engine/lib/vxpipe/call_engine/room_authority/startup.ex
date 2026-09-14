@@ -92,6 +92,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
              status: :preparing,
              waits: %{},
              readiness: nil,
+             release_task: nil,
+             ready_graph: nil,
              resources_ready?: false,
              deadline_ms: Vxpipe.CallEngine.CallLifecycle.readiness_deadline(state.call_lifecycle)
            }

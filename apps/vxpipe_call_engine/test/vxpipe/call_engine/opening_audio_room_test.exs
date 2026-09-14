@@ -27,66 +27,94 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
   alias Vxpipe.AgentRuntime.ModelResponse
 
-  test "resumes the same wait cursor after opening playback while model setup is pending" do
-    configure_speech_runtime()
-    configure_agent_runtime_provider(Vxpipe.CallEngine.TestSelectiveAgentRuntimeModelProvider)
-    owner = self()
+  for blocker <- [:model, :media] do
+    test "resumes the same wait cursor after opening playback while #{blocker} readiness is pending" do
+      configure_speech_runtime()
+      configure_agent_runtime_provider(Vxpipe.CallEngine.TestSelectiveAgentRuntimeModelProvider)
+      owner = self()
 
-    configure_opening_audio(fn ->
-      send(owner, {:opening_fetch_waiting, self()})
+      configure_opening_audio(fn ->
+        send(owner, {:opening_fetch_waiting, self()})
 
-      receive do
-        :release_notice -> {:ok, %Download{body: wave(<<1, 0, 2, 0>>), content_type: "audio/wav"}}
+        receive do
+          :release_notice ->
+            {:ok, %Download{body: wave(<<1, 0, 2, 0>>), content_type: "audio/wav"}}
+        end
+      end)
+
+      wait_url = "https://assets.example.test/cursor-wait.wav"
+
+      wait_pcm =
+        for value <- 100..500//100, into: <<>>, do: :binary.copy(<<value::little-16>>, 960)
+
+      plan =
+        compile_plan(
+          model: "test:blocked",
+          opening_audio: %{type: "file_url", url: "https://assets.example.test/cursor-notice.wav"},
+          wait_sounds: %{call_setup: wait_url}
+        )
+
+      assert {:ok, room} =
+               CallEngine.start_call(plan,
+                 wait_sound_settings: [
+                   fetcher:
+                     {TestOpeningAudioFetcher,
+                      observer: self(),
+                      response: {:ok, %Download{body: wave(wait_pcm), content_type: "audio/wav"}}}
+                 ]
+               )
+
+      assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 1_000
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      sink = start_supervised!({TestAudioOutputSink, observer: self()})
+      command = attach_command(plan, room, caller, "conn-opening-cursor")
+      assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
+      assert_receive {:opening_fetch_waiting, fetcher}, 1_000
+      assert_receive {:test_audio_output, ^sink, first}, 1_000
+      assert first.payload == :binary.copy(<<100::little-16>>, 960)
+      assert_receive {:test_audio_output_finish, ^sink, _}
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+      assert_receive {:test_audio_output, ^sink, second}
+      assert second.payload == :binary.copy(<<200::little-16>>, 960)
+      assert_receive {:test_audio_output_finish, ^sink, _}
+
+      send(fetcher, :release_notice)
+      refute_receive {:test_audio_output, ^sink, _}, 100
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+      assert_receive {:test_audio_output, ^sink, notice}
+      assert notice.payload == <<1, 0, 2, 0>>
+      assert_receive {:test_audio_output_finish, ^sink, _}
+      refute_receive {:test_audio_output, ^sink, _}, 100
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      connection = TestTransferConnection.run(command, fn -> self() end)
+
+      if unquote(blocker) == :media do
+        send(model_preparer, :release_test_agent_runtime_model)
+        await_initial_resource_observation(authority, System.monotonic_time(:millisecond) + 1_000)
+        assert :ok = GenServer.call(connection, :defer_readiness)
       end
-    end)
 
-    wait_url = "https://assets.example.test/cursor-wait.wav"
-    wait_pcm = for value <- 100..500//100, into: <<>>, do: :binary.copy(<<value::little-16>>, 960)
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+      assert_receive {:test_audio_output, ^sink, resumed}, 1_000
+      assert resumed.payload == :binary.copy(<<300::little-16>>, 960)
+      assert resumed.command_id == first.command_id
+      assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
 
-    plan =
-      compile_plan(
-        model: "test:blocked",
-        opening_audio: %{type: "file_url", url: "https://assets.example.test/cursor-notice.wav"},
-        wait_sounds: %{call_setup: wait_url}
-      )
+      if unquote(blocker) == :media do
+        assert_receive {:test_transfer_readiness_waiting, ^connection}, 1_000
+        assert :ok = GenServer.call(connection, :complete_readiness)
+      else
+        send(model_preparer, :release_test_agent_runtime_model)
+      end
 
-    assert {:ok, room} =
-             CallEngine.start_call(plan,
-               wait_sound_settings: [
-                 fetcher:
-                   {TestOpeningAudioFetcher,
-                    observer: self(),
-                    response: {:ok, %Download{body: wave(wait_pcm), content_type: "audio/wav"}}}
-               ]
-             )
-
-    assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 1_000
-    caller = Map.fetch!(plan.participants, plan.entry_caller)
-    sink = start_supervised!({TestAudioOutputSink, observer: self()})
-    command = attach_command(plan, room, caller, "conn-opening-cursor")
-    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
-    assert_receive {:opening_fetch_waiting, fetcher}, 1_000
-    assert_receive {:test_audio_output, ^sink, first}, 1_000
-    assert first.payload == :binary.copy(<<100::little-16>>, 960)
-    assert_receive {:test_audio_output_finish, ^sink, _}
-    assert :ok = TestAudioOutputSink.playback_completed(sink)
-    assert_receive {:test_audio_output, ^sink, second}
-    assert second.payload == :binary.copy(<<200::little-16>>, 960)
-    assert_receive {:test_audio_output_finish, ^sink, _}
-
-    send(fetcher, :release_notice)
-    refute_receive {:test_audio_output, ^sink, _}, 100
-    assert :ok = TestAudioOutputSink.playback_completed(sink)
-    assert_receive {:test_audio_output, ^sink, notice}
-    assert notice.payload == <<1, 0, 2, 0>>
-    assert_receive {:test_audio_output_finish, ^sink, _}
-    refute_receive {:test_audio_output, ^sink, _}, 100
-    assert :ok = TestAudioOutputSink.playback_completed(sink)
-    assert_receive {:test_audio_output, ^sink, resumed}
-    assert resumed.payload == :binary.copy(<<300::little-16>>, 960)
-    assert resumed.command_id == first.command_id
-    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
-    send(model_preparer, :release_test_agent_runtime_model)
+      assert_receive {:test_audio_output_finish, ^sink, _}
+      await_initial_resource_observation(authority, System.monotonic_time(:millisecond) + 1_000)
+      _ = :sys.get_state(resumed.reply_to)
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+      assert_eventually_open(plan)
+      refute_receive {:test_call_ready, _}
+      refute_receive {:test_audio_output, ^sink, _}
+    end
   end
 
   for deadline <- [:readiness, :max_duration] do
@@ -155,6 +183,64 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       end
 
       refute_receive {:test_call_ready, _}
+    end
+  end
+
+  for change <- [:preparing, :generation, :policy] do
+    test "rechecks #{change} after opening playback before admitting conversation" do
+      configure_speech_runtime()
+
+      configure_opening_audio(
+        {:ok, %Download{body: wave(<<1, 0, 2, 0>>), content_type: "audio/wav"}}
+      )
+
+      plan =
+        compile_plan(
+          opening_audio: %{type: "file_url", url: "https://assets.example.test/recheck.wav"}
+        )
+
+      assert {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      sink = start_supervised!({TestAudioOutputSink, observer: self()})
+      command = attach_command(plan, room, caller, "conn-opening-recheck")
+      assert {:ok, _} = TestTransferConnection.attach(command, sink)
+      assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      await_initial_resource_observation(authority, System.monotonic_time(:millisecond) + 1_000)
+      connection = TestTransferConnection.run(command, fn -> self() end)
+      {:ok, original_binding} = RoomAuthority.readiness_binding(authority)
+
+      case unquote(change) do
+        :generation ->
+          assert :ok = GenServer.call(connection, :renew_readiness)
+
+        :policy ->
+          receiver = Map.fetch!(plan.participants, plan.entry_receiver)
+          policy = original_binding.policy_authority
+
+          assert {:ok, _} =
+                   CallEngine.MediaPolicy.Authority.leave(policy, receiver.participant_id)
+
+          assert {:ok, _} =
+                   CallEngine.MediaPolicy.Authority.admit(policy, receiver.participant_id)
+
+        :preparing ->
+          :ok
+      end
+
+      assert :ok = GenServer.call(connection, :defer_readiness)
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+
+      assert_receive {:test_transfer_readiness_waiting, ^connection}, 1_000
+      refute_receive {:test_call_ready, _}, 100
+      assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+      assert :ok = GenServer.call(connection, :complete_readiness)
+      assert_eventually_open(plan)
+      refute_receive {:test_call_ready, _}
+      assert {:ok, current_binding} = RoomAuthority.readiness_binding(authority)
+      assert current_binding.participants == original_binding.participants
+      assert current_binding.room == original_binding.room
+      assert current_binding.connections == original_binding.connections
     end
   end
 
@@ -366,19 +452,20 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-opening-failure")
 
-    assert {:ok, attachment} = TestTransferConnection.attach(command, sink)
+    assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_tts_control, ^tts_transport, _speak}
     assert_receive {:test_tts_control, ^tts_transport, _flush}
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    room_monitor = Process.monitor(authority)
 
     TestTextToSpeechTransport.deliver_control(
       tts_transport,
       ~s({"type":"Error","request_id":"req","code":"MESSAGE_INVALID"})
     )
 
-    assert_receive {:DOWN, room_monitor, :process, _room_authority, :opening_audio_unavailable},
+    assert_receive {:DOWN, ^room_monitor, :process, ^authority, :opening_audio_unavailable},
                    1_000
-
-    assert room_monitor == attachment.room_monitor
 
     assert_receive {:opening_audio_telemetry, @opening_audio_stop_event,
                     %{count: 1, duration: duration}, %{outcome: :failed, source: :text}}
@@ -759,6 +846,19 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
              "text" => "Welcome from the model.",
              "type" => "Speak"
            }
+  end
+
+  defp await_initial_resource_observation(authority, deadline) do
+    if :sys.get_state(authority).startup.resources_ready? do
+      :ok
+    else
+      assert System.monotonic_time(:millisecond) < deadline
+
+      receive do
+      after
+        5 -> await_initial_resource_observation(authority, deadline)
+      end
+    end
   end
 
   defp compile_plan(options \\ []) do

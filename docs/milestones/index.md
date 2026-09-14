@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,322 tests, zero failures and 15 exclusions, with test concurrency four (seed 879358). Four ordinary WebRTC
+1,326 tests, zero failures and 15 exclusions, with test concurrency four (seed 333264). Four ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
@@ -136,9 +136,10 @@ opening PCM is playable, pauses through private playout, and resumes the same cu
 remain unready. Native decoded audio and engine PCM checks verify that order and cursor continuity.
 Silent caller disconnect, killed wait players and original deadline expiry now stop pending startup
 work. Explicit detach clears queued waiting; another silent caller connection keeps startup alive.
-Native startup failures deliver one peerLeft before bounded teardown. Release freshness, startup
-blocker/timing diagnostics, deterministic phone failure coverage and full initial-call acceptance
-remain open.
+Native startup failures deliver one peerLeft before bounded teardown. Initial release now rechecks
+resource readiness, generations and policy after opening/wait playout; pending readiness resumes
+the same cursor and retains healthy capabilities. Startup blocker/timing diagnostics, deterministic
+phone failure coverage and full initial-call acceptance remain open.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.
 

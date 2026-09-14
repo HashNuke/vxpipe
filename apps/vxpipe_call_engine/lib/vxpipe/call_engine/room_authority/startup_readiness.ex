@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     ConnectionLifecycle,
     FirstMessage,
     OpeningAudio,
+    ReadinessBinding,
     Startup,
     StartupProbe
   }
@@ -142,14 +143,63 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   def room_result(reference, result, %{startup: %{readiness: %Task{ref: reference}}} = state) do
     Process.demonitor(reference, [:flush])
 
-    if result == :ok do
-      reconcile(%{state | startup: %{state.startup | readiness: nil, resources_ready?: true}})
-    else
-      {:error, startup_unavailable()}
+    case result do
+      {:ok, graph} ->
+        startup = %{state.startup | readiness: nil, resources_ready?: true, ready_graph: graph}
+        reconcile(%{state | startup: startup})
+
+      _failed ->
+        {:error, startup_unavailable()}
     end
   end
 
   def room_result(_reference, _result, state), do: {:ok, state}
+
+  def release_result(
+        reference,
+        result,
+        %{startup: %{release_task: %Task{ref: reference}}} = state
+      ) do
+    Process.demonitor(reference, [:flush])
+    state = %{state | startup: %{state.startup | release_task: nil}}
+
+    cond do
+      result == :ok and current_graph?(state) ->
+        waits =
+          Map.new(state.startup.waits, fn {id, wait} ->
+            discard_wait(wait, state)
+            {id, %{wait | player: nil, monitor: nil, status: :stopped}}
+          end)
+
+        complete(%{state | startup: %{state.startup | waits: waits}})
+
+      result in [{:error, :readiness_failed}, {:error, :deadline_elapsed}] ->
+        {:error, startup_unavailable()}
+
+      true ->
+        startup = %{state.startup | resources_ready?: false, ready_graph: nil}
+        ready(%{state | startup: startup})
+    end
+  end
+
+  def release_result(_reference, _result, state), do: {:ok, state}
+
+  defp current_graph?(state) do
+    graph = state.startup.ready_graph
+
+    with {:ok, binding} <- ReadinessBinding.capture(state),
+         true <- binding == graph.inventory.binding,
+         :ok <-
+           Vxpipe.CallEngine.MediaPolicy.Authority.validate_candidate(
+             state.media_policy_authority,
+             graph.inventory.candidate,
+             1_000
+           ) do
+      true
+    else
+      _stale -> false
+    end
+  end
 
   def playback(player, episode, status, state) do
     case Enum.find(state.startup.waits, fn {_id, wait} ->
@@ -187,7 +237,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
       do: OutputSink.clear(connection.output_sink)
 
     cancel_probe(state.startup.readiness)
-    startup = %{state.startup | waits: waits, readiness: nil, resources_ready?: false}
+    cancel_probe(state.startup.release_task)
+
+    startup = %{
+      state.startup
+      | waits: waits,
+        readiness: nil,
+        release_task: nil,
+        ready_graph: nil,
+        resources_ready?: false
+    }
+
     state = %{state | startup: startup}
     plan = state.participant_transfer_runtime.plan
     caller = Map.fetch!(plan.participants, plan.entry_caller)
@@ -279,7 +339,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   defp reconcile(state) do
     with {:ok, state} <- update_waits(state),
          {:ok, state} <- start_opening(state) do
-      complete(state)
+      verify_release(state)
     end
   end
 
@@ -303,15 +363,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
   defp update_wait(id, %{status: status} = wait, state) when status in [:playing, :paused] do
     cond do
-      state.startup.resources_ready? and state.opening_audio.phase == :open ->
-        Player.stop(wait.player)
-        {:ok, put_wait(state, id, %{wait | status: :stopping})}
+      state.startup.resources_ready? and state.opening_audio.phase == :open and status == :playing ->
+        Player.pause(wait.player)
+        {:ok, put_wait(state, id, %{wait | status: :pausing})}
 
       state.opening_audio.phase == :ready and status == :playing ->
         Player.pause(wait.player)
         {:ok, put_wait(state, id, %{wait | status: :pausing})}
 
-      state.opening_audio.phase == :open and status == :paused ->
+      not state.startup.resources_ready? and state.opening_audio.phase == :open and
+          status == :paused ->
         Player.resume(wait.player)
         {:ok, put_wait(state, id, %{wait | status: :playing})}
 
@@ -413,10 +474,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     end
   end
 
+  defp verify_release(
+         %{startup: %{resources_ready?: true, release_task: nil}, opening_audio: %{phase: :open}} =
+           state
+       ) do
+    if Enum.all?(state.startup.waits, fn {_id, wait} -> wait.status in [:paused, :stopped] end) do
+      with :ok <- clear_outputs(state) do
+        room = self()
+        graph = state.startup.ready_graph
+        deadline = state.startup.deadline_ms
+
+        task =
+          Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->
+            {:startup_release, StartupProbe.verify(room, graph, deadline)}
+          end)
+
+        {:ok, %{state | startup: %{state.startup | release_task: task}}}
+      end
+    else
+      {:ok, state}
+    end
+  end
+
+  defp verify_release(state), do: {:ok, state}
+
   defp complete(%{startup: %{resources_ready?: true}, opening_audio: %{phase: :open}} = state) do
     if Enum.all?(state.startup.waits, fn {_id, wait} -> wait.status == :stopped end) do
-      with :ok <- clear_outputs(state),
-           :ok <- CallLifecycle.ready(state.call_lifecycle),
+      with :ok <- CallLifecycle.ready(state.call_lifecycle),
            :ok <- RoomMixer.complete_opening(state.room_mixer) do
         Enum.each(state.connections, fn {_id, connection} ->
           send(connection.pid, {:vxpipe_call_ready, connection.room_monitor})

@@ -136,6 +136,11 @@ defmodule Vxpipe.CallEngine.TestTransferConnection do
   def handle_call(:readiness, _from, state),
     do: {:reply, {:ok, state.binding.resource, :ready}, state}
 
+  def handle_call(:renew_readiness, _from, state) do
+    resource = %{state.binding.resource | generation: make_ref()}
+    {:reply, :ok, put_in(state.binding.resource, resource)}
+  end
+
   def handle_call(:defer_readiness, _from, state),
     do: {:reply, :ok, %{state | defer_readiness?: true}}
 

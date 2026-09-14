@@ -324,6 +324,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({reference, {:startup_ready, result}}, state),
     do: StartupReadiness.reply(StartupReadiness.room_result(reference, result, state), state)
 
+  def handle_info({reference, {:startup_release, result}}, state),
+    do: StartupReadiness.reply(StartupReadiness.release_result(reference, result, state), state)
+
   def handle_info({:vxpipe_wait_playback, player, episode, status}, %{startup: startup} = state)
       when startup != nil,
       do: StartupReadiness.reply(StartupReadiness.playback(player, episode, status, state), state)

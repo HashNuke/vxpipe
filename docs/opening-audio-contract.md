@@ -47,9 +47,13 @@ room-owned output gate holds the first frame, requests wait pause, and releases 
 wait player acknowledges pause and the actual output clears its queued tail. It forwards the
 real sink's correlated completion acknowledgements. This preserves streamed text playback and
 bounded backpressure without pre-rendering a complete notice. After the notice, a still-pending
-setup resumes the same wait player and cursor; ready setup releases conversation instead. Normal
-text and media input remain closed until the output sink reports actual playout completion; preparation, synthesis completion, enqueueing, or provider
-readiness do not open the gate. Input received while the gate is closed is discarded rather
+setup resumes the same wait player and cursor. Initial resource readiness is rechecked after opening
+playout and acknowledged wait pause/clear; the earlier observation is not valid indefinitely.
+The exact resource generations/configurations, current room binding and policy candidate must still
+match. Pending or changed resources resume waiting and refresh preparation under the original
+startup deadline, retaining unaffected capabilities. Only a fresh ready result releases conversation.
+Normal text and media input remain closed until the output sink reports actual playout completion;
+preparation, synthesis completion, enqueueing, or provider readiness do not open the gate. Input received while the gate is closed is discarded rather
 than buffered or replayed. A preparation or playback failure ends the room explicitly and
 never silently opens normal conversation. A text source without a resolved TTS binding fails
 validation before a room is registered; file playback is independent of TTS.

@@ -21,6 +21,29 @@ defmodule Vxpipe.CallEngine.Readiness.Probe do
     end)
   end
 
+  def verify(resources, timeout) when is_integer(timeout) and timeout > 0 do
+    resources
+    |> Task.async_stream(&readiness/1,
+      max_concurrency: 8,
+      timeout: timeout,
+      on_timeout: :kill_task,
+      ordered: true
+    )
+    |> Stream.zip(resources)
+    |> Enum.reduce_while(:ok, fn
+      {{:ok, {:ok, current, :ready}}, expected}, :ok ->
+        if current == expected,
+          do: {:cont, :ok},
+          else: {:halt, {:error, :binding_changed}}
+
+      {{:ok, {:ok, _resource, :failed}}, _expected}, :ok ->
+        {:halt, {:error, :readiness_failed}}
+
+      _pending, :ok ->
+        {:halt, {:error, :preparing}}
+    end)
+  end
+
   defp readiness(resource) do
     adapter = resource.adapter
 
