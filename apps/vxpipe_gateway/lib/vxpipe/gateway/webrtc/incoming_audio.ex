@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.Gateway.Media.RoomAudioIngress
-  alias Vxpipe.Gateway.WebRTC.AudioFrame
+  alias Vxpipe.Gateway.WebRTC.{AudioFrame, SpeechInput}
 
   @spec forward(
           RTPCodecParameters.t() | nil,
@@ -46,7 +46,7 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
 
   defp deliver_to_inputs(attachment, frame, options) do
     results = [
-      deliver_speech_audio(attachment, frame),
+      deliver_speech_audio(attachment, frame, Keyword.get(options, :speech_input)),
       RoomAudioIngress.push(Keyword.get(options, :room_audio_ingress), frame)
     ]
 
@@ -66,10 +66,12 @@ defmodule Vxpipe.Gateway.WebRTC.IncomingAudio do
 
   defp receive_only?(%ConnectionAttachment{}), do: false
 
-  defp deliver_speech_audio(%ConnectionAttachment{media_ingress: nil}, _frame), do: :disabled
+  defp deliver_speech_audio(%ConnectionAttachment{media_ingress: nil}, _frame, _input),
+    do: :disabled
 
-  defp deliver_speech_audio(%ConnectionAttachment{} = attachment, frame) do
-    CallEngine.push_audio(attachment, frame)
+  defp deliver_speech_audio(%ConnectionAttachment{} = attachment, frame, input) do
+    with {:ok, speech_frame} <- SpeechInput.frame(frame, input),
+         do: CallEngine.push_audio(attachment, speech_frame)
   end
 
   defp classify(result) when result in [:ok, :drop, :unavailable], do: result

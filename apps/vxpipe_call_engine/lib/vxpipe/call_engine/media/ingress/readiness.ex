@@ -5,6 +5,14 @@ defmodule Vxpipe.CallEngine.Media.Ingress.Readiness do
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Readiness.Resource
 
+  def media_format(ingress) do
+    with {:ok, binding} <- call(ingress, :readiness_binding),
+         {:ok, provider} <- input_binding(binding, :current),
+         :ok <- validate_provider(binding, provider) do
+      {:ok, provider.media_format}
+    end
+  end
+
   def readiness(ingress) do
     with {:ok, resource, status, _dependencies} <- observe(ingress),
          do: {:ok, resource, status}

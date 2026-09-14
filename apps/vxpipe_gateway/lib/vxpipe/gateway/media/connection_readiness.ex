@@ -141,9 +141,9 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
 
   defp prepare_part(:speech_input, binding, _candidate, _demand, track, options) do
     input = binding.attachment.media_ingress
-    track = speech_track(binding, track)
 
     with %Resource{kind: :speech_to_text} = provider <- Keyword.get(options, :speech_to_text),
+         {:ok, track} <- speech_track(binding, track),
          :ok <- Ingress.prepare_track(input, track, provider),
          {:ok, resources} <- Ingress.readiness_resources(input, provider) do
       {:ok, resources, []}
@@ -203,21 +203,25 @@ defmodule Vxpipe.Gateway.Media.ConnectionReadiness do
 
   defp prepare_input(binding, track, demand) do
     with :ok <- prepare_track(RoomAudioIngress, binding.room_input, track, demand.audio_input?),
-         :ok <-
-           prepare_track(
-             Ingress,
-             binding.attachment.media_ingress,
-             speech_track(binding, track),
-             demand.speech_to_text?
-           ) do
+         :ok <- prepare_speech_track(binding, track, demand.speech_to_text?) do
       :ok
     end
   end
 
-  defp speech_track(%{transport: Vxpipe.Gateway.Telephony.MediaSession}, track),
-    do: Vxpipe.Gateway.Telephony.IncomingAudio.speech_track(track)
+  defp prepare_speech_track(_binding, _track, false), do: :ok
 
-  defp speech_track(_binding, track), do: track
+  defp prepare_speech_track(binding, track, true) do
+    with {:ok, track} <- speech_track(binding, track),
+         do: Ingress.prepare_track(binding.attachment.media_ingress, track)
+  end
+
+  defp speech_track(%{transport: Vxpipe.Gateway.Telephony.MediaSession}, track),
+    do: {:ok, Vxpipe.Gateway.Telephony.IncomingAudio.speech_track(track)}
+
+  defp speech_track(%{transport: Vxpipe.Gateway.WebRTC.Connection, instance: connection}, track),
+    do: Vxpipe.Gateway.WebRTC.Connection.speech_track(connection, track)
+
+  defp speech_track(_binding, track), do: {:ok, track}
 
   defp prepare_track(_adapter, _input, _track, false), do: :ok
   defp prepare_track(adapter, input, track, true), do: adapter.prepare_track(input, track)

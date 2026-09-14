@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,302 tests, zero failures and 15 exclusions, with test concurrency four. Four ordinary WebRTC
+1,303 tests, zero failures and 15 exclusions, with test concurrency four. Four ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
@@ -120,6 +120,10 @@ completion and recovery now use the existing RTVI server-message extension and s
 No caller UI changes are required. Native peers own further transport
 and audio diagnosis, with browser checks limited to presentation/interoperability. Independent
 tool delays and complete configuration/privacy acceptance remain open.
+The native human-handoff case now uses real Morse speech providers, converts WebRTC Opus to
+16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 335 checks include
+19 native transfer cases. Earlier intermittent phase-loss recovery failure remains an acceptance
+concern despite the passing final root run. See [native testing](../native-webrtc-testing.md).
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.
 

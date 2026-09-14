@@ -21,6 +21,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   }
 
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.Provider.{MorseCodeSTT, MorseCodeTTS}
+  alias Vxpipe.CallEngine.Provider.MorseCode.Decoder, as: MorseDecoder
+  alias Vxpipe.CallEngine.Provider.MorseCode.Encoder, as: MorseEncoder
   alias Vxpipe.Gateway.HTTP.Endpoint
   alias Vxpipe.Gateway.SessionSupervisor
 
@@ -30,8 +33,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   @automatic_bitrate -1_000
   @endpoint_options Endpoint.init(cors: [])
   @signal_voice 3_001
+  @morse_options [
+    sample_rate: 48_000,
+    unit_duration_ms: 60,
+    window_duration_ms: 20,
+    detection_threshold: 2_400,
+    frequency_tolerance_hz: 250
+  ]
 
-  setup do
+  setup context do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     agent_runtime =
@@ -76,11 +86,129 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       |> Keyword.put(:speech_to_text, speech_to_text)
     )
 
+    if context[:morse] do
+      configured = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+      Application.put_env(
+        :vxpipe_call_engine,
+        Vxpipe.CallEngine.Application,
+        configured
+        |> Keyword.put(:speech_to_text,
+          enabled: false,
+          providers: %{
+            MorseCodeSTT => [
+              enabled: true,
+              provider_options: [],
+              transport: {MorseCodeSTT.Transport, []},
+              media_ingress: Keyword.fetch!(speech_to_text, :media_ingress)
+            ]
+          }
+        )
+        |> Keyword.put(:text_to_speech,
+          enabled: false,
+          providers: %{
+            MorseCodeTTS => [
+              enabled: true,
+              provider_options: [],
+              transport: {MorseCodeTTS.Transport, [emit_interval_ms: 0]},
+              maximum_requests: 2
+            ]
+          }
+        )
+      )
+    end
+
     on_exit(fn ->
       Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
     end)
 
     :ok
+  end
+
+  @tag morse: true
+  test "native peers exchange Morse speech and transcripts before and after human transfer" do
+    plan = compile_plan(morse: true, transfer_notice: "E")
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+
+    caller_client =
+      plan |> issue_session(room, caller.participant_id) |> then(&connect(&1.session_id, "chat"))
+
+    caller_client = Map.put(caller_client, :morse_opus, Decoder.Native.create(48_000, 1))
+
+    assert :ok =
+             PeerConnection.send_data(
+               caller_client.client,
+               caller_client.channel_ref,
+               JSON.encode!(%{
+                 id: "morse-ready",
+                 label: "rtvi-ai",
+                 type: "client-ready",
+                 data: %{version: "2.1.0"}
+               })
+             )
+
+    await_sideband(caller_client, "bot-ready", 2_000)
+    caller_client = send_morse(caller_client, "SOS")
+    assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
+    assert_transcript(caller_client, caller.participant_id, "SOS")
+    assert {:ok, response} = ModelResponse.new(text: "OK")
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_morse(caller_client, "OK")
+
+    [{caller_connection, _}] =
+      Registry.lookup(
+        Vxpipe.Gateway.WebRTC.Registry,
+        {:connection, caller_client.connection_id}
+      )
+
+    speech_input = :sys.get_state(caller_connection).speech_input
+    assert %{codec: :linear16, sample_rate: 16_000, channels: 1} = speech_input.output
+
+    caller_client = send_morse(caller_client, "ET")
+    assert_transcript(caller_client, caller.participant_id, "ET")
+    assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
+
+    assert {:ok, transfer} =
+             ToolCall.new(
+               id: "morse-handoff",
+               name: "transfer",
+               arguments: %{"destination" => "human-support", "reason" => "E"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+    await_transfer_progress(caller_client, "preparing")
+
+    support_client =
+      plan
+      |> issue_session(room, support.participant_id)
+      |> then(&connect(&1.session_id, "vxpipe"))
+
+    support_client = Map.put(support_client, :morse_opus, Decoder.Native.create(48_000, 1))
+
+    %{"data" => %{"attempt_id" => attempt}} =
+      await_sideband(support_client, "transfer.acceptance_ready", 5_000)
+
+    assert_morse(support_client, "E E")
+    assert :ok = send_acceptance(support_client, "morse-accept", attempt)
+    await_sideband(support_client, "transfer.active", 5_000)
+    await_transfer_progress(caller_client, "completed")
+    assert :sys.get_state(caller_connection).speech_input == speech_input
+    await_tone(caller_client, 1_000, 2_000)
+    await_tone(support_client, 1_000, 2_000)
+    drain_morse_audio(caller_client)
+    drain_morse_audio(support_client)
+
+    support_client = send_morse(support_client, "SOS")
+    assert_transcript(caller_client, support.participant_id, "SOS")
+    assert :ok = await_tone(caller_client, 700, 2_000)
+
+    caller_client = send_morse(caller_client, "ET")
+    assert_transcript(caller_client, caller.participant_id, "ET")
+    assert :ok = await_tone(support_client, 700, 2_000)
   end
 
   test "AI handoff waits for destination voice readiness and cues before its greeting" do
@@ -1679,6 +1807,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  participants: %{
                    "caller" => %{
                      type: "human",
+                     capabilities:
+                       if(Keyword.get(options, :morse),
+                         do: %{speech_to_text: "test-stt"},
+                         else: %{}
+                       ),
                      connection: %{
                        service: "web",
                        mode: "receive",
@@ -1715,7 +1848,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                        mode: "receive",
                        admission: "transfer"
                      },
-                     transfer_notice: "This call is recorded."
+                     transfer_notice:
+                       Keyword.get(options, :transfer_notice, "This call is recorded.")
                    },
                    "observer" => %{
                      type: "human",
@@ -1760,17 +1894,26 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  },
                  "test-stt" => %{
                    kind: :speech_to_text,
-                   provider: Flux,
-                   options: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
+                   provider: if(Keyword.get(options, :morse), do: MorseCodeSTT, else: Flux),
+                   options:
+                     if(Keyword.get(options, :morse),
+                       do: @morse_options |> Map.new() |> Map.put(:sample_rate, 16_000),
+                       else: %{model: "flux-general-en", encoding: :opus, sample_rate: 48_000}
+                     )
                  },
                  "test-voice" => %{
                    kind: :text_to_speech,
-                   provider: FluxTextToSpeech,
-                   options: %{
-                     model: "flux-test-voice",
-                     encoding: :linear16,
-                     sample_rate: 48_000
-                   }
+                   provider:
+                     if(Keyword.get(options, :morse), do: MorseCodeTTS, else: FluxTextToSpeech),
+                   options:
+                     if(Keyword.get(options, :morse),
+                       do: Map.new(@morse_options),
+                       else: %{
+                         model: "flux-test-voice",
+                         encoding: :linear16,
+                         sample_rate: 48_000
+                       }
+                     )
                  }
                },
                host_tools: %{}
@@ -1993,6 +2136,127 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     PeerConnection.send_rtp(connection.client, connection.input_track_id, packet)
   end
 
+  defp send_morse(connection, text) do
+    assert {:ok, config} = MorseCodeSTT.new(@morse_options)
+    assert {:ok, pcm} = MorseEncoder.encode(config, text)
+    pcm = pcm <> :binary.copy(<<0, 0>>, 2_880)
+
+    encoder =
+      Map.get_lazy(connection, :morse_encoder, fn ->
+        Encoder.Native.create(48_000, 1, @application_voip, @automatic_bitrate, @signal_voice)
+      end)
+
+    first_sequence = Map.get(connection, :morse_sequence, 1)
+
+    started_at = System.monotonic_time(:millisecond)
+    timestamp = started_at * 48
+
+    for {frame, index} <- Enum.with_index(for <<frame::binary-size(1_920) <- pcm>>, do: frame) do
+      # Pace actual media at 20 ms per packet; bursting an utterance exceeds the normal ingress bound.
+      receive do
+      after
+        max(started_at + index * 20 - System.monotonic_time(:millisecond), 0) -> :ok
+      end
+
+      assert {:ok, payload} = Encoder.Native.encode_packet(encoder, frame, 960)
+
+      packet =
+        Packet.new(payload,
+          payload_type: 111,
+          sequence_number: first_sequence + index,
+          timestamp: Integer.mod(timestamp + index * 960, 4_294_967_296),
+          ssrc: 123
+        )
+
+      assert :ok = PeerConnection.send_rtp(connection.client, connection.input_track_id, packet)
+    end
+
+    connection
+    |> Map.put(:morse_encoder, encoder)
+    |> Map.put(:morse_sequence, first_sequence + div(byte_size(pcm), 1_920))
+  end
+
+  defp assert_transcript(connection, participant_id, text) do
+    assert_transcript(
+      connection,
+      participant_id,
+      text,
+      System.monotonic_time(:millisecond) + 5_000
+    )
+  end
+
+  defp assert_transcript(connection, participant_id, text, deadline) do
+    message =
+      await_sideband(
+        connection,
+        "user-transcription",
+        max(deadline - System.monotonic_time(:millisecond), 0)
+      )
+
+    case message do
+      %{"data" => %{"user_id" => ^participant_id, "text" => ^text, "final" => true}} -> :ok
+      _ -> assert_transcript(connection, participant_id, text, deadline)
+    end
+  end
+
+  defp assert_morse(connection, expected) do
+    assert {:ok, config} = MorseCodeTTS.new(@morse_options)
+    assert {:ok, morse} = MorseDecoder.new(config)
+
+    assert_morse(
+      connection,
+      expected,
+      connection.morse_opus,
+      morse,
+      System.monotonic_time(:millisecond) + 5_000
+    )
+  end
+
+  defp assert_morse(connection, expected, opus, morse, deadline) do
+    client = connection.client
+    track = connection.output_track_id
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {:ex_webrtc, ^client, {:rtp, ^track, _rid, packet}} ->
+        pcm = Decoder.Native.decode_packet(opus, packet.payload)
+
+        case MorseDecoder.push(morse, pcm) do
+          {:ok, next, events} ->
+            if {:final, expected} in events do
+              :ok
+            else
+              assert_morse(connection, expected, opus, next, deadline)
+            end
+
+          {:error, :unsupported_frequency} when not morse.started? ->
+            assert_morse(connection, expected, opus, morse, deadline)
+
+          error ->
+            flunk(
+              "Morse audio decode failed: #{inspect({error, morse.text, morse.marks, morse.current_kind, morse.current_windows})}"
+            )
+        end
+    after
+      remaining ->
+        assert {:ok, _decoder, [{:final, ^expected}]} = MorseDecoder.flush(morse)
+    end
+  end
+
+  defp drain_morse_audio(connection) do
+    client = connection.client
+    track = connection.output_track_id
+
+    receive do
+      {:ex_webrtc, ^client, {:rtp, ^track, _rid, packet}} ->
+        # Consume the verified cue's queued tail while retaining the Opus decoder history.
+        _pcm = Decoder.Native.decode_packet(connection.morse_opus, packet.payload)
+        drain_morse_audio(connection)
+    after
+      0 -> :ok
+    end
+  end
+
   defp send_tone(connection, frequency, first_sequence) do
     encoder =
       Encoder.Native.create(48_000, 1, @application_voip, @automatic_bitrate, @signal_voice)
@@ -2025,7 +2289,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   defp await_tone(connection, frequency, timeout_ms) do
-    decoder = Decoder.Native.create(48_000, 1)
+    decoder = Map.get_lazy(connection, :morse_opus, fn -> Decoder.Native.create(48_000, 1) end)
     receive_tone(connection, decoder, frequency, System.monotonic_time(:millisecond) + timeout_ms)
   end
 
