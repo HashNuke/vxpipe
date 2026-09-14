@@ -540,11 +540,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                MapSet.delete(current.present_participant_ids, caller)
              )
 
-    assert {:error, %{kind: :recording, scope: :room, reason: :policy_not_prepared}} =
-             Preparation.run_candidate(room_authority, candidate, options)
-
+    assert {:ok, future} = Preparation.run_candidate(room_authority, candidate, options)
+    assert Enum.any?(future.resources, &(&1.kind == :recording))
     assert {:ok, ^before} = CallEngine.RoomRecording.readiness_resources(recording)
     assert Authority.snapshot(authority) == current
+    assert :ok = Preparation.discard(future)
 
     assert {:ok, retained} =
              Authority.preview_presence(authority, current.present_participant_ids)

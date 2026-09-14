@@ -769,14 +769,11 @@ descriptor while preserving the router process, generation and configuration. Ow
 invalidates pending evidence and prevents that candidate's adoption; explicit discard allows a new
 lease. An unrelated revision requires a refreshed candidate under the same original deadline.
 
-Recording remains limited to the installed recording policy and track preparation. Its current
-writer interface has no scoped cancellation, and preparation updates the live required track set.
-It therefore still needs separate prospective track/writer ownership and adoption before this runner
-can support arbitrary recording membership changes. Until then, the preparer compares current and
-prospective recording sources and rejects a changed set with `policy_not_prepared` before touching
-live writers. Failure unwinds the other prepared resources and permits retry. The retained-recording
-fixture covers an unchanged resulting membership and policy. Private destination actors and lifecycle
-orchestration also remain unfinished. Do not treat this runner as complete transfer readiness.
+Candidate recording now stages future writer ownership and selected tracks separately from live
+recording, as described below. The installed-policy query still rejects changed recording sources
+instead of mutating live requirements prematurely. Private destination actors, native agent recording
+taps across changed recording intervals, and lifecycle orchestration remain unfinished. Do not treat
+this runner as complete transfer readiness.
 
 Design review rejected deriving subscriptions from a partial caller list, replacing transcript
 routing on policy changes, extending a lease on refresh, or presenting current recording descriptors
@@ -784,10 +781,56 @@ as evidence for a different prospective recording configuration. Actual WebRTC c
 three-to-two participant transition, cancellation/retry, closed transcript routes until commit,
 unchanged native output and audio after release. The human-transfer fixture additionally collects
 both connected humans, existing STT and recording writers, cancels preparation and continues the
-original audio/transcript conversation. It also rejects a future recording source change, preserves
-the current writers and retries successfully. Router checks cover discard, refresh, expiry and
+original audio/transcript conversation. It also prepares and discards a future recording source set,
+preserves current writers and retries successfully. Router checks cover discard, refresh, expiry and
 owner loss.
 These checks do not establish the milestone's wait/cue, recovery or browser/provider acceptance.
+
+## Prepared recording ownership and policy
+
+The candidate runner now prepares required recording tracks against the authoritative future
+membership and recording permission. The recorder keeps its live stream selection until policy
+adoption. Existing writers retain their handles; missing writers open through independently
+supervised `Recording.PreparedWriter` sources. Each source monitors both the recorder and the
+phase, and uses the original absolute deadline. Writer configuration is passed through separately
+from these lifecycle options. No new writer callback or dependency is required.
+
+Discard ends only new sources; existing artifact writers already drain when their source exits.
+Adoption removes each new source's phase monitor and timer while retaining its recorder monitor.
+The actual writer process, handoff and readiness descriptor remain unchanged. Remote storage stays
+asynchronous: cancellation initiates the existing bounded drain and does not wait for remote
+completion. Source ownership is the cleanup boundary, not a claim that remote storage has finished.
+
+The mixer prepares evidence for its existing recording subscriptions under the same candidate
+lease. Changed recording intervals receive exact prepared bindings which survive policy adoption;
+unchanged queues retain their descriptor. The recorder joins the policy barrier on its first
+candidate preparation, after identity/candidate validation and outside its callback loop. Ordinary
+recorder startup continues to use its existing mixer policy path. Once registered, recorder loss is
+an enforcer loss under the existing authority contract.
+
+Readiness observes the prepared subscriptions and local writers outside the recorder callback, then
+confirms the exact unchanged selection. Adoption requires that confirmation, an unexpired lease and
+the matching authoritative base. The recorder monitors required writer instances after confirmation;
+writer loss invalidates the pending policy even if no new readiness query has run. It performs local
+source adoption and installs the prepared track
+selection. Retained output sequence numbers come from the live streams at commit, so audio recorded
+during preparation cannot be replayed or restart a stream's numbering. No writer opens during commit.
+
+Unrelated policy refresh retains pending writers and the original deadline. A full-mix recorder
+with unchanged dependencies retains its exact descriptor, including when its track-preparation
+metadata is first initialized. An adopted descriptor can confirm readiness for a later unchanged
+preparation. Failure, discard and owner loss close pending sources; mixer loss still terminates
+the recorder during preparation. Known final-validation failures unwind recording handles along
+with the rest of the room's preparations.
+
+Design review rejected mutating live required tracks to discover readiness, copying stale sequence
+counters from the start of preparation, replacing existing writers, and adding provider-specific
+cancellation callbacks where source ownership already supplies cleanup. Engine checks cover private
+future writer creation, recording during preparation, adoption, delayed local readiness,
+discard/retry, phase loss, mixer/writer loss, full-mix retention and policy refresh. The WebRTC room check
+prepares changed human recording membership while preserving current writer resources, discards it
+and continues the original conversation. Preparing a native agent output tap for a different
+recording interval remains separate work; current exact tap evidence is still required there.
 
 ## Phone transport
 

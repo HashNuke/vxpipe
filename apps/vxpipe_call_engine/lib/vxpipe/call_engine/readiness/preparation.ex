@@ -78,7 +78,8 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
              prepared.resources,
              prepared.connections,
              prepared.preparations,
-             deadline
+             deadline,
+             options
            ) do
         {:ok, _result} = success ->
           success
@@ -90,9 +91,38 @@ defmodule Vxpipe.CallEngine.Readiness.Preparation do
     end
   end
 
-  defp finish(room, captured, resources, connections, preparations, deadline) do
-    with {:ok, tracks, recording} <- RecordingPreparation.prepare(captured, connections),
-         {:ok, resources} <- complete_resources(resources ++ recording, captured),
+  defp finish(room, captured, resources, connections, preparations, deadline, options \\ nil) do
+    with {:ok, tracks, recording, recording_preparations} <-
+           prepare_recording(captured, connections, options) do
+      case complete(
+             room,
+             captured,
+             resources ++ recording,
+             connections,
+             tracks,
+             preparations ++ recording_preparations,
+             deadline
+           ) do
+        {:ok, _prepared} = success ->
+          success
+
+        error ->
+          _ = PreparedConnection.discard_preparations(recording_preparations)
+          error
+      end
+    end
+  end
+
+  defp prepare_recording(captured, connections, nil) do
+    with {:ok, tracks, resources} <- RecordingPreparation.prepare(captured, connections),
+         do: {:ok, tracks, resources, []}
+  end
+
+  defp prepare_recording(captured, connections, options),
+    do: RecordingPreparation.prepare_candidate(captured, connections, options)
+
+  defp complete(room, captured, resources, connections, tracks, preparations, deadline) do
+    with {:ok, resources} <- complete_resources(resources, captured),
          :ok <- RoomInventory.validate(room, captured, remaining(deadline)) do
       _remaining = remaining(deadline)
 

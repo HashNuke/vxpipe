@@ -1,18 +1,18 @@
 # Transfer readiness implementation
 
 Implementation resumed following the goal continuation after the pause audit. The latest
-[prospective room checkpoint](#prospective-room-verification-checkpoint) composes the prepared
-connections with mixer, speech and transcript routing and passes all five root gates: 1,229 tests,
+[recording checkpoint](#prepare-recording-ownership-and-policy) adds prospective writer ownership,
+track selection and policy adoption and passes all five root gates: 1,243 tests,
 zero failures and 15 integration exclusions. The earlier notes-only audit and its uncommitted-work
 snapshot are retained below for accountability.
 
-**The end-to-end milestone remains unfinished.** Prospective recording preparation, private
-destination actors, startup/transfer orchestration, waits/cues and recovery still require integration
+**The end-to-end milestone remains unfinished.** Native agent recording taps across changed recording
+intervals, private destination actors, startup/transfer orchestration, waits/cues and recovery still require integration
 and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
 
 ## Detour update after the pause audit
 
-The additional groundwork since the audit addresses the room-output path:
+The additional groundwork since the audit addresses room output and recording preparation:
 
 - `bd7b1e1` added per-listener holds and released-frame generations, and acknowledged discarded
   shared frames so a retained producer could resume. These were prerequisites for using the
@@ -32,9 +32,13 @@ The additional groundwork since the audit addresses the room-output path:
   rather than assume client connection completion proved it. See
   [candidate connection selection](#select-candidate-connection-resources).
 - The whole-room runner assembles those connections with prepared mixer subscriptions
-  and transcript routing. Recording still uses installed-policy preparation and cannot yet stage
-  a changed recording policy safely. The current evidence and ownership gap are recorded in
+  and transcript routing. Its original recording-source guard is documented in
   [the prospective room checkpoint](#prepare-the-prospective-room-graph).
+- The [recording checkpoint](#prepare-recording-ownership-and-policy) now stages future recording
+  writers and tracks without changing live recording, retains existing sequence numbers, and adopts
+  the prepared mixer subscriptions. Review caught mixer/writer loss and retained-descriptor defects;
+  their red/green evidence is recorded below. Native agent tap preparation across changed recording
+  intervals and the complete lifecycle remain unfinished.
 
 No dependency versions or production deadlines changed in these committed checkpoints. These are
 component results: complete resource selection, startup/transfer orchestration, waits/cues,
@@ -1380,3 +1384,64 @@ The subsequent implementation and final gates are recorded in the verification c
 - Commit the whole-room preparation, router leases, recording failure boundary and their focused
   checks/documentation together. Preserve the separate `vxpipe-docs/` work. The milestone and index
   remain open; the future recording ownership gap above is still unresolved.
+
+## Prepare recording ownership and policy
+
+- The preceding whole-room checkpoint `02ab65e` passed all gates and made progress. Revalidated
+  that only the user's separate `vxpipe-docs/` work remains dirty before this checkpoint.
+- Recording preparation must stage future required tracks without mutating live streams, retain
+  existing writers, and adopt under the authoritative policy barrier. The existing writer port
+  already accepts a source process; artifact writers monitor that source and drain when it exits.
+  Use an independently supervised source for each newly prepared writer, bound to the recorder,
+  phase owner and original deadline. Adoption removes only the phase lease; discard ends only
+  pending sources. Existing writers and their sources remain untouched.
+- This avoids adding provider-specific cancellation or rebinding live writer sources. Opening a
+  local writer remains governed by the existing non-blocking writer contract; asynchronous remote
+  storage is outside the local readiness barrier. The subsequent recorder policy must also select
+  exact future mixer subscription evidence and preserve current recording until commit.
+- Six writer-source checks first failed on the missing `PreparedWriter.start/3` boundary, then
+  passed. The source keeps provider options separate from phase options, opens the existing writer
+  port with itself as source, and supports recorder-only adoption, scoped discard, phase/recorder
+  loss and actual deadline expiry. Adoption preserves the handle and source until recorder exit.
+  Logs use `vxpipe-recording-owner-red.log` and `vxpipe-recording-owner-green.log`.
+- Four recorder checks then failed at the absent `RoomRecording.prepare_policy/4` boundary. The
+  implementation stages only missing writers and future track selection, obtains exact prepared
+  recording subscriptions from the mixer, and confirms readiness outside recorder callbacks.
+  Policy adoption retains current live stream counters and adopts new source lifetimes. Initial
+  green evidence is in `vxpipe-recording-policy-green.log`.
+- A new mixer-loss check reproduced the pending-policy DOWN clause swallowing the mixer's death.
+  Giving the existing mixer-monitor clause priority restores recorder termination. Its red log is
+  `vxpipe-recording-mixer-loss-red.log`. The first broader run also showed that registering every
+  recorder as an enforcer at startup changed existing missing-recorder inventory behavior. Instead,
+  register on first candidate preparation after identity validation, outside the recorder loop.
+  Ordinary startup remains unchanged; a recorder participating in the policy barrier is thereafter
+  governed by the existing enforcer-loss contract.
+- Replaced the previous whole-room failure-only recording check with successful future preparation,
+  unchanged live writer evidence, discard and retry. It first failed at the old rejection boundary
+  (`vxpipe-recording-room-red.log`), then passed through the candidate recording runner. The seven
+  WebRTC checks in `vxpipe-recording-room-green.log` continue the original audio/transcript flow.
+- Two further retention checks reproduced unnecessary descriptor replacement for unchanged full-mix
+  recording and failure to confirm a new preparation through a previously adopted descriptor.
+  Readiness now compares actual selections/handles/subscriptions independently of initialization
+  metadata and confirms a later matching pending selection through the retained binding. Red/green
+  logs use `vxpipe-recording-retained-`. No writer/provider restart or deadline increase was needed.
+- Final focused engine coverage passes 52 tests with zero failures (`vxpipe-recording-final-focused.log`);
+  strict Credo also passes. Native agent-output tap evidence is still installed-policy-only, so an
+  agent recording requirement whose recording interval changes remains explicitly unsupported in
+  candidate output selection. This checkpoint completes recorder track/writer staging, not that
+  native tap boundary or the complete lifecycle. Root verification follows.
+- The first full root run passed all five gates with 1,242 tests. Final ownership review then
+  reproduced a required writer dying after its ready report without invalidating recorder adoption.
+  The new check failed at the absent failure notification (`vxpipe-recording-writer-loss-red.log`).
+  The recorder now monitors the exact required writer instances when confirming readiness, in
+  addition to its phase and newly prepared sources. Losing one invalidates pending adoption and
+  closes pending writers. The expanded focused run passes 53 tests; final root gates repeat for
+  this runtime correction under `vxpipe-recording-policy-verified-root-`.
+- Final root verification passes all five gates: formatting, warnings-as-errors compilation,
+  strict Credo, 1,243 tests with zero failures and 15 integrations excluded, and unused dependencies.
+  Every retained per-command result is exit zero and all eight application suites completed. Local
+  documentation links/anchors and `git diff --check` pass. No dependency version, production timeout,
+  running server, browser session or live provider call changed for this checkpoint.
+- Keep the implementation, focused checks and documentation together and preserve concurrent
+  `vxpipe-docs/` changes, including the user's separate `ae699c5` logo commit. The milestone/index
+  remain open; native agent tap intervals and startup/transfer lifecycle acceptance are still required.

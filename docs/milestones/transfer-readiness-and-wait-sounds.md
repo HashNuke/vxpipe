@@ -791,3 +791,18 @@ when its policy interval was unchanged. Such a source change now returns `policy
 without touching current writers; other prepared resources are discarded and the original room can
 be prepared again. The WebRTC check proves this failure/retry boundary. Independent prospective
 recording ownership and adoption remain required to support that transition successfully.
+
+Candidate recording preparation now supports a future recording track set without changing live
+writer selection. New writers have separately supervised sources tied to the recorder, phase and
+original deadline; adoption retains their handles, and cancellation ends only pending sources.
+Prepared mixer recording subscriptions survive changed recording permission, and existing stream
+sequence numbers continue across commit. The whole-room runner includes these recording resources
+and cancellation handles. The installed-policy query retains its explicit rejection of future sets.
+
+Fifty-three focused engine tests and seven WebRTC tests pass. Coverage includes private writer creation,
+delayed local readiness, actual recording before and after adoption, discard/retry, source/phase
+loss, mixer/writer loss, unchanged full-mix evidence and readiness refresh after an earlier adoption.
+All five final root gates pass with 1,243 tests, zero failures and 15 integration exclusions.
+Native agent output tap preparation across changed
+recording intervals, private destination actors and startup/transfer orchestration remain required;
+the milestone and its acceptance checklists remain open.

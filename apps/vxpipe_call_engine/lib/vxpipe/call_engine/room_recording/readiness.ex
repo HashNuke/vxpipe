@@ -14,8 +14,20 @@ defmodule Vxpipe.CallEngine.RoomRecording.Readiness do
          do: {:ok, [resource | dependencies]}
   end
 
-  defp observe(recording) do
-    with {:ok, binding} <- GenServer.call(recording, :readiness_binding, 1_000),
+  def prepared_readiness(recording, token) do
+    with {:ok, resource, status, _dependencies} <- observe(recording, token),
+         do: {:ok, resource, status}
+  end
+
+  def prepared_resources(recording, token) do
+    with {:ok, resource, _status, dependencies} <- observe(recording, token),
+         do: {:ok, [resource | dependencies]}
+  end
+
+  defp observe(recording, token \\ nil) do
+    request = if token, do: {:prepared_readiness_binding, token}, else: :readiness_binding
+
+    with {:ok, binding} <- GenServer.call(recording, request, 1_000),
          {:ok, subscriptions} <- collect(binding.subscriptions, &Subscription.readiness/1),
          {:ok, writers} <- collect(binding.handles, &writer_readiness(binding.writer, &1)) do
       interval = interval(subscriptions)
@@ -28,13 +40,26 @@ defmodule Vxpipe.CallEngine.RoomRecording.Readiness do
       }
 
       dependencies = for {%Resource{} = dependency, _status} <- results, do: dependency
-      {:ok, resource, status(binding, interval, results), dependencies}
+      status = status(binding, interval, results)
+
+      with :ok <- confirm(recording, binding, resource, status, dependencies),
+           do: {:ok, resource, status, dependencies}
     else
       _unavailable -> {:error, :unavailable}
     end
   catch
     :exit, _reason -> {:error, :unavailable}
   end
+
+  defp confirm(recording, %{preparation_token: token} = binding, resource, status, dependencies),
+    do:
+      GenServer.call(
+        recording,
+        {:confirm_prepared_recording, token, binding, resource, status, dependencies},
+        1_000
+      )
+
+  defp confirm(_recording, _binding, _resource, _status, _dependencies), do: :ok
 
   def binding(state) do
     streams = state.streams |> Enum.sort() |> Enum.map(&elem(&1, 1))

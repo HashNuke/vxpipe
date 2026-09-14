@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Candidate}
 
   alias Vxpipe.CallEngine.RoomMixer.{
+    PreparedRecordings,
     PreparedSubscriptions,
     SubscriptionCatalog,
     SubscriptionReadiness
@@ -87,7 +88,15 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
              end)
            ) do
       pending = if state.pending_policy, do: state.pending_policy, else: lease(options)
-      pending = Map.merge(pending, %{candidate: candidate, subscriptions: subscriptions})
+      recordings = PreparedRecordings.capture(state, candidate.snapshot, pending.token)
+
+      pending =
+        Map.merge(pending, %{
+          candidate: candidate,
+          subscriptions: subscriptions,
+          recordings: recordings
+        })
+
       state = %{state | pending_policy: pending}
       resource = resource(state, candidate.snapshot)
 
@@ -96,15 +105,22 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
           do: resource,
           else: alias_resource(resource, pending.token)
 
-      resources = [
-        resource
-        | PreparedSubscriptions.resources(state, subscriptions, candidate.snapshot, pending.token)
-      ]
+      resources =
+        [
+          resource
+          | PreparedSubscriptions.resources(
+              state,
+              subscriptions,
+              candidate.snapshot,
+              pending.token
+            )
+        ] ++ PreparedRecordings.resources(recordings)
 
       {:ok,
        %{
          token: pending.token,
          resources: resources,
+         recording_subscriptions: PreparedRecordings.handles(recordings),
          subscriptions: PreparedSubscriptions.handles(subscriptions, resources, pending.token)
        }, state}
     else
@@ -126,13 +142,14 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
   end
 
   def subscription_readiness(%{pending_policy: %{token: lease}} = state, lease, id, token) do
-    with {:ok, snapshot, subscriptions, status} <- selection(state, lease),
-         true <- Map.has_key?(subscriptions.selected, id),
-         {:ok, resource, :ready} <-
-           PreparedSubscriptions.binding(state, subscriptions, snapshot, id, token) do
-      {:ok, %{resource | binding: {id, :prepared_policy, lease}}, status}
+    if Map.has_key?(state.pending_policy.recordings, id) do
+      with {:ok, _snapshot, _subscriptions, status} <- selection(state, lease),
+           %{handle: %{token: ^token}, resource: resource} <-
+             Map.fetch!(state.pending_policy.recordings, id),
+           do: {:ok, resource, status},
+           else: (_unavailable -> {:error, :unavailable})
     else
-      _unavailable -> {:error, :unavailable}
+      participant_readiness(state, lease, id, token)
     end
   end
 
@@ -143,6 +160,17 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
 
       _unavailable ->
         {:error, :unavailable}
+    end
+  end
+
+  defp participant_readiness(state, lease, id, token) do
+    with {:ok, snapshot, subscriptions, status} <- selection(state, lease),
+         true <- Map.has_key?(subscriptions.selected, id),
+         {:ok, resource, :ready} <-
+           PreparedSubscriptions.binding(state, subscriptions, snapshot, id, token) do
+      {:ok, %{resource | binding: {id, :prepared_policy, lease}}, status}
+    else
+      _unavailable -> {:error, :unavailable}
     end
   end
 
@@ -182,7 +210,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
            | pending_policy: nil,
              adopted_policy_token: pending.token,
              subscriptions:
-               PreparedSubscriptions.adopt(state, pending.subscriptions, snapshot, pending.token)
+               state
+               |> PreparedSubscriptions.adopt(pending.subscriptions, snapshot, pending.token)
+               |> PreparedRecordings.adopt(pending.recordings, pending.token)
          }}
       else
         {:error, :policy_not_ready}
@@ -208,7 +238,9 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
            state,
            pending.subscriptions,
            pending.candidate.snapshot
-         ), do: fail(state), else: state
+         ) or not PreparedRecordings.valid?(state, pending.recordings, pending.candidate.snapshot),
+       do: fail(state),
+       else: state
   end
 
   defp selection(%{pending_policy: %{token: token} = pending} = state, token) do
@@ -234,7 +266,8 @@ defmodule Vxpipe.CallEngine.RoomMixer.PolicyPreparation do
     do:
       not pending.failed? and pending.deadline_ms > now() and
         pending.candidate.base_snapshot == state.policy and
-        PreparedSubscriptions.valid?(state, pending.subscriptions, pending.candidate.snapshot)
+        PreparedSubscriptions.valid?(state, pending.subscriptions, pending.candidate.snapshot) and
+        PreparedRecordings.valid?(state, pending.recordings, pending.candidate.snapshot)
 
   defp compatible_lease(nil, _options), do: :ok
 

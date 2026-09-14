@@ -8,7 +8,14 @@ defmodule Vxpipe.CallEngine.RoomRecording.State do
     :accepted_chunks,
     :rejected_chunks
   ]
-  defstruct @enforce_keys ++ [readiness_resource: nil, prepared_interval: nil]
+  defstruct @enforce_keys ++
+              [
+                readiness_resource: nil,
+                prepared_interval: nil,
+                format: nil,
+                policy: nil,
+                pending_policy: nil
+              ]
 
   @type t :: %__MODULE__{
           configuration: Vxpipe.CallEngine.RoomRecording.Configuration.t(),

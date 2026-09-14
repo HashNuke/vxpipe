@@ -28,7 +28,8 @@ defmodule Vxpipe.CallEngine.RoomRecording.Preparation do
 
   defp current_policy(_policy, _tracks, _interval), do: :ok
 
-  defp validate_tracks(tracks, config, policy) when is_list(tracks) do
+  @doc false
+  def validate_tracks(tracks, config, policy) when is_list(tracks) do
     if length(tracks) <= @maximum_tracks and length(tracks) == length(Enum.uniq(tracks)) and
          Enum.all?(tracks, &valid_track?(&1, config, policy)) do
       :ok
@@ -37,7 +38,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Preparation do
     end
   end
 
-  defp validate_tracks(_tracks, _config, _policy), do: {:error, :invalid_recording_tracks}
+  def validate_tracks(_tracks, _config, _policy), do: {:error, :invalid_recording_tracks}
 
   defp valid_track?({:individual_track, participant, _connection, _track} = mode, config, policy) do
     MapSet.member?(policy.present, participant) and

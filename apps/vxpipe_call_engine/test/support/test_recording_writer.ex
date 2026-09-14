@@ -28,6 +28,8 @@ defmodule Vxpipe.CallEngine.TestRecordingWriter do
         binding: {stream.stream_id, Keyword.get(options, :readiness)}
       )
 
+    resource = %{resource | instance: Keyword.get(options, :resource_instance, resource.instance)}
+
     {:ok,
      %{
        observer: observer,

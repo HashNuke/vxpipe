@@ -12,6 +12,32 @@ defmodule Vxpipe.CallEngine.Readiness.RecordingPreparation do
     end
   end
 
+  def prepare_candidate(captured, connections, options) do
+    case Map.fetch(captured.room, :recording) do
+      :error ->
+        {:ok, [], [], []}
+
+      {:ok, recording} when is_pid(recording) ->
+        prepare_candidate_recording(recording, captured, connections, options)
+
+      _missing ->
+        ResourceQuery.failure(:recording, :room, :missing)
+    end
+  end
+
+  defp prepare_candidate_recording(recording, captured, connections, options) do
+    with {:ok, agent_tracks, outputs} <- RecordingOutputs.prepare(captured, connections),
+         {:ok, tracks} <- tracks(captured, connections, agent_tracks),
+         {:ok, prepared} <-
+           RoomRecording.prepare_policy(recording, captured.candidate, tracks, options) do
+      handles = [%{adapter: RoomRecording, instance: recording, token: prepared.token}]
+      {:ok, tracks, prepared.resources ++ outputs, handles}
+    else
+      {:error, %{kind: _kind}} = failure -> failure
+      _unavailable -> ResourceQuery.failure(:recording, :room, :preparation_failed)
+    end
+  end
+
   defp prepare_recording(recording, captured, connections) do
     policy = captured.candidate.snapshot
 

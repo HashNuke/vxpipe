@@ -6,8 +6,17 @@ defmodule Vxpipe.CallEngine.RoomRecording do
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
   alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.RoomMixer
-  alias Vxpipe.CallEngine.RoomRecording.{Configuration, Preparation, Readiness, State, Streams}
+
+  alias Vxpipe.CallEngine.RoomRecording.{
+    Configuration,
+    PolicyPreparation,
+    Preparation,
+    Readiness,
+    State,
+    Streams
+  }
 
   @call_timeout 1_000
 
@@ -34,6 +43,17 @@ defmodule Vxpipe.CallEngine.RoomRecording do
   @impl Vxpipe.CallEngine.Readiness.Adapter
   defdelegate readiness(recording), to: Readiness
 
+  @impl Vxpipe.CallEngine.Readiness.Adapter
+  def readiness_binding(%{instance: recording, binding: {_id, :prepared_policy, token}}),
+    do: Readiness.prepared_readiness(recording, token)
+
+  def readiness_binding(%{instance: recording}), do: readiness(recording)
+
+  def prepare_policy(recording, candidate, tracks, options),
+    do: PolicyPreparation.request(recording, candidate, tracks, options)
+
+  def discard_policy(recording, token), do: safe_call(recording, {:discard_policy, token})
+
   @doc "Returns the recorder and its required local writers/subscriptions for lifecycle monitoring."
   defdelegate readiness_resources(recording), to: Readiness, as: :resources
 
@@ -50,6 +70,7 @@ defmodule Vxpipe.CallEngine.RoomRecording do
       {:ok,
        %State{
          configuration: configuration,
+         format: format,
          readiness_resource: Resource.new(:recording, :room, __MODULE__, configuration),
          mixer_monitor: Process.monitor(configuration.mixer),
          streams: streams,
@@ -64,15 +85,58 @@ defmodule Vxpipe.CallEngine.RoomRecording do
 
   @impl true
   def handle_call(:readiness_binding, _from, state) do
-    {:reply, {:ok, Readiness.binding(state)}, state}
+    {:reply, {:ok, PolicyPreparation.current_binding(state)}, state}
   end
 
-  def handle_call({:prepare_tracks, tracks, interval}, _from, state) do
+  def handle_call(:preparation_configuration, _from, state),
+    do: {:reply, {:ok, state.configuration}, state}
+
+  def handle_call({:prepared_readiness_binding, token}, _from, state),
+    do: {:reply, PolicyPreparation.binding(state, token), state}
+
+  def handle_call(
+        {:confirm_prepared_recording, token, binding, resource, status, dependencies},
+        _from,
+        state
+      ) do
+    case PolicyPreparation.confirm(state, token, binding, resource, status, dependencies) do
+      {:ok, state} -> {:reply, :ok, state}
+      error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:prepare_policy, candidate, tracks, subscriptions, options}, _from, state) do
+    case PolicyPreparation.begin(state, candidate, tracks, subscriptions, options) do
+      {:ok, token, state} -> {:reply, {:ok, token}, state}
+      error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:discard_policy, token}, _from, state) do
+    case PolicyPreparation.discard(state, token) do
+      {:ok, state} -> {:reply, :ok, state}
+      error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:vxpipe_apply_media_policy, snapshot}, _from, state) do
+    with {:ok, snapshot} <- Snapshot.prepare(snapshot, state.policy),
+         {:ok, state} <- PolicyPreparation.install(state, snapshot) do
+      {:reply, :ok, %{state | policy: snapshot}}
+    else
+      error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:prepare_tracks, tracks, interval}, _from, %{pending_policy: nil} = state) do
     case Preparation.prepare(state, tracks, interval) do
       {:ok, state} -> {:reply, :ok, state}
       {:error, reason, state} -> {:reply, {:error, reason}, state}
     end
   end
+
+  def handle_call({:prepare_tracks, _tracks, _interval}, _from, state),
+    do: {:reply, {:error, :preparation_conflict}, state}
 
   def handle_call(:stats, _from, state) do
     stats = %{
@@ -95,11 +159,21 @@ defmodule Vxpipe.CallEngine.RoomRecording do
     end
   end
 
+  def handle_info({:recording_policy_expired, token}, %{pending_policy: %{token: token}} = state),
+    do: {:noreply, PolicyPreparation.fail(state)}
+
   def handle_info(
         {:DOWN, monitor, :process, mixer, reason},
         %{configuration: %{mixer: mixer}, mixer_monitor: monitor} = state
       ) do
     {:stop, {:shutdown, {:room_mixer_unavailable, reason}}, state}
+  end
+
+  def handle_info({:DOWN, monitor, :process, _pid, _reason}, %{pending_policy: pending} = state)
+      when not is_nil(pending) do
+    if monitor == pending.monitor or Map.has_key?(pending.monitors, monitor),
+      do: {:noreply, PolicyPreparation.fail(state)},
+      else: {:noreply, state}
   end
 
   def handle_info(_message, state), do: {:noreply, state}
