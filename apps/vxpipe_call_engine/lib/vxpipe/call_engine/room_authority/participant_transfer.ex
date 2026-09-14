@@ -8,22 +8,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
-  alias Vxpipe.CallEngine.RoomAuthority.{SpokenHistory, Startup, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{SpokenHistory, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
     Cleanup,
-    Committer,
-    Completion,
     DestinationParticipant,
     History,
     HumanHandoff,
     HumanPreparation,
     Pending,
-    Phase,
-    Preparation,
-    Restoration,
-    SourceRestorer
+    Preparation
   }
 
   @spec begin(Request.t(), GenServer.from(), State.t()) ::
@@ -89,10 +84,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         }
 
         held =
-          if destination.kind == :human,
-            do:
-              MapSet.new(state.connections, fn {_id, connection} -> connection.participant_id end),
-            else: state.held_participant_ids
+          MapSet.new(state.connections, fn {_id, connection} -> connection.participant_id end)
 
         {:noreply, %{state | pending_participant_transfer: pending, held_participant_ids: held}}
 
@@ -155,21 +147,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
       ) do
     cond do
       deadline_elapsed?(pending) ->
-        Phase.cancel(pending)
-        Cleanup.discard(preparation, state)
-        restore_or_fail(pending, :deadline_elapsed, state)
+        HumanHandoff.failed(%{pending | preparation: preparation}, :deadline_elapsed, state)
 
       Authorizer.authorize(pending.request, state) != :ok ->
-        Phase.cancel(pending)
-        Cleanup.discard(preparation, state)
-
-        reject_pending(pending, :source_authority_changed, %{
+        HumanHandoff.failed(
+          %{pending | preparation: preparation},
+          :source_authority_changed,
           state
-          | pending_participant_transfer: nil
-        })
+        )
 
       true ->
-        commit_prepared(pending, preparation, state)
+        HumanHandoff.prepared(pending, preparation, state)
     end
   end
 
@@ -228,110 +216,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
           state
       ) do
-    if HumanHandoff.pending?(pending, state) do
-      HumanHandoff.failed(pending, reason, state)
-    else
-      Phase.cancel(pending)
-      Cleanup.discard_destination(pending.request)
-      restore_or_fail(pending, reason, state)
-    end
+    HumanHandoff.failed(pending, reason, state)
   end
 
-  def worker_failed(
-        reference,
-        _reason,
-        %State{
-          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
-        } =
-          state
-      ) do
-    settle_task(restoration)
-
-    _ =
-      RoomTransferSupervisor.cleanup_restoration(
-        restoration.request,
-        restoration.task.pid
-      )
-
-    finish_restoration(restoration, :failed, state)
-  end
-
-  def worker_failed(_reference, _reason, %State{} = state), do: {:noreply, state}
+  def worker_failed(_reference, _reason, state), do: {:noreply, state}
 
   @spec deadline_elapsed(reference(), State.t()) :: {:noreply, State.t()}
-  def deadline_elapsed(
-        reference,
-        %State{
-          pending_participant_transfer:
-            %Pending{task: %Task{ref: reference}, preparation: %HumanPreparation{}} = pending
-        } =
-          state
-      ) do
-    Process.demonitor(reference, [:flush])
-    cancel_timer(pending.timer)
-    HumanHandoff.deadline(pending, state)
-  end
-
   def deadline_elapsed(
         reference,
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
           state
       ) do
-    Process.demonitor(reference, [:flush])
-    cancel_timer(pending.timer)
-
-    if HumanHandoff.pending?(pending, state) do
-      _ = RoomTransferSupervisor.terminate(pending.request.incarnation_id, pending.task.pid)
-      HumanHandoff.deadline(pending, state)
-    else
-      _ = RoomTransferSupervisor.cleanup_destination(pending.request, pending.task.pid)
-      restore_or_fail(pending, :deadline_elapsed, state)
-    end
+    HumanHandoff.deadline(pending, state)
   end
 
   def deadline_elapsed(_reference, %State{} = state), do: {:noreply, state}
-
-  @spec restored(reference(), map(), State.t()) :: {:noreply, State.t()}
-  def restored(
-        reference,
-        capability,
-        %State{
-          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
-        } =
-          state
-      )
-      when is_map(capability) do
-    settle_task(restoration)
-    {outcome, state} = SourceRestorer.activate(capability, restoration.request, state)
-    finish_restoration(restoration, outcome, state)
-  end
-
-  def restored(_reference, capability, %State{} = state) when is_map(capability) do
-    _ = Startup.discard_text_to_speech(capability, state)
-    {:noreply, state}
-  end
-
-  @spec restoration_deadline_elapsed(reference(), State.t()) :: {:noreply, State.t()}
-  def restoration_deadline_elapsed(
-        reference,
-        %State{
-          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
-        } =
-          state
-      ) do
-    Process.demonitor(reference, [:flush])
-    cancel_timer(restoration.timer)
-
-    _ =
-      RoomTransferSupervisor.cleanup_restoration(
-        restoration.request,
-        restoration.task.pid
-      )
-
-    finish_restoration(restoration, :timed_out, state)
-  end
-
-  def restoration_deadline_elapsed(_reference, %State{} = state), do: {:noreply, state}
 
   @spec worker_down(reference(), term(), State.t()) :: {:handled, State.t()} | :unhandled
   def worker_down(
@@ -341,26 +240,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
           state
       ) do
     {:noreply, state} = worker_failed(reference, :preparation_process_down, state)
-    {:handled, state}
-  end
-
-  def worker_down(
-        reference,
-        _reason,
-        %State{
-          pending_participant_transfer: %Restoration{task: %Task{ref: reference}} = restoration
-        } =
-          state
-      ) do
-    cancel_timer(restoration.timer)
-
-    _ =
-      RoomTransferSupervisor.cleanup_restoration(
-        restoration.request,
-        restoration.task.pid
-      )
-
-    {:noreply, state} = finish_restoration(restoration, :failed, state)
     {:handled, state}
   end
 
@@ -405,63 +284,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     end
   end
 
-  defp commit_prepared(pending, preparation, state) do
-    case Committer.commit(pending, preparation, state) do
-      {:ok, result, state} ->
-        {:noreply, Completion.finish(pending, result, state)}
-
-      {:error, :destination_unavailable} ->
-        Phase.cancel(pending)
-        Cleanup.discard(preparation, state)
-        restore_or_fail(pending, :destination_commit_unavailable, state)
-    end
-  end
-
-  defp settle_task(pending) do
-    Process.demonitor(pending.task.ref, [:flush])
-    cancel_timer(pending.timer)
-  end
-
-  defp cancel_timer(timer) do
-    _ = Process.cancel_timer(timer)
-    :ok
-  end
-
   defp deadline_elapsed?(pending) do
     System.monotonic_time(:millisecond) >= pending.deadline_ms
-  end
-
-  defp fail_pending(pending, cause, state) do
-    state = History.failed(state, pending.request, cause, :not_required)
-    GenServer.reply(pending.from, {:error, :unavailable})
-    {:noreply, state}
-  end
-
-  defp reject_pending(pending, cause, state) do
-    state = History.failed(state, pending.request, cause, :not_required)
-    GenServer.reply(pending.from, {:error, :rejected})
-    {:noreply, state}
-  end
-
-  defp restore_or_fail(pending, cause, state) do
-    case SourceRestorer.start(pending.request, pending.from, cause, state) do
-      {:ok, restoration} ->
-        {:noreply, %{state | pending_participant_transfer: restoration}}
-
-      :not_required ->
-        fail_pending(pending, cause, %{state | pending_participant_transfer: nil})
-
-      {:error, :unavailable} ->
-        state = History.failed(state, pending.request, cause, :failed)
-        GenServer.reply(pending.from, {:error, :unavailable})
-        {:noreply, %{state | pending_participant_transfer: nil}}
-    end
-  end
-
-  defp finish_restoration(restoration, outcome, state) do
-    state = History.failed(state, restoration.request, restoration.cause, outcome)
-    GenServer.reply(restoration.from, {:error, :unavailable})
-    {:noreply, %{state | pending_participant_transfer: nil}}
   end
 
   defp projected_history(spoken_history, %{kind: :agent, transfer_history: transfer_history}) do

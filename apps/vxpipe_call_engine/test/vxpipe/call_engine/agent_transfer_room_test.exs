@@ -398,7 +398,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       %{
         "cause" => "destination_plan_unavailable",
         "outcome" => "failed",
-        "restoration" => "not_required"
+        "restoration" => "completed"
       }
     )
 
@@ -441,7 +441,6 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     caller = Map.fetch!(plan.participants, "caller")
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
-    reception_participant_id = reception.participant_id
     billing_participant_id = billing.participant_id
 
     assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
@@ -479,17 +478,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     assert initial_correlation == initial.correlation_id
 
     held = send_command(plan, room, caller, "Can you answer something else?")
-    assert :ok = CallEngine.send_text(held)
 
-    assert_receive {:vxpipe_event,
-                    %TextOutput{
-                      participant_id: ^reception_participant_id,
-                      correlation_id: held_correlation,
-                      text: "Please hold while I finish the current request."
-                    }},
-                   2_000
-
-    assert held_correlation == held.correlation_id
+    assert {:error, %Vxpipe.CallEngine.Error{code: :conversation_held}} =
+             CallEngine.send_text(held)
 
     assert_receive {:vxpipe_event,
                     %ToolCallFailed{
@@ -517,7 +508,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       %{
         "cause" => "deadline_elapsed",
         "outcome" => "failed",
-        "restoration" => "not_required"
+        "restoration" => "completed"
       }
     )
 
@@ -547,6 +538,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert [%Message{role: :system, content: "Route callers safely."} | _history] =
              next_request.messages
+
+    refute Enum.any?(next_request.messages, &(&1.content == held.content))
 
     assert {:ok, next_response} = ModelResponse.new(text: "Yes.")
     send(next_provider, {:test_agent_runtime_response, {:ok, next_response}})
@@ -597,10 +590,11 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       end
     end)
 
-    send(blocked_preparer, :release_test_agent_runtime_model)
-
     assert {:ok, scope} = Phase.scope(preparation_task.pid)
     assert scope.authority == authority
+    worker_monitor = Process.monitor(scope.worker.pid)
+    send(blocked_preparer, :release_test_agent_runtime_model)
+    assert_receive {:DOWN, ^worker_monitor, :process, _worker, :normal}, 2_000
 
     destination_key =
       {:participant_supervisor, plan.tenant_id, plan.room_id, billing.participant_id}
@@ -638,9 +632,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       billing,
       "destination-exited-before-commit",
       %{
-        "cause" => "destination_commit_unavailable",
+        "cause" => "destination_media_unavailable",
         "outcome" => "failed",
-        "restoration" => "not_required"
+        "restoration" => "completed"
       }
     )
 
@@ -708,6 +702,14 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert_receive {:test_tts_transport_started, restored_transport, _connection}, 2_000
 
+    refute_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "restore-source-after-failure"}},
+                   50
+
+    TestTextToSpeechTransport.deliver_control(
+      restored_transport,
+      ~s({"type":"Connected","request_id":"restored-source"})
+    )
+
     assert_receive {:vxpipe_event,
                     %ToolCallFailed{
                       tool_call_id: "restore-source-after-failure",
@@ -747,7 +749,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     refute_receive {:test_tts_transport_started, _third_transport, _connection}, 100
   end
 
-  test "a timed-out source restoration leaves room authority responsive" do
+  test "source restoration stays asynchronous and closes the room when required speech times out" do
     start_counter = :atomics.new(1, [])
 
     configure_text_to_speech(
@@ -801,19 +803,11 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       send(blocked_transport, :release_test_tts_transport_start)
     end)
 
-    probe = Process.send_after(self(), :probe_restoration_deadline, 850)
-    assert_receive :probe_restoration_deadline, 1_000
-    _ = Process.cancel_timer(probe)
-
+    authority_monitor = Process.monitor(authority)
     snapshot = Task.async(fn -> RoomAuthority.snapshot(plan.tenant_id, plan.room_id) end)
     assert {:ok, _snapshot} = Task.yield(snapshot, 250)
 
-    assert_receive {:vxpipe_event,
-                    %ToolCallFailed{
-                      tool_call_id: "timed-source-restoration",
-                      name: "transfer",
-                      reason: :tool_failed
-                    }},
+    assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :handoff_recovery_failed},
                    2_000
 
     assert_archived_transfer(
@@ -834,7 +828,6 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     assert_receive {:test_tts_transport_started, ^blocked_transport, _connection}, 2_000
     assert_receive {:DOWN, ^blocked_monitor, :process, ^blocked_transport, _reason}, 2_000
 
-    assert %{text_to_speech_capability: nil} = :sys.get_state(authority)
     refute_receive {:test_tts_transport_started, _other_transport, _connection}, 100
   end
 

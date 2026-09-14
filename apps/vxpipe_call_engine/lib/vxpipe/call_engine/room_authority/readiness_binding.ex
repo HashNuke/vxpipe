@@ -90,9 +90,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
 
   defp participant_bindings(plan, state) do
     Map.new(plan.participants, fn {_key, participant} ->
+      activation = activation_id(participant, state)
+
       model =
-        if participant.activation_id != nil,
-          do: AgentActivationSupervisor.whereis_child(participant.activation_id, :coordinator)
+        if activation != nil,
+          do: AgentActivationSupervisor.whereis_child(activation, :coordinator)
 
       {participant.participant_id,
        %{
@@ -104,6 +106,27 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ReadinessBinding do
            )
        }}
     end)
+  end
+
+  defp activation_id(participant, state) do
+    id = participant.participant_id
+
+    case state do
+      %{
+        pending_participant_transfer: %{
+          preparation: %{
+            destination: %{participant: %{participant_id: ^id, activation_id: activation}}
+          }
+        }
+      } ->
+        activation
+
+      %{text_capability: %{participant_id: ^id, activation_id: activation}} ->
+        activation
+
+      _other ->
+        participant.activation_id
+    end
   end
 
   defp attempt(%{handoff: %{stage: :recovering}}), do: nil

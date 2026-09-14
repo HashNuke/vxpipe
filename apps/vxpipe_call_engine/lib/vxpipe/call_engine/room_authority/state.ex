@@ -62,8 +62,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
           transcript_router: nil | pid(),
           pending_participant_transfer:
             nil
-            | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending.t()
-            | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Restoration.t(),
+            | Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Pending.t(),
           pending_agent_teardowns: %{optional(pid()) => map()},
           pending_connection_promotions: %{optional(String.t()) => map()},
           participant_monitors: %{optional(reference()) => String.t()},

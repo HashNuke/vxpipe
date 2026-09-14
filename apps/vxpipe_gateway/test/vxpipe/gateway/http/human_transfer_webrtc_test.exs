@@ -83,6 +83,82 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     :ok
   end
 
+  test "AI handoff waits for destination voice readiness and cues before its greeting" do
+    plan = compile_plan(agent_destination: true)
+    caller = Map.fetch!(plan.participants, "caller")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+    source_monitor = Process.monitor(source_tts)
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    client =
+      plan |> issue_session(room, caller.participant_id) |> then(&connect(&1.session_id, "chat"))
+
+    assert :ok = send_rtvi_text(client, "transfer-to-agent", true)
+    assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "agent-handoff",
+               name: "transfer",
+               arguments: %{"destination" => "billing"}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_transport_started, destination_tts, _}, 2_000
+    refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 150
+    refute_receive {:test_tts_control, ^destination_tts, _}, 50
+    assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+
+    assert :ok = send_rtvi_text(client, "held-during-agent-transfer")
+
+    assert %{"id" => "held-during-agent-transfer"} =
+             await_sideband(client, "error-response", 2_000)
+
+    TestTextToSpeechTransport.deliver_control(
+      destination_tts,
+      ~s({"type":"Connected","request_id":"destination-ready"})
+    )
+
+    assert :ok = await_tone(client, 1_000, 3_000)
+    assert_receive {:test_tts_control, ^destination_tts, speak}, 3_000
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Billing is ready."}
+    assert_receive {:test_tts_control, ^destination_tts, _flush}, 2_000
+    assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      destination_tts,
+      ~s({"type":"SpeechStarted","speech_id":"billing"})
+    )
+
+    pcm =
+      for sample <- 0..4_799, into: <<>> do
+        amplitude = round(12_000 * :math.sin(2 * :math.pi() * 1_500 * sample / 48_000))
+        <<amplitude::little-signed-16>>
+      end
+
+    reference = TestTextToSpeechTransport.deliver_audio_with_result(destination_tts, pcm)
+    assert_receive {:test_tts_audio_result, ^reference, :ok}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      destination_tts,
+      ~s({"type":"SpeechMetadata","speech_id":"billing"})
+    )
+
+    assert :ok = await_tone(client, 1_500, 2_000)
+    assert :ok = send_rtvi_text(client, "talk-to-billing")
+
+    assert_receive {:test_agent_runtime_stream, _provider,
+                    %{messages: [%{content: "Handle billing requests."} | _]}},
+                   2_000
+  end
+
   for wait_mode <- [:defaults, :custom_url, :silent_caller, :silent_all] do
     @tag wait_mode: wait_mode
     test "human handoff gates and then relays conversation with #{wait_mode} waits", %{
@@ -511,9 +587,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
-  for loss <- [:destination, :phase, :wait_player] do
+  for loss <- [:destination, :phase, :wait_player, :agent_destination] do
     test "recovers the held caller after #{loss} loss without replacing source media" do
-      plan = compile_plan()
+      agent_destination? = unquote(loss) == :agent_destination
+      plan = compile_plan(agent_destination: agent_destination?)
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
       assert {:ok, room} = CallEngine.start_call(plan)
@@ -542,12 +619,16 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                ToolCall.new(
                  id: "recover-human-transfer",
                  name: "transfer",
-                 arguments: %{"destination" => "human-support", "reason" => "Connect support."}
+                 arguments:
+                   if(agent_destination?,
+                     do: %{"destination" => "billing"},
+                     else: %{"destination" => "human-support", "reason" => "Connect support."}
+                   )
                )
 
       assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
       send(source_provider, {:test_agent_runtime_response, {:ok, response}})
-      assert_receive {:test_tts_transport_started, _briefing_tts, _}, 2_000
+      assert_receive {:test_tts_transport_started, destination_tts, _}, 2_000
       assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
       assert {:ok, acknowledgement} = ModelResponse.new(text: "I am connecting support.")
       send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
@@ -561,17 +642,25 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       end
 
       support_client =
-        plan
-        |> issue_session(room, support.participant_id, release)
-        |> then(&connect(&1.session_id, "vxpipe"))
+        unless agent_destination? do
+          client =
+            plan
+            |> issue_session(room, support.participant_id, release)
+            |> then(&connect(&1.session_id, "vxpipe"))
 
-      assert %{"type" => "transfer.preparation"} =
-               await_sideband(support_client, "transfer.preparation", 2_000)
+          assert %{"type" => "transfer.preparation"} =
+                   await_sideband(client, "transfer.preparation", 2_000)
+
+          client
+        end
 
       {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
       pending = :sys.get_state(authority).pending_participant_transfer
 
       case unquote(loss) do
+        :agent_destination ->
+          TestTextToSpeechTransport.disconnect(destination_tts, :test_destination_failed)
+
         :destination ->
           GenServer.stop(
             Map.fetch!(binding.connections, support_client.connection_id).pid,
@@ -589,8 +678,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           Process.exit(player, :kill)
       end
 
-      assert_receive :destination_admission_released, 2_000
+      unless agent_destination?, do: assert_receive(:destination_admission_released, 2_000)
       await_recovered(authority, System.monotonic_time(:millisecond) + 2_000)
+      assert :ok = await_tone(caller_client, 1_000, 2_000)
       refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
       {:ok, after_recovery} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
       assert after_recovery.output == before.output
@@ -1589,7 +1679,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                        text_to_speech: "test-voice"
                      },
                      tools: %{},
-                     transfers: ["human-support"]
+                     transfers:
+                       if(Keyword.get(options, :agent_destination),
+                         do: ["billing"],
+                         else: ["human-support"]
+                       )
+                   },
+                   "billing" => %{
+                     type: "agent",
+                     prompt: "Handle billing requests.",
+                     capabilities: %{model_inference: "test-model", text_to_speech: "test-voice"},
+                     first_message: %{mode: "fixed", text: "Billing is ready."}
                    },
                    "human-support" => %{
                      type: "human",

@@ -23,8 +23,10 @@ confirmed user/played assistant utterances; last_n_spoken bounds that completed-
 selected sends no history, only allowlisted typed variables and an explicit reason. Destination
 preparation may become ready but greeting/TTS/main output stays inaudible to the caller until
 commit. The source retains responsibility; because the generated transfer binding is
-default-blocking, later caller turns receive the platform hold response rather than entering either
-agent's LLM until the transfer reaches a terminal continuation.
+default-blocking, later caller turns cannot enter either agent's LLM until the transfer reaches a
+terminal continuation. The subsequent [wait-sounds milestone](transfer-readiness-and-wait-sounds.md)
+now replaces the spoken blocking-hold response with private waiting audio and rejects held input.
+Agent handoffs use its readiness/cue/release sequence, and required recovery failure ends the call.
 
 ## Implementation checklist
 

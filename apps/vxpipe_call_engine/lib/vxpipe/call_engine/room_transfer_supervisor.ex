@@ -2,7 +2,6 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
   @moduledoc false
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer
-  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Cleanup
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
@@ -10,6 +9,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
 
   @maximum_tasks_per_room 4
+  @recovery_timeout_ms 750
 
   def start_link(options) do
     incarnation_id = Keyword.fetch!(options, :incarnation_id)
@@ -56,7 +56,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
       incarnation_id: incarnation_id,
       attempt_id: attempt_id,
       deadline_ms: deadline_ms,
-      audience_request: if(destination.kind == :human, do: request)
+      audience_request: request
     }
 
     task =
@@ -81,48 +81,6 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     :exit, _reason -> {:error, :unavailable}
   end
 
-  @spec restore_text_to_speech(
-          String.t(),
-          TextToSpeechRuntime.t(),
-          String.t(),
-          pid()
-        ) :: {:ok, Task.t()} | {:error, :unavailable}
-  def restore_text_to_speech(
-        incarnation_id,
-        %TextToSpeechRuntime{} = runtime,
-        participant_id,
-        owner
-      )
-      when is_binary(incarnation_id) and is_binary(participant_id) and is_pid(owner) do
-    task =
-      Task.Supervisor.async_nolink(
-        via(incarnation_id),
-        Startup,
-        :prepare_text_to_speech,
-        [runtime, participant_id, incarnation_id, owner]
-      )
-
-    {:ok, task}
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  @spec cleanup_destination(Request.t(), pid()) :: :ok | {:error, :unavailable}
-  def cleanup_destination(%Request{} = request, task) when is_pid(task) do
-    start_cleanup(request.incarnation_id, fn ->
-      _ = terminate(request.incarnation_id, task)
-      Cleanup.discard_destination(request)
-    end)
-  end
-
-  @spec cleanup_restoration(Request.t(), pid()) :: :ok | {:error, :unavailable}
-  def cleanup_restoration(%Request{} = request, task) when is_pid(task) do
-    start_cleanup(request.incarnation_id, fn ->
-      _ = terminate(request.incarnation_id, task)
-      Cleanup.discard_source_text_to_speech(request)
-    end)
-  end
-
   @spec terminate(String.t(), pid()) :: :ok | {:error, :unavailable}
   def terminate(incarnation_id, task) when is_pid(task) do
     case Task.Supervisor.terminate_child(via(incarnation_id), task) do
@@ -137,9 +95,9 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     Task.Supervisor.async(via(incarnation_id), work)
   end
 
-  def recover(pending) do
+  def recover(pending, source_text_to_speech) do
     deadline =
-      System.monotonic_time(:millisecond) + ParticipantTransfer.SourceRestorer.timeout_ms()
+      System.monotonic_time(:millisecond) + @recovery_timeout_ms
 
     scope = %{
       authority: self(),
@@ -150,20 +108,21 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
 
     task =
       Task.Supervisor.async_nolink(via(scope.incarnation_id), fn ->
-        Phase.run(scope, fn -> {:handoff, :recover, pending.request} end)
+        Phase.run(scope, fn ->
+          with {:ok, capability} <-
+                 Startup.prepare_text_to_speech(
+                   source_text_to_speech,
+                   pending.request.source_participant_id,
+                   scope.incarnation_id,
+                   scope.authority
+                 ) do
+            {:handoff, :recover, %{request: pending.request, text_to_speech: capability}}
+          end
+        end)
       end)
 
     send(task.pid, {:vxpipe_transfer_phase_start, task.ref})
     {:ok, task, deadline}
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
-
-  defp start_cleanup(incarnation_id, cleanup) when is_function(cleanup, 0) do
-    case Task.Supervisor.start_child(via(incarnation_id), cleanup) do
-      {:ok, _task} -> :ok
-      {:error, _reason} -> {:error, :unavailable}
-    end
   catch
     :exit, _reason -> {:error, :unavailable}
   end

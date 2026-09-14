@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
 
   alias Vxpipe.CallEngine.Media.OutputSink
   alias Vxpipe.CallEngine.MediaPolicy.Authority
-  alias Vxpipe.CallEngine.Readiness.{Collector, Preparation, RoomInventory}
+  alias Vxpipe.CallEngine.Readiness.{Collector, Inventory, Preparation, RoomInventory}
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle
   alias Vxpipe.CallEngine.{RoomAuthority, RoomCapabilitySupervisor, Telemetry}
   alias Vxpipe.CallEngine.WaitSounds.Player
@@ -52,7 +52,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     end
   end
 
-  defp execute(:recover, phase, request) do
+  defp execute(:recover, phase, %{request: request, text_to_speech: text_to_speech}) do
     scope =
       Map.merge(
         Map.take(phase, [:owner, :attempt_id, :deadline_ms]),
@@ -83,7 +83,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
              demand = Map.fetch!(graph.inventory.inventory.connections, id).demand
              connection.adapter.release(connection, scope, demand)
            end) do
-      {:ok, %{connections: connections, scope: scope}}
+      {:ok, %{connections: connections, scope: scope, text_to_speech: text_to_speech}}
     else
       false -> {:error, :source_unavailable}
       error -> error
@@ -103,11 +103,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     audience = phase.audience
     scope = audience.scope
 
-    with {:ok, participant} <-
-           ParticipantLifecycle.prepare(
-             preparation.destination.command,
-             phase.incarnation_id
-           ),
+    with {:ok, participant} <- prepare_participant(preparation, phase.incarnation_id),
          {:ok, media} <- prepare_media(phase, request, scope),
          joining = Map.drop(media.connections, Map.keys(audience.connections)),
          :ok <- hold(joining, scope),
@@ -151,6 +147,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
       error -> error
     end
   end
+
+  defp prepare_participant(%{participant: participant}, _incarnation), do: {:ok, participant}
+
+  defp prepare_participant(preparation, incarnation),
+    do: ParticipantLifecycle.prepare(preparation.destination.command, incarnation)
 
   defp prepare_release(prepared, collector, phase, request) do
     with {:ok, ready} <-
@@ -290,7 +291,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
 
   defp capture_connections(binding, present) do
     binding.connections
-    |> Enum.filter(fn {_id, connection} -> MapSet.member?(present, connection.participant_id) end)
+    |> Enum.filter(fn {_id, connection} ->
+      MapSet.member?(present, connection.participant_id) and
+        Inventory.media_connection?(connection)
+    end)
     |> Enum.reduce_while({:ok, %{}}, fn {id, connection}, {:ok, captured} ->
       case GenServer.call(connection.pid, :vxpipe_connection_readiness, 1_000) do
         {:ok, media} -> {:cont, {:ok, Map.put(captured, id, media)}}
@@ -412,10 +416,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
     connections
     |> Enum.group_by(fn {_id, connection} -> connection.identity.participant_id end)
     |> Enum.reduce_while({:ok, []}, fn {participant, outputs}, {:ok, players} ->
+      destination = Map.fetch!(binding.plan.participants, request.destination_definition_key)
+
       slot =
-        if participant == request.destination_participant_id,
-          do: :transfer_joining,
-          else: :transfer_to_human
+        cond do
+          destination.kind == :agent -> :transfer_to_agent
+          participant == request.destination_participant_id -> :transfer_joining
+          true -> :transfer_to_human
+        end
 
       asset_id = if mode == :cue, do: assets.connection_cue, else: Map.fetch!(assets.slots, slot)
 

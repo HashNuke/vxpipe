@@ -9,7 +9,10 @@ defmodule Vxpipe.CallEngine.TestConnectionReadinessAdapter do
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
   def replace(connection), do: GenServer.call(connection, :replace)
-  def attach(connection, command), do: GenServer.call(connection, {:attach, command})
+
+  def attach(connection, command, output_sink),
+    do: GenServer.call(connection, {:attach, command, output_sink})
+
   def readiness(connection), do: GenServer.call(connection, :readiness)
 
   @impl true
@@ -63,8 +66,8 @@ defmodule Vxpipe.CallEngine.TestConnectionReadinessAdapter do
   def handle_call(:replace, _from, binding),
     do: {:reply, :ok, %{binding | generation: make_ref()}}
 
-  def handle_call({:attach, command}, _from, binding),
-    do: {:reply, Vxpipe.CallEngine.attach_connection(command), binding}
+  def handle_call({:attach, command, output_sink}, _from, binding),
+    do: {:reply, Vxpipe.CallEngine.attach_connection(command, output_sink), binding}
 
   def handle_call(:readiness, _from, binding),
     do: {:reply, {:ok, binding.resource, :ready}, binding}

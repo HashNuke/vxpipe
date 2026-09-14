@@ -9,16 +9,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
     Cleanup,
+    Committer,
     History,
     HumanBriefing,
     HumanCommitter,
     HumanPreparation,
     Pending,
     Phase,
+    Preparation,
     PrivateSpeech
   }
 
-  @spec prepared(Pending.t(), HumanPreparation.t(), State.t()) :: {:noreply, State.t()}
+  @spec prepared(Pending.t(), HumanPreparation.t() | Preparation.t(), State.t()) ::
+          {:noreply, State.t()}
   def prepared(%Pending{} = pending, %HumanPreparation{} = preparation, %State{} = state) do
     preparation = %{
       preparation
@@ -29,6 +32,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     pending = %{pending | briefing: :waiting, preparation: preparation}
     {:ok, state} = progress(pending, state)
     {:noreply, state}
+  end
+
+  def prepared(%Pending{} = pending, %Preparation{} = preparation, %State{} = state) do
+    preparation = %{
+      preparation
+      | text_to_speech: Startup.activate_text_to_speech(preparation.text_to_speech)
+    }
+
+    :ok =
+      Phase.handoff(pending.task.pid, :prepare, %{
+        request: pending.request,
+        preparation: preparation
+      })
+
+    pending = %{pending | preparation: preparation, handoff: :preparing}
+    {:noreply, %{state | pending_participant_transfer: pending}}
   end
 
   @spec attach_connection(
@@ -219,9 +238,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   def connection_down(_connection_id, %State{}), do: :unhandled
 
-  @spec pending?(Pending.t(), State.t()) :: boolean()
-  def pending?(%Pending{} = pending, %State{} = state), do: human_pending?(pending, state)
-
   defp apply_control(:accept, %Pending{accepted?: false, briefing: :completed} = pending),
     do: {:ok, %{pending | accepted?: true}}
 
@@ -304,6 +320,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
         with :ok <- Authorizer.authorize(pending.request, state),
              :ok <- Phase.finish(%{pending | deadline_ms: deadline}) do
           state = record_output_generation(state, recovered)
+          state = restore_text_to_speech(state, recovered.text_to_speech)
           state = History.failed(state, pending.request, cause, :completed)
           GenServer.reply(pending.from, {:error, :unavailable})
 
@@ -346,7 +363,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
       {:release, %{stage: :releasing}, {:ok, ready}} ->
         demonitor_outbound_leg(pending.preparation)
         state = record_output_generation(state, ready)
-        {:noreply, HumanCommitter.finish_ready(pending, ready, state)}
+
+        state =
+          case pending.preparation do
+            %Preparation{} -> Committer.finish_ready(pending, state)
+            %HumanPreparation{} -> HumanCommitter.finish_ready(pending, ready, state)
+          end
+
+        {:noreply, state}
 
       {_, %{stage: :releasing}, _failure} ->
         GenServer.reply(pending.from, {:error, :unavailable})
@@ -370,6 +394,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
     %{state | connections: connections}
   end
+
+  defp restore_text_to_speech(state, nil), do: state
+
+  defp restore_text_to_speech(state, capability),
+    do: %{state | text_to_speech_capability: Startup.activate_text_to_speech(capability)}
 
   defp retry_preparation(pending, ready, state) do
     if deadline_elapsed?(pending) do
@@ -460,7 +489,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp start_recovery(pending, cause, state) do
-    case Vxpipe.CallEngine.RoomTransferSupervisor.recover(pending) do
+    source_text_to_speech =
+      if state.text_to_speech_capability == nil, do: state.text_to_speech_runtime
+
+    case Vxpipe.CallEngine.RoomTransferSupervisor.recover(pending, source_text_to_speech) do
       {:ok, task, deadline} ->
         timer =
           Process.send_after(
@@ -488,7 +520,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   defp recovery_failed(pending, state) do
     Phase.cancel(pending)
     GenServer.reply(pending.from, {:error, :unavailable})
-    state = History.failed(state, pending.request, pending.handoff.cause, :failed)
+
+    outcome =
+      if System.monotonic_time(:millisecond) >= Map.get(pending.handoff, :deadline_ms, :infinity),
+        do: :timed_out,
+        else: :failed
+
+    state = History.failed(state, pending.request, pending.handoff.cause, outcome)
     {:stop, :handoff_recovery_failed, state}
   end
 
@@ -497,6 +535,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     _ = Cleanup.discard(preparation, state)
     :ok
   end
+
+  defp discard_preparation(%Pending{preparation: %Preparation{} = preparation}, state),
+    do: Cleanup.discard(preparation, state)
 
   defp discard_preparation(%Pending{} = pending, _state) do
     Cleanup.discard_destination(pending.request)
@@ -510,6 +551,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   defp monitor_outbound_leg(outbound_leg), do: Process.monitor(outbound_leg.owner)
 
   defp demonitor_outbound_leg(%HumanPreparation{outbound_leg_monitor: nil}), do: :ok
+  defp demonitor_outbound_leg(%Preparation{}), do: :ok
 
   defp demonitor_outbound_leg(%HumanPreparation{outbound_leg_monitor: monitor}) do
     Process.demonitor(monitor, [:flush])

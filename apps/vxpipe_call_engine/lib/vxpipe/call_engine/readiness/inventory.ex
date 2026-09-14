@@ -83,7 +83,9 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
   defp admitted?(_connection, _attempt_id), do: false
 
   defp connection_demands(connections, participants, policy, recorded) do
-    Map.new(connections, fn {id, connection} ->
+    connections
+    |> Map.filter(fn {_id, connection} -> media_connection?(connection) end)
+    |> Map.new(fn {id, connection} ->
       participant = Map.fetch!(participants, connection.participant_id)
       microphone? = connection.role == :human
 
@@ -104,6 +106,9 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
        }}
     end)
   end
+
+  def media_connection?(%{output_sink: nil, speech_to_text: nil}), do: false
+  def media_connection?(_connection), do: true
 
   defp missing_participants(participants, connections) do
     connected = MapSet.new(connections, fn {_id, connection} -> connection.participant_id end)
@@ -164,7 +169,10 @@ defmodule Vxpipe.CallEngine.Readiness.Inventory do
         connection.participant_id == participant.participant_id
       end)
 
-    attached == [] or Enum.any?(attached, fn {_id, connection} -> connection.role == :human end)
+    attached == [] or
+      Enum.any?(attached, fn {_id, connection} ->
+        connection.role == :human and media_connection?(connection)
+      end)
   end
 
   defp recording_target?(targets, id) do

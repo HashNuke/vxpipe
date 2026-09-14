@@ -2,8 +2,8 @@
 
 Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
 readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
-Human-handoff integration now passes normal transfer, bounded recovery and cue-failure checks. All
-five root gates pass with 1,300 tests and zero failures (test concurrency four); full slice
+Human and AI handoffs now pass normal transfer and bounded recovery checks; human cue-failure
+checks also pass. All five root gates pass with 1,302 tests and zero failures (test concurrency four); full slice
 acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -38,12 +38,12 @@ private preparation. The missing work is completing and verifying their use in o
 | --- | --- | --- |
 | Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and player loss recover spoken caller conversation through retained media; readiness is rechecked during cues and stale candidates trigger preparation and fresh cues. | Complete remaining failure stages, policy adoption, safe diagnostics and sample/audible acceptance. |
 | Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
-| AI transfer | Existing transfer works under its earlier contract; the new wait/readiness/cue sequence is not integrated. | Reuse the completed human flow's coordination for an agent destination, including model/tools and first-message gating. |
+| AI transfer | Shared hold/readiness/cue/release now gates agent destinations and their first message. Failed destination TTS recovers spoken source conversation; fresh activations work on re-entry. The live caller sample transfers to billing and continues on the same peer. | Complete caller preparation/failure detail, independently delayed model/tool cases and the remaining configuration/privacy acceptance. |
 | Initial call | Opening playback exists; early caller waiting and full initial readiness orchestration are unfinished. | Provide caller output before expensive setup, compose waiting with opening playback, then release conversation once. |
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The current human-handoff checkpoint
-passes all five root gates with 1,300 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
+passes all five root gates with 1,302 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
 ## Call-definition changes
@@ -309,7 +309,7 @@ slice demands it. There is no separate infrastructure-completion phase.
 | Delivery checkpoint | Runnable result | Depends on | Status |
 | --- | --- | --- | --- |
 | [Human web handoff](#checkpoint-human-web-handoff) | Desktop caller transfers to the mobile transfer desk, hears waits/cues, then exchanges audio and transcripts; failure restores or ends the call correctly. | Existing committed preparation/playback | Normal flow and recovery implemented; full acceptance open |
-| [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Not integrated |
+| [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Normal flow and bounded recovery integrated; full acceptance open |
 | [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Not integrated |
 | [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Local incoming/outbound handoff checks pass; full acceptance open |
 | [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Component coverage only |
@@ -410,13 +410,16 @@ A destination that cannot become ready returns control through bounded source re
 
 Implementation tasks:
 
-- [ ] Reuse the human slice's hold/readiness/cue/adopt/release sequence, skipping human briefing,
+- [x] Reuse the human slice's hold/readiness/cue/adopt/release sequence, skipping human briefing,
   acceptance and joining playback. Keep the existing allowlist, Variables, history modes and
   total transfer deadline; introduce no alternate transfer configuration.
 - [ ] Prepare the destination activation, model/tool/MCP bindings and demanded STT/TTS/output
   before release. Prevent destination greeting, model requests and late source speech from
   crossing the held interval. Preserve every unaffected participant and room capability.
-- [ ] Apply first-message behavior once after release/completion. Discard failed destination
+  The shared prospective inventory now gates agent destinations, including delayed TTS. Existing
+  model preparation/deadline checks and fresh-activation re-entry pass; independent tool/MCP and
+  every retained resource's end-to-end evidence remain open.
+- [x] Apply first-message behavior once after release/completion. Discard failed destination
   preparation and recover or end under the same failure contract as human transfers.
 - [ ] Expose the destination and actual preparing/failure phase through the existing sample and
   diagnostics so the transition is reproducible from an ordinary caller session.
@@ -752,13 +755,39 @@ Known remaining work in the first slice:
   model/Deepgram services with synthesized microphone speech; this does not establish physical audibility.
 - Changing membership/connections and multiple listeners retain their later dedicated checkpoint.
 
+### AI handoff integration
+
+- Agent destinations reuse the audience hold, prospective readiness, cue/drain, exact candidate
+  adoption and acknowledged release path. They skip human briefing/acceptance and select the
+  call's `transfer_to_agent` sound. The destination first message starts after release; source
+  resources remain available until completion. No UI components or configuration fields were added.
+- The ordinary WebRTC case delays destination TTS acknowledgement, receives waiting audio,
+  rejects held text and retains the source. It then decodes the cue and billing greeting in order
+  and submits another turn to billing. Extending the existing recovery cases with failed AI TTS
+  proves a decoded recovery cue and spoken source response on the retained caller media.
+- The 11 existing agent-transfer cases cover source/target authority, Variables/history, total
+  deadline, destination exit, lost source TTS restoration and re-entry. Required source TTS
+  restoration now occurs inside the shared 750 ms recovery budget and waits for provider readiness.
+  Failed required recovery closes the room; healthy source TTS is retained. The superseded separate
+  agent restoration state/worker and direct commit route were removed.
+- Rendered Chrome at 1440×900 exercised the live default billing sample: 25 non-silent waiting
+  frames preceded the detected 1 kHz cue; the cue preceded destination speech. The same connected
+  caller received “Billing is ready” and a subsequent billing-department response. The screenshot
+  was inspected and showed no horizontal overflow. This is decoded browser audio with live
+  providers, not physical speaker verification. Controlled failure, URL/nil and independent
+  model/tool delay runs in the rendered sample remain open.
+
+The [agent handoff labnote](../../labnotes/20260914-2008-agent-handoff-readiness.md) records the
+red/green boundary, integration corrections, removed lifecycle code and exact verification logs.
+
 ### Verification ledger
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
 | Human handoff and recovery | Sixteen WebRTC transfer checks pass within the 332-check Gateway suite with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, pending readiness reconciles removed STT demand and retains an unaffected STT transport, and destination/phase/player loss restores a fresh caller conversation through retained media. |
-| Current human-handoff checkpoint | All five root gates pass; 1,300 tests, zero failures, 15 exclusions; seed 226627 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and spoken recovery pass. Destination reservations release on connection loss/expiry; the rendered retry completes in the same call. Full slice acceptance stays open. |
+| Human-handoff checkpoint, `fe022a6` | All five root gates pass; 1,300 tests, zero failures, 15 exclusions; seed 226627 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and spoken recovery pass. Destination reservations release on connection loss/expiry; the rendered retry completes in the same call. Full slice acceptance stays open. |
+| Current AI-handoff integration | All five root gates pass; 1,302 tests, zero failures, 15 exclusions; seed 890393 at concurrency four. The 34 focused agent/inventory checks and 18 WebRTC transfer cases pass. | Delayed agent TTS gates cue/greeting; failed destination TTS recovers spoken source conversation on retained media. Source restoration is bounded and provider-ready; re-entry uses a fresh activation. The rendered live default billing transfer retains the caller peer and answers a follow-up. Full AI and milestone acceptance remain open. |
 | Cue barrier and failure recovery | Nine focused engine cases pass | Completion requires cue drain, including completion during a deferred readiness recheck. Stale policy candidates during cues or at the final commit check cause preparation and fresh cues under the original deadline, retaining unaffected STT; default and silent waits are covered. Cue-player or prepared STT failure recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
 | Rendered sample and spoken recovery | Real desktop/mobile-sized Chrome sessions with live model/Deepgram and synthesized microphone speech | Accepted default-wait handoffs preserve the caller and deliver support transcripts. Both peers decode cues and conversation; failed destination connection recovers two spoken assistant responses on the same peer. A fresh desk admission now completes a later transfer on the same caller peer, with audio and final transcripts. Custom/nil, independent readiness delays and physical audibility remain open. |
 | Destination readmission | Five Session lifetime cases, extended persistence admission case and repeated WebRTC recovery flow | Exact release preserves history, rejects stale release/token replay and retains active exclusion. Failed persistence release retries while unavailable; bound connections outlive credential TTL. |

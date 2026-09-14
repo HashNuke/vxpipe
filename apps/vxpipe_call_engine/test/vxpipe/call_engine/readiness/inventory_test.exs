@@ -615,7 +615,15 @@ defmodule Vxpipe.CallEngine.Readiness.InventoryTest do
                    ]
                )
 
-      assert {:ok, _attachment} = TestConnectionReadinessAdapter.attach(connection, command)
+      output =
+        start_supervised!(
+          {Vxpipe.CallEngine.TestAudioOutputSink, observer: self()},
+          id: {:output, key}
+        )
+
+      assert {:ok, _attachment} =
+               TestConnectionReadinessAdapter.attach(connection, command, output)
+
       {key, connection}
     end)
   end

@@ -323,11 +323,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ParticipantTransfer.prepared(reference, preparation, state)
   end
 
-  def handle_info({reference, {:ok, capability}}, state)
-      when is_reference(reference) and is_map(capability) do
-    ParticipantTransfer.restored(reference, capability, state)
-  end
-
   def handle_info({reference, :phase_finished}, state) when is_reference(reference),
     do: {:noreply, state}
 
@@ -338,11 +333,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({:vxpipe_participant_transfer_deadline, reference}, state)
       when is_reference(reference) do
     ParticipantTransfer.deadline_elapsed(reference, state)
-  end
-
-  def handle_info({:vxpipe_participant_transfer_restoration_deadline, reference}, state)
-      when is_reference(reference) do
-    ParticipantTransfer.restoration_deadline_elapsed(reference, state)
   end
 
   def handle_info(

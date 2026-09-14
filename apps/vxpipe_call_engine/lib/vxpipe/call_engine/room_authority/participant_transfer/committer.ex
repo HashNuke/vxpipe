@@ -6,29 +6,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     FirstMessage,
-    ParticipantLifecycle,
     Startup,
     State
   }
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Completion,
-    Pending,
-    Preparation
+    Pending
   }
 
-  @spec commit(Pending.t(), Preparation.t(), State.t()) ::
-          {:ok, map(), State.t()} | {:error, :destination_unavailable}
-  def commit(%Pending{} = pending, %Preparation{} = preparation, %State{} = state) do
-    request = pending.request
+  def finish_ready(%Pending{} = pending, %State{} = state) do
+    preparation = pending.preparation
 
-    case ParticipantLifecycle.commit(preparation.participant, state) do
-      {:ok, destination_snapshot, state} ->
-        commit_available(request, preparation, destination_snapshot, state)
+    {:ok, result, state} =
+      commit_available(pending.request, preparation, preparation.participant.snapshot, state)
 
-      {:error, :participant_unavailable} ->
-        {:error, :destination_unavailable}
-    end
+    Completion.finish(pending, result, %{state | held_participant_ids: MapSet.new()})
   end
 
   defp commit_available(request, preparation, destination_snapshot, state) do
@@ -65,7 +58,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
         pending_agent_teardowns: pending_agent_teardowns,
         pending_participant_transfer: nil,
         text_capability: destination_capability,
-        text_to_speech_capability: Startup.activate_text_to_speech(preparation.text_to_speech),
+        text_to_speech_capability: preparation.text_to_speech,
         text_to_speech_runtime: preparation.destination.text_to_speech
     }
 
