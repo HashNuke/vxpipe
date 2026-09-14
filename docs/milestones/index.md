@@ -170,8 +170,14 @@ now carry bounded failure reasons before destination cleanup and through source 
 checks verify reason continuity and distinct timeout/STT-loss reporting during release. Separate
 briefing/acceptance/cue timings now cover actual lifecycle boundaries. Confirmed cancellation and
 unexpected worker exits are observed by surviving owners; sampled player slot pressure and output
-rejections reach bounded, sanitized Console aggregates. Human-handoff diagnostics are complete;
-20 checkpoint tasks remain (human 3, AI 3, phone 6, changing/multiple listeners 6, final audit 2).
+rejections reach bounded, sanitized Console aggregates. Human-handoff diagnostics and private-resource
+cleanup are complete; 19 checkpoint tasks remain (human 2, AI 3, phone 6, changing/multiple listeners 6,
+final audit 2). Recording denial now retires private writers and removes writer readiness dependencies;
+unrelated policy retains the same writer and recording stream. Two native cases keep existing room,
+source and speech/media bindings, and cue a readmitted listener before conversation. The denied case
+completes while writer readiness remains withheld. All five root gates pass: 1,408 tests, zero failures,
+16 integration exclusions; seed 235296, concurrency four. See the
+[recording-demand checkpoint](../../labnotes/20260915-0505-recording-demand-reconciliation.md).
 Native early failure checks now prove recovery after briefing disconnect/voice failure and actual
 attempt expiry during briefing or acceptance. Each releases the private admission once, stops the
 old phase, avoids activation and restores cue, spoken response and another caller turn on retained

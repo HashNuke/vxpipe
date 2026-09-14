@@ -54,7 +54,14 @@ defmodule Vxpipe.CallEngine.RoomRecording.PolicyPreparation do
          :ok <- Preparation.validate_tracks(tracks, state.configuration, policy),
          true <- valid_subscriptions?(state, subscriptions),
          previous = if(state.pending_policy, do: state.pending_policy.outputs, else: %{}),
-         {:ok, selections, outputs} <- PreparedTracks.stage(state, tracks, previous, options) do
+         {:ok, selections, outputs} <-
+           PreparedTracks.stage(
+             state,
+             tracks,
+             previous,
+             options,
+             candidate.snapshot.effective.record_audio
+           ) do
       pending = state.pending_policy || lease(options)
       release_monitors(pending)
 

@@ -6,8 +6,9 @@ deterministic phone acceptance; the other four delivery slices remain open.
 Human and AI handoffs now pass normal transfer and bounded recovery checks; human cue-failure
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
-of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,398 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four).
+of the model and pause/resume the caller wait at playable readiness. Human private-resource cleanup
+now includes recording-demand reconciliation. All five root gates pass with 1,408 tests, zero
+failures and 16 integration exclusions (seed 235296; concurrency four). Nineteen checkpoint tasks remain.
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -40,7 +41,7 @@ private preparation. The missing work is completing and verifying their use in o
 
 | Area | Current boundary | Next required result |
 | --- | --- | --- |
-| Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and player loss recover spoken caller conversation through retained media; readiness is rechecked during cues and stale candidates trigger preparation and fresh cues. Failure reasons, lifecycle timing and bounded playback diagnostics are available. | Complete remaining failure stages, policy adoption and sample/audible acceptance. |
+| Human web transfer | Normal acceptance holds the caller from authorization, prepares media, plays waits/cues, adopts and releases. Destination, phase and player loss recover spoken caller conversation through retained media; readiness is rechecked during cues and stale candidates trigger preparation and fresh cues. Private resource reconciliation and lifecycle diagnostics pass. | Resolve the historical intermittent recovery failure and finish the cleanup audit before closing the slice. |
 | Phone transfer | Incoming and outbound Telnyx/Twilio transfer checks pass, including actual incoming audio delivery to configured STT. | Complete early waiting/recovery and audible provider verification; simulated transports do not establish live phone behavior. |
 | AI transfer | Shared hold/readiness/cue/release now gates agent destinations and their first message. Failed destination TTS recovers spoken source conversation; fresh activations work on re-entry. The live caller sample transfers to billing and continues on the same peer. | Complete independently delayed model/tool cases and the remaining configuration/privacy acceptance. |
 | Initial call | Native default/URL/nil startup, independent file/text openings, delayed participant/room resources and one greeting pass. Late readiness starts a skipped wait or resumes its existing cursor. Deterministic Telnyx/Twilio failures end the exact provider leg before or after media attachment. | Slice accepted; retain these checks while completing transfer slices. |
@@ -376,7 +377,7 @@ Implementation tasks:
   [early recovery labnote](../../labnotes/20260915-0441-human-recovery-boundaries.md).
 - [x] Resolve existing engine connection-fixture failures and the configured phone
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
-- [ ] Remove prepared private resources that the resulting policy does not demand.
+- [x] Remove prepared private resources that the resulting policy does not demand.
   Initial and repeated private STT allocation now check the prospective policy. If demand disappears
   before acceptance or while readiness collection is pending, the private speech pair is removed
   while Gateway retains its connection and room-media actors; the WebRTC handoff completes. An
@@ -396,7 +397,15 @@ Implementation tasks:
   cases pause actual recovery cue drain, deliver late playback/unavailable/monitor events, and
   finish recovery with the same source TTS; see the
   [retired-event regression](../../labnotes/20260915-0453-retired-briefing-events.md).
-  Other capability kinds and the complete changing audience remain open.
+  Recording denial now removes private destination writers and excludes all writer dependencies
+  from candidate and installed readiness. An unrelated revision retains the same writer and
+  recording stream. Two native cases apply these revisions by readmitting a connected listener:
+  both keep the worker/deadline, room/source bindings and existing speech/media actors, then
+  deliver that listener's cue before conversation. Denial completes with writer readiness still
+  withheld and records no conversation. The resource-ownership review finds no other private
+  web-human capability allocation; model/tool/MCP preparation belongs to the AI checkpoint.
+  The complete changing-audience, re-entry and phone acceptance tasks remain open. See the
+  [recording-demand evidence and review](../../labnotes/20260915-0505-recording-demand-reconciliation.md).
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -1131,6 +1140,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Recording demand during human handoff | Expected red writer-dependency assertion; ten owning recorder cases and both native policy variants pass. All five root gates pass: 1,408 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | Denied recording retires private writers and removes writer readiness dependencies, while unrelated policy retains the writer and stream. Native handoffs preserve worker/deadline, room/source and existing media/speech bindings, and cue a readmitted listener before conversation. Human private-resource cleanup is complete; 19 checkpoint tasks remain. |
 | Retired briefing events during recovery | Two engine cases reproduce a missing match clause; all three focused cases, 36 owning handoff tests and five root gates pass after the fix. Root: 1,405 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | A late completion from retired briefing TTS no longer crashes RoomAuthority after recovery discards the preparation. Late playback/unavailable/monitor events leave pending recovery unchanged, and actual cue drain permits recovery with retained source TTS. This does not explain the historical native unavailable result; 20 checkpoint tasks remain. |
 | Early human recovery boundaries | Four focused native cases pass; all five root gates pass with 1,405 tests, zero failures and 16 exclusions, seed 235296 at concurrency four. | Briefing disconnect/voice failure and actual total-attempt expiry during briefing/acceptance release the private admission once, stop the phase and recover cue plus spoken caller conversation on retained media without destination activation. No production change was required. The separate intermittent recovery failure remains unexplained; 20 checkpoint tasks remain. |
 | Human transfer lifecycle diagnostics | Red-green engine, output-arbiter and reporter checks pass, including acceptance, timeout and worker loss. All five root gates pass: 1,401 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Briefing, acceptance and finite cue durations follow actual control/playback boundaries. Surviving owners count confirmed cancellation and unexpected worker exits. Console aggregates sampled player slot pressure and rejected/discarded arbiter submissions, stripping private data before mailbox admission. Combined with reason delivery, the human diagnostics item is complete; 20 checkpoint tasks remain. |

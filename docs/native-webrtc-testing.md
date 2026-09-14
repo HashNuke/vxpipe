@@ -38,6 +38,20 @@ their selected STT on attachment through the same supervised runtime path as ini
 The private briefing transport must stop after playback acknowledgement and before acceptance;
 subsequent waiting, cues, required STT and conversation continue independently of that retired TTS.
 
+For recording demand changes while a writer is the final handoff blocker:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'human handoff gates recording and reconciles'
+```
+
+These cases readmit a connected listener with either recording denied or unchanged permissions.
+Denial retires the private destination writer and completes the handoff while writer readiness
+remains withheld, with no recorded conversation. An unrelated revision retains the same writer
+and records conversation on its original stream. Both preserve the preparation worker, deadline,
+room services and source capabilities until adoption, retain existing speech/media bindings,
+and deliver a cue before conversation to the readmitted listener too.
+
 For independent resource loss during preparation, adoption and partial release:
 
 ```shell

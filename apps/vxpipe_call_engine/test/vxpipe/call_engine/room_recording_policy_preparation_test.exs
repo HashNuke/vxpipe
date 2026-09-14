@@ -182,6 +182,76 @@ defmodule Vxpipe.CallEngine.RoomRecordingPolicyPreparationTest do
     assert {:ok, ^recorder, :ready} = RoomRecording.readiness_binding(recorder)
   end
 
+  test "recording denial discards private writers and excludes writers from readiness" do
+    readiness = :atomics.new(1, [])
+    context = start_context(readiness: readiness)
+    :ok = :atomics.put(readiness, 1, 2)
+
+    assert {:ok, prepared} =
+             RoomRecording.prepare_policy(
+               context.recording,
+               context.candidate,
+               tracks(context),
+               context.options
+             )
+
+    joining_track = track(context.joining)
+
+    assert_receive {:test_recording_writer_opened, private_writer, private_writer,
+                    %{mode: ^joining_track}}
+
+    monitor = Process.monitor(private_writer)
+
+    assert {:ok, denied} =
+             Authority.preview_presence(
+               context.authority,
+               MapSet.put(context.candidate.snapshot.present_participant_ids, context.restricted)
+             )
+
+    assert {:ok, without_recording} =
+             RoomRecording.prepare_policy(context.recording, denied, [], context.options)
+
+    assert without_recording.token == prepared.token
+    assert_receive {:DOWN, ^monitor, :process, ^private_writer, _reason}, 1_000
+    refute Enum.any?(without_recording.resources, &(&1.kind == :recording_writer))
+    resource = Enum.find(without_recording.resources, &(&1.kind == :recording))
+    assert {:ok, ^resource, :ready} = RoomRecording.readiness_binding(resource)
+
+    assert {:ok, policy} =
+             Authority.commit_candidate(
+               context.authority,
+               denied,
+               Keyword.fetch!(context.options, :deadline_ms)
+             )
+
+    assert :ok =
+             RoomRecording.prepare_tracks(
+               context.recording,
+               [],
+               Snapshot.interval(policy, :recording)
+             )
+
+    assert {:ok, _resource, :ready} = RoomRecording.readiness(context.recording)
+    refute_receive {:test_recording_writer_opened, _writer, _source, _stream}, 0
+    push(context, context.caller, 1, 0)
+    refute_receive {:test_recording_chunk, _stream, _chunk}, 50
+
+    assert {:ok, restored} = Authority.leave(context.authority, context.restricted)
+
+    assert :ok =
+             RoomRecording.prepare_tracks(
+               context.recording,
+               tracks(context),
+               Snapshot.interval(restored, :recording)
+             )
+
+    assert {:ok, _resource, :preparing} = RoomRecording.readiness(context.recording)
+    :ok = :atomics.put(readiness, 1, 0)
+    assert {:ok, _resource, :ready} = RoomRecording.readiness(context.recording)
+    push(context, context.caller, 2, 2)
+    assert_receive {:test_recording_chunk, "full-mix", %{sequence: 0}}
+  end
+
   test "refresh retains pending writers and changed recording permission uses prepared subscriptions" do
     context = start_context()
 

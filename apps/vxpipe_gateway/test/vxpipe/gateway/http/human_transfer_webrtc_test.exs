@@ -693,6 +693,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         {:silent_all, :participant, nil},
         {:custom_url, :recording, nil},
         {:silent_all, :recording, nil},
+        {:silent_all, :recording, :recording_denied},
+        {:silent_all, :recording, :recording_unrelated},
         {:silent_all, :participant, :preparation},
         {:silent_all, :recording, :preparation},
         {:silent_all, :participant, :adopt},
@@ -709,9 +711,17 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     outcome =
       case {last_ready, loss_at} do
-        {:destination, :preparation} -> "recovers after preparation loss"
-        {_kind, nil} -> "then relays conversation"
-        {_kind, stage} -> "closes after #{stage} loss"
+        {:destination, :preparation} ->
+          "recovers after preparation loss"
+
+        {_kind, nil} ->
+          "then relays conversation"
+
+        {_kind, change} when change in [:recording_denied, :recording_unrelated] ->
+          "reconciles #{change} policy"
+
+        {_kind, stage} ->
+          "closes after #{stage} loss"
       end
 
     @tag wait_mode: wait_mode, last_ready: last_ready, loss_at: loss_at
@@ -723,6 +733,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
          } do
       alias Vxpipe.CallEngine.MediaPolicy.Authority
 
+      recording_change = if loss_at in [:recording_denied, :recording_unrelated], do: loss_at
+      loss_at = if recording_change, do: nil, else: loss_at
       {wait_sounds, options} = wait_configuration(mode)
       writer_readiness = :atomics.new(1, [])
 
@@ -730,7 +742,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         compile_plan(
           wait_sounds: wait_sounds,
           observer_speech_to_text?: true,
-          observer_policy: %{}
+          observer_policy: %{},
+          restriction_policy:
+            if(recording_change == :recording_unrelated, do: %{}, else: %{record_audio: false})
         )
 
       caller = Map.fetch!(plan.participants, "caller")
@@ -789,6 +803,33 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         |> then(&connect(&1.session_id, "chat", false))
 
       assert_receive {:test_stt_transport_started, remaining_stt, _}, 2_000
+
+      restriction_client =
+        if recording_change do
+          restriction = Map.fetch!(plan.participants, "recording-restriction")
+
+          assert {:ok, restriction_join} =
+                   CallEngine.Command.JoinParticipant.new(
+                     tenant_id: plan.tenant_id,
+                     actor_id: plan.actor_id,
+                     room_id: plan.room_id,
+                     participant_id: restriction.participant_id,
+                     role: :human,
+                     deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+                   )
+
+          assert {:ok, _} = CallEngine.join_participant(restriction_join)
+
+          client =
+            plan
+            |> issue_session(room, restriction.participant_id)
+            |> then(&connect(&1.session_id, "chat", false))
+
+          policy_authority = Authority.whereis(room.incarnation_id)
+          assert {:ok, _} = Authority.leave(policy_authority, restriction.participant_id)
+          client
+        end
+
       :ok = :atomics.put(writer_readiness, 1, 2)
 
       recovers? = last_ready == :destination and loss_at == :preparation
@@ -1068,7 +1109,56 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _reason}, 2_000
         end
       else
-        Map.fetch!(releases, last_ready).()
+        retained_recording_stream =
+          if recording_change do
+            support_id = support.participant_id
+
+            assert_receive {:test_recording_writer_opened, private_writer, private_writer,
+                            %{participant_id: ^support_id, stream_id: stream_id}},
+                           2_000
+
+            writer_monitor = Process.monitor(private_writer)
+            pending = :sys.get_state(room_authority).pending_participant_transfer
+            token = pause_native_gate(connection, :adopt)
+            restriction = Map.fetch!(plan.participants, "recording-restriction")
+
+            try do
+              assert {:ok, _} =
+                       Authority.admit(binding.policy_authority, restriction.participant_id)
+
+              if recording_change == :recording_denied do
+                assert_receive {:DOWN, ^writer_monitor, :process, ^private_writer, _}, 2_000
+              else
+                Map.fetch!(releases, last_ready).()
+              end
+
+              assert_receive {:native_gate_waiting, ^token}, 2_000
+              refreshed = :sys.get_state(room_authority).pending_participant_transfer
+              assert refreshed.task.pid == pending.task.pid
+              assert refreshed.deadline_ms == pending.deadline_ms
+              assert {:ok, current} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+              assert current.room == binding.room
+              source_id = Map.fetch!(plan.participants, "reception").participant_id
+
+              assert Map.fetch!(current.participants, source_id) ==
+                       Map.fetch!(binding.participants, source_id)
+
+              if recording_change == :recording_unrelated do
+                refute_receive {:DOWN, ^writer_monitor, :process, ^private_writer, _}, 0
+
+                refute_receive {:test_recording_writer_opened, _replacement, _source,
+                                %{participant_id: ^support_id}},
+                               0
+              end
+            after
+              send(connection, {:continue_native_gate, token})
+            end
+
+            stream_id
+          else
+            Map.fetch!(releases, last_ready).()
+            nil
+          end
 
         for phase <- ["cue", "releasing"] do
           assert %{"data" => %{"attempt_id" => ^attempt_id, "blockers" => []}} =
@@ -1109,6 +1199,10 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         send_tone(caller_client, 500, 1)
         assert_handoff_audio_order(support_client, 500, wait_frequency)
         assert_handoff_audio_order(observer_client, 500, wait_frequency)
+
+        if restriction_client,
+          do: assert_handoff_audio_order(restriction_client, 500, wait_frequency)
+
         send_tone(support_client, 1_500, 11)
         assert_handoff_audio_order(caller_client, 1_500, wait_frequency)
         assert_receive {:test_stt_audio, ^joining_stt, _conversation_audio}, 2_000
@@ -1120,13 +1214,30 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         caller_id = caller.participant_id
         support_id = support.participant_id
 
-        for participant_id <- [caller_id, support_id, observer.participant_id] do
-          assert_receive {:test_recording_writer_opened, _writer, _recorder,
-                          %{participant_id: ^participant_id, stream_id: stream_id}},
-                         2_000
+        if recording_change == :recording_denied do
+          assert :atomics.get(writer_readiness, 1) == 2
 
-          assert_receive {:test_recording_chunk, ^stream_id, chunk}, 2_000
-          assert byte_size(chunk.payload) > 0
+          assert {:ok, resources} =
+                   CallEngine.RoomRecording.readiness_resources(binding.room.recording)
+
+          refute Enum.any?(resources, &(&1.kind == :recording_writer))
+          refute_receive {:test_recording_chunk, _stream, _chunk}, 100
+        else
+          for participant_id <- [caller_id, support_id, observer.participant_id] do
+            stream_id =
+              if recording_change == :recording_unrelated and participant_id == support_id do
+                retained_recording_stream
+              else
+                assert_receive {:test_recording_writer_opened, _writer, _recorder,
+                                %{participant_id: ^participant_id, stream_id: opened_stream}},
+                               2_000
+
+                opened_stream
+              end
+
+            assert_receive {:test_recording_chunk, ^stream_id, chunk}, 2_000
+            assert byte_size(chunk.payload) > 0
+          end
         end
 
         for {event, sequence} <- [{"StartOfTurn", 1}, {"EndOfTurn", 2}] do
@@ -2934,7 +3045,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                      type: "human",
                      connection: %{service: "web", mode: "receive", admission: "start_call"},
                      capabilities: %{},
-                     while_present: %{record_audio: false}
+                     while_present:
+                       Keyword.get(options, :restriction_policy, %{record_audio: false})
                    }
                  },
                  limits: %{max_duration_ms: 60_000}

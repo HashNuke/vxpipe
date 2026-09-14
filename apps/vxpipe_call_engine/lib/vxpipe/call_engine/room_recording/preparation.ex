@@ -13,7 +13,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Preparation do
     with {:ok, policy} <- RoomMixer.recording_configuration(config.mixer, config.recording_token),
          :ok <- current_policy(policy, tracks, interval),
          :ok <- validate_tracks(tracks, config, policy) do
-      state = require_tracks(state, tracks, interval)
+      state = require_tracks(state, tracks, interval, policy.permitted?)
       prepare_outputs(state, policy.format)
     else
       {:error, reason} -> {:error, reason, state}
@@ -48,7 +48,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Preparation do
 
   defp valid_track?(_mode, _config, _policy), do: false
 
-  defp require_tracks(state, tracks, interval) do
+  defp require_tracks(state, tracks, interval, permitted?) do
     streams =
       Map.new(state.streams, fn {id, stream} ->
         modes =
@@ -57,7 +57,7 @@ defmodule Vxpipe.CallEngine.RoomRecording.Preparation do
             target -> tracks |> Enum.filter(&selected?(target, &1)) |> MapSet.new()
           end
 
-        {id, %{stream | required_modes: modes}}
+        {id, %{stream | required_modes: if(permitted?, do: modes, else: MapSet.new())}}
       end)
 
     %{state | streams: streams, prepared_interval: interval}

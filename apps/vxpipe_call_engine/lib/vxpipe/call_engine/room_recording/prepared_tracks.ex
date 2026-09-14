@@ -4,8 +4,12 @@ defmodule Vxpipe.CallEngine.RoomRecording.PreparedTracks do
   alias Vxpipe.CallEngine.Recording.{PreparedWriter, Stream}
   alias Vxpipe.CallEngine.RoomRecording.Output
 
-  def stage(state, tracks, previous, options) do
-    selections = Map.new(state.streams, fn {id, stream} -> {id, modes(stream.target, tracks)} end)
+  def stage(state, tracks, previous, options, permitted?) do
+    selections =
+      Map.new(state.streams, fn {id, stream} ->
+        {id, if(permitted?, do: modes(stream.target, tracks), else: MapSet.new())}
+      end)
+
     required = for {id, modes} <- selections, mode <- modes, do: {id, mode}
 
     result =
