@@ -534,6 +534,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
              is_struct(request, CachedPlaybackRequest) do
     if OpeningAudio.asset_failure?(state.opening_audio, worker, request) do
       OpeningAudio.failed(state.opening_audio)
+      StartupReadiness.failed(state, :opening_audio_unavailable)
       {:stop, :opening_audio_unavailable, state}
     else
       {:noreply, state}
@@ -556,6 +557,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       :unhandled ->
         if OpeningAudio.capability?(state.opening_audio, capability) do
           OpeningAudio.failed(state.opening_audio)
+          StartupReadiness.failed(state, :opening_audio_unavailable)
           {:stop, :opening_audio_unavailable, state}
         else
           state = AgentOutput.unavailable(capability, state)

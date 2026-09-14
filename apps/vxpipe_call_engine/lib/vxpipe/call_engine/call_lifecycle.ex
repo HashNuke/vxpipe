@@ -4,7 +4,8 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   use GenServer
 
   alias Vxpipe.CallEngine.CallLifecycle.ProcessTimer
-  alias Vxpipe.CallEngine.ResolvedCallPlan
+  alias Vxpipe.CallEngine.{ResolvedCallPlan, Telemetry}
+  alias Vxpipe.CallEngine.Readiness.Blockers
 
   @call_timeout 1_000
 
@@ -33,6 +34,15 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   end
 
   def readiness_deadline(lifecycle), do: safe_call(lifecycle, :readiness_deadline)
+
+  def startup_progress(nil, _source, _blockers), do: :ok
+
+  def startup_progress(incarnation, source, blockers)
+      when is_binary(incarnation) and is_list(blockers),
+      do: safe_call(via(incarnation), {:startup_progress, source, Blockers.kinds(blockers)})
+
+  def startup_progress(lifecycle, source, blockers) when is_pid(lifecycle) and is_list(blockers),
+    do: safe_call(lifecycle, {:startup_progress, source, Blockers.kinds(blockers)})
 
   @spec ready(pid()) :: :ok | {:error, :unavailable}
   def ready(lifecycle) when is_pid(lifecycle) do
@@ -112,6 +122,9 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
         idle: :inactive,
         idle_timeout_ms: idle_timeout_ms,
         readiness: :pending,
+        startup_started_at: Telemetry.started_at(),
+        startup_sources: %{},
+        startup_blockers: [],
         readiness_deadline_ms: System.monotonic_time(:millisecond) + readiness_timeout_ms,
         timer: {timer_module, timer_options},
         timers: %{},
@@ -142,7 +155,24 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   def handle_call(:readiness_deadline, _from, state),
     do: {:reply, state.readiness_deadline_ms, state}
 
+  def handle_call({:startup_progress, source, blockers}, _from, %{readiness: :pending} = state) do
+    sources =
+      if blockers == [],
+        do: Map.delete(state.startup_sources, source),
+        else: Map.put(state.startup_sources, source, blockers)
+
+    current = sources |> Map.values() |> List.flatten() |> Enum.uniq() |> Enum.sort()
+
+    if current != state.startup_blockers,
+      do: Telemetry.startup_progress(state.startup_started_at, current)
+
+    {:reply, :ok, %{state | startup_sources: sources, startup_blockers: current}}
+  end
+
+  def handle_call({:startup_progress, _source, _blockers}, _from, state), do: {:reply, :ok, state}
+
   def handle_call(:ready, _from, %{readiness: :pending} = state) do
+    startup_stop(state, :ready)
     {:reply, :ok, state |> cancel(:readiness) |> Map.put(:readiness, :ready)}
   end
 
@@ -184,6 +214,8 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   end
 
   def handle_call({:startup_failed, reason}, _from, %{readiness: :pending} = state) do
+    startup_stop(state, if(reason == :caller_disconnected, do: :disconnected, else: :failed))
+
     state =
       state
       |> cancel(:readiness)
@@ -213,6 +245,13 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     :ok
   end
 
+  defp startup_stop(%{readiness: :pending} = state, outcome) do
+    blockers = if outcome == :ready, do: [], else: state.startup_blockers
+    Telemetry.startup_stop(state.startup_started_at, outcome, blockers)
+  end
+
+  defp startup_stop(_state, _outcome), do: :ok
+
   defp schedule(state, event, timeout_ms) do
     token = make_ref()
     {timer_module, timer_options} = state.timer
@@ -237,6 +276,8 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   end
 
   defp fire(:readiness, _token, state) do
+    startup_stop(state, :timeout)
+
     state
     |> Map.put(:readiness, :expired)
     |> remove_timer(:readiness)
@@ -251,6 +292,8 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
   end
 
   defp fire(:max_duration, _token, state) do
+    startup_stop(state, :timeout)
+
     state
     |> cancel(:readiness)
     |> Map.put(:readiness, :expired)

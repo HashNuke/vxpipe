@@ -211,6 +211,77 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = await_tone(support_client, 700, 2_000)
   end
 
+  test "native startup diagnostics follow independent STT and TTS acknowledgements" do
+    handler = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach_many(
+        handler,
+        [[:vxpipe, :call_engine, :startup, :progress], [:vxpipe, :call_engine, :startup, :stop]],
+        &__MODULE__.handle_startup_diagnostic/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    plan = compile_plan(reception_model: "test:blocked", caller_speech_to_text?: true)
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+    assert_receive {:test_agent_runtime_model_preparing, model}, 2_000
+
+    assert_receive {:native_startup, [:vxpipe, :call_engine, :startup, :progress], _,
+                    %{blockers: [:model_inference]}},
+                   1_000
+
+    caller = Map.fetch!(plan.participants, "caller")
+
+    client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat", false))
+
+    assert :ok = send_client_ready(client)
+    send(model, :release_test_agent_runtime_model)
+    assert_receive {:test_tts_transport_started, voice, _}, 2_000
+    assert_receive {:test_stt_transport_started, speech, _}, 2_000
+
+    assert_receive {:native_startup, [:vxpipe, :call_engine, :startup, :progress], _,
+                    %{blockers: [:speech_to_text, :text_to_speech]}},
+                   2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      ~s({"type":"Connected","request_id":"voice-ready"})
+    )
+
+    assert_receive {:native_startup, [:vxpipe, :call_engine, :startup, :progress], _,
+                    %{blockers: [:speech_to_text]}},
+                   2_000
+
+    assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+    assert :ok = send_rtvi_text(client, "held-for-stt")
+    assert %{"id" => "held-for-stt"} = await_sideband(client, "error-response", 2_000)
+
+    TestSpeechToTextTransport.deliver(
+      speech,
+      ~s({"type":"Connected","request_id":"speech-ready","sequence_id":0})
+    )
+
+    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+
+    assert_receive {:native_startup, [:vxpipe, :call_engine, :startup, :stop],
+                    %{count: 1, duration: duration}, %{outcome: :ready, blockers: []}},
+                   1_000
+
+    assert duration >= 0
+    refute_receive {:native_startup, [:vxpipe, :call_engine, :startup, :stop], _, _}
+    refute_receive {:test_tts_transport_started, _, _}
+    refute_receive {:test_stt_transport_started, _, _}
+  end
+
+  def handle_startup_diagnostic(event, measurements, metadata, receiver),
+    do: send(receiver, {:native_startup, event, measurements, metadata})
+
   test "a new caller hears setup waiting while model and voice initialization are delayed" do
     plan =
       compile_plan(
@@ -2082,7 +2153,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    "caller" => %{
                      type: "human",
                      capabilities:
-                       if(Keyword.get(options, :morse),
+                       if(
+                         Keyword.get(options, :morse, false) or
+                           Keyword.get(options, :caller_speech_to_text?, false),
                          do: %{speech_to_text: "test-stt"},
                          else: %{}
                        ),

@@ -54,7 +54,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModelProfile do
              generation_options,
              Map.has_key?(profile_options, :generation_options)
            ),
-         {:ok, configuration} <- provider.new(provider_options) do
+         {:ok, configuration} <- initialize(provider, provider_options, settings) do
       {:ok,
        %__MODULE__{
          model: model,
@@ -69,6 +69,17 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentModelProfile do
   end
 
   def resolve(_selection, _settings), do: {:error, :unsupported_provider_options}
+
+  defp initialize(provider, options, settings) do
+    lifecycle = Keyword.get(settings, :startup_lifecycle)
+    _ = Vxpipe.CallEngine.CallLifecycle.startup_progress(lifecycle, self(), [:model_inference])
+    result = provider.new(options)
+
+    if match?({:ok, _}, result),
+      do: Vxpipe.CallEngine.CallLifecycle.startup_progress(lifecycle, self(), [])
+
+    result
+  end
 
   defp normalize_profile_options(options) do
     Enum.reduce_while(options, {:ok, %{}}, fn {key, value}, {:ok, normalized} ->

@@ -161,6 +161,34 @@ defmodule Vxpipe.Console.TelemetryReporterTest do
     assert snapshot.provider_failures[{:stt, :morse, :unavailable}] == 1
   end
 
+  test "projects startup blockers and completion without retaining private event data" do
+    {_child_id, reporter} = start_reporter(max_pending_events: 4)
+    sentinel = "private-startup-payload"
+    :ok = :sys.suspend(reporter)
+
+    :telemetry.execute(
+      [:vxpipe, :call_engine, :startup, :progress],
+      %{count: 1, duration: duration_ms(7), payload: sentinel},
+      %{blockers: [:speech_to_text, :media, :speech_to_text, sentinel], call_id: sentinel}
+    )
+
+    :telemetry.execute(
+      [:vxpipe, :call_engine, :startup, :stop],
+      %{count: 1, duration: duration_ms(11), payload: sentinel},
+      %{outcome: :failed, blockers: [:speech_to_text], provider_error: sentinel}
+    )
+
+    assert {:messages, messages} = Process.info(reporter, :messages)
+    refute inspect(messages) =~ sentinel
+    :ok = :sys.resume(reporter)
+
+    snapshot = TelemetryReporter.snapshot(reporter)
+    assert snapshot.startup.stops.failed == duration_stats(11_000)
+    assert snapshot.startup.blockers == %{speech_to_text: 1, media: 1, other: 1}
+    assert snapshot.startup.terminal_blockers == %{{:failed, :speech_to_text} => 1}
+    refute inspect(snapshot) =~ sentinel
+  end
+
   test "projects bounded opening-audio outcomes without retaining private metadata" do
     {_child_id, reporter} = start_reporter(max_pending_events: 4)
     sentinel = "private-opening-audio-sentinel"

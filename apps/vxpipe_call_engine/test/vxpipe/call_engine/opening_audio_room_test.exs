@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   use ExUnit.Case, async: false
 
+  @startup_progress [:vxpipe, :call_engine, :startup, :progress]
+  @startup_stop [:vxpipe, :call_engine, :startup, :stop]
   @opening_audio_stop_event [:vxpipe, :call_engine, :opening_audio, :stop]
 
   alias Vxpipe.CallEngine
@@ -26,6 +28,58 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
   alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, TextOutput}
   alias Vxpipe.AgentRuntime.ModelResponse
+
+  test "reports TTS and opening blockers until actual setup readiness" do
+    attach_opening_audio_telemetry()
+    configure_speech_runtime(tts_ready?: false)
+
+    configure_opening_audio(
+      {:ok, %Download{body: wave(<<1, 0, 2, 0>>), content_type: "audio/wav"}}
+    )
+
+    plan =
+      compile_plan(
+        agent_text_to_speech: true,
+        opening_audio: %{
+          type: "file_url",
+          url: "https://assets.example.test/diagnostic-notice.wav"
+        }
+      )
+
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, tts, _}, 1_000
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    command = attach_command(plan, room, caller, "diagnostic-opening")
+    assert {:ok, _} = TestTransferConnection.attach(command, sink)
+    assert_receive {:test_stt_transport_started, stt, _}, 1_000
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+
+    assert_receive {:opening_audio_telemetry, @startup_progress, _,
+                    %{blockers: [:opening_audio, :text_to_speech]}},
+                   1_000
+
+    TestTextToSpeechTransport.deliver_control(
+      tts,
+      ~s({"type":"Connected","request_id":"tts-ready"})
+    )
+
+    assert_receive {:opening_audio_telemetry, @startup_progress, _,
+                    %{blockers: [:opening_audio]}},
+                   1_000
+
+    assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_eventually_open(plan)
+
+    assert_receive {:opening_audio_telemetry, @startup_stop, %{count: 1, duration: duration},
+                    %{outcome: :ready, blockers: []}}
+
+    assert duration >= 0
+    refute_receive {:opening_audio_telemetry, @startup_stop, _, _}
+    refute_receive {:test_tts_transport_started, _, _}
+    refute_receive {:test_stt_transport_started, _, _}
+  end
 
   for blocker <- [:model, :media] do
     test "resumes the same wait cursor after opening playback while #{blocker} readiness is pending" do
@@ -188,6 +242,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
   for change <- [:preparing, :generation, :policy] do
     test "rechecks #{change} after opening playback before admitting conversation" do
+      attach_opening_audio_telemetry()
       configure_speech_runtime()
 
       configure_opening_audio(
@@ -229,9 +284,11 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       end
 
       assert :ok = GenServer.call(connection, :defer_readiness)
+      flush_startup_progress()
       assert :ok = TestAudioOutputSink.playback_completed(sink)
 
       assert_receive {:test_transfer_readiness_waiting, ^connection}, 1_000
+      await_startup_blocker(:media, System.monotonic_time(:millisecond) + 1_000)
       refute_receive {:test_call_ready, _}, 100
       assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
       assert :ok = GenServer.call(connection, :complete_readiness)
@@ -393,7 +450,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     assert_receive {:test_tts_control, ^tts_transport, speak}
     assert JSON.decode!(speak) == %{"text" => "This call may be recorded.", "type" => "Speak"}
-    assert_receive {:test_tts_control, ^tts_transport, _flush}
+    assert_receive {:test_tts_control, ^tts_transport, _flush}, 1_000
 
     assert {:error, %Error{code: :opening_audio_in_progress}} =
              TestTransferConnection.send_text(
@@ -453,8 +510,8 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     command = attach_command(plan, room, caller, "conn-opening-failure")
 
     assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
-    assert_receive {:test_tts_control, ^tts_transport, _speak}
-    assert_receive {:test_tts_control, ^tts_transport, _flush}
+    assert_receive {:test_tts_control, ^tts_transport, _speak}, 1_000
+    assert_receive {:test_tts_control, ^tts_transport, _flush}, 1_000
 
     [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
     room_monitor = Process.monitor(authority)
@@ -471,6 +528,12 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
                     %{count: 1, duration: duration}, %{outcome: :failed, source: :text}}
 
     assert duration >= 0
+
+    assert_receive {:opening_audio_telemetry, @startup_stop, _,
+                    %{outcome: :failed, blockers: blockers}}
+
+    assert :opening_audio in blockers
+    refute_receive {:opening_audio_telemetry, @startup_stop, _, _}
   end
 
   test "targets the entry caller rather than another attached participant" do
@@ -498,8 +561,8 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     caller_command = attach_command(plan, room, caller, "conn-opening-caller")
     assert {:ok, _attachment} = TestTransferConnection.attach(caller_command, caller_sink)
-    assert_receive {:test_tts_control, ^tts_transport, _speak}
-    assert_receive {:test_tts_control, ^tts_transport, _flush}
+    assert_receive {:test_tts_control, ^tts_transport, _speak}, 1_000
+    assert_receive {:test_tts_control, ^tts_transport, _flush}, 1_000
 
     complete_speech(tts_transport, caller_sink, "opening-caller-only")
     refute_receive {:test_audio_output, ^receiver_sink, _frame}
@@ -585,8 +648,8 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
     assert_receive {:test_stt_transport_started, _stt_transport, _connection}
     refute_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}
-    assert_receive {:test_tts_control, ^tts_transport, _speak}
-    assert_receive {:test_tts_control, ^tts_transport, _flush}
+    assert_receive {:test_tts_control, ^tts_transport, _speak}, 1_000
+    assert_receive {:test_tts_control, ^tts_transport, _flush}, 1_000
     refute_receive {:test_call_lifecycle_timer_scheduled, _idle_timer, 15_000}
 
     complete_speech(tts_transport, sink, "opening-idle")
@@ -848,6 +911,25 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
            }
   end
 
+  defp flush_startup_progress do
+    receive do
+      {:opening_audio_telemetry, @startup_progress, _, _} -> flush_startup_progress()
+    after
+      0 -> :ok
+    end
+  end
+
+  defp await_startup_blocker(kind, deadline) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {:opening_audio_telemetry, @startup_progress, _, %{blockers: blockers}} ->
+        if kind in blockers, do: :ok, else: await_startup_blocker(kind, deadline)
+    after
+      remaining -> flunk("Startup did not report the expected blocker")
+    end
+  end
+
   defp await_initial_resource_observation(authority, deadline) do
     if :sys.get_state(authority).startup.resources_ready? do
       :ok
@@ -1081,7 +1163,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     "RIFF" <> <<byte_size(body) + 4::little-32>> <> "WAVE" <> body
   end
 
-  defp configure_speech_runtime do
+  defp configure_speech_runtime(options \\ []) do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     opening_audio_cache =
@@ -1117,7 +1199,9 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         encoding: :linear16,
         sample_rate: 48_000
       ],
-      transport: {TestTextToSpeechTransport, [observer: self(), ready_on_start: true]},
+      transport:
+        {TestTextToSpeechTransport,
+         [observer: self(), ready_on_start: Keyword.get(options, :tts_ready?, true)]},
       maximum_requests: 2
     ]
 
@@ -1209,9 +1293,9 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     handler_id = {__MODULE__, make_ref()}
 
     :ok =
-      :telemetry.attach(
+      :telemetry.attach_many(
         handler_id,
-        @opening_audio_stop_event,
+        [@opening_audio_stop_event, @startup_progress, @startup_stop],
         &__MODULE__.handle_opening_audio_telemetry/4,
         self()
       )

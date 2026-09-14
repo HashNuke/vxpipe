@@ -27,6 +27,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
       {:noreply, CallerIdle.reconcile(state)}
     else
       _failed ->
+        failed(state, :startup_unavailable)
         ConnectionLifecycle.notify(state.connections, :call_start_failed)
         {:stop, :startup_unavailable, state}
     end
@@ -49,6 +50,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
         reply(reconcile(state), state)
 
       _failed ->
+        failed(state, :opening_audio_unavailable)
         {:stop, :opening_audio_unavailable, state}
     end
   end
@@ -56,14 +58,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   def reply({:ok, state}, _previous), do: {:noreply, CallerIdle.reconcile(state)}
 
   def reply({:error, %Error{code: code}}, state) do
+    failed(state, code)
     ConnectionLifecycle.notify(state.connections, :call_start_failed)
     {:stop, code, state}
   end
 
   def reply({:error, _reason}, state) do
+    failed(state, :startup_unavailable)
     ConnectionLifecycle.notify(state.connections, :call_start_failed)
     {:stop, :startup_unavailable, state}
   end
+
+  def failed(%{startup_ready?: false, call_lifecycle: lifecycle} = state, reason)
+      when is_pid(lifecycle),
+      do: CallLifecycle.startup_failed(state.snapshot.incarnation_id, reason)
+
+  def failed(_state, _reason), do: :ok
 
   def bind(%CreateRoom{}, _incarnation_id), do: {:ok, nil}
 
@@ -109,6 +119,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   def ready(%{startup: %{status: :preparing}} = state), do: {:ok, state}
 
   def ready(%{startup: startup, startup_ready?: false} = state) when startup != nil do
+    blockers =
+      cond do
+        map_size(state.connections) == 0 -> [:media]
+        pending_speech?(state) -> [:speech_to_text]
+        true -> []
+      end
+
+    _ = CallLifecycle.startup_progress(state.call_lifecycle, :connections, blockers)
     state = start_room_probe(state)
     reconcile(state)
   end
@@ -145,6 +163,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
     case result do
       {:ok, graph} ->
+        _ = CallLifecycle.startup_progress(state.call_lifecycle, :release, [])
         startup = %{state.startup | readiness: nil, resources_ready?: true, ready_graph: graph}
         reconcile(%{state | startup: startup})
 
@@ -236,8 +255,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     if connection != nil and is_pid(connection.output_sink),
       do: OutputSink.clear(connection.output_sink)
 
-    cancel_probe(state.startup.readiness)
-    cancel_probe(state.startup.release_task)
+    cancel_probe(state.startup.readiness, state)
+    cancel_probe(state.startup.release_task, state)
+    _ = CallLifecycle.startup_progress(state.call_lifecycle, :release, [])
 
     startup = %{
       state.startup
@@ -271,15 +291,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   defp discard_wait(nil, _state), do: :ok
 
   defp discard_wait(wait, state) do
-    cancel_probe(wait.task)
+    cancel_probe(wait.task, state)
     if wait.monitor, do: Process.demonitor(wait.monitor, [:flush])
 
     if wait.player,
       do: RoomCapabilitySupervisor.stop_capability(state.snapshot.incarnation_id, wait.player)
   end
 
-  defp cancel_probe(nil), do: :ok
-  defp cancel_probe(task), do: Task.shutdown(task, :brutal_kill)
+  defp cancel_probe(nil, _state), do: :ok
+
+  defp cancel_probe(task, state) do
+    Task.shutdown(task, :brutal_kill)
+    CallLifecycle.startup_progress(state.call_lifecycle, task.pid, [])
+  end
 
   defp start_output_probe(_command, %{output_sink: nil}, state), do: state
 
@@ -337,6 +361,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   defp reconcile(%{startup_ready?: true} = state), do: FirstMessage.start(state)
 
   defp reconcile(state) do
+    blockers = if state.opening_audio.phase == :open, do: [], else: [:opening_audio]
+    _ = CallLifecycle.startup_progress(state.call_lifecycle, :opening_audio, blockers)
+
     with {:ok, state} <- update_waits(state),
          {:ok, state} <- start_opening(state) do
       verify_release(state)

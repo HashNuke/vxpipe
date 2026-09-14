@@ -15,6 +15,8 @@ defmodule Vxpipe.CallEngine.Telemetry do
   @model_request_stop_event [:vxpipe, :call_engine, :model, :request, :stop]
   @tts_first_audio_event [:vxpipe, :call_engine, :tts, :first_audio]
   @opening_audio_stop_event [:vxpipe, :call_engine, :opening_audio, :stop]
+  @startup_progress_event [:vxpipe, :call_engine, :startup, :progress]
+  @startup_stop_event [:vxpipe, :call_engine, :startup, :stop]
   @transfer_phase_stop_event [:vxpipe, :call_engine, :transfer, :phase, :stop]
   @provider_failure_event [:vxpipe, :call_engine, :provider, :failure]
   @background_tool_admission_event [:vxpipe, :call_engine, :background_tool, :admission]
@@ -26,6 +28,8 @@ defmodule Vxpipe.CallEngine.Telemetry do
     @model_request_stop_event,
     @tts_first_audio_event,
     @opening_audio_stop_event,
+    @startup_progress_event,
+    @startup_stop_event,
     @transfer_phase_stop_event,
     @provider_failure_event,
     @background_tool_admission_event,
@@ -81,6 +85,30 @@ defmodule Vxpipe.CallEngine.Telemetry do
       @opening_audio_stop_event,
       %{count: 1, duration: System.monotonic_time() - started_at},
       %{outcome: outcome, source: source}
+    )
+  end
+
+  @doc "Emits a changed setup blocker set without resource or call identity."
+  def startup_progress(started_at, blockers) do
+    execute_startup(@startup_progress_event, started_at, %{
+      blockers: Vxpipe.CallEngine.Readiness.Blockers.kinds(blockers)
+    })
+  end
+
+  @doc "Emits total setup time and the final bounded blocker set."
+  def startup_stop(started_at, outcome, blockers)
+      when outcome in [:ready, :failed, :timeout, :disconnected] do
+    execute_startup(@startup_stop_event, started_at, %{
+      outcome: outcome,
+      blockers: Vxpipe.CallEngine.Readiness.Blockers.kinds(blockers)
+    })
+  end
+
+  defp execute_startup(event, started_at, metadata) do
+    :telemetry.execute(
+      event,
+      %{count: 1, duration: System.monotonic_time() - started_at},
+      metadata
     )
   end
 

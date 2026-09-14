@@ -21,7 +21,8 @@ defmodule Vxpipe.CallEngine.Readiness.Probe do
     end)
   end
 
-  def verify(resources, timeout) when is_integer(timeout) and timeout > 0 do
+  def verify(resources, timeout, report \\ fn _blockers -> :ok end)
+      when is_integer(timeout) and timeout > 0 and is_function(report, 1) do
     resources
     |> Task.async_stream(&readiness/1,
       max_concurrency: 8,
@@ -32,14 +33,19 @@ defmodule Vxpipe.CallEngine.Readiness.Probe do
     |> Stream.zip(resources)
     |> Enum.reduce_while(:ok, fn
       {{:ok, {:ok, current, :ready}}, expected}, :ok ->
-        if current == expected,
-          do: {:cont, :ok},
-          else: {:halt, {:error, :binding_changed}}
+        if current == expected do
+          {:cont, :ok}
+        else
+          report.([expected])
+          {:halt, {:error, :binding_changed}}
+        end
 
-      {{:ok, {:ok, _resource, :failed}}, _expected}, :ok ->
+      {{:ok, {:ok, _resource, :failed}}, expected}, :ok ->
+        report.([expected])
         {:halt, {:error, :readiness_failed}}
 
-      _pending, :ok ->
+      {_pending, expected}, :ok ->
+        report.([expected])
         {:halt, {:error, :preparing}}
     end)
   end

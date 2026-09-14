@@ -53,6 +53,89 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     :ok
   end
 
+  @startup_progress [:vxpipe, :call_engine, :startup, :progress]
+  @startup_stop [:vxpipe, :call_engine, :startup, :stop]
+
+  for outcome <- [:ready, :failed, :timeout, :disconnected] do
+    test "observes blocked model startup through #{outcome} without private identity" do
+      attach_startup_telemetry()
+      model = if unquote(outcome) == :failed, do: "test:blocked-unavailable", else: "test:blocked"
+      plan = compile_plan(60_000, model: model, wait_sounds: nil)
+      assert {:ok, room} = start_call(plan)
+      assert_receive {:test_call_lifecycle_timer_scheduled, {lifecycle, _, :max_duration}, 60_000}
+      assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+      assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+
+      assert_receive {:startup_diagnostic, ^lifecycle, @startup_progress, _,
+                      %{blockers: [:model_inference]}},
+                     1_000
+
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      command = connection_command(plan, room, caller, "diagnostic-startup")
+      assert {:ok, _} = CallEngine.TestTransferConnection.attach(command, nil)
+
+      case unquote(outcome) do
+        :timeout ->
+          :ok = TestCallLifecycleTimer.fire(readiness_timer)
+
+        :disconnected ->
+          assert :ok =
+                   CallEngine.TestTransferConnection.run(command, fn ->
+                     CallEngine.RoomAuthority.detach_connection(
+                       room_authority(plan),
+                       command,
+                       self()
+                     )
+                   end)
+
+        _other ->
+          send(preparer, :release_test_agent_runtime_model)
+      end
+
+      assert_receive {:startup_diagnostic, ^lifecycle, @startup_stop,
+                      %{count: 1, duration: duration}, metadata},
+                     1_000
+
+      blockers = if unquote(outcome) == :ready, do: [], else: [:model_inference]
+      assert metadata == %{outcome: unquote(outcome), blockers: blockers}
+      assert duration >= 0
+      refute_receive {:startup_diagnostic, ^lifecycle, @startup_stop, _, _}
+    end
+  end
+
+  test "reports missing caller media after model preparation and through the startup deadline" do
+    attach_startup_telemetry()
+    plan = compile_plan(60_000)
+    assert {:ok, _room} = start_call(plan)
+    assert_receive {:test_call_lifecycle_timer_scheduled, {lifecycle, _, :max_duration}, 60_000}
+    assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+
+    assert_receive {:startup_diagnostic, ^lifecycle, @startup_progress, _, %{blockers: [:media]}},
+                   1_000
+
+    assert :ok = TestCallLifecycleTimer.fire(readiness_timer)
+
+    assert_receive {:startup_diagnostic, ^lifecycle, @startup_stop, _,
+                    %{outcome: :timeout, blockers: [:media]}}
+  end
+
+  defp attach_startup_telemetry do
+    handler = {__MODULE__, self(), make_ref()}
+
+    :ok =
+      :telemetry.attach_many(
+        handler,
+        [@startup_progress, @startup_stop],
+        &__MODULE__.handle_startup/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+  end
+
+  def handle_startup(event, measurements, metadata, receiver),
+    do: send(receiver, {:startup_diagnostic, self(), event, measurements, metadata})
+
   test "fails an unready call when its startup deadline expires" do
     plan = compile_plan(60_000)
     assert {:ok, room} = start_call(plan)
@@ -108,6 +191,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
   end
 
   test "fails startup promptly if its wait player is killed without a playback result" do
+    attach_startup_telemetry()
     plan = compile_plan(60_000, model: "test:blocked")
     assert {:ok, room} = start_call(plan)
     assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
@@ -125,6 +209,11 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert_receive {:DOWN, ^room_monitor, :process, ^authority, :startup_unavailable}, 1_000
     assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 1_000
     refute_receive {:test_call_ready, _}
+
+    assert_receive {:startup_diagnostic, _, @startup_stop, _,
+                    %{outcome: :failed, blockers: blockers}}
+
+    assert :model_inference in blockers
   end
 
   test "detaching a waiting caller clears queued audio and cancels preparation" do
@@ -514,7 +603,9 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
   end
 
   defp configure_working_speech_to_text do
-    configure_speech_to_text({TestSpeechToTextTransport, [observer: self()]})
+    configure_speech_to_text(
+      {TestSpeechToTextTransport, [observer: self(), ready_on_start: true]}
+    )
   end
 
   defp configure_speech_to_text(transport) do

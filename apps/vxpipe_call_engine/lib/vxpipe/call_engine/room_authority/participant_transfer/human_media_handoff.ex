@@ -385,7 +385,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
   defp report_readiness(nil, _blockers), do: nil
 
   defp report_readiness({phase, status, previous}, blockers) do
-    kinds = blockers |> Enum.map(&blocker_kind(&1.kind)) |> Enum.uniq() |> Enum.sort()
+    kinds = Vxpipe.CallEngine.Readiness.Blockers.kinds(blockers)
     if kinds != previous, do: report_progress(phase, status, kinds)
     {phase, status, kinds}
   end
@@ -403,35 +403,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanMediaHandoff 
 
     :ok
   end
-
-  defp blocker_kind(kind) when kind in [:speech_to_text, :text_to_speech, :model_inference],
-    do: kind
-
-  defp blocker_kind(:speech_to_text_ingress), do: :speech_to_text
-  defp blocker_kind(kind) when kind in [:tool_invocations, :remote_tools], do: :tools
-
-  defp blocker_kind(kind)
-       when kind in [:recording_writer, :recording_output, :recording, :archive],
-       do: :recording
-
-  defp blocker_kind(kind)
-       when kind in [:room_mixer, :transcript_router, :call_variables, :live_inspection],
-       do: :room_services
-
-  defp blocker_kind(kind)
-       when kind in [
-              :audio_input,
-              :audio_output,
-              :audio_subscription,
-              :media_connection,
-              :media_input,
-              :phone_transport,
-              :private_output,
-              :room_output_binding
-            ],
-       do: :media
-
-  defp blocker_kind(_kind), do: :other
 
   defp play(connections, binding, scope, request, mode, owner \\ self()) do
     assets = binding.plan.wait_sound_assets

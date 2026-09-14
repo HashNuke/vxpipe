@@ -248,13 +248,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   end
 
   test "reports payload-free first output and successful model telemetry once" do
-    attach_telemetry_events([
+    runtime = start_runtime(provider: :req_llm)
+
+    attach_telemetry_events(runtime.coordinator, [
       @model_first_token_event,
       @model_request_stop_event,
       @provider_failure_event
     ])
 
-    runtime = start_runtime(provider: :req_llm)
     command = command("telemetry-success", "private-model-input")
     sentinel = "private-model-output"
 
@@ -282,13 +283,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   end
 
   test "reports a safe unavailable outcome for an arbitrary provider failure" do
-    attach_telemetry_events([
+    runtime = start_runtime(provider: :req_llm)
+
+    attach_telemetry_events(runtime.coordinator, [
       @model_first_token_event,
       @model_request_stop_event,
       @provider_failure_event
     ])
 
-    runtime = start_runtime(provider: :req_llm)
     command = command("telemetry-failure", "private-model-input")
 
     assert :ok = Coordinator.respond(runtime.coordinator, command)
@@ -665,13 +667,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
   end
 
   test "reports caller interruption as cancelled without a provider failure" do
-    attach_telemetry_events([
+    runtime = start_runtime(provider: :req_llm)
+
+    attach_telemetry_events(runtime.coordinator, [
       @model_first_token_event,
       @model_request_stop_event,
       @provider_failure_event
     ])
 
-    runtime = start_runtime(provider: :req_llm)
     command = command("telemetry-interruption", "Stop this request")
 
     assert :ok = Coordinator.respond(runtime.coordinator, command)
@@ -1007,11 +1010,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     command
   end
 
-  def handle_telemetry_event(event, measurements, metadata, test_pid) do
-    send(test_pid, {:telemetry_event, event, measurements, metadata})
+  def handle_telemetry_event(event, measurements, metadata, {test_pid, coordinator}) do
+    if self() == coordinator,
+      do: send(test_pid, {:telemetry_event, event, measurements, metadata})
   end
 
-  defp attach_telemetry_events(events) do
+  defp attach_telemetry_events(coordinator, events) do
     handler_id = {__MODULE__, self(), make_ref()}
 
     :ok =
@@ -1019,7 +1023,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
         handler_id,
         events,
         &__MODULE__.handle_telemetry_event/4,
-        self()
+        {self(), coordinator}
       )
 
     on_exit(fn -> :telemetry.detach(handler_id) end)

@@ -3221,6 +3221,8 @@ The implemented framework-independent event contract currently includes:
 | `[:vxpipe, :call_engine, :model, :request, :stop]` | `duration` in Erlang `:native` units | `provider`, `outcome`, and `first_output` | Request dispatch to terminal completion, cancellation, timeout, or failure; `first_output` is `:observed` or `:missing` |
 | `[:vxpipe, :call_engine, :tts, :first_audio]` | `duration` in Erlang `:native` units | `provider` | TTS request dispatch to the first decoded provider audio frame, before output-sink acceptance or remote playout; emitted once and absent without audio |
 | `[:vxpipe, :call_engine, :opening_audio, :stop]` | `count` equal to `1` and `duration` in Erlang `:native` units | `source` and `outcome` | Configured opening-audio attempt through correlated destination playout completion or terminal failure; emitted once and absent when opening audio is omitted |
+| `[:vxpipe, :call_engine, :startup, :progress]` | `count` equal to `1` and elapsed setup `duration` in Erlang `:native` units | `blockers` | Changed current setup blocker categories from model initialization, caller binding, opening playback, preparation, resource collection and final release checks; no worker or call identity |
+| `[:vxpipe, :call_engine, :startup, :stop]` | `count` equal to `1` and total setup `duration` in Erlang `:native` units | `outcome` and final `blockers` | CallLifecycle's first ready, explicit startup failure/disconnect, or original readiness/maximum-duration expiry; late progress and repeated terminal calls are ignored |
 | `[:vxpipe, :call_engine, :provider, :failure]` | `count` equal to `1` | `capability`, `provider`, and `category` | Safe failure projection at the owning model, STT, or TTS boundary; no raw provider reason or response is included |
 | `[:vxpipe, :call_engine, :background_tool, :admission]` | `count` plus `reserved` and configured `limit` gauges observed at that admission | `outcome` | Engine submission boundary after validation and capacity checks; accepted work is counted only after worker startup |
 | `[:vxpipe, :call_engine, :background_tool, :stop]` | `count` and local-worker `duration` in Erlang `:native` units | `outcome` | One terminal observation for a successful, failed, unknown-timeout, or activation-terminated local worker |
@@ -3246,6 +3248,24 @@ operations are `:discovery` or `:invocation`; their outcomes are bounded to `:ok
 `:timeout`, `:rejected`, `:too_large`, `:not_submitted`, `:remote_error`, or `:unknown`.
 Console diagnostics projects opening-audio stops into bounded source/outcome duration aggregates;
 it does not retain call identity, configured text, asset URLs, or provider payloads.
+
+Startup observations use the existing CallLifecycle clock and terminal state. Each active preparation
+worker contributes its own blocker set; completing/cancelling one worker does not clear another
+worker's blockers. Categories are `speech_to_text`, `text_to_speech`, `model_inference`, `tools`,
+`recording`, `room_services`, `media`, `opening_audio`, and `other`. Unknown resource kinds map to
+`other`. The categories describe resources whose current readiness is still unconfirmed; an empty
+progress set is not a readiness receipt. Only the terminal `ready` outcome releases that lifecycle.
+Other terminal outcomes are `failed`, `timeout`, and `disconnected`; successful completion has an
+empty final blocker set. Retry and policy refresh do not reset the clock or restart healthy providers.
+
+The existing `Vxpipe.Console.TelemetryReporter.snapshot/0` exposes `startup.stops` as outcome-keyed
+duration aggregates, `startup.blockers` as counts of changed blocker observations, and
+`startup.terminal_blockers` as counts keyed by outcome and final blocker category. Blocker counts
+are observations, not unique calls or current active-call gauges. The reporter sanitizes these events
+before queue admission and retains no call IDs, URLs, resource identities, audio, text or provider
+errors. Telemetry is operational evidence, not a durable call ledger; abrupt VM/process termination
+may prevent an observation. No startup UI component or additional call-definition field is required.
+
 None of these events carries input/output text, audio, raw provider errors, model names,
 endpoint/tool identity, request arguments/results, credentials, tenant IDs, or integration
 IDs. Only the MCP events may include an ephemeral local client PID; the Console removes it

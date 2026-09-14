@@ -59,7 +59,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
       owner: self(),
       call_variables: CallVariables.whereis(state.snapshot.incarnation_id),
       incarnation_id: state.snapshot.incarnation_id,
-      agent_runtime: Keyword.fetch!(settings, :agent_runtime),
+      agent_runtime:
+        settings
+        |> Keyword.fetch!(:agent_runtime)
+        |> Keyword.put(:startup_lifecycle, state.call_lifecycle),
       agent_request_options: Keyword.get(options, :agent_request_options, []),
       mcp_integrations: Keyword.get(options, :mcp_integrations),
       opening_audio: Keyword.fetch!(options, :opening_audio),

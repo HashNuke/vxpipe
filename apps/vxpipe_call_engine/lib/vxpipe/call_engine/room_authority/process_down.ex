@@ -26,6 +26,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
       :unhandled ->
         if OpeningAudio.worker_monitor?(state.opening_audio, monitor) do
           OpeningAudio.failed(state.opening_audio)
+          StartupReadiness.failed(state, :opening_audio_unavailable)
           {:stop, :opening_audio_unavailable, state}
         else
           state =
