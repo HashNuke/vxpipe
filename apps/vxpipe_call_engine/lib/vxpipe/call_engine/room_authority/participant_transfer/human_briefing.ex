@@ -46,6 +46,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanBriefing do
       preparation.text_to_speech.pid == capability and expected == request
   end
 
+  def matches?(%Pending{}, _capability, %TextToSpeechRequest{}), do: false
+
   @spec complete(Pending.t(), State.t()) :: Pending.t()
   def complete(%Pending{} = pending, %State{} = state) do
     pending = stop_timing(pending, :ok)

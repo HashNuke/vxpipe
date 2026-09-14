@@ -1337,6 +1337,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
         assert AgentActivationSupervisor.whereis_child(reception.activation_id, :session) == nil
       else
         pending = :sys.get_state(authority).pending_participant_transfer
+        assert :ok = GenServer.call(caller_sink, {:defer_drain, true})
 
         outcome =
           case completion do
@@ -1354,6 +1355,18 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                        1_000
 
         assert duration >= 0
+
+        assert_receive {:test_audio_output_drain, ^caller_sink}, 1_000
+        recovering = :sys.get_state(authority).pending_participant_transfer
+        assert recovering.handoff.stage == :recovering
+        assert recovering.preparation == nil
+
+        # Retirement notifications can arrive after the failed preparation was discarded.
+        send(authority, {:vxpipe_tts_playback, briefing.pid, briefing_request, :completed})
+        send(authority, {:vxpipe_tts_unavailable, briefing.pid, :transport_closed})
+        send(authority, {:DOWN, briefing.monitor, :process, briefing.pid, :shutdown})
+        assert :sys.get_state(authority).pending_participant_transfer == recovering
+        assert :ok = GenServer.call(caller_sink, :complete_drain)
 
         assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "human-support-transfer"}},
                        2_000

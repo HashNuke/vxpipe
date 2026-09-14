@@ -157,7 +157,10 @@ success; failures during release publish failed status and history instead of at
 restoration. Required destination STT remains tracked after adoption through release. Engine and
 native caller/desk checks cover these orderings. Completed private briefing TTS now stops before
 acceptance, while source TTS remains available for recovery; delayed retired-capability events are
-ignored. Nine three-peer cases now cover independent destination STT, remaining-human STT and
+ignored even after recovery discards the preparation. The prior missing match clause crashed
+RoomAuthority on a late completion; engine timeout/phase-loss cases now deliver those events
+during actual recovery cue drain and finish with retained source TTS. Nine three-peer cases now
+cover independent destination STT, remaining-human STT and
 recording loss during preparation, adoption and partial release. Pre-adoption destination loss
 recovers the recorded source conversation while retaining healthy resources; failed reservations
 no longer prevent restoration or a valid new preparation. Authorized assistant transcripts reach

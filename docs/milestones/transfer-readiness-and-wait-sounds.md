@@ -391,8 +391,12 @@ Implementation tasks:
   Engine and native cases cover removed speech demand, unrelated policy and changed still-required
   STT, retaining unaffected room/media actors and the original deadline. Completed private briefing
   TTS now stops after acknowledged playback, before acceptance; its delayed notifications cannot
-  cancel the transfer. Source TTS stays available for recovery. Other capability kinds and the
-  complete changing audience remain open.
+  cancel the transfer. A late completion received after recovery discarded the preparation used
+  to crash the room; the matcher now treats that retired request as unrelated. Engine timeout/phase-loss
+  cases pause actual recovery cue drain, deliver late playback/unavailable/monitor events, and
+  finish recovery with the same source TTS; see the
+  [retired-event regression](../../labnotes/20260915-0453-retired-briefing-events.md).
+  Other capability kinds and the complete changing audience remain open.
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -1127,6 +1131,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Retired briefing events during recovery | Two engine cases reproduce a missing match clause; all three focused cases, 36 owning handoff tests and five root gates pass after the fix. Root: 1,405 tests, zero failures, 16 exclusions; seed 235296, concurrency four. | A late completion from retired briefing TTS no longer crashes RoomAuthority after recovery discards the preparation. Late playback/unavailable/monitor events leave pending recovery unchanged, and actual cue drain permits recovery with retained source TTS. This does not explain the historical native unavailable result; 20 checkpoint tasks remain. |
 | Early human recovery boundaries | Four focused native cases pass; all five root gates pass with 1,405 tests, zero failures and 16 exclusions, seed 235296 at concurrency four. | Briefing disconnect/voice failure and actual total-attempt expiry during briefing/acceptance release the private admission once, stop the phase and recover cue plus spoken caller conversation on retained media without destination activation. No production change was required. The separate intermittent recovery failure remains unexplained; 20 checkpoint tasks remain. |
 | Human transfer lifecycle diagnostics | Red-green engine, output-arbiter and reporter checks pass, including acceptance, timeout and worker loss. All five root gates pass: 1,401 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Briefing, acceptance and finite cue durations follow actual control/playback boundaries. Surviving owners count confirmed cancellation and unexpected worker exits. Console aggregates sampled player slot pressure and rejected/discarded arbiter submissions, stripping private data before mailbox admission. Combined with reason delivery, the human diagnostics item is complete; 20 checkpoint tasks remain. |
 | Transfer failure reasons | Native recovered-call reason delivery, terminal release timeout/STT-loss cases and 19 Gateway codec checks pass. All five root gates pass: 1,398 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | The connected desk receives a bounded reason before cleanup; the recovered caller receives the same reason. Terminal release failures report timeout or known speech loss. Unknown/internal details are not exposed. Lifecycle timings, forced-worker and queue diagnostics remain open; 21 checkpoint tasks remain. |
