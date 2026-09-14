@@ -55,6 +55,31 @@ RoomAuthority's receive loop, binds each response to its current batch/request a
 processes. The barrier alone neither monitors processes nor releases media. Lifecycle use and media
 release fencing are still pending.
 
+## Transfer phase ownership
+
+The existing destination task under `RoomTransferSupervisor` now persists after configuration.
+It sends `RoomAuthority` a typed prepared notification keyed by its public task reference, then
+waits under the same authority, incarnation, attempt and absolute deadline. `Phase.scope/1` reports
+that identity after preparation; it supplies neither capability readiness nor connection authority.
+Only the owning room authority can acknowledge completion. Requests are bounded and use reply
+aliases so a late response cannot remain in the caller's mailbox.
+
+The task monitor remains installed while a human hears briefing or waits to accept. Its original
+deadline also expires independently after preparation if room authority is busy. Terminal failure
+stops it through its existing supervisor; human failure uses private connection, briefing and
+outbound-leg cleanup. Adopted resources retain their ordinary owners, while unadopted resources
+bound to this phase observe its termination through their existing leases.
+
+Both existing commit paths now require a final phase acknowledgement before publishing history or
+tool success or starting the destination greeting. If that acknowledgement fails after policy/control
+mutation, room authority exits with `shutdown`; its significant-child supervision closes the room.
+Reporting success or attempting ordinary restoration from that partial state was rejected. A new
+owner process or registry was unnecessary because the existing task supplies the lifetime boundary.
+
+This connects ownership to the actual transfer path, but does not implement the full coordinator.
+Private connection authorization, complete resource preparation, listener holds/waits/cues and
+acknowledged media release must still use this lifetime before calling the completion boundary.
+
 ## Prospective policy
 
 The policy authority can now preview an exact resulting membership without applying it. It

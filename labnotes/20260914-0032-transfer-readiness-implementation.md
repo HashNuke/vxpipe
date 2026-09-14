@@ -1,12 +1,14 @@
 # Transfer readiness implementation
 
-The current [allocation lifetime checkpoint](#bind-private-allocation-to-its-phase) binds private
-speech to the original phase owner, attempt and deadline before provider preparation starts. Owner
-loss or expiry closes the pair; adoption retains the prepared session after the phase ends and
-keeps input closed until release. All 53 focused checks and five root gates pass: 1,263 tests,
-zero failures and 15 integration exclusions. This checkpoint required no fixture or timeout change.
+The current [transfer phase checkpoint](#retain-the-actual-transfer-phase) keeps the actual
+supervised preparation task alive through handoff with its original owner, attempt and deadline.
+Human owner loss cleans the private destination. Both commit paths require the phase's final
+acknowledgement before success or greeting; loss during policy adoption closes the room. All 22
+focused agent/human web/phone checks and five root gates pass: 1,265 tests, zero failures and
+15 integration exclusions.
 
-This extends private speech adoption in `a8106d4`, the complete-membership commit in `69b5ad6`,
+This extends private allocation ownership in `c005511`, speech adoption in `a8106d4`,
+the complete-membership commit in `69b5ad6`,
 native tap preparation in `666ca37` and writer/track adoption in `4b14530`.
 The earlier [investigation](#private-stt-initialization-and-cancellation-ownership)
 and pause audit retain their historical failures/worktree snapshots, not current status.
@@ -16,8 +18,8 @@ orchestration, waits/cues and recovery still require integration
 and acceptance. Passing this component checkpoint does not establish the requested transfer flow.
 The [handoff investigation](#recording-tap-investigation-and-handoff-resume-point) identifies the
 existing completion sequence that still needs to use the prepared resources.
-The latest [phase-owner integration findings](#phase-owner-integration-findings) record the
-remaining ownership and completion-order gaps from source inspection after `c005511`.
+The [phase-owner integration findings](#phase-owner-integration-findings) retain the source audit
+before this checkpoint; the implementation evidence below records the changes since that audit.
 
 ## Detour update after the pause audit
 
@@ -1830,3 +1832,50 @@ Verification for this follow-up: cross-checked the supervisor, preparation settl
 human cleanup and both commit paths against the current source; checked local Markdown links and
 anchors and `git diff --check`. The 1,263-test result above belongs to `c005511`; no runtime suite,
 browser/provider session or server restart was performed for this documentation-only update.
+
+## Retain the actual transfer phase
+
+- The preceding turn committed the source-only integration findings as `ab5d3ff`. That is progress
+  in the requested detour accounting; the active milestone still requires runtime integration.
+  Revalidated the worktree and preserved the concurrent artwork and its separate labnote.
+- Added real human-transfer checks for phase scope through briefing, rejection of completion by a
+  non-owner, cleanup after owner loss, and owner termination after successful handoff. The initial
+  run fails because the phase API is absent (`vxpipe-transfer-phase-red.log`: seven tests, two
+  failures). The existing supervised task now sends a typed preparation notification and remains
+  alive under the original authority, attempt and deadline. The same seven checks pass in
+  `vxpipe-transfer-phase-green.log`; two compiler warnings remain for the refactor pass.
+- Human owner-loss handling now uses the existing human cleanup path, including the private
+  connection and briefing speech. A separate real-room check blocks policy adoption at an actual
+  enforcer and kills the phase before acknowledging adoption. This targets the previously documented
+  risk of publishing success inside the committer before the phase can acknowledge completion.
+  The red run emitted a `ToolCallCompleted` before a failed phase acknowledgement crashed authority
+  (`vxpipe-transfer-phase-commit-red.log`: eight tests, one failure). Both committers now return
+  control to a common completion boundary, which checks the phase before publishing success or
+  starting the first message. Failure after mutation exits authority with `shutdown`, closing its
+  incarnation rather than claiming a recoverable handoff.
+- The combined room run exposed an old agent fixture that used task exit as configuration evidence
+  (`vxpipe-transfer-phase-rooms.log`: 19 tests, one failure). It now waits for the phase's prepared
+  scope, then kills the actual destination as before and verifies failed-transfer cleanup ends
+  the phase. No failure assertion or production deadline was relaxed.
+- Strengthened the existing one-second deadline case by suspending room authority after private
+  attachment/acceptance and observing the actual phase exit before resuming authority. This proves
+  the original budget survives configuration independently of the authority's receive loop. The
+  19 combined agent/human web checks pass in `vxpipe-transfer-phase-rooms-green.log`. Removed the
+  obsolete settlement helper and unused binding; expanded phone and root verification follow.
+  Full readiness/wait/cue/release integration is still outstanding.
+- All 22 focused agent, human web and human phone checks pass in
+  `vxpipe-transfer-phase-focused.log`. Root checks run sequentially under
+  `vxpipe-transfer-phase-root-`, with per-command exit codes and source hashes retained. No package
+  or production timeout changed. No rendered browser, live-provider session or server restart was
+  performed; those full-milestone acceptance gates remain open.
+- Final root verification passes all five commands: formatting, warnings-as-errors compilation,
+  strict Credo, the full suite and unused dependencies. All eight application suites completed:
+  1,265 tests, zero failures and 15 integration exclusions. Every retained command result is exit
+  zero, and all ten changed/new code and test files match their hashes from the start of the run.
+  The 60 local documentation links/anchors and `git diff --check` pass. Commit the phase lifetime,
+  completion ordering, focused checks and documentation together, preserving concurrent visual work.
+- The next integration can authorize private connection preparation against the now-live
+  `Pending.task.pid` and its original scope. It must keep destination input closed, collect the
+  full candidate room graph, and compose holds/waits/cues/adoption/release before invoking the
+  completion boundary. Keeping the task alive does not itself perform these steps. Early acceptance,
+  startup waiting, restoration and rendered/provider acceptance remain unfinished.

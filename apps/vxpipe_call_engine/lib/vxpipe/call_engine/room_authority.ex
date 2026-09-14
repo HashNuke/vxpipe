@@ -281,7 +281,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   @impl true
   def handle_info(
-        {reference, {:ok, %ParticipantTransfer.Preparation{} = preparation}},
+        {:vxpipe_transfer_prepared, reference, %ParticipantTransfer.Preparation{} = preparation},
         state
       )
       when is_reference(reference) do
@@ -289,7 +289,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_info(
-        {reference, {:ok, %ParticipantTransfer.HumanPreparation{} = preparation}},
+        {:vxpipe_transfer_prepared, reference,
+         %ParticipantTransfer.HumanPreparation{} = preparation},
         state
       )
       when is_reference(reference) do
@@ -300,6 +301,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       when is_reference(reference) and is_map(capability) do
     ParticipantTransfer.restored(reference, capability, state)
   end
+
+  def handle_info({reference, :phase_finished}, state) when is_reference(reference),
+    do: {:noreply, state}
 
   def handle_info({reference, {:error, reason}}, state) when is_reference(reference) do
     ParticipantTransfer.worker_failed(reference, reason, state)

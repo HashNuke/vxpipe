@@ -863,3 +863,15 @@ records the existing supervision reused and the remaining authorized connection/
 Fifty-three focused checks and all five root gates pass, including 1,263 tests with zero failures
 and 15 integration exclusions. No fixture or production timeout change was required. This is
 component evidence and does not complete startup, transfer waits/cues, release or recovery acceptance.
+
+The actual destination preparation task now persists after its typed prepared notification. Its
+scope retains the room authority, incarnation, attempt and original deadline through briefing and
+acceptance. Owner loss uses the existing human cleanup path, and the deadline can expire while room
+authority is busy. Both commit paths require its final acknowledgement before success publication
+or destination greeting; loss during policy adoption closes the room without a completion event.
+
+The [phase ownership contract](../readiness-resource-contract.md#transfer-phase-ownership) records
+this integration and the remaining private binding, full readiness, cue and release work. All 22
+focused agent/human web/phone checks and all five root gates pass: 1,265 tests, zero failures and
+15 integration exclusions. The milestone and index remain unchecked because the full lifecycle
+and manual acceptance are still unfinished.

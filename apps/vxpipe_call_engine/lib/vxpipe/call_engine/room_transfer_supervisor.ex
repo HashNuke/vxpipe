@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Cleanup
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
   alias Vxpipe.CallEngine.{TextToSpeechRuntime, RoomAuthority.Startup}
@@ -35,7 +36,7 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
           boolean(),
           [Vxpipe.AgentRuntime.Message.t()],
           nil | TextToSpeechRuntime.t(),
-          integer()
+          %{attempt_id: String.t(), deadline_ms: integer()}
         ) ::
           {:ok, Task.t()} | {:error, :unavailable}
   def prepare(
@@ -46,25 +47,33 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
         first_activation?,
         initial_messages,
         source_text_to_speech,
-        deadline_ms
+        %{attempt_id: attempt_id, deadline_ms: deadline_ms}
       )
       when is_boolean(first_activation?) and is_list(initial_messages) and
              is_integer(deadline_ms) do
+    scope = %{
+      authority: self(),
+      incarnation_id: incarnation_id,
+      attempt_id: attempt_id,
+      deadline_ms: deadline_ms
+    }
+
     task =
-      Task.Supervisor.async_nolink(
-        via(incarnation_id),
-        ParticipantTransfer.DestinationPreparer,
-        :prepare,
-        [
-          request,
-          runtime,
-          destination,
-          first_activation?,
-          initial_messages,
-          source_text_to_speech,
-          deadline_ms
-        ]
-      )
+      Task.Supervisor.async_nolink(via(incarnation_id), fn ->
+        Phase.run(scope, fn ->
+          ParticipantTransfer.DestinationPreparer.prepare(
+            request,
+            runtime,
+            destination,
+            first_activation?,
+            initial_messages,
+            source_text_to_speech,
+            deadline_ms
+          )
+        end)
+      end)
+
+    send(task.pid, {:vxpipe_transfer_phase_start, task.ref})
 
     {:ok, task}
   catch

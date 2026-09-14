@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
   alias Vxpipe.CallEngine.Tool.Context
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request
   alias Vxpipe.CallEngine.Provider.Deepgram.FluxTextToSpeech
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -598,7 +599,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     send(blocked_preparer, :release_test_agent_runtime_model)
 
-    assert_receive {:DOWN, ^preparation_monitor, :process, _preparation_task, :normal}, 2_000
+    assert {:ok, scope} = Phase.scope(preparation_task.pid)
+    assert scope.authority == authority
 
     destination_key =
       {:participant_supervisor, plan.tenant_id, plan.room_id, billing.participant_id}
@@ -626,6 +628,8 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                       reason: :tool_failed
                     }},
                    2_000
+
+    assert_receive {:DOWN, ^preparation_monitor, :process, _preparation_task, :shutdown}, 2_000
 
     assert_archived_transfer(
       :participant_transfer_failed,

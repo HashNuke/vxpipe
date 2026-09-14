@@ -13,7 +13,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Completion,
-    History,
     Pending,
     Preparation
   }
@@ -70,20 +69,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Committer do
         text_to_speech_runtime: preparation.destination.text_to_speech
     }
 
-    state = History.completed(state, request)
-    state = start_first_message(state, request.caller_participant_id)
-
     _ = Startup.discard_text_to_speech(source_text_to_speech, state)
 
     result = Completion.result(request)
 
-    {:ok, result, Completion.publish(request, result, state)}
-  end
-
-  defp start_first_message(state, caller_participant_id) do
-    case FirstMessage.start(state) do
-      {:ok, state} -> state
-      {:error, _error} -> %{state | first_message: FirstMessage.completed(caller_participant_id)}
-    end
+    {:ok, result, state}
   end
 end

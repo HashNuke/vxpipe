@@ -23,6 +23,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl, SendText}
   alias Vxpipe.CallEngine.Event.{ToolCallCompleted, ToolCallFailed}
   alias Vxpipe.CallEngine.Provider.Deepgram.{Flux, FluxTextToSpeech}
+  alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -76,6 +77,50 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     :ok
   end
 
+  test "the prepared phase retains its scope and owner loss discards the private destination" do
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    reception = Map.fetch!(plan.participants, "reception")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, _source_tts, _}, 2_000
+    caller_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :phase_caller)
+    support_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :phase_support)
+    assert {:ok, _} = attach(plan, room, caller, "caller-connection", caller_sink)
+    source = AgentActivationSupervisor.whereis_child(reception.activation_id, :session)
+
+    begin_transfer(plan, room, caller, "phase-owner-lost")
+    assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+    briefing_monitor = Process.monitor(briefing_tts)
+
+    assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt_id}} =
+             attach(plan, room, support, "support-connection", support_sink)
+
+    authority = room_authority(plan)
+    pending = :sys.get_state(authority).pending_participant_transfer
+    phase = pending.task.pid
+    phase_monitor = Process.monitor(phase)
+
+    assert {:ok, scope} = Phase.scope(phase)
+    assert scope.owner == phase
+    assert scope.authority == authority
+    assert scope.attempt_id == attempt_id
+    assert scope.incarnation_id == room.incarnation_id
+    assert scope.deadline_ms == pending.deadline_ms
+    assert {:error, :not_owner} = Phase.complete(phase, pending.deadline_ms)
+    assert {:ok, ^scope} = Phase.scope(phase)
+
+    Process.exit(phase, :kill)
+    assert_receive {:DOWN, ^phase_monitor, :process, ^phase, :killed}, 2_000
+    assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: "phase-owner-lost"}}, 2_000
+    assert_receive {:vxpipe_connection_unavailable, :transfer_failed}, 2_000
+    assert_receive {:DOWN, ^briefing_monitor, :process, ^briefing_tts, _reason}, 2_000
+    assert AgentActivationSupervisor.whereis_child(reception.activation_id, :session) == source
+    assert :sys.get_state(authority).pending_participant_transfer == nil
+    refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _}
+    refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phase-owner-lost"}}
+  end
+
   test "activates a destination's configured STT only after acceptance and reuses it" do
     plan = compile_plan(support_stt: true)
     caller = Map.fetch!(plan.participants, "caller")
@@ -101,6 +146,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
     refute_receive {:test_stt_transport_started, _, _}
 
+    pending = :sys.get_state(room_authority(plan)).pending_participant_transfer
+    phase = pending.task.pid
+    phase_monitor = Process.monitor(phase)
+    assert {:ok, scope} = Phase.scope(phase)
+
     assert :ok =
              CallEngine.participant_transfer_control(
                transfer_control(plan, room, support, attempt_id, :accept)
@@ -111,11 +161,14 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                transfer_control(plan, room, support, attempt_id, :media_ready)
              )
 
+    assert {:ok, ^scope} = Phase.scope(phase)
     finish_private_briefing(briefing_tts, support_sink)
 
     assert_receive {:vxpipe_transfer_main_media, ^attempt_id,
                     %ConnectionAttachment{admission: :main}},
                    2_000
+
+    assert_receive {:DOWN, ^phase_monitor, :process, ^phase, :normal}, 2_000
 
     command = attachment_command(plan, room, support, "support-connection")
     assert {:ok, ingress} = CallEngine.activate_speech_to_text(command)
@@ -431,6 +484,25 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                transfer_control(plan, room, support, attempt_id, :accept)
              )
 
+    authority = room_authority(plan)
+    pending = :sys.get_state(authority).pending_participant_transfer
+    phase = pending.task.pid
+    phase_monitor = Process.monitor(phase)
+    assert {:ok, scope} = Phase.scope(phase)
+    assert scope.deadline_ms == pending.deadline_ms
+    assert :ok = :sys.suspend(authority)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(authority)
+      catch
+        :exit, _reason -> :ok
+      end
+    end)
+
+    assert_receive {:DOWN, ^phase_monitor, :process, ^phase, :normal}, 2_000
+    assert :ok = :sys.resume(authority)
+
     assert_receive {:vxpipe_event,
                     %ToolCallFailed{
                       tool_call_id: "timed-out-human-transfer",
@@ -458,6 +530,60 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                plan.room_id,
                support.participant_id
              )
+  end
+
+  @tag capture_log: true
+  test "phase loss during policy adoption cannot publish a successful transfer" do
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, _source_tts, _}, 2_000
+    caller_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :commit_caller)
+    support_sink = start_supervised!({TestAudioOutputSink, observer: self()}, id: :commit_support)
+
+    assert {:ok, caller_attachment} =
+             attach(plan, room, caller, "caller-connection", caller_sink)
+
+    enforcer =
+      start_supervised!({Vxpipe.CallEngine.TestMediaPolicyEnforcer, owner: self(), mode: :ok})
+
+    assert {:ok, _} = CallEngine.register_room_audio_enforcer(caller_attachment, enforcer)
+    assert_receive {:media_policy_applied, ^enforcer, _}
+
+    begin_transfer(plan, room, caller, "phase-lost-during-commit")
+    assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+
+    assert {:ok, %ConnectionAttachment{transfer_attempt_id: attempt_id}} =
+             attach(plan, room, support, "support-connection", support_sink)
+
+    authority = room_authority(plan)
+    authority_monitor = Process.monitor(authority)
+    phase = :sys.get_state(authority).pending_participant_transfer.task.pid
+    phase_monitor = Process.monitor(phase)
+    assert {:ok, _} = Phase.scope(phase)
+
+    :sys.replace_state(enforcer, &%{&1 | mode: :manual})
+
+    assert :ok =
+             CallEngine.participant_transfer_control(
+               transfer_control(plan, room, support, attempt_id, :accept)
+             )
+
+    assert :ok =
+             CallEngine.participant_transfer_control(
+               transfer_control(plan, room, support, attempt_id, :media_ready)
+             )
+
+    finish_private_briefing(briefing_tts, support_sink)
+    assert_receive {:media_policy_applied, ^enforcer, _}, 2_000
+    Process.exit(phase, :kill)
+    assert_receive {:DOWN, ^phase_monitor, :process, ^phase, :killed}, 2_000
+    Vxpipe.CallEngine.TestMediaPolicyEnforcer.acknowledge(enforcer, :ok)
+
+    assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :shutdown}, 2_000
+    refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phase-lost-during-commit"}}
+    refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _}
   end
 
   @tag capture_log: true
@@ -727,6 +853,13 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
              )
 
     lifecycle
+  end
+
+  defp room_authority(plan) do
+    assert [{authority, _}] =
+             Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    authority
   end
 
   defp force_future_mixer_revision(incarnation_id) do

@@ -14,11 +14,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
     Authorizer,
     Cleanup,
     Committer,
+    Completion,
     DestinationParticipant,
     History,
     HumanHandoff,
     HumanPreparation,
     Pending,
+    Phase,
     Preparation,
     Restoration,
     SourceRestorer
@@ -65,7 +67,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
            not previously_activated?,
            initial_messages,
            state.text_to_speech_runtime,
-           deadline_ms
+           %{attempt_id: attempt_id, deadline_ms: deadline_ms}
          ) do
       {:ok, task} ->
         remaining_ms = max(deadline_ms - System.monotonic_time(:millisecond), 0)
@@ -128,14 +130,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
           state
       ) do
-    settle_task(pending)
-
     cond do
       deadline_elapsed?(pending) ->
+        Phase.cancel(pending)
         Cleanup.discard(preparation, state)
         restore_or_fail(pending, :deadline_elapsed, state)
 
       Authorizer.authorize(pending.request, state) != :ok ->
+        Phase.cancel(pending)
         Cleanup.discard(preparation, state)
 
         reject_pending(pending, :source_authority_changed, %{
@@ -155,8 +157,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
           state
       ) do
-    settle_human_preparation_task(pending)
-
     cond do
       deadline_elapsed?(pending) ->
         pending = %{pending | preparation: preparation}
@@ -201,11 +201,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
         %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
           state
       ) do
-    settle_task(pending)
-
     if HumanHandoff.pending?(pending, state) do
       HumanHandoff.failed(pending, reason, state)
     else
+      Phase.cancel(pending)
       Cleanup.discard_destination(pending.request)
       restore_or_fail(pending, reason, state)
     end
@@ -311,12 +310,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   def worker_down(
         reference,
         _reason,
-        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}} = pending} =
+        %State{pending_participant_transfer: %Pending{task: %Task{ref: reference}}} =
           state
       ) do
-    cancel_timer(pending.timer)
-    _ = RoomTransferSupervisor.cleanup_destination(pending.request, pending.task.pid)
-    {:noreply, state} = restore_or_fail(pending, :preparation_process_down, state)
+    {:noreply, state} = worker_failed(reference, :preparation_process_down, state)
     {:handled, state}
   end
 
@@ -384,10 +381,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   defp commit_prepared(pending, preparation, state) do
     case Committer.commit(pending, preparation, state) do
       {:ok, result, state} ->
-        GenServer.reply(pending.from, {:ok, result})
-        {:noreply, state}
+        {:noreply, Completion.finish(pending, result, state)}
 
       {:error, :destination_unavailable} ->
+        Phase.cancel(pending)
         Cleanup.discard(preparation, state)
         restore_or_fail(pending, :destination_commit_unavailable, state)
     end
@@ -396,10 +393,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   defp settle_task(pending) do
     Process.demonitor(pending.task.ref, [:flush])
     cancel_timer(pending.timer)
-  end
-
-  defp settle_human_preparation_task(pending) do
-    Process.demonitor(pending.task.ref, [:flush])
   end
 
   defp cancel_timer(timer) do

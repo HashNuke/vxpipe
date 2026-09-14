@@ -9,11 +9,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Authorizer,
     Cleanup,
+    Completion,
     History,
     HumanBriefing,
     HumanCommitter,
     HumanPreparation,
-    Pending
+    Pending,
+    Phase
   }
 
   @spec prepared(Pending.t(), HumanPreparation.t(), State.t()) :: {:noreply, State.t()}
@@ -233,13 +235,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   defp progress(%Pending{accepted?: true, briefing: :completed} = pending, state) do
     if Authorizer.authorize(pending.request, state) == :ok do
-      cancel_timer(pending.timer)
       demonitor_outbound_leg(pending.preparation)
 
       case HumanCommitter.commit(pending, pending.preparation, state) do
         {:ok, result, state} ->
-          GenServer.reply(pending.from, {:ok, result})
-          {:ok, state}
+          {:ok, Completion.finish(pending, result, state)}
 
         {:error, :destination_unavailable, state} ->
           {:ok, fail(pending, :destination_commit_unavailable, state)}
@@ -309,7 +309,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp fail(pending, cause, state) do
-    cancel_timer(pending.timer)
+    Phase.cancel(pending)
     discard_preparation(pending, state)
     state = ConnectionLifecycle.discard_transfer(pending.attempt_id, :transfer_failed, state)
     state = History.failed(state, pending.request, cause, :not_required)
@@ -329,11 +329,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
 
   defp deadline_elapsed?(pending) do
     System.monotonic_time(:millisecond) >= pending.deadline_ms
-  end
-
-  defp cancel_timer(timer) do
-    _ = Process.cancel_timer(timer)
-    :ok
   end
 
   defp monitor_outbound_leg(nil), do: nil

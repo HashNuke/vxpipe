@@ -13,7 +13,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
     Completion,
-    History,
     HumanPreparation,
     Pending
   }
@@ -83,9 +82,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanCommitter do
     _ = Startup.discard_text_to_speech(source_text_to_speech, state)
 
     result = Completion.result(request)
-    state = History.completed(state, request)
-    state = Completion.publish(request, result, state)
-
     {:ok, result, state}
   end
 end
