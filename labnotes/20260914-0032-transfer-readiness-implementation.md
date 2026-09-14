@@ -1,10 +1,17 @@
 # Transfer readiness implementation
 
-The latest [handoff investigation](#coordinate-the-live-human-handoff) reproduces the remaining
-integration defect through normal WebRTC acceptance: the destination is already admitted to main
-media when its STT provider starts connecting. That focused check currently fails; no runtime fix
-has been made for it. The test remains uncommitted. The passing results below belong to `c4fea8c`,
-not to the current worktree or completed end-to-end acceptance.
+Current delivery tasks and curated status now live in the
+[milestone checkpoints](../docs/milestones/transfer-readiness-and-wait-sounds.md#implementation-checkpoints).
+The [latest phone diagnosis and delivery review](#phone-diagnosis-and-vertical-delivery-review)
+records the remaining unsupported-audio failure and the documentation-first restructuring.
+Earlier sections below are chronological evidence, not parallel current task lists.
+
+The current [automatic human handoff work](#wire-normal-acceptance-through-prepared-media) connects
+normal acceptance to private preparation, whole-room collection, local cues, exact policy adoption
+and acknowledged release. All six WebRTC transfer checks pass, including delayed destination STT,
+actor reuse and a surviving room after source teardown. This work remains uncommitted: embedded
+fixture migration, phone integration, complete recovery and earlier audience holds are unfinished. The
+1,274-test umbrella result below belongs to `c4fea8c`, not to this worktree or full acceptance.
 
 The last verified [Gateway preparation checkpoint](#integrate-private-gateway-preparation) allocates
 dormant private media on actual WebRTC and phone connections. Complete prospective WebRTC room
@@ -2101,3 +2108,127 @@ added or run for this documentation update, and no development server or provide
 restarted. Verification compares the account with the current source, the retained one-test
 failure, the five successful `c4fea8c` gate results and the milestone's unchecked acceptance tasks.
 All 46 local Markdown links/anchors and the documentation whitespace check pass.
+
+## Wire normal acceptance through prepared media
+
+- Previous goal turn: progress, committed the requested detour accounting as `6f9455a`. Revalidated
+  the existing failing WebRTC test and kept the concurrent visual work separate. This turn resumes
+  implementation; it does not redefine the full milestone around that one reproduction.
+- Normal human acceptance now asks the persistent phase to supervise preparation outside authority
+  and Gateway message loops. The phase stays responsive to scope/completion requests, and links
+  its supervised worker so abrupt phase loss cannot leave it running independently. Workers retain
+  the original attempt deadline and lease prepared resources to the phase.
+- The new flow invokes private preparation on actual owning connections, captures all connections
+  in the prospective membership, gates input/output, starts participant-local waits, collects the
+  complete prepared graph, stops/clears waiting, and awaits each mandatory local cue. It refreshes
+  readiness and validates the captured room before the policy/control commit. This currently begins
+  after acceptance/briefing; immediate audience waiting at authorization remains unfinished.
+- Human commit uses the exact prepared candidate and registers only enforcers present in the
+  required resource set. Participant installation checks that committed snapshot instead of creating
+  another admission revision. Gateway adoption updates attachments on existing actors; it does not
+  call ordinary pipeline startup. Release rechecks ready resources, opens the prepared outputs and
+  input gates, and acknowledges before completion. Source TTS is retained until completion; source
+  participant cleanup recognizes its already-committed departure. Removed the old human committer.
+- The first wiring run appeared green, but compilation reported an alias declared below its use.
+  That caused completion to crash authority after sending `transfer.active`; source shutdown alone
+  let the original test pass. Added the missing surviving-room assertion, observed the expected
+  failure (`vxpipe-human-handoff-completion-red.log`), fixed alias scope, and reran successfully
+  (`vxpipe-human-handoff-completion-green.log`). The earlier apparent green is insufficient evidence.
+- A held-text check exposed the missing model-admission gate. The fixture initially expected the
+  sideband error type instead of RTVI's `error-response`, then incorrectly counted a continuation
+  of the original source request as a newly admitted held request. Corrected both fixture assumptions
+  and bound the assertion to the held request's correlation. That check now passes in
+  `vxpipe-human-handoff-held-text-correlated.log`. Held input cannot interrupt/cancel the transfer;
+  held model output and caller-idle eligibility are also gated. Broader gate/race coverage remains.
+- The older WebRTC integration check awaited activation before delivering its simulated provider's
+  Connected acknowledgement. It now acknowledges STT before activation and expects ready media
+  afterwards. Its later independent preparation exercises also use a fresh output generation rather
+  than resetting a transferred output to generation one. All six WebRTC checks pass in
+  `vxpipe-human-handoff-web-updated.log`, including the existing transcript/recording integration.
+- Broader focused runs expose outstanding embedded connection fixtures: they attach the ExUnit
+  process as the connection and cannot answer the required preparation/readiness protocol. The
+  engine human web/phone run has five failures out of 15; the earlier Gateway web/phone run has
+  three failures out of 12, of which the WebRTC provider-order failure is now corrected. These need
+  proper simulated connection adapters and updated completion assertions; do not add a production
+  bypass that considers an unsupported connection ready.
+- Remaining runtime concerns include recovery after a held preparation failure, the server-side
+  acceptance window, audience holds before destination preparation, participant/multiple-connection
+  changes during the attempt, removal of selected-but-undemanded private speech, and corresponding
+  agent/startup orchestration. Phase loss currently closes a held connection; this does not implement
+  the required bounded source recovery. Complete acceptance, live browser/audible checks and the
+  milestone/index checkboxes remain open.
+- Formatting, warnings-as-errors compilation, strict Credo and unused dependencies pass. The full
+  umbrella run completed with exit 2 in `vxpipe-human-handoff-root-test.log`: 1,275 tests, nine
+  failures and 15 exclusions. Five failures are in engine human-transfer checks, two in outbound
+  phone checks, and two additional failures in the actual Telnyx/Twilio incoming-call harnesses.
+  Those harnesses wait for source retirement and require diagnosis; do not assume all failures are
+  fixture-only. The other six application suites pass. This is not a committable checkpoint yet.
+  No dependency versions, lockfiles, production deadline values or server processes were changed
+  or restarted. Complete the remaining implementation and verification before committing.
+
+## Phone diagnosis and vertical delivery review
+
+### Remaining phone integration failure
+
+- The existing incoming Telnyx/Twilio harnesses invoked media socket callbacks from the test
+  process. Updated their supervised socket fixture to own and execute the real callbacks,
+  retain socket state, deliver outbound frames and echo playback marks through the real parser.
+  Provider mark envelopes require Telnyx stream/sequence fields and Twilio sequence numbers;
+  the first fixture revision omitted those fields and failed before meaningful handoff evidence.
+- Added handling for the actual four-element normal close callback and supplied the simulated
+  source STT Connected acknowledgement before its transcript events. With those fixture issues
+  corrected, both harnesses still fail during preparation with
+  `media_connection/unsupported_audio`. The retained `vxpipe-human-handoff-phone-cause.log`
+  reports two tests and two failures. This is a remaining media integration issue, not evidence
+  that all current phone failures can be fixed by increasing test waits.
+- A temporary trace printed only the safe preparation scope/reason to locate that boundary.
+  Removed it after diagnosis. No production workaround, provider downgrade, dependency change or
+  deadline change was made. The phone fixture edits and human handoff runtime remain uncommitted;
+  no full root run after these fixture edits is claimed.
+
+### Delivery-plan review, separate from implementation progress
+
+- The user requested the milestone document be split into checkpoints and concrete tasks first,
+  with a curated account of work already done. Paused runtime editing for this documentation step.
+  The preceding status response changed no implementation state; this step changes the actual
+  delivery document and records the evidence needed to resume the first runnable slice.
+- Replaced the component-first checklist with five runnable checkpoints: human web handoff, AI
+  handoff, initial caller waiting, phone handoff parity, and changing/multiple listeners. Each
+  contains implementation tasks, user-observable acceptance, failure handling, relevant diagnostics,
+  verification and a coherent commit. Dependencies follow the existing contracts and prepared
+  components; no generic framework or additional prerequisite milestone was introduced.
+- Human web acceptance remains first. Its existing phone/embedded regressions must pass before
+  that implementation commit; a later phone parity checkpoint does not permit those failures to
+  be deferred. Broader phone/provider verification remains a complete runnable call slice, with
+  any external blocker recorded without a false pass. Independent work can continue while a
+  specific external check is unavailable.
+- Reviewed coverage against all existing acceptance items: sound resolution/isolation, all selected
+  participant/room capabilities, unaffected-instance retention, audience/cue ordering, opening
+  playback, clocks, recovery, safe diagnostics, rendered samples and live phone evidence. These
+  remain requirements; the final audit only reconciles missing or invalidated evidence, rather than
+  delaying failure handling or testing until all implementation is written.
+- Replaced the milestone's long chronological evidence with committed-component summaries and
+  representative commits, a separate dirty-worktree account, a verification ledger and a concise
+  detour explanation. Existing historical labnotes retain the detailed failed approaches and
+  intermediate results. Corrected stale statements that common collection/private playback did
+  not yet exist and that implementation approval was still pending in the index review table.
+- The ledger distinguishes `c4fea8c` (all five root gates; 1,274 tests, zero failures), six passing
+  WebRTC checks with simulated providers, the later full worktree run (1,275 tests, nine failures),
+  and the latest two failing phone harnesses. No browser/audible acceptance or completed delivery
+  checkbox was inferred from component evidence. Milestone 23 and the packaging/retention hold
+  remain unchanged in completion status.
+
+### Documentation checkpoint verification
+
+- All 145 local Markdown links/anchors across the milestone, index and implementation labnote
+  resolve. The JSON example parses and is unchanged. Comparison with the committed document
+  confirms the definition, readiness, private playback, initial sequence and complete acceptance
+  checklist are preserved. The transfer sequence changes only stale approval wording and records
+  the already generated cue's exact duration/frequency/ramps from the packaged asset README.
+- All 25 milestone identities, order and completion states are preserved. Five delivery checkpoint
+  sections exist and none of their implementation/acceptance tasks is checked complete. The local
+  design-review checklist is separate from those runtime tasks.
+- `git diff --check` passes. No tests were added or run for this documentation-only checkpoint;
+  no runtime file, dependency or running development server was changed during the restructuring.
+  Runtime edits already present in the worktree are left for the first runnable implementation
+  checkpoint and retain their explicitly recorded failures.

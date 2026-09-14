@@ -1,7 +1,10 @@
 # Transfer readiness and participant wait sounds
 
-Status: implementation in progress (2026-09-14); definition/assets and private playback checkpoints
-complete. Common readiness, lifecycle waiting and coordinated transfer acceptance remain incomplete.
+Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
+readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
+Normal human-handoff integration is uncommitted and the latest full suite has nine failures.
+Start with the [delivery checkpoints](#implementation-checkpoints) and
+[curated implementation evidence](#implementation-evidence).
 Prerequisites: [Call lifecycle and opening audio](opening-audio-and-call-lifecycle.md),
 [Agent transfers](agent-transfers.md), [Live mixing and media policy](live-mixing-and-media-policy.md),
 [Human web transfers](human-web-transfers.md), [Common phone transfers](telnyx-calls.md),
@@ -25,17 +28,21 @@ phone, human destinations, agent destinations, and rooms with more than two part
 
 ## Current gap
 
-- `HumanHandoff.progress/2` commits when acceptance and briefing are complete.
-  `HumanCommitter` promotes the connection and publishes completion before Gateway receives the
-  promotion and starts destination STT and main media. `transfer.active` is later than the engine's
-  success. These must become one coordinated lifecycle with a truthful final completion point.
-- The latest transcription fix correctly resolves destination STT and forwards other participants'
-  transcripts, but its post-promotion STT startup must move into gated preparation.
-- Startup readiness is currently concentrated around caller attachment/STT. There is no common
-  readiness report covering every enabled room and participant capability.
-- The opening player enqueues a finite asset and awaits output completion. It is not an independent,
-  paced looping player. Private and room output also need one ordered recipient output path.
-- The supplied WAVs are stereo; the existing opening WAV decoder requires 48 kHz mono PCM16.
+The original defect was completion before destination STT/main media were ready. The committed
+groundwork now supplies independent players, shared ordered output, capability readiness and
+private preparation. The missing work is completing and verifying their use in ordinary calls.
+
+| Area | Current boundary | Next required result |
+| --- | --- | --- |
+| Human web transfer | Uncommitted normal acceptance prepares media, collects readiness, plays cues, adopts and releases; six WebRTC checks pass with simulated providers. | Finish early audience holds, post-briefing acceptance, recovery and sample verification; pass the full suite before committing. |
+| Phone transfer | Private preparation components pass without selected STT; current full call harnesses fail with `media_connection/unsupported_audio`. | Resolve the configured speech/media integration and verify actual phone handoff ordering. Component preparation does not establish phone STT compatibility. |
+| AI transfer | Existing transfer works under its earlier contract; the new wait/readiness/cue sequence is not integrated. | Reuse the completed human flow's coordination for an agent destination, including model/tools and first-message gating. |
+| Initial call | Opening playback exists; early caller waiting and full initial readiness orchestration are unfinished. | Provide caller output before expensive setup, compose waiting with opening playback, then release conversation once. |
+| Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
+
+The last verified implementation commit is `c4fea8c` (1,274 tests, zero failures). The latest full
+run of the subsequent worktree reports 1,275 tests and nine failures; later phone fixture changes
+still leave both incoming-call harnesses failing. Neither result establishes full milestone acceptance.
 
 ## Call-definition changes
 
@@ -241,7 +248,7 @@ flowchart LR
    `transfer_to_agent` or `transfer_to_human` from the destination's type. Rejecting an
    unauthorized request does not put anyone on hold. Prepare destination configuration/resources
    asynchronously under supervision; keep room authority and Gateway message loops responsive.
-2. A human destination connects privately and hears its briefing/notice. **Proposed acceptance
+2. A human destination connects privately and hears its briefing/notice. **Approved acceptance
    change:** expose acceptance only after required briefing playback completes. Authenticate that
    acceptance window server-side for web and phone. Premature controls do not accept or end the
    attempt; they do not reset the deadline. This replaces today's permitted early-accept latch and
@@ -260,10 +267,9 @@ flowchart LR
    Agent destinations skip human briefing/acceptance/receiver playback but use the same readiness
    and audience wait barrier, with no destination greeting/model output before release.
 6. Stop/clear each listener's wait frames and play the mandatory connection cue once per listener.
-   Proposed cue audience: every held human listener, including the incoming human, even when their
-   wait slot is null. Recommend a
-   short, distinct 1 kHz beep, about 250 ms, with brief edge ramps and a -6 dBFS peak, above the
-   supplied wait assets' level. Generate/package this cue during implementation. Each output path
+   The approved cue audience is every held human listener, including the incoming human, even when
+   their wait slot is null. Use the generated 250 ms, 1 kHz beep with 5 ms edge ramps and a -6 dBFS
+   peak, above the supplied wait assets' level. Each output path
    must acknowledge ordered completion, not merely successful enqueue. Wait for all applicable
    listener cues before releasing any conversational output.
 7. Revalidate the exact attempt, deadline, membership, resource generations and readiness. Commit
@@ -293,36 +299,202 @@ held conversation. End when no valid conversation can be recovered. Never redial
 
 ## Implementation checkpoints
 
-Each checkpoint includes its own failing contract check first, implementation, focused verification,
-documentation and labnotes; preserve a runnable umbrella between commits.
+Deliver the following runnable slices in order. Each checkpoint contains its own behavior,
+failure handling, diagnostics, verification and coherent commit. Reuse the committed groundwork;
+change a resource adapter only when a required behavior or reproduced failure in the current
+slice demands it. There is no separate infrastructure-completion phase.
 
-- [x] **Definition and asset resolution:** add typed call-level wait slots, presence-aware
-  URL/null/default resolution, strict validation, bounded URL fetching, pinned plan/asset resolution,
-  compatibility parsing and the development sample configuration.
-  Normalize bundled stereo PCM16 to canonical 48 kHz mono once per cached asset; generate the
-  connection beep. Reject invalid/oversized assets before starting the dependent call/transfer.
-- [x] **Private paced playback:** implement supervised independent looping players and the shared
-  per-recipient output arbiter, including pause/resume, clear/drain, cue playback and generation
-  fencing. Integrate web and common phone output without recreating their pipelines per phase.
-- [ ] **Common readiness:** define resource descriptors/reports and prepared bindings for all selected
-  STT/TTS/model/tool resources, both participant and room services. Reuse unchanged generations and
-  prepare only the actual diff. Cover provider-ready acknowledgements beyond child startup.
-- [ ] **Initial caller waiting:** expose usable caller output during asynchronous room setup, compose
-  waiting with opening audio/first messages, and preserve admission and lifecycle timing semantics.
-- [ ] **Coordinated transfers:** hold every audience listener, expose the correct acceptance window,
-  prepare destination capabilities before media, await readiness/cues/policy/release acknowledgements,
-  then publish completion and retire source. Apply the same barrier to agent and human destinations.
-- [ ] **Failure and sample verification:** exercise restoration, disconnects, saturation and races;
-  update `/transfer` and `/pipecat-console` states and safe diagnostics. Add phone adapter parity
-  fixtures and run authorized provider checks in the existing integration lane.
-- [ ] Complete the [common gates](index.md#common-implementation-and-verification-gates), record
-  implementation evidence here, and check the milestone/index only after acceptance passes.
+| Delivery checkpoint | Runnable result | Depends on | Status |
+| --- | --- | --- | --- |
+| [Human web handoff](#checkpoint-human-web-handoff) | Desktop caller transfers to the mobile transfer desk, hears waits/cues, then exchanges audio and transcripts; failure restores or ends the call correctly. | Existing committed preparation/playback | In progress; uncommitted integration, acceptance open |
+| [AI handoff](#checkpoint-ai-handoff) | Caller hears the AI-transfer wait and cue, then talks to the ready destination agent. | Human handoff coordination | Not integrated |
+| [Initial caller waiting](#checkpoint-initial-caller-waiting) | Caller hears setup waiting, optional opening audio and exactly one correctly ordered first-message action. | Established hold/readiness/output lifecycle | Not integrated |
+| [Phone handoff parity](#checkpoint-phone-handoff-parity) | Web/phone and phone/phone callers complete the same waits, briefing, acceptance, cues and human conversation. | Human handoff and initial-call coordination | Components exist; full handoff currently fails |
+| [Changing and multiple listeners](#checkpoint-changing-and-multiple-listeners) | Five-participant calls and repeated transfers retain independent waits and correct media/privacy as connections change. | Completed transfer paths | Component coverage only |
 
-Expected ownership: `CallDefinition`/`DefinitionCompiler`/`ResolvedCallPlan` own the schema;
-`PlanStartup`, startup readiness and participant-transfer modules own orchestration; small dedicated
-readiness and local-playback components own their respective state. Gateway's main/private media
-adapters own output ordering and acknowledgements. Calls owns prepared admission/plan persistence;
-Console owns human-facing phases. Keep provider startup and media pacing outside RoomAuthority.
+A checkpoint stays open until its runnable acceptance and applicable
+[common gates](index.md#common-implementation-and-verification-gates) pass. Fix regressions in
+existing supported paths within the checkpoint that introduces them: the known phone/embedded
+failures block the human-web checkpoint's commit even though broader phone acceptance has its own
+slice. Record unavailable external verification explicitly; do not label a local simulation as
+live-provider proof. Continue independent work if an external check is blocked, preserving the
+unfinished checkbox and exact missing evidence.
+
+### Checkpoint: human web handoff
+
+**Runnable outcome:** start a call in `/pipecat-console`, request human support, connect `/transfer`
+on a second device, hear its private briefing, accept, hear the local waits/cues, then talk in both
+directions with permitted transcripts. A delayed or failed capability produces a useful preparing
+or recovery state rather than a false completion or unexplained return to the create-room screen.
+
+Carry forward the existing uncommitted `HumanMediaHandoff`/`HandoffGate` integration and six passing
+WebRTC checks. The new normal-handoff regression disables waits; these results do not close this
+checkpoint.
+
+Implementation tasks:
+
+- [ ] Gate all existing audience input/output/model turns at authorized transfer start and begin
+  `transfer_to_human` immediately. Suspend caller-idle handling while preserving the whole-call
+  clock; suppress competing source speech and discard held microphone frames without replay.
+- [ ] Enforce briefing completion before authenticated acceptance on both server control paths.
+  Keep early/duplicate controls harmless and start `transfer_joining` immediately upon valid
+  acceptance. The original total attempt deadline covers every stage.
+- [ ] Finish ordinary acceptance through whole-room preparation, ordered wait clearing, every
+  listener's cue, exact policy adoption, acknowledged release and one consistent completion.
+  Retain source resources until completion and retain unaffected capability/codec instances.
+- [ ] Finish rejection, expiry, disconnect and preparation/cue failure cleanup. Recover the source
+  within the existing restoration budget, with readiness and cue before release; close when
+  recovery is impossible or partial release leaves uncertain media admission. Never redial.
+- [ ] Resolve existing engine connection-fixture failures and the configured phone
+  `unsupported_audio` failure without a production readiness bypass or deadline increase.
+  Remove prepared private resources that the resulting policy does not demand.
+- [ ] Connect Console phases and safe diagnostics to the actual engine state: briefing, accepting,
+  preparing, connected and failure/recovery. Show the blocking capability kind and phase timing
+  without exposing provider payloads. Keep the acceptance button readable through transitions.
+
+Acceptance and commit tasks:
+
+- [ ] Exercise defaults, a valid fetched URL, per-slot nil and whole-object nil through the normal
+  sample path; nil still requires readiness and the mandatory cue. Verify cue-before-room output
+  and no wait tail or private audio in transcription, model history or recordings.
+- [ ] Delay required destination, remaining-participant and room capabilities independently, then
+  inject readiness loss and cue backpressure. Observe no premature conversation/success and
+  unchanged healthy instances; verify held text/audio cannot interrupt or replay after release.
+- [ ] Run the owning engine/Gateway/Console checks, including the existing web/phone transfer
+  regressions, and all five root gates. Record exact results for the implementation being committed.
+- [ ] Inspect desktop `/pipecat-console` and mobile-sized `/transfer` with `agent-browser` in
+  rendered Chrome, deliberately delaying readiness. Verify the audible two-device handoff and
+  a controlled recovery path; retain explicit limits for any unavailable physical-device check.
+- [ ] Commit the usable human-web slice with its implementation, focused tests, sample behavior,
+  milestone status and labnote evidence. Then begin the AI slice.
+
+### Checkpoint: AI handoff
+
+**Runnable outcome:** the caller requests an allowlisted AI destination, hears `transfer_to_agent`
+(default café-bossa), hears the cue, then converses with that agent using the retained call context.
+A destination that cannot become ready returns control through bounded source recovery.
+
+Implementation tasks:
+
+- [ ] Reuse the human slice's hold/readiness/cue/adopt/release sequence, skipping human briefing,
+  acceptance and joining playback. Keep the existing allowlist, Variables, history modes and
+  total transfer deadline; introduce no alternate transfer configuration.
+- [ ] Prepare the destination activation, model/tool/MCP bindings and demanded STT/TTS/output
+  before release. Prevent destination greeting, model requests and late source speech from
+  crossing the held interval. Preserve every unaffected participant and room capability.
+- [ ] Apply first-message behavior once after release/completion. Discard failed destination
+  preparation and recover or end under the same failure contract as human transfers.
+- [ ] Expose the destination and actual preparing/failure phase through the existing sample and
+  diagnostics so the transition is reproducible from an ordinary caller session.
+
+Acceptance and commit tasks:
+
+- [ ] Run success and failed-preparation scenarios from the caller sample, including independent
+  delays for model/tools and TTS, default/URL/nil waiting, exactly-once greeting/completion and
+  source continuity after recovery. Verify audio/transcript privacy and resource reuse.
+- [ ] Inspect affected sample states in rendered Chrome; verify audible wait/cue/greeting order.
+  Pass focused agent-transfer checks and all five root gates, update evidence and commit the slice.
+
+### Checkpoint: initial caller waiting
+
+**Runnable outcome:** on a deliberately slow new call, a connected caller hears `call_setup`
+(default phone-ring), hears any configured opening announcement privately, and enters conversation
+only when opening playback and all required initial capabilities are ready.
+
+Implementation tasks:
+
+- [ ] Establish the minimal caller identity and usable web/phone output before expensive resource
+  initialization. Start the caller's independent wait and initialize required resources
+  asynchronously using the existing readiness contracts and owning supervisors.
+- [ ] Give file and text opening playback priority: pause waiting, clear its tail, finish opening,
+  then resume the same cursor only if setup still needs time. Preserve the opening's own TTS
+  profile, pre-recording isolation and existing supported initial receiver types.
+- [ ] Release microphone/model/first-message behavior only after complete initial readiness and
+  opening completion. Preserve exactly-once admission and all startup, idle and whole-call clocks.
+  Initial setup does not add the transfer connection cue.
+- [ ] End failed/disconnected/timed-out startup cleanly, including its player and preparation
+  workers. Report safe setup timing and the real readiness blocker through existing diagnostics.
+
+Acceptance and commit tasks:
+
+- [ ] Demonstrate delayed room and participant setup with and without file/text openings, using
+  defaults, a URL and nil. Verify cursor resume, no overlapping audio, no recording/transcription
+  of private audio, no early microphone admission and exactly-once first-message behavior.
+- [ ] Verify startup failure/clock behavior in web and deterministic phone paths. Inspect the
+  caller sample in rendered Chrome and confirm audible opening/wait ordering. Pass focused and
+  all five root gates, document the runnable result and commit the slice.
+
+### Checkpoint: phone handoff parity
+
+**Runnable outcome:** incoming Telnyx/Twilio and web callers transfer to a phone human, who hears
+the private briefing and presses 1 after it completes. Each listener hears its own wait/cue;
+conversation and permitted transcripts follow only after all required media is ready.
+
+This expands acceptance of the common flow. It does not postpone repairing phone regressions
+introduced by earlier checkpoints or create a second provider-specific handoff coordinator.
+
+Implementation tasks:
+
+- [ ] Exercise the real common telephony session/codec/STT boundary for configured supported
+  formats in both providers. Reuse the same private preparation and adoption protocol as web;
+  retain native timelines and unaffected providers across holding and release.
+- [ ] Complete phone acceptance-window, clear, fresh playback-mark and drain integration under
+  the single deadline. Duplicate/out-of-order marks must not complete a new cue or release speech.
+- [ ] Carry the same failure, disconnect, bounded recovery, privacy and diagnostic behavior through
+  web/phone and phone/phone calls; retain the existing signed-event and admission boundaries.
+
+Acceptance and commit tasks:
+
+- [ ] Run deterministic incoming/outgoing Telnyx/Twilio flows with selected STT, delayed readiness,
+  default/URL/nil waits, finite cue backpressure, invalid early acceptance and provider disconnect.
+  Assert actual audio/transcripts after release and no private audio in recordings.
+- [ ] In the tagged, explicitly authorized provider lane, verify audible cue-before-conversation,
+  clearing and recovered conversation. Record the provider/path and evidence, or the exact external
+  blocker; playback marks alone do not prove physical audibility.
+- [ ] Pass relevant phone/engine checks and all five root gates, update evidence and commit the
+  runnable slice. Keep any unavailable live-provider acceptance visibly open.
+
+### Checkpoint: changing and multiple listeners
+
+**Runnable outcome:** a five-participant call transfers its active agent while every remaining
+human hears an independent wait. A listener joining, leaving or replacing a connection affects
+only that listener's episode; subsequent transfers and allowed conversation continue correctly.
+
+Implementation tasks:
+
+- [ ] Reconcile the actual whole-room audience and all required resources on membership or
+  connection changes. Support receive-only monitors and multiple authorized sinks per human
+  without creating microphone permission or sharing another participant's cursor.
+- [ ] Fence each episode by incarnation, attempt, participant and connection generation. Preserve
+  unaffected resources/cursors; refresh relevant preparation and replay cues when required by
+  readiness loss or a changed candidate, within the original deadline.
+- [ ] Complete repeated transfer, receiver re-entry, disconnect and partial-release cleanup across
+  the established human and AI paths. Retain bounded queues and exact-attempt cancellation.
+
+Acceptance and commit tasks:
+
+- [ ] Demonstrate the five-participant hold and two listeners at seven/three seconds of one shared
+  ten-second fixture in a running call. Replace a connection and add/remove a listener during
+  waiting/cue; verify independent playback, multiple-sink ordering and unchanged service identities.
+- [ ] Exercise stale readiness, relevant/unrelated policy revisions and repeated human/AI transfers
+  with audio/transcript/recording assertions. Include a controlled partial-release failure and
+  safe phase/queue diagnostics. Inspect any changed sample UI in rendered Chrome.
+- [ ] Pass focused and all five root gates, update evidence and commit the runnable slice.
+
+### Final milestone audit
+
+- [ ] Reconcile every item in [automated and manual acceptance](#automated-and-manual-acceptance)
+  with evidence from its owning slice; execute only missing checks or checks invalidated by later
+  changes. Diagnostics, recovery and browser verification belong to each slice, not this final audit.
+- [ ] Confirm all checkpoint commits, current root gates and required audible/provider evidence.
+  Update the milestone and its index together only when the full approved outcome is verified.
+
+Expected ownership remains unchanged: `CallDefinition`/`DefinitionCompiler`/`ResolvedCallPlan` own
+schema; `PlanStartup` and participant-transfer modules own orchestration; readiness and playback
+components own their respective state; Gateway owns media ordering and transport acknowledgements;
+Calls owns prepared admission/persistence; Console owns human-facing phases. Provider startup and
+media pacing stay outside RoomAuthority. No new generic orchestration framework is required by
+this delivery plan.
 
 ## Automated and manual acceptance
 
@@ -395,514 +567,113 @@ Console owns human-facing phases. Keep provider startup and media pacing outside
 - [ ] Runtime acceptance and common implementation gates pass.
 
 The original planning checks covered documents and copied assets only. Implementation evidence
-is recorded below; no new playback/browser/provider acceptance is claimed yet.
+is recorded below; no complete runtime/browser/provider acceptance is claimed yet.
+
+### Vertical delivery review
+
+- [x] Replace component-first delivery with runnable checkpoints and explicit dependencies, tasks,
+  failure cases, verification and commits. Review performed locally on 2026-09-14; this is a
+  delivery-plan review, not an independent runtime acceptance review.
+- [x] Reconcile existing work against commits, source and retained test logs. Separate committed
+  preparation from uncommitted lifecycle integration and replace stale chronological status with
+  the current evidence ledger. Keep historical details in the implementation labnote.
+- [x] Map configuration, isolation, complete readiness, unchanged-resource retention, cue ordering,
+  clocks, recovery and diagnostics into each applicable slice. Assign initial opening integration,
+  phone playout and changing audiences explicit runnable checkpoints. Retain the full acceptance
+  checklist and the packaging/retention hold in the index.
+- [x] Reject another prerequisite-only sequence and a final testing-only phase. Existing phone
+  regressions must be fixed in the first slice; broader phone acceptance remains separately visible.
+  A blocked external check does not become a passed checkbox or prevent independent progress.
+
+No new runtime contract or configuration field is introduced by this restructuring. The acceptance
+window and cue audience were already authorized; their wording now reflects that approval.
+Detailed review and verification are recorded in the
+[checkpoint labnote](../../labnotes/20260914-0032-transfer-readiness-implementation.md#phone-diagnosis-and-vertical-delivery-review).
 
 ## Implementation evidence
 
-The first checkpoint introduces the typed `wait_sounds` selection, schema `20260914.01`, explicit
-compatibility for `20260913.01`, bounded URL preparation and pinned normalized audio. A prepared
-manifest stores each distinct audio payload once, keyed by content digest, plus slot/cue references
-and the normalization profile. New call preparation reuses URL cache entries for up to 60 seconds;
-after that it fetches again. Active/prepared calls retain their own immutable bytes. The original
-bundled WAV RIFF-size metadata required correction; waveform bytes are unchanged. The built-in
-250 ms connection beep is generated, but runtime cue playback is not yet integrated.
-
-Compiler, asset, admission and PostgreSQL reconstruction regressions have passed. Complete gate
-results and subsequent checkpoints are tracked in the
-[implementation labnote](../../labnotes/20260914-0032-transfer-readiness-implementation.md).
-
-All five root gates pass for the definition/asset checkpoint: formatting, warnings-as-errors
-compilation, strict Credo, 1,025 umbrella tests with zero failures, and unused-dependency checks.
-Older serialized plans hydrate missing wait fields only at the explicit preparation boundary;
-the original saved bytes/schema/identities remain unchanged. Already prepared audio is reused
-without refetching. Playback, the common readiness barrier and the remaining acceptance items
-remain incomplete.
-
-The playback primitive checkpoint adds supervised independent cursors, one pending frame per sink,
-completion-driven pacing, drain-before-pause/stop, cursor-preserving resume, and finite cue
-completion. Focused checks demonstrate two listeners at seven/three seconds and one participant's
-multiple sinks sharing a cursor. Private audio is explicitly excluded from native WebRTC and phone
-recording handoffs. These primitives are not yet connected to call/transfer phases; the private
-playback checkpoint remains unchecked until the shared recipient output arbiter is integrated.
-
-All five root gates pass for the playback primitive checkpoint: formatting, warnings-as-errors
-compilation, strict Credo, 1,032 umbrella tests with zero failures, and unused-dependency checks.
-Runtime integration and rendered/provider acceptance remain pending.
-
-The native-output clear primitive now discards queued audio and drains the in-flight frame before
-acknowledging. WebRTC retains its encoder/SSRC/RTP timeline; phone retains its encoding pipeline and
-sequence clock while clearing remote queued media. This enables phase changes without codec
-restarts, but does not itself integrate shared output or establish remote phone playback marks.
-
-Shared recipient arbitration is now integrated into production WebRTC and common phone output.
-Room frames and private/direct frames share the same encoder and output timeline. Room frames are
-discarded during private playback; replacing a room binding drains its old frame and preserves
-pending private playback. Generation-fenced output holds and drain-before-release are available
-for lifecycle integration. The eight focused regressions and existing web/phone attachment and
-human-transfer checks pass. Wait/cue phase orchestration and phone playback marks remain pending,
-so the private paced playback checkpoint and milestone acceptance remain unchecked.
-
-Finite cue completion now includes explicit final drain on every sink. Phone output maps drain
-and clear to exact provider playback marks on the bound stream; clear cancels older marks before
-issuing its own acknowledgement marker. WebRTC drain requires completion of the final paced
-packet. Shared output rejects conversation/release while drain is pending and phone acknowledgement
-failure closes the output. Deterministic socket/native/arbiter/player checks cover these boundaries;
-this does not yet establish audible live-provider acceptance or integrate the transfer barrier.
-Phone socket call-event dispatch is now asynchronous and bounded so call processing cannot block
-the same socket's playback acknowledgements. Both provider checks pass with the leg dispatcher
-deliberately suspended while a mark is processed.
-
-All five root gates pass for the playback-marks checkpoint, including 1,053 umbrella tests with
-zero failures (15 integrations excluded). Initial waits, common
-readiness, coordinated transfer release, and rendered/live-provider acceptance remain incomplete.
-
-Native phone output now also enforces a local 20 ms pacing boundary after idle gaps, preventing
-overdue pipeline timestamps from producing a catch-up burst. Small encoding delays are absorbed
-without accumulating drift; the codec and output sequence remain intact. Controlled-clock and
-phone integration fixtures pass, followed by all five root gates with 1,054 tests and zero failures
-(15 integrations excluded). This proves local queue pacing, not audible live-provider acceptance.
-
-The common readiness foundation now has exact resource descriptors, ordered attempt-bound reports
-and incremental reconciliation that preserves unchanged evidence. Missing resources/adapters,
-foreign or stale reports, multiple connections per participant and readiness loss have focused
-coverage. STT/TTS expose actual provider initialization evidence and preserve unchanged session
-generations. The [resource contract](../readiness-resource-contract.md) explains the ownership and
-fencing decisions. Thirty-seven focused barrier/speech/local-provider tests pass. The full
-prospective inventory, other capability/room adapters, asynchronous collector and lifecycle use
-remain pending, so the common readiness checkpoint is not yet complete.
-
-All five root gates pass for the readiness foundation and speech-adapter checkpoint: formatting,
-warnings-as-errors compilation, strict Credo, 1,067 umbrella tests with zero failures (15 integrations
-excluded), and unused-dependency checks. The private playback checkpoint is now complete based on
-the independent player, shared output, clear/drain, generation and phone pacing evidence above;
-this does not check off the separate rendered/live-provider or lifecycle acceptance requirements.
-
-Core room services now expose readiness at their owning boundaries. Mixer/router require an
-installed policy and preserve their generations across policy updates; only relevant interval
-evidence changes. Variables retains its evidence through ordinary updates. Live inspection and
-archive require open local handoffs, with archive also requiring a bound producer. Pending remote
-archive writes preserve the existing asynchronous contract. Forty focused room-service tests pass.
-Recording, model/tool readiness, the full prospective inventory and lifecycle integration remain
-pending; this is partial progress on common readiness.
-
-Readiness collection is now supervised and asynchronous. It retains unchanged evidence, bounds
-parallel observations, monitors resource death and fences responses to the current attempt/batch.
-A timed-out observation can be retried without replacing its resource, while missing adapters and
-explicit failures block. Reconciliation preserves the original absolute deadline; late ready replies
-cannot beat deadline enforcement. Eleven collector checks, including actual STT/mixer integration,
-pass. The combined focused lane has 61 passing tests and all five root gates pass with 1,083 tests,
-zero failures and 15 excluded integrations. The collector is not yet connected to RoomAuthority;
-model/tool, recording/media adapters, complete inventory and lifecycle acceptance remain pending.
-
-Model and tool adapters now expose installed context/client evidence, available invocation queues
-and scoped MCP initialization. Coordinator queries combine those dependencies outside its receive
-loop; busy sessions and saturated tool queues report preparing while preserving their generations.
-No model request or dummy tool invocation is used to establish readiness. An actual activation graph
-is covered through collection, ordinary conversation and dependency loss; MCP fixtures also cover
-delayed initialization and credential revocation. Nine focused model/provider tests and fifty focused
-engine checks pass. All five root gates pass with 1,089 tests, zero failures and 15 integrations
-excluded. Recording/media adapters, the complete prospective inventory, initial caller waiting and
-coordinated transfer release remain incomplete; the common readiness checkpoint is still unchecked.
-
-Recording readiness now covers exact mixer subscriptions and initialized local artifact writers.
-The collector can query separate bindings on one mixer process. Individual track preparation opens
-only demanded missing writers under the installed recording interval, retains unchanged writers
-through retries/policy changes, and prevents audio from creating an unprepared writer afterward.
-The recorder exposes its required writer/subscription descriptors so writer loss revokes readiness
-even if the recorder stays alive. Malformed writer evidence fails closed; remote storage waits and
-saturation retain the bounded asynchronous gap contract. Thirty-one focused engine checks and nine
-artifact checks pass. All five root gates pass with 1,096 tests, zero failures and 15 integrations
-excluded. Gateway media readiness, complete prospective inventory, initial waiting and coordinated
-transfer lifecycle integration remain pending; no browser/live-provider acceptance is claimed.
-
-Gateway room ingress, common native/phone output and room egress now expose current pipeline
-readiness. Unrelated policy and native output clear retain descriptors; replacement callbacks are
-fenced to the current pipeline. Room egress additionally requires its actual mixer subscription
-under the same output interval and exposes that dependency for monitoring. Twenty-seven focused
-checks cover these boundaries, including real mixer integration and loss. All five root gates pass
-with 1,100 tests, zero failures and 15 integrations excluded. Native WebRTC/private output bindings,
-negotiated connection and STT ingress evidence, complete inventory and lifecycle integration remain
-outstanding. These component queries do not establish complete participant-media readiness or
-rendered/live-provider acceptance; the common readiness checkpoint remains unchecked.
-
-Shared output now carries explicit recipient/native-adapter bindings and queries actual native
-encoder initialization. Private output retains its readiness generation through holds and room-route
-changes; pending clear/drain stays preparing. Room egress also checks the exact revocable arbiter
-route, so an old shared pipeline cannot satisfy readiness after rebinding. Fifty-one focused
-web/phone/media checks pass, including both phone adapter fixtures. All five root gates pass with
-1,103 tests, zero failures and 15 integrations excluded. Negotiated connection/input-track evidence,
-STT ingress, prospective inventory and lifecycle orchestration remain incomplete; output readiness
-does not substitute for those requirements or rendered/live-provider acceptance.
-
-WebRTC connection/input evidence now requires the server's connected transport and negotiated
-track/codec/direction before any RTP arrives. Receive-only listeners can omit input demand;
-unchanged directions retain their descriptors. Seven focused checks pass. All five root gates pass
-with 1,107 tests, zero failures and 15 integrations excluded. The negotiated input projection is
-available for preparing actual ingress handoffs, which remain unfinished along with phone transport
-evidence, prospective inventory and lifecycle orchestration. Common readiness and full milestone
-acceptance remain unchecked.
-
-Engine STT ingress now prepares the exact normalized track against its actual provider identity and
-codec/rate before microphone release. Its readiness includes the provider, bounded handoff capacity
-and matching installed speech-policy interval. Repeated preparation, unrelated policy changes and
-opening-gate release preserve the binding and queued work; held frames are discarded. Forty-two
-focused engine checks and all five root gates pass with 1,111 tests, zero failures and 15 integrations
-excluded. Gateway normalizer binding, prospective policy preparation, complete inventory and lifecycle
-orchestration remain unfinished; this does not establish the milestone's coordinated handoff.
-
-WebRTC decoder preparation now supplies format information without sending a packet and waits for
-an ordered acknowledgement from the PCM sink. This closes the gap between a playing Membrane graph
-and an initialized decoder/normalization path. Early requests defer until playing; repeated requests
-retain the existing track and buffered partial frames. Twenty-one focused checks and all five root
-gates pass with 1,114 tests, zero failures and 15 integrations excluded. Common room-ingress wiring,
-phone input evidence, prospective resource/policy preparation and startup/transfer orchestration
-remain incomplete. No rendered or live-provider acceptance is claimed.
-
-Common room ingress now prepares the selected decoder through its registered pipeline and requires
-its actual readiness in addition to the installed audio-input policy. It exposes both descriptors
-for collection/monitoring and rejects missing adapters. Phone inputs also wait for the PCM sink's
-ordered format acknowledgement while retaining their authenticated stream and native format.
-Sixteen focused checks include real WebRTC, Telnyx and Twilio pipelines. All five root gates pass
-with 1,120 tests, zero failures and 15 integrations excluded. Phone socket/transport readiness,
-prospective policy/resource preparation and startup/transfer orchestration remain unfinished.
-
-Phone sockets now attest their validated stream and provider format independently of the leg
-dispatcher. Media sessions require exact socket, stream and full connection identity and expose the
-actual transport dependency for collection. Eighteen focused socket/session checks pass, including
-collection before audio, stable bindings after delivery and rejection of a changed stream. All five
-root gates pass with 1,122 tests, zero failures and 15 integrations excluded. Prospective inventory,
-candidate-policy preparation and startup/transfer orchestration remain unfinished; these component
-checks do not establish live-provider or coordinated handoff acceptance.
-
-The policy authority now previews exact prospective membership without invoking enforcers or changing
-live permissions. Candidates retain unchanged permission intervals and are validated against the
-actual authority, current base snapshot and recomposed pinned policies. Forty-five focused
-policy/readiness checks pass, including four retained listeners plus an incoming participant and
-rejection of stale/altered candidates. All five root gates pass with 1,127 tests, zero failures and
-15 integrations excluded. Complete resource enumeration, preparing affected enforcers behind closed
-gates, installing prepared bindings at commit and startup/transfer lifecycle integration remain
-unfinished. This preview is a planning boundary, not transfer authorization or a readiness barrier.
-
-Connection preparation now aggregates transport, private/native output, demanded decoder/STT
-handoffs and room-route dependencies outside connection callbacks through one bounded engine protocol.
-Its typed result includes the exact connection binding and prepared input track needed for recording.
-Receive-only connections cannot acquire input demand, unprepared policy intervals are rejected, and
-changed/foreign bindings or missing adapters fail closed. Cold pipeline adapters load before callback
-reflection. Thirty-nine focused engine checks and 31 gateway checks pass, including WebRTC and both
-phone media graphs before audio, unchanged resources after packet delivery and delayed STT connection
-acknowledgement followed by transcription. All five root gates pass with 1,135 tests, zero failures
-and 15 integrations excluded. Full prospective room inventory, candidate-resource preparation and
-startup/transfer wait/cue/release orchestration remain unfinished. The speech fixture uses the current
-post-promotion attachment; phone graph fixtures do not select STT, and rendered/live-provider
-acceptance is not claimed.
-
-Prospective inventory selection now includes every resulting participant, every authorized human
-connection, selected participant capabilities and enabled room handoffs. Disconnected humans and
-missing enabled actors remain required; monitors never demand microphone processing. Audio and
-recording demand follow the effective policy and configured recording targets. A bounded capture
-reads the room's authoritative bindings, validates the candidate outside the room callback and
-rejects stale, changed or shortened inventories. An incarnation-scoped recorder binding makes local
-recording an explicit requirement even after its actor disappears. Fifty-one focused inventory,
-policy, collector, recording and connection checks pass. This establishes requirements and bindings;
-expanding them into the complete prepared resource graph, candidate-resource installation and
-startup/transfer orchestration remain unfinished. Common readiness and lifecycle acceptance stay
-unchecked; no rendered or live-provider verification is claimed.
-
-All five root gates pass for this inventory checkpoint: formatting, warnings-as-errors compilation,
-strict Credo, 1,148 umbrella tests with zero failures and 15 integrations excluded, and unused
-dependency checks. The full milestone remains incomplete.
-
-Room preparation now expands the authoritative selection into connection graphs and selected
-participant/room resources under a bounded worker budget. It prepares individual human recording
-writers before audio, collects their local dependencies, rejects incomplete/foreign/conflicting
-sets and revalidates policy and room bindings afterward. TTS inventory reads every participant's
-supervised binding rather than only the active room handle. Fifty-two focused engine checks and
-five WebRTC checks pass, including both human graphs before audio and a model/TTS room that remains
-preparing until explicit TTS provider acknowledgement. That checkpoint left individual agent
-recording dependent on exposing the receiving output tap's readiness/track binding.
-Candidate installation, private destination preparation, startup/transfer wait/cue/release and
-rendered/live-provider acceptance remain unfinished. Common readiness remains unchecked.
-
-All five root gates pass for preparation/collection: formatting, warnings-as-errors compilation,
-strict Credo, 1,157 umbrella tests with zero failures and 15 integrations excluded, and the
-unused-dependency check. These gates do not complete the remaining runtime acceptance items.
-
-A later broader run reproduced incomplete nested-worker cleanup when room preparation expired.
-Room and connection preparation now use supervised linked query streams, so request cancellation
-also terminates their blocked observations. Direct and nested cancellation checks monitor the
-actual worker and keep the queried media connection usable. The correction and recording-output
-checkpoint pass 69 engine checks, 26 Gateway checks and all five root gates in the combined
-worktree (1,166 tests, zero failures, 15 integrations excluded). Lifecycle acceptance remains open.
-
-Recording preparation now includes native agent-output taps for both full-mix and individual
-recording demand. WebRTC and common phone outputs expose their exact mixer-issued handoffs; bounded
-engine observations validate issuer, room/connection identity, format and recording interval, then
-recheck the native binding. Individual agent writers use the receiving connection and its reported
-track ID. They are opened before speech, without advancing audio cursors or restarting codecs.
-Collection waits for the local writer and native codec and invalidates replaced/stale taps.
-
-The real WebRTC agent fixture prepares caller/agent writers before its delayed-TTS barrier.
-The common phone output fixture opens its agent writer before audio and remains preparing until
-codec acknowledgement, retaining the same generation afterward. Separate sample-rate and frame-size
-mismatch checks prevent a tap from claiming readiness for native PCM it cannot accept. Seventy-one
-engine checks, 26 Gateway checks and all five root gates pass (1,168 tests, zero failures,
-15 integrations excluded). Candidate-policy preparation, private destination
-prewarming, startup/transfer wait and cue orchestration, final release and rendered/provider
-acceptance remain unfinished; common readiness and the milestone index remain unchecked.
-
-The STT policy enforcer now supports candidate preparation through the shared provider contract.
-It retains unchanged sessions, defers a future denial until commit, and warms only an affected
-replacement under the attempt's existing owner/deadline. Collection waits for provider readiness;
-matching policy application adopts the ready connection without another startup. Prepared bindings
-remain verifiable after adoption. Discard, owner loss, failure and expiry leave the installed source
-available and prevent committing the failed preparation. Ignored preparation signals cannot replay
-as room transcripts after commit.
-
-An unrelated room revision also retains a healthy pending replacement. Its old candidate evidence
-becomes stale, and a refreshed authoritative candidate reuses that same connection/generation when
-its prospective speech permissions are unchanged. Room-level checks use the real policy authority,
-STT capability, ingress, collector and participant admission. Other enforcers' candidate preparation,
-private destination prewarming and startup/transfer wait/cue/release orchestration remain unfinished.
-
-Seventy-five focused checks pass for this speech-preparation checkpoint. All five root gates pass:
-formatting, warnings-as-errors compilation, strict Credo, 1,178 tests with zero failures and
-15 integrations excluded, and unused dependencies. This is deterministic room/provider-fixture
-evidence; no rendered browser or live-provider acceptance is claimed. The milestone remains open.
-
-STT input readiness now accepts the exact prepared provider resource, validates its negotiated track
-and applicable input interval, and lets the collector observe that provider with the existing input
-buffer. The same descriptor remains valid after adoption. An unchanged provider retains the ordinary
-input descriptor, and unrelated candidate refresh retains both buffer and provider generations.
-Preparation under a currently denied input policy becomes ready without delivering microphone audio;
-discarded or altered provider descriptors cannot validate the track or pass collection.
-
-Forty-five focused checks and all five root gates pass for this input-binding checkpoint: 1,179 tests,
-zero failures and 15 integrations excluded. The connection-graph adapter still queries installed
-resources; selecting prepared resources there requires the persistent phase owner and existing
-deadline, plus candidate preparation of the other media and room enforcers. Startup/transfer waits,
-cues, final release, restoration and rendered/provider acceptance remain incomplete.
-
-Gateway room-input decoders now support candidate preparation under the phase's existing owner,
-attempt and deadline. Required replacements initialize their negotiated track before collection;
-policy commit adopts the ready decoder and preserves the normalized-frame sequence. Old-pipeline
-PCM and transport packets from the prior interval remain fenced. Unaffected policies and unrelated
-candidate refresh retain healthy decoder instances. Loss of all recipients/recording demand removes
-the decoder at commit, and renewed demand prepares one even if the permission interval is unchanged.
-Denied microphone packets are discarded without failing the transport.
-
-Twenty-four focused checks cover adoption, discard, startup failure, pending failure, expiry,
-owner loss, retention, demand and the actual WebRTC/Telnyx/Twilio normalizers. All five root gates
-pass: 1,192 tests, zero failures and 15 integrations excluded. Output/mixer/recording candidate
-preparation, selecting the prepared graph, startup/transfer waits and cues, fenced release,
-restoration, safe phase observations and rendered/provider acceptance remain unfinished.
-
-Shared room output now supports preparation while retaining the live route and native encoder.
-The pending route is bound to the phase owner, attempt, existing absolute deadline and held-output
-generation. The ordinary room-output owner adopts its exact ready descriptor only after private
-output drains. Release cannot bypass pending preparation. Discard, expiry, owner loss and a newer
-hold generation cancel only pending output, preserving the source route for restoration; adoption
-releases phase ownership without stopping the new route. Native encoding and RTP identity continue
-across the private cue and first room frame.
-
-Nineteen focused arbiter checks and all five root gates pass: formatting, warnings-as-errors
-compilation, strict Credo, 1,199 tests with zero failures and 15 integrations excluded, and unused
-dependencies. Mixer/room-egress candidate installation, full prepared graph selection and
-startup/transfer orchestration still need to use these bindings. No rendered or live-provider
-acceptance is claimed, and the common-readiness milestone and index remain unchecked.
-
-The mixer can now acknowledge an authoritative prospective policy and prepare the selected
-participant subscriptions under the phase's existing owner, attempt and deadline. New queues stay
-outside live audio delivery until policy commit. Existing queues and subscription generations remain
-intact, including adopted handles across later unchanged attempts. Commit excludes previously buffered
-source audio from a newly admitted queue while preserving it for existing listeners. Candidate refresh
-can remove one prospective listener's new queue without recreating other prepared subscriptions.
-
-Expiry, phase-owner loss and subscriber loss notify the owner, cancel only new queues and leave a
-failed preparation that cannot be committed. Collection refresh reports the failed evidence. Exact
-discard and stale cleanup preserve the installed source. Twenty-eight focused mixer checks cover
-these boundaries with the real policy authority, including changed privacy and foreign candidates.
-All five root gates pass: formatting, warnings-as-errors compilation, strict Credo, 1,210 tests with
-zero failures and 15 integrations excluded, and unused dependencies. Room-egress adoption of the
-prepared subscription/output pair, transcript/recording candidate preparation, complete graph selection
-and startup/transfer wait/cue/release orchestration remain unfinished, as does rendered/provider
-acceptance. The milestone and index remain open.
-
-Existing room output now supports coordinated mixer/native hold and release without replacing its
-subscription, pipeline or codec. Held subscriptions discard queued/buffered speech; released frames
-carry the current generation. Native clear acknowledges discarded room frames so their producer
-cannot remain stuck. Gateway refuses release during private playback and reports terminal connection
-failure if its mixer/binding is lost after native release begins. Real mixer/shared-output checks
-verify private-before-room ordering and retained RTP/readiness identity. All five root gates pass,
-including 1,214 tests with zero failures and 15 integrations excluded; focused lanes pass 29 engine
-and 31 Gateway checks. Lifecycle use, direct speech generation, microphone/model gates, prepared
-egress adoption and the remaining readiness/acceptance requirements are still outstanding.
-
-Gateway room egress now accepts the authoritative candidate and exact mixer-prepared subscription
-under the phase's original owner, attempt, deadline and held generation. Existing shared routes
-remain in place through affected policy changes; a joining connection prepares its route privately.
-Commit adopts collected ready output while its mixer queue stays held, preserving readiness and
-native codec identities. The mixer verifies the actual queue consumer before preparation can
-change its gates. Foreign bindings, revoked native routes and failed preparation cannot satisfy
-adoption. Unrelated membership changes keep a private joining route dormant and allow candidate
-refresh without recreating its pipeline or extending the lease.
-
-The focused lanes pass 29 engine and 40 Gateway checks, including nine new real-authority/mixer/
-native-output contracts. All five final root gates pass, including 1,223 tests with zero failures
-and 15 integrations excluded. A separate diagnostics fixture correction allows unrelated room
-cleanup while continuing to reject newly created bindings or room processes.
-Full connection-graph selection, remaining room-service/recording candidate
-preparation, direct speech generations, microphone/model gates and startup/transfer orchestration
-remain unfinished, along with rendered/provider acceptance. No implementation or acceptance gate is
-closed by this component checkpoint.
-
-Connection preparation now has a candidate-aware path selecting the exact prepared speech session,
-decoder, mixer subscription and shared output under the phase's persistent owner and original
-deadline. Its input/output preparation handles support discard and retry without replacing live
-resources. Actual WebRTC checks adopt the collected decoder/output graph through the policy barrier
-and deliver audio afterward; the speech graph remains preparing until its replacement provider's
-Connected acknowledgement and can cancel back to the retained conversation. Focused checks pass
-32 engine and nine WebRTC/Telnyx/Twilio tests.
-
-Candidate collection also prepares deferred shutdown when policy removes an existing input's
-demand; the decoder stops at commit without starting a replacement. The final WebRTC fixture waits
-for actual server transport readiness. All five final root checks pass, including 1,224 tests with
-zero failures and 15 integrations excluded.
-
-The whole-room preparation runner and lifecycle must still invoke this path with their complete
-resource set, create private destination bindings and finish room-service/recording preparation.
-This checkpoint does not close common readiness, waiting, transfer or rendered/provider gates.
-
-Whole-room candidate preparation now derives the complete mixer subscription set from actual
-connection bindings, prepares transcript routing and selected speech sessions under the phase lease,
-and collects every required connection plus room and participant resources. Cancellation handles
-preserve live resources. Transcript preparation retains current permissions until adoption and keeps
-the router process through policy changes; expiry or owner loss prevents prepared adoption.
-
-Seven focused Gateway WebRTC checks pass, including prospective departure with cancellation/retry
-and actual audio after adoption. The human-transfer fixture collects both connected humans with
-unchanged STT and recording writers, cancels preparation and resumes audio/transcripts. Four focused
-router checks pass for refresh, discard, expiry and owner loss. All five root checks pass with
-1,229 tests, zero failures and 15 integrations excluded. Recording preparation for changed future
-track sets, private destination actors and persistent startup/transfer phase integration remain
-required; acceptance boxes remain open.
-
-A regression also exposed future source selection mutating the live recorder before commit even
-when its policy interval was unchanged. Such a source change now returns `policy_not_prepared`
-without touching current writers; other prepared resources are discarded and the original room can
-be prepared again. The WebRTC check proves this failure/retry boundary. Independent prospective
-recording ownership and adoption remain required to support that transition successfully.
-
-Candidate recording preparation now supports a future recording track set without changing live
-writer selection. New writers have separately supervised sources tied to the recorder, phase and
-original deadline; adoption retains their handles, and cancellation ends only pending sources.
-Prepared mixer recording subscriptions survive changed recording permission, and existing stream
-sequence numbers continue across commit. The whole-room runner includes these recording resources
-and cancellation handles. The installed-policy query retains its explicit rejection of future sets.
-
-Fifty-three focused engine tests and seven WebRTC tests pass. Coverage includes private writer creation,
-delayed local readiness, actual recording before and after adoption, discard/retry, source/phase
-loss, mixer/writer loss, unchanged full-mix evidence and readiness refresh after an earlier adoption.
-All five final root gates pass with 1,243 tests, zero failures and 15 integration exclusions.
-Native agent output tap preparation across changed
-recording intervals, private destination actors and startup/transfer orchestration remain required;
-the milestone and its acceptance checklists remain open.
-
-Candidate recording selection now pairs each required native agent tap with the room's prepared
-mixer policy resource. The physical tap retains its descriptor and codec generation across recording
-permission changes; the mixer keeps a denied live gate closed until adoption. Preparation checks actual
-identity, binding, PCM format, capacity and candidate policy evidence instead of relabeling the
-installed recording interval. A discarded policy dependency keeps the combined readiness barrier
-closed even when the unchanged tap remains physically ready.
-
-Forty-one focused engine checks and eight Gateway WebRTC checks pass. The new WebRTC case collects
-the complete caller/agent recording graph before relaxing recording permission, cancels and retries
-preparation, adopts the exact collected resources and releases output. Engine checks also prove
-audio is ignored before permission commit, tap/codec identity is retained, scoped writer cleanup
-works, and installed/relabeled/stale policy evidence cannot authorize candidate recording. All five
-root gates pass: 1,248 tests, zero failures and 15 integration exclusions. An existing transcript
-fixture's acknowledgement deadline was corrected in a separate test-only checkpoint; production
-deadlines remain unchanged. Private destination actors, startup/transfer orchestration, waits/cues,
-restoration and browser/provider acceptance remain unfinished.
-
-The policy authority now commits an exact validated candidate membership in one revision, bounded
-by the original absolute phase deadline. This supports replacing source with destination without an
-intermediate policy that would differ from the collected resources. Expired/stale/forged requests
-cannot apply policy; failure after enforcer application begins retains the existing fail-closed
-authority behavior. Seventeen focused authority checks and eight WebRTC checks pass, including
-adoption of the prepared recording graph through this operation. All five root gates pass with
-1,251 tests, zero failures and 15 integration exclusions.
-Participant/control changes, private destination preparation and the full held-media lifecycle still
-need to call this operation; the milestone acceptance boxes remain open.
-
-Newly prepared speech actors can now start under the base policy without opening a preliminary
-provider session, prepare their required candidate session and ingress, and join the final policy
-barrier as new enforcers. They remain outside ordinary critical registration until commit, so
-discarding the private pair preserves the source. Adoption retains the prepared provider generation
-and leaves microphone ingress closed until explicit release. The internal initialization option
-does not change call-definition configuration or authorize private connection access.
-
-Forty-eight focused checks pass, including new-enforcer acknowledgement and failure, rejected
-adoption without registration, private pair cancellation/retry, unchanged source audio and exact
-session adoption. An unchanged membership candidate preserves existing enforcers without replaying
-the installed revision. The [resource contract](../readiness-resource-contract.md#adopting-newly-prepared-enforcers)
-records ownership and the remaining requirement to bind allocated actors to the authorized
-connection and persistent phase owner. All five root gates pass with 1,258 tests, zero failures and
-15 integration exclusions. An earlier recorder flush failure did not reproduce in isolation or
-the complete same-seed rerun; the labnote retains that evidence without claiming a cause or fix.
-Lifecycle and acceptance remain open.
-
-Private speech allocation can now be bound to the phase owner, attempt and original deadline from
-construction, covering the gap before provider preparation begins. Owner loss or expiry closes the
-pending transport and both temporary actors. Prepared-session adoption releases that temporary
-ownership while retaining the session and closed microphone gate. A different scope, unprepared
-admission or no-demand allocation cannot be promoted through this boundary. Unrelated membership
-refresh preserves the prepared provider generation through existing policy reconciliation.
-
-The [allocation lifetime contract](../readiness-resource-contract.md#private-speech-allocation-lifetime)
-records the existing supervision reused and the remaining authorized connection/coordinator wiring.
-Fifty-three focused checks and all five root gates pass, including 1,263 tests with zero failures
-and 15 integration exclusions. No fixture or production timeout change was required. This is
-component evidence and does not complete startup, transfer waits/cues, release or recovery acceptance.
-
-The actual destination preparation task now persists after its typed prepared notification. Its
-scope retains the room authority, incarnation, attempt and original deadline through briefing and
-acceptance. Owner loss uses the existing human cleanup path, and the deadline can expire while room
-authority is busy. Both commit paths require its final acknowledgement before success publication
-or destination greeting; loss during policy adoption closes the room without a completion event.
-
-The [phase ownership contract](../readiness-resource-contract.md#transfer-phase-ownership) records
-this integration and the remaining private binding, full readiness, cue and release work. All 22
-focused agent/human web/phone checks and all five root gates pass: 1,265 tests, zero failures and
-15 integration exclusions. The milestone and index remain unchecked because the full lifecycle
-and manual acceptance are still unfinished.
-
-An internal authority operation now allocates speech for the exact private transfer connection,
-using its resolved profile and the actual phase's owner/attempt/deadline. It keeps input closed,
-starts no preliminary provider and stays outside critical policy registration. Repeated requests
-retain the pair; foreign and late requests are rejected. An allocated pair cannot take the old
-immediate commit path, and private speech failure cleans the pending attempt while retaining the
-source. Startup/opening input release excludes private bindings, and cancellation removes all
-private connections belonging to the exact attempt.
-
-The [private binding contract](../readiness-resource-contract.md#authorized-private-speech-binding)
-records the authorization and ownership decisions. All 46 focused transfer/speech checks and all
-five root gates pass: 1,269 tests, zero failures and 15 integration exclusions.
-Gateway dormant media setup, coordinator invocation, complete candidate
-adoption and wait/cue/release acceptance remain unfinished. The internal operation is not yet used
-by the sample handoff.
-
-Gateway now exposes internal private preparation on actual WebRTC connections and phone media
-sessions. It allocates dormant room ingress/egress alongside the authorized closed speech binding,
-retains native output, and exposes the future mixer subscription without room admission or critical
-registration. Repeated requests retain actors and refresh their installed base policy. Preparation
-without STT also blocks immediate commit; private actor loss fails the attempt and uses connection
-supervision for cleanup. Refreshing an unrelated policy leaves an absent, undemanded decoder absent.
-
-The [Gateway preparation contract](../readiness-resource-contract.md#private-gateway-media-preparation)
-records this boundary. A real WebRTC check collects the complete prospective caller/human room
-after the provider acknowledgement, retaining caller pipelines and source capabilities; Telnyx and
-Twilio checks collect private decoder/output graphs with no selected STT. These are preparation and
-cancellation checks. Forty-six engine and 46 Gateway focused checks and all five root gates pass:
-1,274 tests, zero failures and 15 integration exclusions. Full lifecycle invocation, successful
-prepared adoption/promotion, startup waiting, waits/cues, release and manual acceptance remain
-unfinished; no additional acceptance box is checked by this component.
+This is a current, grouped account as of the 2026-09-14 documentation checkpoint. Commit references
+identify completed components; they do not imply that an ordinary call invokes the whole sequence.
+The [implementation labnote](../../labnotes/20260914-0032-transfer-readiness-implementation.md)
+retains the chronological red/green results, failed approaches and intermediate worktree snapshots.
+
+### Committed components available to the slices
+
+| Work delivered | Representative commits | Evidence and practical limit |
+| --- | --- | --- |
+| Typed call-level sound slots; missing/default/URL/nil semantics; `transfer_joining`; schema `20260914.01` with explicit `20260913.01` compatibility; immutable normalized assets and generated cue | `6dd801f`, `66b6033` | Compiler, asset, admission and stored-plan reconstruction checks passed. A manifest deduplicates payloads by digest; new preparation reuses URL cache entries for up to 60 seconds, while active calls retain pinned bytes. This supplies sounds but does not start waits during a call. |
+| Independent private players and shared recipient output; pause/resume, ordered clear/drain, cue completion, isolation from recording | `b9ddac9`, `f8bd969`, `0e8efc6` | Focused checks cover independent seven/three-second cursors, one participant's multiple sinks and private/room ordering while preserving native codecs. Normal lifecycle acceptance remains separate. |
+| Phone clear/mark completion and pacing after idle | `840090e`, `1e36913` | Controlled native/socket checks cover fresh marks, final cue drain and paced resumption. They do not establish a physical phone's audible result. |
+| Readiness descriptions and bounded collection across speech, model/tools/MCP, recording, room services and negotiated media | `c0bd41f`, `52e3047`, `d3d6532`, `2e02e6a`, `71d3a06`, `0bc649e`, `cde2f91` | Exact identity/configuration/generation and provider acknowledgements replace PID-only assumptions. Required unsupported resources fail; unchanged instances remain reusable. The common collector exists, but each ordinary lifecycle still has to use it. |
+| Prospective membership, affected speech/decoder/output/mixer preparation and full candidate collection | `b02a2d2`, `fb567d0`, `43aafa2`, `b079dbf`, `97119f8`, `9fc4b83`, `02ab65e` | Real media checks cover prepare/discard/retry/adopt without prematurely replacing live routes. The room graph includes remaining participants and room resources; candidate readiness grants no early permission. |
+| Candidate recording tracks/taps and exact membership adoption | `4b14530`, `666ca37`, `69b5ad6` | Local recording paths prepare under future policy without changing current permissions; an exact collected membership commits in one revision under the original deadline. Remote persistence remains asynchronous. |
+| Attempt-owned private speech and actual Gateway preparation | `a8106d4`, `c005511`, `4801597`, `5ab8c17`, `c4fea8c` | Private actors are bound to the authorized connection and persistent phase. WebRTC preparation waits for destination STT while retaining caller/source resources. Phone component checks select no STT, so they do not prove the currently failing configured phone handoff. |
+
+The durable [readiness resource contract](../readiness-resource-contract.md) records ownership,
+identity, preparation/adoption and cleanup rules. The
+[incremental policy contract](../incremental-media-policy.md) remains authoritative: readiness or
+waiting must not restart any unaffected participant or room capability.
+
+### Human handoff integration in the worktree
+
+Normal acceptance now invokes private media preparation and full prospective collection, starts
+participant waits, drains cues, commits the exact membership, adopts existing media actors and
+awaits release before completion. Held text/model admission and caller-idle handling are gated;
+source retirement occurs after completion. This integration is **uncommitted and incomplete**.
+
+The six passing WebRTC checks include delayed destination STT, private admission while preparing,
+retained media actors, held-text rejection, audio/transcript integration and a surviving room after
+source teardown. The newly added normal-handoff regression disables waiting sounds. It therefore
+does not demonstrate the default/custom waiting experience, all failure paths, or rendered UI.
+
+Known remaining work in the first slice:
+
+- Audience holds currently start after acceptance/briefing, rather than at transfer authorization.
+- Early acceptance still latches; the approved server-side post-briefing window is unfinished.
+- Phase loss can close held connections; bounded source restoration is not implemented by that
+  cleanup. Recovery requires its own readiness, cue and release sequence.
+- Existing embedded test connections do not implement the new preparation protocol. Actual phone
+  harnesses also fail with `media_connection/unsupported_audio`; these are distinct findings.
+- Selected-but-undemanded private speech cleanup, changing membership/connection behavior and full
+  sample/diagnostic integration remain open. No browser or live audible acceptance is claimed.
+
+### Verification ledger
+
+| Evidence boundary | Result | What it establishes |
+| --- | --- | --- |
+| Last verified implementation, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
+| Subsequent human-handoff worktree | Six WebRTC transfer checks pass with simulated providers | The exercised normal web handoff waits for destination STT and retains the prepared actors/room. Broader acceptance remains open. |
+| Latest full worktree run, before subsequent phone fixture edits | Format, warnings-as-errors compile, strict Credo and unused dependencies pass; 1,275 tests, nine failures, 15 exclusions | Five engine transfer failures and four Gateway phone failures remain. This is not a green implementation checkpoint. |
+| Latest targeted phone diagnosis, after fixture edits | Two incoming-call harnesses fail; both report `media_connection/unsupported_audio` during preparation | A remaining phone media integration failure is reproduced. No subsequent full root pass is recorded. |
+| Rendered browser, physical two-device audio and live phone provider | Not verified for this milestone | Automated media delivery/marks cannot substitute for audible and UI acceptance. |
+
+Retained command/log details are in the labnote's
+[normal acceptance integration](../../labnotes/20260914-0032-transfer-readiness-implementation.md#wire-normal-acceptance-through-prepared-media)
+and [phone diagnosis and delivery review](../../labnotes/20260914-0032-transfer-readiness-implementation.md#phone-diagnosis-and-vertical-delivery-review).
+Do not apply an earlier green result to the dirty worktree or check off the milestone from these
+component results.
+
+### Detours and lessons applied to delivery
+
+- **Asset and output defects:** bundled WAV header lengths needed correction without changing
+  waveform samples; private audio could reach recording taps; separate output paths and phone
+  interruption recreated codecs. The shared output, isolation and pacing work addresses those
+  concrete media boundaries.
+- **Preparation ordering:** decoders/writers/providers previously initialized on first media or
+  policy application. Preparing them beforehand required exact candidate bindings and adoption,
+  with current permissions retained. Cancellation also had to reach nested preparation workers.
+- **Fixture corrections:** tighter readiness exposed simulated sockets missing playback marks,
+  providers lacking connection acknowledgements and embedded connections unable to answer the
+  protocol. Some fixture deadlines needed scheduling headroom; production deadlines did not change.
+  Fixture defects are recorded separately from production failures.
+- **Integration mistake:** an initial handoff check appeared green while completion crashed the
+  room. A surviving-room assertion exposed it; correcting alias scope fixed that specific defect.
+  The broader phone and recovery problems are still open.
+- **Sequencing mistake:** implementation repeatedly expanded the next component prerequisite and
+  reran component/root checks before proving a complete user flow. No dependency version or lockfile
+  upgrades explain that expansion, and no reliable per-activity timing record exists. The checkpoint
+  plan now requires a runnable flow with its failures and verification before expanding the next one.
+
+The [earlier detour audit](../../labnotes/20260914-0032-transfer-readiness-implementation.md#dependency-and-integration-detours)
+retains individual findings and commit evidence. Its historical open items are superseded by the
+current grouped status above; it is not a second current task list.
