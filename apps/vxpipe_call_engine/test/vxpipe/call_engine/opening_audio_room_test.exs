@@ -89,6 +89,75 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     send(model_preparer, :release_test_agent_runtime_model)
   end
 
+  for deadline <- [:readiness, :max_duration] do
+    test "#{deadline} stops initial waiting, model construction and a pending opening fetch" do
+      configure_speech_runtime()
+      configure_agent_runtime_provider(Vxpipe.CallEngine.TestSelectiveAgentRuntimeModelProvider)
+      observer = self()
+
+      configure_opening_audio(fn ->
+        send(observer, {:opening_fetch_waiting, self()})
+
+        receive do
+          :release_notice -> {:ok, %Download{body: wave(<<1, 0>>), content_type: "audio/wav"}}
+        end
+      end)
+
+      plan =
+        compile_plan(
+          model: "test:blocked",
+          wait_sounds: %{},
+          opening_audio: %{
+            type: "file_url",
+            url: "https://assets.example.test/deadline-notice.wav"
+          }
+        )
+
+      assert {:ok, room} =
+               CallEngine.start_call(plan,
+                 call_lifecycle: [
+                   readiness_timeout_ms: 30_000,
+                   idle_timeout_ms: 15_000,
+                   timer: {TestCallLifecycleTimer, [observer: self()]}
+                 ]
+               )
+
+      assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}
+      assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+      assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      sink = start_supervised!({TestAudioOutputSink, observer: self()})
+      command = attach_command(plan, room, caller, "conn-opening-deadline")
+      assert {:ok, _} = TestTransferConnection.attach(command, sink)
+      assert_receive {:opening_fetch_waiting, fetcher}, 1_000
+      assert_receive {:test_audio_output, ^sink, wait_frame}, 1_000
+
+      workers =
+        for worker <- [preparer, fetcher, wait_frame.reply_to],
+            do: {worker, Process.monitor(worker)}
+
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+      room_monitor = Process.monitor(authority)
+      refute_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}, 100
+      refute_receive {:test_call_lifecycle_timer_scheduled, _, _}, 100
+
+      {timer, reason} =
+        case unquote(deadline) do
+          :readiness -> {readiness_timer, :startup_readiness_timeout}
+          :max_duration -> {maximum_timer, :maximum_duration_reached}
+        end
+
+      :ok = TestCallLifecycleTimer.fire(timer)
+      assert_receive {:DOWN, ^room_monitor, :process, ^authority, {:shutdown, ^reason}}, 1_000
+
+      for {worker, monitor} <- workers do
+        assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 1_000
+      end
+
+      refute_receive {:test_call_ready, _}
+    end
+  end
+
   test "plays its own opening voice with a human initial receiver and releases it after playback" do
     configure_speech_runtime()
     plan = compile_plan(receiver: :human)

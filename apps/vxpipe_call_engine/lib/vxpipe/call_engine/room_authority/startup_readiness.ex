@@ -157,9 +157,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
          end) do
       {id, wait} ->
         case status do
-          :stopped -> reconcile(put_wait(state, id, %{wait | player: nil, status: :stopped}))
-          {:paused, _offset} -> reconcile(put_wait(state, id, %{wait | status: :paused}))
-          {:failed, _reason} -> {:error, startup_unavailable()}
+          :stopped ->
+            Process.demonitor(wait.monitor, [:flush])
+            reconcile(put_wait(state, id, %{wait | player: nil, monitor: nil, status: :stopped}))
+
+          {:paused, _offset} ->
+            reconcile(put_wait(state, id, %{wait | status: :paused}))
+
+          {:failed, _reason} ->
+            {:error, startup_unavailable()}
         end
 
       nil ->
@@ -169,6 +175,51 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
 
   def opening_changed(%{startup: nil} = state), do: FirstMessage.start(state)
   def opening_changed(state), do: reconcile(state)
+
+  def connection_removed(_id, _connection, %{startup: nil} = state), do: state
+  def connection_removed(_id, _connection, %{startup_ready?: true} = state), do: state
+
+  def connection_removed(id, connection, state) do
+    {wait, waits} = Map.pop(state.startup.waits, id)
+    discard_wait(wait, state)
+
+    if connection != nil and is_pid(connection.output_sink),
+      do: OutputSink.clear(connection.output_sink)
+
+    cancel_probe(state.startup.readiness)
+    startup = %{state.startup | waits: waits, readiness: nil, resources_ready?: false}
+    state = %{state | startup: startup}
+    plan = state.participant_transfer_runtime.plan
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    if connection != nil and connection.participant_id == caller.participant_id and
+         not Enum.any?(state.connections, fn {_id, remaining} ->
+           remaining.participant_id == caller.participant_id
+         end) do
+      CallLifecycle.startup_failed(state.snapshot.incarnation_id, :caller_disconnected)
+    end
+
+    if state.startup.status == :prepared, do: start_room_probe(state), else: state
+  end
+
+  def player_down?(monitor, %{startup: startup}) when startup != nil do
+    Enum.any?(startup.waits, fn {_id, wait} -> wait.monitor == monitor end)
+  end
+
+  def player_down?(_monitor, _state), do: false
+
+  defp discard_wait(nil, _state), do: :ok
+
+  defp discard_wait(wait, state) do
+    cancel_probe(wait.task)
+    if wait.monitor, do: Process.demonitor(wait.monitor, [:flush])
+
+    if wait.player,
+      do: RoomCapabilitySupervisor.stop_capability(state.snapshot.incarnation_id, wait.player)
+  end
+
+  defp cancel_probe(nil), do: :ok
+  defp cancel_probe(task), do: Task.shutdown(task, :brutal_kill)
 
   defp start_output_probe(_command, %{output_sink: nil}, state), do: state
 
@@ -188,6 +239,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     put_wait(state, command.connection_id, %{
       task: task,
       player: nil,
+      monitor: nil,
       episode: Id.generate(:command),
       status: :checking
     })
@@ -295,8 +347,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
       ]
 
       case RoomCapabilitySupervisor.start_wait_audio(state.snapshot.incarnation_id, options) do
-        {:ok, player} -> {:ok, put_wait(state, id, %{wait | player: player, status: :playing})}
-        _failed -> {:error, startup_unavailable()}
+        {:ok, player} ->
+          {:ok,
+           put_wait(state, id, %{
+             wait
+             | player: player,
+               monitor: Process.monitor(player),
+               status: :playing
+           })}
+
+        _failed ->
+          {:error, startup_unavailable()}
       end
     else
       {:ok, put_wait(state, id, %{wait | status: :stopped})}

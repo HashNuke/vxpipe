@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,311 tests, zero failures and 15 exclusions, with test concurrency four (seed 787372). Four ordinary WebRTC
+1,322 tests, zero failures and 15 exclusions, with test concurrency four (seed 879358). Four ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
@@ -122,8 +122,8 @@ No caller UI changes are required. Native peers own further transport
 and audio diagnosis, with browser checks limited to presentation/interoperability. Independent
 tool delays and complete configuration/privacy acceptance remain open.
 The native human-handoff case now uses real Morse speech providers, converts WebRTC Opus to
-16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 339 checks include
-23 native startup/transfer cases. Independent model initialization and TTS readiness delays now retain
+16 kHz PCM STT, and retains the caller decoder across transfer. Gateway's 342 checks include
+26 native startup/transfer cases. Independent model initialization and TTS readiness delays now retain
 caller waiting and gates; failed model preparation recovers spoken source conversation.
 Earlier intermittent phase-loss recovery failure remains an acceptance
 concern despite passing bounded repeats and the final root run. A mixed repeat also exposed an
@@ -134,7 +134,11 @@ initial resource readiness and opening completion gate conversation, recording a
 File and text openings now prepare independently of model construction. Waiting continues until
 opening PCM is playable, pauses through private playout, and resumes the same cursor if resources
 remain unready. Native decoded audio and engine PCM checks verify that order and cursor continuity.
-Release freshness, startup failure coverage and full initial-call acceptance remain open.
+Silent caller disconnect, killed wait players and original deadline expiry now stop pending startup
+work. Explicit detach clears queued waiting; another silent caller connection keeps startup alive.
+Native startup failures deliver one peerLeft before bounded teardown. Release freshness, startup
+blocker/timing diagnostics, deterministic phone failure coverage and full initial-call acceptance
+remain open.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.
 

@@ -6,7 +6,7 @@ Human and AI handoffs now pass normal transfer and bounded recovery checks; huma
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
 of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,311 tests, zero failures and 15 integration exclusions (seed 787372; concurrency four).
+1,322 tests, zero failures and 15 integration exclusions (seed 879358; concurrency four).
 Full slice acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -476,6 +476,14 @@ Implementation tasks:
   Initial setup does not add the transfer connection cue.
 - [ ] End failed/disconnected/timed-out startup cleanly, including its player and preparation
   workers. Report safe setup timing and the real readiness blocker through existing diagnostics.
+  Silent caller detach/process loss now cancels preparation; a killed wait player fails startup.
+  Explicit detach clears queued waiting; silent startup survives removal of one caller connection
+  when another remains.
+  Original readiness/maximum-duration timers stop pending model, opening and wait workers, and
+  late readiness cannot reopen an expired lifecycle. Native failure checks receive one peerLeft
+  before connection teardown. Safe blocker/timing diagnostics and remaining release freshness
+  acceptance are still open; see the
+  [startup cleanup labnote](../../labnotes/20260914-2340-startup-failure-cleanup.md).
 
 Acceptance and commit tasks:
 

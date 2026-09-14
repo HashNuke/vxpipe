@@ -61,7 +61,14 @@ before that boundary are discarded even when decoding or delivery finishes after
 earlier, but receive no held caller audio. Private opening output does not enter room recordings.
 Opening completion does not revise privacy policy or restart warmed capabilities. The original
 startup-readiness deadline includes this completion; idle and whole-call timers keep their existing
-owners and activity rules. A successful room-start receipt does not imply conversational readiness.
+owners and activity rules. Readiness and maximum-duration expiry reject late readiness completion.
+Expiry stops pending model preparation, opening fetch and wait playback. Removing the last attached
+entry-caller connection before startup readiness cancels that startup even when waits are disabled;
+removing a connection clears its own waiting output and cancels its exact output probe.
+Silent startup survives when another connection still belongs to the entry caller.
+Unexpected wait-player death is a startup failure. WebRTC startup failures send the existing
+Small WebRTC peerLeft message once before the bounded connection teardown. A successful room-start
+receipt does not imply conversational readiness.
 
 ## Migration
 

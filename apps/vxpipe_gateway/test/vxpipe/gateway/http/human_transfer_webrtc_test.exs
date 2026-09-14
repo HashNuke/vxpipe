@@ -262,6 +262,56 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              await_sideband(client, "bot-output", 2_000)
   end
 
+  for failure <- [:readiness, :max_duration, :model] do
+    test "native caller receives terminal signalling when startup fails at #{failure}" do
+      model = if unquote(failure) == :model, do: "test:blocked-unavailable", else: "test:blocked"
+      plan = compile_plan(reception_model: model)
+
+      assert {:ok, room} =
+               CallEngine.start_call(plan,
+                 call_lifecycle: [
+                   readiness_timeout_ms: 30_000,
+                   idle_timeout_ms: 15_000,
+                   timer: {CallEngine.TestCallLifecycleTimer, [observer: self()]}
+                 ]
+               )
+
+      stop_room_on_exit(plan)
+      assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}
+      assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
+      assert_receive {:test_agent_runtime_model_preparing, preparer}, 2_000
+      preparation_monitor = Process.monitor(preparer)
+      caller = Map.fetch!(plan.participants, "caller")
+
+      client =
+        plan
+        |> issue_session(room, caller.participant_id)
+        |> then(&connect(&1.session_id, "chat", false))
+
+      [{connection, _}] =
+        Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, client.connection_id})
+
+      connection_monitor = Process.monitor(connection)
+      assert :ok = send_client_ready(client)
+      assert client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+      refute_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}, 100
+
+      case unquote(failure) do
+        :readiness -> CallEngine.TestCallLifecycleTimer.fire(readiness_timer)
+        :max_duration -> CallEngine.TestCallLifecycleTimer.fire(maximum_timer)
+        :model -> send(preparer, :release_test_agent_runtime_model)
+      end
+
+      assert %{"message" => %{"type" => "peerLeft"}} = await_sideband(client, "signalling", 2_000)
+      assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 2_000
+      assert_receive {:DOWN, ^connection_monitor, :process, ^connection, _}, 2_000
+      peer = client.client
+      channel = client.channel_ref
+      refute_receive {:ex_webrtc, ^peer, {:data, ^channel, _}}, 100
+      refute_receive {:test_tts_transport_started, _, _}, 100
+    end
+  end
+
   test "opening file plays independently of model setup and waiting resumes after it" do
     {sounds, options} = wait_configuration(:custom_url)
     owner = self()

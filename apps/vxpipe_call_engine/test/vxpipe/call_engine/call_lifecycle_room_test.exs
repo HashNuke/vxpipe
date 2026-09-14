@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     CallInvocation,
     DefinitionCompiler,
     Error,
-    TestAgentRuntimeModelProvider,
+    TestSelectiveAgentRuntimeModelProvider,
     TestBlockingTool,
     TestCallLifecycleTimer,
     TestFailingSpeechToTextTransport,
@@ -34,7 +34,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
       original
       |> Keyword.fetch!(:agent_runtime)
       |> Keyword.put(:implementation, :agent_runtime)
-      |> Keyword.put(:model_provider, TestAgentRuntimeModelProvider)
+      |> Keyword.put(:model_provider, TestSelectiveAgentRuntimeModelProvider)
       |> Keyword.put(:model_provider_options, owner: self())
 
     Application.put_env(
@@ -72,6 +72,114 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
                    1_000
 
     refute room.incarnation_id == ""
+  end
+
+  for departure <- [:detach, :process_down] do
+    test "cancels silent startup preparation when its caller leaves by #{departure}" do
+      plan = compile_plan(60_000, model: "test:blocked", wait_sounds: nil)
+      assert {:ok, room} = start_call(plan)
+      assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+      preparation_monitor = Process.monitor(preparer)
+      authority = room_authority(plan)
+      room_monitor = Process.monitor(authority)
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      command = connection_command(plan, room, caller, "silent-startup")
+      assert {:ok, _} = CallEngine.TestTransferConnection.attach(command, nil)
+
+      case unquote(departure) do
+        :detach ->
+          assert :ok =
+                   CallEngine.TestTransferConnection.run(command, fn ->
+                     CallEngine.RoomAuthority.detach_connection(authority, command, self())
+                   end)
+
+        :process_down ->
+          connection = CallEngine.TestTransferConnection.run(command, fn -> self() end)
+          Process.exit(connection, :kill)
+      end
+
+      assert_receive {:DOWN, ^room_monitor, :process, ^authority,
+                      {:shutdown, {:startup_failure, :caller_disconnected}}},
+                     1_000
+
+      assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _reason}, 1_000
+      refute_receive {:test_call_ready, _}
+    end
+  end
+
+  test "fails startup promptly if its wait player is killed without a playback result" do
+    plan = compile_plan(60_000, model: "test:blocked")
+    assert {:ok, room} = start_call(plan)
+    assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+    preparation_monitor = Process.monitor(preparer)
+    authority = room_authority(plan)
+    room_monitor = Process.monitor(authority)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    sink = start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+    command = connection_command(plan, room, caller, "failed-wait-startup")
+    assert {:ok, _} = CallEngine.TestTransferConnection.attach(command, sink)
+    assert_receive {:test_audio_output, ^sink, wait_frame}, 1_000
+    player = wait_frame.reply_to
+    Process.exit(player, :kill)
+
+    assert_receive {:DOWN, ^room_monitor, :process, ^authority, :startup_unavailable}, 1_000
+    assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 1_000
+    refute_receive {:test_call_ready, _}
+  end
+
+  test "detaching a waiting caller clears queued audio and cancels preparation" do
+    plan = compile_plan(60_000, model: "test:blocked")
+    assert {:ok, room} = start_call(plan)
+    assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+    preparation_monitor = Process.monitor(preparer)
+    authority = room_authority(plan)
+    room_monitor = Process.monitor(authority)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    sink = start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+    command = connection_command(plan, room, caller, "detached-wait-startup")
+    assert {:ok, _} = CallEngine.TestTransferConnection.attach(command, sink)
+    assert_receive {:test_audio_output, ^sink, wait_frame}, 1_000
+    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    player_monitor = Process.monitor(wait_frame.reply_to)
+
+    assert :ok =
+             CallEngine.TestTransferConnection.run(command, fn ->
+               CallEngine.RoomAuthority.detach_connection(authority, command, self())
+             end)
+
+    assert :sys.get_state(sink).callback == nil
+    assert_receive {:DOWN, ^player_monitor, :process, _, _}, 1_000
+
+    assert_receive {:DOWN, ^room_monitor, :process, ^authority,
+                    {:shutdown, {:startup_failure, :caller_disconnected}}},
+                   1_000
+
+    assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 1_000
+  end
+
+  test "keeps silent startup alive when another connection still belongs to the caller" do
+    plan = compile_plan(60_000, model: "test:blocked", wait_sounds: nil)
+    assert {:ok, room} = start_call(plan)
+    assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+    preparation_monitor = Process.monitor(preparer)
+    authority = room_authority(plan)
+    room_monitor = Process.monitor(authority)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    first = connection_command(plan, room, caller, "first-caller-connection")
+    second = connection_command(plan, room, caller, "second-caller-connection")
+    assert {:ok, _} = CallEngine.TestTransferConnection.attach(first, nil)
+    assert {:ok, _} = CallEngine.TestTransferConnection.attach(second, nil)
+
+    assert :ok =
+             CallEngine.TestTransferConnection.run(first, fn ->
+               CallEngine.RoomAuthority.detach_connection(authority, first, self())
+             end)
+
+    refute_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 100
+    refute_receive {:DOWN, ^room_monitor, :process, ^authority, _}, 100
+    send(preparer, :release_test_agent_runtime_model)
+    assert_receive {:test_call_ready, _}, 1_000
+    assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, :normal}, 1_000
   end
 
   test "ends a ready call at its pinned maximum duration" do
@@ -274,6 +382,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
       entry_caller: "caller",
       entry_receiver: "receiver",
       defaults: %{capabilities: %{}},
+      wait_sounds: Keyword.get(options, :wait_sounds, %{}),
       call_variables: %{sections: %{}},
       participants: %{
         "caller" => %{
@@ -314,7 +423,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
         "test-model" => %{
           kind: :model_inference,
           provider: :req_llm,
-          options: %{model: "test:scripted"}
+          options: %{model: Keyword.get(options, :model, "test:scripted")}
         },
         "test-stt" => %{
           kind: :speech_to_text,
@@ -330,6 +439,11 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
   end
 
   defp attach(plan, room, caller, connection_id \\ nil) do
+    command = connection_command(plan, room, caller, connection_id || unique_id("connection"))
+    Vxpipe.CallEngine.TestTransferConnection.attach(command, nil)
+  end
+
+  defp connection_command(plan, room, caller, connection_id) do
     assert {:ok, command} =
              AttachConnection.new(
                tenant_id: plan.tenant_id,
@@ -337,11 +451,11 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
                room_id: plan.room_id,
                incarnation_id: room.incarnation_id,
                participant_id: caller.participant_id,
-               connection_id: connection_id || unique_id("connection"),
+               connection_id: connection_id,
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    Vxpipe.CallEngine.TestTransferConnection.attach(command, nil)
+    command
   end
 
   defp send_command(plan, room, caller, content) do

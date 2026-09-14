@@ -146,7 +146,8 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     {:reply, :ok, state |> cancel(:readiness) |> Map.put(:readiness, :ready)}
   end
 
-  def handle_call(:ready, _from, state), do: {:reply, :ok, state}
+  def handle_call(:ready, _from, %{readiness: :ready} = state), do: {:reply, :ok, state}
+  def handle_call(:ready, _from, state), do: {:reply, {:error, :unavailable}, state}
 
   def handle_call(:waiting, _from, %{readiness: :ready, idle: :inactive} = state) do
     state = state |> schedule(:idle, state.idle_timeout_ms) |> Map.put(:idle, :armed)
@@ -247,6 +248,14 @@ defmodule Vxpipe.CallEngine.CallLifecycle do
     |> Map.put(:idle, {:notified, token})
     |> remove_timer(:idle)
     |> deliver({:idle, token})
+  end
+
+  defp fire(:max_duration, _token, state) do
+    state
+    |> cancel(:readiness)
+    |> Map.put(:readiness, :expired)
+    |> remove_timer(:max_duration)
+    |> deliver(:max_duration)
   end
 
   defp fire(event, _token, state), do: state |> remove_timer(event) |> deliver(event)

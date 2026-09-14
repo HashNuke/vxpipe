@@ -373,10 +373,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
         {:DOWN, room_monitor, :process, _pid, _reason},
         %{room_monitor: room_monitor} = state
       ) do
-    case signal_peer_left(state) do
-      :sent -> await_peer_disconnect(state)
-      :unavailable -> {:stop, :shutdown, state}
-    end
+    leave_peer(state)
   end
 
   def handle_info(
@@ -513,7 +510,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   end
 
   def handle_info({:vxpipe_connection_unavailable, _reason}, state) do
-    {:stop, :shutdown, state}
+    leave_peer(state)
   end
 
   def handle_info(
@@ -702,6 +699,16 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
     :sent
   catch
     :exit, _reason -> :unavailable
+  end
+
+  defp leave_peer(%{peer_left_timeout_token: token} = state) when is_reference(token),
+    do: {:noreply, state}
+
+  defp leave_peer(state) do
+    case signal_peer_left(state) do
+      :sent -> await_peer_disconnect(state)
+      :unavailable -> {:stop, :shutdown, state}
+    end
   end
 
   defp await_peer_disconnect(state) do

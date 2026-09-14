@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
   alias Vxpipe.CallEngine.Media.{Ingress, OutputSink}
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, RoomMixer}
-  alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, State, TextCapability}
+  alias Vxpipe.CallEngine.RoomAuthority.{OpeningAudio, StartupReadiness, State, TextCapability}
 
   @spec attach(struct(), pid(), pid(), pid() | nil, reference(), State.t()) ::
           {:reply, {:ok, atom(), term()} | {:error, Error.t()}, State.t()}
@@ -474,6 +474,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
       | connection_monitors: connection_monitors,
         connections: Map.delete(state.connections, connection_id)
     }
+
+    state = StartupReadiness.connection_removed(connection_id, connection, state)
 
     if connection == nil or connection.admission != :main do
       state
