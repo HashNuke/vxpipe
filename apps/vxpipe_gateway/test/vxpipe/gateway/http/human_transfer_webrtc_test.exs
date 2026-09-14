@@ -262,6 +262,140 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              await_sideband(client, "bot-output", 2_000)
   end
 
+  test "opening file plays independently of model setup and waiting resumes after it" do
+    {sounds, options} = wait_configuration(:custom_url)
+    owner = self()
+    opening_url = "https://media.example.com/initial-notice.wav"
+
+    plan =
+      compile_plan(
+        reception_model: "test:blocked",
+        opening_audio: %{type: "file_url", url: opening_url},
+        wait_sounds: %{call_setup: sounds.transfer_to_human}
+      )
+
+    settings = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
+
+    opening_settings = [
+      fetcher:
+        {CallEngine.TestOpeningAudioFetcher,
+         [
+           observer: owner,
+           response: fn ->
+             send(owner, {:opening_fetch_waiting, self()})
+
+             receive do
+               :release_opening_file ->
+                 {:ok,
+                  %CallEngine.OpeningAudio.Download{
+                    body: tone_wave(1_400),
+                    content_type: "audio/wav"
+                  }}
+             end
+           end
+         ]}
+    ]
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      CallEngine.Application,
+      Keyword.put(settings, :opening_audio, opening_settings)
+    )
+
+    assert {:ok, room} = CallEngine.start_call(plan, options)
+    stop_room_on_exit(plan)
+    assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
+    caller = Map.fetch!(plan.participants, "caller")
+
+    client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat", false))
+
+    assert :ok = send_client_ready(client)
+    assert_receive {:opening_fetch_waiting, fetcher}, 2_000
+    assert :ok = await_tone(client, 250, 2_000)
+    refute_receive {:test_tts_transport_started, _, _}, 100
+    send(fetcher, :release_opening_file)
+    assert :ok = await_tone(client, 1_400, 2_000)
+    assert :ok = await_tone(client, 250, 2_000)
+    assert :ok = send_rtvi_text(client, "held-after-opening")
+
+    assert %{"id" => "held-after-opening"} =
+             await_sideband(client, "error-response", 2_000)
+
+    send(model_preparer, :release_test_agent_runtime_model)
+    assert_receive {:test_tts_transport_started, voice, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      ~s({"type":"Connected","request_id":"voice-ready-after-opening"})
+    )
+
+    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+  end
+
+  test "opening speech prepares independently and waiting continues until its first audio" do
+    {sounds, options} = wait_configuration(:custom_url)
+
+    plan =
+      compile_plan(
+        reception_model: "test:blocked",
+        opening_audio: %{type: "text", text: "Opening notice.", text_to_speech: "test-voice"},
+        wait_sounds: %{call_setup: sounds.transfer_to_human}
+      )
+
+    assert {:ok, room} = CallEngine.start_call(plan, options)
+    stop_room_on_exit(plan)
+    assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
+    assert_receive {:test_tts_transport_started, opening_voice, _}, 2_000
+    opening_monitor = Process.monitor(opening_voice)
+
+    TestTextToSpeechTransport.deliver_control(
+      opening_voice,
+      ~s({"type":"Connected","request_id":"opening-voice-ready"})
+    )
+
+    caller = Map.fetch!(plan.participants, "caller")
+
+    client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat", false))
+
+    assert :ok = send_client_ready(client)
+    assert_receive {:test_tts_control, ^opening_voice, speak}, 2_000
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Opening notice."}
+    assert_receive {:test_tts_control, ^opening_voice, _flush}, 2_000
+    assert :ok = await_tone(client, 250, 2_000)
+
+    TestTextToSpeechTransport.deliver_control(
+      opening_voice,
+      ~s({"type":"SpeechStarted","speech_id":"opening-notice"})
+    )
+
+    <<_header::binary-size(44), pcm::binary>> = tone_wave(1_400)
+    TestTextToSpeechTransport.deliver_audio(opening_voice, pcm)
+
+    TestTextToSpeechTransport.deliver_control(
+      opening_voice,
+      ~s({"type":"SpeechMetadata","speech_id":"opening-notice"})
+    )
+
+    assert :ok = await_tone(client, 1_400, 2_000)
+    assert :ok = await_tone(client, 250, 2_000)
+    assert_receive {:DOWN, ^opening_monitor, :process, ^opening_voice, _}, 2_000
+    send(model_preparer, :release_test_agent_runtime_model)
+    assert_receive {:test_tts_transport_started, voice, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      ~s({"type":"Connected","request_id":"voice-ready-after-opening"})
+    )
+
+    assert %{"type" => "bot-ready"} = await_sideband(client, "bot-ready", 2_000)
+  end
+
   test "AI handoff waits independently for model and voice readiness before cues and greeting" do
     plan = compile_plan(agent_destination: true, billing_model: "test:blocked")
     caller = Map.fetch!(plan.participants, "caller")
@@ -1849,18 +1983,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         {CallEngine.OpeningAudio.AssetCache, maximum_entries: 8, maximum_bytes: 8_388_608}
       )
 
-    pcm =
-      for sample <- 0..9_599, into: <<>> do
-        amplitude = round(12_000 * :math.sin(2 * :math.pi() * 250 * sample / 48_000))
-        <<amplitude::little-signed-16>>
-      end
-
-    format =
-      <<1::little-16, 1::little-16, 48_000::little-32, 96_000::little-32, 2::little-16,
-        16::little-16>>
-
-    body = "fmt " <> <<16::little-32>> <> format <> "data" <> <<byte_size(pcm)::little-32>> <> pcm
-    wave = "RIFF" <> <<byte_size(body) + 4::little-32>> <> "WAVE" <> body
+    wave = tone_wave(250)
     url = "https://media.example.com/handoff.wav"
 
     {%{transfer_to_human: url, transfer_joining: url},
@@ -1878,6 +2001,21 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
      ]}
   end
 
+  defp tone_wave(frequency) do
+    pcm =
+      for sample <- 0..9_599, into: <<>> do
+        amplitude = round(12_000 * :math.sin(2 * :math.pi() * frequency * sample / 48_000))
+        <<amplitude::little-signed-16>>
+      end
+
+    format =
+      <<1::little-16, 1::little-16, 48_000::little-32, 96_000::little-32, 2::little-16,
+        16::little-16>>
+
+    body = "fmt " <> <<16::little-32>> <> format <> "data" <> <<byte_size(pcm)::little-32>> <> pcm
+    "RIFF" <> <<byte_size(body) + 4::little-32>> <> "WAVE" <> body
+  end
+
   defp compile_plan(options \\ []) do
     resource_id = unique_id("human-transfer-definition")
 
@@ -1889,6 +2027,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  entry_receiver: "reception",
                  defaults: %{capabilities: %{}},
                  wait_sounds: Keyword.get(options, :wait_sounds, %{}),
+                 opening_audio: Keyword.get(options, :opening_audio),
                  participants: %{
                    "caller" => %{
                      type: "human",

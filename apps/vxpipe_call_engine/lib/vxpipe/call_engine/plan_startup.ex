@@ -32,8 +32,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     :receiver_command,
     :agent_activation,
     :speech_to_text_runtimes,
-    :text_to_speech,
-    :opening_text_to_speech
+    :text_to_speech
   ]
   defstruct @enforce_keys
 
@@ -46,8 +45,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           speech_to_text_runtimes: %{
             required(String.t()) => nil | SpeechToTextRuntime.t()
           },
-          text_to_speech: nil | TextToSpeechRuntime.t(),
-          opening_text_to_speech: nil | TextToSpeechRuntime.t()
+          text_to_speech: nil | TextToSpeechRuntime.t()
         }
 
   @spec validate(ResolvedCallPlan.t(), keyword()) ::
@@ -123,8 +121,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          {:ok, activation_options} <- agent_activation_options(plan, receiver, options),
          {:ok, speech_to_text_runtimes} <-
            speech_to_text_runtimes(plan, [caller, receiver], plan.opening_audio, options),
-         {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options),
-         {:ok, opening_text_to_speech} <- opening_text_to_speech_runtime(plan, caller, options) do
+         {:ok, text_to_speech} <- text_to_speech_runtime(plan, receiver, options) do
       {:ok,
        %__MODULE__{
          caller: caller,
@@ -133,8 +130,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
          receiver_command: entries.receiver_command,
          agent_activation: activation_options,
          speech_to_text_runtimes: speech_to_text_runtimes,
-         text_to_speech: text_to_speech,
-         opening_text_to_speech: opening_text_to_speech
+         text_to_speech: text_to_speech
        }}
     end
   end
@@ -468,6 +464,11 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     else
       _invalid -> {:error, :invalid_usage_identity}
     end
+  end
+
+  def opening_runtime(%ResolvedCallPlan{} = plan, options) do
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    opening_text_to_speech_runtime(plan, caller, options)
   end
 
   defp opening_text_to_speech_runtime(%ResolvedCallPlan{opening_audio: nil}, _caller, _options),

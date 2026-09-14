@@ -31,6 +31,27 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     end
   end
 
+  def opening_preparation_result(ref, result, state) do
+    Process.demonitor(ref, [:flush])
+
+    case result do
+      {:ok, voice} ->
+        state = %{
+          state
+          | opening_audio: %{
+              state.opening_audio
+              | capability: Startup.activate_text_to_speech(voice)
+            },
+            startup: %{state.startup | opening_task: nil}
+        }
+
+        reply(reconcile(state), state)
+
+      _failed ->
+        {:stop, :opening_audio_unavailable, state}
+    end
+  end
+
   def reply({:ok, state}, _previous), do: {:noreply, CallerIdle.reconcile(state)}
 
   def reply({:error, %Error{code: code}}, state) do
@@ -220,7 +241,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
   end
 
   defp update_wait(id, %{status: :ready} = wait, state) do
-    if state.startup.resources_ready? or state.opening_audio.phase == :playing do
+    if (state.startup.resources_ready? and state.opening_audio.phase == :open) or
+         state.opening_audio.phase in [:ready, :playing] do
       {:ok, put_wait(state, id, %{wait | status: :stopped})}
     else
       start_wait(id, wait, state)
@@ -233,8 +255,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
         Player.stop(wait.player)
         {:ok, put_wait(state, id, %{wait | status: :stopping})}
 
-      state.startup.status == :prepared and state.opening_audio.phase == :awaiting_connection and
-          status == :playing ->
+      state.opening_audio.phase == :ready and status == :playing ->
         Player.pause(wait.player)
         {:ok, put_wait(state, id, %{wait | status: :pausing})}
 
@@ -282,10 +303,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     end
   end
 
-  defp start_opening(%{startup: %{status: :preparing}} = state), do: {:ok, state}
-
   defp start_opening(%{opening_audio: %{phase: phase}} = state)
-       when phase != :awaiting_connection, do: {:ok, state}
+       when phase not in [:awaiting_connection, :ready], do: {:ok, state}
 
   defp start_opening(state) do
     target = state.opening_audio.target_participant_id
@@ -293,28 +312,43 @@ defmodule Vxpipe.CallEngine.RoomAuthority.StartupReadiness do
     case Enum.find(state.connections, fn {id, connection} ->
            connection.participant_id == target and
              match?(
-               %{status: status} when status in [:paused, :stopped],
+               %{status: status} when status != :checking,
                Map.get(state.startup.waits, id)
              )
          end) do
       {_id, connection} ->
-        with {:ok, _discarded} <- OutputSink.clear(connection.output_sink),
-             {:ok, opening} <-
-               OpeningAudio.start(
-                 state.opening_audio,
-                 connection.attach_command,
-                 connection,
-                 state.snapshot,
-                 self()
-               ) do
-          {:ok, %{state | opening_audio: opening}}
-        else
-          {:error, %Error{}} = error -> error
-          _failed -> {:error, startup_unavailable()}
-        end
+        begin_or_release_opening(connection, state)
 
       nil ->
         {:ok, state}
+    end
+  end
+
+  defp begin_or_release_opening(connection, %{opening_audio: %{phase: :ready}} = state) do
+    wait = Map.fetch!(state.startup.waits, connection.attach_command.connection_id)
+
+    if wait.status in [:paused, :stopped] do
+      with {:ok, _discarded} <- OutputSink.clear(connection.output_sink),
+           {:ok, opening} <- OpeningAudio.release(state.opening_audio) do
+        {:ok, %{state | opening_audio: opening}}
+      else
+        _failed -> {:error, startup_unavailable()}
+      end
+    else
+      {:ok, state}
+    end
+  end
+
+  defp begin_or_release_opening(connection, state) do
+    with {:ok, opening} <-
+           OpeningAudio.start(
+             state.opening_audio,
+             connection.attach_command,
+             connection,
+             state.snapshot,
+             self()
+           ) do
+      {:ok, %{state | opening_audio: opening}}
     end
   end
 

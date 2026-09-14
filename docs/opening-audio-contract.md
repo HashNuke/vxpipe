@@ -2,7 +2,8 @@
 
 Status: fixed-text and HTTPS-file playback, bounded reusable-asset caching, and input gating are
 implemented. The 2026-09-14 update gives text openings an explicit, independent TTS profile and
-closes the room-recording path during opening playback.
+closes the room-recording path during opening playback. Opening preparation now runs independently
+of the initial agent, and coordinates with the caller setup wait sound.
 
 ## Decision
 
@@ -39,9 +40,15 @@ Omission means there is no opening-audio phase. Required call startup still wait
 resource readiness; `wait_sounds.call_setup` controls private audio during that interval.
 The runtime targets only the entry caller. Text uses a separate supervised TTS capability owned
 by the opening lifecycle, attributed to the caller with no agent activation, and released after
-opening completion. Agent greetings keep their own TTS capability. Normal text and media input
-remain closed until the output sink reports
-actual playout completion; preparation, synthesis completion, enqueueing, or provider
+opening completion. Its supervised preparation runs alongside initial agent construction. File
+loading starts once caller output is usable. Agent greetings keep their own TTS capability.
+Waiting continues while opening file loading or synthesis has not produced playable PCM. A
+room-owned output gate holds the first frame, requests wait pause, and releases it after the
+wait player acknowledges pause and the actual output clears its queued tail. It forwards the
+real sink's correlated completion acknowledgements. This preserves streamed text playback and
+bounded backpressure without pre-rendering a complete notice. After the notice, a still-pending
+setup resumes the same wait player and cursor; ready setup releases conversation instead. Normal
+text and media input remain closed until the output sink reports actual playout completion; preparation, synthesis completion, enqueueing, or provider
 readiness do not open the gate. Input received while the gate is closed is discarded rather
 than buffered or replayed. A preparation or playback failure ends the room explicitly and
 never silently opens normal conversation. A text source without a resolved TTS binding fails
@@ -124,6 +131,15 @@ while a temporary sink owns bounded collection. `RoomAuthority` owns only the op
 correlated outcome decision; it does not fetch, decode, cache, synthesize, or push opening media.
 
 ## Verification
+
+The independent-opening checkpoint adds native WebRTC regressions with model construction held:
+a delayed file fetch and a separately prepared opening voice both produce decoded wait → notice →
+wait audio before model construction is released. The engine-level PCM check proves the resumed
+wait starts at its next segment in the same episode. Existing tests cover caller targeting, a
+human entry receiver, separate voice profiles, cache reuse, recording and input isolation, required
+opening failure, and exactly-once fixed greeting history. See the
+[checkpoint labnote](../labnotes/20260914-2319-independent-opening-audio.md) for final checks and
+fixture changes required by independent initialization.
 
 The 2026-09-14 regressions prove explicit profile resolution for a human initial receiver,
 rejection of absent/malformed/unknown/wrong-kind references, independent opening/greeting voices,

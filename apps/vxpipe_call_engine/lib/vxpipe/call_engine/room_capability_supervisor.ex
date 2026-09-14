@@ -169,6 +169,13 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
     DynamicSupervisor.start_child(via(incarnation_id), {TextCacheSink, options})
   end
 
+  def start_opening_audio_gate(incarnation_id, options) when is_list(options) do
+    DynamicSupervisor.start_child(
+      via(incarnation_id),
+      {Vxpipe.CallEngine.OpeningAudio.PlaybackGate, options}
+    )
+  end
+
   def start_wait_audio(incarnation_id, options) when is_list(options) do
     options = Keyword.put(options, :incarnation_id, incarnation_id)
 

@@ -311,6 +311,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
       ),
       do: StartupReadiness.preparation_result(ref, result, state)
 
+  def handle_info(
+        {ref, {:opening_prepared, result}},
+        %{startup: %{opening_task: %Task{ref: ref}}} = state
+      ),
+      do: StartupReadiness.opening_preparation_result(ref, result, state)
+
   def handle_info({reference, {:startup_output, id, result}}, state),
     do:
       StartupReadiness.reply(StartupReadiness.output_result(reference, id, result, state), state)
@@ -321,6 +327,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info({:vxpipe_wait_playback, player, episode, status}, %{startup: startup} = state)
       when startup != nil,
       do: StartupReadiness.reply(StartupReadiness.playback(player, episode, status, state), state)
+
+  def handle_info({:vxpipe_opening_audio_ready, gate}, state) do
+    opening = OpeningAudio.ready(state.opening_audio, gate)
+
+    StartupReadiness.reply(
+      StartupReadiness.opening_changed(%{state | opening_audio: opening}),
+      state
+    )
+  end
 
   def handle_info({:vxpipe_transfer_progress, reference, progress}, state),
     do: ParticipantTransfer.progress(reference, progress, state)

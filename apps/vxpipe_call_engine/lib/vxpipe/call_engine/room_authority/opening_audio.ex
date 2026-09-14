@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   alias Vxpipe.CallEngine.OpeningAudio.{
     CachedPlaybackRequest,
     FilePlaybackRequest,
+    PlaybackGate,
     Settings,
     TextPreparation
   }
@@ -24,9 +25,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   @derive {Inspect, only: [:phase, :target_participant_id]}
   @enforce_keys [:participant_id, :phase, :settings, :source, :target_participant_id]
   defstruct @enforce_keys ++
-              [capability: nil, monitor: nil, request: nil, started_at: nil, worker: nil]
+              [
+                capability: nil,
+                gate: nil,
+                gate_monitor: nil,
+                monitor: nil,
+                request: nil,
+                started_at: nil,
+                worker: nil
+              ]
 
-  @type phase :: :open | :awaiting_connection | :playing
+  @type phase :: :open | :awaiting_connection | :preparing | :ready | :playing
   @type request ::
           nil | TextToSpeechRequest.t() | FilePlaybackRequest.t() | CachedPlaybackRequest.t()
   @type t :: %__MODULE__{
@@ -36,6 +45,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
           target_participant_id: nil | String.t(),
           settings: nil | Settings.t(),
           capability: nil | map(),
+          gate: nil | pid(),
+          gate_monitor: nil | reference(),
           request: request(),
           started_at: nil | integer(),
           worker: nil | pid(),
@@ -93,8 +104,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
 
   @spec start(t(), AttachConnection.t(), map(), struct(), pid()) ::
           {:ok, t()} | {:error, Error.t()}
+  def start(%__MODULE__{phase: phase} = opening, _command, _connection, _snapshot, _owner)
+      when phase != :awaiting_connection,
+      do: {:ok, opening}
+
   def start(
-        %__MODULE__{phase: :open} = opening,
+        %__MODULE__{capability: nil, source: %OpeningSource{type: :text}} = opening,
         _command,
         _connection,
         _snapshot,
@@ -102,31 +117,56 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
       ),
       do: {:ok, opening}
 
-  def start(
-        %__MODULE__{phase: :awaiting_connection, target_participant_id: target} = opening,
-        %AttachConnection{participant_id: participant_id},
-        _connection,
-        _snapshot,
-        _owner
-      )
-      when participant_id != target,
-      do: {:ok, opening}
+  def start(opening, command, connection, snapshot, owner)
+      when command.participant_id == opening.target_participant_id and
+             is_pid(connection.output_sink) do
+    options = [
+      owner: owner,
+      output_sink: connection.output_sink,
+      connection_id: command.connection_id
+    ]
 
-  def start(
-        %__MODULE__{
-          participant_id: participant_id,
-          capability: %{asset_cache_identity: cache_identity, pid: capability},
-          phase: :awaiting_connection,
-          settings: %Settings{},
-          source: %OpeningSource{type: :text, text: text}
-        } = opening,
-        %AttachConnection{} = command,
-        %{output_sink: output_sink},
-        snapshot,
-        owner
-      )
-      when is_pid(output_sink) and is_pid(capability) and is_pid(owner) and is_binary(text) and
-             is_map(cache_identity) do
+    with {:ok, gate} <-
+           RoomCapabilitySupervisor.start_opening_audio_gate(snapshot.incarnation_id, options),
+         {:ok, opening} <-
+           start_playback(opening, command, %{connection | output_sink: gate}, snapshot, owner) do
+      {:ok, %{opening | gate: gate, gate_monitor: Process.monitor(gate), phase: :preparing}}
+    else
+      _failed -> {:error, unavailable()}
+    end
+  end
+
+  def start(opening, _command, _connection, _snapshot, _owner), do: {:ok, opening}
+
+  def ready(%__MODULE__{gate: gate, phase: :preparing} = opening, gate),
+    do: %{opening | phase: :ready}
+
+  def ready(opening, _gate), do: opening
+
+  def release(%__MODULE__{gate: gate, phase: :ready} = opening) do
+    case PlaybackGate.release(gate) do
+      :ok -> {:ok, %{opening | phase: :playing}}
+      _failed -> {:error, unavailable()}
+    end
+  catch
+    :exit, _reason -> {:error, unavailable()}
+  end
+
+  defp start_playback(
+         %__MODULE__{
+           participant_id: participant_id,
+           capability: %{asset_cache_identity: cache_identity, pid: capability},
+           phase: :awaiting_connection,
+           settings: %Settings{},
+           source: %OpeningSource{type: :text, text: text}
+         } = opening,
+         %AttachConnection{} = command,
+         %{output_sink: output_sink},
+         snapshot,
+         owner
+       )
+       when is_pid(output_sink) and is_pid(capability) and is_pid(owner) and is_binary(text) and
+              is_map(cache_identity) do
     options = [
       text: text,
       command: command,
@@ -162,19 +202,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
     end
   end
 
-  def start(
-        %__MODULE__{
-          participant_id: participant_id,
-          phase: :awaiting_connection,
-          settings: %Settings{} = settings,
-          source: %OpeningSource{type: :file_url, url: url}
-        } = opening,
-        %AttachConnection{} = command,
-        %{output_sink: output_sink},
-        snapshot,
-        owner
-      )
-      when is_pid(output_sink) and is_pid(owner) and is_binary(url) do
+  defp start_playback(
+         %__MODULE__{
+           participant_id: participant_id,
+           phase: :awaiting_connection,
+           settings: %Settings{} = settings,
+           source: %OpeningSource{type: :file_url, url: url}
+         } = opening,
+         %AttachConnection{} = command,
+         %{output_sink: output_sink},
+         snapshot,
+         owner
+       )
+       when is_pid(output_sink) and is_pid(owner) and is_binary(url) do
     request = %FilePlaybackRequest{
       tenant_id: snapshot.tenant_id,
       room_id: snapshot.room_id,
@@ -211,25 +251,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
         {:error, unavailable()}
     end
   end
-
-  def start(
-        %__MODULE__{phase: :awaiting_connection},
-        _command,
-        _connection,
-        _snapshot,
-        _owner
-      ) do
-    {:error, unavailable()}
-  end
-
-  def start(
-        %__MODULE__{phase: :playing} = opening,
-        _command,
-        _connection,
-        _snapshot,
-        _owner
-      ),
-      do: {:ok, opening}
 
   @spec playback(t(), TextToSpeechRequest.t(), :started | :completed | tuple()) ::
           :unrelated | {:handled, t()}
@@ -282,7 +303,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   @spec asset_failure?(t(), pid(), FilePlaybackRequest.t() | CachedPlaybackRequest.t()) ::
           boolean()
   def asset_failure?(
-        %__MODULE__{phase: :playing, request: expected, worker: worker},
+        %__MODULE__{request: expected, worker: worker},
         worker,
         request
       ) do
@@ -296,7 +317,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
       when is_reference(monitor),
       do: true
 
-  def worker_monitor?(%__MODULE__{phase: :playing, monitor: monitor}, monitor)
+  def worker_monitor?(%__MODULE__{gate_monitor: monitor}, monitor)
+      when is_reference(monitor),
+      do: true
+
+  def worker_monitor?(%__MODULE__{monitor: monitor}, monitor)
       when is_reference(monitor),
       do: true
 
@@ -349,10 +374,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.OpeningAudio do
   defp opened(%__MODULE__{source: %OpeningSource{type: source}, started_at: started_at} = opening) do
     Telemetry.opening_audio_stop(started_at, source, :completed)
     release_capability(opening)
+    Process.demonitor(opening.gate_monitor, [:flush])
+    RoomCapabilitySupervisor.stop_capability(opening.request.incarnation_id, opening.gate)
 
     %{
       opening
       | capability: nil,
+        gate: nil,
+        gate_monitor: nil,
         monitor: nil,
         phase: :open,
         request: nil,

@@ -88,6 +88,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
          | participant_transfer_runtime: runtime,
            startup: %{
              task: task,
+             opening_task: prepare_opening(plan, startup_options, incarnation),
              status: :preparing,
              waits: %{},
              readiness: nil,
@@ -118,20 +119,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
              startup.receiver.participant_id,
              incarnation,
              owner
-           ),
-         {:ok, opening_voice} <-
-           prepare_text_to_speech(
-             startup.opening_text_to_speech,
-             startup.caller.participant_id,
-             incarnation,
-             owner
            ) do
       {:ok,
        %{
          configuration: startup,
          participant: participant,
-         voice: voice,
-         opening_voice: opening_voice
+         voice: voice
        }}
     end
   rescue
@@ -139,6 +132,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   catch
     :exit, _reason -> {:error, :entry_start_failed}
   end
+
+  defp prepare_opening(%{opening_audio: %{type: :text}} = plan, options, incarnation) do
+    owner = Keyword.fetch!(options, :owner)
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->
+      result =
+        with {:ok, runtime} <- PlanStartup.opening_runtime(plan, options),
+             do: prepare_text_to_speech(runtime, caller.participant_id, incarnation, owner)
+
+      {:opening_prepared, result}
+    end)
+  end
+
+  defp prepare_opening(_plan, _options, _incarnation), do: nil
 
   defp prepare_receiver(%{receiver: %{kind: :human}}, _incarnation), do: {:ok, nil}
 
@@ -161,10 +169,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         | speech_to_text_runtime: startup.speech_to_text_runtimes,
           text_to_speech_capability: activate_text_to_speech(prepared.voice),
           text_to_speech_runtime: startup.text_to_speech,
-          opening_audio: %{
-            state.opening_audio
-            | capability: activate_text_to_speech(prepared.opening_voice)
-          },
           startup: %{state.startup | task: nil, status: :prepared}
       }
 
