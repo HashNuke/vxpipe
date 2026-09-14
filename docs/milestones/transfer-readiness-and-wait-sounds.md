@@ -649,3 +649,22 @@ engine checks, 26 Gateway checks and all five root gates pass (1,168 tests, zero
 15 integrations excluded). Candidate-policy preparation, private destination
 prewarming, startup/transfer wait and cue orchestration, final release and rendered/provider
 acceptance remain unfinished; common readiness and the milestone index remain unchecked.
+
+The STT policy enforcer now supports candidate preparation through the shared provider contract.
+It retains unchanged sessions, defers a future denial until commit, and warms only an affected
+replacement under the attempt's existing owner/deadline. Collection waits for provider readiness;
+matching policy application adopts the ready connection without another startup. Prepared bindings
+remain verifiable after adoption. Discard, owner loss, failure and expiry leave the installed source
+available and prevent committing the failed preparation. Ignored preparation signals cannot replay
+as room transcripts after commit.
+
+An unrelated room revision also retains a healthy pending replacement. Its old candidate evidence
+becomes stale, and a refreshed authoritative candidate reuses that same connection/generation when
+its prospective speech permissions are unchanged. Room-level checks use the real policy authority,
+STT capability, ingress, collector and participant admission. Other enforcers' candidate preparation,
+private destination prewarming and startup/transfer wait/cue/release orchestration remain unfinished.
+
+Seventy-five focused checks pass for this speech-preparation checkpoint. All five root gates pass:
+formatting, warnings-as-errors compilation, strict Credo, 1,178 tests with zero failures and
+15 integrations excluded, and unused dependencies. This is deterministic room/provider-fixture
+evidence; no rendered browser or live-provider acceptance is claimed. The milestone remains open.

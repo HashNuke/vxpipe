@@ -1,0 +1,336 @@
+defmodule Vxpipe.CallEngine.Capability.SpeechToText.PolicyPreparation do
+  @moduledoc false
+
+  alias Vxpipe.CallEngine.Capability.SpeechToText.{State, Usage}
+
+  alias Vxpipe.CallEngine.MediaPolicy.{
+    Authority,
+    Candidate,
+    Intervals,
+    Snapshot,
+    SpeechToTextDemand
+  }
+
+  alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.Readiness.Provider
+  alias Vxpipe.CallEngine.Telemetry
+
+  @derive {Inspect, only: [:attempt_id, :change, :deadline_ms]}
+  @enforce_keys [
+    :candidate,
+    :attempt_id,
+    :owner,
+    :monitor,
+    :deadline_ms,
+    :timer,
+    :token,
+    :change,
+    :state
+  ]
+  defstruct @enforce_keys ++ [failed?: false]
+
+  def request(capability, %Candidate{} = candidate, options) do
+    with :ok <- validate_options(options),
+         :ok <- Authority.validate_candidate(candidate.authority, candidate, remaining(options)),
+         do: GenServer.call(capability, {:prepare_policy, candidate, options}, remaining(options))
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  def begin(state, candidate, options) do
+    with :ok <- validate_options(options),
+         :ok <- validate_authority(state, candidate),
+         true <- candidate.base_snapshot == state.policy do
+      begin_current(state, candidate, options)
+    else
+      false -> {:error, :stale_candidate}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp validate_authority(state, candidate) do
+    if Authority.whereis(state.identity.incarnation_id) == candidate.authority,
+      do: :ok,
+      else: {:error, :wrong_policy_authority}
+  end
+
+  defp begin_current(%{pending_policy: nil} = state, candidate, options) do
+    change = change(state, candidate.snapshot)
+
+    with {:ok, session} <- prepare_session(state, candidate.snapshot, change) do
+      token = make_ref()
+      owner = Keyword.fetch!(options, :owner)
+      deadline = Keyword.fetch!(options, :deadline_ms)
+
+      pending = %__MODULE__{
+        candidate: candidate,
+        attempt_id: Keyword.fetch!(options, :attempt_id),
+        owner: owner,
+        monitor: Process.monitor(owner),
+        deadline_ms: deadline,
+        timer: Process.send_after(self(), {:stt_policy_expired, token}, max(deadline - now(), 0)),
+        token: token,
+        change: change,
+        state: session
+      }
+
+      state = %{state | pending_policy: pending}
+      {:ok, reply(state), state}
+    end
+  end
+
+  defp begin_current(state, candidate, options) do
+    pending = state.pending_policy
+
+    if pending.attempt_id == Keyword.fetch!(options, :attempt_id) and
+         pending.owner == Keyword.fetch!(options, :owner) and
+         pending.deadline_ms == Keyword.fetch!(options, :deadline_ms) and not pending.failed? and
+         pending.change == change(state, candidate.snapshot) and
+         Intervals.unchanged?(
+           pending.candidate.snapshot,
+           candidate.snapshot,
+           :speech_to_text,
+           state.identity.participant_id
+         ) do
+      session =
+        if pending.state do
+          %{
+            pending.state
+            | policy: candidate.snapshot,
+              policy_revision:
+                Snapshot.interval(
+                  candidate.snapshot,
+                  :speech_to_text,
+                  state.identity.participant_id
+                )
+          }
+        end
+
+      state = %{state | pending_policy: %{pending | candidate: candidate, state: session}}
+      {:ok, reply(state), state}
+    else
+      {:error, :preparation_conflict}
+    end
+  end
+
+  def discard(%{pending_policy: %{token: token}} = state, token) do
+    cleanup(state.pending_policy)
+    {:ok, %{state | pending_policy: nil}}
+  end
+
+  def discard(_state, _token), do: {:error, :stale_preparation}
+
+  def readiness(%{pending_policy: %{token: token} = pending} = state, token) do
+    if now() < pending.deadline_ms and pending.candidate.base_snapshot == state.policy do
+      case resources(state) do
+        [{resource, status}] -> {:ok, resource, status}
+        _not_required -> {:error, :unavailable}
+      end
+    else
+      {:error, :unavailable}
+    end
+  end
+
+  def readiness(%{adopted_policy_token: token} = state, token) when is_reference(token) do
+    {:ok, resource, status} = State.readiness(state)
+    resource = %{resource | binding: {resource.binding, :prepared_policy, token}}
+    {:ok, resource, status}
+  end
+
+  def readiness(_state, _token), do: {:error, :unavailable}
+
+  def install(%{pending_policy: nil} = state, snapshot), do: install_live(state, snapshot)
+
+  def install(state, snapshot) do
+    with {:ok, normalized} <- Snapshot.prepare(snapshot, state.policy) do
+      if normalized == state.pending_policy.candidate.snapshot do
+        commit(state, normalized)
+      else
+        state = invalidate_if_affected(state, normalized)
+        install_live(state, snapshot)
+      end
+    else
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  defp invalidate_if_affected(state, snapshot) do
+    if Intervals.unchanged?(
+         state.policy,
+         snapshot,
+         :speech_to_text,
+         state.identity.participant_id
+       ) do
+      state
+    else
+      {:ok, state} = discard(state, state.pending_policy.token)
+      state
+    end
+  end
+
+  def connected(state, transport) do
+    pending = state.pending_policy
+    session = Usage.start_session(%{pending.state | transport: transport})
+    %{state | pending_policy: %{pending | state: session}}
+  end
+
+  def message(state, payload) do
+    pending = state.pending_policy
+    session = pending.state
+
+    case session.provider_module.decode(payload) do
+      {:ok, %Signal{provider_sequence: sequence}}
+      when sequence <= session.last_provider_sequence ->
+        state
+
+      {:ok, %Signal{kind: :connected} = signal} ->
+        session =
+          %{
+            session
+            | readiness_status: Provider.connected(session.readiness_status),
+              last_provider_sequence: signal.provider_sequence
+          }
+          |> Usage.observe_signal(signal)
+
+        %{state | pending_policy: %{pending | state: session}}
+
+      {:ok, %Signal{kind: :failed}} ->
+        fail(state, :provider_failed)
+
+      {:error, _reason} ->
+        fail(state, :invalid_provider_message)
+
+      {:ok, %Signal{provider_sequence: sequence}} ->
+        session = %{session | last_provider_sequence: sequence}
+        %{state | pending_policy: %{pending | state: session}}
+
+      _private_provider_event ->
+        state
+    end
+  end
+
+  def fail(state, reason \\ :cancelled) do
+    pending = state.pending_policy
+    failed? = reason in [:provider_failed, :invalid_provider_message, :transport_closed]
+    cleanup(pending, if(failed?, do: :failed, else: :cancelled))
+
+    if failed? and pending.state != nil and not pending.failed?,
+      do: Telemetry.provider_failure(:stt, pending.state.provider_module, reason)
+
+    session =
+      if pending.state do
+        %{pending.state | transport: nil, connector: nil, usage: nil, readiness_status: :failed}
+      end
+
+    %{state | pending_policy: %{pending | state: session, failed?: true}}
+  end
+
+  def close(%{pending_policy: nil}), do: :ok
+  def close(state), do: cleanup(state.pending_policy)
+
+  defp commit(state, snapshot) do
+    pending = state.pending_policy
+
+    cond do
+      pending.failed? or now() >= pending.deadline_ms ->
+        {:error, :policy_not_ready, state}
+
+      pending.change == :replace ->
+        commit_replacement(state)
+
+      true ->
+        release_lease(pending)
+        install_live(%{state | pending_policy: nil}, snapshot)
+    end
+  end
+
+  defp commit_replacement(state) do
+    pending = state.pending_policy
+
+    case State.readiness(pending.state) do
+      {:ok, _resource, :ready} ->
+        release_lease(pending)
+        _retired = state |> Usage.finish_session(:cancelled) |> State.close()
+        {:ok, %{pending.state | adopted_policy_token: pending.token}}
+
+      _not_ready ->
+        {:error, :policy_not_ready, state}
+    end
+  end
+
+  defp install_live(state, snapshot) do
+    case State.install_policy(state, snapshot) do
+      {:ok, updated} -> {:ok, Usage.transition(state, updated)}
+      {:error, reason, updated} -> {:error, reason, Usage.transition(state, updated)}
+    end
+  end
+
+  defp reply(state) do
+    pending = state.pending_policy
+
+    %{
+      token: pending.token,
+      change: pending.change,
+      resources: Enum.map(resources(state), &elem(&1, 0))
+    }
+  end
+
+  defp resources(%{pending_policy: %{change: :replace} = pending}) do
+    {:ok, resource, status} = State.readiness(pending.state)
+    resource = %{resource | binding: {resource.binding, :prepared_policy, pending.token}}
+    [{resource, status}]
+  end
+
+  defp resources(state) do
+    if SpeechToTextDemand.required?(
+         state.pending_policy.candidate.snapshot,
+         state.identity.participant_id
+       ) do
+      {:ok, resource, status} = State.readiness(state)
+      [{resource, status}]
+    else
+      []
+    end
+  end
+
+  defp change(state, snapshot) do
+    cond do
+      state.policy_revision ==
+          Snapshot.interval(snapshot, :speech_to_text, state.identity.participant_id) ->
+        :retain
+
+      SpeechToTextDemand.required?(snapshot, state.identity.participant_id) ->
+        :replace
+
+      true ->
+        :disable
+    end
+  end
+
+  defp prepare_session(state, snapshot, :replace), do: State.prepare_session(state, snapshot)
+  defp prepare_session(_state, _snapshot, _change), do: {:ok, nil}
+
+  defp cleanup(pending, outcome \\ :cancelled) do
+    release_lease(pending)
+    if pending.state, do: pending.state |> Usage.finish_session(outcome) |> State.close()
+    :ok
+  end
+
+  defp release_lease(pending) do
+    Process.cancel_timer(pending.timer)
+    Process.demonitor(pending.monitor, [:flush])
+    :ok
+  end
+
+  defp validate_options(options) do
+    owner = Keyword.get(options, :owner)
+    attempt = Keyword.get(options, :attempt_id)
+    deadline = Keyword.get(options, :deadline_ms)
+
+    if is_pid(owner) and is_binary(attempt) and byte_size(attempt) in 1..128 and
+         is_integer(deadline) and deadline > now(), do: :ok, else: {:error, :invalid_preparation}
+  end
+
+  defp remaining(options), do: min(max(Keyword.fetch!(options, :deadline_ms) - now(), 1), 5_000)
+  defp now, do: System.monotonic_time(:millisecond)
+end

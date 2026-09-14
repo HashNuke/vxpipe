@@ -46,3 +46,11 @@ Verification passes all umbrella completion gates: 1,006 tests, zero failures,
 pipelines through admission and source-agent departure. Both peers exchange RTP.
 See the [speech labnote](../labnotes/20260913-1940-incremental-media-policy.md) and
 [audio labnote](../labnotes/20260913-2001-incremental-audio-policy.md).
+
+The transfer-readiness implementation adds an STT preparation path before policy application.
+It starts only an affected, still-demanded replacement and waits for its provider readiness while
+retaining the installed session. Policy application adopts that prepared generation; it does not
+start another connection. An unchanged live or pending session survives unrelated room revisions.
+Refreshing a stale candidate updates its pending policy binding without repeating provider startup.
+See [the preparation contract](readiness-resource-contract.md#preparing-an-affected-speech-policy).
+Other enforcers and startup/transfer coordination remain incomplete in that milestone.

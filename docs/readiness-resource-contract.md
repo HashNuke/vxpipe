@@ -185,6 +185,51 @@ collects model/tool and TTS resources, stays closed until the TTS provider's exp
 message, then proceeds with the existing transfer. This is collection evidence; coordinated
 startup/transfer waiting, candidate installation, cues and release are still unimplemented.
 
+## Preparing an affected speech policy
+
+Room-owned STT capabilities accept `prepare_policy/3` with an authority-produced candidate plus
+the attempt ID, persistent owner PID and existing absolute monotonic deadline. Candidate validation
+runs outside the capability loop; the capability also checks its room's authority and installed
+base policy. One pending policy lease exists per capability. Repeated identical requests return
+the same binding; another owner/attempt or a changed deadline cannot replace or extend it.
+
+Preparation compares the participant's scoped speech permissions and demand. An unchanged session
+returns its existing resource. A denied future source requires no speech resource and keeps its
+current session until commit. An affected, still-demanded source initializes a separate provider
+connection through the existing supervised connector while the installed session remains available.
+The shared provider readiness contract applies: initialized providers need their bound transport,
+and providers with an explicit connection acknowledgement remain preparing until it arrives.
+Preparation sends no audio to the new connection and publishes none of its transcript signals.
+
+Prepared resources include a lease token in their binding. The collector observes the actual pending
+session, and the same descriptor remains valid when policy application adopts it. Commit rejects
+failed, expired or unready preparations. A matching ready replacement is installed without starting
+another connection; the old session closes through its existing transport lifecycle. Normal speech
+resource queries then report the adopted generation and interval. Stale cleanup cannot close it.
+Pending provider sequence positions are retained so ignored preparation events cannot be replayed
+into room transcripts after adoption. Provider connection/failure usage stays in the existing
+observation path, while preparation cancellation preserves the installed source session.
+
+An unrelated installed membership/policy revision retains both the live session and its pending
+replacement. The old candidate binding becomes stale until the caller supplies an authoritative
+candidate based on the new room snapshot. If prospective speech permissions are unchanged, that
+refresh reuses the pending connection, generation, readiness and deadline while updating its policy
+interval. A relevant permission change invalidates the affected preparation. Explicit token-scoped
+discard, owner loss and deadline expiry remove only the pending session; failure leaves a terminal
+lease that cannot be committed until explicitly discarded and prepared again.
+
+Local design review rejected stopping the source during preparation, starting another connection at
+commit, treating pending provider events as admitted speech, and discarding a healthy replacement
+solely because an unrelated room revision advanced. Room-level checks cover the actual policy
+authority, registered STT/ingress, provider acknowledgements, collection and participant admission.
+They also exercise foreign authority with an identical snapshot, blocked construction, exact cleanup,
+failure/expiry, unchanged retention, candidate refresh and stale transcript delivery after adoption.
+
+This is the STT enforcer's preparation path. Complete prospective graph preparation still requires
+candidate input/output/recording and room-enforcer support, private destination admission, and the
+startup/transfer coordinator's gates, cues and release acknowledgements. Callers must supply the
+existing attempt deadline; this API does not create or extend a transfer budget.
+
 ## Collection and deadlines
 
 `RoomCapabilitySupervisor.start_readiness/2` owns each collector. It accepts the complete required

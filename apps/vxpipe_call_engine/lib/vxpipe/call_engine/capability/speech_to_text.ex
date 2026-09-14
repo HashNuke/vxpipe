@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
-  alias Vxpipe.CallEngine.Capability.SpeechToText.Usage
+  alias Vxpipe.CallEngine.Capability.SpeechToText.{PolicyPreparation, Usage}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -28,6 +28,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   catch
     :exit, _reason -> {:error, :unavailable}
   end
+
+  def prepare_policy(capability, candidate, options),
+    do: PolicyPreparation.request(capability, candidate, options)
+
+  def discard_policy(capability, token),
+    do: GenServer.call(capability, {:discard_policy, token}, @call_timeout)
+
+  @impl true
+  def readiness_binding(%{binding: {_connection, :prepared_policy, token}, instance: capability}) do
+    GenServer.call(capability, {:prepared_policy_readiness, token}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  def readiness_binding(%{instance: capability}), do: readiness(capability)
 
   def child_spec(options) do
     %{
@@ -72,6 +87,23 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   @impl true
   def handle_call(:readiness, _from, state), do: {:reply, State.readiness(state), state}
 
+  def handle_call({:prepare_policy, candidate, options}, _from, state) do
+    case PolicyPreparation.begin(state, candidate, options) do
+      {:ok, prepared, state} -> {:reply, {:ok, prepared}, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:discard_policy, token}, _from, state) do
+    case PolicyPreparation.discard(state, token) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, _reason} = error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:prepared_policy_readiness, token}, _from, state),
+    do: {:reply, PolicyPreparation.readiness(state, token), state}
+
   def handle_call(:input_binding, _from, state) do
     {:ok, resource, status} = State.readiness(state)
 
@@ -93,13 +125,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
-    case State.install_policy(state, snapshot) do
-      {:ok, updated} ->
-        state = Usage.transition(state, updated)
+    case PolicyPreparation.install(state, snapshot) do
+      {:ok, state} ->
         {:reply, :ok, state}
 
-      {:error, :transport_start_failed, updated} ->
-        state = Usage.transition(state, updated)
+      {:error, :transport_start_failed, state} ->
         Telemetry.provider_failure(:stt, state.provider_module, :transport_closed)
         {:reply, {:error, :transport_start_failed}, state}
 
@@ -118,6 +148,45 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   @impl true
+  def handle_info(
+        {:vxpipe_stt_connected, connector, transport},
+        %{pending_policy: %{state: %{connector: %{pid: connector}}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.connected(state, transport)}
+
+  def handle_info(
+        {:vxpipe_stt_transport, transport, {:message, payload}},
+        %{pending_policy: %{state: %{transport: transport}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.message(state, payload)}
+
+  def handle_info(
+        {:vxpipe_stt_transport, transport, {:closed, _reason}},
+        %{pending_policy: %{state: %{transport: transport}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state, :transport_closed)}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _owner, _reason},
+        %{pending_policy: %{monitor: monitor}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state)}
+
+  def handle_info(
+        {:DOWN, monitor, :process, _connector, _reason},
+        %{pending_policy: %{state: %{connector: %{monitor: monitor}}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state, :transport_closed)}
+
+  def handle_info(
+        {:EXIT, transport, _reason},
+        %{pending_policy: %{state: %{transport: transport}}} = state
+      ),
+      do: {:noreply, PolicyPreparation.fail(state, :transport_closed)}
+
+  def handle_info({:stt_policy_expired, token}, %{pending_policy: %{token: token}} = state),
+    do: {:noreply, PolicyPreparation.fail(state)}
+
   def handle_info(
         {:vxpipe_stt_connected, connector, transport},
         %{connector: %{pid: connector}, transport: nil} = state
@@ -179,6 +248,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   @impl true
   def terminate(_reason, state) do
+    :ok = PolicyPreparation.close(state)
     _ = State.close(state)
     :ok
   end

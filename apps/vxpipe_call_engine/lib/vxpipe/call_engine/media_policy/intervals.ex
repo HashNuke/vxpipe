@@ -5,6 +5,11 @@ defmodule Vxpipe.CallEngine.MediaPolicy.Intervals do
 
   @scopes [:speech_to_text, :audio_input, :audio_output]
 
+  @doc false
+  def unchanged?(%Snapshot{} = previous, %Snapshot{} = snapshot, scope, participant)
+      when scope in @scopes,
+      do: signature(previous, scope, participant) == signature(snapshot, scope, participant)
+
   def next(nil, %Snapshot{intervals: intervals}) when is_map(intervals), do: intervals
 
   def next(previous, %Snapshot{} = snapshot) do

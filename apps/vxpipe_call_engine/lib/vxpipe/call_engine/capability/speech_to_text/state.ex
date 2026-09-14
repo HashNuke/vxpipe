@@ -24,7 +24,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     :usage,
     :usage_context
   ]
-  defstruct @enforce_keys ++ [readiness_generation: nil, readiness_status: :preparing]
+  defstruct @enforce_keys ++
+              [
+                readiness_generation: nil,
+                readiness_status: :preparing,
+                pending_policy: nil,
+                adopted_policy_token: nil
+              ]
 
   @type t :: %__MODULE__{
           connection: map(),
@@ -114,6 +120,23 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     end
   end
 
+  @doc false
+  def prepare_session(%__MODULE__{} = state, snapshot) do
+    prepared =
+      %{state | transport: nil, connector: nil, usage: nil, pending_policy: nil}
+      |> invalidate_readiness()
+      |> put_policy(snapshot)
+
+    case TransportConnector.start(
+           state.transport_module,
+           state.connection,
+           state.transport_options
+         ) do
+      {:ok, connector} -> {:ok, %{prepared | connector: connector}}
+      {:error, _reason} -> {:error, :transport_start_failed}
+    end
+  end
+
   @spec close(t()) :: t()
   def close(%__MODULE__{connector: connector} = state) when is_map(connector) do
     :ok = TransportConnector.stop(connector)
@@ -159,6 +182,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     %{
       state
       | readiness_generation: make_ref(),
+        adopted_policy_token: nil,
         readiness_status: Provider.initial_status(state.provider_module)
     }
   end

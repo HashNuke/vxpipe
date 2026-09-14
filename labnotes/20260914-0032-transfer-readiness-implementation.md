@@ -739,3 +739,48 @@ unchecked; the milestone and index are still incomplete.
   attempt-bound private destination prewarming, asynchronous startup, audience waits/cues, final
   release acknowledgements, restoration and rendered/provider acceptance remain necessary.
   No development server was restarted and no live/provider or rendered-browser check was performed.
+
+## Prepare affected speech policy
+
+- The previous goal turn committed recording-output readiness and nested query cancellation, with
+  all gates passing. Revalidated the clean tree and moved into candidate-policy preparation.
+- Inspection confirmed that existing policy application retains unchanged STT sessions, but an
+  affected session still starts its replacement during application. The next checkpoint prepares
+  that replacement asynchronously while retaining the installed session, then adopts only its
+  ready instance when the matching policy commits. Other enforcers and lifecycle orchestration
+  remain part of the full milestone; this does not narrow the goal to STT.
+- Added room-level red checks for prewarming and discard. Corrected the authored policy fixture
+  to omit inherited routes rather than use the internal unrestricted marker. The first commit
+  check then correctly rejected a malformed synthetic final transcript; its fixture needed the
+  provider's required trigger field. Valid pending transcripts remain private before commit.
+- Positive room checks now exercise unchanged retention, deferred denial, replacement adoption,
+  exact discard, owner loss, deadline expiry, provider failure and a blocked provider constructor.
+  Validation against a second authority with identical policy requires a standalone authority
+  fixture with its significant-child flag adapted to the test supervisor. Final checks follow.
+- The corrected foreign-authority check reproduced acceptance of another authority's candidate
+  with an identical base snapshot. Preparation now verifies the capability's incarnation authority
+  in addition to validating the candidate and exact installed base.
+- A red adoption check showed that the prepared resource stopped being queryable once its session
+  became active. The adopted lease token now resolves to the same generation/configuration/interval;
+  stale cleanup rejects that token and cannot close the live session.
+- A synthetic final-transcript replay was already suppressed by the room's turn handling, so it did
+  not prove the capability boundary. Repeating a valid turn-start event after adoption reproduced
+  an unadmitted transcript. Pending events now advance only the provider sequence boundary and stay
+  out of the room; old sequences remain rejected after commit. Connected/failure observations use
+  existing usage and safe provider-failure reporting.
+- Review then reproduced unnecessary replacement startup after an unrelated participant joined.
+  Exposed the existing scoped policy comparison and retained pending sessions across irrelevant
+  installed revisions. A stale candidate cannot claim readiness; refreshing it under the same
+  owner/attempt/deadline retains the ready transport and generation, updating only its candidate
+  policy binding. The revised room test commits and sends audio through that retained transport.
+- Seventy-five focused speech, authority, interval, inventory and collector checks pass. The first
+  full gate run passed 1,177 tests before the additional pending-retention contract; final gates
+  for the complete checkpoint are recorded after execution below.
+- Final root verification passes all five required gates: formatting, warnings-as-errors
+  compilation, strict Credo, 1,178 tests with zero failures and 15 integrations excluded, and
+  unused dependencies. The milestone/index remain incomplete. No running server was restarted.
+- Design review and contract are recorded in `docs/readiness-resource-contract.md` and linked from
+  `docs/incremental-media-policy.md`. Remaining work includes candidate preparation for the other
+  enforcers, selecting prepared bindings in the full connection/room graph, private destination
+  prewarming, initial asynchronous setup, participant waits/cues, fenced release and restoration,
+  and rendered/phone-provider acceptance. These checks do not prove that larger runtime sequence.
