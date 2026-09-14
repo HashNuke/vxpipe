@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
   @moduledoc false
 
   alias Vxpipe.CallEngine.{Error, RoomCapabilitySupervisor, SpeechToTextRuntime}
-  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer}
+  alias Vxpipe.CallEngine.MediaPolicy.{Authority, Enforcer, SpeechToTextDemand}
   alias Vxpipe.CallEngine.RoomAuthority.{ConnectionLifecycle, State}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
@@ -73,13 +73,35 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
   defp start(command, pending, state) do
     case pending.preparation.destination.speech_to_text do
       nil -> {:reply, {:ok, nil}, state}
-      %SpeechToTextRuntime{} = runtime -> allocate_pair(command, pending, runtime, state)
+      %SpeechToTextRuntime{} = runtime -> start_selected(command, pending, runtime, state)
     end
   end
 
-  defp allocate_pair(command, pending, runtime, state) do
+  defp start_selected(command, pending, runtime, state) do
     base = Authority.snapshot(state.media_policy_authority, max(remaining_ms(pending), 1))
 
+    present =
+      base.present_participant_ids
+      |> MapSet.delete(pending.request.source_participant_id)
+      |> MapSet.put(pending.request.destination_participant_id)
+
+    with {:ok, candidate} <-
+           Authority.preview_presence(
+             state.media_policy_authority,
+             present,
+             max(remaining_ms(pending), 1)
+           ) do
+      if SpeechToTextDemand.required?(candidate.snapshot, command.participant_id),
+        do: allocate_pair(command, pending, runtime, state, base),
+        else: {:reply, {:ok, nil}, state}
+    else
+      _unavailable -> {:reply, {:error, unavailable()}, state}
+    end
+  catch
+    :exit, _reason -> {:reply, {:error, unavailable()}, state}
+  end
+
+  defp allocate_pair(command, pending, runtime, state, base) do
     usage = [
       call_id: runtime.call_id,
       participant_id: runtime.participant_id,

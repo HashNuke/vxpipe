@@ -2406,3 +2406,34 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
   desktop/mobile inspection recorded above. No dependency, new UI component or layout change is
   part of this checkpoint. Root verification remains the passing 1,278-test run; no Elixir behavior
   changed after that run. The documentation site and its other agent's labnotes remain untouched.
+
+## Skip private speech when the resulting policy does not need it
+
+- A real WebRTC handoff with configured support STT, no permitted transcript routes and transcript
+  saving disabled stalled before `transfer.active`. Private allocation followed the selected
+  capability even though the prospective human-support policy did not demand speech processing.
+  The focused red run failed on that missing completion (`vxpipe-undemanded-human-speech-red.log`).
+- Before creating the private capability/ingress pair, preview the existing source-to-destination
+  membership change and ask the existing `SpeechToTextDemand` contract. If speech is unnecessary,
+  return no speech binding and continue preparing the connection. Reuse the captured base policy
+  when allocation is required. No new policy setting, timeout or dependency is introduced.
+- The real WebRTC check now completes handoff with a ready main connection, no STT ingress and no
+  provider transport started (`vxpipe-undemanded-human-speech-first.log`: one check, zero failures).
+  The existing engine human-web suite also passed its 12 checks before the later cue additions.
+- This fixes the ordinary acceptance path's initial allocation. Cleanup after a later membership
+  change removes demand from an already-prepared private binding remains open; do not check off
+  that broader milestone requirement using this static-policy case alone.
+- The preceding status response was read-only. Resumed implementation from the failing cue check
+  and kept the other agent's documentation-site changes untouched. Package this policy change
+  separately from the accompanying cue-failure checkpoint.
+- The first combined root run passed all 321 Gateway checks and the added cue scenarios, but one
+  existing speech-policy check failed during cleanup. Its room exited after registry lookup and
+  before `GenServer.stop`, raising `:noproc` in `on_exit`. Tolerate only that already-stopped-room
+  result; other shutdown failures remain visible. No production behavior or deadline changed.
+  The first edit used invalid anonymous-function `catch` syntax; replaced it with an explicit
+  `try` before rerunning the focused suite. The aborted verification is not passing evidence.
+- The corrected speech-policy suite passes all 20 checks. Final combined-worktree verification
+  passes format, warnings-as-errors compilation, strict Credo, unused dependencies and the entire
+  umbrella suite: 1,283 tests, zero failures, 15 integration exclusions, with `--max-cases 4`.
+  Evidence is `vxpipe-human-cue-commit-results.json` and its five logs. This run includes the cue
+  changes that follow as a separate commit; no UI files or dependencies changed in this checkpoint.

@@ -741,9 +741,13 @@ defmodule Vxpipe.CallEngine.SpeechToTextMediaPolicyRoomTest do
     assert {:ok, room} = CallEngine.start_call(plan)
 
     on_exit(fn ->
-      case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
-        [{authority, _value}] -> GenServer.stop(authority, :shutdown)
-        [] -> :ok
+      try do
+        case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) do
+          [{authority, _value}] -> GenServer.stop(authority, :shutdown)
+          [] -> :ok
+        end
+      catch
+        :exit, {:noproc, _call} -> :ok
       end
     end)
 

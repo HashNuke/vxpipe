@@ -352,6 +352,9 @@ Implementation tasks:
 - [x] Resolve existing engine connection-fixture failures and the configured phone
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
 - [ ] Remove prepared private resources that the resulting policy does not demand.
+  Initial private STT allocation now checks the prospective policy; a selected provider with no
+  permitted transcription demand stays stopped and the WebRTC handoff completes. Reconciliation
+  when demand changes after a private binding was already prepared remains open.
 - [ ] Connect Console phases and safe diagnostics to the actual engine state: briefing, accepting,
   preparing, connected and failure/recovery. Show the blocking capability kind and phase timing
   without exposing provider payloads. Keep the acceptance button readable through transitions.

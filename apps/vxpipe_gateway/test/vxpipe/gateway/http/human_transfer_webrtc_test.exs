@@ -206,6 +206,79 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert {:ok, _binding, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(connection)
   end
 
+  test "human handoff leaves selected but undemanded speech stopped" do
+    plan = compile_plan(support_policy: %{transcript_routes: %{}, save_transcripts: false})
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+    stop_room_on_exit(plan)
+    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    caller_client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat"))
+
+    assert :ok = send_rtvi_text(caller_client)
+    assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "no-transcription-transfer",
+               name: "transfer",
+               arguments: %{"destination" => "human-support", "reason" => "Connect support."}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+
+    support_client =
+      plan
+      |> issue_session(room, support.participant_id)
+      |> then(&connect(&1.session_id, "vxpipe"))
+
+    %{"data" => %{"attempt_id" => attempt}} =
+      await_sideband(support_client, "transfer.preparation", 2_000)
+
+    assert_receive {:test_tts_control, ^briefing, _speak}, 2_000
+    assert_receive {:test_tts_control, ^briefing, _flush}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"no-stt-briefing"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(briefing, :binary.copy(<<1, 0>>, 960))
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"no-stt-briefing"})
+    )
+
+    assert %{"data" => %{"attempt_id" => ^attempt}} =
+             await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+
+    assert :ok = send_acceptance(support_client, "accept-without-transcription", attempt)
+
+    assert %{"data" => %{"attempt_id" => ^attempt}} =
+             await_sideband(support_client, "transfer.active", 2_000)
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
+    joining = Map.fetch!(binding.connections, support_client.connection_id).pid
+    assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
+    assert media.attachment.admission == :main
+    assert media.attachment.media_ingress == nil
+    assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
+    refute_receive {:test_stt_transport_started, _transport, _}, 100
+  end
+
   for loss <- [:destination, :phase, :wait_player] do
     test "recovers the held caller after #{loss} loss without replacing source media" do
       plan = compile_plan()
@@ -1134,6 +1207,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                    "human-support" => %{
                      type: "human",
                      description: "A human support specialist",
+                     while_present: Keyword.get(options, :support_policy, %{}),
                      capabilities: %{speech_to_text: "test-stt"},
                      connection: %{
                        service: "web",
