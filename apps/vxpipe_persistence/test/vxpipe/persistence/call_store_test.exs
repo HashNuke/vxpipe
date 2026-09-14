@@ -406,6 +406,58 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert support_claim.call.started_at == started_at
     assert support_claim.call.incarnation_id == "rinc_existing-call"
     assert Repo.aggregate(StoredAdmission, :count) == 2
+
+    assert {:error, :participant_admission_unavailable} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.support_route.key,
+               support_options
+             )
+
+    assert {:error, :admission_not_found} =
+             Calls.release_admission(
+               %{support_claim | token_id: caller_claim.token_id},
+               context.options
+             )
+
+    assert :ok = Calls.release_admission(support_claim, context.options)
+    assert :ok = Calls.release_admission(support_claim, context.options)
+    assert Repo.aggregate(StoredAdmission, :count) == 2
+
+    retry_options =
+      Keyword.merge(context.options,
+        token_id_generator: fn -> "ffffffff-ffff-4fff-8fff-ffffffffffff" end,
+        join_token_generator: fn -> "vxj_test-only-retry-support-token" end
+      )
+
+    assert {:ok, retry_token} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.support_route.key,
+               retry_options
+             )
+
+    assert {:ok, retry_claim} =
+             Calls.claim_join_token(retry_token.secret, support_scope, retry_options)
+
+    assert retry_claim.call.started_at == started_at
+    assert retry_claim.call.incarnation_id == "rinc_existing-call"
+    assert Repo.aggregate(StoredAdmission, :count) == 3
+
+    assert {:error, :token_already_claimed} =
+             Calls.claim_join_token(support_token.secret, support_scope, support_options)
+
+    assert :ok = Calls.release_admission(support_claim, context.options)
+
+    assert {:error, :participant_admission_unavailable} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.support_route.key,
+               support_options
+             )
   end
 
   test "persists a terminal pre-live failure with no start time", context do

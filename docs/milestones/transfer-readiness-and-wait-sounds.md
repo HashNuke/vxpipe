@@ -3,7 +3,7 @@
 Status: implementation in progress (2026-09-14). Definition/assets, private playback and substantial
 readiness preparation are committed; no complete delivery slice below has passed acceptance yet.
 Human-handoff integration now passes normal transfer, bounded recovery and cue-failure checks. All
-five root gates pass with 1,295 tests and zero failures (test concurrency four); full slice
+five root gates pass with 1,300 tests and zero failures (test concurrency four); full slice
 acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -43,7 +43,7 @@ private preparation. The missing work is completing and verifying their use in o
 | Multiple listeners and failures | Player/resource components have focused coverage; changing audiences and complete recovery are not verified end to end. | Exercise whole-room readiness, independent listener lifetimes, repeated transfers and failure paths in running calls. |
 
 The earlier component checkpoint `c4fea8c` passed 1,274 tests. The current human-handoff checkpoint
-passes all five root gates with 1,295 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
+passes all five root gates with 1,300 tests, zero failures and 15 exclusions; `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
 ## Call-definition changes
@@ -393,8 +393,10 @@ Acceptance and commit tasks:
   directions and partial/final support transcripts. Disconnect before acceptance and verify spoken
   source recovery plus another spoken caller turn on the same WebRTC connection.
 - [ ] Complete controlled independent readiness delays, custom/nil configurations and physical
-  two-device audibility in the rendered sample. Fix repeat destination admission after a failed
-  transfer; the browser retry is currently rejected by the persisted admission check.
+  two-device audibility in the rendered sample.
+- [x] Release failed private destination admissions without deleting history or permitting token
+  replay/concurrent admission. A fresh rendered desk completes another transfer in the same call,
+  retaining the original caller peer and exchanging audio and final transcripts.
 - [ ] Commit the usable human-web slice with its implementation, focused tests, sample behavior,
   milestone status and labnote evidence. Then begin the AI slice.
 
@@ -716,15 +718,23 @@ the acknowledged release generation on affected connections and each new speech 
 it. Old requests keep their old generation. Three WebRTC recovery cases now synthesize actual speech,
 require decoded audio and completion, then accept another caller turn. A live browser disconnect
 before acceptance now recovers spoken responses and retains the original peer beyond the former
-failure point. Reconnecting the desk for another attempt remains broken: persistence rejects any
-second admission for that participant in the same call, even after private transfer failure. This
-must be resolved before claiming repeatable sample acceptance. See the
-[recovery audio labnote](../../labnotes/20260914-1915-human-recovery-audio.md).
+failure point. See the [recovery audio labnote](../../labnotes/20260914-1915-human-recovery-audio.md).
+
+The subsequent [admission lifecycle fix](../transfer-admission-lifecycle.md) releases the exact
+private destination reservation on unused-session expiry, claimant loss or connection termination.
+History and consumed tokens remain intact; a partial unique index excludes concurrent active
+admissions, and a late release cannot affect a newer token. The existing destination-loss WebRTC
+case now completes a second briefing, acceptance and conversation after recovery. A rendered retry
+also completed in the original call with live model/Deepgram services, both cues, bidirectional
+audio and final support/caller transcripts. Earlier attempts included rejected text submissions
+and a briefing that timed out without audio; their cause remains unestablished and full failure
+acceptance remains open. The [readmission labnote](../../labnotes/20260914-1929-transfer-desk-readmission.md)
+records both the failed attempts and the successful retry.
 
 Known remaining work in the first slice:
 
-- Permit a fresh, authorized destination admission after failed private transfer preparation;
-  preserve token single-use and concurrent-admission exclusion. The rendered retry currently fails.
+- Reproduce and explain the intermittent rendered briefing failure observed before a later retry
+  completed. Admission release and a subsequent accepted transfer now pass.
 - Complete readiness-loss, partial-release and expiry coverage across the remaining stages.
 - Reconcile changes during initial graph preparation, changes after policy application and changes
   to still-required resources; complete changing-listener lifetimes. Pending collection, cue playback
@@ -733,8 +743,8 @@ Known remaining work in the first slice:
   returned-worker durations.
 - Complete default/custom/nil playback and private-audio/model-history isolation through the
   rendered sample path, building on the passing native WebRTC cases.
-- Complete audible two-device and recovery verification. Rendered UI checks use simulated browser
-  admission/media events and do not establish physical-device or live-provider audio behavior.
+- Complete physical two-device and live phone recovery verification. Rendered Chrome now uses live
+  model/Deepgram services with synthesized microphone speech; this does not establish physical audibility.
 - Changing membership/connections and multiple listeners retain their later dedicated checkpoint.
 
 ### Verification ledger
@@ -742,10 +752,11 @@ Known remaining work in the first slice:
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
 | Earlier component checkpoint, `c4fea8c` | 46 engine and 46 Gateway focused checks; all five root gates; 1,274 tests, zero failures, 15 integration exclusions | Committed component preparation and its existing regressions pass. It does not prove completed waits/transfers. |
-| Human handoff and recovery | Sixteen WebRTC transfer checks pass within the 327-check Gateway suite with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, pending readiness reconciles removed STT demand and retains an unaffected STT transport, and destination/phase/player loss restores a fresh caller conversation through retained media. |
-| Current human-handoff checkpoint | All five root gates pass; 1,295 tests, zero failures, 15 exclusions; seed 510739 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and spoken recovery pass. Rendered retry remains blocked by persisted destination admission; full slice acceptance stays open. |
+| Human handoff and recovery | Sixteen WebRTC transfer checks pass within the 332-check Gateway suite with simulated providers | Default audience waiting starts before destination connection; delayed STT gates handoff, pending readiness reconciles removed STT demand and retains an unaffected STT transport, and destination/phase/player loss restores a fresh caller conversation through retained media. |
+| Current human-handoff checkpoint | All five root gates pass; 1,300 tests, zero failures, 15 exclusions; seed 306911 at concurrency four | Existing regressions, wait configurations, bidirectional conversation/transcripts, private-audio isolation, policy reconciliation during pending readiness, cue playback and the final pre-application commit check, cue/recheck ordering, progress and spoken recovery pass. Destination reservations release on connection loss/expiry; the rendered retry completes in the same call. Full slice acceptance stays open. |
 | Cue barrier and failure recovery | Nine focused engine cases pass | Completion requires cue drain, including completion during a deferred readiness recheck. Stale policy candidates during cues or at the final commit check cause preparation and fresh cues under the original deadline, retaining unaffected STT; default and silent waits are covered. Cue-player or prepared STT failure recovers the source; unusable recovery output closes the room. This is controlled output/provider evidence, not physical audible proof. |
-| Rendered sample and spoken recovery | Real desktop/mobile-sized Chrome sessions with live model/Deepgram and synthesized microphone speech | Accepted default-wait handoffs preserve the caller and deliver support transcripts. Both peers decode cues and conversation; failed destination connection recovers two spoken assistant responses on the same peer. Repeat admission is rejected; custom/nil, independent readiness delays and physical audibility remain open. |
+| Rendered sample and spoken recovery | Real desktop/mobile-sized Chrome sessions with live model/Deepgram and synthesized microphone speech | Accepted default-wait handoffs preserve the caller and deliver support transcripts. Both peers decode cues and conversation; failed destination connection recovers two spoken assistant responses on the same peer. A fresh desk admission now completes a later transfer on the same caller peer, with audio and final transcripts. Custom/nil, independent readiness delays and physical audibility remain open. |
+| Destination readmission | Five Session lifetime cases, extended persistence admission case and repeated WebRTC recovery flow | Exact release preserves history, rejects stale release/token replay and retains active exclusion. Failed persistence release retries while unavailable; bound connections outlive credential TTL. |
 | Wait configurations and conversational audio | Four ordinary WebRTC handoffs pass for default/custom/per-slot-nil/whole-nil waits | Peer-decoded tones distinguish custom waiting, mandatory cues and bidirectional conversation. Held microphone/private playback produces no STT input or recording chunks; subsequent conversation is recorded and support transcripts reach the caller. The custom fetch and providers are controlled fixtures. |
 | Earlier targeted engine and phone checks | 20 engine checks (15 human-transfer and five tool-registry); 17 Gateway checks (nine WebRTC, six outbound phone and two incoming harnesses) passed before the latest additions | Owning connections, post-briefing acceptance and actual incoming STT audio are exercised with simulated providers; these checks remain in the passing root suite. |
 | Preparation progress and diagnostics | Real WebRTC check observes STT blockers, cue and releasing before activation; telemetry/reporter checks pass | Progress contains only attempt ID, closed phase/blocker categories and elapsed time. The existing reporter aggregates returned worker durations without call identity or provider payloads. |

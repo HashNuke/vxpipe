@@ -8,11 +8,14 @@ Earlier sections are historical evidence, not parallel current task lists.
 Current committed evidence is in the milestone and the latest checkpoint sections at the end of
 this file. Human handoff now integrates waits, readiness, cues, prepared policy adoption, media
 release and bounded recovery. The spoken recovery checkpoint passes all five root gates:
-1,295 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
+1,300 tests, zero failures and 15 exclusions. That is not full milestone acceptance: AI and initial
 call integration, complete phone/changing-listener behavior, remaining failure stages and audible acceptance remain
 open. The latest [spoken recovery checkpoint](20260914-1915-human-recovery-audio.md) records real-browser
-handoff/transcription evidence, the corrected TTS generation defect and the remaining persisted
-destination readmission failure.
+handoff/transcription evidence, the corrected TTS generation defect and the persisted
+destination readmission failure that led to the subsequent [readmission checkpoint](20260914-1929-transfer-desk-readmission.md).
+That checkpoint now releases exact reservations and verifies a later accepted transfer in the same
+rendered call, preserving the original caller peer. Its notes retain unsuccessful attempts and
+the remaining unexplained briefing failure; full slice acceptance remains open.
 
 Earlier entries are chronological snapshots. Their references to uncommitted work or missing
 integration describe their own checkpoint, not the current worktree. No earlier passing run should
@@ -2727,3 +2730,18 @@ All 46 local Markdown links/anchors and the documentation whitespace check pass.
 - All five final root gates pass: 1,295 tests, zero failures, 15 exclusions, concurrency four and
   seed 510739. Evidence is `vxpipe-human-recovery-audio-final-results.json` and its five logs.
   The new labnote and the milestone/index/resource contract are committed with the implementation.
+
+
+## Release failed transfer admissions for a fresh handoff
+
+- The [readmission checkpoint](20260914-1929-transfer-desk-readmission.md) preserves consumed-token
+  and admission history while releasing only the exact failed destination reservation. Active
+  call/participant uniqueness remains enforced; old releases cannot clear later claims. Gateway
+  session expiry, claimant loss and connection termination drive the release without UI changes.
+- The existing destination-loss WebRTC case now completes another briefing, acceptance and
+  conversation after source recovery. The rendered caller retained its original peer through a
+  later successful transfer; both humans exchanged audio and final live transcripts. The notes
+  retain earlier failed attempts and the remaining unexplained intermittent briefing failure.
+- All five root gates pass: 1,300 tests, zero failures and 15 exclusions at concurrency four,
+  seed 306911. Final logs/results are `vxpipe-readmission-final-*`. Development/test migrations
+  completed without a server restart. Full human and subsequent slice acceptance remain open.

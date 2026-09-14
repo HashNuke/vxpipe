@@ -553,9 +553,16 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
       assert caller_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
 
+      observer = self()
+
+      release = fn ->
+        send(observer, :destination_admission_released)
+        :ok
+      end
+
       support_client =
         plan
-        |> issue_session(room, support.participant_id)
+        |> issue_session(room, support.participant_id, release)
         |> then(&connect(&1.session_id, "vxpipe"))
 
       assert %{"type" => "transfer.preparation"} =
@@ -582,6 +589,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           Process.exit(player, :kill)
       end
 
+      assert_receive :destination_admission_released, 2_000
       await_recovered(authority, System.monotonic_time(:millisecond) + 2_000)
       refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
       {:ok, after_recovery} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
@@ -629,9 +637,69 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       assert :ok = send_rtvi_text(caller_client, "after-recovery")
 
-      assert_receive {:test_agent_runtime_stream, _model,
+      assert_receive {:test_agent_runtime_stream, retry_provider,
                       %{correlation: %{correlation_id: "after-recovery"}}},
                      2_000
+
+      if unquote(loss) == :destination do
+        assert {:ok, retry_call} =
+                 ToolCall.new(
+                   id: "retry-human-transfer",
+                   name: "transfer",
+                   arguments: %{
+                     "destination" => "human-support",
+                     "reason" => "Try support again."
+                   }
+                 )
+
+        assert {:ok, retry_response} = ModelResponse.new(text: "", tool_calls: [retry_call])
+        send(retry_provider, {:test_agent_runtime_response, {:ok, retry_response}})
+        assert_receive {:test_tts_transport_started, retry_briefing, _}, 2_000
+
+        retry_client =
+          plan
+          |> issue_session(room, support.participant_id, release)
+          |> then(&connect(&1.session_id, "vxpipe"))
+
+        assert %{"data" => %{"attempt_id" => attempt_id}} =
+                 await_sideband(retry_client, "transfer.preparation", 2_000)
+
+        assert_receive {:test_tts_control, ^retry_briefing, _speak}, 2_000
+        assert_receive {:test_tts_control, ^retry_briefing, _flush}, 2_000
+
+        TestTextToSpeechTransport.deliver_control(
+          retry_briefing,
+          ~s({"type":"SpeechStarted","speech_id":"retry-briefing"})
+        )
+
+        reference = TestTextToSpeechTransport.deliver_audio_with_result(retry_briefing, pcm)
+        assert_receive {:test_tts_audio_result, ^reference, :ok}, 2_000
+
+        TestTextToSpeechTransport.deliver_control(
+          retry_briefing,
+          ~s({"type":"SpeechMetadata","speech_id":"retry-briefing"})
+        )
+
+        assert :ok = await_tone(retry_client, 1_500, 2_000)
+
+        assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+                 await_sideband(retry_client, "transfer.acceptance_ready", 2_000)
+
+        assert :ok = send_acceptance(retry_client, "accept-retry", attempt_id)
+        assert_receive {:test_stt_transport_started, retry_stt, _}, 2_000
+
+        TestSpeechToTextTransport.deliver(
+          retry_stt,
+          ~s({"type":"Connected","request_id":"retry-stt","sequence_id":0})
+        )
+
+        assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+                 await_sideband(retry_client, "transfer.active", 5_000)
+
+        refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
+        send_tone(retry_client, 1_500, 1)
+        assert :ok = await_tone(caller_client, 1_500, 2_000)
+      end
     end
   end
 
@@ -1597,14 +1665,15 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     plan
   end
 
-  defp issue_session(plan, room, participant_id) do
+  defp issue_session(plan, room, participant_id, release \\ nil) do
     binding = [
       tenant_id: plan.tenant_id,
       actor_id: plan.actor_id,
       room_id: plan.room_id,
       incarnation_id: room.incarnation_id,
       participant_id: participant_id,
-      tool_visibility: plan.tool_visibility
+      tool_visibility: plan.tool_visibility,
+      release_admission: release
     ]
 
     assert {:ok, session} = SessionSupervisor.issue(binding, 30_000)

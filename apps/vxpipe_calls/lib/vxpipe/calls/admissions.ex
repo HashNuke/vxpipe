@@ -98,6 +98,17 @@ defmodule Vxpipe.Calls.Admissions do
 
   def claim_token(_secret, _expected_scope, _options), do: {:error, :invalid_join_token}
 
+  @spec release(AdmissionClaim.t(), keyword()) :: :ok | {:error, term()}
+  def release(claim, options \\ [])
+
+  def release(%AdmissionClaim{} = claim, options) do
+    with {:ok, repository} <- Repositories.fetch(options, :call_repository) do
+      Repositories.call(repository, :release_admission, [claim, now(options)])
+    end
+  end
+
+  def release(_claim, _options), do: {:error, :invalid_admission}
+
   @spec mark_started(AdmissionClaim.t(), String.t(), DateTime.t(), keyword()) ::
           {:ok, PreparedCall.t()} | {:error, term()}
   def mark_started(claim, incarnation_id, started_at, options \\ [])

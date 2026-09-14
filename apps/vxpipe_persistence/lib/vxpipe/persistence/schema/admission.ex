@@ -8,6 +8,7 @@ defmodule Vxpipe.Persistence.Schema.Admission do
     field :participant_key, Ecto.UUID
     field :participant_ref, :string
     field :accepted_at, :utc_datetime_usec
+    field :released_at, :utc_datetime_usec
 
     belongs_to :call, Call
     belongs_to :join_token, JoinToken

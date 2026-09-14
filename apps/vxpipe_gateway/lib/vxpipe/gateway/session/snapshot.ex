@@ -13,7 +13,7 @@ defmodule Vxpipe.Gateway.Session.Snapshot do
     :tool_visibility,
     :expires_at
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [admission_owner: nil]
 
   @type t :: %__MODULE__{
           session_id: String.t(),
@@ -23,7 +23,8 @@ defmodule Vxpipe.Gateway.Session.Snapshot do
           incarnation_id: String.t(),
           participant_id: String.t(),
           tool_visibility: Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility.t(),
-          expires_at: DateTime.t()
+          expires_at: DateTime.t(),
+          admission_owner: pid() | nil
         }
 
   @spec to_public(t()) :: map()

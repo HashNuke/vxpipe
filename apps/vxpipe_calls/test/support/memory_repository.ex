@@ -361,20 +361,37 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
           participant_ref: token.participant_ref,
           participant_key: token.participant_key,
           token_id: token.id,
-          accepted_at: now
+          accepted_at: now,
+          released_at: nil
         }
 
         next_state = %{
           state
           | calls: Map.put(state.calls, {call.tenant_key, call.id}, call),
             tokens: Map.put(state.tokens, digest, consumed),
-            admissions: Map.put(state.admissions, {call.id, token.participant_ref}, admission)
+            admissions:
+              Map.put(state.admissions, {call.id, token.participant_ref, token.id}, admission)
         }
 
         {{:ok, claim}, next_state}
       else
         :error -> {{:error, :token_not_found}, state}
         {:error, _reason} = error -> {error, state}
+      end
+    end)
+  end
+
+  def release_admission(agent, claim, released_at) do
+    Agent.get_and_update(agent, fn state ->
+      key = {claim.call.id, claim.participant_ref, claim.token_id}
+
+      with {:ok, _call} <- Map.fetch(state.calls, {claim.call.tenant_key, claim.call.id}),
+           {:ok, admission} <- Map.fetch(state.admissions, key),
+           true <- admission.participant_key == claim.participant_key do
+        admission = %{admission | released_at: admission.released_at || released_at}
+        {:ok, %{state | admissions: Map.put(state.admissions, key, admission)}}
+      else
+        _missing -> {{:error, :admission_not_found}, state}
       end
     end)
   end
@@ -504,8 +521,13 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
 
   defp admission_available(state, call, participant_ref) do
     cond do
-      call.state in [:ended, :failed] -> {:error, :call_unavailable}
-      Map.has_key?(state.admissions, {call.id, participant_ref}) ->
+      call.state in [:ended, :failed] ->
+        {:error, :call_unavailable}
+
+      Enum.any?(state.admissions, fn {_key, admission} ->
+        admission.call_id == call.id and admission.participant_ref == participant_ref and
+            is_nil(admission.released_at)
+      end) ->
         {:error, :participant_admission_unavailable}
 
       call.state == :prepared and participant_ref != call.entry_caller ->
@@ -520,7 +542,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   end
 
   defp matching_admission(state, claim) do
-    case Map.fetch(state.admissions, {claim.call.id, claim.participant_ref}) do
+    case Map.fetch(state.admissions, {claim.call.id, claim.participant_ref, claim.token_id}) do
       {:ok, %{token_id: token_id}} when token_id == claim.token_id -> :ok
       _missing_or_other -> {:error, :admission_not_found}
     end

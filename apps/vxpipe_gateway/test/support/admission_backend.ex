@@ -103,6 +103,13 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     end)
   end
 
+  def release_admission(agent, claim) do
+    operation(agent, {:release_admission, claim.token_id})
+    state = Agent.get(agent, & &1)
+    send(state.observer, {:test_admission_released, claim.token_id})
+    :ok
+  end
+
   def mark_started(agent, claim, incarnation_id, started_at) do
     operation(agent, {:mark_started, claim.call.id, incarnation_id, started_at})
     state = Agent.get(agent, & &1)

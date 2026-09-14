@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,295 tests, zero failures and 15 exclusions, with test concurrency four. Four ordinary WebRTC
+1,300 tests, zero failures and 15 exclusions, with test concurrency four. Four ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
@@ -104,8 +104,10 @@ participant and the same deadline. Preparation blockers and
 cue/release progress now reach the existing transfer desk; returned worker durations reach the
 existing diagnostics reporter. Rendered desktop/mobile Chrome checks now confirm live default-wait
 handoff audio and support transcripts. Recovery also preserves spoken assistant responses by carrying
-the released output generation into new TTS requests. A later desk admission after failed preparation
-is still rejected by persistence and remains an explicit sample blocker. The milestone's
+the released output generation into new TTS requests. A failed private connection now releases its exact persisted destination
+admission while retaining history and single-use tokens. A fresh desk completed another transfer in
+the original live call, with retained caller audio and support/caller transcripts. Earlier intermittent
+briefing failure and the full failure-stage acceptance remain open. The milestone's
 [current evidence](transfer-readiness-and-wait-sounds.md#implementation-evidence) distinguishes this
 implementation from remaining failure/privacy/diagnostic and audible acceptance.
 All five delivery checkpoints and milestone acceptance remain open. Packaging and retention stay

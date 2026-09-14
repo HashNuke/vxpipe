@@ -218,7 +218,8 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
         room_id: claim.call.room_id,
         incarnation_id: claim.call.incarnation_id,
         participant_id: participant.participant_id,
-        tool_visibility: claim.call.plan.tool_visibility
+        tool_visibility: claim.call.plan.tool_visibility,
+        release_admission: fn -> backend(options, :release_admission, [claim]) end
       ],
       options.session_ttl_ms
     )

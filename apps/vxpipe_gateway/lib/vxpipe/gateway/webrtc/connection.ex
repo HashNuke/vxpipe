@@ -89,6 +89,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   def init(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
     session = Keyword.fetch!(options, :session)
+    admission_monitor = if session.admission_owner, do: Process.monitor(session.admission_owner)
 
     with {:ok, attach_command} <- attach_command(connection_id, session),
          {:ok, peer_connection} <-
@@ -164,6 +165,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
          rtvi_channel_ref: nil,
          rtvi_turn_state: TurnState.new(),
          session: session,
+         admission_monitor: admission_monitor,
          sideband_channel_ref: nil,
          transfer_media_ready?: false,
          transfer_preparation_sent?: false,
@@ -321,6 +323,12 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
       when connection_state in [:closed, :failed] do
     {:stop, :shutdown, state}
   end
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{admission_monitor: monitor} = state
+      ),
+      do: {:stop, :shutdown, state}
 
   def handle_info(
         {:DOWN, peer_monitor, :process, _pid, _reason},

@@ -85,6 +85,8 @@ defmodule Vxpipe.Gateway.CallAdmission do
     end
   end
 
+  def release_admission(options, claim), do: Calls.release_admission(claim, options)
+
   def mark_started(options, claim, incarnation_id, started_at) do
     Calls.mark_call_started(claim, incarnation_id, started_at, options)
   end

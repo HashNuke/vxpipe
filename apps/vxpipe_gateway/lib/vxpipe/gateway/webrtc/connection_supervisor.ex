@@ -15,10 +15,23 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionSupervisor do
   def init(:ok), do: DynamicSupervisor.init(strategy: :one_for_one)
 
   def accept_offer(session_id, %SessionDescription{} = offer, options) do
-    with {:ok, session} <- Session.claim(session_id),
-         {:ok, connection_id, incarnation} <- start_connection(session, options),
-         {:ok, answer} <- negotiate(connection_id, incarnation, offer) do
-      {:ok, connection_id, answer}
+    with {:ok, session} <- Session.claim(session_id) do
+      case start_connection(session, options) do
+        {:ok, connection_id, incarnation} ->
+          with :ok <- Session.bind_connection(session_id, incarnation),
+               {:ok, answer} <- negotiate(connection_id, incarnation, offer) do
+            {:ok, connection_id, answer}
+          else
+            {:error, _reason} = error ->
+              _ = DynamicSupervisor.terminate_child(__MODULE__, incarnation)
+              Session.abandon(session_id)
+              error
+          end
+
+        {:error, _reason} = error ->
+          Session.abandon(session_id)
+          error
+      end
     end
   end
 

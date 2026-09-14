@@ -293,10 +293,18 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
                "state" => "pending_transfer"
              },
              "session" => %{
+               "session_id" => session_id,
                "incarnation_id" => "rinc_test-admission",
                "participant_id" => "part_test-support"
              }
            } = body(conn)
+
+    [{session, _}] = Registry.lookup(Vxpipe.Gateway.SessionRegistry, session_id)
+    monitor = Process.monitor(session)
+    send(session, :expire)
+    assert_receive {:test_admission_released, "40000000-0000-4000-8000-000000000004"}
+    assert_receive {:DOWN, ^monitor, :process, ^session, :normal}
+    refute conn.resp_body =~ "admission_owner"
 
     refute_receive {:test_admission_started, _incarnation_id, _started_at}
     refute_receive {:test_admission_failed, _reason}
