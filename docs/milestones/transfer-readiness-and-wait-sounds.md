@@ -7,7 +7,7 @@ Human and AI handoffs now pass normal transfer and bounded recovery checks; huma
 checks also pass. The initial-startup checkpoint now admits caller media before model construction
 and gates conversation on complete resource readiness. File/text openings prepare independently
 of the model and pause/resume the caller wait at playable readiness. All five root gates pass with
-1,380 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four).
+1,386 tests, zero failures and 16 integration exclusions (seed 235296; concurrency four).
 Full milestone acceptance remains open.
 Start with the [delivery checkpoints](#implementation-checkpoints) and
 [curated implementation evidence](#implementation-evidence).
@@ -329,8 +329,9 @@ external verification explicitly; do not label a local simulation as
 live-provider proof. Continue independent work if an external check is blocked, preserving the
 unfinished checkbox and exact missing evidence.
 
-Remaining work after native whole-room handoff acceptance: **22 tasks** in this section—human web
-handoff 5, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6, and final audit 2.
+Remaining work after whole-room acceptance and handoff cancellation fixes: **22 tasks** in this
+section—human web handoff 5, AI handoff 3, phone handoff parity 6, changing/multiple listeners 6,
+and final audit 2.
 The 13 open acceptance/summary boxes elsewhere restate these requirements;
 they are not additional independent tasks. These tasks vary in size and do not imply a completion
 percentage. Four delivery slices still have acceptance work remaining.
@@ -363,8 +364,11 @@ Implementation tasks:
   recovery is impossible or partial release leaves uncertain media admission. Never redial.
   Release acknowledgements now revalidate policy/bindings and exact resource generations. Engine
   cases close on changed policy/generation, explicit release error and policy change before final
-  coordinator completion. Native cases close both peers after policy changes during release,
-  without activation, recovery or redial. Intermittent recovery and remaining failure stages stay open.
+  coordinator completion. Deadline, phase loss and required destination STT loss during release
+  now produce terminal failure without recovery or redial. An already handled recovery cancellation
+  defeats a queued successful worker result. Native caller/desk cases receive failure through RTVI
+  and close without activation; engine archive facts retain the bounded failure cause.
+  Intermittent recovery and remaining failure stages stay open.
 - [x] Resolve existing engine connection-fixture failures and the configured phone
   `unsupported_audio` failure without a production readiness bypass or deadline increase.
 - [ ] Remove prepared private resources that the resulting policy does not demand.
@@ -380,8 +384,8 @@ Implementation tasks:
   same prepared STT transport, room services, worker and audience wait scope. Policy revisions after
   adoption now reconcile against the installed policy before any release and drain a fresh cue.
   Engine and native cases cover removed speech demand, unrelated policy and changed still-required
-  STT, retaining unaffected room/media actors and the original deadline. Other capability kinds
-  and the complete changing audience remain open.
+  STT, retaining unaffected room/media actors and the original deadline. Retiring completed private
+  briefing TTS, other capability kinds and the complete changing audience remain open.
 - [x] Connect the existing Console status and ledger to actual preparation blockers and cue/release
   progress. Keep briefing/acceptance/active ordering and the readable button. Publish only closed
   capability categories and elapsed time; reject stale attempts and late updates after activation.
@@ -418,7 +422,9 @@ Acceptance and commit tasks:
   unchanged healthy instances; verify held text/audio cannot interrupt or replay after release.
   Destination STT, a remaining human recognizer and room recording now independently hold the
   native three-peer handoff as its final blocker. Their ordinary success/retention and held-input
-  checks pass; the remaining loss stages are still open.
+  checks pass. Required destination STT remains tracked after adoption until release completes;
+  losing it then closes the call with failed progress instead of bypassing transfer cancellation.
+  Remaining-participant and room-resource loss stages are still open.
 - [x] Run the owning engine/Gateway/Console checks, including the existing web/phone transfer
   regressions, and all five root gates. Record exact results for the implementation being committed.
 - [x] Exercise the actual rendered desktop caller and mobile-sized desk with live model/Deepgram
@@ -879,6 +885,25 @@ Known remaining work in the first slice:
   model/Deepgram services with synthesized microphone speech; this does not establish physical audibility.
 - Changing membership/connections and multiple listeners retain their later dedicated checkpoint.
 
+### Human handoff cancellation
+
+Cancellation is recorded in the pending handoff before the coordinator returns to its mailbox.
+A queued recovery success cannot overtake an already handled deadline/failure. Failures after
+adoption use terminal release cleanup instead of discarding the destination and starting source
+recovery against an already changed room. Failed releases emit the existing bounded history fact.
+The original attempt and 750 ms recovery budgets are unchanged.
+
+A destination recognizer remains associated with its pending attempt through release, even after
+main admission. Provider-unavailable messages and capability/ingress monitors still fail that exact
+attempt. Ordinary connection lifecycle resumes responsibility after transfer completion.
+
+Nine focused engine cases pass, covering outstanding release invalidation, required STT loss,
+phase loss during policy adoption, failure history and an actual recovery worker success queued
+behind cancellation. Two native caller/desk cases observe failed RTVI progress and teardown for
+release cancellation and required STT loss, without activation or recovery. The new release-loss
+tests use required STT; retirement of completed briefing TTS remains in private-resource cleanup. The previously intermittent recovery failure is not claimed fixed by this checkpoint.
+See the [failure-cleanup labnote](../../labnotes/20260915-0249-human-handoff-failure-cleanup.md).
+
 ### AI handoff integration
 
 - Agent destinations reuse the audience hold, prospective readiness, cue/drain, exact candidate
@@ -1043,6 +1068,7 @@ cases and two native failure cases cover these boundaries. See the
 
 | Evidence boundary | Result | What it establishes |
 | --- | --- | --- |
+| Handoff cancellation and release failures | Nine focused engine cases, two native caller/desk cases and all five root gates pass: 1,386 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. Gateway includes 377 tests and 45 default native startup/transfer cases. | Cancellation defeats a queued recovery success; deadline, phase loss and required adopted STT loss during release produce terminal failure without recovery or activation. The existing archive receives bounded failure causes. Completed briefing-resource retirement and the earlier intermittent recovery failure remain open; 22 checkpoint tasks remain. |
 | Whole-room native human handoff | Two engine regression cases and nine native handoff cases pass, including public HTTPS retrieval. All five root gates pass: 1,380 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. Gateway includes 375 tests and 43 default native startup/transfer cases. | Additional planned humans initialize selected STT on attachment; unsupported selected providers reject that attachment without replacing original resources. Destination STT, remaining-human STT and room recording each hold as the final blocker with custom/nil waits. Three peers receive ordered cues/conversation, held input is discarded, and unaffected speech/media/room bindings remain. The controlled native acceptance item is complete; 22 checkpoint tasks remain. |
 | Human handoff audio acceptance | Ten focused native cases, including the public-HTTPS WAV variant, pass. All five root gates pass: 1,374 tests, zero failures, 16 exclusions; seed 235296 at concurrency four. | Production URL retrieval and peer-decoded configured waiting work; queued wait/cue/conversation ordering and post-briefing recovery model-history isolation pass. The public-URL case is opt-in and excluded from the default suite. Human audio acceptance is complete; intermittent recovery and the other 23 checkpoint tasks remain open. |
 | Release acknowledgement and completion fences | 65 focused engine checks and nine native policy cases pass. Final five root gates pass: 1,374 tests, zero failures, 15 exclusions; seed 235296 at concurrency four. Gateway includes 371 checks and 39 native startup/transfer cases. | Four engine cases prevent success after policy/generation changes during acknowledgements, explicit release error and policy revision before final coordinator completion. Two native cases close the room and peers without activation after policy changes during release. Existing intermittent recovery and wider failure-stage acceptance remain open. |

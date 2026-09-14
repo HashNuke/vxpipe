@@ -93,7 +93,7 @@ adds milestone 23 before delivery. The user authorized implementation on 2026-09
 runnable vertical checkpoints. Definition/assets, private playback and readiness preparation are
 committed. Normal human-handoff integration now passes early waiting, post-briefing acceptance,
 prepared media release, cue-failure handling and bounded caller recovery. All five root gates pass:
-1,380 tests, zero failures and 16 exclusions, with test concurrency four (seed 235296). Eight ordinary WebRTC
+1,386 tests, zero failures and 16 exclusions, with test concurrency four (seed 235296). Eight ordinary WebRTC
 cases cover default/custom/nil waits, actual bidirectional media, support transcripts and private
 audio isolation; completed cues survive concurrent readiness rechecks. Pending human readiness now
 reconciles removed STT demand and retains the original STT transport across unrelated membership
@@ -152,8 +152,10 @@ HTTPS WAV fetch, ordered wait/cue/conversation on both native peers and model-hi
 after private briefing and recovery. An additional planned human now initializes its selected STT
 on connection attachment.
 Nine native handoffs independently hold for destination/remaining-human STT and room recording,
-then deliver ordered cues and conversation to three peers. The milestone has 22 remaining
-checkpoint tasks.
+then deliver ordered cues and conversation to three peers. Cancellation now defeats queued recovery
+success; failures during release publish failed status and history instead of attempting source
+restoration. Required destination STT remains tracked after adoption through release. Engine and
+native caller/desk checks cover these orderings. The milestone has 22 remaining checkpoint tasks.
 The initial caller-waiting slice is accepted. Four delivery checkpoints
 and full milestone acceptance remain open. Packaging and retention stay
 behind the same explicit review hold.

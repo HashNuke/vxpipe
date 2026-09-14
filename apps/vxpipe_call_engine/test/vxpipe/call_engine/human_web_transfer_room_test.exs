@@ -682,16 +682,28 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
         :policy,
         :connection_generation,
         :release_error,
-        :completion_policy
+        :completion_policy,
+        :deadline,
+        :phase_loss,
+        :speech_loss
       ] do
     @tag capture_log: true, invalidation: invalidation
     test "closes a partially released handoff after #{invalidation}", %{
       invalidation: invalidation
     } do
-      plan = compile_plan(wait_sounds: nil, transfer_timeout_ms: 2_000)
+      plan =
+        compile_plan(
+          wait_sounds: nil,
+          transfer_timeout_ms: 2_000,
+          support_stt: invalidation == :speech_loss
+        )
+
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
-      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+
+      assert {:ok, room} =
+               Vxpipe.CallEngine.TestCallStartup.start_call(plan, archive: archive_options())
+
       authority = room_authority(plan)
       monitor = Process.monitor(authority)
       assert_receive {:test_tts_transport_started, source, _}, 2_000
@@ -731,6 +743,18 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
                TestTransferConnection.control(
                  transfer_control(plan, room, support, attempt, :accept)
                )
+
+      speech_transport =
+        if invalidation == :speech_loss do
+          assert_receive {:test_stt_transport_started, transport, _}, 1_000
+
+          TestSpeechToTextTransport.deliver(
+            transport,
+            ~s({"type":"Connected","request_id":"release-ready","sequence_id":0})
+          )
+
+          transport
+        end
 
       assert_receive {:test_audio_output_released, ^caller_sink}, 1_000
       assert :sys.get_state(caller_sink).output_generation == 0
@@ -775,12 +799,49 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
 
           :release_error ->
             {:error, :output_unavailable}
+
+          :deadline ->
+            pending = :sys.get_state(authority).pending_participant_transfer
+            send(authority, {:vxpipe_participant_transfer_deadline, pending.task.ref})
+            :cancelled
+
+          :phase_loss ->
+            pending = :sys.get_state(authority).pending_participant_transfer
+            Process.exit(pending.task.pid, :kill)
+            :cancelled
+
+          :speech_loss ->
+            TestSpeechToTextTransport.disconnect(speech_transport, :test_release_failure)
+            :cancelled
         end
 
-      if result != :acknowledged,
+      if result not in [:acknowledged, :cancelled],
         do: assert(:ok == GenServer.call(caller_sink, {:complete_release, result}))
 
-      assert_receive {:DOWN, ^monitor, :process, ^authority, :handoff_release_failed}, 1_000
+      refute_receive {:vxpipe_transfer_progress, ^attempt, %{phase: :recovering}}, 100
+      assert_receive {:vxpipe_transfer_progress, ^attempt, %{phase: :failed}}, 1_000
+      assert_receive {:DOWN, ^monitor, :process, ^authority, reason}, 1_000
+
+      # Loss of an adopted policy enforcer can concurrently stop the room supervisor.
+      if invalidation == :speech_loss,
+        do: assert(reason in [:handoff_release_failed, :shutdown]),
+        else: assert(reason == :handoff_release_failed)
+
+      cause =
+        case invalidation do
+          :deadline -> "deadline_elapsed"
+          :phase_loss -> "preparation_process_down"
+          :speech_loss -> "destination_speech_to_text_unavailable"
+          _other -> "destination_media_unavailable"
+        end
+
+      assert_receive {:test_archive_fact,
+                      %Fact{
+                        kind: :participant_transfer_failed,
+                        tool_call_id: "partial-release-transfer",
+                        payload: %{"cause" => ^cause, "restoration" => "failed"}
+                      }},
+                     1_000
 
       refute_receive {:vxpipe_event,
                       %ToolCallCompleted{tool_call_id: "partial-release-transfer"}},
@@ -789,6 +850,61 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
       refute_receive {:vxpipe_transfer_active, ^attempt}, 50
       refute_receive {:test_tts_transport_started, _recovery_or_redial, _}, 50
     end
+  end
+
+  @tag capture_log: true
+  test "recovery cancellation wins over an already queued successful release" do
+    plan = compile_plan(wait_sounds: nil)
+    caller = Map.fetch!(plan.participants, "caller")
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+    authority = room_authority(plan)
+    authority_monitor = Process.monitor(authority)
+    assert_receive {:test_tts_transport_started, source, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source,
+      ~s({"type":"Connected","request_id":"retained-source"})
+    )
+
+    sink = start_supervised!({TestAudioOutputSink, observer: self(), defer_drain: true})
+    assert {:ok, _} = attach_ready(plan, room, caller, "caller-connection", sink)
+    begin_transfer(plan, room, caller, "cancel-queued-recovery")
+    assert_receive {:test_tts_transport_started, _briefing, _}, 2_000
+    pending = :sys.get_state(authority).pending_participant_transfer
+    Process.exit(pending.task.pid, :kill)
+
+    assert_receive {:test_audio_output_drain, ^sink}, 1_000
+    recovering = :sys.get_state(authority).pending_participant_transfer
+    assert recovering.handoff.stage == :recovering
+    assert {:ok, phase} = Phase.scope(recovering.task.pid)
+    worker = phase.worker.pid
+    worker_monitor = Process.monitor(worker)
+    token = pause_handoff_result(worker, :recover)
+    assert :ok = GenServer.call(sink, :complete_drain)
+    assert_receive {:handoff_result_ready, ^token}, 1_000
+
+    assert :ok = :sys.suspend(authority)
+
+    try do
+      # Put the cancellation first, then the actual successful worker result in the
+      # authority mailbox. No wall-clock delay or fabricated readiness result is needed.
+      send(authority, {:vxpipe_participant_transfer_deadline, recovering.task.ref})
+      send(worker, {:continue_handoff, token})
+      assert_receive {:DOWN, ^worker_monitor, :process, ^worker, :normal}, 1_000
+      assert {:ok, settled} = Phase.scope(recovering.task.pid)
+      refute Map.has_key?(settled, :worker)
+    after
+      :sys.resume(authority)
+    end
+
+    attempt = recovering.attempt_id
+    refute_receive {:vxpipe_transfer_progress, ^attempt, %{phase: :recovered}}, 100
+
+    assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :handoff_recovery_failed},
+                   1_000
+
+    refute_receive {:test_tts_transport_started, _replacement, _}, 50
+    refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "cancel-queued-recovery"}}, 50
   end
 
   for change <- [:removes_speech, :unrelated] do
@@ -1434,7 +1550,11 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     assert_receive {:DOWN, ^phase_monitor, :process, ^phase, :killed}, 2_000
     Vxpipe.CallEngine.TestMediaPolicyEnforcer.acknowledge(enforcer, :ok)
 
-    assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :shutdown}, 2_000
+    refute_receive {:vxpipe_transfer_progress, ^attempt_id, %{phase: :recovering}}, 100
+
+    assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :handoff_release_failed},
+                   2_000
+
     refute_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "phase-lost-during-commit"}}
     refute_receive {:vxpipe_transfer_main_media, ^attempt_id, _}
   end

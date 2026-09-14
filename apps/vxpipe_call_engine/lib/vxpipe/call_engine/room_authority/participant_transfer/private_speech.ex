@@ -22,8 +22,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
 
   def matches?(pending, capability, identity, state) do
     case ConnectionLifecycle.authorized_speech_to_text(capability, identity, state) do
-      {:ok, connection_id, %{admission: :transfer_preparation}} ->
-        connection_id == pending.destination_connection_id
+      {:ok, connection_id, connection} ->
+        connection_id == pending.destination_connection_id and
+          admission_matches?(pending, connection.admission)
 
       _other ->
         false
@@ -32,10 +33,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.PrivateSpeech do
 
   defp binding(pending, state) do
     case Map.get(state.connections, pending.destination_connection_id) do
-      %{admission: :transfer_preparation, speech_to_text: speech} -> speech
-      _missing -> nil
+      %{admission: admission, speech_to_text: speech} ->
+        if admission_matches?(pending, admission), do: speech
+
+      _missing ->
+        nil
     end
   end
+
+  defp admission_matches?(_pending, :transfer_preparation), do: true
+  defp admission_matches?(%Pending{handoff: %{stage: :releasing}}, :main), do: true
+  defp admission_matches?(_pending, _admission), do: false
 
   def allocate(command, caller, attempt_id, %State{} = state) do
     with {:ok, pending, _connection} <- authorize(command, caller, attempt_id, state) do

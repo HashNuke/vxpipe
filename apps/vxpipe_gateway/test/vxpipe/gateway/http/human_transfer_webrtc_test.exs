@@ -1031,10 +1031,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :after_unrelated_adoption,
         :after_speech_adoption,
         :release_policy_change,
-        :release_unrelated_change
+        :release_unrelated_change,
+        :release_deadline,
+        :release_speech_loss
       ] do
     @tag preparation: preparation
-    test "human handoff reconciles speech demand with #{preparation} preparation", %{
+    test "human handoff handles #{preparation} preparation", %{
       preparation: preparation
     } do
       restriction = %{transcript_routes: %{}, save_transcripts: false}
@@ -1048,7 +1050,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
               when mode in [
                      :during_unrelated_change,
                      :after_unrelated_adoption,
-                     :release_unrelated_change
+                     :release_unrelated_change,
+                     :release_deadline,
+                     :release_speech_loss
                    ] ->
                 %{}
 
@@ -1173,7 +1177,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              :after_unrelated_adoption,
              :after_speech_adoption,
              :release_policy_change,
-             :release_unrelated_change
+             :release_unrelated_change,
+             :release_deadline,
+             :release_speech_loss
            ] do
           assert_receive {:test_stt_transport_started, transport, _}, 2_000
 
@@ -1190,14 +1196,21 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                :after_unrelated_adoption,
                :after_speech_adoption,
                :release_policy_change,
-               :release_unrelated_change
+               :release_unrelated_change,
+               :release_deadline,
+               :release_speech_loss
              ] do
             {media, _monitors, _connections} = before
 
             action =
-              if preparation in [:release_policy_change, :release_unrelated_change],
-                do: :release,
-                else: :adopt
+              if preparation in [
+                   :release_policy_change,
+                   :release_unrelated_change,
+                   :release_deadline,
+                   :release_speech_loss
+                 ],
+                 do: :release,
+                 else: :adopt
 
             token = pause_native_gate(media.instance, action)
 
@@ -1209,8 +1222,23 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
             assert_receive {:native_gate_waiting, ^token}, 2_000
 
             try do
-              assert {:ok, _policy} =
-                       CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+              case preparation do
+                :release_deadline ->
+                  [{authority, _}] =
+                    Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+                  pending = :sys.get_state(authority).pending_participant_transfer
+                  send(authority, {:vxpipe_participant_transfer_deadline, pending.task.ref})
+                  await_terminal_transfer_failure(caller_client, attempt)
+
+                :release_speech_loss ->
+                  TestSpeechToTextTransport.disconnect(transport, :test_release_failure)
+                  await_terminal_transfer_failure(caller_client, attempt)
+
+                _policy_change ->
+                  assert {:ok, _policy} =
+                           CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+              end
             after
               send(media.instance, {:continue_native_gate, token})
             end
@@ -1248,8 +1276,18 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           prior_media
         end
 
-      if preparation in [:release_policy_change, :release_unrelated_change] do
-        assert_receive {:DOWN, ^room_monitor, :process, _room, :handoff_release_failed}, 2_000
+      if preparation in [
+           :release_policy_change,
+           :release_unrelated_change,
+           :release_deadline,
+           :release_speech_loss
+         ] do
+        assert_receive {:DOWN, ^room_monitor, :process, _room, reason}, 2_000
+
+        if preparation == :release_speech_loss,
+          do: assert(reason in [:handoff_release_failed, :shutdown]),
+          else: assert(reason == :handoff_release_failed)
+
         {_media, _monitors, connections} = prior_media
 
         for {_id, connection} <- connections do
@@ -1277,7 +1315,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              :after_unrelated_adoption,
              :after_speech_adoption,
              :release_policy_change,
-             :release_unrelated_change
+             :release_unrelated_change,
+             :release_deadline,
+             :release_speech_loss
            ],
            do: assert(media.attachment.media_ingress == nil)
 
@@ -1298,7 +1338,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                  :after_unrelated_adoption,
                  :after_speech_adoption,
                  :release_policy_change,
-                 :release_unrelated_change
+                 :release_unrelated_change,
+                 :release_deadline,
+                 :release_speech_loss
                ] do
               assert media.attachment.media_ingress == before.attachment.media_ingress
               refute_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 100
@@ -2393,6 +2435,39 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     if kind in blockers,
       do: :ok,
       else: await_destination_blocker(connection, kind, deadline)
+  end
+
+  defp await_terminal_transfer_failure(connection, attempt) do
+    await_terminal_transfer_failure(
+      connection,
+      attempt,
+      System.monotonic_time(:millisecond) + 2_000
+    )
+  end
+
+  defp await_terminal_transfer_failure(connection, attempt, deadline) do
+    message =
+      await_sideband(
+        connection,
+        "server-message",
+        max(deadline - System.monotonic_time(:millisecond), 0)
+      )
+
+    case message do
+      %{
+        "data" => %{
+          "t" => "vxpipe.transfer",
+          "d" => %{"attempt_id" => ^attempt, "phase" => phase}
+        }
+      } ->
+        refute phase in ["recovering", "recovered", "completed"],
+               "a failed release attempted recovery or reported success"
+
+        if phase != "failed", do: await_terminal_transfer_failure(connection, attempt, deadline)
+
+      _other ->
+        await_terminal_transfer_failure(connection, attempt, deadline)
+    end
   end
 
   defp refute_native_activation(connection, deadline) do

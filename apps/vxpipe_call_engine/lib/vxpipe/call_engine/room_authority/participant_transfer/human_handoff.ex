@@ -317,6 +317,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
           state
       ) do
     case {stage, pending.handoff, result} do
+      {_, %{stage: :recovering, failure: _cause}, _result} ->
+        recovery_failed(pending, state)
+
+      {_, %{stage: :releasing, failure: _cause}, _result} ->
+        release_failed(pending, state)
+
       {:recover, %{stage: :recovering, deadline_ms: deadline, cause: cause}, {:ok, recovered}} ->
         with :ok <- Authorizer.authorize(pending.request, state),
              :ok <- Phase.finish(%{pending | deadline_ms: deadline}) do
@@ -407,8 +413,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
   end
 
   defp release_failed(pending, state) do
+    Phase.cancel(pending)
     Progress.publish(pending, :failed, [], state)
     GenServer.reply(pending.from, {:error, :unavailable})
+    cause = Map.get(pending.handoff, :failure, :destination_media_unavailable)
+    state = History.failed(state, pending.request, cause, :failed)
     {:stop, :handoff_release_failed, state}
   end
 
@@ -490,13 +499,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.HumanHandoff do
     end)
   end
 
-  defp fail(%Pending{handoff: %{stage: :recovering}} = pending, _cause, state) do
+  defp fail(%Pending{handoff: %{stage: stage}} = pending, cause, state)
+       when stage in [:recovering, :releasing] do
+    # Latch cancellation before returning to the mailbox: a successful worker result
+    # may already be queued ahead of the failure notification sent below.
+    pending = %{pending | handoff: Map.put_new(pending.handoff, :failure, cause)}
+    worker_stage = if stage == :recovering, do: :recover, else: :release
+
     send(
       self(),
-      {:vxpipe_transfer_handoff_result, pending.task.ref, :recover, {:error, :recovery_failed}}
+      {:vxpipe_transfer_handoff_result, pending.task.ref, worker_stage, {:error, cause}}
     )
 
-    state
+    %{state | pending_participant_transfer: pending}
   end
 
   defp fail(pending, cause, state) do

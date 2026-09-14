@@ -82,6 +82,18 @@ mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
 These two cases close the room and its media connections without transfer activation when release
 can no longer be validated. They complement the successful retries before release shown above.
 
+For cancellation and required destination STT loss during media release:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'release_(deadline|speech_loss)'
+```
+
+These pause the real destination release command, cancel the attempt or disconnect its required
+recognizer, and observe terminal failed progress on the caller's RTVI channel. All room connections
+close without activation, recovery or redial. The engine suite also queues a real successful recovery
+result behind cancellation and verifies that cancellation wins; its release cases check failure history.
+
 For initial caller waiting during independent model and voice startup delays:
 
 ```shell
